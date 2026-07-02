@@ -1,6 +1,6 @@
 import React, { useState, useMemo, memo } from 'react';
 import {
-  CalendarClock, Receipt, X, Check, Trash2, Clock, ListTodo, AlertCircle, Sparkles, Pencil, Save
+  CalendarClock, Receipt, Check, Trash2, Clock, ListTodo, AlertCircle, Sparkles, Pencil, Save, ChevronDown
 } from 'lucide-react';
 import { format, parseISO, isBefore, addDays, isAfter, startOfToday, isValid } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -11,9 +11,11 @@ import {
 import { HouseholdMember, BudgetBucket, Habit, Transaction, ToDo } from '@/types/schema';
 import { suggestHabitsForTransaction } from '@/utils/habitSuggestions';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
+import { cn } from '@/utils/cn';
 import Input from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import Eyebrow from '@/components/ui/Eyebrow';
+import { Drawer } from '@/components/ui/Drawer';
 
 interface ActionQueueItemProps {
   item: ActionQueueItem;
@@ -110,6 +112,38 @@ const areActionQueueItemPropsEqual = (
   return true;
 };
 
+interface SelectableChipProps {
+  selected: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  /** Small pulsing dot hinting a high-confidence suggestion (unselected state only). */
+  showSuggestionDot?: boolean;
+}
+
+/**
+ * A single unified selection-chip treatment, shared by the habit-suggestion
+ * chips and the budget-category chips below. Replaces the two competing
+ * "selected" color/border languages that used to live in this file.
+ */
+const SelectableChip: React.FC<SelectableChipProps> = ({ selected, onClick, children, showSuggestionDot }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={cn(
+      'relative px-3 py-1.5 rounded-btn text-xs font-semibold transition-colors duration-(--duration-fast) ease-(--ease-standard) inline-flex items-center gap-1',
+      selected
+        ? 'bg-accent-600 text-white'
+        : 'bg-white border border-brand-200 text-brand-600 hover:bg-brand-50 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-300 dark:hover:bg-brand-700'
+    )}
+  >
+    {selected && <Check size={12} strokeWidth={3} />}
+    {children}
+    {!selected && showSuggestionDot && (
+      <span className="absolute -top-1 -right-1 w-2 h-2 bg-warm-500 rounded-full motion-safe:animate-pulse" aria-hidden="true" />
+    )}
+  </button>
+);
+
 // Optimization: Memoized to prevent re-renders of unexpanded items when one item is expanded/collapsed.
 // We use isExpanded boolean instead of passing expandedId string to ensure stable props for unexpanded items.
 // Updated 2026-02-19: Accepts context values as props to avoid re-rendering on unrelated context updates.
@@ -132,6 +166,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
   const fmt = useFormatCurrency();
   const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [showAllHabits, setShowAllHabits] = useState(false);
 
   // Edit State
   const [isEditing, setIsEditing] = useState(false);
@@ -173,6 +208,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
       setSelectedHabitIds(item.relatedHabitIds || []);
       // Initialize with current category
       setSelectedCategory(item.category || '');
+      setShowAllHabits(false);
       if (item.needsAmount) {
         // Apple Pay $0 "awaiting amount" stub: open the edit form first (blank
         // amount) so the user must enter the real amount before approving — the
@@ -189,6 +225,8 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
       setSelectedCategory('');
     }
   };
+
+  const handleClose = () => setExpandedId(null);
 
   const handleEdit = () => {
     if (isTransactionQueueItem(item)) {
@@ -280,6 +318,17 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
     };
   }, [item]);
 
+  const itemLabel = isTodoQueueItem(item) ? item.text : isCalendarQueueItem(item) ? item.title : isTransactionQueueItem(item) ? item.merchant || 'transaction' : 'item';
+
+  const drawerTitle = isCalendarQueueItem(item) || isTodoQueueItem(item)
+    ? 'Actions'
+    : isEditing
+    ? 'Edit Transaction'
+    : 'Select Category';
+
+  const lowConfidenceHabits = suggestedHabits.filter(s => s.confidence === 'low');
+  const remainingLowConfidenceHabits = lowConfidenceHabits.filter(s => !selectedHabitIds.includes(s.habit.id));
+
   return (
     <div className="relative hairline-divider transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-brand-50 dark:hover:bg-brand-700/30 group">
       <div className="p-4 flex items-center justify-between">
@@ -326,7 +375,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
               size="sm"
               className="px-4 min-h-11"
               onClick={handleExpand}
-              aria-label={`Review ${isTodoQueueItem(item) ? item.text : isCalendarQueueItem(item) ? item.title : isTransactionQueueItem(item) ? item.merchant || 'transaction' : 'item'}`}
+              aria-label={`Review ${itemLabel}`}
             >
               Review
             </Button>
@@ -334,358 +383,329 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
         </div>
       </div>
 
-      {/* Expanded Actions */}
-      {isExpanded && (
-        <div className="px-4 pb-3 sm:pb-4 pt-3 border-t border-brand-200 dark:border-brand-700 bg-brand-50/60 dark:bg-brand-900/30">
-          <div className="flex justify-between items-center mb-2 sm:mb-3">
-             <Eyebrow as="p" className="text-xxs">
-               {isCalendarQueueItem(item) ? 'Actions' : isEditing ? 'Edit Transaction' : 'Select Category'}
-             </Eyebrow>
-             <button onClick={() => setExpandedId(null)} aria-label="Collapse item" className="p-2.5 -m-2.5 text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300"><X size={14}/></button>
-          </div>
-
-          {isCalendarQueueItem(item) ? (
-            /* Calendar Item Actions */
-            <div className="space-y-2">
-              <p className="text-xs text-brand-500 dark:text-brand-400 mb-3">
-                {item.type === 'expense' ? 'Confirm this expense' : 'Confirm this income'} has hit your account:
-              </p>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Button
-                  variant="success"
-                  onClick={() => {
-                    setPayModalItemId(item.id);
+      {/* Review / approve flow lives in its own bottom sheet rather than
+          expanding the row in place, so the list stays a static summary. */}
+      <Drawer isOpen={isExpanded} onClose={handleClose} title={drawerTitle}>
+        {isCalendarQueueItem(item) ? (
+          /* Calendar Item Actions */
+          <div className="space-y-2">
+            <p className="text-xs text-brand-500 dark:text-brand-400 mb-3">
+              {item.type === 'expense' ? 'Confirm this expense' : 'Confirm this income'} has hit your account:
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button
+                variant="success"
+                onClick={() => {
+                  setPayModalItemId(item.id);
+                  setExpandedId(null);
+                }}
+                className="w-full sm:flex-1"
+                leftIcon={<Check size={16} />}
+              >
+                Approve
+              </Button>
+              <Button
+                variant="warning"
+                onClick={async () => {
+                  await deferCalendarItem(item.id);
+                  setExpandedId(null);
+                }}
+                className="w-full sm:flex-1"
+                leftIcon={<Clock size={16} />}
+              >
+                Defer
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  showDeleteConfirmation(async () => {
+                    await deleteCalendarItem(item.id);
                     setExpandedId(null);
-                  }}
-                  className="w-full sm:flex-1"
-                  leftIcon={<Check size={16} />}
-                >
-                  Approve
-                </Button>
-                <Button
-                  variant="warning"
-                  onClick={async () => {
-                    await deferCalendarItem(item.id);
-                    setExpandedId(null);
-                  }}
-                  className="w-full sm:flex-1"
-                  leftIcon={<Clock size={16} />}
-                >
-                  Defer
-                </Button>
-                <Button
-                  variant="destructive"
-                  onClick={() => {
-                    showDeleteConfirmation(async () => {
-                      await deleteCalendarItem(item.id);
-                      setExpandedId(null);
-                    }, 'calendar item');
-                  }}
-                  className="w-full sm:flex-1"
-                  leftIcon={<Trash2 size={16} />}
-                >
-                  Delete
-                </Button>
-              </div>
+                  }, 'calendar item');
+                }}
+                className="w-full sm:flex-1"
+                leftIcon={<Trash2 size={16} />}
+              >
+                Delete
+              </Button>
             </div>
-          ) : isTodoQueueItem(item) ? (
-            /* To-Do Item Actions */
-            <div className="space-y-2">
-               <p className="text-xs text-brand-500 dark:text-brand-400 mb-3">
-                 Mark this task as complete or delay it:
-               </p>
-               <div className="flex flex-col sm:flex-row gap-2">
-                 <Button
-                   variant="success"
-                   onClick={async () => {
-                     try {
-                       await completeToDo(item.id);
-                       toast.success('To-Do completed! 🎉');
-                       setExpandedId(null);
-                     } catch (error) {
-                       console.error('Failed to complete task:', error);
-                       toast.error('Failed to complete to-do');
+          </div>
+        ) : isTodoQueueItem(item) ? (
+          /* To-Do Item Actions */
+          <div className="space-y-2">
+             <p className="text-xs text-brand-500 dark:text-brand-400 mb-3">
+               Mark this task as complete or delay it:
+             </p>
+             <div className="flex flex-col sm:flex-row gap-2">
+               <Button
+                 variant="success"
+                 onClick={async () => {
+                   try {
+                     await completeToDo(item.id);
+                     toast.success('To-Do completed! 🎉');
+                     setExpandedId(null);
+                   } catch (error) {
+                     console.error('Failed to complete task:', error);
+                     toast.error('Failed to complete to-do');
+                   }
+                 }}
+                 className="w-full sm:flex-1"
+                 leftIcon={<Check size={16} />}
+               >
+                 Complete
+               </Button>
+               <Button
+                 variant="warning"
+                 onClick={async () => {
+                   const today = startOfToday();
+                   const tomorrowDate = addDays(today, 1);
+                   const originalDueDate = parseISO(item.date);
+
+                   if (!isValid(originalDueDate)) {
+                     toast.error('Invalid due date');
+                     return;
+                   }
+
+                   const deferredFromOriginal = addDays(originalDueDate, 1);
+                   const newDueDate = isAfter(deferredFromOriginal, tomorrowDate)
+                     ? deferredFromOriginal
+                     : tomorrowDate;
+
+                   const newDueDateString = format(newDueDate, 'yyyy-MM-dd');
+                   try {
+                     await updateToDo(item.id, { completeByDate: newDueDateString });
+
+                     if (isBefore(originalDueDate, today)) {
+                       toast.success(
+                         `Deferred overdue task (was due ${format(
+                           originalDueDate,
+                           'MMM d'
+                         )}) to ${format(newDueDate, 'MMM d')}`
+                       );
+                     } else {
+                       toast.success(`Deferred to ${format(newDueDate, 'MMM d')}`);
                      }
-                   }}
-                   className="w-full sm:flex-1"
-                   leftIcon={<Check size={16} />}
-                 >
-                   Complete
-                 </Button>
-                 <Button
-                   variant="warning"
-                   onClick={async () => {
-                     const today = startOfToday();
-                     const tomorrowDate = addDays(today, 1);
-                     const originalDueDate = parseISO(item.date);
-
-                     if (!isValid(originalDueDate)) {
-                       toast.error('Invalid due date');
-                       return;
-                     }
-
-                     const deferredFromOriginal = addDays(originalDueDate, 1);
-                     const newDueDate = isAfter(deferredFromOriginal, tomorrowDate)
-                       ? deferredFromOriginal
-                       : tomorrowDate;
-
-                     const newDueDateString = format(newDueDate, 'yyyy-MM-dd');
-                     try {
-                       await updateToDo(item.id, { completeByDate: newDueDateString });
-
-                       if (isBefore(originalDueDate, today)) {
-                         toast.success(
-                           `Deferred overdue task (was due ${format(
-                             originalDueDate,
-                             'MMM d'
-                           )}) to ${format(newDueDate, 'MMM d')}`
-                         );
-                       } else {
-                         toast.success(`Deferred to ${format(newDueDate, 'MMM d')}`);
-                       }
-                       setExpandedId(null);
-                     } catch (error) {
-                       console.error('Failed to defer task:', error);
-                       toast.error('Failed to defer task. Please try again.');
-                     }
-                   }}
-                   className="w-full sm:flex-1"
-                   leftIcon={<Clock size={16} />}
-                 >
-                   Defer
-                 </Button>
-                 <Button
-                   variant="destructive"
-                   onClick={() => {
-                     showDeleteConfirmation(async () => {
-                       await deleteToDo(item.id);
-                       setExpandedId(null);
-                       toast.success('Task deleted');
-                     });
-                   }}
-                   className="w-full sm:flex-1"
-                   leftIcon={<Trash2 size={16} />}
-                 >
-                   Delete
-                 </Button>
-               </div>
+                     setExpandedId(null);
+                   } catch (error) {
+                     console.error('Failed to defer task:', error);
+                     toast.error('Failed to defer task. Please try again.');
+                   }
+                 }}
+                 className="w-full sm:flex-1"
+                 leftIcon={<Clock size={16} />}
+               >
+                 Defer
+               </Button>
+               <Button
+                 variant="destructive"
+                 onClick={() => {
+                   showDeleteConfirmation(async () => {
+                     await deleteToDo(item.id);
+                     setExpandedId(null);
+                     toast.success('Task deleted');
+                   });
+                 }}
+                 className="w-full sm:flex-1"
+                 leftIcon={<Trash2 size={16} />}
+               >
+                 Delete
+               </Button>
+             </div>
+          </div>
+        ) : (
+          /* Transaction Queue Item */
+          isEditing ? (
+            <div className="space-y-3">
+                <Input
+                  label="Merchant"
+                  value={editForm.merchant}
+                  onChange={e => setEditForm({...editForm, merchant: e.target.value})}
+                  error={editErrors.merchant}
+                />
+                <div className="flex gap-2">
+                  <Input
+                      label="Amount"
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      value={editForm.amount}
+                      onChange={e => setEditForm({...editForm, amount: e.target.value})}
+                      icon={<span className="text-brand-400 dark:text-brand-500 font-bold">$</span>}
+                      error={editErrors.amount}
+                  />
+                  <Input
+                      label="Date"
+                      type="date"
+                      value={editForm.date}
+                      onChange={e => setEditForm({...editForm, date: e.target.value})}
+                  />
+                </div>
+                <div className="flex gap-2 pt-2">
+                    <Button variant="ghost" className="flex-1" onClick={() => setIsEditing(false)}>
+                        Cancel
+                    </Button>
+                    <Button variant="primary" className="flex-1" onClick={handleSave} leftIcon={<Save size={16}/>}>
+                        Save Changes
+                    </Button>
+                </div>
             </div>
           ) : (
-            /* Transaction Queue Item */
-            isEditing ? (
-              <div className="space-y-3">
-                  <Input
-                    label="Merchant"
-                    value={editForm.merchant}
-                    onChange={e => setEditForm({...editForm, merchant: e.target.value})}
-                    error={editErrors.merchant}
-                  />
-                  <div className="flex gap-2">
-                    <Input
-                        label="Amount"
-                        type="number"
-                        inputMode="decimal"
-                        step="0.01"
-                        value={editForm.amount}
-                        onChange={e => setEditForm({...editForm, amount: e.target.value})}
-                        icon={<span className="text-brand-400 dark:text-brand-500 font-bold">$</span>}
-                        error={editErrors.amount}
-                    />
-                    <Input
-                        label="Date"
-                        type="date"
-                        value={editForm.date}
-                        onChange={e => setEditForm({...editForm, date: e.target.value})}
-                    />
-                  </div>
-                  <div className="flex gap-2 pt-2">
-                      <Button variant="ghost" className="flex-1" onClick={() => setIsEditing(false)}>
-                          Cancel
-                      </Button>
-                      <Button variant="primary" className="flex-1" onClick={handleSave} leftIcon={<Save size={16}/>}>
-                          Save Changes
-                      </Button>
-                  </div>
-              </div>
-            ) : (
-              /* Transaction Category & Habit Selector */
-              <div className="space-y-3">
-                {/* Habits Section - Smart Suggestions */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1.5">
-                    <Eyebrow as="p" className="text-xxs">Connect Habits</Eyebrow>
-                    {suggestedHabits.some(s => s.confidence !== 'low') && (
-                      <Sparkles size={10} className="text-warm-500" />
-                    )}
-                  </div>
-                  {habits.length === 0 && <p className="text-xs text-brand-400 dark:text-brand-500 italic">No habits found. Create some in Habits tab.</p>}
-
-                  {habits.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {/* Show suggested habits first */}
-                      {suggestedHabits
-                        .filter(s => s.confidence === 'high' || s.confidence === 'medium')
-                        .map(({ habit, confidence }) => {
-                          const isSelected = selectedHabitIds.includes(habit.id);
-                          return (
-                            <button
-                              key={habit.id}
-                              onClick={() => {
-                                setSelectedHabitIds(prev =>
-                                  isSelected
-                                    ? prev.filter(id => id !== habit.id)
-                                    : [...prev, habit.id]
-                                );
-                              }}
-                              className={`px-3 py-1.5 rounded-btn text-xs font-semibold transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center gap-1 relative ${
-                                isSelected
-                                  ? 'bg-accent-600 text-white'
-                                  : confidence === 'high'
-                                  ? 'bg-warm-50 border-2 border-warm-300 text-warm-700 hover:bg-warm-100 dark:bg-warm-900/20 dark:border-warm-700 dark:text-warm-300 dark:hover:bg-warm-900/40'
-                                  : 'bg-warm-50 border border-warm-200 text-warm-600 hover:bg-warm-100 dark:bg-warm-900/15 dark:border-warm-800 dark:text-warm-300 dark:hover:bg-warm-900/30'
-                              }`}
-                            >
-                              {isSelected && <Check size={12} strokeWidth={3} />}
-                              {habit.title}
-                              {!isSelected && confidence === 'high' && (
-                                <span className="absolute -top-1 -right-1 w-2 h-2 bg-warm-500 rounded-full motion-safe:animate-pulse" />
-                              )}
-                            </button>
-                          );
-                        })}
-
-                      {/* Show other habits (collapsed by default) */}
-                      {suggestedHabits
-                        .filter(s => s.confidence === 'low')
-                        .map(({ habit }) => {
-                          const isSelected = selectedHabitIds.includes(habit.id);
-                          if (!isSelected) return null; // Only show if selected
-                          return (
-                            <button
-                              key={habit.id}
-                              onClick={() => {
-                                setSelectedHabitIds(prev => prev.filter(id => id !== habit.id));
-                              }}
-                              className="px-3 py-1.5 rounded-btn text-xs font-semibold transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center gap-1 bg-accent-600 text-white"
-                            >
-                              <Check size={12} strokeWidth={3} />
-                              {habit.title}
-                            </button>
-                          );
-                        })}
-
-                      {/* "More" button to show all habits */}
-                      {suggestedHabits.filter(s => s.confidence === 'low' && !selectedHabitIds.includes(s.habit.id)).length > 0 && (
-                        <details className="inline">
-                          <summary className="px-3 py-1.5 rounded-btn text-xs font-semibold bg-white border border-brand-200 text-brand-500 hover:bg-brand-50 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-400 dark:hover:bg-brand-700 cursor-pointer inline-flex items-center gap-1">
-                            + More ({suggestedHabits.filter(s => s.confidence === 'low').length})
-                          </summary>
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {suggestedHabits
-                              .filter(s => s.confidence === 'low' && !selectedHabitIds.includes(s.habit.id))
-                              .map(({ habit }) => (
-                                <button
-                                  key={habit.id}
-                                  onClick={() => {
-                                    setSelectedHabitIds(prev => [...prev, habit.id]);
-                                  }}
-                                  className="px-3 py-1.5 rounded-btn text-xs font-semibold transition-colors duration-(--duration-fast) ease-(--ease-standard) bg-white border border-brand-200 text-brand-500 hover:bg-brand-50 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-400 dark:hover:bg-brand-700"
-                                >
-                                  {habit.title}
-                                </button>
-                              ))}
-                          </div>
-                        </details>
-                      )}
-                    </div>
+            /* Transaction Category & Habit Selector */
+            <div className="space-y-3">
+              {/* Habits Section - Smart Suggestions */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <Eyebrow as="p" className="text-xxs">Connect Habits</Eyebrow>
+                  {suggestedHabits.some(s => s.confidence !== 'low') && (
+                    <Sparkles size={10} className="text-warm-500" />
                   )}
                 </div>
+                {habits.length === 0 && <p className="text-xs text-brand-400 dark:text-brand-500 italic">No habits found. Create some in Habits tab.</p>}
 
-                {/* Categories Section */}
-                <div className="space-y-2">
-                  <Eyebrow as="p" className="text-xxs">Budget Category</Eyebrow>
+                {habits.length > 0 && (
                   <div className="flex flex-wrap gap-2">
-                    {buckets.map(bucket => (
-                      <button
-                        key={bucket.id}
-                        onClick={() => setSelectedCategory(bucket.name)}
-                        className={`px-3 py-1.5 rounded-btn text-xs font-semibold transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
-                          selectedCategory === bucket.name
-                            ? 'bg-brand-800 text-white dark:bg-brand-100 dark:text-brand-900'
-                            : 'bg-white border border-brand-200 text-brand-600 hover:bg-brand-50 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-300 dark:hover:bg-brand-700'
-                        }`}
+                    {/* Show suggested habits first */}
+                    {suggestedHabits
+                      .filter(s => s.confidence === 'high' || s.confidence === 'medium')
+                      .map(({ habit, confidence }) => {
+                        const isSelected = selectedHabitIds.includes(habit.id);
+                        return (
+                          <SelectableChip
+                            key={habit.id}
+                            selected={isSelected}
+                            showSuggestionDot={confidence === 'high'}
+                            onClick={() => {
+                              setSelectedHabitIds(prev =>
+                                isSelected
+                                  ? prev.filter(id => id !== habit.id)
+                                  : [...prev, habit.id]
+                              );
+                            }}
+                          >
+                            {habit.title}
+                          </SelectableChip>
+                        );
+                      })}
+
+                    {/* Low-confidence habits already selected stay visible even
+                        when "Show more" is collapsed. */}
+                    {lowConfidenceHabits
+                      .filter(s => selectedHabitIds.includes(s.habit.id))
+                      .map(({ habit }) => (
+                        <SelectableChip
+                          key={habit.id}
+                          selected
+                          onClick={() => setSelectedHabitIds(prev => prev.filter(id => id !== habit.id))}
+                        >
+                          {habit.title}
+                        </SelectableChip>
+                      ))}
+
+                    {/* Remaining low-confidence habits, revealed via a plain
+                        toggle button (matches the app's chevron-expand
+                        language elsewhere instead of a native <details>). */}
+                    {showAllHabits && remainingLowConfidenceHabits.map(({ habit }) => (
+                      <SelectableChip
+                        key={habit.id}
+                        selected={false}
+                        onClick={() => setSelectedHabitIds(prev => [...prev, habit.id])}
                       >
-                        {selectedCategory === bucket.name && <Check size={12} strokeWidth={3} className="inline mr-1" />}
-                        {bucket.name}
-                      </button>
+                        {habit.title}
+                      </SelectableChip>
                     ))}
-                    <button
-                      onClick={() => setSelectedCategory('Budgeted in Calendar')}
-                      className={`px-3 py-1.5 rounded-btn text-xs font-semibold transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
-                        selectedCategory === 'Budgeted in Calendar'
-                          ? 'bg-accent-700 text-white'
-                          : 'bg-accent-50 text-accent-700 border border-accent-200 hover:bg-accent-100 dark:bg-accent-800/40 dark:text-accent-200 dark:border-accent-700 dark:hover:bg-accent-800/60'
-                      }`}
-                    >
-                      {selectedCategory === 'Budgeted in Calendar' && <Check size={12} strokeWidth={3} className="inline mr-1" />}
-                      Budgeted in Calendar
-                    </button>
+
+                    {remainingLowConfidenceHabits.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllHabits(prev => !prev)}
+                        aria-expanded={showAllHabits}
+                        className="px-3 py-1.5 rounded-btn text-xs font-semibold bg-white border border-brand-200 text-brand-500 hover:bg-brand-50 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-400 dark:hover:bg-brand-700 inline-flex items-center gap-1"
+                      >
+                        {showAllHabits ? 'Show less' : `+ More (${remainingLowConfidenceHabits.length})`}
+                        <ChevronDown
+                          size={12}
+                          className={cn('transition-transform duration-(--duration-fast) ease-(--ease-standard)', showAllHabits && 'rotate-180')}
+                        />
+                      </button>
+                    )}
                   </div>
-                </div>
+                )}
+              </div>
 
-                {/* Approve Button */}
-                <Button
-                  variant="success"
-                  size="lg"
-                  onClick={async () => {
-                    if (!selectedCategory) {
-                      toast.error('Please select a category');
-                      return;
-                    }
-                    try {
-                      await updateTransactionCategory(item.id, selectedCategory, selectedHabitIds);
-                      toast.success('Transaction approved!');
-                      setExpandedId(null);
-                      setSelectedHabitIds([]);
-                      setSelectedCategory('');
-                    } catch (error) {
-                      console.error('Failed to approve transaction:', error);
-                      toast.error('Failed to approve transaction');
-                    }
-                  }}
-                  disabled={!selectedCategory}
-                  className="w-full py-3"
-                  leftIcon={<Check size={18} strokeWidth={3} />}
-                >
-                  Approve Transaction
-                </Button>
-
-                {/* Edit/Delete Actions */}
-                <div className="flex gap-2 pt-1 border-t border-brand-200 dark:border-brand-700 mt-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="flex-1 text-xs"
-                      leftIcon={<Pencil size={14}/>}
-                      onClick={handleEdit}
+              {/* Categories Section */}
+              <div className="space-y-2">
+                <Eyebrow as="p" className="text-xxs">Budget Category</Eyebrow>
+                <div className="flex flex-wrap gap-2">
+                  {buckets.map(bucket => (
+                    <SelectableChip
+                      key={bucket.id}
+                      selected={selectedCategory === bucket.name}
+                      onClick={() => setSelectedCategory(bucket.name)}
                     >
-                        Edit Details
-                    </Button>
-                    <Button
-                      variant="ghost-danger"
-                      size="sm"
-                      className="flex-1 text-xs"
-                      leftIcon={<Trash2 size={14}/>}
-                      onClick={handleDelete}
-                    >
-                        Delete
-                    </Button>
+                      {bucket.name}
+                    </SelectableChip>
+                  ))}
+                  <SelectableChip
+                    selected={selectedCategory === 'Budgeted in Calendar'}
+                    onClick={() => setSelectedCategory('Budgeted in Calendar')}
+                  >
+                    Budgeted in Calendar
+                  </SelectableChip>
                 </div>
               </div>
-            )
-          )}
-        </div>
-      )}
+
+              {/* Approve Button */}
+              <Button
+                variant="success"
+                size="lg"
+                onClick={async () => {
+                  if (!selectedCategory) {
+                    toast.error('Please select a category');
+                    return;
+                  }
+                  try {
+                    await updateTransactionCategory(item.id, selectedCategory, selectedHabitIds);
+                    toast.success('Transaction approved!');
+                    setExpandedId(null);
+                    setSelectedHabitIds([]);
+                    setSelectedCategory('');
+                  } catch (error) {
+                    console.error('Failed to approve transaction:', error);
+                    toast.error('Failed to approve transaction');
+                  }
+                }}
+                disabled={!selectedCategory}
+                className="w-full py-3"
+                leftIcon={<Check size={18} strokeWidth={3} />}
+              >
+                Approve Transaction
+              </Button>
+
+              {/* Edit/Delete Actions */}
+              <div className="flex gap-2 pt-1 border-t border-brand-200 dark:border-brand-700 mt-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="flex-1 text-xs"
+                    leftIcon={<Pencil size={14}/>}
+                    onClick={handleEdit}
+                  >
+                      Edit Details
+                  </Button>
+                  <Button
+                    variant="ghost-danger"
+                    size="sm"
+                    className="flex-1 text-xs"
+                    leftIcon={<Trash2 size={14}/>}
+                    onClick={handleDelete}
+                  >
+                      Delete
+                  </Button>
+              </div>
+            </div>
+          )
+        )}
+      </Drawer>
     </div>
   );
 }, areActionQueueItemPropsEqual);

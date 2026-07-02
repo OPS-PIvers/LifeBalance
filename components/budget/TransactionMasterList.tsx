@@ -13,6 +13,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import EmptyState from '@/components/ui/EmptyState';
+import { StatGroup, Stat } from '@/components/ui/Section';
 import toast from 'react-hot-toast';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -370,8 +371,8 @@ const TransactionMasterList: React.FC = () => {
 
   return (
     <div className="space-y-4 animate-in fade-in duration-(--duration-base)">
-      {/* Filters Card */}
-      <div className="surface-section p-5 space-y-3">
+      {/* Search + Filters — flat on the page background, no wrapping card */}
+      <div className="space-y-3">
         {/* Search Bar */}
         <div className="relative">
           <Input
@@ -396,7 +397,7 @@ const TransactionMasterList: React.FC = () => {
         </div>
 
         {/* Mobile Filter & Select Toggle */}
-        <div className="flex md:hidden items-center gap-2 mb-2">
+        <div className="flex md:hidden items-center gap-2">
            <Button
              variant="secondary"
              className="flex-1 justify-center"
@@ -475,34 +476,18 @@ const TransactionMasterList: React.FC = () => {
         />
       </div>
 
-      {/* Summary Widget */}
-      <div className="surface-section p-5">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="bg-brand-50 dark:bg-brand-700/40 p-4 rounded-card border border-brand-200 dark:border-brand-700">
-            <p className="text-xs font-semibold text-brand-400 dark:text-brand-500 uppercase tracking-wider mb-1">Income</p>
-            <p className="text-lg font-bold text-money-pos font-mono tabular-nums">
-              +{fmt(summary.income)}
-            </p>
-          </div>
-          <div className="bg-brand-50 dark:bg-brand-700/40 p-4 rounded-card border border-brand-200 dark:border-brand-700">
-            <p className="text-xs font-semibold text-brand-400 dark:text-brand-500 uppercase tracking-wider mb-1">Expense</p>
-            <p className="text-lg font-bold text-money-neg font-mono tabular-nums">
-              -{fmt(summary.expense)}
-            </p>
-          </div>
-          <div className="bg-brand-50 dark:bg-brand-700/40 p-4 rounded-card border border-brand-200 dark:border-brand-700">
-            <p className="text-xs font-semibold text-brand-400 dark:text-brand-500 uppercase tracking-wider mb-1">Net</p>
-            <p className={`text-lg font-bold font-mono tabular-nums ${net >= 0 ? 'text-money-pos' : 'text-money-neg'}`}>
-              {net >= 0 ? '+' : ''}{fmt(net)}
-            </p>
-          </div>
-          <div className="bg-brand-50 dark:bg-brand-700/40 p-4 rounded-card border border-brand-200 dark:border-brand-700">
-            <p className="text-xs font-semibold text-brand-400 dark:text-brand-500 uppercase tracking-wider mb-1">Count</p>
-            <p className="text-lg font-bold text-brand-700 dark:text-brand-200 font-mono tabular-nums">
-              {summary.count}
-            </p>
-          </div>
-        </div>
+      {/* Summary — typography stat row, no boxed tiles */}
+      <div className="px-1">
+        <StatGroup>
+          <Stat label="Income" value={`+${fmt(summary.income)}`} valueClassName="text-money-pos" />
+          <Stat label="Expense" value={`-${fmt(summary.expense)}`} valueClassName="text-money-neg" />
+          <Stat
+            label="Net"
+            value={`${net >= 0 ? '+' : ''}${fmt(net)}`}
+            valueClassName={net >= 0 ? 'text-money-pos' : 'text-money-neg'}
+          />
+          <Stat label="Count" value={summary.count} />
+        </StatGroup>
       </div>
 
       {/* Select All Bar */}
@@ -584,7 +569,7 @@ const TransactionMasterList: React.FC = () => {
         <div
           ref={scrollContainerRef}
           data-testid="virtual-scroll-container"
-          className="overflow-y-auto"
+          className="surface-section overflow-y-auto"
           style={{ height: '64vh' }}
         >
           {/* Spacer that grows to the total measured height of all items */}

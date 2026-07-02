@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
+import { Section, SurfaceList, Row } from '@/components/ui/Section';
 
 interface ChallengeHubModalProps {
   isOpen: boolean;
@@ -277,7 +278,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                     Only rendered when Kid Mode is on; warm-amber kid-surface accents.
                     Leaves the existing edit form (below) untouched when off. */}
                 {kidModeEnabled && (
-                  <div className="rounded-2xl border-2 border-warm-200 dark:border-warm-500/40 bg-warm-50 dark:bg-warm-500/10 p-4">
+                  <div>
                     {!showFamilyForm ? (
                       <Button
                         type="button"
@@ -341,35 +342,38 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                               Add a habit first to link it to a challenge.
                             </p>
                           ) : (
-                            <div className="space-y-2 max-h-44 scroll-contain-y">
-                              {habits.map((habit) => {
-                                const isSelected = familyHabitIds.includes(habit.id);
-                                return (
-                                  <button
-                                    key={habit.id}
-                                    type="button"
-                                    onClick={() => toggleFamilyHabit(habit.id)}
-                                    className={`flex w-full items-center gap-3 rounded-lg border p-2.5 text-left transition-all ${
-                                      isSelected
-                                        ? 'bg-white dark:bg-brand-800 border-warm-400'
-                                        : 'bg-transparent border-transparent hover:bg-white/60 dark:hover:bg-brand-800/60'
-                                    }`}
-                                  >
-                                    <span
-                                      className={`flex h-5 w-5 items-center justify-center rounded ${
+                            <div className="max-h-44 overflow-y-auto scroll-contain-y">
+                              <SurfaceList>
+                                {habits.map((habit) => {
+                                  const isSelected = familyHabitIds.includes(habit.id);
+                                  return (
+                                    <button
+                                      key={habit.id}
+                                      type="button"
+                                      onClick={() => toggleFamilyHabit(habit.id)}
+                                      aria-pressed={isSelected}
+                                      className={`flex w-full items-center gap-3 px-4 py-2.5 text-left hairline-divider transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
                                         isSelected
-                                          ? 'bg-warm-500 text-white'
-                                          : 'border border-warm-300 dark:border-warm-500/50 bg-white dark:bg-brand-800'
+                                          ? 'bg-warm-50 dark:bg-warm-900/20'
+                                          : 'hover:bg-warm-50/60 dark:hover:bg-warm-900/10'
                                       }`}
                                     >
-                                      {isSelected && <Check size={14} strokeWidth={3} />}
-                                    </span>
-                                    <span className="text-sm font-medium text-brand-700 dark:text-brand-200">
-                                      {habit.title}
-                                    </span>
-                                  </button>
-                                );
-                              })}
+                                      <span
+                                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded ${
+                                          isSelected
+                                            ? 'bg-warm-500 text-white'
+                                            : 'border border-warm-300 dark:border-warm-500/50 bg-white dark:bg-brand-800'
+                                        }`}
+                                      >
+                                        {isSelected && <Check size={14} strokeWidth={3} />}
+                                      </span>
+                                      <span className="text-sm font-medium text-brand-700 dark:text-brand-200">
+                                        {habit.title}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </SurfaceList>
                             </div>
                           )}
                         </div>
@@ -492,82 +496,87 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                 )}
 
                 {/* Habit Selector */}
-                <div className="bg-brand-50 dark:bg-brand-700/50 p-4 rounded-xl border border-brand-100 dark:border-brand-700">
-                  <h3 className="text-sm font-bold text-brand-700 dark:text-brand-200 mb-3">Linked Habits</h3>
-                  <div className="space-y-2 max-h-60 scroll-contain-y">
-                    {/* Suggested New Habit */}
-                    {suggestedHabit && (
-                        <div
-                          key="suggested-habit"
-                          onClick={() => toggleHabitSelection('suggested-habit')}
-                          className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${
-                            selectedHabitIds.includes('suggested-habit')
-                              ? 'bg-white dark:bg-brand-800 border-brand-400 dark:border-brand-600'
-                              : 'bg-transparent border-transparent hover:bg-white/50 dark:hover:bg-brand-700/50'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={`w-5 h-5 rounded flex items-center justify-center ${
-                                selectedHabitIds.includes('suggested-habit')
-                                  ? 'bg-brand-800 text-white'
-                                  : 'border border-brand-300 dark:border-brand-600 bg-white dark:bg-brand-800'
-                              }`}
-                            >
-                              {selectedHabitIds.includes('suggested-habit') && <Check size={14} strokeWidth={3} />}
-                            </div>
-                            <span className="text-sm font-medium text-brand-700 dark:text-brand-200">
-                              {suggestedHabit.title} <Badge variant="neutral" size="sm" className="ml-2">NEW</Badge>
-                            </span>
-                          </div>
-                          <Badge
-                            variant={(suggestedHabit.type || 'positive') === 'positive' ? 'success' : 'danger'}
-                            size="sm"
-                            className="uppercase"
+                <Section title="Linked Habits">
+                  <div className="max-h-60 overflow-y-auto scroll-contain-y">
+                    <SurfaceList>
+                      {/* Suggested New Habit */}
+                      {suggestedHabit && (
+                          <button
+                            key="suggested-habit"
+                            type="button"
+                            onClick={() => toggleHabitSelection('suggested-habit')}
+                            aria-pressed={selectedHabitIds.includes('suggested-habit')}
+                            className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left hairline-divider transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
+                              selectedHabitIds.includes('suggested-habit')
+                                ? 'bg-brand-50 dark:bg-brand-700/40'
+                                : 'hover:bg-brand-50 dark:hover:bg-brand-700/40'
+                            }`}
                           >
-                            {(suggestedHabit.type || 'positive') === 'positive' ? 'Good' : 'Bad'}
-                          </Badge>
-                        </div>
-                    )}
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div
+                                className={`w-5 h-5 shrink-0 rounded flex items-center justify-center ${
+                                  selectedHabitIds.includes('suggested-habit')
+                                    ? 'bg-brand-800 text-white'
+                                    : 'border border-brand-300 dark:border-brand-600 bg-white dark:bg-brand-800'
+                                }`}
+                              >
+                                {selectedHabitIds.includes('suggested-habit') && <Check size={14} strokeWidth={3} />}
+                              </div>
+                              <span className="text-sm font-medium text-brand-700 dark:text-brand-200 truncate">
+                                {suggestedHabit.title} <Badge variant="neutral" size="sm" className="ml-2">NEW</Badge>
+                              </span>
+                            </div>
+                            <Badge
+                              variant={(suggestedHabit.type || 'positive') === 'positive' ? 'success' : 'danger'}
+                              size="sm"
+                              className="uppercase shrink-0"
+                            >
+                              {(suggestedHabit.type || 'positive') === 'positive' ? 'Good' : 'Bad'}
+                            </Badge>
+                          </button>
+                      )}
 
-                    {habits.map((habit) => {
-                      const isSelected = selectedHabitIds.includes(habit.id);
-                      return (
-                        <div
-                          key={habit.id}
-                          onClick={() => toggleHabitSelection(habit.id)}
-                          className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${
-                            isSelected
-                              ? 'bg-white dark:bg-brand-800 border-brand-400 dark:border-brand-600'
-                              : 'bg-transparent border-transparent hover:bg-white/50 dark:hover:bg-brand-700/50'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={`w-5 h-5 rounded flex items-center justify-center ${
-                                isSelected
-                                  ? 'bg-brand-800 text-white'
-                                  : 'border border-brand-300 dark:border-brand-600 bg-white dark:bg-brand-800'
-                              }`}
-                            >
-                              {isSelected && <Check size={14} strokeWidth={3} />}
-                            </div>
-                            <span className="text-sm font-medium text-brand-700 dark:text-brand-200">
-                              {habit.title}
-                            </span>
-                          </div>
-                          <Badge
-                            variant={habit.type === 'positive' ? 'success' : 'danger'}
-                            size="sm"
-                            className="uppercase"
+                      {habits.map((habit) => {
+                        const isSelected = selectedHabitIds.includes(habit.id);
+                        return (
+                          <button
+                            key={habit.id}
+                            type="button"
+                            onClick={() => toggleHabitSelection(habit.id)}
+                            aria-pressed={isSelected}
+                            className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left hairline-divider transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
+                              isSelected
+                                ? 'bg-brand-50 dark:bg-brand-700/40'
+                                : 'hover:bg-brand-50 dark:hover:bg-brand-700/40'
+                            }`}
                           >
-                            {habit.type === 'positive' ? 'Good' : 'Bad'}
-                          </Badge>
-                        </div>
-                      );
-                    })}
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div
+                                className={`w-5 h-5 shrink-0 rounded flex items-center justify-center ${
+                                  isSelected
+                                    ? 'bg-brand-800 text-white'
+                                    : 'border border-brand-300 dark:border-brand-600 bg-white dark:bg-brand-800'
+                                }`}
+                              >
+                                {isSelected && <Check size={14} strokeWidth={3} />}
+                              </div>
+                              <span className="text-sm font-medium text-brand-700 dark:text-brand-200 truncate">
+                                {habit.title}
+                              </span>
+                            </div>
+                            <Badge
+                              variant={habit.type === 'positive' ? 'success' : 'danger'}
+                              size="sm"
+                              className="uppercase shrink-0"
+                            >
+                              {habit.type === 'positive' ? 'Good' : 'Bad'}
+                            </Badge>
+                          </button>
+                        );
+                      })}
+                    </SurfaceList>
                   </div>
-                </div>
+                </Section>
               </TabsContent>
 
               {/* Yearly Goal Tab */}
@@ -724,18 +733,19 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                             <button
                               key={dateStr}
                               onClick={() => setSelectedDate(date)}
-                              className={`p-3 rounded-xl border-2 transition-all ${
+                              aria-pressed={!!isSelected}
+                              className={`flex flex-col items-center gap-0.5 py-2.5 rounded-full transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
                                 isSelected
-                                  ? 'border-habit-blue bg-habit-blue/10 dark:bg-habit-blue/15'
-                                  : 'border-brand-100 dark:border-brand-700 hover:border-brand-200 dark:hover:border-brand-600'
+                                  ? 'bg-habit-blue text-white'
+                                  : 'bg-brand-100 dark:bg-brand-700/50 text-brand-500 dark:text-brand-400 hover:bg-brand-200 dark:hover:bg-brand-700'
                               }`}
                             >
-                              <div className="text-xxs text-brand-400 dark:text-brand-400 font-medium">
+                              <span className="text-xxs font-medium opacity-80">
                                 {format(date, 'EEE')}
-                              </div>
-                              <div className="text-sm font-bold text-brand-800 dark:text-brand-100">
+                              </span>
+                              <span className="text-sm font-bold">
                                 {format(date, 'd')}
-                              </div>
+                              </span>
                             </button>
                           );
                         })}
@@ -748,28 +758,31 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                         <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase mb-2 block">
                           Select Habit to Patch
                         </label>
-                        <div className="space-y-2 max-h-48 scroll-contain-y">
-                          {habits
-                            .filter((h) => h.type === 'positive')
-                            .map((habit) => {
-                              const dateStr = format(selectedDate, 'yyyy-MM-dd');
-                              const alreadyCompleted = habit.completedDates.includes(dateStr);
+                        <div className="max-h-48 overflow-y-auto scroll-contain-y">
+                          <SurfaceList>
+                            {habits
+                              .filter((h) => h.type === 'positive')
+                              .map((habit) => {
+                                const dateStr = format(selectedDate, 'yyyy-MM-dd');
+                                const alreadyCompleted = habit.completedDates.includes(dateStr);
+                                const isSelected = selectedHabitForFreeze === habit.id;
 
-                              return (
-                                <button
-                                  key={habit.id}
-                                  onClick={() => setSelectedHabitForFreeze(habit.id)}
-                                  disabled={alreadyCompleted}
-                                  className={`w-full p-3 rounded-xl border-2 text-left transition-all ${
-                                    selectedHabitForFreeze === habit.id
-                                      ? 'border-habit-blue bg-habit-blue/10 dark:bg-habit-blue/15'
-                                      : alreadyCompleted
-                                      ? 'border-brand-100 dark:border-brand-700 bg-brand-50 dark:bg-brand-700/50 opacity-50 cursor-not-allowed'
-                                      : 'border-brand-100 dark:border-brand-700 hover:border-brand-200 dark:hover:border-brand-600'
-                                  }`}
-                                >
-                                  <div className="flex items-center justify-between">
-                                    <span className="font-bold text-brand-700 dark:text-brand-200">
+                                return (
+                                  <button
+                                    key={habit.id}
+                                    type="button"
+                                    onClick={() => setSelectedHabitForFreeze(habit.id)}
+                                    disabled={alreadyCompleted}
+                                    aria-pressed={isSelected}
+                                    className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left hairline-divider transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
+                                      isSelected
+                                        ? 'bg-habit-blue/10 dark:bg-habit-blue/15'
+                                        : alreadyCompleted
+                                        ? 'opacity-50 cursor-not-allowed'
+                                        : 'hover:bg-brand-50 dark:hover:bg-brand-700/40'
+                                    }`}
+                                  >
+                                    <span className="font-bold text-brand-700 dark:text-brand-200 text-sm">
                                       {habit.title}
                                     </span>
                                     {alreadyCompleted && (
@@ -777,10 +790,10 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                                         Already completed
                                       </span>
                                     )}
-                                  </div>
-                                </button>
-                              );
-                            })}
+                                  </button>
+                                );
+                              })}
+                          </SurfaceList>
                         </div>
                       </div>
                     )}
@@ -798,40 +811,35 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                 )}
 
                 {/* History Log */}
-                <div>
-                  <h3 className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase mb-3">
-                    Recent History
-                  </h3>
-                  <div className="space-y-2">
-                    {(freezeBank?.history || [])
-                      .slice(-5)
-                      .reverse()
-                      .map((entry) => (
-                        <div
-                          key={entry.id}
-                          className="flex items-center justify-between p-3 bg-brand-50 dark:bg-brand-700/50 rounded-xl border border-brand-100 dark:border-brand-700"
-                        >
-                          <div>
-                            <p className="text-sm font-medium text-brand-700 dark:text-brand-200">
-                              {entry.type === 'used' ? '❄️ Token Used' : '📥 Rollover'}
-                            </p>
-                            <p className="text-xs text-brand-400 dark:text-brand-400">{entry.notes}</p>
-                          </div>
-                          <span
-                            className={`text-sm font-bold ${
-                              entry.amount > 0 ? 'text-money-pos' : 'text-brand-600 dark:text-brand-300'
-                            }`}
-                          >
-                            {entry.amount > 0 ? '+' : ''}
-                            {entry.amount}
-                          </span>
-                        </div>
-                      ))}
-                    {(!freezeBank?.history || freezeBank.history.length === 0) && (
-                      <p className="text-sm text-brand-400 dark:text-brand-400 text-center py-4">No history yet</p>
-                    )}
-                  </div>
-                </div>
+                <Section title="Recent History">
+                  {(!freezeBank?.history || freezeBank.history.length === 0) ? (
+                    <p className="text-sm text-brand-400 dark:text-brand-400 text-center py-4">No history yet</p>
+                  ) : (
+                    <SurfaceList>
+                      {(freezeBank?.history || [])
+                        .slice(-5)
+                        .reverse()
+                        .map((entry) => (
+                          <Row key={entry.id} className="justify-between">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-brand-700 dark:text-brand-200">
+                                {entry.type === 'used' ? '❄️ Token Used' : '📥 Rollover'}
+                              </p>
+                              <p className="text-xs text-brand-400 dark:text-brand-400 truncate">{entry.notes}</p>
+                            </div>
+                            <span
+                              className={`shrink-0 text-sm font-bold ${
+                                entry.amount > 0 ? 'text-money-pos' : 'text-brand-600 dark:text-brand-300'
+                              }`}
+                            >
+                              {entry.amount > 0 ? '+' : ''}
+                              {entry.amount}
+                            </span>
+                          </Row>
+                        ))}
+                    </SurfaceList>
+                  )}
+                </Section>
               </TabsContent>
           </div>
 

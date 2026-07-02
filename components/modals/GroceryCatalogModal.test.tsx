@@ -35,42 +35,80 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useShopping: () => mockHousehold
 }));
 
-// Mock Drawer to verify it's being used
+// Mock Drawer to verify it's being used, while still rendering the fixed
+// header/footer slots so the single-sheet view-swap can be exercised.
 vi.mock('@/components/ui/Drawer', () => ({
-  Drawer: ({ children, isOpen, title }: { children: React.ReactNode, isOpen: boolean, title?: string }) => isOpen ? (
-    <div data-testid="drawer">
-      {title && <h1>{title}</h1>}
-      {children}
-    </div>
-  ) : null
+  Drawer: ({
+    children,
+    isOpen,
+    header,
+    footer,
+  }: {
+    children: React.ReactNode;
+    isOpen: boolean;
+    header?: React.ReactNode;
+    footer?: React.ReactNode;
+  }) =>
+    isOpen ? (
+      <div data-testid="drawer">
+        {header}
+        {children}
+        {footer}
+      </div>
+    ) : null,
 }));
 
-describe('GroceryCatalogModal Mobile Optimization', () => {
+describe('GroceryCatalogModal', () => {
   it('renders without crashing', () => {
     render(<GroceryCatalogModal isOpen={true} onClose={vi.fn()} />);
     expect(screen.getByText('Previously Purchased')).toBeInTheDocument();
   });
 
-  it('renders mobile action button for each item', () => {
+  it('renders always-visible edit and delete actions for each item (no action sheet)', () => {
     render(<GroceryCatalogModal isOpen={true} onClose={vi.fn()} />);
 
-    // Look for the "More options" button which we will add
-    // Since we have 2 items in mock data, we expect 2 buttons
-    const moreButtons = screen.getAllByLabelText('More options');
-    expect(moreButtons.length).toBe(2);
+    // Since we have 2 items in mock data, we expect 2 of each action.
+    expect(screen.getAllByLabelText(/^Edit /).length).toBe(2);
+    expect(screen.getAllByLabelText(/from history$/).length).toBe(2);
+
+    // The old "More options" action-sheet trigger is gone entirely.
+    expect(screen.queryByLabelText('More options')).not.toBeInTheDocument();
+    expect(screen.queryByText('Item Options')).not.toBeInTheDocument();
   });
 
-  it('opens action drawer when mobile button is clicked', () => {
+  it('swaps to an in-sheet edit view (single sheet, no nested Drawer) when Edit is clicked', () => {
     render(<GroceryCatalogModal isOpen={true} onClose={vi.fn()} />);
 
-    const moreButtons = screen.getAllByLabelText('More options');
-    fireEvent.click(moreButtons[0]!);
+    fireEvent.click(screen.getByLabelText('Edit Milk'));
 
-    // Check if the drawer with "Item Options" title appears
-    expect(screen.getByText('Item Options')).toBeInTheDocument();
+    // Only one Drawer instance should ever be rendered.
+    expect(screen.getAllByTestId('drawer').length).toBe(1);
 
-    // Check for action buttons
-    expect(screen.getByText('Edit Details')).toBeInTheDocument();
+    expect(screen.getByText('Edit History Item')).toBeInTheDocument();
+    expect(screen.getByLabelText('Back to history')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Milk')).toBeInTheDocument();
+
+    // The list view (and its "Previously Purchased" header) is no longer shown.
+    expect(screen.queryByText('Previously Purchased')).not.toBeInTheDocument();
+  });
+
+  it('returns to the list view when the back button is clicked', () => {
+    render(<GroceryCatalogModal isOpen={true} onClose={vi.fn()} />);
+
+    fireEvent.click(screen.getByLabelText('Edit Milk'));
+    expect(screen.getByText('Edit History Item')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Back to history'));
+
+    expect(screen.getByText('Previously Purchased')).toBeInTheDocument();
+    expect(screen.queryByText('Edit History Item')).not.toBeInTheDocument();
+  });
+
+  it('opens the remove confirmation when Delete is clicked', () => {
+    render(<GroceryCatalogModal isOpen={true} onClose={vi.fn()} />);
+
+    fireEvent.click(screen.getByLabelText('Delete Milk from history'));
+
     expect(screen.getByText('Remove from History')).toBeInTheDocument();
   });
 });

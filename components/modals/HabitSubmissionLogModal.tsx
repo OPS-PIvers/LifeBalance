@@ -12,6 +12,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import EmptyState from '@/components/ui/EmptyState';
 import Input from '@/components/ui/Input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
+import { Section, StatGroup, Stat } from '@/components/ui/Section';
 
 interface HabitSubmissionLogModalProps {
   isOpen: boolean;
@@ -248,153 +249,145 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
           ) : (
           <>
           <TabsContent value="calendar" className="p-4 space-y-4">
-            {/* Calendar Controls */}
-            <div className="flex items-center justify-between bg-white dark:bg-brand-800 p-2 rounded-xl border border-brand-200 dark:border-brand-700 shadow-xs">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setCalendarDate(subMonths(calendarDate, 1))}
-                aria-label="Previous month"
-              >
-                <ChevronLeft size={20} />
-              </Button>
-              <h3 className="text-lg font-bold text-brand-800 dark:text-brand-100">
-                {format(calendarDate, 'MMMM yyyy')}
-              </h3>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setCalendarDate(addMonths(calendarDate, 1))}
-                aria-label="Next month"
-              >
-                <ChevronRight size={20} />
-              </Button>
-            </div>
-
-            {/* Calendar Grid */}
-            <div
-              className="bg-white dark:bg-brand-800 rounded-xl border border-brand-200 dark:border-brand-700 p-4 shadow-xs"
-              role="grid"
-              aria-label={`Habit calendar for ${format(calendarDate, 'MMMM yyyy')}`}
-            >
-              <div className="grid grid-cols-7 mb-2" role="row">
-                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-                  <div key={i} className="text-center text-xs font-bold text-brand-300 dark:text-brand-500 py-2" role="columnheader">
-                    {day}
-                  </div>
-                ))}
+            {/* Calendar — nav row + grid share a single surface */}
+            <div className="bg-white dark:bg-brand-800 rounded-xl border border-brand-200 dark:border-brand-700 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setCalendarDate(subMonths(calendarDate, 1))}
+                  aria-label="Previous month"
+                >
+                  <ChevronLeft size={20} />
+                </Button>
+                <h3 className="text-lg font-bold text-brand-800 dark:text-brand-100">
+                  {format(calendarDate, 'MMMM yyyy')}
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setCalendarDate(addMonths(calendarDate, 1))}
+                  aria-label="Next month"
+                >
+                  <ChevronRight size={20} />
+                </Button>
               </div>
-              <div className="grid grid-cols-7 gap-1" role="presentation">
-                {calendarData.days.map((day) => {
-                  const dateStr = format(day, 'yyyy-MM-dd');
-                  // Use O(1) Set lookup
-                  const isCompleted = calendarData.completedDatesSet.has(dateStr);
-                  const isCurrentMonth = isSameMonth(day, calendarDate);
-                  const isTodayDate = isSameDay(day, new Date());
 
-                  // Accessibility label
-                  const label = `${format(day, 'MMMM do')}, ${isCompleted ? 'completed' : 'not completed'}`;
-
-                  return (
-                    <div
-                      key={dateStr}
-                      role="gridcell"
-                      aria-label={label}
-                      className={`
-                        aspect-square rounded-lg flex items-center justify-center text-sm font-medium relative
-                        ${!isCurrentMonth ? 'opacity-30' : ''}
-                        ${isCompleted
-                          ? (habit.type === 'positive' ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos font-bold' : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg font-bold')
-                          : 'bg-brand-50 dark:bg-brand-700/50 text-brand-400 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-700/50'
-                        }
-                        ${isTodayDate && !isCompleted ? 'ring-2 ring-brand-400' : ''}
-                      `}
-                      title={dateStr}
-                    >
-                      {format(day, 'd')}
-                      {isCompleted && (
-                        <div className={`absolute bottom-1 w-1 h-1 rounded-full ${habit.type === 'positive' ? 'bg-money-pos' : 'bg-money-neg'}`} />
-                      )}
+              <div
+                role="grid"
+                aria-label={`Habit calendar for ${format(calendarDate, 'MMMM yyyy')}`}
+              >
+                <div className="grid grid-cols-7 mb-2" role="row">
+                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+                    <div key={i} className="text-center text-xs font-bold text-brand-300 dark:text-brand-500 py-2" role="columnheader">
+                      {day}
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 gap-1" role="presentation">
+                  {calendarData.days.map((day) => {
+                    const dateStr = format(day, 'yyyy-MM-dd');
+                    // Use O(1) Set lookup
+                    const isCompleted = calendarData.completedDatesSet.has(dateStr);
+                    const isCurrentMonth = isSameMonth(day, calendarDate);
+                    const isTodayDate = isSameDay(day, new Date());
+
+                    // Accessibility label
+                    const label = `${format(day, 'MMMM do')}, ${isCompleted ? 'completed' : 'not completed'}`;
+
+                    return (
+                      <div
+                        key={dateStr}
+                        role="gridcell"
+                        aria-label={label}
+                        className={`
+                          aspect-square rounded-lg flex items-center justify-center text-sm font-medium relative
+                          ${!isCurrentMonth ? 'opacity-30' : ''}
+                          ${isCompleted
+                            ? (habit.type === 'positive' ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos font-bold' : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg font-bold')
+                            : 'bg-brand-50 dark:bg-brand-700/50 text-brand-400 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-700/50'
+                          }
+                          ${isTodayDate && !isCompleted ? 'ring-2 ring-brand-400' : ''}
+                        `}
+                        title={dateStr}
+                      >
+                        {format(day, 'd')}
+                        {isCompleted && (
+                          <div className={`absolute bottom-1 w-1 h-1 rounded-full ${habit.type === 'positive' ? 'bg-money-pos' : 'bg-money-neg'}`} />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
-            {/* Summary */}
-            <div className="bg-brand-50 dark:bg-brand-700/50 rounded-xl p-4 flex items-center gap-4">
-              <div className={`p-3 rounded-full ${habit.type === 'positive' ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos' : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg'}`}>
-                <CheckCircle2 size={24} />
+            {/* Summary — typography line, no boxed card */}
+            <div className="flex items-center gap-3 px-1">
+              <div className={`shrink-0 p-2 rounded-full ${habit.type === 'positive' ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos' : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg'}`}>
+                <CheckCircle2 size={20} />
               </div>
               <div>
                 <p className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase tracking-wide">
                   {format(calendarDate, 'MMMM')} Performance
                 </p>
-                <p className="text-xl font-bold text-brand-800 dark:text-brand-100">
+                <p className="text-lg font-bold text-brand-800 dark:text-brand-100">
                   {calendarData.completionsInMonth} day{calendarData.completionsInMonth !== 1 ? 's' : ''} completed
                 </p>
               </div>
             </div>
           </TabsContent>
 
-          <TabsContent value="stats" className="p-4 space-y-4">
-            {/* Stats Overview */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-money-bgPos dark:bg-money-pos/10 p-4 rounded-xl border border-money-pos/30">
-                <div className="flex items-center gap-2 mb-1">
-                  <Award className="w-4 h-4 text-money-pos" />
-                  <span className="text-xs font-bold text-money-pos uppercase tracking-wide">Total Points</span>
-                </div>
-                <p className="font-mono text-2xl font-bold tabular-nums text-money-pos">{analytics.totalPoints.toLocaleString()}</p>
-                <p className="text-xs text-money-pos mt-1">
-                  {analytics.averagePointsPerSubmission.toFixed(1)} avg/submission
-                </p>
-              </div>
-
-              <div className="bg-warm-50 dark:bg-warm-900/20 p-4 rounded-xl border border-warm-200 dark:border-warm-800/60">
-                <div className="flex items-center gap-2 mb-1">
-                  <TrendingUp className="w-4 h-4 text-warm-600 dark:text-warm-300" />
-                  <span className="text-xs font-bold text-warm-700 dark:text-warm-300 uppercase tracking-wide">Submissions</span>
-                </div>
-                <p className="font-mono text-2xl font-bold tabular-nums text-warm-700 dark:text-warm-200">{analytics.totalSubmissions}</p>
-                <p className="text-xs text-warm-600 dark:text-warm-300 mt-1">
-                  {analytics.totalCount} total actions
-                </p>
-              </div>
-
-              <div className="bg-warm-50 dark:bg-warm-900/20 p-4 rounded-xl border border-warm-200 dark:border-warm-800/60">
-                <div className="flex items-center gap-2 mb-1">
-                  <Flame className="w-4 h-4 text-habit-streak" />
-                  <span className="text-xs font-bold text-habit-streak uppercase tracking-wide">Current Streak</span>
-                </div>
-                <p className="font-mono text-2xl font-bold tabular-nums text-habit-streak">{analytics.currentStreak}</p>
-                <p className="text-xs text-warm-600 dark:text-warm-300 mt-1">
-                  {analytics.maxStreak} day max
-                </p>
-              </div>
-
-              <div className="bg-habit-blue/10 dark:bg-habit-blue/15 p-4 rounded-xl border border-habit-blue/30">
-                <div className="flex items-center gap-2 mb-1">
-                  <BarChart3 className="w-4 h-4 text-habit-blue" />
-                  <span className="text-xs font-bold text-habit-blue uppercase tracking-wide">Multiplier</span>
-                </div>
-                <p className="font-mono text-2xl font-bold tabular-nums text-habit-blue">
-                  {analytics.currentStreak >= 7 ? '2.0x' : analytics.currentStreak >= 3 ? '1.5x' : '1.0x'}
-                </p>
-                <p className="text-xs text-habit-blue mt-1">
-                  Current bonus
-                </p>
-              </div>
-            </div>
+          <TabsContent value="stats" className="p-4 space-y-6">
+            {/* Stats Overview — typography-only, no boxed tiles */}
+            <StatGroup>
+              <Stat
+                label={
+                  <span className="flex flex-col gap-0.5">
+                    <span className="flex items-center gap-1.5"><Award size={12} /> Total Points</span>
+                    <span className="text-brand-400 dark:text-brand-500">{analytics.averagePointsPerSubmission.toFixed(1)} avg/submission</span>
+                  </span>
+                }
+                value={analytics.totalPoints.toLocaleString()}
+                valueClassName="text-2xl text-money-pos"
+              />
+              <Stat
+                label={
+                  <span className="flex flex-col gap-0.5">
+                    <span className="flex items-center gap-1.5"><TrendingUp size={12} /> Submissions</span>
+                    <span className="text-brand-400 dark:text-brand-500">{analytics.totalCount} total actions</span>
+                  </span>
+                }
+                value={analytics.totalSubmissions}
+                valueClassName="text-2xl text-warm-700 dark:text-warm-200"
+              />
+              <Stat
+                label={
+                  <span className="flex flex-col gap-0.5">
+                    <span className="flex items-center gap-1.5"><Flame size={12} /> Current Streak</span>
+                    <span className="text-brand-400 dark:text-brand-500">{analytics.maxStreak} day max</span>
+                  </span>
+                }
+                value={analytics.currentStreak}
+                valueClassName="text-2xl text-habit-streak"
+              />
+              <Stat
+                label={
+                  <span className="flex flex-col gap-0.5">
+                    <span className="flex items-center gap-1.5"><BarChart3 size={12} /> Multiplier</span>
+                    <span className="text-brand-400 dark:text-brand-500">Current bonus</span>
+                  </span>
+                }
+                value={analytics.currentStreak >= 7 ? '2.0x' : analytics.currentStreak >= 3 ? '1.5x' : '1.0x'}
+                valueClassName="text-2xl text-habit-blue"
+              />
+            </StatGroup>
 
             {/* Weekly Breakdown */}
             {analytics.weeklyData.length > 0 && (
-              <div className="bg-brand-50 dark:bg-brand-700/50 rounded-xl border border-brand-200 dark:border-brand-700 overflow-hidden">
-                <div className="p-3 border-b border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
-                  <h3 className="text-sm font-bold text-brand-800 dark:text-brand-100">Weekly Breakdown</h3>
-                  <p className="text-xs text-brand-400 dark:text-brand-400 mt-0.5">Points earned per week</p>
-                </div>
-                <div className="p-3 space-y-2">
+              <Section title="Weekly Breakdown">
+                <p className="text-xs text-brand-400 dark:text-brand-400 mb-3">Points earned per week</p>
+                <div className="space-y-3">
                   {analytics.weeklyData.map((week, idx) => {
                     const maxPoints = Math.max(...analytics.weeklyData.map(w => w.points), 1);
                     const barWidth = (week.points / maxPoints) * 100;
@@ -417,17 +410,14 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                     );
                   })}
                 </div>
-              </div>
+              </Section>
             )}
 
             {/* Time of Day Distribution */}
             {Object.keys(analytics.dailyDistribution).length > 0 && (
-              <div className="bg-brand-50 dark:bg-brand-700/50 rounded-xl border border-brand-200 dark:border-brand-700 overflow-hidden">
-                <div className="p-3 border-b border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
-                  <h3 className="text-sm font-bold text-brand-800 dark:text-brand-100">Time Patterns</h3>
-                  <p className="text-xs text-brand-400 dark:text-brand-400 mt-0.5">When you complete this habit</p>
-                </div>
-                <div className="p-3 space-y-2">
+              <Section title="Time Patterns">
+                <p className="text-xs text-brand-400 dark:text-brand-400 mb-3">When you complete this habit</p>
+                <div className="space-y-3">
                   {Object.entries(analytics.dailyDistribution)
                     .sort((a, b) => b[1] - a[1])
                     .map(([period, count]) => {
@@ -452,7 +442,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                       );
                     })}
                 </div>
-              </div>
+              </Section>
             )}
 
             {/* Empty State */}
@@ -539,7 +529,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                   const dayCount = subs.reduce((sum, s) => sum + s.count, 0);
 
                   return (
-                    <div key={date} className="border border-brand-200 dark:border-brand-700 rounded-xl overflow-hidden shadow-xs">
+                    <div key={date} className="border border-brand-200 dark:border-brand-700 rounded-xl overflow-hidden">
                       <div className="bg-brand-50 dark:bg-brand-700/50 px-3 py-2.5 flex items-center justify-between">
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <Calendar size={14} className="text-brand-600 dark:text-brand-300 shrink-0" />

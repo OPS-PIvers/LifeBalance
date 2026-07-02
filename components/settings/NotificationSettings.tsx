@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bell, Clock, DollarSign, Flame, Calendar, ListTodo, Send, Info } from 'lucide-react';
+import { Clock, DollarSign, Flame, Calendar, ListTodo, Send, Info } from 'lucide-react';
 import { NotificationPreferences } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { getFunctionsInstance } from '@/firebase.config';
@@ -180,17 +180,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-warm-50 dark:bg-warm-500/15 rounded-card flex items-center justify-center">
-            <Bell className="w-6 h-6 text-warm-600 dark:text-warm-300" />
-          </div>
-          <div>
-            <h3 className="font-display text-lg font-semibold tracking-tight text-brand-900 dark:text-brand-100">Notification Preferences</h3>
-            <p className="text-sm text-brand-500 dark:text-brand-400">Customize your alerts</p>
-          </div>
-        </div>
-
+      <div className="flex justify-end">
         <Button
           variant="subtle"
           size="sm"
@@ -198,11 +188,11 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
           leftIcon={<Send className="w-4 h-4" />}
           title="Send a test notification to your device"
         >
-          <span className="hidden sm:inline">Test</span>
+          Send test
         </Button>
       </div>
 
-      {/* iOS-specific notice - show helpful guidance based on current state */}
+      {/* iOS-specific notice - a plain callout (icon + text), no boxed chrome */}
       {(() => {
         const isIOS = isIOSDevice();
         if (!isIOS) return null;
@@ -212,42 +202,36 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
         const isReady = isPwa && hasPushSupport;
 
         return (
-          <div className={`p-4 rounded-card border mb-4 ${
-            isReady
-              ? 'bg-money-bgPos border-accent-200 dark:bg-accent-500/10 dark:border-accent-500/30'
-              : 'bg-warm-50 border-warm-200 dark:bg-warm-500/10 dark:border-warm-500/30'
-          }`}>
-            <div className="flex items-start gap-3">
-              <Info className={`w-5 h-5 shrink-0 mt-0.5 ${
-                isReady ? 'text-money-pos dark:text-accent-300' : 'text-warm-600 dark:text-warm-300'
-              }`} />
-              <div>
-                <h4 className={`font-semibold text-sm ${
-                  isReady ? 'text-accent-800 dark:text-accent-200' : 'text-warm-800 dark:text-warm-200'
-                }`}>
-                  {isReady ? 'Push Notifications Ready' : 'iOS Notification Setup'}
-                </h4>
-                <p className={`text-sm mt-1 ${
-                  isReady ? 'text-accent-700 dark:text-accent-300' : 'text-warm-700 dark:text-warm-300'
-                }`}>
-                  {isReady ? (
-                    <>
-                      Background notifications are enabled. You&apos;ll receive alerts even when
-                      the app is closed.
-                    </>
-                  ) : isPwa ? (
-                    <>
-                      Notifications will appear when the app is open.
-                      For background notifications, ensure you&apos;re on iOS 16.4 or later.
-                    </>
-                  ) : (
-                    <>
-                      To enable notifications, add LifeBalance to your Home Screen first.
-                      Tap <strong>Share</strong> → <strong>Add to Home Screen</strong>, then open from there.
-                    </>
-                  )}
-                </p>
-              </div>
+          <div className="flex items-start gap-3 px-1">
+            <Info className={`w-5 h-5 shrink-0 mt-0.5 ${
+              isReady ? 'text-money-pos dark:text-accent-300' : 'text-warm-600 dark:text-warm-300'
+            }`} />
+            <div>
+              <h4 className={`font-semibold text-sm ${
+                isReady ? 'text-accent-800 dark:text-accent-200' : 'text-warm-800 dark:text-warm-200'
+              }`}>
+                {isReady ? 'Push Notifications Ready' : 'iOS Notification Setup'}
+              </h4>
+              <p className={`text-sm mt-1 ${
+                isReady ? 'text-accent-700 dark:text-accent-300' : 'text-warm-700 dark:text-warm-300'
+              }`}>
+                {isReady ? (
+                  <>
+                    Background notifications are enabled. You&apos;ll receive alerts even when
+                    the app is closed.
+                  </>
+                ) : isPwa ? (
+                  <>
+                    Notifications will appear when the app is open.
+                    For background notifications, ensure you&apos;re on iOS 16.4 or later.
+                  </>
+                ) : (
+                  <>
+                    To enable notifications, add LifeBalance to your Home Screen first.
+                    Tap <strong>Share</strong> → <strong>Add to Home Screen</strong>, then open from there.
+                  </>
+                )}
+              </p>
             </div>
           </div>
         );
@@ -255,198 +239,31 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
 
       <SurfaceList>
         {/* Habit Reminders */}
-        <Row className="flex-col items-stretch gap-0">
-          <div className="flex items-start justify-between">
-            <div className="flex items-start gap-3 flex-1">
-              <div className="w-10 h-10 bg-warm-50 dark:bg-warm-500/15 rounded-btn flex items-center justify-center shrink-0">
-                <Flame className="w-5 h-5 text-warm-600 dark:text-warm-300" />
-              </div>
-              <div className="flex-1">
+        <Row className="items-start">
+          <div className="w-10 h-10 bg-warm-50 dark:bg-warm-500/15 rounded-btn flex items-center justify-center shrink-0">
+            <Flame className="w-5 h-5 text-warm-600 dark:text-warm-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
                 <h4 className="font-semibold text-brand-900 dark:text-brand-100">Daily Habit Check-In</h4>
                 <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">Remind me to complete my habits</p>
               </div>
+              <Switch
+                id="notif-habit-reminders"
+                aria-label="Daily habit check-in reminders"
+                checked={preferences.habitReminders.enabled}
+                onCheckedChange={() => handleToggle('habitReminders')}
+              />
             </div>
-            <Switch
-              id="notif-habit-reminders"
-              aria-label="Daily habit check-in reminders"
-              checked={preferences.habitReminders.enabled}
-              onCheckedChange={() => handleToggle('habitReminders')}
-            />
-          </div>
-          {preferences.habitReminders.enabled && (
-            <div className="flex items-center gap-2 mt-3 ml-13 pl-3 border-l-2 border-brand-200 dark:border-brand-700">
-              <Clock className="w-4 h-4 text-brand-500 dark:text-brand-400" />
-              <select
-                value={preferences.habitReminders.time}
-                onChange={(e) => handleTimeChange('habitReminders', e.target.value)}
-                className={inlineControlClass}
-                aria-label="Habit reminder time"
-              >
-                {hourOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-        </Row>
-
-        {/* Action Queue Reminders */}
-        <Row className="flex-col items-stretch gap-0">
-          <div className="flex items-start justify-between">
-            <div className="flex items-start gap-3 flex-1">
-              <div className="w-10 h-10 bg-habit-blue/15 rounded-btn flex items-center justify-center shrink-0">
-                <ListTodo className="w-5 h-5 text-habit-blue" />
-              </div>
-              <div className="flex-1">
-                <h4 className="font-semibold text-brand-900 dark:text-brand-100">Morning To-Do List</h4>
-                <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">Get reminders for pending to-dos, due bills, and incomplete habits each morning.</p>
-              </div>
-            </div>
-            <Switch
-              id="notif-action-queue-reminders"
-              aria-label="Morning to-do list reminders"
-              checked={preferences.actionQueueReminders.enabled}
-              onCheckedChange={() => handleToggle('actionQueueReminders')}
-            />
-          </div>
-          {preferences.actionQueueReminders.enabled && (
-            <div className="flex items-center gap-2 mt-3 ml-13 pl-3 border-l-2 border-brand-200 dark:border-brand-700">
-              <Clock className="w-4 h-4 text-brand-500 dark:text-brand-400" />
-              <select
-                value={preferences.actionQueueReminders.time}
-                onChange={(e) => handleTimeChange('actionQueueReminders', e.target.value)}
-                className={inlineControlClass}
-                aria-label="Morning to-do reminder time"
-              >
-                {hourOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-        </Row>
-
-        {/* Budget Alerts */}
-        <Row className="flex-col items-stretch gap-0">
-          <div className="flex items-start justify-between">
-            <div className="flex items-start gap-3 flex-1">
-              <div className="w-10 h-10 bg-money-bgNeg dark:bg-money-neg/15 rounded-btn flex items-center justify-center shrink-0">
-                <DollarSign className="w-5 h-5 text-money-neg" />
-              </div>
-              <div className="flex-1">
-                <h4 className="font-semibold text-brand-900 dark:text-brand-100">Low Balance Alert</h4>
-                <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">Alert when your Safe to Spend balance drops below your threshold.</p>
-              </div>
-            </div>
-            <Switch
-              id="notif-budget-alerts"
-              aria-label="Low balance alerts"
-              checked={preferences.budgetAlerts.enabled}
-              onCheckedChange={() => handleToggle('budgetAlerts')}
-            />
-          </div>
-          {preferences.budgetAlerts.enabled && (
-            <div className="flex items-center gap-2 mt-3 ml-13 pl-3 border-l-2 border-brand-200 dark:border-brand-700">
-              <span className="text-sm text-brand-600 dark:text-brand-300">Threshold:</span>
-              <div className="flex items-center gap-1">
-                <span className="text-sm text-brand-500 dark:text-brand-400">$</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="10"
-                  value={preferences.budgetAlerts.threshold ?? 100}
-                  onChange={(e) => handleThresholdChange(Number(e.target.value))}
-                  className={`w-20 ${inlineControlClass}`}
-                  aria-label="Low balance alert threshold in dollars"
-                />
-              </div>
-            </div>
-          )}
-        </Row>
-
-        {/* Streak Warnings */}
-        <Row className="flex-col items-stretch gap-0">
-          <div className="flex items-start justify-between">
-            <div className="flex items-start gap-3 flex-1">
-              <div className="w-10 h-10 bg-habit-streak/15 rounded-btn flex items-center justify-center shrink-0">
-                <Flame className="w-5 h-5 text-habit-streak" />
-              </div>
-              <div className="flex-1">
-                <h4 className="font-semibold text-brand-900 dark:text-brand-100">Streak Protection</h4>
-                <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">Remind me before my streak breaks</p>
-              </div>
-            </div>
-            <Switch
-              id="notif-streak-warnings"
-              aria-label="Streak protection reminders"
-              checked={preferences.streakWarnings.enabled}
-              onCheckedChange={() => handleToggle('streakWarnings')}
-            />
-          </div>
-          {preferences.streakWarnings.enabled && (
-            <div className="flex items-center gap-2 mt-3 ml-13 pl-3 border-l-2 border-brand-200 dark:border-brand-700">
-              <Clock className="w-4 h-4 text-brand-500 dark:text-brand-400" />
-              <select
-                value={preferences.streakWarnings.time}
-                onChange={(e) => handleTimeChange('streakWarnings', e.target.value)}
-                className={inlineControlClass}
-                aria-label="Streak warning time"
-              >
-                {hourOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-        </Row>
-
-        {/* Bill Reminders */}
-        <Row className="flex-col items-stretch gap-0">
-          <div className="flex items-start justify-between">
-            <div className="flex items-start gap-3 flex-1">
-              <div className="w-10 h-10 bg-accent-50 dark:bg-accent-500/15 rounded-btn flex items-center justify-center shrink-0">
-                <Calendar className="w-5 h-5 text-accent-600 dark:text-accent-300" />
-              </div>
-              <div className="flex-1">
-                <h4 className="font-semibold text-brand-900 dark:text-brand-100">Bill Payment Reminders</h4>
-                <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">Remind me about upcoming bills</p>
-              </div>
-            </div>
-            <Switch
-              id="notif-bill-reminders"
-              aria-label="Bill payment reminders"
-              checked={preferences.billReminders.enabled}
-              onCheckedChange={() => handleToggle('billReminders')}
-            />
-          </div>
-          {preferences.billReminders.enabled && (
-            <div className="mt-3 ml-13 pl-3 border-l-2 border-brand-200 dark:border-brand-700 space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-brand-600 dark:text-brand-300">Remind:</span>
-                <input
-                  type="number"
-                  min="1"
-                  max="7"
-                  value={preferences.billReminders.daysBeforeDue}
-                  onChange={(e) => handleDaysBeforeChange(Number(e.target.value))}
-                  className={`w-16 ${inlineControlClass}`}
-                  aria-label="Days before bill due"
-                />
-                <span className="text-sm text-brand-500 dark:text-brand-400">day(s) before due</span>
-              </div>
-              <div className="flex items-center gap-2">
+            {preferences.habitReminders.enabled && (
+              <div className="flex items-center gap-2 mt-3">
                 <Clock className="w-4 h-4 text-brand-500 dark:text-brand-400" />
                 <select
-                  value={preferences.billReminders.time}
-                  onChange={(e) => handleTimeChange('billReminders', e.target.value)}
+                  value={preferences.habitReminders.time}
+                  onChange={(e) => handleTimeChange('habitReminders', e.target.value)}
                   className={inlineControlClass}
-                  aria-label="Bill reminder time"
+                  aria-label="Habit reminder time"
                 >
                   {hourOptions.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -455,8 +272,175 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                   ))}
                 </select>
               </div>
+            )}
+          </div>
+        </Row>
+
+        {/* Action Queue Reminders */}
+        <Row className="items-start">
+          <div className="w-10 h-10 bg-habit-blue/15 rounded-btn flex items-center justify-center shrink-0">
+            <ListTodo className="w-5 h-5 text-habit-blue" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <h4 className="font-semibold text-brand-900 dark:text-brand-100">Morning To-Do List</h4>
+                <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">Get reminders for pending to-dos, due bills, and incomplete habits each morning.</p>
+              </div>
+              <Switch
+                id="notif-action-queue-reminders"
+                aria-label="Morning to-do list reminders"
+                checked={preferences.actionQueueReminders.enabled}
+                onCheckedChange={() => handleToggle('actionQueueReminders')}
+              />
             </div>
-          )}
+            {preferences.actionQueueReminders.enabled && (
+              <div className="flex items-center gap-2 mt-3">
+                <Clock className="w-4 h-4 text-brand-500 dark:text-brand-400" />
+                <select
+                  value={preferences.actionQueueReminders.time}
+                  onChange={(e) => handleTimeChange('actionQueueReminders', e.target.value)}
+                  className={inlineControlClass}
+                  aria-label="Morning to-do reminder time"
+                >
+                  {hourOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        </Row>
+
+        {/* Budget Alerts */}
+        <Row className="items-start">
+          <div className="w-10 h-10 bg-money-bgNeg dark:bg-money-neg/15 rounded-btn flex items-center justify-center shrink-0">
+            <DollarSign className="w-5 h-5 text-money-neg" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <h4 className="font-semibold text-brand-900 dark:text-brand-100">Low Balance Alert</h4>
+                <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">Alert when your Safe to Spend balance drops below your threshold.</p>
+              </div>
+              <Switch
+                id="notif-budget-alerts"
+                aria-label="Low balance alerts"
+                checked={preferences.budgetAlerts.enabled}
+                onCheckedChange={() => handleToggle('budgetAlerts')}
+              />
+            </div>
+            {preferences.budgetAlerts.enabled && (
+              <div className="flex items-center gap-2 mt-3">
+                <span className="text-sm text-brand-600 dark:text-brand-300">Threshold:</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-brand-500 dark:text-brand-400">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="10"
+                    value={preferences.budgetAlerts.threshold ?? 100}
+                    onChange={(e) => handleThresholdChange(Number(e.target.value))}
+                    className={`w-20 ${inlineControlClass}`}
+                    aria-label="Low balance alert threshold in dollars"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </Row>
+
+        {/* Streak Warnings */}
+        <Row className="items-start">
+          <div className="w-10 h-10 bg-habit-streak/15 rounded-btn flex items-center justify-center shrink-0">
+            <Flame className="w-5 h-5 text-habit-streak" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <h4 className="font-semibold text-brand-900 dark:text-brand-100">Streak Protection</h4>
+                <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">Remind me before my streak breaks</p>
+              </div>
+              <Switch
+                id="notif-streak-warnings"
+                aria-label="Streak protection reminders"
+                checked={preferences.streakWarnings.enabled}
+                onCheckedChange={() => handleToggle('streakWarnings')}
+              />
+            </div>
+            {preferences.streakWarnings.enabled && (
+              <div className="flex items-center gap-2 mt-3">
+                <Clock className="w-4 h-4 text-brand-500 dark:text-brand-400" />
+                <select
+                  value={preferences.streakWarnings.time}
+                  onChange={(e) => handleTimeChange('streakWarnings', e.target.value)}
+                  className={inlineControlClass}
+                  aria-label="Streak warning time"
+                >
+                  {hourOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        </Row>
+
+        {/* Bill Reminders */}
+        <Row className="items-start">
+          <div className="w-10 h-10 bg-accent-50 dark:bg-accent-500/15 rounded-btn flex items-center justify-center shrink-0">
+            <Calendar className="w-5 h-5 text-accent-600 dark:text-accent-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <h4 className="font-semibold text-brand-900 dark:text-brand-100">Bill Payment Reminders</h4>
+                <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">Remind me about upcoming bills</p>
+              </div>
+              <Switch
+                id="notif-bill-reminders"
+                aria-label="Bill payment reminders"
+                checked={preferences.billReminders.enabled}
+                onCheckedChange={() => handleToggle('billReminders')}
+              />
+            </div>
+            {preferences.billReminders.enabled && (
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-brand-600 dark:text-brand-300">Remind:</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="7"
+                    value={preferences.billReminders.daysBeforeDue}
+                    onChange={(e) => handleDaysBeforeChange(Number(e.target.value))}
+                    className={`w-16 ${inlineControlClass}`}
+                    aria-label="Days before bill due"
+                  />
+                  <span className="text-sm text-brand-500 dark:text-brand-400">day(s) before due</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-brand-500 dark:text-brand-400" />
+                  <select
+                    value={preferences.billReminders.time}
+                    onChange={(e) => handleTimeChange('billReminders', e.target.value)}
+                    className={inlineControlClass}
+                    aria-label="Bill reminder time"
+                  >
+                    {hourOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
         </Row>
       </SurfaceList>
 

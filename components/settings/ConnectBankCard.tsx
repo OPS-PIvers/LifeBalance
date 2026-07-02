@@ -5,7 +5,7 @@ import { Landmark } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getFunctionsInstance } from '@/firebase.config';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { Button } from '@/components/ui/Button';
+import { Section, SurfaceList, DisclosureRow } from '@/components/ui/Section';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 /**
@@ -100,39 +100,31 @@ const ConnectBankCard: React.FC = () => {
     }
   };
 
+  const connectDisabled = !householdId || busy || disconnecting;
+  const disconnectDisabled = !householdId || busy || disconnecting;
+
   return (
-    <div className="surface-section p-4">
-      <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-full bg-accent-50 text-accent-700 dark:bg-accent-800/40 dark:text-accent-200 flex items-center justify-center shrink-0">
-          <Landmark size={18} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h3 className="font-display font-semibold tracking-tight text-brand-900 dark:text-brand-50">
-            Connect a bank
-          </h3>
-          <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">
-            Securely link an account via Plaid. New transactions sync into your review queue automatically — no manual entry.
-          </p>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Button
-              variant="primary"
-              onClick={handleConnect}
-              isLoading={busy}
-              disabled={!householdId || disconnecting}
-            >
-              Connect a bank
-            </Button>
-            <Button
-              variant="ghost-destructive"
-              size="sm"
-              onClick={() => setConfirmDisconnect(true)}
-              disabled={!householdId || busy || disconnecting}
-            >
-              Disconnect
-            </Button>
-          </div>
-        </div>
-      </div>
+    <Section title="Bank">
+      <SurfaceList>
+        <DisclosureRow
+          disabled={connectDisabled}
+          icon={
+            <div className="w-10 h-10 rounded-full bg-accent-50 text-accent-700 dark:bg-accent-800/40 dark:text-accent-200 flex items-center justify-center shrink-0">
+              <Landmark size={18} />
+            </div>
+          }
+          title="Connect a bank"
+          subtitle={busy ? 'Connecting…' : 'Securely link via Plaid — auto-sync transactions'}
+          onClick={handleConnect}
+        />
+
+        <DisclosureRow
+          destructive
+          disabled={disconnectDisabled}
+          title="Disconnect bank"
+          onClick={() => setConfirmDisconnect(true)}
+        />
+      </SurfaceList>
 
       <ConfirmDialog
         isOpen={confirmDisconnect}
@@ -143,7 +135,7 @@ const ConnectBankCard: React.FC = () => {
         confirmLabel="Disconnect"
         isConfirming={disconnecting}
       />
-    </div>
+    </Section>
   );
 };
 

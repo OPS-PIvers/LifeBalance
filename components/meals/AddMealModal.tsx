@@ -4,6 +4,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { SurfaceList, Row } from '@/components/ui/Section';
 import { X, ChefHat, Sparkles, Plus, FileText } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -160,7 +161,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                         id="meal-description"
                         value={currentMeal.description || ''}
                         onChange={e => setCurrentMeal({...currentMeal, description: e.target.value})}
-                        className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:placeholder:text-brand-500 text-sm text-brand-700 dark:text-brand-200 leading-relaxed"
+                        className="w-full p-3 bg-brand-50 rounded-xl focus:ring-2 focus:ring-accent-500/40 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden dark:bg-brand-700/40 dark:placeholder:text-brand-500 text-sm text-brand-700 dark:text-brand-200 leading-relaxed"
                         rows={2}
                         placeholder="Add notes about preparation..."
                     />
@@ -181,7 +182,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                                     .filter(line => line.length > 0),
                             })
                         }
-                        className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:placeholder:text-brand-500 text-sm font-mono text-brand-600 dark:text-brand-300"
+                        className="w-full p-3 bg-brand-50 rounded-xl focus:ring-2 focus:ring-accent-500/40 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden dark:bg-brand-700/40 dark:placeholder:text-brand-500 text-sm font-mono text-brand-600 dark:text-brand-300"
                         rows={4}
                         placeholder="Step 1...&#10;Step 2..."
                     />
@@ -265,15 +266,16 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
 
                   {/* Current Ingredients List */}
                   {currentMeal.ingredients && currentMeal.ingredients.length > 0 && (
-                      <div className="mb-4 flex flex-wrap gap-2">
+                      <SurfaceList className="mb-4">
                           {currentMeal.ingredients.map((ing, idx) => (
-                              <div key={`${ing.name}-${idx}`} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-brand-200 rounded-lg text-sm dark:bg-brand-800 dark:border-brand-700">
-                                  <span className="font-semibold text-brand-700 dark:text-brand-200">{ing.name}</span>
-                                  <span className="text-brand-400 text-xs bg-brand-50 px-1.5 py-0.5 rounded-sm dark:text-brand-400 dark:bg-brand-700/50">{ing.quantity}</span>
+                              <Row key={`${ing.name}-${idx}`} dense className="justify-between">
+                                  <div className="min-w-0 flex items-baseline gap-2">
+                                      <span className="font-semibold text-brand-700 dark:text-brand-200 truncate">{ing.name}</span>
+                                      {ing.quantity && <span className="text-brand-400 dark:text-brand-500 text-xs shrink-0">{ing.quantity}</span>}
+                                  </div>
                                   <Button
                                       variant="ghost-destructive"
                                       size="icon-sm"
-                                      className="ml-1 p-0"
                                       onClick={() => {
                                           setCurrentMeal(prev => ({
                                               ...prev,
@@ -284,49 +286,47 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                                   >
                                       <X className="w-3.5 h-3.5" />
                                   </Button>
-                              </div>
+                              </Row>
                           ))}
-                      </div>
+                      </SurfaceList>
                   )}
 
-                  <div className="space-y-4">
-                      {/* Ingredient Entry */}
-                      <div className="bg-white p-4 rounded-xl border border-brand-200 dark:bg-brand-800 dark:border-brand-700">
-                          <label htmlFor="ingredient-name" className="block text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider mb-2">Add Ingredient</label>
-                          <div className="flex gap-2">
-                              <input
-                                  id="ingredient-name"
-                                  type="text"
-                                  placeholder="Item name"
-                                  className="flex-1 rounded-xl border-brand-200 bg-white text-base focus:border-accent-500 focus:ring-accent-500/40 outline-hidden p-2.5 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
-                                  value={ingredientName}
-                                  onChange={(e) => setIngredientName(e.target.value)}
-                                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddIngredient())}
-                              />
-                              <input
-                                  aria-label="Ingredient quantity"
-                                  type="text"
-                                  placeholder="Qty"
-                                  className="w-20 rounded-xl border-brand-200 bg-white text-base focus:border-accent-500 focus:ring-accent-500/40 outline-hidden p-2.5 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
-                                  value={ingredientQty}
-                                  onChange={(e) => setIngredientQty(e.target.value)}
-                                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddIngredient())}
-                              />
-                              <Button
-                                  variant="primary"
-                                  size="icon"
-                                  className="p-2.5"
-                                  onClick={handleAddIngredient}
-                                  disabled={!ingredientName.trim()}
-                                  aria-label="Add ingredient"
-                              >
-                                  <Plus className="w-5 h-5" />
-                              </Button>
-                          </div>
-                          <p className="text-xxs text-brand-400 dark:text-brand-500 mt-2 pl-1">
-                              Ingredients will be added to the shopping list when creating a new meal plan.
-                          </p>
+                  {/* Ingredient Entry — single lightly-tinted row, not a bordered card */}
+                  <div className="bg-brand-50 dark:bg-brand-700/30 p-4 rounded-xl">
+                      <label htmlFor="ingredient-name" className="block text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider mb-2">Add Ingredient</label>
+                      <div className="flex gap-2">
+                          <input
+                              id="ingredient-name"
+                              type="text"
+                              placeholder="Item name"
+                              className="flex-1 rounded-xl border-brand-200 bg-white text-base focus:border-accent-500 focus:ring-accent-500/40 outline-hidden p-2.5 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+                              value={ingredientName}
+                              onChange={(e) => setIngredientName(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddIngredient())}
+                          />
+                          <input
+                              aria-label="Ingredient quantity"
+                              type="text"
+                              placeholder="Qty"
+                              className="w-20 rounded-xl border-brand-200 bg-white text-base focus:border-accent-500 focus:ring-accent-500/40 outline-hidden p-2.5 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+                              value={ingredientQty}
+                              onChange={(e) => setIngredientQty(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddIngredient())}
+                          />
+                          <Button
+                              variant="primary"
+                              size="icon"
+                              className="p-2.5"
+                              onClick={handleAddIngredient}
+                              disabled={!ingredientName.trim()}
+                              aria-label="Add ingredient"
+                          >
+                              <Plus className="w-5 h-5" />
+                          </Button>
                       </div>
+                      <p className="text-xxs text-brand-400 dark:text-brand-500 mt-2 pl-1">
+                          Ingredients will be added to the shopping list when creating a new meal plan.
+                      </p>
                   </div>
             </div>
 

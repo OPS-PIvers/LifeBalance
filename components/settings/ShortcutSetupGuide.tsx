@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  ChevronDown,
   Smartphone,
   Mic,
   ShoppingCart,
@@ -16,6 +15,8 @@ import {
   MousePointerClick,
 } from 'lucide-react';
 import { getQuickAddEndpointUrl } from '@/services/apiKeyService';
+import { SurfaceList, DisclosureRow } from '@/components/ui/Section';
+import { Drawer } from '@/components/ui/Drawer';
 import toast from 'react-hot-toast';
 
 // ---------------------------------------------------------------------------
@@ -95,9 +96,11 @@ const em = (text: string): React.ReactNode =>
   );
 
 /**
- * A full-width tappable row that copies a literal value. When `disabled` (e.g. the
- * Authorization row before a key exists), it shows the placeholder but isn't
- * copyable — copying `Bearer YOUR_API_KEY` would only mislead.
+ * A full-width tappable row that copies a literal value, meant to sit inside a
+ * `SurfaceList` (it draws its own top hairline; the first row's is suppressed by
+ * the list). When `disabled` (e.g. the Authorization row before a key exists) it
+ * shows the placeholder but isn't copyable — copying `Bearer YOUR_API_KEY` would
+ * only mislead.
  * NOTE: `outline-hidden` is the correct Tailwind v4 utility (the v4 rename of v3's
  * `outline-none`); it keeps a transparent outline for forced-colors accessibility.
  */
@@ -111,10 +114,8 @@ const CopyRow: React.FC<{ label: string; value: string; hint?: string; disabled?
     type="button"
     disabled={disabled}
     onClick={() => copyText(value, label)}
-    className={`group w-full flex items-center gap-3 rounded-btn border border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-900 px-3 py-2 text-left transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900 ${
-      disabled
-        ? 'opacity-70 cursor-not-allowed'
-        : 'hover:border-accent-300 dark:hover:border-accent-500/50 hover:bg-accent-50/60 dark:hover:bg-accent-500/5'
+    className={`group w-full flex items-center gap-3 px-4 py-2.5 text-left hairline-divider transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-inset ${
+      disabled ? 'opacity-70 cursor-not-allowed' : 'hover:bg-brand-50 dark:hover:bg-brand-700/40'
     }`}
   >
     <div className="min-w-0 flex-1">
@@ -140,7 +141,10 @@ const TypeChip: React.FC<{ type: 'Text' | 'Number' }> = ({ type }) => (
   </span>
 );
 
-/** One JSON body field, rendered per its mode (copy / type your own / pick variable). */
+/**
+ * One JSON body field, rendered per its mode (copy / type your own / pick
+ * variable) as a plain hairline row inside a `SurfaceList` — no bordered pill.
+ */
 const FieldRow: React.FC<{ field: FieldSpec }> = ({ field }) => {
   const header = (
     <span className="flex items-center gap-2 min-w-0">
@@ -156,7 +160,7 @@ const FieldRow: React.FC<{ field: FieldSpec }> = ({ field }) => {
       <button
         type="button"
         onClick={() => copyText(field.value, field.key)}
-        className="group w-full flex items-center gap-3 rounded-btn border border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-900 px-3 py-2 text-left transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:border-accent-300 dark:hover:border-accent-500/50 hover:bg-accent-50/60 dark:hover:bg-accent-500/5 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900"
+        className="group w-full flex items-center gap-3 px-4 py-2.5 text-left hairline-divider transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-brand-50 dark:hover:bg-brand-700/40 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-inset"
       >
         <div className="min-w-0 flex-1 space-y-0.5">
           {header}
@@ -176,7 +180,7 @@ const FieldRow: React.FC<{ field: FieldSpec }> = ({ field }) => {
   }
 
   return (
-    <div className="w-full flex items-start gap-3 rounded-btn border border-dashed border-brand-300 dark:border-brand-600 bg-brand-50 dark:bg-brand-800/60 px-3 py-2">
+    <div className="w-full flex items-start gap-3 px-4 py-2.5 hairline-divider">
       <div className="min-w-0 flex-1 space-y-0.5">
         {header}
         {field.mode === 'typeIn' ? (
@@ -220,28 +224,28 @@ const NumberedStep: React.FC<{ n: number; text: string; children?: React.ReactNo
     </span>
     <div className="min-w-0 flex-1">
       <p className="text-sm text-brand-700 dark:text-brand-200 leading-relaxed">{em(text)}</p>
-      {children && <div className="mt-2 space-y-2">{children}</div>}
+      {children && <div className="mt-2">{children}</div>}
     </div>
   </li>
 );
 
 /** Section eyebrow between step groups (numbering continues across groups). */
 const PartLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <p className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 mb-2">
+  <p className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 mb-2 px-1">
     {children}
   </p>
 );
 
-/** Short bullet list for "Before you start" / "Good to know". */
+/** Short bullet list ("Before you start" / "Good to know") — plain, no box. */
 const NoteList: React.FC<{ title: string; items: string[] }> = ({ title, items }) => (
-  <div className="rounded-btn border border-warm-200 dark:border-warm-500/30 bg-warm-50 dark:bg-warm-500/10 p-3">
-    <p className="text-xs font-semibold uppercase tracking-wider text-warm-700 dark:text-warm-300 mb-1.5">
+  <div className="px-1">
+    <p className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 mb-1.5">
       {title}
     </p>
     <ul className="space-y-1.5">
       {items.map((item, i) => (
-        <li key={i} className="flex gap-2 text-sm text-warm-800 dark:text-warm-200 leading-relaxed">
-          <span className="shrink-0 mt-2 w-1 h-1 rounded-full bg-warm-500 dark:bg-warm-400" />
+        <li key={i} className="flex gap-2 text-sm text-brand-600 dark:text-brand-300 leading-relaxed">
+          <span className="shrink-0 mt-2 w-1 h-1 rounded-full bg-brand-400 dark:bg-brand-500" />
           <span>{em(item)}</span>
         </li>
       ))}
@@ -586,6 +590,115 @@ const EXAMPLES: ShortcutExample[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Walkthrough (rendered inside the per-shortcut Drawer)
+// ---------------------------------------------------------------------------
+
+const ExampleWalkthrough: React.FC<{
+  ex: ShortcutExample;
+  authValue: string;
+  apiKey?: string | null;
+}> = ({ ex, authValue, apiKey }) => {
+  // Numbering runs continuously across the three step groups.
+  const requestStart = ex.setupSteps.length;
+  const finishStart = requestStart + 4;
+
+  return (
+    <div className="space-y-6">
+      {ex.before && <NoteList title="Before you start" items={ex.before} />}
+
+      {/* Part 1 — create the shortcut / automation */}
+      <div>
+        <PartLabel>{ex.isAutomation ? 'Set up the automation' : 'Build the shortcut'}</PartLabel>
+        <ol className="space-y-4">
+          {ex.setupSteps.map((step, i) => (
+            <NumberedStep key={i} n={i + 1} text={step.text}>
+              {step.copy && (
+                <SurfaceList>
+                  {step.copy.map((s) => (
+                    <CopyRow key={s.label} label={s.label} value={s.value} hint={s.hint} />
+                  ))}
+                </SurfaceList>
+              )}
+            </NumberedStep>
+          ))}
+        </ol>
+      </div>
+
+      {/* Part 2 — the web request (same 4 steps for every shortcut) */}
+      <div>
+        <PartLabel>Send it to LifeBalance</PartLabel>
+        <ol className="space-y-4">
+          <NumberedStep
+            n={requestStart + 1}
+            text="Add **Get Contents of URL**. Tap its pale **URL** text and paste:"
+          >
+            <SurfaceList>
+              <CopyRow label="URL" value={getQuickAddEndpointUrl(ex.endpoint)} />
+            </SurfaceList>
+          </NumberedStep>
+          <NumberedStep
+            n={requestStart + 2}
+            text="Tap the **› arrow** on that action to expand its options, then change **Method** from GET to **POST**."
+          />
+          <NumberedStep
+            n={requestStart + 3}
+            text="Tap **Headers** → **Add new header**, twice. Type each header’s name on the left and paste its value on the right:"
+          >
+            <SurfaceList>
+              <CopyRow
+                label="Header 1 · Authorization"
+                value={authValue}
+                hint={
+                  apiKey
+                    ? 'Name: **Authorization** — tap to copy the value.'
+                    : 'Generate a key above and this fills in automatically.'
+                }
+                disabled={!apiKey}
+              />
+              <CopyRow
+                label="Header 2 · Content-Type"
+                value="application/json"
+                hint="Name: **Content-Type** — tap to copy the value."
+              />
+            </SurfaceList>
+          </NumberedStep>
+          <NumberedStep
+            n={requestStart + 4}
+            text="Tap **Request Body** (keep it on **JSON**) → **Add new field**, once per field below. Pick the type on the chip, type the name exactly as shown, then set the value:"
+          >
+            <SurfaceList>
+              {ex.fields.map((f) => (
+                <FieldRow key={f.key} field={f} />
+              ))}
+            </SurfaceList>
+          </NumberedStep>
+        </ol>
+      </div>
+
+      {/* Part 3 — finish */}
+      <div>
+        <PartLabel>Finish up</PartLabel>
+        <ol className="space-y-4">
+          {ex.finishSteps.map((step, i) => (
+            <NumberedStep key={i} n={finishStart + i + 1} text={step.text}>
+              {step.copy && (
+                <SurfaceList>
+                  {step.copy.map((s) => (
+                    <CopyRow key={s.label} label={s.label} value={s.value} hint={s.hint} />
+                  ))}
+                </SurfaceList>
+              )}
+            </NumberedStep>
+          ))}
+        </ol>
+      </div>
+
+      {ex.after && <NoteList title="Good to know" items={ex.after} />}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -595,200 +708,98 @@ interface ShortcutSetupGuideProps {
 }
 
 const ShortcutSetupGuide: React.FC<ShortcutSetupGuideProps> = ({ apiKey }) => {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const openExample = EXAMPLES.find((e) => e.id === openId) ?? null;
 
   const authValue = apiKey ? `Bearer ${apiKey}` : 'Bearer YOUR_API_KEY';
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* How it works */}
-      <div className="rounded-card border border-accent-200 dark:border-accent-500/30 bg-accent-50 dark:bg-accent-500/10 p-3">
-        <h4 className="font-semibold text-accent-800 dark:text-accent-200 mb-1">How it works</h4>
-        <p className="text-sm text-accent-700 dark:text-accent-300 leading-relaxed">
-          Every shortcut here does the same thing: it sends one web request to LifeBalance. Pick
-          one below and follow its steps top to bottom — anything in a box is tap-to-copy, so you
-          never have to type the fiddly parts.
-        </p>
-      </div>
+      <p className="text-sm text-brand-500 dark:text-brand-400 leading-relaxed px-1">
+        Every shortcut here does the same thing: it sends one web request to LifeBalance. Pick one
+        below and follow its steps top to bottom — tap any highlighted value to copy it, so you
+        never have to type the fiddly parts.
+      </p>
 
       {/* API-key / Authorization status — the one value every shortcut needs */}
       {apiKey ? (
-        <div className="rounded-card border border-money-pos/40 bg-money-pos/5 p-3 space-y-2">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-money-pos shrink-0" />
-            <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">
-              Your API key is ready
-            </p>
+        <div className="space-y-2">
+          <div className="flex items-start gap-2 px-1">
+            <CheckCircle2 className="w-4 h-4 text-money-pos shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">
+                Your API key is ready
+              </p>
+              <p className="text-sm text-brand-500 dark:text-brand-400">
+                Every shortcut below uses this same Authorization value — it&apos;s pre-filled into the
+                steps for you. It won&apos;t be shown again after you leave this screen.
+              </p>
+            </div>
           </div>
-          <p className="text-sm text-brand-600 dark:text-brand-300">
-            Every shortcut below uses this same Authorization value — it&apos;s pre-filled into the
-            steps for you. It won&apos;t be shown again after you leave this screen.
-          </p>
-          <CopyRow label="Authorization header" value={authValue} />
+          <SurfaceList>
+            <CopyRow label="Authorization header" value={authValue} />
+          </SurfaceList>
         </div>
       ) : (
-        <div className="rounded-card border border-warm-200 dark:border-warm-500/30 bg-warm-50 dark:bg-warm-500/10 p-3">
-          <div className="flex items-center gap-2 mb-1">
-            <KeyRound className="w-4 h-4 text-warm-600 dark:text-warm-300 shrink-0" />
+        <div className="flex items-start gap-2 px-1">
+          <KeyRound className="w-4 h-4 text-warm-600 dark:text-warm-300 shrink-0 mt-0.5" />
+          <div>
             <p className="text-sm font-semibold text-warm-800 dark:text-warm-200">
               Generate an API key first
             </p>
+            <p className="text-sm text-warm-700 dark:text-warm-300 leading-relaxed">
+              Scroll up to <strong>API Keys → Generate New API Key</strong>. Once created, every
+              shortcut below is pre-filled with it — ready to copy step by step.
+            </p>
           </div>
-          <p className="text-sm text-warm-700 dark:text-warm-300 leading-relaxed">
-            Scroll up to <strong>API Keys → Generate New API Key</strong>. Once created, every
-            shortcut below is pre-filled with it — ready to copy step by step.
-          </p>
         </div>
       )}
 
-      {/* Shortcut list */}
+      {/* Shortcut list — each row drills into a bottom-sheet walkthrough */}
       <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">
+        <p className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 px-1">
           Shortcuts &amp; automations
         </p>
-
-        {EXAMPLES.map((ex) => {
-          const isOpen = expandedId === ex.id;
-          // Numbering runs continuously across the three step groups.
-          const requestStart = ex.setupSteps.length;
-          const finishStart = requestStart + 4;
-          return (
-            <div key={ex.id} className="surface-section overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setExpandedId(isOpen ? null : ex.id)}
-                aria-expanded={isOpen}
-                className="w-full flex items-center justify-between gap-3 p-3 hover:bg-brand-50 dark:hover:bg-brand-700/40 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-inset"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="shrink-0 text-accent-600 dark:text-accent-400">{ex.icon}</div>
-                  <div className="text-left min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-semibold text-brand-900 dark:text-brand-100 truncate">
-                        {ex.title}
-                      </p>
-                      {ex.isRecommended && (
-                        <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-accent-100 dark:bg-accent-500/20 text-accent-700 dark:text-accent-300 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5">
-                          <Sparkles className="w-2.5 h-2.5" />
-                          Best
-                        </span>
-                      )}
-                      {ex.isAutomation && (
-                        <span className="shrink-0 rounded-full border border-brand-300 dark:border-brand-600 text-brand-500 dark:text-brand-400 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5">
-                          Automation
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-brand-500 dark:text-brand-400 line-clamp-2">
-                      {ex.description}
-                    </p>
-                  </div>
-                </div>
-                <ChevronDown
-                  className={`shrink-0 w-5 h-5 text-brand-400 dark:text-brand-500 transition-transform duration-(--duration-base) ease-spring ${
-                    isOpen ? 'rotate-180 text-accent-600 dark:text-accent-400' : ''
-                  }`}
-                />
-              </button>
-
-              {isOpen && (
-                <div className="border-t border-brand-200 dark:border-brand-700 bg-brand-50/60 dark:bg-brand-900/40 p-3 space-y-5">
-                  {ex.before && <NoteList title="Before you start" items={ex.before} />}
-
-                  {/* Part 1 — create the shortcut / automation */}
-                  <div>
-                    <PartLabel>
-                      {ex.isAutomation ? 'Set up the automation' : 'Build the shortcut'}
-                    </PartLabel>
-                    <ol className="space-y-2.5">
-                      {ex.setupSteps.map((step, i) => (
-                        <NumberedStep key={i} n={i + 1} text={step.text}>
-                          {step.copy?.map((s) => (
-                            <CopyRow key={s.label} label={s.label} value={s.value} hint={s.hint} />
-                          ))}
-                        </NumberedStep>
-                      ))}
-                    </ol>
-                  </div>
-
-                  {/* Part 2 — the web request (same 4 steps for every shortcut) */}
-                  <div>
-                    <PartLabel>Send it to LifeBalance</PartLabel>
-                    <ol className="space-y-2.5">
-                      <NumberedStep
-                        n={requestStart + 1}
-                        text="Add **Get Contents of URL**. Tap its pale **URL** text and paste:"
-                      >
-                        <CopyRow label="URL" value={getQuickAddEndpointUrl(ex.endpoint)} />
-                      </NumberedStep>
-                      <NumberedStep
-                        n={requestStart + 2}
-                        text="Tap the **› arrow** on that action to expand its options, then change **Method** from GET to **POST**."
-                      />
-                      <NumberedStep
-                        n={requestStart + 3}
-                        text="Tap **Headers** → **Add new header**, twice. Type each header’s name on the left and paste its value on the right:"
-                      >
-                        <CopyRow
-                          label="Header 1 · Authorization"
-                          value={authValue}
-                          hint={
-                            apiKey
-                              ? 'Name: **Authorization** — tap to copy the value.'
-                              : 'Generate a key above and this fills in automatically.'
-                          }
-                          disabled={!apiKey}
-                        />
-                        <CopyRow
-                          label="Header 2 · Content-Type"
-                          value="application/json"
-                          hint="Name: **Content-Type** — tap to copy the value."
-                        />
-                      </NumberedStep>
-                      <NumberedStep
-                        n={requestStart + 4}
-                        text="Tap **Request Body** (keep it on **JSON**) → **Add new field**, once per field below. Pick the type on the chip, type the name exactly as shown, then set the value:"
-                      >
-                        {ex.fields.map((f) => (
-                          <FieldRow key={f.key} field={f} />
-                        ))}
-                      </NumberedStep>
-                    </ol>
-                  </div>
-
-                  {/* Part 3 — finish */}
-                  <div>
-                    <PartLabel>Finish up</PartLabel>
-                    <ol className="space-y-2.5">
-                      {ex.finishSteps.map((step, i) => (
-                        <NumberedStep key={i} n={finishStart + i + 1} text={step.text}>
-                          {step.copy?.map((s) => (
-                            <CopyRow key={s.label} label={s.label} value={s.value} hint={s.hint} />
-                          ))}
-                        </NumberedStep>
-                      ))}
-                    </ol>
-                  </div>
-
-                  {ex.after && <NoteList title="Good to know" items={ex.after} />}
-                </div>
-              )}
-            </div>
-          );
-        })}
+        <SurfaceList>
+          {EXAMPLES.map((ex) => (
+            <DisclosureRow
+              key={ex.id}
+              icon={ex.icon}
+              title={ex.title}
+              subtitle={ex.description}
+              onClick={() => setOpenId(ex.id)}
+              value={
+                ex.isRecommended || ex.isAutomation ? (
+                  <span className="flex items-center gap-1">
+                    {ex.isRecommended && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-accent-100 dark:bg-accent-500/20 text-accent-700 dark:text-accent-300 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5">
+                        <Sparkles className="w-2.5 h-2.5" />
+                        Best
+                      </span>
+                    )}
+                    {ex.isAutomation && (
+                      <span className="rounded-full border border-brand-300 dark:border-brand-600 text-brand-500 dark:text-brand-400 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5">
+                        Auto
+                      </span>
+                    )}
+                  </span>
+                ) : undefined
+              }
+            />
+          ))}
+        </SurfaceList>
       </div>
 
       {/* Lock Screen tip */}
-      <div className="rounded-card border border-warm-200 dark:border-warm-500/30 bg-warm-50 dark:bg-warm-500/10 p-3">
-        <div className="flex items-start gap-2">
-          <Smartphone className="w-5 h-5 text-warm-600 dark:text-warm-300 shrink-0 mt-0.5" />
-          <div>
-            <h4 className="font-semibold text-warm-800 dark:text-warm-200">Lock Screen shortcuts</h4>
-            <p className="text-sm text-warm-700 dark:text-warm-300 mt-1">
-              Swap the flashlight or camera button for a shortcut: long-press the Lock Screen →
-              Customize → tap a button.
-            </p>
-          </div>
+      <div className="flex items-start gap-2 px-1">
+        <Smartphone className="w-5 h-5 text-brand-500 dark:text-brand-400 shrink-0 mt-0.5" />
+        <div>
+          <h4 className="font-semibold text-sm text-brand-900 dark:text-brand-100">Lock Screen shortcuts</h4>
+          <p className="text-sm text-brand-500 dark:text-brand-400 mt-1">
+            Swap the flashlight or camera button for a shortcut: long-press the Lock Screen →
+            Customize → tap a button.
+          </p>
         </div>
       </div>
 
@@ -802,6 +813,18 @@ const ShortcutSetupGuide: React.FC<ShortcutSetupGuideProps> = ({ apiKey }) => {
         <ExternalLink className="w-4 h-4" />
         Apple Shortcuts documentation
       </a>
+
+      {/* Per-shortcut walkthrough sheet */}
+      <Drawer
+        isOpen={openExample !== null}
+        onClose={() => setOpenId(null)}
+        title={openExample?.title}
+        height="tall"
+      >
+        {openExample && (
+          <ExampleWalkthrough ex={openExample} authValue={authValue} apiKey={apiKey} />
+        )}
+      </Drawer>
     </div>
   );
 };

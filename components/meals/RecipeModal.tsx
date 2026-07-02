@@ -3,6 +3,7 @@ import { Meal, MealPlanItem } from '@/types/schema';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { SurfaceList } from '@/components/ui/Section';
 import { Check, ExternalLink, ChefHat, Utensils, CheckCircle2 } from 'lucide-react';
 import { haptic } from '@/utils/haptics';
 import clsx from 'clsx';
@@ -87,7 +88,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
               <h4 className="flex items-center gap-2 text-sm font-bold text-brand-900 dark:text-brand-100 uppercase tracking-wider mb-4">
                 <Utensils size={16} className="text-brand-600 dark:text-brand-300" /> Ingredients
               </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <SurfaceList>
                 {meal.ingredients.map((ing, idx) => {
                   const isChecked = checkedIngredients.has(idx);
                   return (
@@ -95,26 +96,24 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
                       key={ing.name}
                       onClick={() => toggleIngredient(idx)}
                       className={clsx(
-                        "flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors duration-(--duration-fast) ease-(--ease-standard) w-full text-left",
-                        isChecked
-                          ? "bg-brand-50 border-brand-200 opacity-60 dark:bg-brand-800/50 dark:border-brand-700"
-                          : "bg-white border-brand-200 hover:border-brand-300 dark:bg-brand-800 dark:border-brand-700 dark:hover:border-brand-500/50"
+                        "flex items-center gap-3 px-4 py-3 hairline-divider cursor-pointer transition-colors duration-(--duration-fast) ease-(--ease-standard) w-full text-left hover:bg-brand-50 dark:hover:bg-brand-700/40",
+                        isChecked && "opacity-60"
                       )}
                     >
                       <div className={clsx(
-                        "w-5 h-5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 transition-colors",
+                        "w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-colors",
                         isChecked ? "bg-brand-300 border-brand-300 text-white dark:bg-brand-600 dark:border-brand-600" : "border-brand-300 bg-white dark:border-brand-600 dark:bg-brand-700"
                       )}>
                         {isChecked && <Check size={14} strokeWidth={3} />}
                       </div>
-                      <div className={clsx("text-sm", isChecked && "line-through text-brand-400 dark:text-brand-500")}>
+                      <div className={clsx("text-sm min-w-0", isChecked && "line-through text-brand-400 dark:text-brand-500")}>
                         <span className="font-bold text-brand-700 dark:text-brand-200">{ing.name}</span>
                         {ing.quantity && <span className="text-brand-500 dark:text-brand-400 ml-1">({ing.quantity})</span>}
                       </div>
                     </button>
                   );
                 })}
-              </div>
+              </SurfaceList>
             </section>
           )}
 
@@ -124,7 +123,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
               <h4 className="flex items-center gap-2 text-sm font-bold text-brand-900 dark:text-brand-100 uppercase tracking-wider mb-4">
                 <ChefHat size={16} className="text-brand-600 dark:text-brand-300" /> Instructions
               </h4>
-              <div className="space-y-4">
+              <SurfaceList>
                 {meal.instructions.map((step, idx) => {
                   const isChecked = checkedInstructions.has(idx);
                   return (
@@ -132,27 +131,25 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
                       key={step}
                       onClick={() => toggleInstruction(idx)}
                       className={clsx(
-                        "flex gap-4 p-4 rounded-xl border cursor-pointer transition-colors duration-(--duration-fast) ease-(--ease-standard) w-full text-left",
-                        isChecked
-                          ? "bg-brand-50 border-brand-200 opacity-60 dark:bg-brand-800/50 dark:border-brand-700"
-                          : "bg-white border-brand-200 hover:border-brand-300 dark:bg-brand-800 dark:border-brand-700 dark:hover:border-brand-500/50"
+                        "flex gap-4 px-4 py-3 hairline-divider cursor-pointer transition-colors duration-(--duration-fast) ease-(--ease-standard) w-full text-left hover:bg-brand-50 dark:hover:bg-brand-700/40",
+                        isChecked && "opacity-60"
                       )}
                     >
                       <div className={clsx(
-                        "w-6 h-6 rounded-full border flex items-center justify-center shrink-0 font-bold text-xs transition-colors",
+                        "w-6 h-6 rounded-full border flex items-center justify-center shrink-0 font-bold text-xs transition-colors mt-0.5",
                         isChecked
                           ? "bg-brand-300 border-brand-300 text-white dark:bg-brand-600 dark:border-brand-600"
                           : "bg-brand-50 text-brand-700 border-brand-200 dark:bg-brand-700/40 dark:text-brand-300 dark:border-brand-500/40"
                       )}>
                         {isChecked ? <Check size={14} strokeWidth={3} /> : idx + 1}
                       </div>
-                      <p className={clsx("text-sm leading-relaxed", isChecked ? "line-through text-brand-400 dark:text-brand-500" : "text-brand-700 dark:text-brand-200")}>
+                      <p className={clsx("text-sm leading-relaxed min-w-0", isChecked ? "line-through text-brand-400 dark:text-brand-500" : "text-brand-700 dark:text-brand-200")}>
                         {step}
                       </p>
                     </button>
                   );
                 })}
-              </div>
+              </SurfaceList>
             </section>
           )}
 

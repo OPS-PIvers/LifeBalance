@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
+import { format, parseISO } from 'date-fns';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { Plus, Edit, Trash2, Wallet } from 'lucide-react';
@@ -10,9 +11,11 @@ import toast from 'react-hot-toast';
 import EditTransactionModal from '@/components/modals/EditTransactionModal';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import Select from '@/components/ui/Select';
 import EmptyState from '@/components/ui/EmptyState';
+import { SurfaceList, Row } from '@/components/ui/Section';
 import { BudgetBucketCard } from './BudgetBucketCard';
 
 const UNBUDGETED_BUCKET: BudgetBucket = {
@@ -100,9 +103,6 @@ const BudgetBuckets: React.FC = () => {
   const [isEditTransactionModalOpen, setIsEditTransactionModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
-  // Mobile Action Drawer State
-  const [actionTransaction, setActionTransaction] = useState<Transaction | null>(null);
-
   const [transactionToDelete, setTransactionToDelete] = useState<string | null>(null);
 
   // --- Memoized Handlers ---
@@ -121,6 +121,16 @@ const BudgetBuckets: React.FC = () => {
     setEditingTransaction(transaction);
     setIsEditTransactionModalOpen(true);
   }, []);
+
+  // Close the bucket-detail sheet before opening the Edit Transaction sheet.
+  // EditTransactionModal renders its own Drawer, so leaving the bucket-detail
+  // Drawer open would stack two Drawers (double backdrop, competing focus
+  // traps). Mirrors the old actionTransaction-drawer pattern of closing
+  // itself before handing off to the edit/delete handlers.
+  const handleEditTransactionFromSheet = useCallback((transaction: Transaction) => {
+    setExpandedBucketId(null);
+    handleEditTransaction(transaction);
+  }, [handleEditTransaction]);
 
   const handleDeleteTransaction = useCallback((id: string) => {
     setTransactionToDelete(id);
@@ -221,56 +231,60 @@ const BudgetBuckets: React.FC = () => {
   const remainingAfterTransfer = sourcePreview ? sourcePreview.balance - amountToCover : 0;
 
 
+  // The bucket whose transactions the detail Drawer is currently showing.
+  const expandedBucketTransactions = expandedBucketId ? (transactionsByBucket.get(expandedBucketId) || []) : [];
+  const expandedBucketName = expandedBucketId === UNBUDGETED_BUCKET.id
+    ? UNBUDGETED_BUCKET.name
+    : buckets.find(b => b.id === expandedBucketId)?.name;
+
   return (
     <div className="space-y-4">
-      {/* Unbudgeted Bucket (if any) */}
-      {transactionsByBucket.has(UNBUDGETED_BUCKET.id) && (
-        <BudgetBucketCard
-          key={UNBUDGETED_BUCKET.id}
-          bucket={UNBUDGETED_BUCKET}
-          spent={{
-            verified: sumMoney(transactionsByBucket.get(UNBUDGETED_BUCKET.id)!.map(t => t.amount)),
-            pending: 0
-          }}
-          bucketTransactions={transactionsByBucket.get(UNBUDGETED_BUCKET.id)!}
-          isExpanded={expandedBucketId === UNBUDGETED_BUCKET.id}
-          isEditingLimit={false}
-          onExpand={handleExpand}
-          onEditBucket={() => {}} // No-op
-          onStartEditingLimit={() => {}} // No-op
-          onSaveLimit={() => {}} // No-op
-          onCancelEdit={() => {}} // No-op
-          onReallocate={handleReallocate}
-          onEditTransaction={handleEditTransaction}
-          onDeleteTransaction={handleDeleteTransaction}
-          onOpenTransactionActions={setActionTransaction}
-        />
+      {(transactionsByBucket.has(UNBUDGETED_BUCKET.id) || buckets.length > 0) && (
+        <SurfaceList>
+          {/* Unbudgeted Bucket (if any) */}
+          {transactionsByBucket.has(UNBUDGETED_BUCKET.id) && (
+            <BudgetBucketCard
+              key={UNBUDGETED_BUCKET.id}
+              bucket={UNBUDGETED_BUCKET}
+              spent={{
+                verified: sumMoney(transactionsByBucket.get(UNBUDGETED_BUCKET.id)!.map(t => t.amount)),
+                pending: 0
+              }}
+              transactionCount={transactionsByBucket.get(UNBUDGETED_BUCKET.id)!.length}
+              isExpanded={expandedBucketId === UNBUDGETED_BUCKET.id}
+              isEditingLimit={false}
+              onExpand={handleExpand}
+              onEditBucket={() => {}} // No-op
+              onStartEditingLimit={() => {}} // No-op
+              onSaveLimit={() => {}} // No-op
+              onCancelEdit={() => {}} // No-op
+              onReallocate={handleReallocate}
+            />
+          )}
+
+          {buckets.map(bucket => {
+            const spent = bucketSpentMap.get(bucket.id) || { verified: 0, pending: 0 };
+            const bucketTransactions = transactionsByBucket.get(bucket.id) || [];
+
+            return (
+              <BudgetBucketCard
+                key={bucket.id}
+                bucket={bucket}
+                spent={spent}
+                transactionCount={bucketTransactions.length}
+                isExpanded={expandedBucketId === bucket.id}
+                isEditingLimit={editingLimitId === bucket.id}
+                onExpand={handleExpand}
+                onEditBucket={handleEditBucket}
+                onStartEditingLimit={startEditingLimit}
+                onSaveLimit={saveLimit}
+                onCancelEdit={cancelEditLimit}
+                onReallocate={handleReallocate}
+              />
+            );
+          })}
+        </SurfaceList>
       )}
-
-      {buckets.map(bucket => {
-        const spent = bucketSpentMap.get(bucket.id) || { verified: 0, pending: 0 };
-        const bucketTransactions = transactionsByBucket.get(bucket.id) || [];
-
-        return (
-          <BudgetBucketCard
-            key={bucket.id}
-            bucket={bucket}
-            spent={spent}
-            bucketTransactions={bucketTransactions}
-            isExpanded={expandedBucketId === bucket.id}
-            isEditingLimit={editingLimitId === bucket.id}
-            onExpand={handleExpand}
-            onEditBucket={handleEditBucket}
-            onStartEditingLimit={startEditingLimit}
-            onSaveLimit={saveLimit}
-            onCancelEdit={cancelEditLimit}
-            onReallocate={handleReallocate}
-            onEditTransaction={handleEditTransaction}
-            onDeleteTransaction={handleDeleteTransaction}
-            onOpenTransactionActions={setActionTransaction}
-          />
-        );
-      })}
 
       {/* Empty State */}
       {buckets.length === 0 && !transactionsByBucket.has(UNBUDGETED_BUCKET.id) && (
@@ -403,43 +417,69 @@ const BudgetBuckets: React.FC = () => {
         </div>
       </Drawer>
 
-      {/* Mobile Actions Drawer */}
+      {/* Bucket Transactions Detail Drawer — replaces the old inline accordion.
+          Tapping a bucket row opens this sheet with a flat, hairline-divided
+          list of its transactions instead of expanding a nested bordered panel. */}
       <Drawer
-        isOpen={!!actionTransaction}
-        onClose={() => setActionTransaction(null)}
-        title="Transaction Options"
+        isOpen={!!expandedBucketId}
+        onClose={() => setExpandedBucketId(null)}
+        title={expandedBucketName ?? 'Transactions'}
       >
-        <div className="space-y-2">
-          {actionTransaction && (
-            <>
-              <Button
-                variant="ghost"
-                className="w-full justify-start text-lg py-4"
-                leftIcon={<Edit className="text-brand-500" />}
-                onClick={() => {
-                  const txToEdit = actionTransaction;
-                  setActionTransaction(null);
-                  handleEditTransaction(txToEdit);
-                }}
-              >
-                Edit Transaction
-              </Button>
-              <div className="h-px bg-brand-200 dark:bg-brand-700 my-2" />
-              <Button
-                variant="ghost-destructive"
-                className="w-full justify-start text-lg py-4"
-                leftIcon={<Trash2 />}
-                onClick={() => {
-                  const txToDelete = actionTransaction;
-                  setActionTransaction(null);
-                  handleDeleteTransaction(txToDelete.id);
-                }}
-              >
-                Delete
-              </Button>
-            </>
-          )}
-        </div>
+        {expandedBucketTransactions.length === 0 ? (
+          <EmptyState
+            variant="plain"
+            title="No transactions"
+            description="This bucket has no transactions yet."
+          />
+        ) : (
+          <>
+            <p className="px-1 mb-2 text-xs font-semibold text-brand-400 dark:text-brand-500 uppercase tracking-wider">
+              {expandedBucketTransactions.length} transaction{expandedBucketTransactions.length === 1 ? '' : 's'}
+            </p>
+            <SurfaceList>
+              {expandedBucketTransactions.map(tx => (
+                <Row key={tx.id} className="justify-between">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-brand-900 dark:text-brand-100 truncate text-sm">{tx.merchant}</p>
+                    <p className="text-xs text-brand-500 dark:text-brand-400 flex items-center gap-2 mt-0.5">
+                      {format(parseISO(tx.date), 'MMM d')}
+                      {tx.status === 'pending_review' && (
+                        <Badge variant="warning" size="sm">Pending</Badge>
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className={`font-mono tabular-nums font-bold text-sm mr-1 ${
+                      tx.status === 'pending_review' ? 'text-brand-400 dark:text-brand-500' : 'text-brand-900 dark:text-brand-100'
+                    }`}>
+                      {fmt(tx.amount)}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => handleEditTransactionFromSheet(tx)}
+                      className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300"
+                      title="Edit transaction"
+                      aria-label={`Edit transaction: ${tx.merchant || 'Unnamed'}`}
+                    >
+                      <Edit size={14} />
+                    </Button>
+                    <Button
+                      variant="ghost-destructive"
+                      size="icon-sm"
+                      onClick={() => handleDeleteTransaction(tx.id)}
+                      className="text-brand-400 dark:text-brand-500 hover:text-money-neg"
+                      title="Delete transaction"
+                      aria-label={`Delete transaction: ${tx.merchant || 'Unnamed'}`}
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
+                </Row>
+              ))}
+            </SurfaceList>
+          </>
+        )}
       </Drawer>
     </div>
   );

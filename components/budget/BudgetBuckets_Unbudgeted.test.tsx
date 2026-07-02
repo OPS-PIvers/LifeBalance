@@ -33,11 +33,12 @@ vi.mock('lucide-react', () => ({
   Plus: () => <span data-testid="plus-icon" />,
   Pencil: () => <span data-testid="pencil-icon" />,
   Check: () => <span data-testid="check-icon" />,
+  ChevronRight: () => <span data-testid="chevron-right" />,
   ChevronDown: () => <span data-testid="chevron-down" />,
-  ChevronUp: () => <span data-testid="chevron-up" />,
   Edit: () => <span data-testid="edit-icon" />,
   Trash2: () => <span data-testid="trash-icon" />,
   MoreVertical: () => <span data-testid="more-vertical-icon" />,
+  Wallet: () => <span data-testid="wallet-icon" />,
   X: () => <span data-testid="x-icon" />,
 }));
 
@@ -150,7 +151,7 @@ describe('BudgetBuckets Unbudgeted Logic', () => {
   it('allows expanding Unbudgeted bucket to see details', () => {
     render(<BudgetBuckets />);
 
-    const toggleButton = screen.getByRole('button', { name: /Toggle 2 transactions for Unbudgeted & Other/i });
+    const toggleButton = screen.getByRole('button', { name: /View 2 transactions for Unbudgeted & Other/i });
     fireEvent.click(toggleButton);
 
     expect(screen.getByText('Mystery Skydiving')).toBeInTheDocument();

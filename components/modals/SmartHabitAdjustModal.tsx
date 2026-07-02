@@ -142,14 +142,14 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
                   <div className="flex-1">
                     <div className="flex items-center justify-between sm:justify-start sm:gap-4 mb-2">
                       <h3 className="font-bold text-brand-800 dark:text-brand-100 text-lg">{suggestion.habitTitle}</h3>
-                      <div className="flex items-center gap-2 bg-brand-50 dark:bg-brand-700/50 px-3 py-1 rounded-full border border-brand-200 dark:border-brand-700">
+                      <div className="flex items-center gap-1.5">
                         <span className="text-sm font-bold text-brand-500 dark:text-brand-400">{suggestion.currentPoints}</span>
                         <ArrowRight size={14} className="text-brand-300 dark:text-brand-600" />
                         <span className="text-sm font-bold text-warm-700 dark:text-warm-300">{suggestion.suggestedPoints} pts</span>
                       </div>
                     </div>
-                    <p className="text-sm text-brand-500 dark:text-brand-400 leading-relaxed bg-brand-50 dark:bg-brand-700/50 p-3 rounded-xl border border-brand-200 dark:border-brand-700">
-                      <Sparkles size={12} className="inline mr-1.5 text-warm-600 dark:text-warm-300 -mt-0.5" />
+                    <p className="text-sm text-brand-500 dark:text-brand-400 leading-relaxed italic">
+                      <Sparkles size={12} className="inline mr-1.5 text-warm-600 dark:text-warm-300 -mt-0.5 not-italic" />
                       {suggestion.reasoning}
                     </p>
                   </div>

@@ -4,10 +4,11 @@ import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { CalendarItem } from '@/types/schema';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Trash2, Edit2, Check, Repeat, TrendingUp, TrendingDown, MoreVertical, X } from 'lucide-react';
+import { Trash2, Edit2, Check, Repeat, TrendingUp, TrendingDown, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Drawer } from '@/components/ui/Drawer';
 import EmptyState from '@/components/ui/EmptyState';
+import { SurfaceList, Row, StatGroup, Stat } from '@/components/ui/Section';
 
 interface RecurringBillsModalProps {
   isOpen: boolean;
@@ -18,7 +19,6 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
   const { calendarItems, updateCalendarItem, deleteCalendarItem } = useFinance();
   const fmt = useFormatCurrency();
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [actionItem, setActionItem] = useState<CalendarItem | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // Edit Form State
@@ -144,30 +144,24 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
         </div>
       }
     >
-      {/* Summary Cards */}
-      <div className="p-6 grid grid-cols-2 gap-4 shrink-0 bg-brand-50 dark:bg-brand-900">
-          <div className="surface-section p-5">
-            <div className="flex items-center gap-2 mb-1 text-money-neg font-bold text-xs uppercase tracking-wider">
-              <TrendingDown size={14} /> Monthly Expenses
-            </div>
-            <div className="font-mono tabular-nums text-2xl font-bold text-brand-900 dark:text-brand-100">
-              {fmt(totalExpenses)}
-            </div>
-            <div className="text-xs text-brand-400 dark:text-brand-500 mt-1">Estimated fixed costs</div>
-          </div>
-          <div className="surface-section p-5">
-            <div className="flex items-center gap-2 mb-1 text-money-pos font-bold text-xs uppercase tracking-wider">
-              <TrendingUp size={14} /> Monthly Income
-            </div>
-            <div className="font-mono tabular-nums text-2xl font-bold text-brand-900 dark:text-brand-100">
-              {fmt(totalIncome)}
-            </div>
-            <div className="text-xs text-brand-400 dark:text-brand-500 mt-1">Estimated recurring income</div>
-          </div>
+      {/* Summary — typography stat columns, no boxed tiles (already inside a sheet) */}
+      <div className="p-6 shrink-0">
+        <StatGroup>
+          <Stat
+            label={<span className="flex items-center gap-1.5"><TrendingDown size={12} /> Monthly Expenses</span>}
+            value={fmt(totalExpenses)}
+            valueClassName="text-2xl"
+          />
+          <Stat
+            label={<span className="flex items-center gap-1.5"><TrendingUp size={12} /> Monthly Income</span>}
+            value={fmt(totalIncome)}
+            valueClassName="text-2xl"
+          />
+        </StatGroup>
       </div>
 
       {/* List */}
-      <div className="p-4 sm:p-6 space-y-3">
+      <div className="p-4 sm:p-6">
           {recurringItems.length === 0 ? (
             <EmptyState
               variant="dashed"
@@ -176,142 +170,97 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
               description="Add recurring bills and income from the main calendar view to manage them here."
             />
           ) : (
-            recurringItems.map(item => (
-              <div key={item.id} className="surface-section p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 group hover:border-brand-300 dark:hover:border-brand-600 transition-colors duration-(--duration-fast) ease-(--ease-standard)">
-                {editingId === item.id ? (
-                  // Edit Mode
-                  <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
-                    {/* Compact inline edit fields — raw, not the full-width Input/Select
-                        primitives whose w-full p-3 wrapper breaks this dense grid row. */}
-                    <div className="sm:col-span-4">
-                      <input
-                        value={editTitle}
-                        onChange={e => setEditTitle(e.target.value)}
-                        placeholder="Title"
-                        aria-label="Title"
-                        className="w-full h-10 px-3 text-base bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn outline-hidden text-brand-900 dark:text-brand-100 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/40"
-                      />
+            <SurfaceList>
+              {recurringItems.map(item => (
+                <Row
+                  key={item.id}
+                  className="flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4"
+                >
+                  {editingId === item.id ? (
+                    // Edit Mode
+                    <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                      {/* Compact inline edit fields — raw, not the full-width Input/Select
+                          primitives whose w-full p-3 wrapper breaks this dense grid row. */}
+                      <div className="sm:col-span-4">
+                        <input
+                          value={editTitle}
+                          onChange={e => setEditTitle(e.target.value)}
+                          placeholder="Title"
+                          aria-label="Title"
+                          className="w-full h-10 px-3 text-base bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn outline-hidden text-brand-900 dark:text-brand-100 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/40"
+                        />
+                      </div>
+                      <div className="sm:col-span-3">
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          value={editAmount}
+                          onChange={e => setEditAmount(e.target.value)}
+                          placeholder="Amount"
+                          aria-label="Amount"
+                          className="w-full h-10 px-3 text-base bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn outline-hidden text-brand-900 dark:text-brand-100 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/40"
+                        />
+                      </div>
+                      <div className="sm:col-span-3">
+                        <select
+                          value={editFrequency}
+                          onChange={e => setEditFrequency(e.target.value as 'weekly' | 'bi-weekly' | 'monthly')}
+                          aria-label="Frequency"
+                          className="w-full h-10 px-3 text-base bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn outline-hidden text-brand-900 dark:text-brand-100 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/40"
+                        >
+                           <option value="weekly">Weekly</option>
+                           <option value="bi-weekly">Bi-Weekly</option>
+                           <option value="monthly">Monthly</option>
+                        </select>
+                      </div>
+                      <div className="sm:col-span-2 flex justify-end gap-1">
+                        <Button size="icon-sm" variant="success" onClick={() => saveEditing(item)} aria-label={`Save changes to ${editTitle}`}>
+                          <Check size={16} />
+                        </Button>
+                        <Button size="icon-sm" variant="ghost" onClick={cancelEditing} aria-label="Cancel editing">
+                          <X size={16} />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="sm:col-span-3">
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        value={editAmount}
-                        onChange={e => setEditAmount(e.target.value)}
-                        placeholder="Amount"
-                        aria-label="Amount"
-                        className="w-full h-10 px-3 text-base bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn outline-hidden text-brand-900 dark:text-brand-100 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/40"
-                      />
-                    </div>
-                    <div className="sm:col-span-3">
-                      <select
-                        value={editFrequency}
-                        onChange={e => setEditFrequency(e.target.value as 'weekly' | 'bi-weekly' | 'monthly')}
-                        aria-label="Frequency"
-                        className="w-full h-10 px-3 text-base bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn outline-hidden text-brand-900 dark:text-brand-100 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/40"
-                      >
-                         <option value="weekly">Weekly</option>
-                         <option value="bi-weekly">Bi-Weekly</option>
-                         <option value="monthly">Monthly</option>
-                      </select>
-                    </div>
-                    <div className="sm:col-span-2 flex justify-end gap-1">
-                      <Button size="icon-sm" variant="success" onClick={() => saveEditing(item)} aria-label={`Save changes to ${editTitle}`}>
-                        <Check size={16} />
-                      </Button>
-                      <Button size="icon-sm" variant="ghost" onClick={cancelEditing} aria-label="Cancel editing">
-                        <X size={16} />
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  // View Mode
-                  <>
-                    <div className="flex items-center gap-3">
-                       <div className={`w-10 h-10 rounded-card flex items-center justify-center font-bold text-lg shrink-0 ${
-                          item.type === 'income' ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos' : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg'
-                        }`}>
-                          {item.type === 'income' ? '+' : '-'}
-                        </div>
-                        <div>
-                          <div className="font-semibold text-brand-900 dark:text-brand-100">{item.title}</div>
-                          <div className="text-xs text-brand-500 dark:text-brand-400 capitalize flex items-center gap-1">
-                            <Repeat size={10} /> {item.frequency}
+                  ) : (
+                    // View Mode
+                    <>
+                      <div className="flex items-center gap-3">
+                         <div className={`w-10 h-10 rounded-card flex items-center justify-center font-bold text-lg shrink-0 ${
+                            item.type === 'income' ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos' : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg'
+                          }`}>
+                            {item.type === 'income' ? '+' : '-'}
                           </div>
-                        </div>
-                    </div>
+                          <div>
+                            <div className="font-semibold text-brand-900 dark:text-brand-100">{item.title}</div>
+                            <div className="text-xs text-brand-500 dark:text-brand-400 capitalize flex items-center gap-1">
+                              <Repeat size={10} /> {item.frequency}
+                            </div>
+                          </div>
+                      </div>
 
-                    <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
-                        <div className="text-right">
-                          <div className="font-mono tabular-nums font-bold text-brand-900 dark:text-brand-100">{fmt(item.amount)}</div>
-                          <div className="text-xxs text-brand-400 dark:text-brand-500">per instance</div>
-                        </div>
+                      <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
+                          <div className="text-right">
+                            <div className="font-mono tabular-nums font-bold text-brand-900 dark:text-brand-100">{fmt(item.amount)}</div>
+                            <div className="text-xxs text-brand-400 dark:text-brand-500">per instance</div>
+                          </div>
 
-                        <div className="hidden sm:flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity">
-                           <Button variant="ghost" size="icon-sm" onClick={() => startEditing(item)} aria-label={`Edit ${item.title}`}>
-                             <Edit2 size={14} className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300" />
-                           </Button>
-                           <Button variant="ghost-destructive" size="icon-sm" onClick={() => handleDelete(item.id)} aria-label={`Delete ${item.title}`}>
-                             <Trash2 size={14} />
-                           </Button>
-                        </div>
-
-                        {/* Mobile Action */}
-                        <div className="sm:hidden">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setActionItem(item)}
-                            className="text-brand-400 dark:text-brand-500 active:bg-brand-100 dark:active:bg-brand-700/50"
-                            aria-label={`Manage ${item.title}`}
-                          >
-                            <MoreVertical size={20} />
-                          </Button>
-                        </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            ))
+                          <div className="flex items-center gap-1">
+                             <Button variant="ghost" size="icon-sm" onClick={() => startEditing(item)} aria-label={`Edit ${item.title}`}>
+                               <Edit2 size={14} className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300" />
+                             </Button>
+                             <Button variant="ghost-destructive" size="icon-sm" onClick={() => handleDelete(item.id)} aria-label={`Delete ${item.title}`}>
+                               <Trash2 size={14} />
+                             </Button>
+                          </div>
+                      </div>
+                    </>
+                  )}
+                </Row>
+              ))}
+            </SurfaceList>
           )}
       </div>
-
-      {/* Mobile Action Drawer */}
-      <Drawer
-        isOpen={!!actionItem}
-        onClose={() => setActionItem(null)}
-        title={actionItem ? `Manage ${actionItem.title}` : 'Manage Item'}
-      >
-        <div className="space-y-2">
-          {actionItem && (
-            <>
-              <Button
-                variant="ghost"
-                className="w-full justify-start text-lg py-4"
-                leftIcon={<Edit2 className="text-brand-500" />}
-                onClick={() => {
-                  startEditing(actionItem);
-                  setActionItem(null);
-                }}
-              >
-                Edit Item
-              </Button>
-              <div className="h-px bg-brand-200 dark:bg-brand-700 my-2" />
-              <Button
-                variant="ghost-destructive"
-                className="w-full justify-start text-lg py-4"
-                leftIcon={<Trash2 />}
-                onClick={() => {
-                  handleDelete(actionItem.id);
-                  setActionItem(null);
-                }}
-              >
-                Delete
-              </Button>
-            </>
-          )}
-        </div>
-      </Drawer>
 
       <ConfirmDialog
         isOpen={!!deleteConfirmId}

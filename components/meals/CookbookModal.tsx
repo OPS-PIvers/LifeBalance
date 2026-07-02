@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import Input from '@/components/ui/Input';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { SurfaceList, Row } from '@/components/ui/Section';
 import { Search, ChevronRight, Copy, X, ArrowUpAZ, Calendar, Star, ChefHat } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
@@ -167,7 +168,7 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
       }
     >
         {/* List (single Drawer scroll container) */}
-        <div className="p-4 space-y-2">
+        <div className="p-4">
           {filteredMeals.length === 0 ? (
             <div className="text-center py-12 text-brand-400 dark:text-brand-500">
                 <p>No matching recipes found.</p>
@@ -181,13 +182,14 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
                 )}
             </div>
           ) : (
-            filteredMeals.map(meal => (
-                <div key={meal.id} className="flex items-stretch gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <SurfaceList>
+              {filteredMeals.map(meal => (
+                <Row key={meal.id} className="gap-2 px-2">
                     <button
                         onClick={() => onSelect(meal)}
-                        className="flex-1 text-left p-4 hover:bg-brand-50 rounded-2xl border border-brand-200 bg-white transition-colors duration-(--duration-fast) ease-(--ease-standard) group flex justify-between items-center dark:bg-brand-800 dark:border-brand-700 dark:hover:bg-brand-700/50"
+                        className="flex-1 min-w-0 text-left p-2 rounded-lg hover:bg-brand-50 transition-colors duration-(--duration-fast) ease-(--ease-standard) group flex justify-between items-center dark:hover:bg-brand-700/40"
                     >
-                        <div>
+                        <div className="min-w-0">
                             <span className="font-bold text-brand-700 group-hover:text-brand-700 block mb-0.5 dark:text-brand-200 dark:group-hover:text-brand-300">{meal.name}</span>
                             <div className="flex items-center gap-2">
                                 {meal.rating && meal.rating > 0 ? (
@@ -210,19 +212,20 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
                                 )}
                             </div>
                         </div>
-                        <ChevronRight className="w-5 h-5 text-brand-300 group-hover:text-brand-400 transition-colors dark:text-brand-600 dark:group-hover:text-brand-400" />
+                        <ChevronRight className="w-5 h-5 shrink-0 text-brand-300 group-hover:text-brand-400 transition-colors dark:text-brand-600 dark:group-hover:text-brand-400" />
                     </button>
                     <button
                         type="button"
                         aria-label="Clone as New Meal"
                         onClick={() => onClone(meal)}
-                        className="px-4 text-brand-400 hover:text-brand-600 hover:bg-brand-50 border border-brand-200 bg-white hover:border-brand-200 rounded-2xl transition-colors dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/30 dark:border-brand-700 dark:bg-brand-800 dark:hover:border-brand-500/40"
+                        className="shrink-0 p-2.5 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
                         title="Clone as New Meal"
                     >
                         <Copy className="w-5 h-5" />
                     </button>
-                </div>
-            ))
+                </Row>
+              ))}
+            </SurfaceList>
           )}
         </div>
 

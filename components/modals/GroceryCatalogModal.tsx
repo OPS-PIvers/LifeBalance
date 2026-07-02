@@ -1,13 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import { useShopping } from '@/contexts/FirebaseHouseholdContext';
 import { GroceryCatalogItem } from '@/types/schema';
-import { Search, Plus, Trash2, Edit2, ShoppingCart, Clock, MoreVertical } from 'lucide-react';
+import { Search, Plus, Trash2, Edit2, ShoppingCart, Clock, ChevronLeft, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { Drawer } from '@/components/ui/Drawer';
+import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import EmptyState from '@/components/ui/EmptyState';
 import Input from '@/components/ui/Input';
+import { SurfaceList, Row } from '@/components/ui/Section';
 
 interface GroceryCatalogModalProps {
   isOpen: boolean;
@@ -25,13 +27,11 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
 
   const [searchQuery, setSearchQuery] = useState('');
   const [editingItem, setEditingItem] = useState<GroceryCatalogItem | null>(null);
-  const [actionItem, setActionItem] = useState<GroceryCatalogItem | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // Wrapper for onClose to reset state
   const handleClose = () => {
     setEditingItem(null);
-    setActionItem(null);
     setSearchQuery('');
     onClose();
   };
@@ -123,10 +123,8 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
     const id = deleteConfirmId;
     setDeleteConfirmId(null);
     await deleteGroceryCatalogItem(id);
-    // Close action drawer if open for this item
-    if (actionItem?.id === id) {
-      setActionItem(null);
-    }
+    // Close the edit view if it was open for the deleted item.
+    setEditingItem(prev => (prev?.id === id ? null : prev));
   };
 
   return (
@@ -134,191 +132,169 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
       isOpen={isOpen}
       onClose={handleClose}
       noPadding={true}
-    >
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-brand-200 dark:border-brand-700 flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-700/50 flex items-center justify-center">
-            <Clock className="w-5 h-5 text-brand-500 dark:text-brand-400" />
-        </div>
-        <div>
-          <h3 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-100 tracking-tight">Previously Purchased</h3>
-          <p className="text-xs text-brand-500 dark:text-brand-400">Quickly add items back to your list</p>
-        </div>
-      </div>
-
-      {/* Search */}
-      <div className="px-6 py-3 border-b border-brand-200 dark:border-brand-700 bg-brand-50/50 dark:bg-brand-700/30">
-        <Input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search history..."
-          icon={<Search className="w-4 h-4" />}
-          autoFocus
-        />
-      </div>
-
-      {/* List */}
-      <div className="p-4 space-y-2 bg-brand-50/30 dark:bg-brand-700/20 min-h-[50vh]">
-          {filteredCatalog.length === 0 ? (
-            <EmptyState
-              icon={<ShoppingCart size={28} />}
-              title={<>No history found matching &quot;{searchQuery}&quot;</>}
-              description="Items you check off your shopping list will appear here."
-            />
-          ) : (
-            filteredCatalog.map(item => (
-              <div
-                key={item.id}
-                className="group flex items-center gap-3 p-3 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-2xl hover:bg-brand-50 dark:hover:bg-brand-700/40 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
-              >
-                {/* Add Button Area */}
-                <button
-                  onClick={() => handleAddItem(item)}
-                  className="w-10 h-10 rounded-xl bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 flex items-center justify-center hover:bg-brand-50 dark:hover:bg-brand-700/50 hover:text-brand-600 dark:hover:text-brand-300 hover:scale-105 transition-all shrink-0"
-                  aria-label={`Add ${item.name} to list`}
-                >
-                  <Plus className="w-5 h-5" />
-                </button>
-
-                {/* Content */}
-                <button
-                  type="button"
-                  className="flex-1 min-w-0 text-left focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-lg px-1 -mx-1"
-                  onClick={() => handleAddItem(item)}
-                >
-                  <div className="font-medium text-brand-900 dark:text-brand-100 truncate">{item.name}</div>
-                  <div className="text-xs text-brand-500 dark:text-brand-400 flex items-center gap-2 mt-0.5">
-                    <span className="bg-brand-100 dark:bg-brand-700/50 px-2 py-0.5 rounded-full text-brand-600 dark:text-brand-300 font-medium">{item.category}</span>
-                    {item.defaultStore && <span className="truncate max-w-[80px] text-brand-400 dark:text-brand-500">• {item.defaultStore}</span>}
-                    {item.lastPurchased && (
-                      <span className="text-brand-300 dark:text-brand-600">• {formatDistanceToNow(new Date(item.lastPurchased))} ago</span>
-                    )}
-                  </div>
-                </button>
-
-                {/* Mobile Actions */}
-                <button
-                    onClick={() => setActionItem(item)}
-                    className="sm:hidden w-10 h-10 flex items-center justify-center text-brand-400 dark:text-brand-500 active:text-brand-600 active:bg-brand-100 rounded-full"
-                    aria-label="More options"
-                >
-                    <MoreVertical className="w-5 h-5" />
-                </button>
-
-                {/* Desktop Actions */}
-                <div className="hidden sm:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => setEditingItem(item)}
-                    className="p-2 text-brand-300 dark:text-brand-600 hover:text-brand-600 dark:hover:text-brand-300 hover:bg-brand-100 dark:hover:bg-brand-700/50 rounded-full transition-colors"
-                    aria-label="Edit history item"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteItem(item.id)}
-                    className="p-2 text-brand-300 dark:text-brand-600 hover:text-money-neg hover:bg-money-neg/10 rounded-full transition-colors"
-                    aria-label="Delete from history"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-      </div>
-
-      {/* Mobile Actions Drawer */}
-      <Drawer
-        isOpen={!!actionItem}
-        onClose={() => setActionItem(null)}
-        title="Item Options"
-      >
-          <div className="space-y-3">
-             <div className="bg-brand-50 dark:bg-brand-700/50 rounded-xl p-4 mb-4">
-                <p className="font-bold text-lg">{actionItem?.name}</p>
-                <p className="text-brand-500 dark:text-brand-400">{actionItem?.category}</p>
-             </div>
-
-             <button
-               onClick={() => {
-                 setEditingItem(actionItem);
-                 setActionItem(null);
-               }}
-               className="w-full flex items-center gap-3 p-4 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-xl font-bold text-brand-700 dark:text-brand-200 active:bg-brand-50"
-             >
-                <Edit2 className="w-5 h-5" />
-                Edit Details
-             </button>
-
-             <button
-               onClick={() => {
-                 if (actionItem) {
-                     handleDeleteItem(actionItem.id);
-                 }
-               }}
-               className="w-full flex items-center gap-3 p-4 bg-white dark:bg-brand-800 border border-money-neg/30 text-money-neg rounded-btn font-semibold active:bg-money-neg/10"
-             >
-                <Trash2 className="w-5 h-5" />
-                Remove from History
-             </button>
+      ariaLabelledBy="grocery-catalog-title"
+      header={
+        editingItem ? (
+          <div className="px-4 py-3 flex items-center gap-1 border-b border-brand-200 dark:border-brand-700">
+            <button
+              type="button"
+              onClick={() => setEditingItem(null)}
+              aria-label="Back to history"
+              className="p-2.5 -ml-1 text-brand-500 hover:text-brand-700 hover:bg-brand-50 rounded-full transition-colors dark:text-brand-400 dark:hover:text-brand-200 dark:hover:bg-brand-700/50"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <h3 id="grocery-catalog-title" className="flex-1 font-display text-lg font-semibold text-brand-900 dark:text-brand-100 tracking-tight">
+              Edit History Item
+            </h3>
+            <button
+              type="button"
+              onClick={handleClose}
+              aria-label="Close"
+              className="p-2.5 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
-      </Drawer>
+        ) : (
+          <>
+            <div className="px-6 py-4 border-b border-brand-200 dark:border-brand-700 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-700/50 flex items-center justify-center shrink-0">
+                  <Clock className="w-5 h-5 text-brand-500 dark:text-brand-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 id="grocery-catalog-title" className="font-display text-lg font-semibold text-brand-900 dark:text-brand-100 tracking-tight">Previously Purchased</h3>
+                <p className="text-xs text-brand-500 dark:text-brand-400">Quickly add items back to your list</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleClose}
+                aria-label="Close"
+                className="p-2.5 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-      {/* Nested Edit Drawer Overlay */}
-      {editingItem && (
-        <Drawer
-          isOpen={!!editingItem}
-          onClose={() => setEditingItem(null)}
-          title="Edit History Item"
-        >
-          <div className="space-y-4">
-
-            <Input
-              label="Name"
-              type="text"
-              value={editingItem.name}
-              onChange={e => setEditingItem({...editingItem, name: e.target.value})}
-            />
-            <Input
-              label="Category"
-              type="text"
-              value={editingItem.category}
-              onChange={e => setEditingItem({...editingItem, category: e.target.value})}
-            />
-            <div className="grid grid-cols-2 gap-3">
+            {/* Search */}
+            <div className="px-6 py-3 border-b border-brand-200 dark:border-brand-700 bg-brand-50/50 dark:bg-brand-700/30">
               <Input
-                label="Default Qty"
                 type="text"
-                value={editingItem.defaultQuantity || ''}
-                onChange={e => setEditingItem({...editingItem, defaultQuantity: e.target.value})}
-                placeholder="e.g. 1"
-              />
-              <Input
-                label="Default Store"
-                type="text"
-                value={editingItem.defaultStore || ''}
-                onChange={e => setEditingItem({...editingItem, defaultStore: e.target.value})}
-                placeholder="Optional"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search history..."
+                icon={<Search className="w-4 h-4" />}
+                autoFocus
               />
             </div>
-          </div>
-
-          <div className="sticky bottom-0 flex gap-3 mt-6 p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
-            <button
-              onClick={() => setEditingItem(null)}
-              className="flex-1 py-2 text-brand-600 dark:text-brand-300 font-medium hover:bg-brand-100 dark:hover:bg-brand-700/50 rounded-lg"
-            >
+          </>
+        )
+      }
+      footer={
+        editingItem ? (
+          <div className="flex gap-3 p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
+            <Button variant="ghost" className="flex-1" onClick={() => setEditingItem(null)}>
               Cancel
-            </button>
-            <button
-              onClick={handleUpdateItem}
-              className="flex-1 py-2 bg-accent-600 dark:bg-accent-500 text-white font-semibold rounded-btn hover:bg-accent-700 dark:hover:bg-accent-400 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
-            >
+            </Button>
+            <Button variant="primary" className="flex-1" onClick={handleUpdateItem}>
               Save
-            </button>
+            </Button>
           </div>
-        </Drawer>
+        ) : undefined
+      }
+    >
+      {editingItem ? (
+        /* In-sheet edit view — swaps in place of the list, no second Drawer. */
+        <div className="p-4 space-y-4">
+          <Input
+            label="Name"
+            type="text"
+            value={editingItem.name}
+            onChange={e => setEditingItem({...editingItem, name: e.target.value})}
+          />
+          <Input
+            label="Category"
+            type="text"
+            value={editingItem.category}
+            onChange={e => setEditingItem({...editingItem, category: e.target.value})}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Default Qty"
+              type="text"
+              value={editingItem.defaultQuantity || ''}
+              onChange={e => setEditingItem({...editingItem, defaultQuantity: e.target.value})}
+              placeholder="e.g. 1"
+            />
+            <Input
+              label="Default Store"
+              type="text"
+              value={editingItem.defaultStore || ''}
+              onChange={e => setEditingItem({...editingItem, defaultStore: e.target.value})}
+              placeholder="Optional"
+            />
+          </div>
+        </div>
+      ) : (
+        /* List */
+        <div className="p-4 bg-brand-50/30 dark:bg-brand-700/20 min-h-[50vh]">
+            {filteredCatalog.length === 0 ? (
+              <EmptyState
+                icon={<ShoppingCart size={28} />}
+                title={<>No history found matching &quot;{searchQuery}&quot;</>}
+                description="Items you check off your shopping list will appear here."
+              />
+            ) : (
+              <SurfaceList>
+                {filteredCatalog.map(item => (
+                  <Row key={item.id}>
+                    {/* Add Button Area */}
+                    <button
+                      onClick={() => handleAddItem(item)}
+                      className="w-10 h-10 rounded-xl bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 flex items-center justify-center hover:bg-brand-200 dark:hover:bg-brand-700 transition-colors shrink-0"
+                      aria-label={`Add ${item.name} to list`}
+                    >
+                      <Plus className="w-5 h-5" />
+                    </button>
+
+                    {/* Content */}
+                    <button
+                      type="button"
+                      className="flex-1 min-w-0 text-left focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-lg px-1 -mx-1"
+                      onClick={() => handleAddItem(item)}
+                    >
+                      <div className="font-medium text-brand-900 dark:text-brand-100 truncate">{item.name}</div>
+                      <div className="text-xs text-brand-500 dark:text-brand-400 flex items-center gap-2 mt-0.5">
+                        <span className="bg-brand-100 dark:bg-brand-700/50 px-2 py-0.5 rounded-full text-brand-600 dark:text-brand-300 font-medium">{item.category}</span>
+                        {item.defaultStore && <span className="truncate max-w-[80px] text-brand-400 dark:text-brand-500">• {item.defaultStore}</span>}
+                        {item.lastPurchased && (
+                          <span className="text-brand-300 dark:text-brand-600">• {formatDistanceToNow(new Date(item.lastPurchased))} ago</span>
+                        )}
+                      </div>
+                    </button>
+
+                    {/* Actions — always visible (touch-friendly), no separate action sheet */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => setEditingItem(item)}
+                        className="p-2 text-brand-300 dark:text-brand-600 hover:text-brand-600 dark:hover:text-brand-300 hover:bg-brand-100 dark:hover:bg-brand-700/50 rounded-full transition-colors"
+                        aria-label={`Edit ${item.name}`}
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteItem(item.id)}
+                        className="p-2 text-brand-300 dark:text-brand-600 hover:text-money-neg hover:bg-money-neg/10 rounded-full transition-colors"
+                        aria-label={`Delete ${item.name} from history`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </Row>
+                ))}
+              </SurfaceList>
+            )}
+        </div>
       )}
 
       {/* Delete from History Confirmation Dialog */}

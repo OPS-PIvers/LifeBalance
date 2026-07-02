@@ -4,9 +4,10 @@ import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { BucketPeriodSnapshot } from '@/types/schema';
 import { format, parseISO } from 'date-fns';
 import { roundMoney } from '@/utils/money';
-import { ChevronDown, ChevronUp, History, Download, Loader2 } from 'lucide-react';
+import { ChevronRight, History, Download, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Section } from '@/components/ui/Section';
+import { Section, SurfaceList, Row } from '@/components/ui/Section';
+import { Drawer } from '@/components/ui/Drawer';
 import EmptyState from '@/components/ui/EmptyState';
 import ProgressBar from '@/components/ui/ProgressBar';
 import { generateCsvExport } from '@/utils/exportUtils';
@@ -31,7 +32,9 @@ const BudgetHistory: React.FC = () => {
     loadAllBucketHistory,
   } = useFinance();
   const fmt = useFormatCurrency();
-  const [expandedPeriodId, setExpandedPeriodId] = useState<string | null>(null);
+  // The period whose bucket breakdown is shown in the detail Drawer (replaces
+  // the old inline-expanding accordion card).
+  const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null);
 
   const historyGroups = useMemo(() => {
     const groups = new Map<string, PeriodGroup>();
@@ -65,10 +68,6 @@ const BudgetHistory: React.FC = () => {
       b.startDate > a.startDate ? 1 : b.startDate < a.startDate ? -1 : 0
     );
   }, [bucketHistory]);
-
-  const toggleExpand = (periodId: string) => {
-    setExpandedPeriodId(prev => prev === periodId ? null : periodId);
-  };
 
   const handleExport = useCallback(() => {
     if (bucketHistory.length === 0) {
@@ -132,6 +131,8 @@ const BudgetHistory: React.FC = () => {
     );
   }
 
+  const selectedGroup = historyGroups.find(g => g.periodId === selectedPeriodId);
+
   return (
     <Section
       title="Period history"
@@ -147,114 +148,114 @@ const BudgetHistory: React.FC = () => {
         </Button>
       }
     >
-      <div className="space-y-3">
+      <SurfaceList>
         {historyGroups.map(group => {
-          const isExpanded = expandedPeriodId === group.periodId;
           const savings = group.totalLimit - group.totalSpent;
           const percentUsed = group.totalLimit > 0
             ? Math.min(100, Math.max(0, (group.totalSpent / group.totalLimit) * 100))
             : 100;
 
           return (
-            <div key={group.periodId} className="surface-section overflow-hidden">
+            <Row key={group.periodId} className="flex-col items-stretch gap-2.5">
               <button
-                onClick={() => toggleExpand(group.periodId)}
-                className="w-full text-left focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-2xl"
-                aria-expanded={isExpanded}
+                type="button"
+                onClick={() => setSelectedPeriodId(group.periodId)}
+                className="flex items-center justify-between gap-3 w-full text-left focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-btn"
+                aria-label={`View bucket breakdown for ${format(parseISO(group.startDate), 'MMM d')} to ${format(parseISO(group.endDate), 'MMM d, yyyy')}`}
               >
-                <div className="p-5 hover:bg-brand-50 dark:hover:bg-brand-700/40 transition-colors duration-(--duration-fast) ease-(--ease-standard)">
-                  <div className="flex justify-between items-center mb-3">
-                    <div>
-                      <h3 className="font-semibold text-brand-900 dark:text-brand-100 text-base">
-                        {format(parseISO(group.startDate), 'MMM d')} – {format(parseISO(group.endDate), 'MMM d, yyyy')}
-                      </h3>
-                      <p className="text-xs text-brand-400 dark:text-brand-500 font-medium mt-0.5">
-                        {group.transactionCount} transactions
-                      </p>
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-brand-900 dark:text-brand-100 text-base truncate">
+                    {format(parseISO(group.startDate), 'MMM d')} – {format(parseISO(group.endDate), 'MMM d, yyyy')}
+                  </h3>
+                  <p className="text-xs text-brand-400 dark:text-brand-500 font-medium mt-0.5">
+                    {group.transactionCount} transactions
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="text-right">
+                    <div className={`font-mono text-base font-bold tabular-nums ${savings >= 0 ? 'text-money-pos' : 'text-money-neg'}`}>
+                      {savings >= 0 ? '+' : ''}{fmt(savings)}
                     </div>
-                    <div className="text-right">
-                      <div className={`font-mono text-base font-bold tabular-nums ${savings >= 0 ? 'text-money-pos' : 'text-money-neg'}`}>
-                        {savings >= 0 ? '+' : ''}{fmt(savings)}
-                      </div>
-                      <p className="text-xxs text-brand-400 dark:text-brand-500">
-                        {savings >= 0 ? 'saved' : 'overspent'}
-                      </p>
-                    </div>
+                    <p className="text-xxs text-brand-400 dark:text-brand-500">
+                      {savings >= 0 ? 'saved' : 'overspent'}
+                    </p>
                   </div>
-
-                  {/* Progress bar */}
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-xs font-medium text-brand-600 dark:text-brand-300">
-                      <span className="font-mono tabular-nums">{fmt(group.totalSpent)} spent</span>
-                      <span className="font-mono tabular-nums">{fmt(group.totalLimit)} limit</span>
-                    </div>
-                    <ProgressBar
-                      value={percentUsed}
-                      className="h-2 bg-brand-100 dark:bg-brand-700"
-                      barClassName={getProgressColor(group.totalSpent, group.totalLimit)}
-                      ariaLabel={`${Math.round(percentUsed)}% of limit used`}
-                    />
-                  </div>
-
-                  <div className="flex justify-center pt-3 text-brand-400 dark:text-brand-500">
-                    {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                  </div>
+                  <ChevronRight size={18} className="text-brand-300 dark:text-brand-600" aria-hidden="true" />
                 </div>
               </button>
 
-              {/* Expanded content */}
-              {isExpanded && (
-                <div className="border-t border-brand-200 dark:border-brand-700 p-5 space-y-3 animate-in fade-in slide-in-from-top-2 duration-(--duration-base)">
-                  <h4 className="text-xs font-semibold text-brand-400 dark:text-brand-500 uppercase tracking-wider">
-                    Bucket breakdown
-                  </h4>
-                  {group.snapshots
-                    .slice()
-                    .sort((a, b) => (b.limit - b.totalSpent) - (a.limit - a.totalSpent))
-                    .map(bucket => {
-                      const bucketSavings = bucket.limit - bucket.totalSpent;
-                      const bucketPercent = bucket.limit > 0
-                        ? Math.min(100, Math.max(0, (bucket.totalSpent / bucket.limit) * 100))
-                        : 100;
-
-                      return (
-                        <div key={bucket.id} className="space-y-1.5">
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm font-semibold text-brand-700 dark:text-brand-200">{bucket.bucketName}</span>
-                            <span className={`text-sm font-mono tabular-nums font-bold ${bucketSavings >= 0 ? 'text-money-pos' : 'text-money-neg'}`}>
-                              {fmt(bucket.totalSpent)} <span className="text-brand-300 dark:text-brand-500 font-normal">/ {fmt(bucket.limit)}</span>
-                            </span>
-                          </div>
-                          <ProgressBar
-                            value={bucketPercent}
-                            className="h-1.5 bg-brand-100 dark:bg-brand-700"
-                            barClassName={getProgressColor(bucket.totalSpent, bucket.limit)}
-                            ariaLabel={`${Math.round(bucketPercent)}% of limit used`}
-                          />
-                        </div>
-                      );
-                    })}
+              {/* Progress bar */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs font-medium text-brand-600 dark:text-brand-300">
+                  <span className="font-mono tabular-nums">{fmt(group.totalSpent)} spent</span>
+                  <span className="font-mono tabular-nums">{fmt(group.totalLimit)} limit</span>
                 </div>
-              )}
-            </div>
+                <ProgressBar
+                  value={percentUsed}
+                  className="h-2 bg-brand-100 dark:bg-brand-700"
+                  barClassName={getProgressColor(group.totalSpent, group.totalLimit)}
+                  ariaLabel={`${Math.round(percentUsed)}% of limit used`}
+                />
+              </div>
+            </Row>
           );
         })}
+      </SurfaceList>
 
-        {/* Load older periods beyond the live window */}
-        {hasMoreBucketHistory && (
-          <div className="pt-1 flex justify-center">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={loadAllBucketHistory}
-              disabled={isLoadingOlderBucketHistory}
-              leftIcon={isLoadingOlderBucketHistory ? <Loader2 size={16} className="animate-spin" /> : <History size={16} />}
-            >
-              {isLoadingOlderBucketHistory ? 'Loading…' : 'Load older periods'}
-            </Button>
-          </div>
+      {/* Load older periods beyond the live window */}
+      {hasMoreBucketHistory && (
+        <div className="pt-3 flex justify-center">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={loadAllBucketHistory}
+            disabled={isLoadingOlderBucketHistory}
+            leftIcon={isLoadingOlderBucketHistory ? <Loader2 size={16} className="animate-spin" /> : <History size={16} />}
+          >
+            {isLoadingOlderBucketHistory ? 'Loading…' : 'Load older periods'}
+          </Button>
+        </div>
+      )}
+
+      {/* Bucket breakdown Drawer — replaces the old inline-expanding panel */}
+      <Drawer
+        isOpen={!!selectedPeriodId}
+        onClose={() => setSelectedPeriodId(null)}
+        title={selectedGroup
+          ? `${format(parseISO(selectedGroup.startDate), 'MMM d')} – ${format(parseISO(selectedGroup.endDate), 'MMM d, yyyy')}`
+          : 'Bucket breakdown'}
+      >
+        {selectedGroup && (
+          <SurfaceList>
+            {selectedGroup.snapshots
+              .slice()
+              .sort((a, b) => (b.limit - b.totalSpent) - (a.limit - a.totalSpent))
+              .map(bucket => {
+                const bucketSavings = bucket.limit - bucket.totalSpent;
+                const bucketPercent = bucket.limit > 0
+                  ? Math.min(100, Math.max(0, (bucket.totalSpent / bucket.limit) * 100))
+                  : 100;
+
+                return (
+                  <Row key={bucket.id} className="flex-col items-stretch gap-1.5">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-semibold text-brand-700 dark:text-brand-200">{bucket.bucketName}</span>
+                      <span className={`text-sm font-mono tabular-nums font-bold ${bucketSavings >= 0 ? 'text-money-pos' : 'text-money-neg'}`}>
+                        {fmt(bucket.totalSpent)} <span className="text-brand-300 dark:text-brand-500 font-normal">/ {fmt(bucket.limit)}</span>
+                      </span>
+                    </div>
+                    <ProgressBar
+                      value={bucketPercent}
+                      className="h-1.5 bg-brand-100 dark:bg-brand-700"
+                      barClassName={getProgressColor(bucket.totalSpent, bucket.limit)}
+                      ariaLabel={`${Math.round(bucketPercent)}% of limit used`}
+                    />
+                  </Row>
+                );
+              })}
+          </SurfaceList>
         )}
-      </div>
+      </Drawer>
     </Section>
   );
 };

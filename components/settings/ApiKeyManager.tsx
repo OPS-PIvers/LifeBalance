@@ -3,6 +3,8 @@ import { Key, Plus, Copy, Trash2, AlertTriangle, Clock, Shield } from 'lucide-re
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { Switch } from '@/components/ui/Switch';
+import { SurfaceList, Row } from '@/components/ui/Section';
+import { Drawer } from '@/components/ui/Drawer';
 import { HouseholdApiKey, ApiKeyPermissions } from '@/types/schema';
 import {
   generateApiKey,
@@ -135,8 +137,8 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
   const revokedKeys = apiKeys.filter((k) => k.status === 'revoked');
 
   return (
-    <div className="space-y-4">
-      {/* Newly Created Key Warning */}
+    <div className="space-y-6">
+      {/* Newly Created Key Warning — the one legitimately-tinted ephemeral state */}
       {newlyCreatedKey && (
         <div className="bg-warm-50 border border-warm-200 rounded-card p-4 space-y-3 dark:bg-warm-500/10 dark:border-warm-500/30">
           <div className="flex items-start gap-2">
@@ -184,178 +186,118 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
         </div>
       )}
 
-      {/* Active Keys */}
+      {/* Active Keys — one grouped surface, one hairline row per key */}
       {activeKeys.length > 0 && (
         <div className="space-y-2">
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">Active Keys</h4>
-          {activeKeys.map((key) => (
-            <div
-              key={key.id}
-              className="surface-section p-3 space-y-2"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 px-1">Active keys</p>
+          <SurfaceList>
+            {activeKeys.map((key) => (
+              <Row key={key.id} className="items-start">
+                <div className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-700 flex items-center justify-center shrink-0">
                   <Key className="w-4 h-4 text-brand-500 dark:text-brand-400" />
-                  <span className="font-semibold text-brand-900 dark:text-brand-100">{key.name}</span>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost-danger"
-                    size="icon"
-                    onClick={() => handleRevokeKey(key.id, key.name)}
-                    title="Revoke key"
-                    aria-label={`Revoke key ${key.name}`}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                <div className="flex-1 min-w-0 space-y-1.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-semibold text-brand-900 dark:text-brand-100 truncate">{key.name}</span>
+                    <Button
+                      variant="ghost-danger"
+                      size="icon"
+                      className="shrink-0 -my-1"
+                      onClick={() => handleRevokeKey(key.id, key.name)}
+                      title="Revoke key"
+                      aria-label={`Revoke key ${key.name}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-brand-500 dark:text-brand-400">
+                    <code className="bg-brand-100 dark:bg-brand-700 px-2 py-0.5 rounded-sm font-mono text-brand-700 dark:text-brand-200">{key.keyPrefix}...</code>
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {key.lastUsedAt
+                        ? `Used ${formatDistanceToNow(new Date(key.lastUsedAt))} ago`
+                        : 'Never used'}
+                    </span>
+                    <span className="tabular-nums">{key.usageCount} calls</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {key.permissions.habits && (
+                      <Badge variant="warning" size="md">
+                        Habits
+                      </Badge>
+                    )}
+                    {key.permissions.expenses && (
+                      <Badge variant="default" size="md">
+                        Expenses
+                      </Badge>
+                    )}
+                    {key.permissions.shoppingList && (
+                      <span className="text-xs bg-habit-blue/15 text-habit-blue border border-habit-blue/30 px-2 py-0.5 rounded-full">
+                        Shopping
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-4 text-xs text-brand-500 dark:text-brand-400">
-                <code className="bg-brand-100 dark:bg-brand-700 px-2 py-0.5 rounded-sm font-mono text-brand-700 dark:text-brand-200">{key.keyPrefix}...</code>
-                <span className="flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  {key.lastUsedAt
-                    ? `Used ${formatDistanceToNow(new Date(key.lastUsedAt))} ago`
-                    : 'Never used'}
-                </span>
-                <span className="tabular-nums">{key.usageCount} calls</span>
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {key.permissions.habits && (
-                  <Badge variant="warning" size="md">
-                    Habits
-                  </Badge>
-                )}
-                {key.permissions.expenses && (
-                  <Badge variant="default" size="md">
-                    Expenses
-                  </Badge>
-                )}
-                {key.permissions.shoppingList && (
-                  <span className="text-xs bg-habit-blue/15 text-habit-blue border border-habit-blue/30 px-2 py-0.5 rounded-full">
-                    Shopping
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
+              </Row>
+            ))}
+          </SurfaceList>
         </div>
       )}
 
-      {/* Create New Key Form */}
-      {isCreating ? (
-        <div className="surface-section bg-brand-50 dark:bg-brand-800 p-4 space-y-4">
-          <h4 className="font-display font-semibold text-brand-900 dark:text-brand-100">Create New API Key</h4>
+      {/* Generate New Key — opens the create form in a bottom sheet */}
+      <Button
+        variant="secondary"
+        onClick={() => setIsCreating(true)}
+        leftIcon={<Plus className="w-4 h-4" />}
+        className="w-full"
+      >
+        Generate New API Key
+      </Button>
 
-          <Input
-            label="Key Name"
-            type="text"
-            value={newKeyName}
-            onChange={(e) => setNewKeyName(e.target.value)}
-            placeholder="e.g., iPhone Shortcut"
-          />
-
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 mb-2">
-              Permissions
-            </label>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <label htmlFor="perm-habits" className="text-sm text-brand-700 dark:text-brand-200 cursor-pointer">Habits (toggle habits)</label>
-                <Switch
-                  id="perm-habits"
-                  checked={permissions.habits}
-                  onCheckedChange={(checked) =>
-                    setPermissions({ ...permissions, habits: checked })
-                  }
-                  aria-label="Habits (toggle habits)"
-                />
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <label htmlFor="perm-expenses" className="text-sm text-brand-700 dark:text-brand-200 cursor-pointer">Expenses (add transactions)</label>
-                <Switch
-                  id="perm-expenses"
-                  checked={permissions.expenses}
-                  onCheckedChange={(checked) =>
-                    setPermissions({ ...permissions, expenses: checked })
-                  }
-                  aria-label="Expenses (add transactions)"
-                />
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <label htmlFor="perm-shopping" className="text-sm text-brand-700 dark:text-brand-200 cursor-pointer">Shopping List (add items)</label>
-                <Switch
-                  id="perm-shopping"
-                  checked={permissions.shoppingList}
-                  onCheckedChange={(checked) =>
-                    setPermissions({ ...permissions, shoppingList: checked })
-                  }
-                  aria-label="Shopping List (add items)"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <Button
-              variant="primary"
-              onClick={handleCreateKey}
-              isLoading={isLoading}
-              disabled={!newKeyName.trim()}
-            >
-              Create Key
-            </Button>
-            <Button variant="ghost" onClick={() => setIsCreating(false)}>
-              Cancel
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <Button
-          variant="secondary"
-          onClick={() => setIsCreating(true)}
-          leftIcon={<Plus className="w-4 h-4" />}
-          className="w-full"
-        >
-          Generate New API Key
-        </Button>
-      )}
-
-      {/* Endpoint URLs */}
-      <div className="surface-section bg-brand-50 dark:bg-brand-800 p-4 space-y-2">
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">Endpoint URLs</h4>
-        <p className="text-xs text-brand-500 dark:text-brand-400">
+      {/* Endpoint URLs — plain tap-to-copy rows, no boxed panel of boxed buttons */}
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 px-1">Endpoint URLs</p>
+        <p className="text-xs text-brand-500 dark:text-brand-400 px-1">
           Paste these into your iOS Shortcuts along with your API key. Each endpoint accepts one type of data: habits, expenses, or shopping items.
         </p>
-        <div className="space-y-1">
+        <SurfaceList>
           {(['habit', 'expense', 'shopping'] as const).map((endpoint) => (
-            <button
+            <Row
               key={endpoint}
+              interactive
+              dense
+              role="button"
+              tabIndex={0}
               onClick={() => handleCopyEndpoint(endpoint)}
-              className="w-full flex items-center justify-between px-2 py-1.5 bg-white dark:bg-brand-900 rounded-sm border border-brand-200 dark:border-brand-700 hover:bg-brand-50 dark:hover:bg-brand-700/40 transition-colors duration-(--duration-fast) ease-(--ease-standard) text-left"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleCopyEndpoint(endpoint);
+                }
+              }}
+              aria-label={`Copy ${endpoint} endpoint URL`}
             >
-              <span className="text-xs font-mono text-brand-600 dark:text-brand-300 truncate">
+              <span className="flex-1 min-w-0 text-xs font-mono text-brand-600 dark:text-brand-300 truncate">
                 {getQuickAddEndpointUrl(endpoint)}
               </span>
-              <Copy className="w-3 h-3 text-brand-400 dark:text-brand-500 shrink-0 ml-2" />
-            </button>
+              <Copy className="w-3.5 h-3.5 text-brand-400 dark:text-brand-500 shrink-0" />
+            </Row>
           ))}
-        </div>
+        </SurfaceList>
       </div>
 
       {/* Revoked Keys */}
       {revokedKeys.length > 0 && (
         <div className="space-y-2">
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">Revoked Keys</h4>
-          {revokedKeys.map((key) => (
-            <div
-              key={key.id}
-              className="surface-section bg-brand-50 dark:bg-brand-800 p-3 opacity-60"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 px-1">Revoked keys</p>
+          <SurfaceList>
+            {revokedKeys.map((key) => (
+              <Row key={key.id} className="opacity-60">
+                <div className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-700 flex items-center justify-center shrink-0">
                   <Key className="w-4 h-4 text-brand-400 dark:text-brand-500" />
-                  <span className="font-semibold text-brand-600 dark:text-brand-300 line-through">
+                </div>
+                <div className="flex-1 min-w-0 flex items-center gap-2">
+                  <span className="font-semibold text-brand-600 dark:text-brand-300 line-through truncate">
                     {key.name}
                   </span>
                   <Badge variant="neutral" size="md">
@@ -365,26 +307,101 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                 <Button
                   variant="ghost-danger"
                   size="icon"
+                  className="shrink-0"
                   onClick={() => handleDeleteKey(key.id, key.name)}
                   title="Delete permanently"
                   aria-label={`Delete key ${key.name}`}
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>
-              </div>
-            </div>
-          ))}
+              </Row>
+            ))}
+          </SurfaceList>
         </div>
       )}
 
-      {/* Security Warning */}
-      <div className="bg-warm-50 border border-warm-200 rounded-btn p-3 flex items-start gap-2 dark:bg-warm-500/10 dark:border-warm-500/30">
+      {/* Security note — a plain callout, no boxed chrome */}
+      <div className="flex items-start gap-2 px-1">
         <AlertTriangle className="w-4 h-4 text-warm-600 dark:text-warm-300 shrink-0 mt-0.5" />
-        <p className="text-xs text-warm-700 dark:text-warm-300">
+        <p className="text-xs text-brand-500 dark:text-brand-400">
           API keys bypass normal authentication. Only share with trusted devices
           and revoke keys if your device is lost or compromised.
         </p>
       </div>
+
+      {/* Create Key — bottom sheet */}
+      <Drawer
+        isOpen={isCreating}
+        onClose={() => setIsCreating(false)}
+        title="Create API Key"
+        footer={
+          <div className="flex gap-2 p-4 border-t border-brand-200 dark:border-brand-700">
+            <Button variant="ghost" className="flex-1" onClick={() => setIsCreating(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              className="flex-1"
+              onClick={handleCreateKey}
+              isLoading={isLoading}
+              disabled={!newKeyName.trim()}
+            >
+              Create Key
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <Input
+            label="Key Name"
+            type="text"
+            value={newKeyName}
+            onChange={(e) => setNewKeyName(e.target.value)}
+            placeholder="e.g., iPhone Shortcut"
+          />
+
+          <div className="space-y-2">
+            <p className="block text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 px-1">
+              Permissions
+            </p>
+            <SurfaceList>
+              <Row>
+                <label htmlFor="perm-habits" className="flex-1 text-sm text-brand-700 dark:text-brand-200 cursor-pointer">Habits (toggle habits)</label>
+                <Switch
+                  id="perm-habits"
+                  checked={permissions.habits}
+                  onCheckedChange={(checked) =>
+                    setPermissions({ ...permissions, habits: checked })
+                  }
+                  aria-label="Habits (toggle habits)"
+                />
+              </Row>
+              <Row>
+                <label htmlFor="perm-expenses" className="flex-1 text-sm text-brand-700 dark:text-brand-200 cursor-pointer">Expenses (add transactions)</label>
+                <Switch
+                  id="perm-expenses"
+                  checked={permissions.expenses}
+                  onCheckedChange={(checked) =>
+                    setPermissions({ ...permissions, expenses: checked })
+                  }
+                  aria-label="Expenses (add transactions)"
+                />
+              </Row>
+              <Row>
+                <label htmlFor="perm-shopping" className="flex-1 text-sm text-brand-700 dark:text-brand-200 cursor-pointer">Shopping List (add items)</label>
+                <Switch
+                  id="perm-shopping"
+                  checked={permissions.shoppingList}
+                  onCheckedChange={(checked) =>
+                    setPermissions({ ...permissions, shoppingList: checked })
+                  }
+                  aria-label="Shopping List (add items)"
+                />
+              </Row>
+            </SurfaceList>
+          </div>
+        </div>
+      </Drawer>
 
       <ConfirmDialog
         isOpen={pendingAction !== null}

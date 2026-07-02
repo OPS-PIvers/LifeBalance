@@ -1,7 +1,7 @@
 
 import { render, screen, fireEvent } from '@testing-library/react';
 import { BudgetBucketCard } from './BudgetBucketCard';
-import { BudgetBucket, Transaction } from '@/types/schema';
+import { BudgetBucket } from '@/types/schema';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { vi, describe, it, expect } from 'vitest';
 
@@ -24,12 +24,11 @@ describe('BudgetBucketCard', () => {
   };
 
   const mockSpent = { verified: 200, pending: 50 };
-  const mockTransactions: Transaction[] = [];
 
   const defaultProps = {
     bucket: mockBucket,
     spent: mockSpent,
-    bucketTransactions: mockTransactions,
+    transactionCount: 0,
     isExpanded: false,
     isEditingLimit: false,
     onExpand: vi.fn(),
@@ -38,9 +37,6 @@ describe('BudgetBucketCard', () => {
     onSaveLimit: vi.fn(),
     onCancelEdit: vi.fn(),
     onReallocate: vi.fn(),
-    onEditTransaction: vi.fn(),
-    onDeleteTransaction: vi.fn(),
-    onOpenTransactionActions: vi.fn(),
   };
 
   it('renders bucket information correctly', () => {
@@ -142,24 +138,25 @@ describe('BudgetBucketCard', () => {
     expect(input).toHaveValue(500);
   });
 
-  it('calls onExpand when header is clicked', () => {
-    render(<BudgetBucketCard {...defaultProps} />);
-    fireEvent.click(screen.getByRole('button', { name: /Toggle/ }));
+  it('calls onExpand when the bucket row is clicked', () => {
+    render(<BudgetBucketCard {...defaultProps} transactionCount={1} />);
+    fireEvent.click(screen.getByRole('button', { name: /View 1 transactions for Groceries/i }));
     expect(defaultProps.onExpand).toHaveBeenCalledWith('bucket1');
   });
 
-  it('renders transactions when expanded', () => {
-    const tx = {
-      id: 'tx1',
-      merchant: 'Test Merchant',
-      amount: 50,
-      date: '2023-01-01',
-      category: 'Groceries',
-      status: 'verified',
-    } as Transaction;
+  it('shows a disclosure chevron only when the bucket has transactions', () => {
+    const { rerender, container } = render(<BudgetBucketCard {...defaultProps} transactionCount={0} />);
+    expect(container.querySelector('svg.lucide-chevron-right')).not.toBeInTheDocument();
 
-    render(<BudgetBucketCard {...defaultProps} isExpanded={true} bucketTransactions={[tx]} />);
+    rerender(<BudgetBucketCard {...defaultProps} transactionCount={3} />);
+    expect(container.querySelector('svg.lucide-chevron-right')).toBeInTheDocument();
+  });
 
-    expect(screen.getByText('Test Merchant')).toBeInTheDocument();
+  it('shows the overspend line and calls onReallocate when Fix is clicked', () => {
+    render(<BudgetBucketCard {...defaultProps} spent={{ verified: 600, pending: 0 }} />);
+
+    expect(screen.getByText('Over by $100.00')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Fix'));
+    expect(defaultProps.onReallocate).toHaveBeenCalledWith('bucket1');
   });
 });

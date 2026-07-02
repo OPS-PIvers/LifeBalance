@@ -349,10 +349,12 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
   if (!currentUser) {
     return (
       <div className="pb-nav-safe pt-6 px-4 max-w-2xl mx-auto">
-        <div className="surface-section p-6 text-money-neg">
-          <p className="font-display font-semibold tracking-tight text-lg">Authentication required</p>
-          <p className="text-sm opacity-90 mt-1">Please log in to manage your to-do list.</p>
-        </div>
+        <EmptyState
+          icon={<AlertCircle size={28} />}
+          title="Authentication required"
+          description="Please log in to manage your to-do list."
+          tone="danger"
+        />
       </div>
     );
   }
@@ -1051,10 +1053,12 @@ interface TodoRowProps {
   onToggleSelection: (id: string) => void;
 }
 
-const badgeStyleMap = {
-  rose: 'bg-money-bgNeg text-money-neg border border-money-neg/20 dark:bg-money-neg/15 dark:text-money-negDark dark:border-money-neg/25',
-  amber: 'bg-warm-50 text-warm-700 border border-warm-200 dark:bg-warm-500/15 dark:text-warm-300 dark:border-warm-500/25',
-  blue: 'bg-habit-blue/10 text-habit-blue border border-habit-blue/20 dark:bg-habit-blue/15 dark:text-habit-blue dark:border-habit-blue/25',
+// Non-overdue due-date text color, keyed by section urgency. No background/border
+// chrome — a single colored text signal per row, matching the section's accent.
+const dateColorMap = {
+  rose: 'text-money-neg dark:text-money-negDark',
+  amber: 'text-warm-700 dark:text-warm-300',
+  blue: 'text-habit-blue dark:text-habit-blue',
 } as const;
 
 // Memoized row for a single active to-do.
@@ -1133,40 +1137,43 @@ const TodoRow = React.memo(function TodoRow({
         <div className="flex-1 min-w-0">
           <p className={`font-medium leading-snug ${isSelected ? 'text-accent-800 dark:text-accent-200' : 'text-brand-900 dark:text-brand-50'}`}>{item.text}</p>
 
-          <div className="flex flex-wrap items-center gap-2 mt-2">
+          <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs">
+            {/* Single primary status signal: urgency-colored text, not a bordered pill. */}
             {isOverdue ? (
-              <div className="flex items-center gap-1 text-xs px-2 py-1 rounded-sm font-bold bg-money-bgNeg text-money-neg dark:bg-money-neg/15 dark:text-money-negDark">
-                <AlertCircle size={10} />
+              <span className="flex items-center gap-1 font-semibold text-money-neg dark:text-money-negDark">
+                <AlertCircle size={11} />
                 Overdue ({format(dueDate, 'MMM d')})
-              </div>
+              </span>
             ) : (
-              <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-sm font-medium ${badgeStyleMap[color]}`}>
-                <Clock size={10} />
+              <span className={`flex items-center gap-1 font-semibold ${dateColorMap[color]}`}>
+                <Clock size={11} />
                 {isToday(dueDate) ? 'Today' :
                  isTomorrow(dueDate) ? 'Tomorrow' :
                  format(dueDate, 'MMM d')}
-              </div>
+              </span>
             )}
 
             {assignee && (
-              <div className="flex items-center gap-1 text-xs text-brand-500 bg-brand-100 px-2 py-1 rounded-sm dark:text-brand-300 dark:bg-brand-700/60">
+              <span className="flex items-center gap-1 text-brand-500 dark:text-brand-400">
                 {assignee.photoURL ? (
                   <img
                     src={assignee.photoURL}
-                    className="w-3 h-3 rounded-full"
+                    className="w-4 h-4 rounded-full"
                     alt={assignee.displayName ?? 'Task assignee'}
                   />
                 ) : (
                   <User size={10} />
                 )}
-                <span>{assignee.displayName?.split(' ')[0] ?? 'User'}</span>
-              </div>
+                {assignee.displayName?.split(' ')[0] ?? 'User'}
+              </span>
             )}
 
             {/* Plan 080c-5: points-on-completion badge — kid chores only. Dormant for
-                normal households: only shown when the assignee is a managed kid. */}
+                normal households: only shown when the assignee is a managed kid. This
+                is the one signal that keeps pill chrome — it's a distinct bonus, not
+                metadata, so it should still pop against the plain-text date/assignee. */}
             {assignee?.isManaged === true && (
-              <span className="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-sm bg-warm-100 text-warm-700 dark:bg-warm-500/15 dark:text-warm-300">
+              <span className="flex items-center gap-1 font-bold px-2 py-1 rounded-sm bg-warm-100 text-warm-700 dark:bg-warm-500/15 dark:text-warm-300">
                 +{item.points ?? DEFAULT_TODO_POINTS} pts
               </span>
             )}

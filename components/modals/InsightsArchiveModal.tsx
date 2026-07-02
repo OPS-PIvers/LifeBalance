@@ -4,6 +4,7 @@ import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { format, parseISO, isValid } from 'date-fns';
 import { Drawer } from '@/components/ui/Drawer';
 import EmptyState from '@/components/ui/EmptyState';
+import { SurfaceList, Row } from '@/components/ui/Section';
 
 interface InsightsArchiveModalProps {
   isOpen: boolean;
@@ -23,15 +24,15 @@ const InsightsArchiveModal: React.FC<InsightsArchiveModalProps> = ({ isOpen, onC
 
   return (
     <Drawer isOpen={isOpen} onClose={onClose} title="Insights Archive">
-      <div className="space-y-4">
-        {insightsHistory.length === 0 ? (
-          <EmptyState
-            icon={<Sparkles size={32} />}
-            title="No insights yet"
-            description="Generate your first insight from the dashboard!"
-          />
-        ) : (
-          insightsHistory.map((insight) => {
+      {insightsHistory.length === 0 ? (
+        <EmptyState
+          icon={<Sparkles size={32} />}
+          title="No insights yet"
+          description="Generate your first insight from the dashboard!"
+        />
+      ) : (
+        <SurfaceList>
+          {insightsHistory.map((insight) => {
             // Parse date with error handling to prevent crashes
             let formattedDate = 'Invalid date';
             try {
@@ -44,20 +45,18 @@ const InsightsArchiveModal: React.FC<InsightsArchiveModalProps> = ({ isOpen, onC
             }
 
             return (
-              <div key={insight.id} className="bg-warm-50 dark:bg-warm-900/20 rounded-2xl p-5 border border-warm-200 dark:border-warm-800/60">
-                <div className="flex justify-between items-start mb-2">
-                    <span className="text-xxs font-bold uppercase tracking-wider text-warm-600 dark:text-warm-300 bg-white dark:bg-brand-800 px-2 py-1 rounded-btn border border-warm-200 dark:border-warm-800/60">
-                        {formattedDate}
-                    </span>
-                </div>
+              <Row key={insight.id} className="flex-col items-start gap-1">
+                <span className="text-xxs font-bold uppercase tracking-wider text-warm-600 dark:text-warm-300">
+                  {formattedDate}
+                </span>
                 <p className="text-brand-800 dark:text-brand-100 font-medium leading-relaxed">
                   &quot;{insight.text}&quot;
                 </p>
-              </div>
+              </Row>
             );
-          })
-        )}
-      </div>
+          })}
+        </SurfaceList>
+      )}
     </Drawer>
   );
 };

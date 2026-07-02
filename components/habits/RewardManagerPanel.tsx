@@ -2,7 +2,7 @@ import React, { useId, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Plus, Pencil, Trash2, X } from 'lucide-react';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
-import { Section } from '@/components/ui/Section';
+import { Section, SurfaceList, Row } from '@/components/ui/Section';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Switch } from '@/components/ui/Switch';
@@ -258,12 +258,9 @@ const RewardManagerPanel: React.FC<RewardManagerPanelProps> = ({ kids, kidModeEn
 
       {/* Existing rewards with edit/delete controls */}
       {rewardsInventory.length > 0 ? (
-        <ul className="space-y-2">
+        <SurfaceList role="list">
           {rewardsInventory.map((reward) => (
-            <li
-              key={reward.id}
-              className="flex items-center gap-3 surface-section px-3 py-2.5"
-            >
+            <Row key={reward.id} role="listitem">
               <span className="text-xl" aria-hidden="true">{reward.icon}</span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-brand-900 dark:text-brand-50">
@@ -293,9 +290,9 @@ const RewardManagerPanel: React.FC<RewardManagerPanelProps> = ({ kids, kidModeEn
               >
                 <Trash2 size={16} />
               </button>
-            </li>
+            </Row>
           ))}
-        </ul>
+        </SurfaceList>
       ) : (
         !formOpen && (
           <p className="px-1 text-xs text-brand-500 dark:text-brand-400">

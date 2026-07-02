@@ -15,7 +15,6 @@ import {
   Crown,
   LogOut,
   User,
-  CircleUser,
   Shield,
   Pencil,
   Trash2,
@@ -24,12 +23,9 @@ import {
   Download,
   FileJson,
   FileSpreadsheet,
-  Smartphone,
   Terminal,
-  AlertTriangle,
   Sparkles,
   Baby,
-  LayoutGrid
 } from 'lucide-react';
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
 import MemberModal from '@/components/modals/MemberModal';
@@ -38,13 +34,12 @@ import NotificationSettings from '@/components/settings/NotificationSettings';
 import { ThemeToggle } from '@/components/settings/ThemeToggle';
 import ApiKeyManager from '@/components/settings/ApiKeyManager';
 import ShortcutSetupGuide from '@/components/settings/ShortcutSetupGuide';
-import Card from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
-import { CollapsibleCard } from '@/components/ui/CollapsibleCard';
-import { SurfaceList, Row } from '@/components/ui/Section';
+import { Section, SurfaceList, Row, DisclosureRow, StatGroup, Stat } from '@/components/ui/Section';
+import { Drawer } from '@/components/ui/Drawer';
 import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -121,6 +116,10 @@ const Settings: React.FC = () => {
   const [memberToRemove, setMemberToRemove] = useState<HouseholdMember | null>(null);
   const [isRemovingMember, setIsRemovingMember] = useState(false);
 
+  // Sub-flow drawers
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isKidModeOpen, setIsKidModeOpen] = useState(false);
+
   // Billing / upgrade (Plan 050b) — dormant until billingEnabled is turned on.
   const billingEnabled = useBillingEnabled();
   const [showPaywall, setShowPaywall] = useState(false);
@@ -142,15 +141,9 @@ const Settings: React.FC = () => {
 
   const isGlobalAdmin = user?.uid === import.meta.env.VITE_ADMIN_UID;
 
-  // Section State
-  const [openSection, setOpenSection] = useState<string | null>('profile');
   // The write-once API key from the current session, lifted so the setup guide
   // can pre-fill and copy the Authorization header the moment a key is created.
   const [sessionApiKey, setSessionApiKey] = useState<string | null>(null);
-
-  const handleToggleSection = (id: string) => {
-    setOpenSection(prev => prev === id ? null : id);
-  };
 
   const handleCurrencyChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newCurrency = e.target.value;
@@ -408,42 +401,38 @@ const Settings: React.FC = () => {
     );
   }
 
+  const sortedMembers = [...members].sort((a, b) => {
+    // Sort admins first
+    if (a.role === 'admin' && b.role !== 'admin') return -1;
+    if (a.role !== 'admin' && b.role === 'admin') return 1;
+    // Legacy member docs can lack displayName despite the schema type — sort them safely.
+    return (a.displayName || '').localeCompare(b.displayName || '');
+  });
+
   return (
     <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe px-4 pt-6">
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className="max-w-2xl mx-auto space-y-8">
 
         <h1 className="font-display text-3xl font-semibold tracking-tight text-brand-900 dark:text-brand-50 px-1">
           Settings
         </h1>
 
         {isGlobalAdmin && (
-          <Card className="overflow-hidden">
-            <button
+          <SurfaceList>
+            <DisclosureRow
+              icon={<Terminal className="w-5 h-5 text-accent-600 dark:text-accent-400" />}
+              title="Developer Console"
+              value={<Badge variant="warning" size="sm">ADMIN</Badge>}
               onClick={() => setIsDevConsoleOpen(true)}
-              className="w-full flex items-center justify-between p-4 hover:bg-brand-50 dark:hover:bg-brand-700/40 transition-colors duration-(--duration-fast) ease-(--ease-standard) group text-left"
-            >
-              <div className="flex items-center gap-3">
-                <Terminal className="w-5 h-5 text-accent-600 dark:text-accent-400" />
-                <h3 className="font-display text-lg font-semibold tracking-tight text-brand-900 dark:text-brand-100">Developer Console</h3>
-              </div>
-              <span className="text-xxs font-bold uppercase tracking-wider text-accent-700 dark:text-accent-300 bg-accent-50 dark:bg-accent-900/40 px-2 py-1 rounded-sm border border-accent-200 dark:border-accent-800">
-                ADMIN
-              </span>
-            </button>
-          </Card>
+            />
+          </SurfaceList>
         )}
 
-        <CollapsibleCard
-          id="profile"
-          title="Profile & Preferences"
-          icon={<User className="w-5 h-5" />}
-          isOpen={openSection === 'profile'}
-          onToggle={() => handleToggleSection('profile')}
-          contentClassName="space-y-6"
-        >
-          {/* User Profile Card */}
-          <div>
-            <div className="flex items-center gap-5">
+        {/* Profile & Preferences */}
+        <Section title="Profile">
+          <div className="space-y-4">
+            {/* Identity */}
+            <div className="flex items-center gap-4 px-1">
               {user?.photoURL ? (
                 <img
                   src={user.photoURL}
@@ -455,11 +444,11 @@ const Settings: React.FC = () => {
                   <User className="w-8 h-8 text-brand-400 dark:text-brand-500" />
                 </div>
               )}
-              <div className="flex-1">
-                <h2 className="font-display text-xl font-semibold text-brand-900 dark:text-brand-50 tracking-tight">
+              <div className="flex-1 min-w-0">
+                <h2 className="font-display text-xl font-semibold text-brand-900 dark:text-brand-50 tracking-tight truncate">
                   {user?.displayName || 'User'}
                 </h2>
-                <p className="text-sm text-brand-500 dark:text-brand-400 font-medium">{user?.email}</p>
+                <p className="text-sm text-brand-500 dark:text-brand-400 font-medium truncate">{user?.email}</p>
                 {currentUser && (
                   <div className="flex items-center gap-2 mt-2">
                     {currentUser.role === 'admin' ? (
@@ -478,151 +467,142 @@ const Settings: React.FC = () => {
               </div>
             </div>
 
-            {/* Appearance / Theme */}
-            <div className="mt-6 pt-6 border-t border-brand-200 dark:border-brand-700">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 mb-3">Appearance</h4>
-              <ThemeToggle />
-            </div>
+            <SurfaceList>
+              {/* Appearance / Theme */}
+              <Row className="flex-col items-stretch gap-3">
+                <span className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">Appearance</span>
+                <ThemeToggle />
+              </Row>
 
-            {/* Currency */}
-            <div className="mt-6 pt-6 border-t border-brand-200 dark:border-brand-700">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 mb-3">Currency</h4>
-              <Select
-                label="Display currency"
-                value={householdSettings?.currency ?? 'USD'}
-                onChange={handleCurrencyChange}
-              >
-                {CURRENCY_OPTIONS.map(({ code, symbol, label }) => (
-                  <option key={code} value={code}>
-                    {`${code} (${symbol}) — ${label}`}
-                  </option>
-                ))}
-              </Select>
-              <p className="text-xs text-brand-500 dark:text-brand-400 mt-2">
-                Used to format money throughout the app.
-              </p>
-            </div>
-
-            {/* Plan (Plan 050b) — only shown once billing is live; dormant by default. */}
-            {billingEnabled && (
-              <div className="mt-6 pt-6 border-t border-brand-200 dark:border-brand-700">
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 mb-3">Plan</h4>
-                {getPlan(householdSettings) === 'premium' ? (
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-warm-700 bg-warm-50 border border-warm-200 px-2.5 py-0.5 rounded-full dark:bg-warm-500/15 dark:text-warm-300 dark:border-warm-500/30">
-                      <Sparkles size={12} />
-                      Premium
-                    </span>
-                    <span className="text-xs text-brand-500 dark:text-brand-400">Thanks for supporting LifeBalance.</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <div>
-                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-600 bg-brand-100 border border-brand-200 px-2.5 py-0.5 rounded-full dark:bg-brand-700/50 dark:text-brand-300 dark:border-brand-600">
-                        Free
-                      </span>
-                      <p className="text-xs text-brand-500 dark:text-brand-400 mt-2">
-                        Upgrade for more AI, more members, and premium features.
-                      </p>
-                    </div>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      leftIcon={<Sparkles className="w-4 h-4" />}
-                      onClick={() => setShowPaywall(true)}
-                    >
-                      Upgrade
-                    </Button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="mt-6 pt-6 border-t border-brand-200 dark:border-brand-700">
-              <SurfaceList>
-                <Row
-                  interactive={notificationStatus === 'default'}
-                  role="button"
-                  tabIndex={notificationStatus === 'default' ? 0 : -1}
-                  aria-disabled={notificationStatus !== 'default'}
-                  onClick={() => { if (notificationStatus === 'default') handleEnableNotifications(); }}
-                  onKeyDown={(e) => {
-                    if ((e.key === 'Enter' || e.key === ' ') && notificationStatus === 'default') {
-                      e.preventDefault();
-                      handleEnableNotifications();
-                    }
-                  }}
-                  className={notificationStatus !== 'default' ? 'opacity-70 pointer-events-none' : undefined}
-                  aria-label={
-                    notificationStatus === 'granted'
-                      ? 'Push notifications enabled'
-                      : notificationStatus === 'denied'
-                      ? 'Push notifications denied by browser'
-                      : 'Enable push notifications'
-                  }
-                  aria-describedby={notificationStatus === 'denied' ? 'notification-denied-help' : undefined}
+              {/* Currency */}
+              <Row className="flex-col items-stretch gap-1.5">
+                <Select
+                  label="Currency"
+                  value={householdSettings?.currency ?? 'USD'}
+                  onChange={handleCurrencyChange}
                 >
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                    notificationStatus === 'granted'
-                      ? 'bg-money-bgPos text-money-pos dark:bg-accent-500/15 dark:text-accent-300'
-                      : 'bg-brand-100 text-brand-400 dark:bg-brand-700 dark:text-brand-500'
-                  }`}>
-                    <Bell size={18} />
-                  </div>
-                  <div className="flex-1 text-left">
-                    <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">Push Notifications</p>
-                    <p className="text-xs text-brand-500 dark:text-brand-400">
-                      {notificationStatus === 'granted' ? 'Notifications enabled' :
-                       notificationStatus === 'denied' ? 'Notifications denied in browser' :
-                       'Enable alerts on this device'}
-                    </p>
-                  </div>
-                  <Badge
-                    variant={notificationStatus === 'granted' ? 'success' : notificationStatus === 'denied' ? 'danger' : 'brand'}
-                    size="sm"
-                    className="shrink-0"
-                  >
-                    {notificationStatus === 'granted' ? 'Enabled' :
-                     notificationStatus === 'denied' ? 'Denied' : 'Enable'}
-                  </Badge>
-                </Row>
-              </SurfaceList>
-              {notificationStatus === 'denied' && (
-                <p id="notification-denied-help" className="sr-only">
-                  Notifications have been denied by your browser. To enable them, please update your browser settings to allow notifications for this site.
+                  {CURRENCY_OPTIONS.map(({ code, symbol, label }) => (
+                    <option key={code} value={code}>
+                      {`${code} (${symbol}) — ${label}`}
+                    </option>
+                  ))}
+                </Select>
+                <p className="text-xs text-brand-500 dark:text-brand-400">
+                  Used to format money throughout the app.
                 </p>
+              </Row>
+
+              {/* Plan (Plan 050b) — only shown once billing is live; dormant by default. */}
+              {billingEnabled && (
+                <Row className="flex-col items-stretch gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">Plan</span>
+                  {getPlan(householdSettings) === 'premium' ? (
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-warm-700 bg-warm-50 border border-warm-200 px-2.5 py-0.5 rounded-full dark:bg-warm-500/15 dark:text-warm-300 dark:border-warm-500/30">
+                        <Sparkles size={12} />
+                        Premium
+                      </span>
+                      <span className="text-xs text-brand-500 dark:text-brand-400">Thanks for supporting LifeBalance.</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div>
+                        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-600 bg-brand-100 border border-brand-200 px-2.5 py-0.5 rounded-full dark:bg-brand-700/50 dark:text-brand-300 dark:border-brand-600">
+                          Free
+                        </span>
+                        <p className="text-xs text-brand-500 dark:text-brand-400 mt-2">
+                          Upgrade for more AI, more members, and premium features.
+                        </p>
+                      </div>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        leftIcon={<Sparkles className="w-4 h-4" />}
+                        onClick={() => setShowPaywall(true)}
+                      >
+                        Upgrade
+                      </Button>
+                    </div>
+                  )}
+                </Row>
               )}
-            </div>
+
+              {/* Push notification permission */}
+              <Row
+                interactive={notificationStatus === 'default'}
+                role="button"
+                tabIndex={notificationStatus === 'default' ? 0 : -1}
+                aria-disabled={notificationStatus !== 'default'}
+                onClick={() => { if (notificationStatus === 'default') handleEnableNotifications(); }}
+                onKeyDown={(e) => {
+                  if ((e.key === 'Enter' || e.key === ' ') && notificationStatus === 'default') {
+                    e.preventDefault();
+                    handleEnableNotifications();
+                  }
+                }}
+                className={notificationStatus !== 'default' ? 'opacity-70 pointer-events-none' : undefined}
+                aria-label={
+                  notificationStatus === 'granted'
+                    ? 'Push notifications enabled'
+                    : notificationStatus === 'denied'
+                    ? 'Push notifications denied by browser'
+                    : 'Enable push notifications'
+                }
+                aria-describedby={notificationStatus === 'denied' ? 'notification-denied-help' : undefined}
+              >
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                  notificationStatus === 'granted'
+                    ? 'bg-money-bgPos text-money-pos dark:bg-accent-500/15 dark:text-accent-300'
+                    : 'bg-brand-100 text-brand-400 dark:bg-brand-700 dark:text-brand-500'
+                }`}>
+                  <Bell size={18} />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">Push Notifications</p>
+                  <p className="text-xs text-brand-500 dark:text-brand-400">
+                    {notificationStatus === 'granted' ? 'Notifications enabled' :
+                     notificationStatus === 'denied' ? 'Notifications denied in browser' :
+                     'Enable alerts on this device'}
+                  </p>
+                </div>
+                <Badge
+                  variant={notificationStatus === 'granted' ? 'success' : notificationStatus === 'denied' ? 'danger' : 'brand'}
+                  size="sm"
+                  className="shrink-0"
+                >
+                  {notificationStatus === 'granted' ? 'Enabled' :
+                   notificationStatus === 'denied' ? 'Denied' : 'Enable'}
+                </Badge>
+              </Row>
+
+              {/* Notification preferences — opens a bottom sheet once granted */}
+              {notificationStatus === 'granted' && householdId && user && (
+                <DisclosureRow
+                  icon={<Bell className="w-5 h-5" />}
+                  title="Notification Preferences"
+                  subtitle="Customize your alerts"
+                  onClick={() => setIsNotificationsOpen(true)}
+                />
+              )}
+            </SurfaceList>
+            {notificationStatus === 'denied' && (
+              <p id="notification-denied-help" className="sr-only">
+                Notifications have been denied by your browser. To enable them, please update your browser settings to allow notifications for this site.
+              </p>
+            )}
           </div>
+        </Section>
 
-          {/* Notification Settings - Only show if notifications are granted */}
-          {notificationStatus === 'granted' && householdId && user && (
-            <div className="mt-6 border-t border-brand-200 dark:border-brand-700 pt-6">
-              <NotificationSettings
-                householdId={householdId}
-                currentPreferences={currentUser?.notificationPreferences}
-                onSave={handleSaveNotificationPreferences}
-              />
-            </div>
-          )}
-        </CollapsibleCard>
-
-        <CollapsibleCard
-          id="household"
-          title="Household"
-          icon={<Users className="w-5 h-5" />}
-          isOpen={openSection === 'household'}
-          onToggle={() => handleToggleSection('household')}
-          contentClassName="space-y-6"
-        >
-          {/* Household Info */}
-          <div className="space-y-6">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-brand-100 dark:bg-brand-700 rounded-card flex items-center justify-center">
+        {/* Household */}
+        <Section title="Household">
+          <div className="space-y-5">
+            {/* Household identity */}
+            <div className="flex items-center gap-4 px-1">
+              <div className="w-14 h-14 bg-brand-100 dark:bg-brand-700 rounded-card flex items-center justify-center shrink-0">
                 <Users className="w-7 h-7 text-brand-500 dark:text-brand-400" />
               </div>
-              <div>
-                <h3 className="font-display text-xl font-semibold text-brand-900 dark:text-brand-50 tracking-tight">
+              <div className="min-w-0">
+                <h3 className="font-display text-xl font-semibold text-brand-900 dark:text-brand-50 tracking-tight truncate">
                   {householdSettings.name}
                 </h3>
                 <p className="text-sm text-brand-500 dark:text-brand-400 font-medium">
@@ -634,69 +614,60 @@ const Settings: React.FC = () => {
             {/* Invite Code */}
             <HouseholdInviteCard inviteCode={householdSettings.inviteCode} />
 
-            {/* Shared Household Points */}
-            <div className="p-5 surface-section bg-warm-50 dark:bg-warm-500/10 border-warm-200 dark:border-warm-500/25">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-warm-700 dark:text-warm-300 mb-1">Shared Household Points</h4>
-              <p className="text-xs text-brand-600 dark:text-brand-400 mb-4">
-                Points earned by all household members from habits. Tap any total for a detailed breakdown.
+            {/* Shared Household Points — typography, not a tinted box */}
+            <div className="space-y-3">
+              <p className="text-xs text-brand-500 dark:text-brand-400 px-1">
+                Shared points earned by all members from habits. Tap any total for a detailed breakdown.
               </p>
-              <div className="grid grid-cols-3 gap-2">
+              <StatGroup className="px-1">
                 <button
+                  type="button"
                   onClick={() => setActivePointsView('daily')}
-                  className="text-center hover:bg-white/70 dark:hover:bg-brand-800/60 p-3 rounded-btn transition-all duration-(--duration-fast) ease-(--ease-standard) active:scale-[0.98] group"
+                  className="text-left rounded-btn transition-opacity hover:opacity-70 active:scale-[0.98]"
                   aria-label="View daily points breakdown"
                 >
-                  <p className="text-xs text-brand-500 dark:text-brand-400 mb-1 font-semibold uppercase tracking-wider group-hover:text-warm-700 dark:group-hover:text-warm-300">Daily</p>
-                  <p className="font-mono tabular-nums text-xl font-bold text-brand-900 dark:text-brand-50">{dailyPoints}</p>
+                  <Stat label="Daily" value={dailyPoints} />
                 </button>
                 <button
+                  type="button"
                   onClick={() => setActivePointsView('weekly')}
-                  className="text-center hover:bg-white/70 dark:hover:bg-brand-800/60 p-3 rounded-btn transition-all duration-(--duration-fast) ease-(--ease-standard) active:scale-[0.98] group"
+                  className="text-left rounded-btn transition-opacity hover:opacity-70 active:scale-[0.98]"
                   aria-label="View weekly points breakdown"
                 >
-                  <p className="text-xs text-brand-500 dark:text-brand-400 mb-1 font-semibold uppercase tracking-wider group-hover:text-warm-700 dark:group-hover:text-warm-300">Weekly</p>
-                  <p className="font-mono tabular-nums text-xl font-bold text-brand-900 dark:text-brand-50">{weeklyPoints}</p>
+                  <Stat label="Weekly" value={weeklyPoints} />
                 </button>
                 <button
+                  type="button"
                   onClick={() => setActivePointsView('total')}
-                  className="text-center hover:bg-white/70 dark:hover:bg-brand-800/60 p-3 rounded-btn transition-all duration-(--duration-fast) ease-(--ease-standard) active:scale-[0.98] group"
+                  className="text-left rounded-btn transition-opacity hover:opacity-70 active:scale-[0.98]"
                   aria-label="View total points breakdown"
                 >
-                  <p className="text-xs text-brand-500 dark:text-brand-400 mb-1 font-semibold uppercase tracking-wider group-hover:text-warm-700 dark:group-hover:text-warm-300">Total</p>
-                  <p className="font-mono tabular-nums text-xl font-bold text-brand-900 dark:text-brand-50">{totalPoints.toLocaleString()}</p>
+                  <Stat label="Total" value={totalPoints.toLocaleString()} />
                 </button>
-              </div>
+              </StatGroup>
             </div>
-          </div>
 
-          {/* Members List */}
-          <div className="pt-2">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-100 tracking-tight">
-                Household Members
-              </h3>
-              {currentUser?.role === 'admin' && (
-                <Button
-                  onClick={handleAddMember}
-                  variant="subtle"
-                  size="icon-sm"
-                  title="Add Member"
-                  aria-label="Add Member"
-                  className="rounded-full"
-                >
-                  <Plus size={18} />
-                </Button>
-              )}
-            </div>
-            <SurfaceList>
-              {members
-                .sort((a, b) => {
-                  // Sort admins first
-                  if (a.role === 'admin' && b.role !== 'admin') return -1;
-                  if (a.role !== 'admin' && b.role === 'admin') return 1;
-                  return a.displayName.localeCompare(b.displayName);
-                })
-                .map((member) => (
+            {/* Members */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between px-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">
+                  Members
+                </p>
+                {currentUser?.role === 'admin' && (
+                  <Button
+                    onClick={handleAddMember}
+                    variant="subtle"
+                    size="icon-sm"
+                    title="Add Member"
+                    aria-label="Add Member"
+                    className="rounded-full"
+                  >
+                    <Plus size={18} />
+                  </Button>
+                )}
+              </div>
+              <SurfaceList>
+                {sortedMembers.map((member) => (
                   <Row key={member.uid}>
                     {member.photoURL ? (
                       <img
@@ -752,188 +723,115 @@ const Settings: React.FC = () => {
                     )}
                   </Row>
                 ))}
-            </SurfaceList>
+              </SurfaceList>
+            </div>
           </div>
-        </CollapsibleCard>
+        </Section>
 
         {/* App Modules (Plan 090) — per-household page/tab on-off toggles. Any
             member can edit (like the currency picker). Default all-on. */}
-        <CollapsibleCard
-          id="modules"
-          title="App Modules"
-          icon={<LayoutGrid className="w-5 h-5" />}
-          isOpen={openSection === 'modules'}
-          onToggle={() => handleToggleSection('modules')}
-          contentClassName="space-y-4"
-        >
-          <p className="text-xs text-brand-500 dark:text-brand-400">
-            Turn off pages or tabs you don&apos;t use — they&apos;ll disappear from navigation for
-            everyone in the household. Your data is kept and comes back when you re-enable a module.
-          </p>
+        <Section title="App Modules">
+          <div className="space-y-3">
+            <p className="text-xs text-brand-500 dark:text-brand-400 px-1">
+              Turn off pages or tabs you don&apos;t use — they&apos;ll disappear from navigation for
+              everyone in the household. Your data is kept and comes back when you re-enable a module.
+            </p>
 
-          <SurfaceList>
-            {/* Top-level pages */}
-            <Row>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">Habits</p>
-              </div>
-              <Switch
-                aria-label="Toggle Habits page"
-                checked={isModuleEnabled(householdSettings, 'habits')}
-                onCheckedChange={(value) => handleModuleToggle('habits', value)}
-              />
-            </Row>
-            <Row>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">Money</p>
-              </div>
-              <Switch
-                aria-label="Toggle Money page"
-                checked={isModuleEnabled(householdSettings, 'money')}
-                onCheckedChange={(value) => handleModuleToggle('money', value)}
-              />
-            </Row>
-            <Row>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">Plan</p>
-                <p className="text-xs text-brand-500 dark:text-brand-400">To-Dos, Meals, and Shopping</p>
-              </div>
-              <Switch
-                aria-label="Toggle Plan page"
-                checked={planEnabled}
-                onCheckedChange={(value) => handleModuleToggle('plan', value)}
-              />
-            </Row>
+            <SurfaceList>
+              {/* Top-level pages */}
+              <Row>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">Habits</p>
+                </div>
+                <Switch
+                  aria-label="Toggle Habits page"
+                  checked={isModuleEnabled(householdSettings, 'habits')}
+                  onCheckedChange={(value) => handleModuleToggle('habits', value)}
+                />
+              </Row>
+              <Row>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">Money</p>
+                </div>
+                <Switch
+                  aria-label="Toggle Money page"
+                  checked={isModuleEnabled(householdSettings, 'money')}
+                  onCheckedChange={(value) => handleModuleToggle('money', value)}
+                />
+              </Row>
+              <Row>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">Plan</p>
+                  <p className="text-xs text-brand-500 dark:text-brand-400">To-Dos, Meals, and Shopping</p>
+                </div>
+                <Switch
+                  aria-label="Toggle Plan page"
+                  checked={planEnabled}
+                  onCheckedChange={(value) => handleModuleToggle('plan', value)}
+                />
+              </Row>
 
-            {/* Plan sub-tabs — indented under Plan */}
-            <Row className="pl-10">
-              <div className="flex-1 min-w-0">
-                <p className={`font-medium text-sm ${planEnabled ? 'text-brand-700 dark:text-brand-300' : 'text-brand-400 dark:text-brand-500'}`}>To-Dos</p>
-              </div>
-              <Switch
-                aria-label="Toggle To-Dos tab"
-                disabled={!planEnabled}
-                checked={isModuleEnabled(householdSettings, 'todos')}
-                onCheckedChange={(value) => handleModuleToggle('todos', value)}
-              />
-            </Row>
-            <Row className="pl-10">
-              <div className="flex-1 min-w-0">
-                <p className={`font-medium text-sm ${planEnabled ? 'text-brand-700 dark:text-brand-300' : 'text-brand-400 dark:text-brand-500'}`}>Meals</p>
-              </div>
-              <Switch
-                aria-label="Toggle Meals tab"
-                disabled={!planEnabled}
-                checked={isModuleEnabled(householdSettings, 'meals')}
-                onCheckedChange={(value) => handleModuleToggle('meals', value)}
-              />
-            </Row>
-            <Row className="pl-10">
-              <div className="flex-1 min-w-0">
-                <p className={`font-medium text-sm ${planEnabled ? 'text-brand-700 dark:text-brand-300' : 'text-brand-400 dark:text-brand-500'}`}>Shopping</p>
-              </div>
-              <Switch
-                aria-label="Toggle Shopping tab"
-                disabled={!planEnabled}
-                checked={isModuleEnabled(householdSettings, 'shopping')}
-                onCheckedChange={(value) => handleModuleToggle('shopping', value)}
-              />
-            </Row>
-          </SurfaceList>
-        </CollapsibleCard>
+              {/* Plan sub-tabs — indented under Plan */}
+              <Row className="pl-10">
+                <div className="flex-1 min-w-0">
+                  <p className={`font-medium text-sm ${planEnabled ? 'text-brand-700 dark:text-brand-300' : 'text-brand-400 dark:text-brand-500'}`}>To-Dos</p>
+                </div>
+                <Switch
+                  aria-label="Toggle To-Dos tab"
+                  disabled={!planEnabled}
+                  checked={isModuleEnabled(householdSettings, 'todos')}
+                  onCheckedChange={(value) => handleModuleToggle('todos', value)}
+                />
+              </Row>
+              <Row className="pl-10">
+                <div className="flex-1 min-w-0">
+                  <p className={`font-medium text-sm ${planEnabled ? 'text-brand-700 dark:text-brand-300' : 'text-brand-400 dark:text-brand-500'}`}>Meals</p>
+                </div>
+                <Switch
+                  aria-label="Toggle Meals tab"
+                  disabled={!planEnabled}
+                  checked={isModuleEnabled(householdSettings, 'meals')}
+                  onCheckedChange={(value) => handleModuleToggle('meals', value)}
+                />
+              </Row>
+              <Row className="pl-10">
+                <div className="flex-1 min-w-0">
+                  <p className={`font-medium text-sm ${planEnabled ? 'text-brand-700 dark:text-brand-300' : 'text-brand-400 dark:text-brand-500'}`}>Shopping</p>
+                </div>
+                <Switch
+                  aria-label="Toggle Shopping tab"
+                  disabled={!planEnabled}
+                  checked={isModuleEnabled(householdSettings, 'shopping')}
+                  onCheckedChange={(value) => handleModuleToggle('shopping', value)}
+                />
+              </Row>
+            </SurfaceList>
+          </div>
+        </Section>
 
         {/* Kid Mode (Plan 080) — dormant until kidModeEnabled is flipped on. */}
         {kidModeEnabled && (
-          <CollapsibleCard
-            id="kidmode"
-            title="Kid Mode"
-            icon={<Baby className="w-5 h-5" />}
-            isOpen={openSection === 'kidmode'}
-            onToggle={() => handleToggleSection('kidmode')}
-            contentClassName="space-y-5"
-          >
-            <div>
-              <h4 className="text-sm font-semibold text-brand-900 dark:text-brand-100 mb-1 tracking-tight">
-                Exit PIN
-              </h4>
-              <p className="text-xs text-brand-500 dark:text-brand-400 mb-4">
-                Require a PIN to leave a kid&apos;s view and return to the parent view. Leave
-                unset to allow exiting freely.
-              </p>
-
-              <div className="mb-4">
-                <span
-                  className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full border ${
-                    hasKidPin
-                      ? 'text-money-pos bg-money-bgPos border-accent-200 dark:bg-accent-500/15 dark:text-accent-300 dark:border-accent-500/30'
-                      : 'text-brand-600 bg-brand-100 border-brand-200 dark:bg-brand-700/50 dark:text-brand-300 dark:border-brand-600'
-                  }`}
-                >
-                  {hasKidPin ? 'PIN set' : 'No PIN'}
-                </span>
-              </div>
-
-              <div className="space-y-3">
-                <Input
-                  type="password"
-                  inputMode="numeric"
-                  autoComplete="new-password"
-                  value={pinDraft}
-                  onChange={(e) => setPinDraft(sanitizePin(e.target.value))}
-                  placeholder={hasKidPin ? 'New PIN (4-6 digits)' : 'PIN (4-6 digits)'}
-                  aria-label="Kid Mode PIN"
-                  className="tracking-widest"
-                />
-                <Input
-                  type="password"
-                  inputMode="numeric"
-                  autoComplete="new-password"
-                  value={pinConfirm}
-                  onChange={(e) => setPinConfirm(sanitizePin(e.target.value))}
-                  placeholder="Confirm PIN"
-                  aria-label="Confirm Kid Mode PIN"
-                  className="tracking-widest"
-                />
-                <div className="flex gap-2">
-                  <Button
-                    onClick={handleSaveKidPin}
-                    isLoading={isSavingPin}
-                    disabled={isSavingPin || pinDraft.length === 0}
-                    variant="primary"
-                    className="flex-1"
-                  >
-                    {hasKidPin ? 'Update PIN' : 'Set PIN'}
-                  </Button>
-                  {hasKidPin && (
-                    <Button
-                      onClick={handleRemoveKidPin}
-                      isLoading={isSavingPin}
-                      disabled={isSavingPin}
-                      variant="ghost-danger"
-                    >
-                      Remove
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </CollapsibleCard>
+          <Section title="Kid Mode">
+            <SurfaceList>
+              <DisclosureRow
+                icon={<Baby className="w-5 h-5" />}
+                title="Exit PIN"
+                subtitle="Require a PIN to leave a kid's view"
+                value={
+                  <Badge variant={hasKidPin ? 'success' : 'neutral'} size="sm">
+                    {hasKidPin ? 'PIN set' : 'No PIN'}
+                  </Badge>
+                }
+                onClick={() => setIsKidModeOpen(true)}
+              />
+            </SurfaceList>
+          </Section>
         )}
 
-        <CollapsibleCard
-          id="data"
-          title="Data Management"
-          icon={<Download className="w-5 h-5" />}
-          isOpen={openSection === 'data'}
-          onToggle={() => handleToggleSection('data')}
-          contentClassName="space-y-6"
-        >
-          {/* Data Management */}
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 mb-1">
-              Export your household data
-            </p>
-            <p className="text-xs text-brand-500 dark:text-brand-400 mb-3">
+        {/* Data Management */}
+        <Section title="Data">
+          <div className="space-y-2">
+            <p className="text-xs text-brand-500 dark:text-brand-400 px-1">
               JSON is a complete backup of everything; CSV contains transactions only, ready for Excel or Google Sheets.
             </p>
 
@@ -989,7 +887,7 @@ const Settings: React.FC = () => {
               </Row>
             </SurfaceList>
           </div>
-        </CollapsibleCard>
+        </Section>
 
         {/* Connect a bank (Plaid) — dormant until the plaidEnabled flag is on.
             Lazy + flag-gated so react-plaid-link never enters the boot bundle. */}
@@ -999,19 +897,12 @@ const Settings: React.FC = () => {
           </Suspense>
         )}
 
-        {/* iOS Shortcuts Section */}
-        <CollapsibleCard
-          id="shortcuts"
-          title="iOS Shortcuts"
-          icon={<Smartphone className="w-5 h-5" />}
-          isOpen={openSection === 'shortcuts'}
-          onToggle={() => handleToggleSection('shortcuts')}
-          contentClassName="space-y-6"
-        >
-          <div className="space-y-8">
+        {/* iOS Shortcuts */}
+        <Section title="iOS Shortcuts">
+          <div className="space-y-6">
             {/* API Key Management */}
-            <div>
-              <h4 className="font-semibold mb-4 tracking-wider uppercase text-xs text-brand-500 dark:text-brand-400">API Keys</h4>
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 px-1">API Keys</p>
               <ApiKeyManager
                 householdId={householdId || ''}
                 userId={user?.uid || ''}
@@ -1022,66 +913,41 @@ const Settings: React.FC = () => {
             </div>
 
             {/* Setup Guide */}
-            <div className="border-t border-brand-200 dark:border-brand-700 pt-6">
-              <h4 className="font-semibold mb-4 tracking-wider uppercase text-xs text-brand-500 dark:text-brand-400">Setup Guide</h4>
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 px-1">Setup Guide</p>
               <ShortcutSetupGuide apiKey={sessionApiKey} />
             </div>
           </div>
-        </CollapsibleCard>
+        </Section>
 
-        {/* Account Section */}
-        <CollapsibleCard
-          id="account"
-          title="Account"
-          icon={<CircleUser className="w-5 h-5" />}
-          isOpen={openSection === 'account'}
-          onToggle={() => handleToggleSection('account')}
-          contentClassName="space-y-6"
-        >
-          <div>
-             <Button
+        {/* Account */}
+        <Section title="Account">
+          <SurfaceList>
+            <DisclosureRow
+              icon={
+                <div className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-700 flex items-center justify-center shrink-0">
+                  <LogOut size={18} className="text-brand-500 dark:text-brand-400" />
+                </div>
+              }
+              title="Sign Out"
               onClick={handleSignOut}
-              variant="secondary"
-              size="lg"
-              className="w-full"
-              leftIcon={<LogOut size={20} />}
-            >
-              Sign Out
-            </Button>
-          </div>
-        </CollapsibleCard>
+            />
+          </SurfaceList>
+        </Section>
 
-        {/* Danger Zone — deliberately the last section on the page; admins only.
-            Collapsed by default so the red treatment isn't a permanent banner. */}
+        {/* Danger Zone — admins only; a single destructive drill-in, no red box. */}
         {currentUser?.role === 'admin' && (
-          <CollapsibleCard
-            id="danger"
-            title="Danger Zone"
-            icon={<AlertTriangle className="w-5 h-5 text-money-neg" />}
-            isOpen={openSection === 'danger'}
-            onToggle={() => handleToggleSection('danger')}
-            className="border-money-neg/30 dark:border-money-neg/40"
-            contentClassName="space-y-4"
-          >
-            <div className="rounded-card bg-money-bgNeg dark:bg-money-neg/10 border border-money-neg/25 dark:border-money-neg/30 p-4">
-              <p className="text-sm font-bold text-brand-900 dark:text-brand-100 tracking-tight">
-                Delete Household
-              </p>
-              <p className="mt-1 text-xs text-brand-600 dark:text-brand-400">
-                Permanently deletes this household and all of its data — habits, transactions,
-                budgets, meals, everything — for every member. There are no backups; this
-                cannot be undone.
-              </p>
-              <Button
+          <Section title="Danger Zone">
+            <SurfaceList>
+              <DisclosureRow
+                destructive
+                icon={<Trash2 className="w-5 h-5" />}
+                title="Delete Household"
+                subtitle="Permanently delete this household and all of its data for every member"
                 onClick={() => setIsDeleteHouseholdOpen(true)}
-                variant="destructive"
-                className="mt-4 w-full sm:w-auto"
-                leftIcon={<Trash2 size={18} />}
-              >
-                Delete Household
-              </Button>
-            </div>
-          </CollapsibleCard>
+              />
+            </SurfaceList>
+          </Section>
         )}
 
         <p className="text-center text-xs text-brand-400 dark:text-brand-500 font-mono tabular-nums pt-2">
@@ -1111,6 +977,92 @@ const Settings: React.FC = () => {
           habits={habits}
         />
       )}
+
+      {/* Notification preferences bottom sheet */}
+      <Drawer
+        isOpen={isNotificationsOpen}
+        onClose={() => setIsNotificationsOpen(false)}
+        title="Notifications"
+        height="tall"
+      >
+        {householdId && user && (
+          <NotificationSettings
+            householdId={householdId}
+            currentPreferences={currentUser?.notificationPreferences}
+            onSave={handleSaveNotificationPreferences}
+          />
+        )}
+      </Drawer>
+
+      {/* Kid Mode PIN bottom sheet */}
+      <Drawer
+        isOpen={isKidModeOpen}
+        onClose={() => setIsKidModeOpen(false)}
+        title="Kid Mode PIN"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-brand-500 dark:text-brand-400">
+            Require a PIN to leave a kid&apos;s view and return to the parent view. Leave unset to
+            allow exiting freely.
+          </p>
+
+          <div>
+            <span
+              className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full border ${
+                hasKidPin
+                  ? 'text-money-pos bg-money-bgPos border-accent-200 dark:bg-accent-500/15 dark:text-accent-300 dark:border-accent-500/30'
+                  : 'text-brand-600 bg-brand-100 border-brand-200 dark:bg-brand-700/50 dark:text-brand-300 dark:border-brand-600'
+              }`}
+            >
+              {hasKidPin ? 'PIN set' : 'No PIN'}
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            <Input
+              type="password"
+              inputMode="numeric"
+              autoComplete="new-password"
+              value={pinDraft}
+              onChange={(e) => setPinDraft(sanitizePin(e.target.value))}
+              placeholder={hasKidPin ? 'New PIN (4-6 digits)' : 'PIN (4-6 digits)'}
+              aria-label="Kid Mode PIN"
+              className="tracking-widest"
+            />
+            <Input
+              type="password"
+              inputMode="numeric"
+              autoComplete="new-password"
+              value={pinConfirm}
+              onChange={(e) => setPinConfirm(sanitizePin(e.target.value))}
+              placeholder="Confirm PIN"
+              aria-label="Confirm Kid Mode PIN"
+              className="tracking-widest"
+            />
+            <div className="flex gap-2">
+              <Button
+                onClick={handleSaveKidPin}
+                isLoading={isSavingPin}
+                disabled={isSavingPin || pinDraft.length === 0}
+                variant="primary"
+                className="flex-1"
+              >
+                {hasKidPin ? 'Update PIN' : 'Set PIN'}
+              </Button>
+              {hasKidPin && (
+                <Button
+                  onClick={handleRemoveKidPin}
+                  isLoading={isSavingPin}
+                  disabled={isSavingPin}
+                  variant="ghost-danger"
+                >
+                  Remove
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </Drawer>
 
       <ConfirmDialog
         isOpen={memberToRemove !== null}

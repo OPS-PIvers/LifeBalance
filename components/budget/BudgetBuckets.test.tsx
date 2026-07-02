@@ -18,6 +18,22 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => {
   };
 });
 
+// Mock framer-motion so the real (unmocked) bucket-detail Drawer's
+// open/close state is reflected synchronously in the DOM instead of lingering
+// through an exit animation — needed to assert the Drawer actually closes
+// (not just gets covered) before the Edit Transaction sheet opens.
+vi.mock('framer-motion', () => ({
+  motion: {
+    div: ({ children, className, onClick, ...props }: { children: React.ReactNode, className?: string, onClick?: () => void, [key: string]: unknown }) => (
+      <div className={className} onClick={onClick} {...props}>
+        {children}
+      </div>
+    ),
+  },
+  AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  useDragControls: () => ({ start: () => {} }),
+}));
+
 // Mock Lucide icons
 vi.mock('lucide-react', () => ({
   AlertTriangle: () => <span data-testid="alert-triangle" />,
@@ -25,11 +41,12 @@ vi.mock('lucide-react', () => ({
   Plus: () => <span data-testid="plus-icon" />,
   Pencil: () => <span data-testid="pencil-icon" />,
   Check: () => <span data-testid="check-icon" />,
+  ChevronRight: () => <span data-testid="chevron-right" />,
   ChevronDown: () => <span data-testid="chevron-down" />,
-  ChevronUp: () => <span data-testid="chevron-up" />,
   Edit: () => <span data-testid="edit-icon" />,
   Trash2: () => <span data-testid="trash-icon" />,
   MoreVertical: () => <span data-testid="more-vertical-icon" />,
+  Wallet: () => <span data-testid="wallet-icon" />,
   X: () => <span data-testid="x-icon" />,
 }));
 
@@ -149,49 +166,57 @@ describe('BudgetBuckets', () => {
     expect(mockUpdateBucketLimit).toHaveBeenCalledWith('b1', 600);
   });
 
-  it('expands bucket details to show transactions', async () => {
+  it('opens the transactions detail sheet to show a bucket\'s transactions', async () => {
     render(<BudgetBuckets />);
 
     // Initially transaction should not be visible
     expect(screen.queryByText('Grocery Store')).not.toBeInTheDocument();
 
-    // Click to expand. The aria-label is dynamic based on expanded state
-    const toggleButton = screen.getByRole('button', { name: /Toggle 1 transactions for Groceries/i });
+    // Click the bucket row to open its transactions sheet. The aria-label
+    // reflects the bucket's transaction count.
+    const toggleButton = screen.getByRole('button', { name: /View 1 transactions for Groceries/i });
     fireEvent.click(toggleButton);
 
-    // Check transactions are visible
-    expect(screen.getByText('Transactions (1)')).toBeInTheDocument();
+    // Check the detail sheet opened with the bucket's transactions
+    expect(screen.getByText('1 transaction')).toBeInTheDocument();
     expect(screen.getByText('Grocery Store')).toBeInTheDocument();
     expect(screen.getByText('$50.00')).toBeInTheDocument();
   });
 
-  it('opens edit transaction modal', async () => {
+  it('opens edit transaction modal from the transactions sheet, closing the sheet first (no stacked Drawers)', async () => {
     render(<BudgetBuckets />);
 
-    // Expand first
-    const toggleButton = screen.getByRole('button', { name: /Toggle 1 transactions for Groceries/i });
+    // Open the transactions sheet first
+    const toggleButton = screen.getByRole('button', { name: /View 1 transactions for Groceries/i });
     fireEvent.click(toggleButton);
+    expect(screen.getByText('1 transaction')).toBeInTheDocument();
 
     // Click edit transaction
     const editButton = screen.getByTitle('Edit transaction');
     fireEvent.click(editButton);
 
     expect(screen.getByTestId('edit-transaction-modal')).toBeInTheDocument();
+
+    // The bucket-detail sheet must be closed (not merely covered) before the
+    // Edit Transaction sheet opens, so the two Drawers are never both open at
+    // once (which would stack two backdrops and two competing focus traps).
+    expect(screen.queryByText('1 transaction')).not.toBeInTheDocument();
+    expect(screen.queryByText('Grocery Store')).not.toBeInTheDocument();
   });
 
   it('deletes transaction when confirmed', async () => {
     render(<BudgetBuckets />);
 
-    // Expand first
-    const toggleButton = screen.getByRole('button', { name: /Toggle 1 transactions for Groceries/i });
+    // Open the transactions sheet first
+    const toggleButton = screen.getByRole('button', { name: /View 1 transactions for Groceries/i });
     fireEvent.click(toggleButton);
 
-    // Click delete transaction -> opens the confirm dialog
+    // Click delete transaction -> opens the confirm dialog (on top of the
+    // transactions sheet, so scope the query to the confirm dialog by name).
     const deleteButton = screen.getByTitle('Delete transaction');
     fireEvent.click(deleteButton);
 
-    // Confirm in the accessible dialog
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('dialog', { name: 'Delete Transaction' });
     const confirmButton = within(dialog).getByRole('button', { name: 'Delete' });
     fireEvent.click(confirmButton);
 
@@ -201,58 +226,20 @@ describe('BudgetBuckets', () => {
   it('does not delete transaction when cancelled', async () => {
      render(<BudgetBuckets />);
 
-     // Expand first
-     const toggleButton = screen.getByRole('button', { name: /Toggle 1 transactions for Groceries/i });
+     // Open the transactions sheet first
+     const toggleButton = screen.getByRole('button', { name: /View 1 transactions for Groceries/i });
      fireEvent.click(toggleButton);
 
      // Click delete transaction -> opens the confirm dialog
      const deleteButton = screen.getByTitle('Delete transaction');
      fireEvent.click(deleteButton);
 
-     // Cancel in the dialog
-     const dialog = screen.getByRole('dialog');
+     // Cancel in the dialog (scoped by name since the transactions sheet is
+     // also an open dialog behind it)
+     const dialog = screen.getByRole('dialog', { name: 'Delete Transaction' });
      const cancelButton = within(dialog).getByRole('button', { name: 'Cancel' });
      fireEvent.click(cancelButton);
 
      expect(mockDeleteTransaction).not.toHaveBeenCalled();
-  });
-
-  it('opens transaction actions drawer on mobile', async () => {
-    render(<BudgetBuckets />);
-
-    // Expand first
-    const toggleButton = screen.getByRole('button', { name: /Toggle 1 transactions for Groceries/i });
-    fireEvent.click(toggleButton);
-
-    // Find the More Options button (which is rendered in the card)
-    // Note: In the real app, this is only visible on mobile (sm:hidden).
-    // In JSDOM tests, usually styles aren't applied so both desktop and mobile buttons might be in the DOM,
-    // or we might need to target it specifically.
-    // The BudgetBucketCard implementation has `aria-label="More options"` on the button.
-    const moreButton = screen.getByLabelText('More options');
-    expect(moreButton).toBeInTheDocument();
-
-    // Click it to open drawer
-    fireEvent.click(moreButton);
-
-    // Check if Drawer content appears
-    expect(screen.getByText('Transaction Options')).toBeInTheDocument();
-
-    // Check if Edit button works
-    const editButton = screen.getByText('Edit Transaction');
-    fireEvent.click(editButton);
-    expect(screen.getByTestId('edit-transaction-modal')).toBeInTheDocument();
-
-    // Re-open drawer (since it closes on action)
-    fireEvent.click(moreButton);
-
-    // Check if Delete button works -> opens the confirm dialog
-    const deleteButton = screen.getByText('Delete');
-    fireEvent.click(deleteButton);
-
-    // Confirm in the accessible dialog
-    const dialog = screen.getByRole('dialog', { name: 'Delete Transaction' });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
-    expect(mockDeleteTransaction).toHaveBeenCalledWith('t1');
   });
 });
