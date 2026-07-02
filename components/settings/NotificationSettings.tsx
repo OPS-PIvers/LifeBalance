@@ -4,7 +4,6 @@ import { NotificationPreferences } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { getFunctionsInstance } from '@/firebase.config';
 import { isIOSDevice, isPWA, supportsPush } from '@/utils/platform';
-import Card from '@/components/ui/Card';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import { Switch } from '@/components/ui/Switch';
 import { Button } from '@/components/ui/Button';
@@ -58,20 +57,28 @@ const getHourOptions = () => {
   });
 };
 
+// Merge saved preferences over the defaults one section at a time. Legacy
+// Firestore docs can predate newer sections (e.g. billReminders), and a
+// shallow spread of such a doc would leave those sections undefined and crash
+// the render on `.enabled`. Also falls back to the browser timezone so
+// existing users don't silently default to UTC.
+const mergePreferences = (current?: NotificationPreferences): NotificationPreferences => ({
+  habitReminders: { ...DEFAULT_PREFERENCES.habitReminders, ...current?.habitReminders },
+  actionQueueReminders: { ...DEFAULT_PREFERENCES.actionQueueReminders, ...current?.actionQueueReminders },
+  budgetAlerts: { ...DEFAULT_PREFERENCES.budgetAlerts, ...current?.budgetAlerts },
+  streakWarnings: { ...DEFAULT_PREFERENCES.streakWarnings, ...current?.streakWarnings },
+  billReminders: { ...DEFAULT_PREFERENCES.billReminders, ...current?.billReminders },
+  timezone: current?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
+});
+
 const NotificationSettings: React.FC<NotificationSettingsProps> = ({
   householdId,
   currentPreferences,
   onSave
 }) => {
-  // Initialize preferences with timezone fallback to prevent UTC default for existing users
-  const [preferences, setPreferences] = useState<NotificationPreferences>(() => {
-    const base = currentPreferences || DEFAULT_PREFERENCES;
-    return {
-      ...base,
-      // If DB has no timezone, use the browser's current one
-      timezone: base.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
-    };
-  });
+  const [preferences, setPreferences] = useState<NotificationPreferences>(() =>
+    mergePreferences(currentPreferences)
+  );
   const [isSaving, setIsSaving] = useState(false);
 
   const hourOptions = getHourOptions();
@@ -84,11 +91,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
   if (prevCurrentPreferences !== currentPreferences) {
     setPrevCurrentPreferences(currentPreferences);
     if (currentPreferences) {
-      setPreferences({
-        ...currentPreferences,
-        // Preserve existing timezone or fallback to browser's
-        timezone: currentPreferences.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
-      });
+      setPreferences(mergePreferences(currentPreferences));
     }
   }
 
@@ -176,7 +179,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
   };
 
   return (
-    <Card className="p-5 space-y-4">
+    <div className="space-y-4">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 bg-warm-50 dark:bg-warm-500/15 rounded-card flex items-center justify-center">
@@ -277,6 +280,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                 value={preferences.habitReminders.time}
                 onChange={(e) => handleTimeChange('habitReminders', e.target.value)}
                 className={inlineControlClass}
+                aria-label="Habit reminder time"
               >
                 {hourOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -297,7 +301,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
               </div>
               <div className="flex-1">
                 <h4 className="font-semibold text-brand-900 dark:text-brand-100">Morning To-Do List</h4>
-                <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">Get a summary of today&apos;s tasks</p>
+                <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">Get reminders for pending to-dos, due bills, and incomplete habits each morning.</p>
               </div>
             </div>
             <Switch
@@ -314,6 +318,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                 value={preferences.actionQueueReminders.time}
                 onChange={(e) => handleTimeChange('actionQueueReminders', e.target.value)}
                 className={inlineControlClass}
+                aria-label="Morning to-do reminder time"
               >
                 {hourOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -334,7 +339,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
               </div>
               <div className="flex-1">
                 <h4 className="font-semibold text-brand-900 dark:text-brand-100">Low Balance Alert</h4>
-                <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">Alert when safe-to-spend is low</p>
+                <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">Alert when your Safe to Spend balance drops below your threshold.</p>
               </div>
             </div>
             <Switch
@@ -353,9 +358,10 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                   type="number"
                   min="0"
                   step="10"
-                  value={preferences.budgetAlerts.threshold || 100}
+                  value={preferences.budgetAlerts.threshold ?? 100}
                   onChange={(e) => handleThresholdChange(Number(e.target.value))}
                   className={`w-20 ${inlineControlClass}`}
+                  aria-label="Low balance alert threshold in dollars"
                 />
               </div>
             </div>
@@ -388,6 +394,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                 value={preferences.streakWarnings.time}
                 onChange={(e) => handleTimeChange('streakWarnings', e.target.value)}
                 className={inlineControlClass}
+                aria-label="Streak warning time"
               >
                 {hourOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -429,6 +436,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                   value={preferences.billReminders.daysBeforeDue}
                   onChange={(e) => handleDaysBeforeChange(Number(e.target.value))}
                   className={`w-16 ${inlineControlClass}`}
+                  aria-label="Days before bill due"
                 />
                 <span className="text-sm text-brand-500 dark:text-brand-400">day(s) before due</span>
               </div>
@@ -438,6 +446,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                   value={preferences.billReminders.time}
                   onChange={(e) => handleTimeChange('billReminders', e.target.value)}
                   className={inlineControlClass}
+                  aria-label="Bill reminder time"
                 >
                   {hourOptions.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -461,7 +470,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
       >
         Save Preferences
       </Button>
-    </Card>
+    </div>
   );
 };
 

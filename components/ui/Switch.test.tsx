@@ -70,4 +70,41 @@ describe('Switch', () => {
     expect(track?.className).toContain('peer-checked:bg-warm-500');
     expect(track?.className).not.toContain('peer-checked:bg-accent-600');
   });
+
+  it('positions the knob against the track', () => {
+    const { container } = render(<Switch checked={false} onCheckedChange={() => {}} />);
+    const track = container.querySelector('input + div');
+    const label = screen.getByRole('checkbox').parentElement;
+    expect(track?.className).toContain('relative');
+    expect(label?.className).not.toContain('py-2.5');
+  });
+
+  it('has a fixed 44px touch target that self-centers', () => {
+    const label = (() => {
+      render(<Switch checked={false} onCheckedChange={() => {}} />);
+      return screen.getByRole('checkbox').parentElement;
+    })();
+    expect(label?.className).toContain('h-11');
+    expect(label?.className).toContain('w-11');
+    expect(label?.className).toContain('self-center');
+  });
+
+  it('track is not itself a peer', () => {
+    const { container } = render(<Switch checked={false} onCheckedChange={() => {}} />);
+    const track = container.querySelector('input + div');
+    const classes = track?.className.split(/\s+/) ?? [];
+    expect(classes).not.toContain('peer');
+  });
+
+  it('knob transition is scoped', () => {
+    const { container } = render(<Switch checked={false} onCheckedChange={() => {}} />);
+    const track = container.querySelector('input + div');
+    expect(track?.className).not.toContain('after:transition-all');
+  });
+
+  it('track is decorative', () => {
+    const { container } = render(<Switch checked={false} onCheckedChange={() => {}} />);
+    const track = container.querySelector('input + div');
+    expect(track).toHaveAttribute('aria-hidden', 'true');
+  });
 });

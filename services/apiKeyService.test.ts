@@ -139,9 +139,14 @@ describe('apiKeyService', () => {
 
   describe('getQuickAddBaseUrl', () => {
     it('uses the default project id when the env var is unset', () => {
+      // Explicitly unset regardless of any VITE_FIREBASE_PROJECT_ID picked up
+      // from a local .env.local, so this assertion doesn't depend on the
+      // developer's environment.
+      vi.stubEnv('VITE_FIREBASE_PROJECT_ID', undefined);
       expect(getQuickAddBaseUrl()).toBe(
         'https://us-central1-lifebalance-26080.cloudfunctions.net'
       );
+      vi.unstubAllEnvs();
     });
 
     it('uses VITE_FIREBASE_PROJECT_ID when set', () => {

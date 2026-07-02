@@ -15,6 +15,7 @@ import {
   Crown,
   LogOut,
   User,
+  CircleUser,
   Shield,
   Pencil,
   Trash2,
@@ -172,6 +173,8 @@ const Settings: React.FC = () => {
   };
 
   const hasKidPin = Boolean(householdSettings?.kidModePinHash);
+  // Whether the 'Plan' module is on — gates the To-Dos/Meals/Shopping sub-toggles below.
+  const planEnabled = isModuleEnabled(householdSettings, 'plan');
 
   const handleSaveKidPin = async () => {
     if (!isValidPinFormat(pinDraft)) {
@@ -222,7 +225,7 @@ const Settings: React.FC = () => {
   const handleSignOut = async () => {
     try {
       await signOut(auth);
-      toast.success('Signed out successfully');
+      toast.success('Signed out');
       navigate('/login');
     } catch (error) {
       console.error('Error signing out:', error);
@@ -342,7 +345,7 @@ const Settings: React.FC = () => {
       };
 
       generateJsonBackup(exportData);
-      toast.success('Backup downloaded successfully');
+      toast.success('Backup downloaded');
     } catch (error) {
       console.error('Export failed:', error);
       toast.error('Failed to generate backup');
@@ -595,7 +598,6 @@ const Settings: React.FC = () => {
           {/* Notification Settings - Only show if notifications are granted */}
           {notificationStatus === 'granted' && householdId && user && (
             <div className="mt-6 border-t border-brand-200 dark:border-brand-700 pt-6">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 mb-4">Notification Preferences</h4>
               <NotificationSettings
                 householdId={householdId}
                 currentPreferences={currentUser?.notificationPreferences}
@@ -634,7 +636,10 @@ const Settings: React.FC = () => {
 
             {/* Shared Household Points */}
             <div className="p-5 surface-section bg-warm-50 dark:bg-warm-500/10 border-warm-200 dark:border-warm-500/25">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-warm-700 dark:text-warm-300 mb-4">Shared Household Points</h4>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-warm-700 dark:text-warm-300 mb-1">Shared Household Points</h4>
+              <p className="text-xs text-brand-600 dark:text-brand-400 mb-4">
+                Points earned by all household members from habits. Tap any total for a detailed breakdown.
+              </p>
               <div className="grid grid-cols-3 gap-2">
                 <button
                   onClick={() => setActivePointsView('daily')}
@@ -762,7 +767,8 @@ const Settings: React.FC = () => {
           contentClassName="space-y-4"
         >
           <p className="text-xs text-brand-500 dark:text-brand-400">
-            Turn off pages you don&apos;t use — they&apos;ll disappear from navigation.
+            Turn off pages or tabs you don&apos;t use — they&apos;ll disappear from navigation for
+            everyone in the household. Your data is kept and comes back when you re-enable a module.
           </p>
 
           <SurfaceList>
@@ -794,7 +800,7 @@ const Settings: React.FC = () => {
               </div>
               <Switch
                 aria-label="Toggle Plan page"
-                checked={isModuleEnabled(householdSettings, 'plan')}
+                checked={planEnabled}
                 onCheckedChange={(value) => handleModuleToggle('plan', value)}
               />
             </Row>
@@ -802,33 +808,33 @@ const Settings: React.FC = () => {
             {/* Plan sub-tabs — indented under Plan */}
             <Row className="pl-10">
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-brand-700 dark:text-brand-300 text-sm">To-Dos</p>
+                <p className={`font-medium text-sm ${planEnabled ? 'text-brand-700 dark:text-brand-300' : 'text-brand-400 dark:text-brand-500'}`}>To-Dos</p>
               </div>
               <Switch
                 aria-label="Toggle To-Dos tab"
-                disabled={!isModuleEnabled(householdSettings, 'plan')}
+                disabled={!planEnabled}
                 checked={isModuleEnabled(householdSettings, 'todos')}
                 onCheckedChange={(value) => handleModuleToggle('todos', value)}
               />
             </Row>
             <Row className="pl-10">
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-brand-700 dark:text-brand-300 text-sm">Meals</p>
+                <p className={`font-medium text-sm ${planEnabled ? 'text-brand-700 dark:text-brand-300' : 'text-brand-400 dark:text-brand-500'}`}>Meals</p>
               </div>
               <Switch
                 aria-label="Toggle Meals tab"
-                disabled={!isModuleEnabled(householdSettings, 'plan')}
+                disabled={!planEnabled}
                 checked={isModuleEnabled(householdSettings, 'meals')}
                 onCheckedChange={(value) => handleModuleToggle('meals', value)}
               />
             </Row>
             <Row className="pl-10">
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-brand-700 dark:text-brand-300 text-sm">Shopping</p>
+                <p className={`font-medium text-sm ${planEnabled ? 'text-brand-700 dark:text-brand-300' : 'text-brand-400 dark:text-brand-500'}`}>Shopping</p>
               </div>
               <Switch
                 aria-label="Toggle Shopping tab"
-                disabled={!isModuleEnabled(householdSettings, 'plan')}
+                disabled={!planEnabled}
                 checked={isModuleEnabled(householdSettings, 'shopping')}
                 onCheckedChange={(value) => handleModuleToggle('shopping', value)}
               />
@@ -914,45 +920,6 @@ const Settings: React.FC = () => {
           </CollapsibleCard>
         )}
 
-        {/* Danger Zone - admins only */}
-        {currentUser?.role === 'admin' && (
-          <Card className="overflow-hidden border-money-neg/30 dark:border-money-neg/40 bg-money-bgNeg dark:bg-money-neg/10">
-            <div className="p-5">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-11 h-11 rounded-card bg-money-neg/10 dark:bg-money-neg/20 flex items-center justify-center">
-                  <AlertTriangle className="w-6 h-6 text-money-neg" />
-                </div>
-                <div>
-                  <h3 className="font-display text-lg font-semibold text-money-neg tracking-tight">
-                    Danger Zone
-                  </h3>
-                  <p className="text-sm text-money-neg/80 font-medium">
-                    Irreversible actions for this household
-                  </p>
-                </div>
-              </div>
-
-              <div className="rounded-card bg-white/70 dark:bg-brand-900/40 border border-money-neg/25 dark:border-money-neg/30 p-4">
-                <p className="text-sm font-bold text-brand-900 dark:text-brand-100 tracking-tight">
-                  Delete Household
-                </p>
-                <p className="mt-1 text-xs text-brand-600 dark:text-brand-400">
-                  Permanently deletes this household and all of its data for every
-                  member. This cannot be undone.
-                </p>
-                <Button
-                  onClick={() => setIsDeleteHouseholdOpen(true)}
-                  variant="destructive"
-                  className="mt-4 w-full sm:w-auto"
-                  leftIcon={<Trash2 size={18} />}
-                >
-                  Delete Household
-                </Button>
-              </div>
-            </div>
-          </Card>
-        )}
-
         <CollapsibleCard
           id="data"
           title="Data Management"
@@ -963,8 +930,11 @@ const Settings: React.FC = () => {
         >
           {/* Data Management */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 mb-1">
               Export your household data
+            </p>
+            <p className="text-xs text-brand-500 dark:text-brand-400 mb-3">
+              JSON is a complete backup of everything; CSV contains transactions only, ready for Excel or Google Sheets.
             </p>
 
             <SurfaceList>
@@ -1063,27 +1033,60 @@ const Settings: React.FC = () => {
         <CollapsibleCard
           id="account"
           title="Account"
-          icon={<LogOut className="w-5 h-5" />}
+          icon={<CircleUser className="w-5 h-5" />}
           isOpen={openSection === 'account'}
           onToggle={() => handleToggleSection('account')}
           contentClassName="space-y-6"
         >
-          <div className="py-2">
+          <div>
              <Button
               onClick={handleSignOut}
-              variant="destructive"
+              variant="secondary"
               size="lg"
               className="w-full"
               leftIcon={<LogOut size={20} />}
             >
               Sign Out
             </Button>
-
-            <div className="pt-6 text-center">
-              <p className="text-xs text-brand-400 dark:text-brand-500 font-mono tabular-nums">v{APP_VERSION}</p>
-            </div>
           </div>
         </CollapsibleCard>
+
+        {/* Danger Zone — deliberately the last section on the page; admins only.
+            Collapsed by default so the red treatment isn't a permanent banner. */}
+        {currentUser?.role === 'admin' && (
+          <CollapsibleCard
+            id="danger"
+            title="Danger Zone"
+            icon={<AlertTriangle className="w-5 h-5 text-money-neg" />}
+            isOpen={openSection === 'danger'}
+            onToggle={() => handleToggleSection('danger')}
+            className="border-money-neg/30 dark:border-money-neg/40"
+            contentClassName="space-y-4"
+          >
+            <div className="rounded-card bg-money-bgNeg dark:bg-money-neg/10 border border-money-neg/25 dark:border-money-neg/30 p-4">
+              <p className="text-sm font-bold text-brand-900 dark:text-brand-100 tracking-tight">
+                Delete Household
+              </p>
+              <p className="mt-1 text-xs text-brand-600 dark:text-brand-400">
+                Permanently deletes this household and all of its data — habits, transactions,
+                budgets, meals, everything — for every member. There are no backups; this
+                cannot be undone.
+              </p>
+              <Button
+                onClick={() => setIsDeleteHouseholdOpen(true)}
+                variant="destructive"
+                className="mt-4 w-full sm:w-auto"
+                leftIcon={<Trash2 size={18} />}
+              >
+                Delete Household
+              </Button>
+            </div>
+          </CollapsibleCard>
+        )}
+
+        <p className="text-center text-xs text-brand-400 dark:text-brand-500 font-mono tabular-nums pt-2">
+          LifeBalance v{APP_VERSION}
+        </p>
 
       </div>
 
@@ -1116,7 +1119,7 @@ const Settings: React.FC = () => {
         isConfirming={isRemovingMember}
         title="Remove member"
         confirmLabel="Remove"
-        message={`Are you sure you want to remove ${memberToRemove?.displayName ?? 'this member'} from the household?`}
+        message={`Remove ${memberToRemove?.displayName ?? 'this member'} from the household? They'll lose access to all shared household data — budgets, habits, and history. This cannot be undone.`}
       />
 
       <ConfirmDialog
