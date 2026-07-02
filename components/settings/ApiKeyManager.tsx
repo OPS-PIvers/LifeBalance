@@ -179,7 +179,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
             onClick={() => setNewlyCreatedKey(null)}
             className="w-full"
           >
-            Done — I&apos;ve copied it
+            Got it
           </Button>
         </div>
       )}
@@ -325,7 +325,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
       <div className="surface-section bg-brand-50 dark:bg-brand-800 p-4 space-y-2">
         <h4 className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">Endpoint URLs</h4>
         <p className="text-xs text-brand-500 dark:text-brand-400">
-          Use these URLs in your iOS Shortcuts with your API key.
+          Paste these into your iOS Shortcuts along with your API key. Each endpoint accepts one type of data: habits, expenses, or shopping items.
         </p>
         <div className="space-y-1">
           {(['habit', 'expense', 'shopping'] as const).map((endpoint) => (
@@ -395,8 +395,8 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
         confirmLabel={pendingAction?.type === 'delete' ? 'Delete' : 'Revoke'}
         message={
           pendingAction?.type === 'delete'
-            ? `Permanently delete "${pendingAction?.keyName}"? This cannot be undone.`
-            : `Revoke "${pendingAction?.keyName}"? This will immediately stop all shortcuts using this key.`
+            ? `Permanently delete "${pendingAction?.keyName}"? The key is removed forever and cannot be restored.`
+            : `Revoke "${pendingAction?.keyName}"? Shortcuts using this key will stop working immediately. The key stays listed under Revoked Keys until you delete it.`
         }
       />
     </div>

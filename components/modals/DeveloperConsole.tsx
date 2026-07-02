@@ -485,15 +485,12 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                           </div>
                           <p className="mt-1.5 text-xs leading-relaxed text-brand-500 dark:text-brand-400">{flag.description}</p>
                         </div>
-                        {/* Reuse the shared Switch primitive (44px touch row, accessible
-                            checkbox). Confirm-gated: onCheckedChange opens the dialog. */}
-                        <div className="flex min-h-[44px] shrink-0 items-center">
-                          <Switch
-                            checked={isOn}
-                            onCheckedChange={() => requestFlagFlip(flag)}
-                            aria-label={`Turn ${flag.label} ${isOn ? 'OFF' : 'ON'}`}
-                          />
-                        </div>
+                        {/* Confirm-gated: onCheckedChange opens the dialog. */}
+                        <Switch
+                          checked={isOn}
+                          onCheckedChange={() => requestFlagFlip(flag)}
+                          aria-label={`Turn ${flag.label} ${isOn ? 'OFF' : 'ON'}`}
+                        />
                       </div>
                     );
                   })}
