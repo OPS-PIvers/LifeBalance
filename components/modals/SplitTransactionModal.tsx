@@ -8,6 +8,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
+import { SurfaceList, Row } from '@/components/ui/Section';
 import toast from 'react-hot-toast';
 
 interface SplitTransactionModalProps {
@@ -160,75 +161,78 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
       </div>
 
       <div className="p-4 space-y-4">
-        {splits.map((split, index) => (
-          <div key={split.id} className="p-4 bg-white dark:bg-brand-800 rounded-xl border border-brand-200 dark:border-brand-700 relative group">
-            <div className="absolute top-2 left-2 text-xs font-bold text-brand-300 dark:text-brand-500">
-              Split #{index + 1}
-            </div>
+        <SurfaceList>
+          {splits.map((split, index) => (
+            <Row key={split.id} className="flex-col items-stretch gap-3 py-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-brand-400 dark:text-brand-500">
+                  Split #{index + 1}
+                </span>
 
-            {splits.length > 2 && (
-              <Button
-                variant="ghost-destructive"
-                size="icon-sm"
-                onClick={() => handleRemoveSplit(split.id)}
-                className="absolute top-2 right-2"
-                title="Remove split"
-                aria-label={`Remove split ${index + 1}`}
-              >
-                <Trash2 size={16} />
-              </Button>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 mt-4">
-               {/* Amount */}
-              <div className="sm:col-span-3">
-                <Input
-                  id={`split-amount-${split.id}`}
-                  label="Amount"
-                  type="number"
-                  inputMode="decimal"
-                  step="0.01"
-                  value={split.amount}
-                  onChange={(e) => updateSplit(split.id, 'amount', e.target.value)}
-                  placeholder="0.00"
-                  icon={<span>$</span>}
-                  disabled={isProcessing}
-                />
+                {splits.length > 2 && (
+                  <Button
+                    variant="ghost-destructive"
+                    size="icon-sm"
+                    onClick={() => handleRemoveSplit(split.id)}
+                    title="Remove split"
+                    aria-label={`Remove split ${index + 1}`}
+                  >
+                    <Trash2 size={16} />
+                  </Button>
+                )}
               </div>
 
-              {/* Merchant */}
-              <div className="sm:col-span-5">
-                <Input
-                  id={`split-merchant-${split.id}`}
-                  label="Merchant / Description"
-                  type="text"
-                  value={split.merchant}
-                  onChange={(e) => updateSplit(split.id, 'merchant', e.target.value)}
-                  placeholder="Store name"
-                  disabled={isProcessing}
-                />
-              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                 {/* Amount */}
+                <div className="sm:col-span-3">
+                  <Input
+                    id={`split-amount-${split.id}`}
+                    label="Amount"
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    value={split.amount}
+                    onChange={(e) => updateSplit(split.id, 'amount', e.target.value)}
+                    placeholder="0.00"
+                    icon={<span>$</span>}
+                    disabled={isProcessing}
+                  />
+                </div>
 
-              {/* Category */}
-              <div className="sm:col-span-4">
-                <Select
-                  id={`split-category-${split.id}`}
-                  label="Category"
-                  value={split.category}
-                  onChange={(e) => updateSplit(split.id, 'category', e.target.value)}
-                  disabled={isProcessing}
-                >
-                  <option value="">Select Category</option>
-                  {dynamicCategories.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </Select>
+                {/* Merchant */}
+                <div className="sm:col-span-5">
+                  <Input
+                    id={`split-merchant-${split.id}`}
+                    label="Merchant / Description"
+                    type="text"
+                    value={split.merchant}
+                    onChange={(e) => updateSplit(split.id, 'merchant', e.target.value)}
+                    placeholder="Store name"
+                    disabled={isProcessing}
+                  />
+                </div>
+
+                {/* Category */}
+                <div className="sm:col-span-4">
+                  <Select
+                    id={`split-category-${split.id}`}
+                    label="Category"
+                    value={split.category}
+                    onChange={(e) => updateSplit(split.id, 'category', e.target.value)}
+                    disabled={isProcessing}
+                  >
+                    <option value="">Select Category</option>
+                    {dynamicCategories.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
               </div>
-            </div>
-          </div>
-        ))}
+            </Row>
+          ))}
+        </SurfaceList>
 
         <Button
           variant="dashed"

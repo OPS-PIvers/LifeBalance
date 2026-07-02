@@ -1,6 +1,14 @@
 import React, { HTMLAttributes } from 'react';
 import { cn } from '@/utils/cn';
 
+/**
+ * LEGACY: `Card` is a standalone bordered/bg surface — reserved for true
+ * standalone hero surfaces (e.g. onboarding screens), not for grouping list
+ * content. For lists/sections, use the grouped-flat primitives in
+ * `components/ui/Section.tsx` (`Section` / `SurfaceList` / `Row` /
+ * `DisclosureRow`) instead — a `Card` per list item is exactly the nested
+ * "boxed layer" the grouped-flat system replaces.
+ */
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
   /** Add a hover/press affordance for cards that act as a button or link. */

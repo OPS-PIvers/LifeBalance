@@ -14,6 +14,7 @@ import Input from '@/components/ui/Input';
 import ProgressBar from '@/components/ui/ProgressBar';
 import Select from '@/components/ui/Select';
 import EmptyState from '@/components/ui/EmptyState';
+import { SurfaceList, Row } from '@/components/ui/Section';
 
 const BudgetAccounts: React.FC = () => {
   const { accounts, updateAccountBalance, addAccount, setAccountGoal, setAccountCardLast4, deleteAccount, reorderAccounts } = useFinance();
@@ -220,7 +221,7 @@ const BudgetAccounts: React.FC = () => {
     setDragOverId(null);
   };
 
-  const renderAccountCard = (account: Account, isLiabilityGroup: boolean) => {
+  const renderAccountRow = (account: Account, isLiabilityGroup: boolean) => {
     const isLiability = account.type === 'credit';
     const isEditing = editingId === account.id;
     const isSavings = account.type === 'savings';
@@ -230,7 +231,7 @@ const BudgetAccounts: React.FC = () => {
     const isDragOver = dragOverId === account.id;
 
     return (
-      <div
+      <Row
         key={account.id}
         draggable
         onDragStart={(e) => handleDragStart(e, account.id)}
@@ -238,18 +239,18 @@ const BudgetAccounts: React.FC = () => {
         onDragLeave={handleDragLeave}
         onDrop={(e) => handleDrop(e, account.id, isLiabilityGroup)}
         onDragEnd={handleDragEnd}
-        className={`surface-section p-5 relative overflow-hidden transition-[opacity,transform,border-color] duration-(--duration-base) ease-(--ease-standard) ${
+        className={`flex-col items-stretch gap-2 transition-[opacity,transform,background-color] duration-(--duration-base) ease-(--ease-standard) ${
           isDragging ? 'opacity-50 scale-95' : ''
-        } ${isDragOver ? 'border-accent-500 dark:border-accent-400' : ''}`}
+        } ${isDragOver ? 'bg-accent-50 dark:bg-accent-900/20' : ''}`}
       >
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
             {/* Drag Handle */}
-            <div className="cursor-grab active:cursor-grabbing text-brand-300 dark:text-brand-600 hover:text-brand-500 dark:hover:text-brand-400 touch-none">
+            <div className="cursor-grab active:cursor-grabbing text-brand-300 dark:text-brand-600 hover:text-brand-500 dark:hover:text-brand-400 touch-none shrink-0">
               <GripVertical size={18} />
             </div>
-            <div>
-              <p className="font-semibold text-brand-900 dark:text-brand-100">{account.name}</p>
+            <div className="min-w-0">
+              <p className="font-semibold text-brand-900 dark:text-brand-100 truncate">{account.name}</p>
               <div className="flex items-center gap-1.5">
                 <Badge variant={isLiability ? 'danger' : 'success'} size="sm" className="uppercase">
                   {account.type}
@@ -267,7 +268,7 @@ const BudgetAccounts: React.FC = () => {
                 variant="subtle"
                 size="icon-sm"
                 onClick={() => setIsGoalModalOpen(account.id)}
-                className="hover:text-habit-gold hover:bg-warm-50 dark:hover:bg-warm-500/15 hidden sm:flex"
+                className="hover:text-habit-gold hover:bg-warm-50 dark:hover:bg-warm-500/15 hidden sm:flex shrink-0"
                 aria-label={`Set savings goal for ${account.name}`}
               >
                 <Target size={14} />
@@ -275,7 +276,7 @@ const BudgetAccounts: React.FC = () => {
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {/* Delete button (Desktop) */}
             <Button
               variant="ghost-destructive"
@@ -339,7 +340,7 @@ const BudgetAccounts: React.FC = () => {
 
         {/* Savings Goal Bar */}
         {isSavings && account.monthlyGoal && (
-          <div className="mt-2 ml-7">
+          <div className="ml-7">
             <div className="flex justify-between text-xxs text-brand-400 dark:text-brand-500 mb-1">
               <span className="flex items-center gap-1">{hitGoal && <Star size={10} className="fill-habit-gold text-habit-gold"/>} {Math.round(progress)}% to goal</span>
               <span>Target: {fmt(account.monthlyGoal)}</span>
@@ -352,7 +353,7 @@ const BudgetAccounts: React.FC = () => {
             />
           </div>
         )}
-      </div>
+      </Row>
     );
   };
 
@@ -384,9 +385,9 @@ const BudgetAccounts: React.FC = () => {
             <div className="flex-1 h-px bg-brand-200 dark:bg-brand-700"></div>
             <span className="text-sm font-mono tabular-nums text-money-pos">{fmt(assets)}</span>
           </div>
-          <div className="space-y-2">
-            {assetAccounts.map(account => renderAccountCard(account, false))}
-          </div>
+          <SurfaceList>
+            {assetAccounts.map(account => renderAccountRow(account, false))}
+          </SurfaceList>
         </div>
       )}
 
@@ -398,9 +399,9 @@ const BudgetAccounts: React.FC = () => {
             <div className="flex-1 h-px bg-brand-200 dark:bg-brand-700"></div>
             <span className="text-sm font-mono tabular-nums text-money-neg">{fmt(debts)}</span>
           </div>
-          <div className="space-y-2">
-            {liabilityAccounts.map(account => renderAccountCard(account, true))}
-          </div>
+          <SurfaceList>
+            {liabilityAccounts.map(account => renderAccountRow(account, true))}
+          </SurfaceList>
         </div>
       )}
 

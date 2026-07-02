@@ -167,9 +167,10 @@ describe('TransactionMasterList Summary Widget', () => {
 
     expect(screen.getByText('-$0.00')).toBeInTheDocument();
 
-    // Find the count element specifically to avoid ambiguity with filter badges
+    // Find the count element specifically to avoid ambiguity with filter badges.
+    // Stat renders the value first, then the label underneath it.
     const countLabel = screen.getByText('Count');
-    const countValue = countLabel.nextElementSibling; // The p tag following the label
+    const countValue = countLabel.previousElementSibling;
     expect(countValue).toHaveTextContent('1');
   });
 });

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useShopping } from '@/contexts/FirebaseHouseholdContext';
-import { Store as StoreIcon, Plus, Trash2, Save, RotateCcw, Search, Check, ShoppingBag, X } from 'lucide-react';
+import { Store as StoreIcon, Plus, Trash2, Edit2, Save, RotateCcw, Search, Check, ShoppingBag, X } from 'lucide-react';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { QuickStockList } from '@/types/schema';
 import { STORE_COLORS, DEFAULT_STORE_COLOR } from '@/data/storeColors';
@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Section, SurfaceList, Row } from '@/components/ui/Section';
 
 interface Props {
   isOpen: boolean;
@@ -314,11 +315,10 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
 
           {activeTab === 'stores' && (
             <div className="space-y-6">
-              {/* Add Store */}
-              <div className="bg-white p-5 rounded-2xl border border-brand-200 dark:bg-brand-800 dark:border-brand-700">
-                <h4 className="text-xs font-bold text-brand-400 dark:text-brand-500 mb-3 uppercase tracking-wider">Add New Store</h4>
-                <form onSubmit={handleAddStore} className="space-y-4">
-                  <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+              {/* Add Store — flat, typography-led; no bordered form card */}
+              <Section title="Add store">
+                <form onSubmit={handleAddStore} className="space-y-3">
+                  <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                     {Object.values(STORE_COLORS).map((color) => (
                       <button
                         key={color.id}
@@ -338,7 +338,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                       value={newStoreName}
                       onChange={(e) => setNewStoreName(e.target.value)}
                       placeholder="Store Name (e.g. Costco)"
-                      className="flex-1 p-2.5 bg-brand-50 border border-brand-200 rounded-xl text-base focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+                      className="flex-1 p-2.5 bg-white border border-brand-200 rounded-xl text-base focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-800 dark:border-brand-700 dark:text-brand-200 dark:placeholder:text-brand-500"
                     />
                     <Button
                       type="submit"
@@ -350,90 +350,87 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                     </Button>
                   </div>
                 </form>
-              </div>
+              </Section>
 
               {/* Store List */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider pl-1">My Stores</h4>
+              <Section title="My stores">
                 {stores.length === 0 ? (
                   <p className="text-sm text-brand-400 dark:text-brand-500 italic pl-1">No stores added yet.</p>
                 ) : (
-                  <div className="grid gap-2">
+                  <SurfaceList>
                     {stores.map(store => (
-                      <div key={store.id} className="bg-white p-4 rounded-xl border border-brand-200 flex items-center justify-between group hover:border-brand-300 transition-colors duration-(--duration-fast) ease-(--ease-standard) dark:bg-brand-800 dark:border-brand-700 dark:hover:border-brand-600">
-                        {editingStoreId === store.id ? (
-                           <div className="flex-1 space-y-2 mr-2">
-                             <div className="flex gap-2 overflow-x-auto pb-1">
-                                {Object.values(STORE_COLORS).map((color) => (
-                                  <button
-                                    key={color.id}
-                                    type="button"
-                                    onClick={() => setEditStoreColor(color.id)}
-                                    className={`w-6 h-6 rounded-full border-2 transition-colors duration-(--duration-fast) ease-(--ease-standard) shrink-0 ${color.bg} ${
-                                      editStoreColor === color.id ? 'border-brand-600 scale-110' : 'border-transparent hover:scale-105'
-                                    }`}
-                                    title={color.label}
-                                    aria-label={`Select color ${color.label}`}
-                                  />
-                                ))}
-                             </div>
-                             <div className="flex gap-2">
-                               <input
-                                  autoFocus
-                                  type="text"
-                                  value={editStoreName}
-                                  onChange={e => setEditStoreName(e.target.value)}
-                                  className="flex-1 p-1.5 border border-brand-300 rounded-sm text-base outline-hidden dark:bg-brand-700/50 dark:border-brand-500/40 dark:text-brand-200"
-                               />
-                               <Button variant="ghost" size="icon-sm" onClick={handleUpdateStore} className="text-money-pos hover:text-money-pos hover:bg-money-bgPos dark:text-money-posDark dark:hover:text-money-posDark dark:hover:bg-money-pos/15" aria-label="Save store name"><Save className="w-4 h-4"/></Button>
-                               <Button variant="ghost" size="icon-sm" onClick={() => setEditingStoreId(null)} className="text-brand-400 hover:bg-brand-100/50 dark:hover:bg-brand-700/50" aria-label="Cancel editing"><X className="w-4 h-4"/></Button>
-                             </div>
-                           </div>
-                        ) : (
-                            <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${(STORE_COLORS[store.color || DEFAULT_STORE_COLOR] ?? STORE_COLORS[DEFAULT_STORE_COLOR]!).iconBg}`}>
-                                    <StoreIcon className="w-4 h-4" />
-                                </div>
-                                <span className="font-medium text-brand-800 dark:text-brand-200">{store.name}</span>
-                            </div>
-                        )}
+                      editingStoreId === store.id ? (
+                        <Row key={store.id} className="flex-col items-stretch gap-2">
+                          <div className="flex gap-2 overflow-x-auto pb-1">
+                            {Object.values(STORE_COLORS).map((color) => (
+                              <button
+                                key={color.id}
+                                type="button"
+                                onClick={() => setEditStoreColor(color.id)}
+                                className={`w-6 h-6 rounded-full border-2 transition-colors duration-(--duration-fast) ease-(--ease-standard) shrink-0 ${color.bg} ${
+                                  editStoreColor === color.id ? 'border-brand-600 scale-110' : 'border-transparent hover:scale-105'
+                                }`}
+                                title={color.label}
+                                aria-label={`Select color ${color.label}`}
+                              />
+                            ))}
+                          </div>
+                          <div className="flex gap-2">
+                            <input
+                              autoFocus
+                              type="text"
+                              value={editStoreName}
+                              onChange={e => setEditStoreName(e.target.value)}
+                              className="flex-1 p-1.5 border border-brand-300 rounded-sm text-base outline-hidden dark:bg-brand-700/50 dark:border-brand-500/40 dark:text-brand-200"
+                            />
+                            <Button variant="ghost" size="icon-sm" onClick={handleUpdateStore} className="text-money-pos hover:text-money-pos hover:bg-money-bgPos dark:text-money-posDark dark:hover:text-money-posDark dark:hover:bg-money-pos/15" aria-label="Save store name"><Save className="w-4 h-4"/></Button>
+                            <Button variant="ghost" size="icon-sm" onClick={() => setEditingStoreId(null)} className="text-brand-400 hover:bg-brand-100/50 dark:hover:bg-brand-700/50" aria-label="Cancel editing"><X className="w-4 h-4"/></Button>
+                          </div>
+                        </Row>
+                      ) : (
+                        <Row key={store.id} className="justify-between">
+                          <div className="flex items-center gap-3 min-w-0">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${(STORE_COLORS[store.color || DEFAULT_STORE_COLOR] ?? STORE_COLORS[DEFAULT_STORE_COLOR]!).iconBg}`}>
+                                  <StoreIcon className="w-4 h-4" />
+                              </div>
+                              <span className="font-medium text-brand-800 dark:text-brand-200 truncate">{store.name}</span>
+                          </div>
 
-                        {editingStoreId !== store.id && (
-                            <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => {
-                                        setEditingStoreId(store.id);
-                                        setEditStoreName(store.name);
-                                        setEditStoreColor(store.color || DEFAULT_STORE_COLOR);
-                                    }}
-                                    className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/30"
-                                >
-                                    <span className="text-xs font-medium">Edit</span>
-                                </Button>
-                                <Button
-                                    variant="ghost-destructive"
-                                    size="icon"
-                                    onClick={() => handleDeleteStore(store.id)}
-                                    aria-label={`Delete store ${store.name}`}
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                </Button>
-                            </div>
-                        )}
-                      </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                              <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  onClick={() => {
+                                      setEditingStoreId(store.id);
+                                      setEditStoreName(store.name);
+                                      setEditStoreColor(store.color || DEFAULT_STORE_COLOR);
+                                  }}
+                                  className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/30"
+                                  aria-label={`Edit store ${store.name}`}
+                              >
+                                  <Edit2 className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                  variant="ghost-destructive"
+                                  size="icon-sm"
+                                  onClick={() => handleDeleteStore(store.id)}
+                                  aria-label={`Delete store ${store.name}`}
+                              >
+                                  <Trash2 className="w-4 h-4" />
+                              </Button>
+                          </div>
+                        </Row>
+                      )
                     ))}
-                  </div>
+                  </SurfaceList>
                 )}
-              </div>
+              </Section>
             </div>
           )}
 
           {activeTab === 'categories' && (
             <div className="space-y-6">
-                <div className="bg-white p-4 rounded-xl border border-brand-200 dark:bg-brand-800 dark:border-brand-700">
-                    <h4 className="text-sm font-bold text-brand-700 dark:text-brand-200 mb-3 uppercase tracking-wide">Add Category</h4>
+                <Section title="Add category">
                     <div className="flex gap-2">
                         <input
                             type="text"
@@ -441,7 +438,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                             onChange={(e) => setNewCategoryName(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && addCategory()}
                             placeholder="Category Name"
-                            className="flex-1 p-2 border border-brand-300 rounded-lg text-base focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+                            className="flex-1 p-2 bg-white border border-brand-200 rounded-lg text-base focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-800 dark:border-brand-700 dark:text-brand-200 dark:placeholder:text-brand-500"
                         />
                         <Button
                             variant="primary"
@@ -451,19 +448,19 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                             <Plus className="w-4 h-4" />
                         </Button>
                     </div>
-                </div>
+                </Section>
 
-                <div className="space-y-2">
-                    <div className="flex items-center justify-between pl-1">
-                         <h4 className="text-sm font-bold text-brand-500 dark:text-brand-400 uppercase tracking-wide">Active Categories</h4>
-                         <button
-                            onClick={resetCategories}
-                            className="text-xs text-brand-600 hover:underline flex items-center gap-1 dark:text-brand-300"
-                         >
-                            <RotateCcw className="w-3 h-3" /> Defaults
-                         </button>
-                    </div>
-
+                <Section
+                  title="Active categories"
+                  action={
+                    <button
+                      onClick={resetCategories}
+                      className="text-xs text-brand-600 hover:underline flex items-center gap-1 dark:text-brand-300"
+                    >
+                      <RotateCcw className="w-3 h-3" /> Defaults
+                    </button>
+                  }
+                >
                     <div className="flex flex-wrap gap-2">
                         {localCategories.map(cat => (
                             <div key={cat} className="flex items-center gap-1 bg-white border border-brand-200 pl-3 pr-1 py-1.5 rounded-full text-sm dark:bg-brand-800 dark:border-brand-700">
@@ -478,7 +475,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                             </div>
                         ))}
                     </div>
-                </div>
+                </Section>
             </div>
           )}
 
@@ -496,114 +493,113 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                     Create New Template
                   </Button>
 
-                  <div className="space-y-3">
-                    {quickStockLists.map(list => {
-                       const Icon = TEMPLATE_ICONS.find(i => i.id === list.icon)?.icon || ShoppingBag;
-                       const color = STORE_COLORS[list.color || DEFAULT_STORE_COLOR] ?? STORE_COLORS[DEFAULT_STORE_COLOR]!; // DEFAULT_STORE_COLOR is always present
+                  {quickStockLists.length === 0 ? (
+                    <p className="text-center text-brand-400 dark:text-brand-500 text-sm py-4">No templates yet. Create one for &quot;Work Week&quot;, &quot;Camping&quot;, etc.</p>
+                  ) : (
+                    <SurfaceList>
+                      {quickStockLists.map(list => {
+                         const Icon = TEMPLATE_ICONS.find(i => i.id === list.icon)?.icon || ShoppingBag;
+                         const color = STORE_COLORS[list.color || DEFAULT_STORE_COLOR] ?? STORE_COLORS[DEFAULT_STORE_COLOR]!; // DEFAULT_STORE_COLOR is always present
 
-                       return (
-                      <div key={list.id} className="bg-white p-4 rounded-xl border border-brand-200 flex items-center justify-between group dark:bg-brand-800 dark:border-brand-700">
-                        <div className="flex items-center gap-3">
-                           <div className={`w-10 h-10 rounded-full flex items-center justify-center ${color.bg} ${color.text}`}>
-                              <Icon className="w-5 h-5" />
-                           </div>
-                           <div>
-                              <h4 className="font-bold text-brand-800 dark:text-brand-200">{list.name}</h4>
-                              <p className="text-xs text-brand-500 dark:text-brand-400">{list.items.length} items</p>
-                           </div>
-                        </div>
-                        <div className="flex gap-2">
-                           <Button
-                             variant="ghost"
-                             size="icon"
-                             onClick={() => setEditingTemplate(list)}
-                             className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/30"
-                           >
-                             <span className="text-xs font-medium">Edit</span>
-                           </Button>
-                           <Button
-                             variant="ghost-destructive"
-                             size="icon"
-                             onClick={() => {
-                               setConfirm({
-                                 title: 'Delete Template',
-                                 message: `Delete template "${list.name}"?`,
-                                 confirmLabel: 'Delete',
-                                 onConfirm: () => {
-                                   // deleteQuickStockList already toasts on success.
-                                   void deleteQuickStockList(list.id);
-                                 },
-                               });
-                             }}
-                           >
-                             <Trash2 className="w-4 h-4" />
-                           </Button>
-                        </div>
-                      </div>
-                    );
-                    })}
-                    {quickStockLists.length === 0 && (
-                      <p className="text-center text-brand-400 dark:text-brand-500 text-sm py-4">No templates yet. Create one for &quot;Work Week&quot;, &quot;Camping&quot;, etc.</p>
-                    )}
-                  </div>
+                         return (
+                        <Row key={list.id} className="justify-between">
+                          <div className="flex items-center gap-3 min-w-0">
+                             <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${color.bg} ${color.text}`}>
+                                <Icon className="w-5 h-5" />
+                             </div>
+                             <div className="min-w-0">
+                                <h4 className="font-bold text-brand-800 dark:text-brand-200 truncate">{list.name}</h4>
+                                <p className="text-xs text-brand-500 dark:text-brand-400">{list.items.length} items</p>
+                             </div>
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                             <Button
+                               variant="ghost"
+                               size="icon-sm"
+                               onClick={() => setEditingTemplate(list)}
+                               className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/30"
+                               aria-label={`Edit template ${list.name}`}
+                             >
+                               <Edit2 className="w-4 h-4" />
+                             </Button>
+                             <Button
+                               variant="ghost-destructive"
+                               size="icon-sm"
+                               onClick={() => {
+                                 setConfirm({
+                                   title: 'Delete Template',
+                                   message: `Delete template "${list.name}"?`,
+                                   confirmLabel: 'Delete',
+                                   onConfirm: () => {
+                                     // deleteQuickStockList already toasts on success.
+                                     void deleteQuickStockList(list.id);
+                                   },
+                                 });
+                               }}
+                               aria-label={`Delete template ${list.name}`}
+                             >
+                               <Trash2 className="w-4 h-4" />
+                             </Button>
+                          </div>
+                        </Row>
+                      );
+                      })}
+                    </SurfaceList>
+                  )}
                 </>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <div className="flex items-center justify-between">
                      <h4 className="font-bold text-brand-800 dark:text-brand-200">{editingTemplate.id ? 'Edit Template' : 'New Template'}</h4>
                      <Button variant="ghost" size="icon-sm" onClick={() => setEditingTemplate(null)} aria-label="Close"><X className="w-5 h-5 text-brand-400 dark:text-brand-500" /></Button>
                   </div>
 
-                  <div className="bg-white p-4 rounded-xl border border-brand-200 space-y-3 dark:bg-brand-800 dark:border-brand-700">
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={editingTemplate.name}
-                        onChange={e => setEditingTemplate({...editingTemplate, name: e.target.value})}
-                        placeholder="Template Name (e.g. Weekly Basics)"
-                        className="flex-1 p-2 border border-brand-300 rounded-lg text-base focus:ring-2 focus:ring-accent-500/40 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
-                        autoFocus
-                      />
-                    </div>
+                  <input
+                    type="text"
+                    value={editingTemplate.name}
+                    onChange={e => setEditingTemplate({...editingTemplate, name: e.target.value})}
+                    placeholder="Template Name (e.g. Weekly Basics)"
+                    className="w-full p-2.5 bg-white border border-brand-200 rounded-lg text-base focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-800 dark:border-brand-700 dark:text-brand-200 dark:placeholder:text-brand-500"
+                    autoFocus
+                  />
 
-                    {/* Icon & Color Selection */}
-                    <div className="flex flex-col gap-3 p-3 bg-brand-50 rounded-xl border border-brand-200 dark:bg-brand-700/30 dark:border-brand-700">
-                         <div>
-                            <span className="text-xs font-bold text-brand-400 dark:text-brand-500 uppercase mb-2 block">Icon</span>
-                            <div className="flex gap-2 overflow-x-auto p-2 scrollbar-hide">
-                                {TEMPLATE_ICONS.map(({ id, icon: Icon }) => (
-                                    <button
-                                        key={id}
-                                        onClick={() => setEditingTemplate({...editingTemplate, icon: id})}
-                                        className={`p-2 rounded-lg transition-colors duration-(--duration-fast) ease-(--ease-standard) shrink-0 ${
-                                            (editingTemplate.icon || 'ShoppingBag') === id
-                                                ? 'bg-brand-100 text-brand-700 ring-2 ring-brand-500 ring-offset-1 dark:bg-brand-700/40 dark:text-brand-200 dark:ring-offset-brand-800'
-                                                : 'bg-white text-brand-400 hover:bg-brand-100/50 hover:text-brand-600 dark:bg-brand-700/50 dark:text-brand-400 dark:hover:bg-brand-700 dark:hover:text-brand-200'
-                                        }`}
-                                    >
-                                        <Icon className="w-5 h-5" />
-                                    </button>
-                                ))}
-                            </div>
-                         </div>
-                         <div>
-                            <span className="text-xs font-bold text-brand-400 dark:text-brand-500 uppercase mb-2 block">Color</span>
-                            <div className="flex gap-2 overflow-x-auto p-2 scrollbar-hide">
-                                {Object.values(STORE_COLORS).map((color) => (
-                                    <button
-                                        key={color.id}
-                                        onClick={() => setEditingTemplate({...editingTemplate, color: color.id})}
-                                        className={`w-6 h-6 rounded-full border-2 transition-colors duration-(--duration-fast) ease-(--ease-standard) shrink-0 ${color.bg} ${
-                                            (editingTemplate.color || DEFAULT_STORE_COLOR) === color.id
-                                                ? 'border-brand-600 scale-110'
-                                                : 'border-transparent hover:scale-105'
-                                        }`}
-                                    />
-                                ))}
-                            </div>
-                         </div>
+                  {/* Icon & Color — flat, typography-labeled; no wrapping box */}
+                  <div>
+                    <span className="text-xs font-bold text-brand-400 dark:text-brand-500 uppercase mb-2 block">Icon</span>
+                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                        {TEMPLATE_ICONS.map(({ id, icon: Icon }) => (
+                            <button
+                                key={id}
+                                onClick={() => setEditingTemplate({...editingTemplate, icon: id})}
+                                className={`p-2 rounded-lg transition-colors duration-(--duration-fast) ease-(--ease-standard) shrink-0 ${
+                                    (editingTemplate.icon || 'ShoppingBag') === id
+                                        ? 'bg-brand-100 text-brand-700 ring-2 ring-brand-500 ring-offset-1 dark:bg-brand-700/40 dark:text-brand-200 dark:ring-offset-brand-800'
+                                        : 'bg-brand-50 text-brand-400 hover:bg-brand-100/50 hover:text-brand-600 dark:bg-brand-700/40 dark:text-brand-400 dark:hover:bg-brand-700 dark:hover:text-brand-200'
+                                }`}
+                            >
+                                <Icon className="w-5 h-5" />
+                            </button>
+                        ))}
                     </div>
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-brand-400 dark:text-brand-500 uppercase mb-2 block">Color</span>
+                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                        {Object.values(STORE_COLORS).map((color) => (
+                            <button
+                                key={color.id}
+                                onClick={() => setEditingTemplate({...editingTemplate, color: color.id})}
+                                className={`w-6 h-6 rounded-full border-2 transition-colors duration-(--duration-fast) ease-(--ease-standard) shrink-0 ${color.bg} ${
+                                    (editingTemplate.color || DEFAULT_STORE_COLOR) === color.id
+                                        ? 'border-brand-600 scale-110'
+                                        : 'border-transparent hover:scale-105'
+                                }`}
+                            />
+                        ))}
+                    </div>
+                  </div>
 
+                  <div>
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-400 dark:text-brand-500" />
                       <input
@@ -611,7 +607,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                         value={itemSearch}
                         onChange={e => setItemSearch(e.target.value)}
                         placeholder="Search or add new item..."
-                        className="w-full pl-9 p-2 bg-brand-50/50 border border-brand-200 rounded-lg text-base focus:ring-2 focus:ring-accent-500/40 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+                        className="w-full pl-9 p-2.5 bg-white border border-brand-200 rounded-lg text-base focus:ring-2 focus:ring-accent-500/40 outline-hidden dark:bg-brand-800 dark:border-brand-700 dark:text-brand-200 dark:placeholder:text-brand-500"
                       />
                     </div>
 
@@ -622,14 +618,14 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                             size="sm"
                             onClick={handleCreateAndAddItem}
                             leftIcon={<Plus className="w-4 h-4" />}
-                            className="w-full bg-brand-50 text-brand-700 hover:bg-brand-100 border border-brand-200 border-dashed dark:bg-brand-700/30 dark:text-brand-200 dark:border-brand-500/40 dark:hover:bg-brand-700/50"
+                            className="w-full mt-2 bg-brand-50 text-brand-700 hover:bg-brand-100 border border-brand-200 border-dashed dark:bg-brand-700/30 dark:text-brand-200 dark:border-brand-500/40 dark:hover:bg-brand-700/50"
                         >
                             Create & Add &quot;{itemSearch}&quot;
                         </Button>
                     )}
                   </div>
 
-                  <div className="space-y-1">
+                  <SurfaceList className="max-h-72 overflow-y-auto">
                     {groceryCatalog
                       .filter(item =>
                          !itemSearch || item.name.toLowerCase().includes(itemSearch.toLowerCase())
@@ -648,10 +644,10 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                           <button
                             key={item.id}
                             onClick={() => toggleItemInTemplate(item.id)}
-                            className={`w-full flex items-center justify-between p-2 rounded-lg text-sm transition-colors bg-white border dark:bg-brand-800 ${
+                            className={`w-full flex items-center justify-between gap-2 px-4 py-2.5 hairline-divider text-sm text-left transition-colors ${
                               isSelected
-                                ? 'border-brand-200 text-brand-800 dark:border-brand-500/40 dark:text-brand-200'
-                                : 'border-brand-200 hover:bg-brand-50/50 text-brand-700 dark:border-brand-700 dark:text-brand-300 dark:hover:bg-brand-700/50'
+                                ? 'text-brand-900 dark:text-brand-100 font-medium'
+                                : 'text-brand-700 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-700/40'
                             }`}
                           >
                             <span>{item.name}</span>
@@ -659,7 +655,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                           </button>
                         );
                       })}
-                  </div>
+                  </SurfaceList>
                 </div>
               )}
             </div>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Check, Inbox } from 'lucide-react';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
-import { Section } from '@/components/ui/Section';
+import { Section, SurfaceList, Row } from '@/components/ui/Section';
 import { formatCurrency } from '@/utils/formatCurrency';
 import type { HouseholdMember, RewardRedemption } from '@/types/schema';
 
@@ -52,15 +52,12 @@ const PendingRedemptionsPanel: React.FC<PendingRedemptionsPanelProps> = ({
         </span>
       }
     >
-      <ul className="space-y-2">
+      <SurfaceList role="list">
         {pending.map((req) => {
           const isAllowance = req.type === 'allowance' && req.allowanceCents !== undefined;
           const busy = busyId === req.id;
           return (
-            <li
-              key={req.id}
-              className="flex items-center gap-3 surface-section px-3 py-2.5"
-            >
+            <Row key={req.id} role="listitem">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-brand-900 dark:text-brand-50">
                   {kidName(req.memberId)} · {req.rewardTitle}
@@ -91,10 +88,10 @@ const PendingRedemptionsPanel: React.FC<PendingRedemptionsPanelProps> = ({
               >
                 Deny
               </button>
-            </li>
+            </Row>
           );
         })}
-      </ul>
+      </SurfaceList>
     </Section>
   );
 };

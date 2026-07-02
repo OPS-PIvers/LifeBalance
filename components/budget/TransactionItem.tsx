@@ -4,6 +4,7 @@ import { format, parseISO } from 'date-fns';
 import { Transaction, INCOME_CATEGORY } from '@/types/schema';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Row } from '@/components/ui/Section';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 
 // --- Helper Functions ---
@@ -36,10 +37,18 @@ export interface TransactionItemProps {
   onToggleSelection: (id: string) => void;
 }
 
+/**
+ * A single hairline-divided row inside the virtualized `TransactionMasterList`.
+ * Renders as a `Row` (no per-item border/bg-white/rounded-card) so 90+ stacked
+ * transactions read as one flat list, not 90 stacked cards. The virtualizer
+ * measures the height of the ABSOLUTE-positioned wrapper `TransactionMasterList`
+ * renders around this component, so row-height behavior stays unchanged.
+ */
 export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDuplicate, onSplit, onMore, isSelectionMode, isSelected, onToggleSelection }: TransactionItemProps) => {
   const fmt = useFormatCurrency();
   return (
-    <div
+    <Row
+      interactive
       onClick={() => isSelectionMode && onToggleSelection(tx.id)}
       role={isSelectionMode ? 'checkbox' : undefined}
       aria-checked={isSelectionMode ? isSelected : undefined}
@@ -50,11 +59,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
           onToggleSelection(tx.id);
         }
       } : undefined}
-      className={`p-4 rounded-card border flex items-center justify-between transition-colors duration-(--duration-fast) ease-(--ease-standard) group cursor-pointer ${
-        isSelected
-          ? 'bg-brand-50 dark:bg-brand-700/40 border-accent-300 dark:border-accent-700'
-          : 'bg-white dark:bg-brand-800 border-brand-200 dark:border-brand-700 hover:border-brand-300 dark:hover:border-brand-600'
-      }`}
+      className={`justify-between group ${isSelected ? 'bg-brand-50 dark:bg-brand-700/40' : ''}`}
     >
       <div className="flex items-center gap-4 overflow-hidden">
         {/* Selection Checkbox */}
@@ -169,7 +174,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
           </>
         )}
       </div>
-    </div>
+    </Row>
   );
 }, (prevProps, nextProps) => {
   // Custom comparator to handle reference instability from Firestore

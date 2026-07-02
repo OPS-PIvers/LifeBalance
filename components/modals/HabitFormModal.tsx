@@ -233,11 +233,11 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
         {/* Assign to kid (Plan 080c-3) — dormant unless Kid Mode is on AND there is
             at least one managed kid. CREATE = multi-select; EDIT = single-select. */}
         {showAssignControl && (
-          <div className="bg-warm-50 dark:bg-warm-900/20 p-4 rounded-xl border border-warm-200 dark:border-warm-800/60">
-            <span className="text-xs font-bold text-warm-700 dark:text-warm-300 uppercase" id="assign-kid-label">
+          <div>
+            <span className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase" id="assign-kid-label">
               {editingHabit ? 'Assign to kid' : 'Assign to kid(s)'}
             </span>
-            <p className="text-xxs text-warm-600/80 dark:text-warm-300/70 mt-0.5 mb-2">
+            <p className="text-xxs text-brand-400 dark:text-brand-400 mt-0.5 mb-2">
               {editingHabit
                 ? 'A chore shows on that kid’s dashboard and credits their points.'
                 : 'Creates one chore per selected kid, each crediting that kid’s points.'}
@@ -269,8 +269,8 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
         )}
 
         {/* Scoring Logic */}
-        <div className="bg-brand-50 dark:bg-brand-700/50 p-4 rounded-xl border border-brand-200 dark:border-brand-700">
-          <h3 className="text-sm font-bold text-brand-700 dark:text-brand-200 mb-3">Scoring Strategy</h3>
+        <div>
+          <h3 className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase mb-3">Scoring Strategy</h3>
 
           <SegmentedControl
             tone="warm"

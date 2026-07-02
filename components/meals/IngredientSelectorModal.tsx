@@ -2,8 +2,10 @@ import React, { useState, useMemo } from 'react';
 import { MealIngredient, ShoppingItem } from '@/types/schema';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import { SurfaceList } from '@/components/ui/Section';
 import { ShoppingCart, Check, AlertCircle } from 'lucide-react';
 import { normalizeToKey } from '@/utils/stringNormalizer';
+import clsx from 'clsx';
 
 interface IngredientSelectorModalProps {
   isOpen: boolean;
@@ -76,14 +78,15 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
       {/* Single scroll container is the Drawer body — no nested scrollers. */}
       <p className="text-xs font-medium text-brand-500 dark:text-brand-400 truncate -mt-1 mb-3">{mealName}</p>
 
-      <div className="space-y-2">
+      <div>
             {ingredients.length === 0 ? (
                 <div className="text-center py-8 text-brand-500 dark:text-brand-400">
                     <AlertCircle className="w-8 h-8 mx-auto mb-2 text-brand-300 dark:text-brand-600" />
                     <p>No ingredients found for this meal.</p>
                 </div>
             ) : (
-                ingredients.map((ing, index) => {
+                <SurfaceList>
+                {ingredients.map((ing, index) => {
                     const isSelected = selectedIndices.has(index);
                     const normalizedName = normalizeToKey(ing.name);
                     const inList = unpurchasedItemNames.has(normalizedName);
@@ -101,13 +104,14 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
                             role="checkbox"
                             aria-checked={isSelected}
                             tabIndex={0}
-                            className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus:ring-2 focus:ring-accent-500/40 ${
+                            className={clsx(
+                                'flex items-center gap-3 px-4 py-3 hairline-divider cursor-pointer transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus:ring-2 focus:ring-accent-500/40 focus:ring-inset',
                                 isSelected
-                                    ? 'bg-brand-50 border-brand-200 dark:bg-brand-700/30 dark:border-brand-500/40'
-                                    : 'bg-white border-brand-100 hover:border-brand-200 hover:bg-brand-50 dark:bg-brand-800 dark:border-brand-700 dark:hover:border-brand-600 dark:hover:bg-brand-700/50'
-                            }`}
+                                    ? 'bg-brand-50 dark:bg-brand-700/30'
+                                    : 'hover:bg-brand-50/60 dark:hover:bg-brand-700/30'
+                            )}
                         >
-                            <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
+                            <div className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors ${
                                 isSelected
                                     ? 'bg-accent-600 border-accent-600 text-white'
                                     : 'bg-white border-brand-300 dark:bg-brand-700 dark:border-brand-600'
@@ -133,7 +137,8 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
                             )}
                         </div>
                     );
-                })
+                })}
+                </SurfaceList>
             )}
       </div>
 

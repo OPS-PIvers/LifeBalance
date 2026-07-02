@@ -20,11 +20,19 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 describe('NotificationSettings', () => {
-  it('renders a single Notification Preferences heading and no nested card wrapper', () => {
+  it('renders the flat preference list without a nested card heading', () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(<NotificationSettings householdId="h1" onSave={onSave} />);
 
-    expect(screen.getAllByText('Notification Preferences')).toHaveLength(1);
+    // The redesigned component drops its own boxed heading (the enclosing Drawer
+    // supplies the title) and renders the preferences directly as a flat list.
+    expect(screen.queryByText('Notification Preferences')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('checkbox', { name: 'Daily habit check-in reminders' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Save Preferences' })
+    ).toBeInTheDocument();
   });
 
   it('reveals the habit reminder time select once habit reminders are enabled', async () => {

@@ -1,5 +1,7 @@
 import React from 'react';
-import { Check, ChevronRight, Sparkles } from 'lucide-react';
+import { Check, Sparkles } from 'lucide-react';
+import { cn } from '@/utils/cn';
+import { Section, SurfaceList } from '@/components/ui/Section';
 import { Badge } from '@/components/ui/Badge';
 import {
   PresetHabit,
@@ -16,11 +18,19 @@ interface PresetHabitListProps {
   onTogglePreset: (preset: PresetHabit) => void;
 }
 
+/**
+ * Flat, always-visible list of preset habits grouped by category — one
+ * typographic Section header + SurfaceList per category, stacked continuously.
+ * No inline accordion/expand-collapse: per the design system, content that
+ * "expands into nested options" becomes a flat scrollable Section instead.
+ *
+ * `expandedCategory`/`onToggleCategory` are retained in the prop signature for
+ * compatibility with HabitCreatorWizard (which still owns that state) but are
+ * no longer used to gate visibility here — every category is always shown.
+ */
 const PresetHabitList: React.FC<PresetHabitListProps> = ({
   presetsByCategory,
   enabledPresetIds,
-  expandedCategory,
-  onToggleCategory,
   onTogglePreset,
 }) => {
   return (
@@ -32,80 +42,89 @@ const PresetHabitList: React.FC<PresetHabitListProps> = ({
         </h3>
       </div>
 
-      {/* Category Accordion */}
-      <div className="space-y-2">
+      <div className="space-y-6">
         {HABIT_CATEGORIES.map(category => {
           const categoryPresets = presetsByCategory[category] || [];
           if (categoryPresets.length === 0) return null;
 
           const enabledCount = categoryPresets.filter(p => enabledPresetIds.has(p.id)).length;
-          const isExpanded = expandedCategory === category;
           const isNegativeCategory = category === NEGATIVE_CATEGORY;
 
           return (
-            <div key={category} className={`border rounded-card overflow-hidden ${isNegativeCategory ? 'border-money-neg/30 dark:border-money-neg/40' : 'border-brand-100 dark:border-brand-700'}`}>
-              {/* Category Header */}
-              <button
-                onClick={() => onToggleCategory(isExpanded ? null : category)}
-                className={`w-full flex items-center justify-between p-3 transition-colors ${isNegativeCategory ? 'bg-money-bgNeg dark:bg-money-neg/10 hover:bg-money-bgNeg dark:hover:bg-money-neg/20' : 'bg-brand-50 dark:bg-brand-700/50 hover:bg-brand-100 dark:hover:bg-brand-700'}`}
-              >
-                <span className={`font-semibold text-sm ${isNegativeCategory ? 'text-money-neg dark:text-money-negDark' : 'text-brand-700 dark:text-brand-200'}`}>{category}</span>
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs ${isNegativeCategory ? 'text-money-neg dark:text-money-negDark' : 'text-brand-400 dark:text-brand-400'}`}>
+            <Section
+              key={category}
+              title={
+                <span className="flex items-baseline gap-2">
+                  <span
+                    className={
+                      isNegativeCategory ? 'text-money-neg dark:text-money-negDark' : undefined
+                    }
+                  >
+                    {category}
+                  </span>
+                  <span className="font-sans text-xs font-normal normal-case tracking-normal text-brand-400 dark:text-brand-400">
                     {enabledCount} / {categoryPresets.length} active
                   </span>
-                  <ChevronRight
-                    size={16}
-                    className={`transition-transform ${isNegativeCategory ? 'text-money-neg' : 'text-brand-400 dark:text-brand-400'} ${isExpanded ? 'rotate-90' : ''}`}
-                  />
-                </div>
-              </button>
+                </span>
+              }
+            >
+              <SurfaceList>
+                {categoryPresets.map(preset => {
+                  const isEnabled = enabledPresetIds.has(preset.id);
+                  const pointsDisplay = preset.type === 'negative'
+                    ? `-${EFFORT_POINTS[preset.effortLevel]}`
+                    : `+${EFFORT_POINTS[preset.effortLevel]}`;
 
-              {/* Category Presets */}
-              {isExpanded && (
-                <div className="divide-y divide-brand-50 dark:divide-brand-700/50">
-                  {categoryPresets.map(preset => {
-                    const isEnabled = enabledPresetIds.has(preset.id);
-                    const pointsDisplay = preset.type === 'negative'
-                      ? `-${EFFORT_POINTS[preset.effortLevel]}`
-                      : `+${EFFORT_POINTS[preset.effortLevel]}`;
-
-                    return (
-                      <button
-                        key={preset.id}
-                        onClick={() => onTogglePreset(preset)}
-                        className="w-full flex items-center justify-between p-3 hover:bg-brand-50 dark:hover:bg-brand-700/50 transition-colors text-left"
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => onTogglePreset(preset)}
+                      aria-pressed={isEnabled}
+                      className={cn(
+                        'flex w-full items-center gap-3 px-4 py-3 text-left hairline-divider',
+                        'transition-colors duration-(--duration-fast) ease-(--ease-standard)',
+                        'hover:bg-brand-50 dark:hover:bg-brand-700/40',
+                        'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-inset'
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          'w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors',
+                          isEnabled
+                            ? preset.type === 'negative'
+                              ? 'bg-money-neg border-money-neg text-white'
+                              : 'bg-money-pos border-money-pos text-white'
+                            : 'border-brand-200 dark:border-brand-600 text-transparent'
+                        )}
                       >
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${
+                        <Check size={12} strokeWidth={3} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p
+                          className={cn(
+                            'font-medium text-sm truncate',
                             isEnabled
-                              ? preset.type === 'negative'
-                                ? 'bg-money-neg border-money-neg text-white'
-                                : 'bg-money-pos border-money-pos text-white'
-                              : 'border-brand-200 dark:border-brand-600 text-transparent'
-                          }`}>
-                            <Check size={12} strokeWidth={3} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className={`font-medium text-sm truncate ${isEnabled ? 'text-brand-800 dark:text-brand-100' : 'text-brand-600 dark:text-brand-500'}`}>
-                              {preset.title}
-                            </p>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <Badge size="sm" variant={preset.type === 'negative' ? 'danger' : 'warning'}>
-                                {pointsDisplay} pts
-                              </Badge>
-                              <span className="text-xxs text-brand-400 dark:text-brand-400">
-                                {preset.period}
-                              </span>
-                            </div>
-                          </div>
+                              ? 'text-brand-800 dark:text-brand-100'
+                              : 'text-brand-600 dark:text-brand-500'
+                          )}
+                        >
+                          {preset.title}
+                        </p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <Badge size="sm" variant={preset.type === 'negative' ? 'danger' : 'warning'}>
+                            {pointsDisplay} pts
+                          </Badge>
+                          <span className="text-xxs text-brand-400 dark:text-brand-400">
+                            {preset.period}
+                          </span>
                         </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </SurfaceList>
+            </Section>
           );
         })}
       </div>

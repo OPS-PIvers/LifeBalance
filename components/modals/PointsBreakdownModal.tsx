@@ -11,6 +11,7 @@ import { db } from '@/firebase.config';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
+import { SurfaceList, Row } from '@/components/ui/Section';
 
 interface PointsBreakdownModalProps {
   isOpen: boolean;
@@ -253,7 +254,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
   const renderEditControls = (item: typeof contributions[0]) => {
     if (view === 'daily') {
         return (
-            <div className="mt-3 p-3 bg-brand-50 dark:bg-brand-700/50 rounded-lg flex items-center justify-between">
+            <div className="flex items-center justify-between">
                 <span className="text-sm text-brand-600 dark:text-brand-300">Adjust Count:</span>
                 <div className="flex items-center gap-3">
                     <Button
@@ -283,7 +284,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
         const days = eachDayOfInterval({ start: weekStart, end: new Date() });
 
         return (
-            <div className="mt-3 p-3 bg-brand-50 dark:bg-brand-700/50 rounded-lg">
+            <div>
                 <p className="text-xs text-brand-500 dark:text-brand-400 mb-2">Toggle days to adjust history:</p>
                 <div className="flex justify-between">
                     {days.map(day => {
@@ -313,7 +314,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
 
     if (view === 'total') {
         return (
-             <div className="mt-3 p-3 bg-brand-50 dark:bg-brand-700/50 rounded-lg">
+             <div>
                  <p className="text-sm text-brand-600 dark:text-brand-300 mb-2">Total Count Correction:</p>
                  <div className="flex items-center gap-3">
                     <Button
@@ -359,53 +360,55 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
       title={getTitle()}
       noPadding={true}
     >
-      <div className="p-4 space-y-3">
+      <div className="p-4">
           {contributions.length === 0 ? (
             <EmptyState
                 icon={<Award className="w-8 h-8" />}
                 title="No points recorded for this period."
             />
           ) : (
-            contributions.map((item) => (
-              <div
-                key={item.id}
-                className={`border rounded-xl p-3 transition-all ${
-                    editingHabitId === item.id ? 'ring-2 ring-brand-200 border-brand-300 dark:border-brand-600 bg-brand-50/30 dark:bg-brand-700/30' : 'border-brand-200 dark:border-brand-700 hover:border-brand-200 dark:hover:border-brand-600'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-brand-100 dark:bg-brand-700/50 flex items-center justify-center text-xl">
+            <SurfaceList>
+              {contributions.map((item) => {
+                const isEditing = editingHabitId === item.id;
+                return (
+                  <React.Fragment key={item.id}>
+                    <Row className={isEditing ? 'bg-brand-50 dark:bg-brand-700/40' : undefined}>
+                        <div className="w-10 h-10 rounded-lg bg-brand-100 dark:bg-brand-700/50 flex items-center justify-center text-xl shrink-0">
                             {/* Simple emoji placeholder if no icon system */}
                             {item.title.charAt(0).toUpperCase()}
                         </div>
-                        <div>
-                            <h3 className="font-semibold text-brand-800 dark:text-brand-100">{item.title}</h3>
-                            <p className="text-xs text-brand-500 dark:text-brand-400">{item.details}</p>
+                        <div className="min-w-0 flex-1">
+                            <h3 className="font-semibold text-brand-800 dark:text-brand-100 text-sm truncate">{item.title}</h3>
+                            <p className="text-xs text-brand-500 dark:text-brand-400 truncate">{item.details}</p>
                         </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <div className="text-right">
-                            <span className="block font-mono font-bold tabular-nums text-warm-600 dark:text-warm-300">+{item.calculatedPoints}</span>
-                            <span className="text-xxs text-brand-400 dark:text-brand-500">points</span>
+                        <div className="flex items-center gap-3 shrink-0">
+                            <div className="text-right">
+                                <span className="block font-mono font-bold tabular-nums text-warm-600 dark:text-warm-300">+{item.calculatedPoints}</span>
+                                <span className="text-xxs text-brand-400 dark:text-brand-500">points</span>
+                            </div>
+                            <button
+                                onClick={() => handleEdit(item.id)}
+                                className={`p-2 rounded-full transition-colors ${
+                                    isEditing
+                                        ? 'bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300'
+                                        : 'text-brand-400 dark:text-brand-500 hover:bg-brand-100 dark:hover:bg-brand-700/50'
+                                }`}
+                                aria-label={`Edit ${item.title}`}
+                            >
+                                <Edit2 size={16} />
+                            </button>
                         </div>
-                        <button
-                            onClick={() => handleEdit(item.id)}
-                            className={`p-2 rounded-full transition-colors ${
-                                editingHabitId === item.id
-                                    ? 'bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300'
-                                    : 'text-brand-400 dark:text-brand-500 hover:bg-brand-100 dark:hover:bg-brand-700/50'
-                            }`}
-                            aria-label={`Edit ${item.title}`}
-                        >
-                            <Edit2 size={16} />
-                        </button>
-                    </div>
-                </div>
+                    </Row>
 
-                {editingHabitId === item.id && renderEditControls(item)}
-              </div>
-            ))
+                    {isEditing && (
+                      <div className="px-4 pb-4 pt-1">
+                        {renderEditControls(item)}
+                      </div>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </SurfaceList>
           )}
       </div>
 

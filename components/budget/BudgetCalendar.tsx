@@ -15,6 +15,7 @@ import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
 import EmptyState from '@/components/ui/EmptyState';
+import { SurfaceList, Row } from '@/components/ui/Section';
 import toast from 'react-hot-toast';
 import RecurringBillsModal from './RecurringBillsModal';
 
@@ -375,23 +376,23 @@ const BudgetCalendar: React.FC = () => {
             }
           />
         ) : (
-          <div className="space-y-3">
+          <SurfaceList>
             {/* ToDos Section */}
             {selectedTodos.map(todo => (
-              <div key={todo.id} className="surface-section p-4 flex items-center justify-between group">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-card flex items-center justify-center font-bold text-lg bg-habit-blue/15 text-habit-blue">
+              <Row key={todo.id} className="justify-between group">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-card flex items-center justify-center font-bold text-lg bg-habit-blue/15 text-habit-blue shrink-0">
                     <CheckSquare size={20} />
                   </div>
-                  <div>
-                    <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm">{todo.text}</p>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm truncate">{todo.text}</p>
                     <p className="text-xs text-brand-500 dark:text-brand-400">
                       Task
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center">
+                <div className="flex items-center shrink-0">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -409,31 +410,31 @@ const BudgetCalendar: React.FC = () => {
                     Complete
                   </Button>
                 </div>
-              </div>
+              </Row>
             ))}
 
             {/* Financial Items Section */}
             {selectedItems.map(item => (
-              <div key={item.id} className="surface-section p-4 flex items-center justify-between group">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-card flex items-center justify-center font-bold text-lg ${
+              <Row key={item.id} className="justify-between group">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-10 h-10 rounded-card flex items-center justify-center font-bold text-lg shrink-0 ${
                     item.type === 'income' ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos' : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg'
                   }`}>
                     {item.type === 'income' ? '+' : '-'}
                   </div>
-                  <div>
-                    <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm">{item.title}</p>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm truncate">{item.title}</p>
                     <p className={`text-xs ${item.isPaid ? 'text-money-pos' : 'text-brand-500 dark:text-brand-400'}`}>
                       {item.isPaid ? 'Paid' : 'Unpaid'} {item.isRecurring && '• Recurring'}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex flex-col items-end gap-1">
+                <div className="flex flex-col items-end gap-1 shrink-0">
                   <span className="font-mono tabular-nums font-bold text-brand-900 dark:text-brand-100">
                     {fmt(item.amount)}
                   </span>
-                  
+
                   {/* Action Buttons */}
                   <div className="flex items-center gap-2">
                     {/* Status Indicator (non-interactive - use Dashboard queue to approve) */}
@@ -481,9 +482,9 @@ const BudgetCalendar: React.FC = () => {
                     </Button>
                   </div>
                 </div>
-              </div>
+              </Row>
             ))}
-          </div>
+          </SurfaceList>
         )}
       </div>
 
