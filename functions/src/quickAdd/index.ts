@@ -511,14 +511,20 @@ export const quickAddExpense = onRequest(
       // sensitive): the Shortcut's own error notification then identifies
       // which automation sent the bad request (emailText ⇒ the email one).
       const receivedFields = Object.keys(req.body || {}).join(", ") || "none";
+      // rawAmount is unvalidated user input echoed into the log and response;
+      // cap it so an oversized string can't bloat either.
+      const safeRawAmount =
+        typeof rawAmount === "string" && rawAmount.length > 100
+          ? `${rawAmount.substring(0, 100)}... [TRUNCATED]`
+          : rawAmount;
       logger.warn(
-        `Invalid amount received: ${JSON.stringify({ rawAmount, amount, type: typeof rawAmount, receivedFields })}`
+        `Invalid amount received: ${JSON.stringify({ rawAmount: safeRawAmount, amount, type: typeof rawAmount, receivedFields })}`
       );
       await logApiCall(householdId, apiKey.substring(0, 16), "expense", req.body, 400);
       errorResponse(
         res,
         400,
-        `amount must be a valid number. Received: ${typeof rawAmount === 'undefined' ? 'undefined' : JSON.stringify(rawAmount)}. ` +
+        `amount must be a valid number. Received: ${typeof safeRawAmount === 'undefined' ? 'undefined' : JSON.stringify(safeRawAmount)}. ` +
           `Send a plain number (50 or -50) or a currency string ("$50.00"). Both positive and negative values are accepted. ` +
           `Body fields received: ${receivedFields}.`,
         "BAD_REQUEST"
