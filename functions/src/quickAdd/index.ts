@@ -37,6 +37,7 @@ import {
   normalizeUsDate,
   type AccountLike,
 } from "./accountMatch";
+import { parseTransactionEmail } from "./emailParser";
 
 const db = admin.firestore();
 
@@ -325,22 +326,90 @@ export const quickAddExpense = onRequest(
     }
 
     // 4. Parse and validate request body
-    const { amount: rawAmount, merchant, category = "Uncategorized", date, notes } = req.body || {};
+    let { amount: rawAmount, merchant, date } = req.body || {};
+    const { category = "Uncategorized", notes } = req.body || {};
 
     // Optional card last-4 (e.g. Wells Fargo email sends "...8899") used to
     // auto-route this expense to the matching account. An explicit `accountId`
     // takes precedence; both are resolved after the household read below.
-    const rawCardLast4 = (req.body || {}).cardLast4;
+    let rawCardLast4 = (req.body || {}).cardLast4;
     const rawAccountId = (req.body || {}).accountId;
+
+    // Server-side email parsing: instead of running four fragile on-device
+    // regexes, the bank-email Shortcut can send the WHOLE email body as
+    // `emailText` and we extract amount/merchant/card/date here (emailParser.ts)
+    // where the logic is versioned, layered per bank wording, and unit-tested.
+    // Explicitly provided fields always win — the parser only fills the gaps —
+    // so existing regex-based Shortcuts keep working unchanged.
+    const rawEmailText = (req.body || {}).emailText;
+    const emailProvided =
+      rawEmailText !== undefined && rawEmailText !== null && rawEmailText !== "";
+    if (emailProvided) {
+      if (typeof rawEmailText !== "string") {
+        errorResponse(res, 400, "emailText must be a string", "BAD_REQUEST");
+        return;
+      }
+      if (rawEmailText.length > 100000) {
+        errorResponse(res, 400, "emailText too long (max 100000 chars)", "BAD_REQUEST");
+        return;
+      }
+      // Redact the blob IN-PLACE before anything logs the body (same treatment
+      // as cardLast4 below): logApiCall persists req.body, and a full bank
+      // email can carry balances and account details that must never sit in
+      // audit logs — sanitizeForLogging's 500-char truncation is not enough.
+      if (req.body) {
+        req.body.emailText = `[redacted email text: ${rawEmailText.length} chars]`;
+      }
+      const parsed = parseTransactionEmail(rawEmailText);
+      if (parsed.amount === null && parsed.merchant === null) {
+        // Nothing recognizable — tell the Shortcut owner (the notification
+        // shows this message) instead of silently skipping the purchase.
+        errorResponse(
+          res,
+          400,
+          "Could not find an amount or merchant in emailText — the bank may have " +
+            "changed its email wording",
+          "BAD_REQUEST"
+        );
+        return;
+      }
+      // A field counts as "missing" when absent OR blank — a Shortcut with an
+      // empty variable sends "" and must not block the parser's value.
+      const isBlank = (v: unknown): boolean =>
+        v === undefined || v === null || (typeof v === "string" && !v.trim());
+      if (isBlank(rawAmount)) {
+        // No readable amount but a known merchant → fall through as a $0
+        // "awaiting amount" stub (capture beats completeness, same philosophy
+        // as the Apple Pay $0 pre-auth path below).
+        rawAmount = parsed.amount ?? 0;
+      }
+      if (typeof merchant !== "string" || !merchant.trim()) {
+        // Amount without a readable merchant is still worth capturing — land
+        // it under a review-obvious placeholder rather than dropping it.
+        merchant = parsed.merchant ?? "Card purchase";
+      }
+      if (isBlank(rawCardLast4)) {
+        rawCardLast4 = parsed.cardLast4 ?? rawCardLast4;
+      }
+      if (isBlank(date)) {
+        // undefined (not a blank string) so a parse miss falls back to today
+        // below instead of failing date validation.
+        date = parsed.date ?? undefined;
+      }
+    }
 
     // Opt-in marker set ONLY by the bank-notification Shortcut (which parses the
     // real settled amount out of the bank's push). It gates the reconcile step
     // below so a regular voice-expense Shortcut — also amount>0, also
     // source:'shortcut' — can never absorb an unrelated Apple Pay $0 stub.
-    // Shortcuts may send a Boolean or a text "true"/"1", so accept both.
+    // Shortcuts may send a Boolean or a text "true"/"1", so accept both. An
+    // email-sourced post IS a bank notification, so `emailText` defaults it on
+    // (an explicit value still wins — e.g. `fromBankNotification: false`).
     const rawFromBank = (req.body || {}).fromBankNotification;
     const fromBankNotification =
-      rawFromBank === true || rawFromBank === "true" || rawFromBank === 1 || rawFromBank === "1";
+      rawFromBank === undefined || rawFromBank === null
+        ? emailProvided
+        : rawFromBank === true || rawFromBank === "true" || rawFromBank === 1 || rawFromBank === "1";
 
     // Convert amount to number.
     // iOS Shortcuts may send amounts as a plain number or as a formatted currency string

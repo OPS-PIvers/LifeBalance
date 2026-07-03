@@ -788,6 +788,180 @@ describe("quickAddExpense", () => {
     expect(res.statusCode).toBe(403);
     expect(res.body).toMatchObject({ error: { code: "FORBIDDEN" } });
   });
+
+  // --- Server-side email parsing (emailText) ---
+
+  const WF_EMAIL = `Your credit card was used for a purchase over $1.00.
+
+You made a purchase of $6.02 with credit card ...8899.
+
+Merchant: Google CLOUD
+Date: 07/01/2026`;
+
+  it("emailText alone creates a transaction from server-parsed fields", async () => {
+    const add = vi.fn(() => Promise.resolve({ id: "tx1" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = { add };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { emailText: WF_EMAIL } }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      success: true,
+      data: { amount: 6.02, merchant: "Google CLOUD", date: "2026-07-01" },
+    });
+    expect(add).toHaveBeenCalledTimes(1);
+    const txData = add.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(txData.amount).toBe(6.02);
+    expect(txData.merchant).toBe("Google CLOUD");
+    expect(txData.date).toBe("2026-07-01");
+    expect(txData.source).toBe("shortcut");
+  });
+
+  it("emailText is redacted from the audit log", async () => {
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = {
+      add: vi.fn(() => Promise.resolve({ id: "tx1" })),
+    };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { emailText: WF_EMAIL } }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(logAddMock).toHaveBeenCalled();
+    const logged = logAddMock.mock.calls[0]?.[0] as {
+      requestBody: Record<string, unknown>;
+    };
+    expect(logged.requestBody.emailText).toMatch(/^\[redacted email text/);
+  });
+
+  it("explicit fields win over emailText-parsed values", async () => {
+    const add = vi.fn(() => Promise.resolve({ id: "tx1" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = { add };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({
+        body: { emailText: WF_EMAIL, amount: 99, merchant: "Override Store" },
+      }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    const txData = add.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(txData.amount).toBe(99);
+    expect(txData.merchant).toBe("Override Store");
+  });
+
+  it("emailText defaults fromBankNotification: fills a lone $0 stub without the explicit flag", async () => {
+    const stub = txDoc("stub1", {
+      source: "shortcut",
+      status: "pending_review",
+      amount: 0,
+      merchant: "Google CLOUD",
+      needsAmount: true,
+    });
+    const add = vi.fn(() => Promise.resolve({ id: "txNew" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = {
+      add,
+      whereGetDocs: [stub],
+    };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { emailText: WF_EMAIL } }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ merged: true, data: { amount: 6.02 } });
+    expect(stub.ref.update).toHaveBeenCalledTimes(1);
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  it("emailText with an amount but no merchant lands under a placeholder merchant", async () => {
+    const add = vi.fn(() => Promise.resolve({ id: "tx1" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = { add };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { emailText: "Charge approved. Amount: $12.00." } }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    const txData = add.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(txData.amount).toBe(12);
+    expect(txData.merchant).toBe("Card purchase");
+  });
+
+  it("emailText with a merchant but no amount creates an awaiting-amount stub", async () => {
+    const add = vi.fn(() => Promise.resolve({ id: "tx1" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = { add };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({
+        body: {
+          emailText:
+            "A transaction at STARBUCKS on 07/01/2026 requires your attention.",
+        },
+      }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    const txData = add.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(txData.amount).toBe(0);
+    expect(txData.needsAmount).toBe(true);
+    expect(txData.merchant).toBe("STARBUCKS");
+  });
+
+  it("blank explicit fields do not block emailText-parsed values", async () => {
+    // A Shortcut with an empty variable sends "" — the parser's values must
+    // still fill in (cardLast4 for routing, date, amount).
+    const add = vi.fn(() => Promise.resolve({ id: "tx1" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = { add };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({
+        body: { emailText: WF_EMAIL, amount: "", merchant: "", cardLast4: "", date: "" },
+      }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    const txData = add.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(txData.amount).toBe(6.02);
+    expect(txData.merchant).toBe("Google CLOUD");
+    expect(txData.date).toBe("2026-07-01");
+    // The parsed card digits survive the blank explicit value: the sanitized
+    // audit-log body carries the normalized last-4 used for account routing.
+    const logged = logAddMock.mock.calls[0]?.[0] as {
+      requestBody: Record<string, unknown>;
+    };
+    expect(logged.requestBody.cardLast4).toBe("8899");
+  });
+
+  it("unparseable emailText returns 400 with a wording hint", async () => {
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { emailText: "Your statement is ready to view." } }),
+      res
+    );
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+    expect((res.body as { message: string }).message).toMatch(/wording/);
+  });
+
+  it("non-string emailText returns 400", async () => {
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { emailText: 12345 } }),
+      res
+    );
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+  });
 });
 
 // ===========================================================================
