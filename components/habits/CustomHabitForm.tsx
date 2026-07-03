@@ -53,7 +53,7 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
       />
 
       {/* Category & Type */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-4 [&>*]:min-w-0">
         <Select
           label="Category"
           value={formData.category}
@@ -133,7 +133,7 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
       </div>
 
       {/* Target & Period */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-4 [&>*]:min-w-0">
         <Input
           label="Target Count"
           type="number"

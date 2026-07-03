@@ -309,15 +309,23 @@ export interface HouseholdContextType {
   addTransaction: (tx: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>) => Promise<void>;
   /** Verify a pending transaction under `category`. Optional `accountId`
    *  additionally (re)tags the transaction so the verify-time balance impact
-   *  lands on that account (used by the Action Queue's smart approve). */
-  updateTransactionCategory: (id: string, category: string, relatedHabitIds?: string[], accountId?: string) => Promise<void>;
+   *  lands on that account (used by the Action Queue's smart approve); pass
+   *  `null` to EXPLICITLY clear a previously-tagged account (the impact then
+   *  re-routes to checking). Optional `overrides` co-commit an inline edit
+   *  (amount/merchant/date, plus clearing the `needsAmount` stub flag) in the
+   *  SAME atomic batch, so verify + edit + account + habits + points can never
+   *  diverge; `overrides.amount` (not the possibly-stale stored amount) drives
+   *  the checking-balance delta. */
+  updateTransactionCategory: (
+    id: string,
+    category: string,
+    relatedHabitIds?: string[],
+    accountId?: string | null,
+    overrides?: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean },
+  ) => Promise<void>;
   updateTransaction: (id: string, updates: Partial<Transaction>, opts?: MutationOpts) => Promise<void>;
   deleteTransaction: (id: string, opts?: MutationOpts) => Promise<void>;
   splitTransaction: (originalTransactionId: string, newTransactions: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[]) => Promise<void>;
-  /** Stamp `needsAmountPromptedAt` on Apple Pay $0 stubs so the on-open
-   *  "awaiting amount" drawer won't auto-surface them again (they remain in the
-   *  Action Queue until resolved). Batched single write per id. */
-  markNeedsAmountPrompted: (ids: string[]) => Promise<void>;
 
   // Habit Actions
   addHabit: (habit: Habit) => Promise<string>;
@@ -466,7 +474,6 @@ export type FinanceContextValue = Pick<HouseholdContextType,
   | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'reallocateBucket'
   | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
   | 'addTransaction' | 'updateTransactionCategory' | 'updateTransaction' | 'deleteTransaction' | 'splitTransaction'
-  | 'markNeedsAmountPrompted'
 >;
 
 export type GamificationContextValue = Pick<HouseholdContextType,
@@ -2711,7 +2718,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   }, [householdId, user, householdSettings, accounts]);
 
-  const updateTransactionCategory = useCallback(async (id: string, category: string, relatedHabitIds?: string[], accountId?: string) => {
+  const updateTransactionCategory = useCallback(async (
+    id: string,
+    category: string,
+    relatedHabitIds?: string[],
+    accountId?: string | null,
+    overrides?: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean },
+  ) => {
     if (!householdId || !currentUser) return;
 
     // Verifying a pending transaction may also increment related habits and the
@@ -2746,27 +2759,58 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // twice — the same rule `updateTransaction` uses. Promoting a pending
     // credit charge to verified raises the card's debt; verifying a checking
     // expense debits checking.
-    const newAccountId = accountId?.trim() || undefined;
+    // `accountId === null` is an EXPLICIT clear of a previously-tagged account
+    // (distinct from `undefined`, which leaves the existing tag untouched). A
+    // clear removes the stored field and re-routes the impact to the checking
+    // fallback via resolveTargetAccount(undefined, …).
+    const clearAccount = accountId === null;
+    const newAccountId = clearAccount ? undefined : (accountId?.trim() || undefined);
     const oldTarget = resolveTargetAccount(existingTx.accountId, accounts);
-    const newTarget = resolveTargetAccount(newAccountId ?? existingTx.accountId, accounts);
+    const newTarget = resolveTargetAccount(
+      clearAccount ? undefined : (newAccountId ?? existingTx.accountId),
+      accounts,
+    );
+
+    // An inline edit (Action Queue / on-open review) can change the amount in the
+    // same verify. Use the OVERRIDE amount (not the possibly-stale/zero stored
+    // amount) for the applied impact, so a $0 "awaiting amount" stub debits the
+    // entered amount exactly once (reverse 0, apply −entered). Round to whole
+    // cents before it drives both the stored amount and the balance delta.
+    const editedAmount = overrides?.amount !== undefined ? roundMoney(overrides.amount) : undefined;
+    const effectiveAmount = editedAmount ?? existingTx.amount;
 
     const reverseDelta = -effectiveAccountImpact(existingTx, oldTarget);
     const applyDelta = effectiveAccountImpact(
-      { amount: existingTx.amount, category, creditPayment: existingTx.creditPayment, status: 'verified' },
+      { amount: effectiveAmount, category, creditPayment: existingTx.creditPayment, status: 'verified' },
       newTarget
     );
     const deltasByAccountId = new Map<string, number>();
     if (oldTarget) deltasByAccountId.set(oldTarget.id, (deltasByAccountId.get(oldTarget.id) ?? 0) + reverseDelta);
     if (newTarget) deltasByAccountId.set(newTarget.id, (deltasByAccountId.get(newTarget.id) ?? 0) + applyDelta);
 
+    // A date edit re-buckets the transaction into the pay period covering the new
+    // date (mirrors updateTransaction).
+    const editedPayPeriodId = overrides?.date
+      ? getPayPeriodForTransaction(overrides.date, householdSettings?.lastPaycheckDate)
+      : undefined;
+
     // 1. Update Transaction. Verifying resolves any Action-Queue snooze, so the
-    // stale marker doesn't linger on the doc.
+    // stale marker doesn't linger on the doc. Inline edits (amount/merchant/date)
+    // and clearing the `needsAmount` stub flag co-commit here in the same op.
     batch.update(doc(db, `households/${householdId}/transactions`, id), {
       category,
       status: 'verified',
       relatedHabitIds: relatedHabitIds || [],
-      ...(newAccountId ? { accountId: newAccountId } : {}),
+      // An explicit clear removes the tag; a new tag sets it; undefined leaves it.
+      ...(clearAccount ? { accountId: deleteField() } : newAccountId ? { accountId: newAccountId } : {}),
       ...(existingTx.reviewSnoozedUntil ? { reviewSnoozedUntil: deleteField() } : {}),
+      ...(editedAmount !== undefined ? { amount: editedAmount } : {}),
+      ...(overrides?.merchant !== undefined ? { merchant: overrides.merchant } : {}),
+      // Truthy guard (not `!== undefined`): a blank date must not write an
+      // undefined payPeriodId (WriteBatch.update throws on undefined). With the
+      // truthy guard, editedPayPeriodId is only computed when a date is present.
+      ...(overrides?.date ? { date: overrides.date, payPeriodId: editedPayPeriodId } : {}),
+      ...(overrides?.clearNeedsAmount ? { needsAmount: false } : {}),
     });
 
     // 1b. Apply the account-balance impact of the status/category transition in
@@ -2843,7 +2887,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
 
     toast.success('Verified & Categorized!');
-  }, [householdId, currentUser, habits, transactions, accounts]);
+  }, [householdId, currentUser, habits, transactions, accounts, householdSettings]);
 
   const updateTransaction = useCallback(async (id: string, updates: Partial<Transaction>, opts?: MutationOpts) => {
     if (!householdId) return;
@@ -2906,6 +2950,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       const sanitizedUpdates: Record<string, unknown> = { ...updates };
       if (sanitizedUpdates.store === undefined || sanitizedUpdates.store === '') {
         delete sanitizedUpdates.store;
+        // Clearing a store: omitting the field leaves the old value in
+        // Firestore, so a caller explicitly clearing a previously-set store
+        // (present `store` key with an empty/undefined value) must remove it
+        // with deleteField(). Callers that simply omit `store` are unaffected.
+        if ('store' in updates && !updates.store && transaction.store) {
+          sanitizedUpdates.store = deleteField();
+        }
       } else if (typeof sanitizedUpdates.store === 'string') {
         sanitizedUpdates.store = sanitizedUpdates.store.trim();
       }
@@ -2970,25 +3021,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       throw error;
     }
   }, [householdId, transactions, householdSettings, accounts]);
-
-  // Mark Apple Pay $0 stubs as already prompted (so the on-open awaiting-amount
-  // drawer won't re-surface them). Fire-and-forget per id via a single batch;
-  // failures are non-fatal (worst case the drawer re-pops once next open).
-  const markNeedsAmountPrompted = useCallback(async (ids: string[]) => {
-    if (!householdId || ids.length === 0) return;
-    try {
-      const batch = writeBatch(db);
-      const now = new Date().toISOString();
-      for (const id of ids) {
-        batch.update(doc(db, `households/${householdId}/transactions`, id), {
-          needsAmountPromptedAt: now,
-        });
-      }
-      await batch.commit();
-    } catch (error) {
-      console.error('[markNeedsAmountPrompted] Failed:', error);
-    }
-  }, [householdId]);
 
   const deleteTransaction = useCallback(async (id: string, opts?: MutationOpts) => {
     if (!householdId) return;
@@ -4666,7 +4698,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateTransaction,
     deleteTransaction,
     splitTransaction,
-    markNeedsAmountPrompted,
   }), [
     safeToSpend, safeToSpendBreakdown, accounts, buckets, calendarItems, transactions, currentPeriodId, bucketSpentMap, bucketHistory,
     transactionWindowStart, isLoadingOlderTransactions, hasMoreTransactions, loadOlderTransactions, loadAllTransactions,
@@ -4675,7 +4706,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addBucket, updateBucket, deleteBucket, updateBucketLimit, reallocateBucket,
     addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem,
     addTransaction, updateTransactionCategory, updateTransaction, deleteTransaction, splitTransaction,
-    markNeedsAmountPrompted,
   ]);
 
   const gamificationValue = useMemo<GamificationContextValue>(() => ({

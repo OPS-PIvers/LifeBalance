@@ -36,7 +36,10 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
     accounts: [] as unknown[],
   }),
   useShopping: () => ({
-    stores: [] as unknown[],
+    stores: [
+      { id: 's1', name: 'Test Store' },
+      { id: 's2', name: 'Costco' },
+    ] as unknown[],
   }),
 }));
 
@@ -121,6 +124,18 @@ describe('EditTransactionModal', () => {
     expect(screen.getByDisplayValue('Test Store')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Groceries')).toBeInTheDocument();
     expect(screen.getByDisplayValue('2024-05-20')).toBeInTheDocument();
+
+    // The Status select and the separate Store select were removed — Merchant
+    // is now the single field, backed by a datalist of known store names.
+    expect(screen.queryByLabelText(/status/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^store$/i)).not.toBeInTheDocument();
+    const merchantInput = screen.getByLabelText(/merchant/i);
+    expect(merchantInput).toHaveAttribute('list');
+    const datalistId = merchantInput.getAttribute('list')!;
+    const options = Array.from(document.getElementById(datalistId)?.querySelectorAll('option') ?? []).map(
+      (o) => o.getAttribute('value')
+    );
+    expect(options).toEqual(['Test Store', 'Costco']);
   });
 
   it('calls updateTransaction when save is clicked', async () => {
@@ -145,9 +160,74 @@ describe('EditTransactionModal', () => {
       amount: 75.50,
       merchant: 'Test Store',
       category: 'Groceries',
-      status: 'verified',
+      // Merchant exactly matches the "Test Store" store, so it resolves to
+      // that store's canonical name.
+      store: 'Test Store',
     }));
+    // Status is no longer editable here — it must not appear in the payload
+    // at all (the context is expected to leave it unchanged).
+    expect(mockUpdateTransaction.mock.calls[0]![1]).not.toHaveProperty('status');
     expect(mockOnClose).toHaveBeenCalled();
+  });
+
+  it('preserves the existing store when the edited merchant does not match a known store', async () => {
+    const user = userEvent.setup();
+    const transactionWithStore: Transaction = { ...mockTransaction, store: 'Original Store' };
+    render(
+      <EditTransactionModal
+        isOpen={true}
+        onClose={mockOnClose}
+        transaction={transactionWithStore}
+      />
+    );
+
+    const merchantInput = screen.getByLabelText(/merchant/i);
+    await user.clear(merchantInput);
+    await user.type(merchantInput, 'A Whole New Merchant');
+
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    expect(mockUpdateTransaction).toHaveBeenCalledWith('tx123', expect.objectContaining({
+      merchant: 'A Whole New Merchant',
+      store: 'Original Store',
+    }));
+  });
+
+  it('clears a stored store via the dismissible chip', async () => {
+    const user = userEvent.setup();
+    const txWithStore: Transaction = { ...mockTransaction, store: 'Costco' };
+    render(
+      <EditTransactionModal
+        isOpen={true}
+        onClose={mockOnClose}
+        transaction={txWithStore}
+      />
+    );
+
+    // The current store is surfaced as a dismissible chip.
+    expect(screen.getByText(/store: costco/i)).toBeInTheDocument();
+
+    // Dismiss it → the chip disappears and an explicit clear is armed.
+    await user.click(screen.getByRole('button', { name: /clear store costco/i }));
+    expect(screen.queryByText(/store: costco/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    // The payload carries an explicit `store: undefined` (present key) so the
+    // context maps it to deleteField(); it must NOT fall back to the old store.
+    const payload = mockUpdateTransaction.mock.calls[0]![1];
+    expect(payload).toHaveProperty('store', undefined);
+  });
+
+  it('does not show a store chip when the transaction has no store', () => {
+    render(
+      <EditTransactionModal
+        isOpen={true}
+        onClose={mockOnClose}
+        transaction={mockTransaction}
+      />
+    );
+    expect(screen.queryByText(/^store:/i)).not.toBeInTheDocument();
   });
 
   it('validates input before saving', async () => {

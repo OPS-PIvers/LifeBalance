@@ -20,7 +20,10 @@ const loadFeedbackModal = () => import('@/components/modals/FeedbackModal');
 const FeedbackModal = React.lazy(loadFeedbackModal);
 
 const TopToolbar: React.FC = () => {
-  const { safeToSpend } = useFinance();
+  const { safeToSpendBreakdown } = useFinance();
+  // Fall back to 0 while the breakdown hasn't been computed yet (matches the
+  // toolbar's prior initial render with the raw `safeToSpend` field).
+  const safeToSpend = safeToSpendBreakdown?.safeToSpend ?? 0;
   const { dailyPoints, weeklyPoints } = useGamification();
   const { household } = useHouseholdCore();
   const { currentUser } = useAuth();

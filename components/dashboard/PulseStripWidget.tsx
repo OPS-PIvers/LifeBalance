@@ -15,9 +15,10 @@ import Eyebrow from '@/components/ui/Eyebrow';
  * PulseStripWidget — the app's thesis metric, finally surfaced on Home.
  *
  * LifeBalance argues that money and habits move together; this strip puts the
- * week's three signals side by side so the user can read their balance at a
- * glance: points earned this week, money spent this week, and habit consistency
- * (share of today's habits done). The strongest active streak is still computed
+ * week's signals side by side so the user can read their balance at a glance:
+ * money spent this week and habit consistency (share of today's habits done).
+ * Weekly points are already shown in the always-mounted `TopToolbar`, so this
+ * strip doesn't duplicate them. The strongest active streak is still computed
  * — it keeps the strip visible when it's the only habits signal — but it is no
  * longer rendered here (DailyHabitsWidget shows per-habit streaks).
  *
@@ -28,7 +29,6 @@ import Eyebrow from '@/components/ui/Eyebrow';
 type SpendTrend = 'up' | 'down' | 'flat' | 'none';
 
 interface PulseMetrics {
-  weekPoints: number;
   weekSpend: number;
   spendTrend: SpendTrend;
   spendPercent: number;
@@ -40,21 +40,20 @@ interface PulseMetrics {
 
 // Tailwind's JIT can only see full, literal class names, so map a cell count to
 // a complete `grid-cols-N` string rather than building `grid-cols-${n}` (which
-// the purge would strip). Keys cover every count this widget can render (1-3).
+// the purge would strip). Keys cover every count this widget can render (1-2).
 const GRID_COLS_BY_COUNT: Record<number, string> = {
   1: 'grid-cols-1',
   2: 'grid-cols-2',
-  3: 'grid-cols-3',
 };
 
 export const PulseStripWidget: React.FC = React.memo(() => {
   const { thisWeekSpend, lastWeekSpend } = useDashboardTransactionStats();
-  const { habits, weeklyPoints } = useGamification();
+  const { habits } = useGamification();
   const { isModuleEnabled } = useModuleVisibility();
   const fmt = useFormatCurrency();
 
   // Plan 090 (graceful degradation): drop the Spent cell when money is off and
-  // the Points/Consistency cells when habits are off. The grid column count and
+  // the Consistency cell when habits are off. The grid column count and
   // `divide-x` dividers follow whichever cells actually render.
   const showSpend = isModuleEnabled('money');
   const showHabits = isModuleEnabled('habits');
@@ -93,7 +92,6 @@ export const PulseStripWidget: React.FC = React.memo(() => {
     }, 0);
 
     return {
-      weekPoints: weeklyPoints,
       weekSpend: thisWeekSpend,
       spendTrend,
       spendPercent,
@@ -102,7 +100,7 @@ export const PulseStripWidget: React.FC = React.memo(() => {
       consistencyPercent,
       topStreak,
     };
-  }, [thisWeekSpend, lastWeekSpend, habits, weeklyPoints]);
+  }, [thisWeekSpend, lastWeekSpend, habits]);
 
   // Stay quiet when none of the ENABLED modules have active content. This covers
   // both the "both domains off" case AND the degraded case where one domain is
@@ -110,8 +108,7 @@ export const PulseStripWidget: React.FC = React.memo(() => {
   // a zeroed strip just because the disabled domain has stale data.
   const hasSpendContent = showSpend && metrics.weekSpend > 0;
   const hasHabitsContent =
-    showHabits &&
-    (metrics.weekPoints > 0 || metrics.consistencyTotal > 0 || metrics.topStreak > 0);
+    showHabits && (metrics.consistencyTotal > 0 || metrics.topStreak > 0);
 
   if (!hasSpendContent && !hasHabitsContent) {
     return null;
@@ -119,7 +116,7 @@ export const PulseStripWidget: React.FC = React.memo(() => {
 
   // Cell count drives the grid column count (and the divider layout, since
   // `divide-x` only paints between siblings — no stray leading/trailing rule).
-  const cellCount = (showSpend ? 1 : 0) + (showHabits ? 2 : 0);
+  const cellCount = (showSpend ? 1 : 0) + (showHabits ? 1 : 0);
   const gridColsClass = GRID_COLS_BY_COUNT[cellCount] ?? 'grid-cols-1';
 
   const SpendTrendIcon =
@@ -140,21 +137,6 @@ export const PulseStripWidget: React.FC = React.memo(() => {
           gridColsClass
         )}
       >
-        {/* Points earned — the habit/gamification signal (warm) */}
-        {showHabits && (
-        <PulseCell label="Points">
-          <span className="stat-num text-2xl font-bold text-warm-600 dark:text-warm-300">
-            {metrics.weekPoints}
-          </span>
-          {/* No streak line here — DailyHabitsWidget just below shows per-habit
-              streaks; `metrics.topStreak` is retained solely for the
-              hasHabitsContent gate above. */}
-          <span className="mt-1 text-xs font-medium text-brand-400 dark:text-brand-500">
-            earned
-          </span>
-        </PulseCell>
-        )}
-
         {/* Spending — the money signal (evergreen) */}
         {showSpend && (
         <PulseCell label="Spent">

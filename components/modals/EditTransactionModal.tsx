@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { Trash2, Loader2, Copy } from 'lucide-react';
+import React, { useId, useState } from 'react';
+import { Trash2, Loader2, Copy, X } from 'lucide-react';
 import { Transaction } from '@/types/schema';
 import { useFinance, useShopping } from '@/contexts/FirebaseHouseholdContext';
 import { Drawer } from '@/components/ui/Drawer';
@@ -9,6 +9,8 @@ import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { buildTransactionCategoryOptions } from '@/utils/categories';
+import { resolveStoreName } from '@/utils/stores';
 import toast from 'react-hot-toast';
 
 interface EditTransactionModalProps {
@@ -21,6 +23,9 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
   const { updateTransaction, deleteTransaction, addTransaction, buckets, accounts } = useFinance();
   const { stores } = useShopping();
 
+  // Datalist id for the Merchant field's store-name autocomplete (see below).
+  const storeListId = useId();
+
   // Initialize the form fields from the transaction prop. Using lazy
   // initializers (rather than a post-mount effect) means the first render is
   // already populated; the prev-tracker below re-populates on later changes.
@@ -28,16 +33,33 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
   const [merchant, setMerchant] = useState(() => transaction?.merchant ?? '');
   const [category, setCategory] = useState(() => transaction?.category ?? '');
   const [subBucketId, setSubBucketId] = useState<string | undefined>(() => transaction?.subBucketId);
-  const [store, setStore] = useState(() => transaction?.store || '');
   const [accountId, setAccountId] = useState(() => transaction?.accountId || '');
   const [creditPayment, setCreditPayment] = useState(() => transaction?.creditPayment ?? false);
   const [date, setDate] = useState(() => transaction?.date ?? '');
-  const [status, setStatus] = useState<'verified' | 'pending_review'>(() => transaction?.status ?? 'verified');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  // Merging Store into Merchant removed the only way to intentionally clear a
+  // stored Store; this flag (set by dismissing the store chip below) requests
+  // an explicit clear on save, overriding the resolve/preserve fallback.
+  const [storeCleared, setStoreCleared] = useState(false);
 
   // Dynamic Categories from buckets
-  const dynamicCategories = [...buckets.map(b => b.name), 'Budgeted in Calendar'];
+  const dynamicCategories = buildTransactionCategoryOptions(buckets);
+
+  // Merchant now doubles as the Store field (the product owner flagged a
+  // separate lower-cased "store" dropdown as redundant with the free-text
+  // merchant name). A native <datalist> on the Merchant input still offers
+  // known store names for autocomplete. `resolveStore` derives the stored
+  // `Transaction.store` at save time: dismissing the store chip clears it;
+  // otherwise an exact (case-insensitive, trimmed) match against a known store
+  // snaps to that store's canonical name so the TransactionMasterList store
+  // filter keeps working, else the transaction's existing store value is left
+  // untouched rather than polluting it with free text. Returning `undefined`
+  // on an explicit clear removes the stored field (see updateTransaction).
+  const resolveStore = (merchantValue: string): string | undefined => {
+    if (storeCleared) return undefined;
+    return resolveStoreName(stores, merchantValue) ?? transaction?.store ?? undefined;
+  };
 
   // Find selected bucket and its sub-buckets
   const selectedBucket = buckets.find(b => b.name === category);
@@ -58,11 +80,10 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
       setMerchant(transaction.merchant);
       setCategory(transaction.category);
       setSubBucketId(transaction.subBucketId);
-      setStore(transaction.store || '');
       setAccountId(transaction.accountId || '');
       setCreditPayment(transaction.creditPayment ?? false);
       setDate(transaction.date);
-      setStatus(transaction.status);
+      setStoreCleared(false);
     }
   }
 
@@ -102,14 +123,18 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
         merchant: merchant.trim(),
         category,
         subBucketId: subBucketId || undefined,
-        store: store || undefined,
+        store: resolveStore(merchant),
         accountId: accountId || undefined,
         // Always pass the key so toggling Payment off on a credit transaction
         // clears the stored flag (the context removes a now-false flag via
         // deleteField). Undefined for non-credit accounts.
         creditPayment: isSelectedAccountCredit && creditPayment ? true : undefined,
         date,
-        status,
+        // Status is intentionally omitted — it stays whatever it was. Editing
+        // it here was a second, inconsistent path into the approve flow that
+        // could flip a transaction to 'verified' without going through the
+        // habit-linking/points logic (and could force-verify a $0
+        // needsAmount stub).
       });
 
       onClose();
@@ -171,7 +196,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
         source: 'manual',
         autoCategorized: transaction.autoCategorized ?? false,
         subBucketId: subBucketId || undefined,
-        store: store || undefined,
+        store: resolveStore(merchant),
         accountId: accountId || undefined
         // Let addTransaction handle ID and timestamps
       });
@@ -218,7 +243,37 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
           value={merchant}
           onChange={(e) => setMerchant(e.target.value)}
           placeholder="Store name"
+          list={storeListId}
+          autoComplete="off"
         />
+        {/* Known store names, offered as autocomplete on the Merchant field
+            above. Typing (or picking) an exact match snaps the transaction's
+            store to that canonical name on save; see resolveStore(). */}
+        <datalist id={storeListId}>
+          {stores.map((s) => (
+            <option key={s.id} value={s.name} />
+          ))}
+        </datalist>
+
+        {/* Merging Store into Merchant removed the way to intentionally clear a
+            stored Store, so surface it as a dismissible chip. Dismissing it
+            flags an explicit clear applied on save (resolveStore). */}
+        {transaction?.store && !storeCleared && (
+          <div className="-mt-2">
+            <span className="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full text-xs font-medium bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300">
+              Store: {transaction.store}
+              <button
+                type="button"
+                onClick={() => setStoreCleared(true)}
+                disabled={isSaving}
+                aria-label={`Clear store ${transaction.store}`}
+                className="p-0.5 rounded-full hover:bg-brand-200 dark:hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <X size={12} />
+              </button>
+            </span>
+          </div>
+        )}
 
         <Select
           id="edit-category"
@@ -254,37 +309,20 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
           </Select>
         )}
 
-        <div className="grid grid-cols-2 gap-4">
-          <Select
-            id="edit-store"
-            label="Store"
-            disabled={isSaving}
-            value={store}
-            onChange={(e) => setStore(e.target.value)}
-          >
-            <option value="">(None)</option>
-            {stores.map((s) => (
-              <option key={s.id} value={s.name}>
-                {s.name}
-              </option>
-            ))}
-          </Select>
-
-          <Select
-            id="edit-account"
-            label="Account"
-            disabled={isSaving}
-            value={accountId}
-            onChange={(e) => setAccountId(e.target.value)}
-          >
-            <option value="">(None)</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </Select>
-        </div>
+        <Select
+          id="edit-account"
+          label="Account"
+          disabled={isSaving}
+          value={accountId}
+          onChange={(e) => setAccountId(e.target.value)}
+        >
+          <option value="">(None)</option>
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
+        </Select>
 
         {isSelectedAccountCredit && (
           <div className="flex items-center justify-between p-4 bg-brand-50 dark:bg-brand-700/50 rounded-xl border border-brand-100 dark:border-brand-700">
@@ -315,17 +353,6 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
           value={date}
           onChange={(e) => setDate(e.target.value)}
         />
-
-        <Select
-          id="edit-status"
-          label="Status"
-          disabled={isSaving}
-          value={status}
-          onChange={(e) => setStatus(e.target.value as 'verified' | 'pending_review')}
-        >
-          <option value="verified">Verified</option>
-          <option value="pending_review">Pending Review</option>
-        </Select>
       </div>
 
       {/* Actions */}

@@ -14,9 +14,8 @@ import { cn } from '@/utils/cn';
  * elevated surface; this is a calm grouped-flat companion in the domain.
  *
  * The headline stays always visible; the itemized rows + disclaimer are
- * collapsed behind a "How is this calculated?" toggle by default, mirroring
- * the exact interaction language SafeToSpendHero uses on Home for the same
- * content.
+ * collapsed behind a "How is this calculated?" toggle by default — the app's
+ * standard show-the-work interaction language for this content.
  */
 export const SafeToSpendDetail: React.FC = () => {
   const { safeToSpendBreakdown: breakdown } = useFinance();

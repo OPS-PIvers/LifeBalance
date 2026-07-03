@@ -1,6 +1,6 @@
-import React, { useState, useMemo, memo, useRef } from 'react';
+import React, { useMemo, memo, useRef } from 'react';
 import {
-  CalendarClock, Receipt, Check, Trash2, Clock, ListTodo, AlertCircle, Sparkles, Pencil, Save, ChevronDown
+  CalendarClock, Receipt, Check, Trash2, Clock, ListTodo, AlertCircle
 } from 'lucide-react';
 import { motion, useMotionValue, useTransform, PanInfo } from 'framer-motion';
 import { format, parseISO, isBefore, addDays, isAfter, startOfToday, isValid } from 'date-fns';
@@ -9,18 +9,16 @@ import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import {
   ActionQueueItem, isCalendarQueueItem, isTodoQueueItem, isTransactionQueueItem
 } from '@/hooks/useActionQueue';
-import { HouseholdMember, BudgetBucket, Habit, Transaction, ToDo } from '@/types/schema';
-import { suggestHabitsForTransaction } from '@/utils/habitSuggestions';
+import { HouseholdMember, BudgetBucket, Transaction, ToDo } from '@/types/schema';
 import { suggestCategoryForTransaction } from '@/utils/actionQueueSmart';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { cn } from '@/utils/cn';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { haptic } from '@/utils/haptics';
-import Input from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import Eyebrow from '@/components/ui/Eyebrow';
 import { Drawer } from '@/components/ui/Drawer';
+import TransactionReviewForm from '@/components/transactions/TransactionReviewForm';
 
 // Swipe affordance background colors per theme (same pattern as ShoppingItemRow).
 const SWIPE_COLORS = {
@@ -50,16 +48,17 @@ interface ActionQueueItemProps {
   onSwipeApprove: (item: ActionQueueItem) => void;
   onSwipeDefer: (item: ActionQueueItem) => void;
 
-  // Data props passed down from parent to avoid consuming context
+  // Data props passed down from parent to avoid consuming context. `buckets` and
+  // `transactions` back the swipe pre-check (a category must be inferable before
+  // an instant approve); the transaction review drawer reads its own data
+  // (habits, mutations) directly from context.
   buckets: BudgetBucket[];
-  habits: Habit[];
   transactions: Transaction[];
   members: HouseholdMember[];
 
-  // Action props passed down from parent
-  updateTransactionCategory: (id: string, category: string, relatedHabitIds?: string[]) => Promise<void>;
-  updateTransaction: (id: string, updates: Partial<Transaction>) => Promise<void>;
-  deleteTransaction: (id: string) => Promise<void>;
+  // Action props passed down from parent. The transaction verify/edit/delete
+  // path now lives in TransactionReviewForm (context-driven), so only the
+  // calendar + todo branch handlers are passed here.
   updateToDo: (id: string, updates: Partial<ToDo>) => Promise<void>;
   deleteToDo: (id: string) => Promise<void>;
   completeToDo: (id: string) => Promise<void>;
@@ -97,22 +96,19 @@ const areActionQueueItemPropsEqual = (
       return false;
   }
 
-  // OPTIMIZATION: Buckets, Habits, and Transactions are ONLY used in the expanded view.
-  // If the item is collapsed (and staying collapsed), we can safely ignore changes to these large collections.
+  // OPTIMIZATION: Buckets and Transactions back the swipe pre-check, needed when
+  // the item can be swiped/reviewed. If the item is collapsed (and staying
+  // collapsed) we can safely ignore changes to these large collections.
   // This prevents the entire list from re-rendering when a single transaction is updated.
   if (next.isExpanded) {
     if (prev.buckets !== next.buckets ||
-        prev.habits !== next.habits ||
         prev.transactions !== next.transactions) {
         return false;
     }
   }
 
   // Check action handlers (should be stable if from context)
-  if (prev.updateTransactionCategory !== next.updateTransactionCategory ||
-      prev.updateTransaction !== next.updateTransaction ||
-      prev.deleteTransaction !== next.deleteTransaction ||
-      prev.updateToDo !== next.updateToDo ||
+  if (prev.updateToDo !== next.updateToDo ||
       prev.deleteToDo !== next.deleteToDo ||
       prev.completeToDo !== next.completeToDo ||
       prev.deferCalendarItem !== next.deferCalendarItem ||
@@ -149,38 +145,6 @@ const areActionQueueItemPropsEqual = (
   return true;
 };
 
-interface SelectableChipProps {
-  selected: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-  /** Small pulsing dot hinting a high-confidence suggestion (unselected state only). */
-  showSuggestionDot?: boolean;
-}
-
-/**
- * A single unified selection-chip treatment, shared by the habit-suggestion
- * chips and the budget-category chips below. Replaces the two competing
- * "selected" color/border languages that used to live in this file.
- */
-const SelectableChip: React.FC<SelectableChipProps> = ({ selected, onClick, children, showSuggestionDot }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={cn(
-      'relative px-3 py-1.5 rounded-btn text-xs font-semibold transition-colors duration-(--duration-fast) ease-(--ease-standard) inline-flex items-center gap-1',
-      selected
-        ? 'bg-accent-600 text-white'
-        : 'bg-white border border-brand-200 text-brand-600 hover:bg-brand-50 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-300 dark:hover:bg-brand-700'
-    )}
-  >
-    {selected && <Check size={12} strokeWidth={3} />}
-    {children}
-    {!selected && showSuggestionDot && (
-      <span className="absolute -top-1 -right-1 w-2 h-2 bg-warm-500 rounded-full motion-safe:animate-pulse" aria-hidden="true" />
-    )}
-  </button>
-);
-
 // Optimization: Memoized to prevent re-renders of unexpanded items when one item is expanded/collapsed.
 // We use isExpanded boolean instead of passing expandedId string to ensure stable props for unexpanded items.
 // Updated 2026-02-19: Accepts context values as props to avoid re-rendering on unrelated context updates.
@@ -193,12 +157,8 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
   onSwipeApprove,
   onSwipeDefer,
   buckets,
-  habits,
   transactions,
   members,
-  updateTransactionCategory,
-  updateTransaction,
-  deleteTransaction,
   updateToDo,
   deleteToDo,
   completeToDo,
@@ -207,18 +167,6 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
 }) => {
 
   const fmt = useFormatCurrency();
-  const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
-  const [showAllHabits, setShowAllHabits] = useState(false);
-
-  // Edit State
-  const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState({
-    merchant: '',
-    amount: '',
-    date: ''
-  });
-  const [editErrors, setEditErrors] = useState<{ amount?: string; merchant?: string }>({});
 
   // --- Swipe-to-triage gesture (right = approve/complete, left = defer) ---
   const x = useMotionValue(0);
@@ -246,7 +194,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
     if (info.offset.x > SWIPE_THRESHOLD) {
       haptic('light');
       // Transactions that can't be instant-approved fall back to the review
-      // panel via handleExpand (which also opens the edit form for $0 stubs).
+      // panel via handleExpand (which surfaces the amount field for $0 stubs).
       if (isTransactionQueueItem(item)) {
         if (item.needsAmount) {
           handleExpand();
@@ -333,102 +281,9 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
     );
   };
 
-  const handleExpand = () => {
-    setExpandedId(item.id);
-    if (isTransactionQueueItem(item)) {
-      // Initialize with existing habit associations
-      setSelectedHabitIds(item.relatedHabitIds || []);
-      // Initialize with current category
-      setSelectedCategory(item.category || '');
-      setShowAllHabits(false);
-      if (item.needsAmount) {
-        // Apple Pay $0 "awaiting amount" stub: open the edit form first (blank
-        // amount) so the user must enter the real amount before approving — the
-        // edit form's amount>0 validation prevents verifying a $0.
-        setEditForm({ merchant: item.merchant, amount: '', date: item.date });
-        setEditErrors({});
-        setIsEditing(true);
-      } else {
-        // Reset edit state
-        setIsEditing(false);
-      }
-    } else {
-      setSelectedHabitIds([]);
-      setSelectedCategory('');
-    }
-  };
+  const handleExpand = () => setExpandedId(item.id);
 
   const handleClose = () => setExpandedId(null);
-
-  const handleEdit = () => {
-    if (isTransactionQueueItem(item)) {
-        setEditForm({
-            merchant: item.merchant,
-            amount: item.amount.toString(),
-            date: item.date
-        });
-        setEditErrors({});
-        setIsEditing(true);
-    }
-  };
-
-  const handleSave = async () => {
-      if (!isTransactionQueueItem(item)) return;
-
-      const amount = parseFloat(editForm.amount);
-      const errors: { amount?: string; merchant?: string } = {};
-
-      if (isNaN(amount) || amount <= 0) {
-          errors.amount = "Please enter a valid amount";
-      }
-      if (!editForm.merchant.trim()) {
-          errors.merchant = "Merchant name is required";
-      }
-
-      if (Object.keys(errors).length > 0) {
-          setEditErrors(errors);
-          // Also surface via toast for sighted users
-          const firstError = errors.amount ?? errors.merchant ?? '';
-          toast.error(firstError);
-          return;
-      }
-
-      setEditErrors({});
-      try {
-          await updateTransaction(item.id, {
-              merchant: editForm.merchant,
-              amount: amount,
-              date: editForm.date,
-              // Entering a real amount resolves an Apple Pay "awaiting amount" stub.
-              ...(item.needsAmount ? { needsAmount: false } : {})
-          });
-          setIsEditing(false);
-          // Toast is handled by updateTransaction or we can add one here if needed,
-          // but updateTransaction already has a success toast.
-      } catch (error) {
-          console.error("Failed to update transaction", error);
-      }
-  };
-
-  const handleDelete = () => {
-      if (!isTransactionQueueItem(item)) return;
-
-      showDeleteConfirmation(async () => {
-          await deleteTransaction(item.id);
-          setExpandedId(null);
-      });
-  };
-
-  // Smart habit suggestions for transactions
-  const suggestedHabits = useMemo(() => {
-    if (!isTransactionQueueItem(item)) return [];
-    return suggestHabitsForTransaction(
-      item.merchant,
-      habits,
-      transactions,
-      5 // Show top 5 suggestions
-    );
-  }, [item, habits, transactions]);
 
   // Compute icon and styles only when item type changes
   const { iconComponent, iconClasses } = useMemo(() => {
@@ -454,12 +309,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
 
   const drawerTitle = isCalendarQueueItem(item) || isTodoQueueItem(item)
     ? 'Actions'
-    : isEditing
-    ? 'Edit Transaction'
-    : 'Select Category';
-
-  const lowConfidenceHabits = suggestedHabits.filter(s => s.confidence === 'low');
-  const remainingLowConfidenceHabits = lowConfidenceHabits.filter(s => !selectedHabitIds.includes(s.habit.id));
+    : 'Review Transaction';
 
   const approveLabel = isTodoQueueItem(item) ? 'Complete'
     : isTransactionQueueItem(item) && item.needsAmount ? 'Add amount'
@@ -723,197 +573,11 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
              </div>
           </div>
         ) : (
-          /* Transaction Queue Item */
-          isEditing ? (
-            <div className="space-y-3">
-                <Input
-                  label="Merchant"
-                  value={editForm.merchant}
-                  onChange={e => setEditForm({...editForm, merchant: e.target.value})}
-                  error={editErrors.merchant}
-                />
-                <div className="flex gap-2">
-                  <Input
-                      label="Amount"
-                      type="number"
-                      inputMode="decimal"
-                      step="0.01"
-                      value={editForm.amount}
-                      onChange={e => setEditForm({...editForm, amount: e.target.value})}
-                      icon={<span className="text-brand-400 dark:text-brand-500 font-bold">$</span>}
-                      error={editErrors.amount}
-                  />
-                  <Input
-                      label="Date"
-                      type="date"
-                      value={editForm.date}
-                      onChange={e => setEditForm({...editForm, date: e.target.value})}
-                  />
-                </div>
-                <div className="flex gap-2 pt-2">
-                    <Button variant="ghost" className="flex-1" onClick={() => setIsEditing(false)}>
-                        Cancel
-                    </Button>
-                    <Button variant="primary" className="flex-1" onClick={handleSave} leftIcon={<Save size={16}/>}>
-                        Save Changes
-                    </Button>
-                </div>
-            </div>
-          ) : (
-            /* Transaction Category & Habit Selector */
-            <div className="space-y-3">
-              {/* Habits Section - Smart Suggestions */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-1.5">
-                  <Eyebrow as="p" className="text-xxs">Connect Habits</Eyebrow>
-                  {suggestedHabits.some(s => s.confidence !== 'low') && (
-                    <Sparkles size={10} className="text-warm-500" />
-                  )}
-                </div>
-                {habits.length === 0 && <p className="text-xs text-brand-400 dark:text-brand-500 italic">No habits found. Create some in Habits tab.</p>}
-
-                {habits.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {/* Show suggested habits first */}
-                    {suggestedHabits
-                      .filter(s => s.confidence === 'high' || s.confidence === 'medium')
-                      .map(({ habit, confidence }) => {
-                        const isSelected = selectedHabitIds.includes(habit.id);
-                        return (
-                          <SelectableChip
-                            key={habit.id}
-                            selected={isSelected}
-                            showSuggestionDot={confidence === 'high'}
-                            onClick={() => {
-                              setSelectedHabitIds(prev =>
-                                isSelected
-                                  ? prev.filter(id => id !== habit.id)
-                                  : [...prev, habit.id]
-                              );
-                            }}
-                          >
-                            {habit.title}
-                          </SelectableChip>
-                        );
-                      })}
-
-                    {/* Low-confidence habits already selected stay visible even
-                        when "Show more" is collapsed. */}
-                    {lowConfidenceHabits
-                      .filter(s => selectedHabitIds.includes(s.habit.id))
-                      .map(({ habit }) => (
-                        <SelectableChip
-                          key={habit.id}
-                          selected
-                          onClick={() => setSelectedHabitIds(prev => prev.filter(id => id !== habit.id))}
-                        >
-                          {habit.title}
-                        </SelectableChip>
-                      ))}
-
-                    {/* Remaining low-confidence habits, revealed via a plain
-                        toggle button (matches the app's chevron-expand
-                        language elsewhere instead of a native <details>). */}
-                    {showAllHabits && remainingLowConfidenceHabits.map(({ habit }) => (
-                      <SelectableChip
-                        key={habit.id}
-                        selected={false}
-                        onClick={() => setSelectedHabitIds(prev => [...prev, habit.id])}
-                      >
-                        {habit.title}
-                      </SelectableChip>
-                    ))}
-
-                    {remainingLowConfidenceHabits.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setShowAllHabits(prev => !prev)}
-                        aria-expanded={showAllHabits}
-                        className="px-3 py-1.5 rounded-btn text-xs font-semibold bg-white border border-brand-200 text-brand-500 hover:bg-brand-50 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-400 dark:hover:bg-brand-700 inline-flex items-center gap-1"
-                      >
-                        {showAllHabits ? 'Show less' : `+ More (${remainingLowConfidenceHabits.length})`}
-                        <ChevronDown
-                          size={12}
-                          className={cn('transition-transform duration-(--duration-fast) ease-(--ease-standard)', showAllHabits && 'rotate-180')}
-                        />
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Categories Section */}
-              <div className="space-y-2">
-                <Eyebrow as="p" className="text-xxs">Budget Category</Eyebrow>
-                <div className="flex flex-wrap gap-2">
-                  {buckets.map(bucket => (
-                    <SelectableChip
-                      key={bucket.id}
-                      selected={selectedCategory === bucket.name}
-                      onClick={() => setSelectedCategory(bucket.name)}
-                    >
-                      {bucket.name}
-                    </SelectableChip>
-                  ))}
-                  <SelectableChip
-                    selected={selectedCategory === 'Budgeted in Calendar'}
-                    onClick={() => setSelectedCategory('Budgeted in Calendar')}
-                  >
-                    Budgeted in Calendar
-                  </SelectableChip>
-                </div>
-              </div>
-
-              {/* Approve Button */}
-              <Button
-                variant="success"
-                size="lg"
-                onClick={async () => {
-                  if (!selectedCategory) {
-                    toast.error('Please select a category');
-                    return;
-                  }
-                  try {
-                    await updateTransactionCategory(item.id, selectedCategory, selectedHabitIds);
-                    toast.success('Transaction approved!');
-                    setExpandedId(null);
-                    setSelectedHabitIds([]);
-                    setSelectedCategory('');
-                  } catch (error) {
-                    console.error('Failed to approve transaction:', error);
-                    toast.error('Failed to approve transaction');
-                  }
-                }}
-                disabled={!selectedCategory}
-                className="w-full py-3"
-                leftIcon={<Check size={18} strokeWidth={3} />}
-              >
-                Approve Transaction
-              </Button>
-
-              {/* Edit/Delete Actions */}
-              <div className="flex gap-2 pt-1 border-t border-brand-200 dark:border-brand-700 mt-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="flex-1 text-xs"
-                    leftIcon={<Pencil size={14}/>}
-                    onClick={handleEdit}
-                  >
-                      Edit Details
-                  </Button>
-                  <Button
-                    variant="ghost-danger"
-                    size="sm"
-                    className="flex-1 text-xs"
-                    leftIcon={<Trash2 size={14}/>}
-                    onClick={handleDelete}
-                  >
-                      Delete
-                  </Button>
-              </div>
-            </div>
-          )
+          /* Transaction review — shared form (verify + inline edit + habits + delete) */
+          <TransactionReviewForm
+            transaction={item}
+            onDone={() => setExpandedId(null)}
+          />
         )}
       </Drawer>
     </div>

@@ -39,7 +39,7 @@ export const ShoppingItemForm: React.FC<ShoppingItemFormProps> = ({ item, onChan
                 value={item.name}
                 onChange={handleFieldChange}
             />
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 [&>*]:min-w-0">
                  <Select
                     label="Category"
                     name="category"

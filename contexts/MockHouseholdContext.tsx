@@ -74,7 +74,7 @@ const SEED_TRANSACTIONS: Transaction[] = [
   // pending_review transaction adds a "pending review" badge to the Money nav
   // link (changing its accessible name) and the e2e smoke test matches the nav
   // link by exact name "Money"; a stub here breaks that. The stub flow is
-  // covered by AwaitingAmountDrawer.test.tsx + the quickAdd function tests.
+  // covered by ReviewPendingDrawer.test.tsx + the quickAdd function tests.
 ];
 
 const SEED_HABITS: Habit[] = [
@@ -335,6 +335,44 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const updateTransaction = useCallback(async (id: string, updates: Partial<Transaction>) => {
     setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
     toast.success('Mock: Transaction updated');
+  }, []);
+
+  // Test-Mode parity for the verify action: mark the transaction verified under
+  // `category`, optionally (re)tag the account, and co-apply the same inline
+  // `overrides` (amount/merchant/date + clearing the needsAmount stub flag) the
+  // real context accepts. Related habits get a simple count bump (mirrors the
+  // mock's toggleHabit); the mock keeps balances/points intentionally minimal.
+  const updateTransactionCategory = useCallback(async (
+    id: string,
+    category: string,
+    relatedHabitIds?: string[],
+    accountId?: string | null,
+    overrides?: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean },
+  ) => {
+    const clearAccount = accountId === null;
+    setTransactions(prev => prev.map(t => {
+      if (t.id !== id) return t;
+      const next: Transaction = {
+        ...t,
+        category,
+        status: 'verified' as const,
+        relatedHabitIds: relatedHabitIds ?? [],
+        ...(accountId ? { accountId } : {}),
+        ...(overrides?.amount !== undefined ? { amount: overrides.amount } : {}),
+        ...(overrides?.merchant !== undefined ? { merchant: overrides.merchant } : {}),
+        ...(overrides?.date ? { date: overrides.date } : {}),
+        ...(overrides?.clearNeedsAmount ? { needsAmount: false } : {}),
+      };
+      // `null` explicitly clears a previously-tagged account.
+      if (clearAccount) delete next.accountId;
+      return next;
+    }));
+    if (relatedHabitIds && relatedHabitIds.length > 0) {
+      setHabits(prev => prev.map(h => relatedHabitIds.includes(h.id)
+        ? { ...h, count: h.count + 1, totalCount: h.totalCount + 1 }
+        : h));
+    }
+    toast.success('Mock: Verified & Categorized!');
   }, []);
 
   const deleteTransaction = useCallback(async (id: string) => {
@@ -885,13 +923,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     reallocateBucket: noOp,
     addTransaction,
     updateTransaction,
-    updateTransactionCategory: noOp,
+    updateTransactionCategory,
     deleteTransaction,
     splitTransaction,
-    markNeedsAmountPrompted: async (ids: string[]) => {
-      const now = new Date().toISOString();
-      setTransactions(prev => prev.map(t => ids.includes(t.id) ? { ...t, needsAmountPromptedAt: now } : t));
-    },
     addCalendarItem,
     updateCalendarItem,
     deleteCalendarItem,

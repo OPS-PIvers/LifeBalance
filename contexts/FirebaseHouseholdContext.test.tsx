@@ -549,6 +549,87 @@ describe('FirebaseHouseholdContext — verified-only balance (Plan 015)', () => 
       expect(accOps).toHaveLength(1);
       expect(accOps[0]!.data!['balance']).toEqual({ __increment: 5000 });
     });
+
+    it('applies an amount override for a $0 needsAmount stub: debits the entered amount exactly once, in one batch', async () => {
+      renderProvider();
+      seed([baseTx({
+        id: 'tx1', amount: 0, merchant: 'Shell', category: 'Uncategorized',
+        status: 'pending_review', needsAmount: true,
+      })]);
+
+      await act(async () => {
+        await captured.value!.finance.updateTransactionCategory('tx1', 'Groceries', [], undefined, {
+          amount: 4550,
+          merchant: 'Shell Gas',
+          date: '2026-06-12',
+          clearNeedsAmount: true,
+        });
+      });
+
+      expect(batches).toHaveLength(1);
+      const batch = batches[0]!;
+      expect(batch.committed).toBe(true);
+      // The verify co-commits the inline edit (amount/merchant/date) + clears the
+      // stub flag in the SAME transaction op.
+      const txOps = opsForPath(batch, `${householdPath}/transactions/tx1`);
+      expect(txOps).toHaveLength(1);
+      expect(txOps[0]!.data).toMatchObject({
+        category: 'Groceries',
+        status: 'verified',
+        amount: 4550,
+        merchant: 'Shell Gas',
+        date: '2026-06-12',
+        needsAmount: false,
+      });
+      // The stub's stored amount was 0 (reverse 0), so the checking debit is the
+      // entered amount, applied exactly once.
+      const accOps = accountOps(batch);
+      expect(accOps).toHaveLength(1);
+      expect(accOps[0]!.data!['balance']).toEqual({ __increment: -4550 });
+    });
+
+    it('explicit account clear (null): removes the accountId tag and routes the impact to checking', async () => {
+      renderProvider();
+      // Two accounts: checking (the fallback) + savings (the current tag).
+      emitCollection(`${householdPath}/accounts`, [
+        docSnap('acc1', checking),
+        docSnap('acc2', {
+          id: 'acc2', name: 'Savings', type: 'savings', balance: 50000,
+          lastUpdated: new Date().toISOString(),
+        } as Account),
+      ]);
+      emitDoc(householdPath, HOUSEHOLD_ID, {
+        memberUids: ['user1'],
+        points: { daily: 0, weekly: 0, total: 0 },
+      });
+      emitCollection(`${householdPath}/members`, [
+        docSnap('user1', { uid: 'user1', points: { daily: 0, weekly: 0, total: 0 } }),
+      ]);
+      emitCollection(`${householdPath}/transactions`, [
+        docSnap('tx1', baseTx({
+          id: 'tx1', amount: 2500, category: 'Dining',
+          status: 'pending_review', accountId: 'acc2',
+        })),
+      ]);
+
+      await act(async () => {
+        // `null` = explicit clear of the savings tag.
+        await captured.value!.finance.updateTransactionCategory('tx1', 'Groceries', [], null);
+      });
+
+      const batch = batches[0]!;
+      const txOps = opsForPath(batch, `${householdPath}/transactions/tx1`);
+      expect(txOps).toHaveLength(1);
+      expect(txOps[0]!.data).toMatchObject({ category: 'Groceries', status: 'verified' });
+      // The stored tag is removed via deleteField() (mocked to '__deleteField').
+      expect(txOps[0]!.data!['accountId']).toBe('__deleteField');
+      // The verify impact lands on checking (the fallback), not savings.
+      const accOps = accountOps(batch);
+      expect(accOps).toHaveLength(1);
+      expect(accOps[0]!.data!['balance']).toEqual({ __increment: -2500 });
+      // Savings (the old tag) is not written — a pending row's reverse delta is 0.
+      expect(opsForPath(batch, `${householdPath}/accounts/acc2`)).toHaveLength(0);
+    });
   });
 
   describe('updateTransaction', () => {

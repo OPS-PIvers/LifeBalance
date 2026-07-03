@@ -39,9 +39,6 @@ vi.mock('@/hooks/useActionQueue', () => ({
 
 // Gated single-domain widgets — stub to identifiable text so the visibility
 // gating is observable regardless of their self-null-on-empty-data behavior.
-vi.mock('@/components/dashboard/SafeToSpendHero', () => ({
-  SafeToSpendHero: () => <div>STS_HERO</div>,
-}));
 vi.mock('@/components/dashboard/DailyHabitsWidget', () => ({
   DailyHabitsWidget: () => <div>DAILY_HABITS</div>,
 }));
@@ -59,8 +56,10 @@ vi.mock('@/components/dashboard/ActivityFeedWidget', () => ({
 vi.mock('@/components/dashboard/KidsChoresWidget', () => ({
   KidsChoresWidget: () => null,
 }));
+// Stubbed to identifiable text (rather than null) so the queue-reordering
+// tests below can assert its position relative to the Action Queue section.
 vi.mock('@/components/dashboard/CreditCardActivityWidget', () => ({
-  CreditCardActivityWidget: () => null,
+  CreditCardActivityWidget: () => <div>CREDIT_CARD_WIDGET</div>,
 }));
 vi.mock('@/components/dashboard/ActionQueueItem', () => ({
   ActionQueueItemCard: ({ item }: { item: { id: string } }) => (
@@ -102,17 +101,15 @@ describe('Dashboard module visibility (Plan 090)', () => {
     setEnabledModules(['habits', 'money', 'plan', 'todos', 'meals', 'shopping']);
   });
 
-  it('shows SafeToSpendHero, trends button, and DailyHabitsWidget when both domains are on', () => {
+  it('shows the trends button and DailyHabitsWidget when both domains are on', () => {
     renderDashboard();
-    expect(screen.getByText('STS_HERO')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: TRENDS_LABEL })).toBeInTheDocument();
     expect(screen.getByText('DAILY_HABITS')).toBeInTheDocument();
   });
 
-  it('hides SafeToSpendHero and the trends button when money is off', () => {
+  it('hides the trends button when money is off', () => {
     setEnabledModules(['habits']);
     renderDashboard();
-    expect(screen.queryByText('STS_HERO')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: TRENDS_LABEL })).not.toBeInTheDocument();
     // Habits widget stays.
     expect(screen.getByText('DAILY_HABITS')).toBeInTheDocument();
@@ -123,7 +120,6 @@ describe('Dashboard module visibility (Plan 090)', () => {
     renderDashboard();
     expect(screen.queryByText('DAILY_HABITS')).not.toBeInTheDocument();
     // Money widgets stay.
-    expect(screen.getByText('STS_HERO')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: TRENDS_LABEL })).toBeInTheDocument();
   });
 });
@@ -166,5 +162,36 @@ describe('Dashboard action queue cap', () => {
     // Leaving selection mode restores the cap.
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(screen.getAllByTestId('queue-item')).toHaveLength(6);
+  });
+});
+
+describe('Dashboard action queue position', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setEnabledModules(['habits', 'money', 'plan', 'todos', 'meals', 'shopping']);
+  });
+
+  it('renders the Action Queue above the widgets when it has items', () => {
+    queueItems = [{ id: 'q-0' }];
+    renderDashboard();
+    const queueHeading = screen.getByText(/Action Queue/);
+    const creditCardWidget = screen.getByText('CREDIT_CARD_WIDGET');
+    // DOCUMENT_POSITION_FOLLOWING on creditCardWidget relative to queueHeading
+    // means queueHeading comes first in the DOM.
+    expect(
+      queueHeading.compareDocumentPosition(creditCardWidget) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it('keeps the "All caught up" Action Queue below the widgets when empty', () => {
+    queueItems = [];
+    renderDashboard();
+    const queueHeading = screen.getByText('Action Queue');
+    const creditCardWidget = screen.getByText('CREDIT_CARD_WIDGET');
+    // DOCUMENT_POSITION_PRECEDING on creditCardWidget relative to queueHeading
+    // means queueHeading comes after in the DOM.
+    expect(
+      queueHeading.compareDocumentPosition(creditCardWidget) & Node.DOCUMENT_POSITION_PRECEDING
+    ).toBeTruthy();
   });
 });
