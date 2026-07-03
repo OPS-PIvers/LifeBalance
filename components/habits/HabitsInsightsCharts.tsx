@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useFinance, useGamification } from '@/contexts/FirebaseHouseholdContext';
 import {
   ResponsiveContainer,
@@ -7,6 +7,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
 import { CustomTooltip } from '@/components/analytics/CustomTooltip';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import {
   calculateHabitConsistency,
   calculateHeatmapData,
@@ -24,7 +25,22 @@ import {
  * Chart palette is the redesign evergreen/warm ramp (gradients are permitted
  * only inside data-viz per the spec). The Pulse charts (effort-vs-spending +
  * week-over-week) were relocated here when the Analytics modal was retired.
+ *
+ * A `SegmentedControl` gates which single chart is mounted at a time (instead
+ * of stacking all four ~256px charts), so the tab reads as one focused view
+ * with a picker rather than a long scroll. All four `useMemo` computations
+ * still run unconditionally — they're cheap, and keeping them un-gated keeps
+ * this diff minimal and avoids re-computing on every tab switch.
  */
+
+type InsightsChartId = 'effort' | 'weekly' | 'balance' | 'consistency';
+
+const CHART_OPTIONS: { value: InsightsChartId; label: string }[] = [
+  { value: 'effort', label: 'Effort' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'balance', label: 'Balance' },
+  { value: 'consistency', label: 'Consistency' },
+];
 
 // Evergreen heatmap ramp (replaces the generic slate→emerald set).
 const HEATMAP_RAMP = ['#e3e0d8', '#b3cdbd', '#84ad97', '#356f54', '#214636'] as const;
@@ -36,6 +52,7 @@ const GRID_STROKE = 'rgba(168,163,153,0.25)';
 const HabitsInsightsCharts: React.FC = () => {
   const { habits } = useGamification();
   const { transactions } = useFinance();
+  const [activeChart, setActiveChart] = useState<InsightsChartId>('effort');
 
   const radarData = useMemo(() => calculateHabitConsistency(habits), [habits]);
   const heatmapData = useMemo(() => calculateHeatmapData(habits), [habits]);
@@ -52,7 +69,15 @@ const HabitsInsightsCharts: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <SegmentedControl
+        name="Insights chart"
+        value={activeChart}
+        onChange={setActiveChart}
+        options={CHART_OPTIONS}
+      />
+
       {/* Effort vs spending — the cross-domain thesis chart (points bar + spend line) */}
+      {activeChart === 'effort' && (
       <div className="surface-section p-6">
         <h3 className="font-display text-sm font-semibold text-brand-800 dark:text-brand-100 mb-1">
           Effort vs. spending
@@ -96,8 +121,10 @@ const HabitsInsightsCharts: React.FC = () => {
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
       {/* Week-over-week points */}
+      {activeChart === 'weekly' && (
       <div className="surface-section p-6">
         <h3 className="font-display text-sm font-semibold text-brand-800 dark:text-brand-100 mb-1">
           This week vs. last
@@ -118,8 +145,10 @@ const HabitsInsightsCharts: React.FC = () => {
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
       {/* Category balance radar */}
+      {activeChart === 'balance' && (
       <div className="surface-section p-6">
         <h3 className="font-display text-sm font-semibold text-brand-800 dark:text-brand-100 mb-2">
           Category balance
@@ -149,8 +178,10 @@ const HabitsInsightsCharts: React.FC = () => {
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
       {/* Consistency heatmap */}
+      {activeChart === 'consistency' && (
       <div className="surface-section p-6">
         <h3 className="font-display text-sm font-semibold text-brand-800 dark:text-brand-100 mb-1">
           Consistency heatmap
@@ -185,6 +216,7 @@ const HabitsInsightsCharts: React.FC = () => {
           <span>More</span>
         </div>
       </div>
+      )}
     </div>
   );
 };

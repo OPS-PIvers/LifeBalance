@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Insight, ModuleKey } from '@/types/schema';
 import { InsightWidget } from './InsightWidget';
@@ -82,6 +82,16 @@ describe('InsightWidget (Plan 090 degradation)', () => {
     setEnabledModules([]); // everything off
     render(<InsightWidget onOpenArchive={noop} />);
     expect(screen.getByText(`“${text}”`)).toBeInTheDocument();
+  });
+
+  it('opens the archive from the demoted History text link', () => {
+    const text = 'Welcome to your household.';
+    setInsight(text, makeInsight({ text, type: 'general' }));
+    const onOpenArchive = vi.fn();
+    render(<InsightWidget onOpenArchive={onOpenArchive} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'History' }));
+    expect(onOpenArchive).toHaveBeenCalledTimes(1);
   });
 
   it('drops a money action pill when money is off but keeps the (general) insight', () => {

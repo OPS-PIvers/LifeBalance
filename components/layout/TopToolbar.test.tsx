@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import TopToolbar from './TopToolbar';
@@ -21,19 +21,36 @@ vi.mock('@/hooks/useFormatCurrency', () => ({
   useFormatCurrency: () => (n: number) => `$${n}`,
 }));
 
-// Keep the lazy FeedbackModal + preload off the test path.
+// Keep the lazy FeedbackModal + preload off the test path, but still render
+// `children` when `when` is true so the feedback-open flow is observable.
 vi.mock('@/utils/preloadOnIdle', () => ({
   preloadOnIdle: () => () => {},
 }));
 vi.mock('@/components/ui/LazyMount', () => ({
-  LazyMount: () => null,
+  LazyMount: ({ when, children }: { when: boolean; children: React.ReactNode }) =>
+    when ? <>{children}</> : null,
 }));
 vi.mock('@/components/modals/FeedbackModal', () => ({
-  default: () => null,
+  default: ({ isOpen }: { isOpen: boolean }) =>
+    isOpen ? <div data-testid="feedback-modal" /> : null,
 }));
-// ProfileMenu pulls in heavy deps; the toolbar visibility logic doesn't need it.
+// ProfileMenu pulls in heavy deps; the toolbar visibility logic doesn't need
+// its full implementation, but it does need to expose the "Send Feedback"
+// menu item so the toolbar's feedback-open wiring is testable.
 vi.mock('./ProfileMenu', () => ({
-  default: () => null,
+  default: ({
+    isOpen,
+    onSendFeedback,
+  }: {
+    isOpen: boolean;
+    onClose: () => void;
+    onSendFeedback?: () => void;
+  }) =>
+    isOpen ? (
+      <div data-testid="profile-menu">
+        <button onClick={onSendFeedback}>Send Feedback</button>
+      </div>
+    ) : null,
 }));
 
 // Module visibility (Plan 090): mocked so each test chooses enabled modules.
@@ -90,12 +107,33 @@ describe('TopToolbar', () => {
     expect(screen.getByRole('button', { name: STS_LABEL })).toBeInTheDocument();
   });
 
-  it('shows only Feedback + Profile when both money and habits are off', () => {
+  it('shows only Profile when both money and habits are off (Feedback lives in the Profile menu)', () => {
     setEnabledModules([]);
     renderToolbar();
     expect(screen.queryByRole('button', { name: STS_LABEL })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: REWARDS_LABEL })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: FEEDBACK_LABEL })).toBeInTheDocument();
+    // No standalone header Feedback button anymore.
+    expect(screen.queryByRole('button', { name: FEEDBACK_LABEL })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: PROFILE_LABEL })).toBeInTheDocument();
+  });
+
+  it('opens the Feedback modal via the Profile menu', async () => {
+    renderToolbar();
+
+    // Feedback modal is not mounted until opened.
+    expect(screen.queryByTestId('feedback-modal')).not.toBeInTheDocument();
+    // Profile menu starts closed.
+    expect(screen.queryByTestId('profile-menu')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: PROFILE_LABEL }));
+    expect(screen.getByTestId('profile-menu')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: FEEDBACK_LABEL }));
+
+    // FeedbackModal is `React.lazy`-loaded, so it resolves asynchronously
+    // even with the module mocked.
+    await waitFor(() => {
+      expect(screen.getByTestId('feedback-modal')).toBeInTheDocument();
+    });
   });
 });

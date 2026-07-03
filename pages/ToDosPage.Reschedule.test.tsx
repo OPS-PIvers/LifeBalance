@@ -51,6 +51,7 @@ vi.mock('lucide-react', () => ({
   MoreHorizontal: () => <div data-testid="more-horizontal-icon" />,
   ClipboardList: () => <div data-testid="clipboard-list-icon" />,
   SlidersHorizontal: () => <div data-testid="sliders-icon" />,
+  ChevronDown: () => <div data-testid="chevron-down-icon" />,
 }));
 
 describe('ToDosPage Reschedule Features', () => {

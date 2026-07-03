@@ -1,9 +1,23 @@
-import React, { useRef } from 'react';
-import { Camera, Upload, Type, Shield } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { Camera, Upload, Type, Shield, X } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { CaptureMagicAction } from './CaptureMagicAction';
 import type { MagicActionResponse } from '@/services/geminiService.types';
 import toast from 'react-hot-toast';
+
+// One-time-per-session PII disclaimer: shown until the user explicitly
+// dismisses it, then suppressed for the rest of the browser session. Never
+// auto-set on mere render — only the explicit dismiss writes the key.
+const PII_NOTICE_KEY = 'lifebalance_pii_notice_seen';
+
+/** Lazily read sessionStorage, guarding against jsdom/private-mode throws. */
+const readPiiNoticeSeen = (): boolean => {
+  try {
+    return sessionStorage.getItem(PII_NOTICE_KEY) !== null;
+  } catch {
+    return false;
+  }
+};
 
 interface CaptureMenuProps {
   onScan: () => void;
@@ -25,6 +39,16 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
   onMagicSuccess
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [piiNoticeSeen, setPiiNoticeSeen] = useState(readPiiNoticeSeen);
+
+  const dismissPiiNotice = () => {
+    try {
+      sessionStorage.setItem(PII_NOTICE_KEY, '1');
+    } catch {
+      // Ignore — worst case the notice reappears next render, which is safe.
+    }
+    setPiiNoticeSeen(true);
+  };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -52,12 +76,22 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
 
-      <div className="bg-brand-50 dark:bg-brand-700/40 p-3 rounded-xl border border-brand-200 dark:border-brand-700 flex items-start gap-3">
-        <Shield size={16} className="text-brand-500 dark:text-brand-400 mt-0.5 shrink-0" />
-        <p className="text-xs text-brand-600 dark:text-brand-300">
-          <strong>AI Processing:</strong> Avoid capturing PII like full names or card numbers.
-        </p>
-      </div>
+      {!piiNoticeSeen && (
+        <div className="bg-brand-50 dark:bg-brand-700/40 p-3 rounded-xl border border-brand-200 dark:border-brand-700 flex items-start gap-3">
+          <Shield size={16} className="text-brand-500 dark:text-brand-400 mt-0.5 shrink-0" />
+          <p className="text-xs text-brand-600 dark:text-brand-300 flex-1">
+            <strong>AI Processing:</strong> Avoid capturing PII like full names or card numbers.
+          </p>
+          <button
+            type="button"
+            onClick={dismissPiiNotice}
+            aria-label="Dismiss PII notice"
+            className="shrink-0 min-w-11 min-h-11 flex items-center justify-center text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-full"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       <CaptureMagicAction
         householdId={householdId}
@@ -74,10 +108,10 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
         </div>
         <div className="text-left flex-1">
           <span className="font-bold text-brand-900 dark:text-brand-100 block">Scan Receipt</span>
-          <span className="text-xs text-brand-500 dark:text-brand-400">Take a photo of your receipt</span>
         </div>
         <Badge variant="warning" size="sm">
           REVIEW
+          <span className="sr-only">: shows in Action Queue before affecting your budget</span>
         </Badge>
       </button>
 
@@ -94,6 +128,7 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
         </div>
         <Badge variant="warning" size="sm">
           REVIEW
+          <span className="sr-only">: shows in Action Queue before affecting your budget</span>
         </Badge>
       </button>
 
@@ -106,10 +141,10 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
         </div>
         <div className="text-left flex-1">
           <span className="font-bold text-brand-900 dark:text-brand-100 block">Manual Entry</span>
-          <span className="text-xs text-brand-500 dark:text-brand-400">Enter transaction details directly</span>
         </div>
         <Badge variant="success" size="sm">
           INSTANT
+          <span className="sr-only">: updates budget immediately</span>
         </Badge>
       </button>
 
@@ -120,20 +155,6 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
         className="hidden"
         onChange={handleFileChange}
       />
-
-      <div className="text-center pt-2">
-        <p className="text-xs text-brand-400 dark:text-brand-500">
-          <span className="inline-flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-warm-500"></span>
-            Review = shows in Action Queue
-          </span>
-          <span className="mx-2">•</span>
-          <span className="inline-flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-money-pos"></span>
-            Instant = updates budget immediately
-          </span>
-        </p>
-      </div>
     </div>
   );
 };

@@ -6,7 +6,7 @@ import { useDashboardTransactionStats } from '@/hooks/useDashboardTransactionSta
 import { streakForHabit } from '@/utils/habitLogic';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { roundMoney } from '@/utils/money';
-import { Flame, TrendingUp, TrendingDown, Minus, Target } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, Target } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { Section } from '@/components/ui/Section';
 import Eyebrow from '@/components/ui/Eyebrow';
@@ -16,8 +16,10 @@ import Eyebrow from '@/components/ui/Eyebrow';
  *
  * LifeBalance argues that money and habits move together; this strip puts the
  * week's three signals side by side so the user can read their balance at a
- * glance: points earned this week, money spent this week, habit consistency
- * (share of today's habits done), and the strongest active streak.
+ * glance: points earned this week, money spent this week, and habit consistency
+ * (share of today's habits done). The strongest active streak is still computed
+ * — it keeps the strip visible when it's the only habits signal — but it is no
+ * longer rendered here (DailyHabitsWidget shows per-habit streaks).
  *
  * Presentation only — all values are derived read-only from context data using
  * the FROZEN scoring/streak/money helpers. No business logic is changed here.
@@ -144,17 +146,12 @@ export const PulseStripWidget: React.FC = React.memo(() => {
           <span className="stat-num text-2xl font-bold text-warm-600 dark:text-warm-300">
             {metrics.weekPoints}
           </span>
-          {metrics.topStreak > 0 ? (
-            <span className="mt-1 flex items-center gap-1 text-xs font-semibold text-habit-streak">
-              <Flame size={12} className="fill-current" aria-hidden="true" />
-              <span aria-hidden="true">{metrics.topStreak}</span>
-              <span className="sr-only">{metrics.topStreak} best active streak</span>
-            </span>
-          ) : (
-            <span className="mt-1 text-xs font-medium text-brand-400 dark:text-brand-500">
-              earned
-            </span>
-          )}
+          {/* No streak line here — DailyHabitsWidget just below shows per-habit
+              streaks; `metrics.topStreak` is retained solely for the
+              hasHabitsContent gate above. */}
+          <span className="mt-1 text-xs font-medium text-brand-400 dark:text-brand-500">
+            earned
+          </span>
         </PulseCell>
         )}
 

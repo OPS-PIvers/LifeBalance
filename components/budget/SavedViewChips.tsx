@@ -80,6 +80,23 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
 
   if (!householdId) return null;
 
+  // Zero saved views and not mid-save: skip the bordered "Views" row chrome
+  // entirely and surface only the unobtrusive "Save View" text button so the
+  // permanent affordance doesn't sit empty for users who never save a view.
+  if (views.length === 0 && !isSaving) {
+    return (
+      <div className="pt-2 mt-2">
+        <button
+          onClick={() => setIsSaving(true)}
+          className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-brand-500 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-200 hover:bg-brand-50 dark:hover:bg-brand-700/50 rounded-md transition-colors"
+        >
+          <Plus size={12} />
+          <span>Save View</span>
+        </button>
+      </div>
+    );
+  }
+
   return (
     <>
     <ConfirmDialog

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Star, TrendingUp, User, AlertCircle } from 'lucide-react';
+import { Star, TrendingUp, User } from 'lucide-react';
 import { useFinance, useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
@@ -68,14 +68,6 @@ const TopToolbar: React.FC = () => {
 
           {/* Right Container: Points Cluster + Profile */}
           <div className="flex items-center gap-3 ml-auto">
-            <button
-              onClick={() => setIsFeedbackOpen(true)}
-              className="min-w-11 min-h-11 flex items-center justify-center text-brand-300 hover:text-white hover:bg-brand-700 rounded-full transition-colors duration-(--duration-fast) ease-(--ease-standard)"
-              aria-label="Send Feedback"
-            >
-              <AlertCircle size={18} />
-            </button>
-
             {/* Points Container - Clickable to open Rewards Modal (habits domain
                 — Plan 090). Hidden entirely when habits is off; Feedback + Profile
                 remain in this right cluster. */}
@@ -142,7 +134,11 @@ const TopToolbar: React.FC = () => {
           </div>
         </header>
 
-        <ProfileMenu isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
+        <ProfileMenu
+          isOpen={isProfileOpen}
+          onClose={() => setIsProfileOpen(false)}
+          onSendFeedback={() => setIsFeedbackOpen(true)}
+        />
       </div>
 
       <LazyMount when={isFeedbackOpen}>

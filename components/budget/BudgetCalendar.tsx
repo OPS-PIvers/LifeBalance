@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { useFinance, useTodos } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { format, isSameMonth, isSameDay, isToday, addMonths, subMonths } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, Copy, CheckSquare, Download, MoreVertical, Repeat, CalendarPlus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, Copy, CheckSquare, Download, MoreVertical, MoreHorizontal, Repeat, CalendarPlus } from 'lucide-react';
 import { CalendarItem } from '@/types/schema';
 import { useCalendarGrid } from '@/hooks/useCalendarGrid';
 import { expandCalendarItems, parseRecurringId, isRecurringId } from '@/utils/calendarRecurrence';
@@ -16,6 +16,7 @@ import Select from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
 import EmptyState from '@/components/ui/EmptyState';
 import { SurfaceList, Row } from '@/components/ui/Section';
+import { Menu, type MenuItem } from '@/components/ui/Menu';
 import toast from 'react-hot-toast';
 import RecurringBillsModal from './RecurringBillsModal';
 
@@ -31,6 +32,7 @@ const BudgetCalendar: React.FC = () => {
   const [isRecurringModalOpen, setIsRecurringModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<CalendarItem | null>(null);
   const [activeActionItem, setActiveActionItem] = useState<CalendarItem | null>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   // Form State
   const [title, setTitle] = useState('');
@@ -231,6 +233,21 @@ const BudgetCalendar: React.FC = () => {
     }
   };
 
+  const calendarMenuItems: MenuItem[] = [
+    {
+      key: 'manage-recurring',
+      label: 'Manage recurring bills',
+      icon: <Repeat size={16} />,
+      onSelect: () => setIsRecurringModalOpen(true),
+    },
+    {
+      key: 'export',
+      label: 'Export month to CSV',
+      icon: <Download size={16} />,
+      onSelect: handleExport,
+    },
+  ];
+
   return (
     <div className="space-y-6 animate-in fade-in duration-(--duration-base)">
       {/* Calendar Card */}
@@ -241,27 +258,27 @@ const BudgetCalendar: React.FC = () => {
             {format(currentDate, 'MMMM yyyy')}
           </h2>
           <div className="flex gap-2">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setIsRecurringModalOpen(true)}
-              className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn"
-              title="Manage Recurring Bills"
-              aria-label="Manage Recurring Bills"
-            >
-              <Repeat size={20} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={handleExport}
-              className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 mr-2 rounded-btn"
-              title="Export this month to CSV"
-              aria-label="Export this month to CSV"
-            >
-              <Download size={20} />
-            </Button>
-            <div className="w-px h-6 bg-brand-200 dark:bg-brand-700 my-auto mx-1" />
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setIsMenuOpen(v => !v)}
+                className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn"
+                aria-label="More calendar actions"
+                aria-haspopup="menu"
+                aria-expanded={isMenuOpen}
+              >
+                <MoreHorizontal size={20} />
+              </Button>
+              <Menu
+                isOpen={isMenuOpen}
+                onClose={() => setIsMenuOpen(false)}
+                items={calendarMenuItems}
+                ariaLabel="Calendar actions"
+                position="top-10 right-0"
+                className="min-w-[208px]"
+              />
+            </div>
             <Button
               variant="ghost"
               size="icon-sm"

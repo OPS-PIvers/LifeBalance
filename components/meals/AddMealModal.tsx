@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { SurfaceList, Row } from '@/components/ui/Section';
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { X, ChefHat, Sparkles, Plus, FileText } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -50,8 +51,15 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
   const [ingredientName, setIngredientName] = useState('');
   const [ingredientQty, setIngredientQty] = useState('');
 
-  // Reset the transient entry fields when the modal closes. Done during render
-  // on the open→close edge rather than in an effect so it doesn't trigger a
+  // "More details" (description/instructions/recipe URL/tags) disclosure —
+  // collapsed for a fresh add, but open by default when editing a meal that
+  // already has content in any of those fields so editing never hides
+  // existing data.
+  const [moreDetailsOpen, setMoreDetailsOpen] = useState(false);
+
+  // Reset the transient entry fields when the modal closes, and recompute the
+  // "More details" default-open state when it opens. Done during render on
+  // the open/close edge rather than in an effect so it doesn't trigger a
   // cascading render (the component stays mounted across open/close).
   const [wasOpen, setWasOpen] = useState(isOpen);
   if (wasOpen !== isOpen) {
@@ -60,6 +68,10 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
       setTagInput('');
       setIngredientName('');
       setIngredientQty('');
+    } else {
+      setMoreDetailsOpen(
+        !!(currentMeal.description || currentMeal.instructions?.length || currentMeal.recipeUrl || currentMeal.tags?.length)
+      );
     }
   }
 
@@ -155,6 +167,16 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                     />
                 </div>
 
+                {/* Description, Instructions, Recipe URL & Tags — lower-frequency fields
+                    behind a single disclosure; open by default when editing a meal that
+                    already has content in any of them. */}
+                <CollapsibleSection
+                    title="More details"
+                    subtitle="Description, instructions, link & tags"
+                    open={moreDetailsOpen}
+                    onOpenChange={setMoreDetailsOpen}
+                >
+                <div className="space-y-5">
                 <div>
                     <label htmlFor="meal-description" className="block text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider mb-2">Description</label>
                     <textarea
@@ -167,7 +189,6 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                     />
                 </div>
 
-                {/* Collapsible Sections could go here if content gets too long */}
                 <div>
                     <label htmlFor="meal-instructions" className="block text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider mb-2">Instructions</label>
                     <textarea
@@ -259,6 +280,8 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                         </div>
                     </div>
                 </div>
+                </div>
+                </CollapsibleSection>
 
             {/* Ingredients Section */}
             <div>
@@ -324,9 +347,11 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                               <Plus className="w-5 h-5" />
                           </Button>
                       </div>
-                      <p className="text-xxs text-brand-400 dark:text-brand-500 mt-2 pl-1">
-                          Ingredients will be added to the shopping list when creating a new meal plan.
-                      </p>
+                      {!currentMeal.ingredients?.length && (
+                          <p className="text-xxs text-brand-400 dark:text-brand-500 mt-2 pl-1">
+                              Ingredients will be added to the shopping list when creating a new meal plan.
+                          </p>
+                      )}
                   </div>
             </div>
 

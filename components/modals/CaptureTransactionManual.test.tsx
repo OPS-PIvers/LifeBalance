@@ -58,6 +58,74 @@ describe('CaptureTransactionManual', () => {
     expect(screen.getByText('Save Transaction')).toBeInTheDocument();
   });
 
+  it('collapses store/account/habit/recurring fields behind "Add details" by default', () => {
+    render(
+      <CaptureTransactionManual
+        onAddTransaction={mockOnAddTransaction}
+        onClose={mockOnClose}
+        dynamicCategories={mockCategories}
+        habits={mockHabits}
+        transactions={mockTransactions}
+        buckets={mockBuckets}
+        stores={[]}
+        accounts={[]}
+      />
+    );
+
+    // Quick-entry fields stay visible.
+    expect(screen.getByPlaceholderText('0.00')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('e.g. Starbucks')).toBeInTheDocument();
+
+    // The disclosure toggle is present but collapsed by default.
+    const toggle = screen.getByRole('button', { name: /add details/i });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Store (Optional)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Recurring Transaction')).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Store (Optional)')).toBeInTheDocument();
+    expect(screen.getByText('Recurring Transaction')).toBeInTheDocument();
+  });
+
+  it('submits successfully with only Amount/Merchant/Category while "Add details" stays collapsed', async () => {
+    render(
+      <CaptureTransactionManual
+        onAddTransaction={mockOnAddTransaction}
+        onClose={mockOnClose}
+        dynamicCategories={mockCategories}
+        habits={mockHabits}
+        transactions={mockTransactions}
+        buckets={mockBuckets}
+        stores={[]}
+        accounts={[]}
+      />
+    );
+
+    // "Add details" is never expanded in this test.
+    expect(screen.queryByText('Store (Optional)')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '25.00' } });
+    fireEvent.change(screen.getByPlaceholderText('e.g. Starbucks'), { target: { value: 'Pizza Place' } });
+
+    fireEvent.click(screen.getByText('Save Transaction'));
+
+    await waitFor(() => {
+      expect(mockOnAddTransaction).toHaveBeenCalledTimes(1);
+    });
+
+    const calledArg = mockOnAddTransaction.mock.calls[0]![0];
+    expect(calledArg).toMatchObject({
+      amount: 25.00,
+      merchant: 'Pizza Place',
+      category: 'Food',
+      source: 'manual',
+      status: 'verified',
+    });
+    expect(mockOnClose).toHaveBeenCalled();
+  });
+
   it('handles successful submission', async () => {
     render(
       <CaptureTransactionManual

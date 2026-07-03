@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 
 interface CaptureTransactionManualProps {
   initialData?: {
@@ -225,50 +226,6 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
         onChange={(e) => setTransactionDate(e.target.value)}
       />
 
-      <div className="grid grid-cols-2 gap-4">
-        <Select
-          label="Store (Optional)"
-          value={store}
-          onChange={(e) => setStore(e.target.value)}
-        >
-          <option value="">Select Store...</option>
-          {stores.map(s => (
-            <option key={s.id} value={s.name}>{s.name}</option>
-          ))}
-        </Select>
-
-        <Select
-          label="Account (Optional)"
-          value={accountId}
-          onChange={(e) => setAccountId(e.target.value)}
-        >
-          <option value="">Select Account...</option>
-          {accounts.map(a => (
-            <option key={a.id} value={a.id}>{a.name}</option>
-          ))}
-        </Select>
-      </div>
-
-      {isSelectedAccountCredit && (
-        <div className="flex items-center justify-between p-4 bg-brand-50 dark:bg-brand-700/50 rounded-xl border border-brand-100 dark:border-brand-700">
-          <div>
-            <span id="credit-payment-label" className="text-sm font-medium text-brand-700 dark:text-brand-200">
-              {creditPayment ? 'Payment toward card' : 'Charge to card'}
-            </span>
-            <p className="text-xs text-brand-400 dark:text-brand-400 mt-0.5">
-              {creditPayment
-                ? 'Lowers this card’s balance (paying it down).'
-                : 'Raises this card’s balance; never affects Safe-to-Spend.'}
-            </p>
-          </div>
-          <Switch
-            checked={creditPayment}
-            onCheckedChange={setCreditPayment}
-            aria-labelledby="credit-payment-label"
-          />
-        </div>
-      )}
-
       <div>
         <label id="manual-category-label" className="block text-xs font-semibold text-brand-400 dark:text-brand-400 uppercase tracking-wider mb-2">Category</label>
         <div
@@ -295,146 +252,205 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
         </div>
       </div>
 
-      {/* Sub-Bucket Selection */}
-      {availableSubBuckets.length > 0 && (
-        <div>
-          <label id="manual-subbucket-label" className="block text-xs font-semibold text-brand-400 dark:text-brand-400 uppercase tracking-wider mb-2">
-            Sub-Category (Optional)
-          </label>
-          <div
-            className="flex gap-2 overflow-x-auto pb-2 no-scrollbar"
-            role="radiogroup"
-            aria-labelledby="manual-subbucket-label"
-          >
-            <button
-              onClick={() => setSubBucketId(undefined)}
-              role="radio"
-              aria-checked={!subBucketId}
-              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                !subBucketId
-                  ? 'bg-accent-600 dark:bg-accent-500 text-white'
-                  : 'bg-brand-50 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 border border-brand-200 dark:border-brand-700 hover:bg-brand-100 dark:hover:bg-brand-700/50'
-              }`}
+      {/*
+        Everything below is secondary to the quick-entry path (Amount/Merchant/
+        Date/Category). Collapsing it is purely visual — all of this state lives
+        at the top level regardless of open/closed, so a value set then collapsed
+        still submits with the transaction (existing behavior for the conditional
+        credit-card field is unchanged).
+      */}
+      <CollapsibleSection
+        title="Add details"
+        subtitle="Store, account, habits & recurring"
+        defaultOpen={false}
+      >
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 gap-4">
+            <Select
+              label="Store (Optional)"
+              value={store}
+              onChange={(e) => setStore(e.target.value)}
             >
-              None
-            </button>
-            {availableSubBuckets.map(sb => (
-              <button
-                key={sb.id}
-                role="radio"
-                aria-checked={subBucketId === sb.id}
-                onClick={() => setSubBucketId(sb.id)}
-                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                  subBucketId === sb.id
-                    ? 'bg-accent-600 dark:bg-accent-500 text-white'
-                    : 'bg-brand-50 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 border border-brand-200 dark:border-brand-700 hover:bg-brand-100 dark:hover:bg-brand-700/50'
-                }`}
-              >
-                {sb.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+              <option value="">Select Store...</option>
+              {stores.map(s => (
+                <option key={s.id} value={s.name}>{s.name}</option>
+              ))}
+            </Select>
 
-      {/* Habit Tagging Section */}
-      {habits.length > 0 && (
-        <div>
-          <div className="flex items-center gap-1.5 mb-2">
-            <label className="block text-xs font-semibold text-brand-400 dark:text-brand-400 uppercase tracking-wider">
-              Connect Habits (Optional)
-            </label>
-            {suggestedHabits.some(s => s.confidence !== 'low') && (
-              <Sparkles size={12} className="text-warm-500 dark:text-warm-300" />
-            )}
+            <Select
+              label="Account (Optional)"
+              value={accountId}
+              onChange={(e) => setAccountId(e.target.value)}
+            >
+              <option value="">Select Account...</option>
+              {accounts.map(a => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </Select>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {/* Show suggested habits first */}
-            {suggestedHabits
-              .filter(s => s.confidence === 'high' || s.confidence === 'medium')
-              .map(({ habit, confidence }) => {
-                const isSelected = selectedHabitIds.includes(habit.id);
-                return (
+
+          {isSelectedAccountCredit && (
+            <div className="flex items-center justify-between p-4 bg-brand-50 dark:bg-brand-700/50 rounded-xl border border-brand-100 dark:border-brand-700">
+              <div>
+                <span id="credit-payment-label" className="text-sm font-medium text-brand-700 dark:text-brand-200">
+                  {creditPayment ? 'Payment toward card' : 'Charge to card'}
+                </span>
+                <p className="text-xs text-brand-400 dark:text-brand-400 mt-0.5">
+                  {creditPayment
+                    ? 'Lowers this card’s balance (paying it down).'
+                    : 'Raises this card’s balance; never affects Safe-to-Spend.'}
+                </p>
+              </div>
+              <Switch
+                checked={creditPayment}
+                onCheckedChange={setCreditPayment}
+                aria-labelledby="credit-payment-label"
+              />
+            </div>
+          )}
+
+          {/* Sub-Bucket Selection */}
+          {availableSubBuckets.length > 0 && (
+            <div>
+              <label id="manual-subbucket-label" className="block text-xs font-semibold text-brand-400 dark:text-brand-400 uppercase tracking-wider mb-2">
+                Sub-Category (Optional)
+              </label>
+              <div
+                className="flex gap-2 overflow-x-auto pb-2 no-scrollbar"
+                role="radiogroup"
+                aria-labelledby="manual-subbucket-label"
+              >
+                <button
+                  onClick={() => setSubBucketId(undefined)}
+                  role="radio"
+                  aria-checked={!subBucketId}
+                  className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                    !subBucketId
+                      ? 'bg-accent-600 dark:bg-accent-500 text-white'
+                      : 'bg-brand-50 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 border border-brand-200 dark:border-brand-700 hover:bg-brand-100 dark:hover:bg-brand-700/50'
+                  }`}
+                >
+                  None
+                </button>
+                {availableSubBuckets.map(sb => (
                   <button
-                    key={habit.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedHabitIds(prev =>
-                        isSelected
-                          ? prev.filter(id => id !== habit.id)
-                          : [...prev, habit.id]
-                      );
-                    }}
-                    className={`px-3 py-1.5 rounded-btn text-xs font-bold transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center gap-1 relative ${
-                      isSelected
-                        ? 'bg-money-pos text-white'
-                        : confidence === 'high'
-                        ? 'bg-warm-50 dark:bg-warm-900/30 border border-warm-300 dark:border-warm-700 text-warm-700 dark:text-warm-300 hover:bg-warm-100 dark:hover:bg-warm-900/50'
-                        : 'bg-habit-blue/10 dark:bg-habit-blue/20 border border-habit-blue/30 text-habit-blue hover:bg-habit-blue/20'
+                    key={sb.id}
+                    role="radio"
+                    aria-checked={subBucketId === sb.id}
+                    onClick={() => setSubBucketId(sb.id)}
+                    className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                      subBucketId === sb.id
+                        ? 'bg-accent-600 dark:bg-accent-500 text-white'
+                        : 'bg-brand-50 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 border border-brand-200 dark:border-brand-700 hover:bg-brand-100 dark:hover:bg-brand-700/50'
                     }`}
                   >
-                    {isSelected && <Check size={12} strokeWidth={3} />}
-                    {habit.title}
-                    {!isSelected && confidence === 'high' && (
-                      <span className="absolute -top-1 -right-1 w-2 h-2 bg-warm-500 rounded-full motion-safe:animate-pulse" />
-                    )}
+                    {sb.name}
                   </button>
-                );
-              })}
+                ))}
+              </div>
+            </div>
+          )}
 
-            {/* Show selected non-suggested habits */}
-            {suggestedHabits
-              .filter(s => s.confidence === 'low' && selectedHabitIds.includes(s.habit.id))
-              .map(({ habit }) => (
-                <button
-                  key={habit.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedHabitIds(prev => prev.filter(id => id !== habit.id));
-                  }}
-                  className="px-3 py-1.5 rounded-btn text-xs font-bold transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center gap-1 bg-money-pos text-white"
-                >
-                  <Check size={12} strokeWidth={3} />
-                  {habit.title}
-                </button>
-              ))}
-
-            {/* "More" button to show all habits */}
-            {suggestedHabits.filter(s => s.confidence === 'low' && !selectedHabitIds.includes(s.habit.id)).length > 0 && (
-              <details className="inline">
-                <summary className="px-3 py-1.5 rounded-lg text-xs font-bold bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 text-brand-500 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-700/50 cursor-pointer inline-flex items-center gap-1">
-                  + More ({suggestedHabits.filter(s => s.confidence === 'low').length})
-                </summary>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {suggestedHabits
-                    .filter(s => s.confidence === 'low' && !selectedHabitIds.includes(s.habit.id))
-                    .map(({ habit }) => (
+          {/* Habit Tagging Section */}
+          {habits.length > 0 && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <label className="block text-xs font-semibold text-brand-400 dark:text-brand-400 uppercase tracking-wider">
+                  Connect Habits (Optional)
+                </label>
+                {suggestedHabits.some(s => s.confidence !== 'low') && (
+                  <Sparkles size={12} className="text-warm-500 dark:text-warm-300" />
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {/* Show suggested habits first */}
+                {suggestedHabits
+                  .filter(s => s.confidence === 'high' || s.confidence === 'medium')
+                  .map(({ habit, confidence }) => {
+                    const isSelected = selectedHabitIds.includes(habit.id);
+                    return (
                       <button
                         key={habit.id}
                         type="button"
                         onClick={() => {
-                          setSelectedHabitIds(prev => [...prev, habit.id]);
+                          setSelectedHabitIds(prev =>
+                            isSelected
+                              ? prev.filter(id => id !== habit.id)
+                              : [...prev, habit.id]
+                          );
                         }}
-                        className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 text-brand-500 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-700/50"
+                        className={`px-3 py-1.5 rounded-btn text-xs font-bold transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center gap-1 relative ${
+                          isSelected
+                            ? 'bg-money-pos text-white'
+                            : confidence === 'high'
+                            ? 'bg-warm-50 dark:bg-warm-900/30 border border-warm-300 dark:border-warm-700 text-warm-700 dark:text-warm-300 hover:bg-warm-100 dark:hover:bg-warm-900/50'
+                            : 'bg-habit-blue/10 dark:bg-habit-blue/20 border border-habit-blue/30 text-habit-blue hover:bg-habit-blue/20'
+                        }`}
                       >
+                        {isSelected && <Check size={12} strokeWidth={3} />}
                         {habit.title}
+                        {!isSelected && confidence === 'high' && (
+                          <span className="absolute -top-1 -right-1 w-2 h-2 bg-warm-500 rounded-full motion-safe:animate-pulse" />
+                        )}
                       </button>
-                    ))}
-                </div>
-              </details>
-            )}
+                    );
+                  })}
+
+                {/* Show selected non-suggested habits */}
+                {suggestedHabits
+                  .filter(s => s.confidence === 'low' && selectedHabitIds.includes(s.habit.id))
+                  .map(({ habit }) => (
+                    <button
+                      key={habit.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedHabitIds(prev => prev.filter(id => id !== habit.id));
+                      }}
+                      className="px-3 py-1.5 rounded-btn text-xs font-bold transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center gap-1 bg-money-pos text-white"
+                    >
+                      <Check size={12} strokeWidth={3} />
+                      {habit.title}
+                    </button>
+                  ))}
+
+                {/* "More" button to show all habits */}
+                {suggestedHabits.filter(s => s.confidence === 'low' && !selectedHabitIds.includes(s.habit.id)).length > 0 && (
+                  <details className="inline">
+                    <summary className="px-3 py-1.5 rounded-lg text-xs font-bold bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 text-brand-500 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-700/50 cursor-pointer inline-flex items-center gap-1">
+                      + More ({suggestedHabits.filter(s => s.confidence === 'low').length})
+                    </summary>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {suggestedHabits
+                        .filter(s => s.confidence === 'low' && !selectedHabitIds.includes(s.habit.id))
+                        .map(({ habit }) => (
+                          <button
+                            key={habit.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedHabitIds(prev => [...prev, habit.id]);
+                            }}
+                            className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 text-brand-500 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-700/50"
+                          >
+                            {habit.title}
+                          </button>
+                        ))}
+                    </div>
+                  </details>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between p-4 bg-brand-50 dark:bg-brand-700/50 rounded-xl border border-brand-100 dark:border-brand-700">
+            <span id="recurring-label" className="text-sm font-medium text-brand-700 dark:text-brand-200">Recurring Transaction</span>
+            <Switch
+              checked={isRecurring}
+              onCheckedChange={setIsRecurring}
+              aria-label="Recurring Transaction"
+            />
           </div>
         </div>
-      )}
-
-      <div className="flex items-center justify-between p-4 bg-brand-50 dark:bg-brand-700/50 rounded-xl border border-brand-100 dark:border-brand-700">
-        <span id="recurring-label" className="text-sm font-medium text-brand-700 dark:text-brand-200">Recurring Transaction</span>
-        <Switch
-          checked={isRecurring}
-          onCheckedChange={setIsRecurring}
-          aria-label="Recurring Transaction"
-        />
-      </div>
+      </CollapsibleSection>
 
       <div className="flex items-center gap-2 p-3 bg-money-bgPos dark:bg-money-pos/15 rounded-xl border border-money-pos/30">
         <CheckCircle2 size={16} className="text-money-pos shrink-0" />

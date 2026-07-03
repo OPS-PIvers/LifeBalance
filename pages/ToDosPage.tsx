@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef, useId } from 'react';
 import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import { useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, MoreHorizontal, ClipboardList, SlidersHorizontal } from 'lucide-react';
+import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { ToDo, HouseholdMember } from '@/types/schema';
@@ -19,6 +19,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { SurfaceList, Row } from '@/components/ui/Section';
+import { ShowMoreRow } from '@/components/ui/ShowMoreRow';
 import { cn } from '@/utils/cn';
 import Input from '@/components/ui/Input';
 import BatchRescheduleModal from '@/components/modals/BatchRescheduleModal';
@@ -719,6 +720,7 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
                 subtitle="This Week"
                 items={upcoming}
                 color="amber"
+                maxVisible={5}
                 onComplete={completeToDo}
                 onEdit={openEditModal}
                 onDelete={deleteToDo}
@@ -737,6 +739,7 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
                 subtitle="Future"
                 items={radar}
                 color="blue"
+                maxVisible={5}
                 onComplete={completeToDo}
                 onEdit={openEditModal}
                 onDelete={deleteToDo}
@@ -787,6 +790,7 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
             <CompletedSection
                 title="This Week"
                 items={completedWeek}
+                defaultCollapsed
                 onUncomplete={handleUncomplete}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
@@ -796,6 +800,7 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
             <CompletedSection
                 title="Older History"
                 items={completedOlder}
+                defaultCollapsed
                 onUncomplete={handleUncomplete}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
@@ -1282,13 +1287,21 @@ interface SectionProps {
   /** Full selection set — Section only re-renders when its own items' membership changes. */
   selectedIds: ReadonlySet<string>;
   onToggleSelection: (id: string) => void;
+  /**
+   * Optional cap on the rows rendered at once; when exceeded, a ShowMoreRow
+   * expands the rest in place. Ignored while selection mode is active so
+   * select-all/batch actions always operate on the full visible list.
+   */
+  maxVisible?: number;
 }
 
 // Sub-component for sections.
 // Uses a custom memo comparator: when `selectedIds` changes, re-render is skipped unless
 // at least one of this section's own items changed its selected/deselected state.
 // This prevents toggling an item in one section from re-rendering the other two sections.
-const Section = React.memo(function Section({ title, subtitle, items, color, onComplete, onEdit, onDelete, onDuplicate, onMoveToTomorrow, onMore, memberMap, isSelectionMode, selectedIds, onToggleSelection }: SectionProps) {
+const Section = React.memo(function Section({ title, subtitle, items, color, onComplete, onEdit, onDelete, onDuplicate, onMoveToTomorrow, onMore, memberMap, isSelectionMode, selectedIds, onToggleSelection, maxVisible }: SectionProps) {
+  // Show-more state for capped lists (hooks must run before the empty early-return).
+  const [expanded, setExpanded] = useState(false);
 
   if (items.length === 0) return null;
 
@@ -1297,6 +1310,14 @@ const Section = React.memo(function Section({ title, subtitle, items, color, onC
     amber: 'bg-warm-500',
     blue: 'bg-habit-blue',
   };
+
+  // In selection mode the full list always renders so select-all / batch
+  // actions operate on everything the user expects — the cap is purely a
+  // browsing affordance. Items are already priority-sorted by due date, so
+  // slicing keeps the soonest-due tasks visible.
+  const isCapped =
+    maxVisible !== undefined && items.length > maxVisible && !expanded && !isSelectionMode;
+  const visibleItems = isCapped ? items.slice(0, maxVisible) : items;
 
   return (
     <div className="animate-in slide-in-from-bottom-4 duration-(--duration-slow)">
@@ -1309,7 +1330,7 @@ const Section = React.memo(function Section({ title, subtitle, items, color, onC
       </div>
 
       <SurfaceList className="[&>*:first-child_.hairline-divider]:border-t-0">
-        {items.map(item => (
+        {visibleItems.map(item => (
           <TodoRow
             key={item.id}
             item={item}
@@ -1326,6 +1347,14 @@ const Section = React.memo(function Section({ title, subtitle, items, color, onC
             onToggleSelection={onToggleSelection}
           />
         ))}
+        {maxVisible !== undefined && !isSelectionMode && items.length > maxVisible && (
+          <ShowMoreRow
+            hiddenCount={items.length - maxVisible}
+            expanded={expanded}
+            onToggle={() => setExpanded(v => !v)}
+            noun="task"
+          />
+        )}
       </SurfaceList>
     </div>
   );
@@ -1339,6 +1368,7 @@ const Section = React.memo(function Section({ title, subtitle, items, color, onC
     prev.color === next.color &&
     prev.title === next.title &&
     prev.subtitle === next.subtitle &&
+    prev.maxVisible === next.maxVisible &&
     prev.onComplete === next.onComplete &&
     prev.onEdit === next.onEdit &&
     prev.onDelete === next.onDelete &&
@@ -1401,7 +1431,7 @@ const SwipeableTodoRow: React.FC<{ onDelete: () => void; children: React.ReactNo
 };
 
 // Sub-component for completed items
-const CompletedSection = React.memo(function CompletedSection({ title, items, onUncomplete, onDelete, onDuplicate, onMore, memberMap }: {
+const CompletedSection = React.memo(function CompletedSection({ title, items, onUncomplete, onDelete, onDuplicate, onMore, memberMap, defaultCollapsed = false }: {
   title: string;
   items: ToDo[];
   onUncomplete: (id: string) => void;
@@ -1410,18 +1440,57 @@ const CompletedSection = React.memo(function CompletedSection({ title, items, on
   onMore: (todo: ToDo) => void;
   /** Pre-built member lookup map from page level — avoids rebuilding per-section. */
   memberMap: ReadonlyMap<string, HouseholdMember>;
+  /**
+   * Start collapsed behind a header toggle (used for the older buckets so
+   * recent completions stay in view). Omit/false = always-expanded header.
+   */
+  defaultCollapsed?: boolean;
 }) {
+    // Toggle state for collapsible buckets (hooks must run before the empty early-return).
+    const [expanded, setExpanded] = useState(!defaultCollapsed);
+    const contentId = useId();
 
     if (items.length === 0) return null;
+
+    // The prop is constant per call site, so it safely decides whether the
+    // header renders as a toggle button or the plain always-expanded title.
+    const collapsible = defaultCollapsed;
 
     return (
         <div className="animate-in slide-in-from-bottom-4 duration-(--duration-slow)">
             <div className="flex items-center gap-2 mb-2 px-1">
-                <h2 className="text-xs font-semibold text-brand-400 dark:text-brand-500 uppercase tracking-wider">{title}</h2>
+                {collapsible ? (
+                    <h2 className="min-w-0">
+                        <button
+                            type="button"
+                            onClick={() => setExpanded(v => !v)}
+                            aria-expanded={expanded}
+                            aria-controls={contentId}
+                            className="flex min-h-11 items-center gap-1.5 text-xs font-semibold text-brand-400 dark:text-brand-500 uppercase tracking-wider hover:text-brand-600 dark:hover:text-brand-300 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-sm"
+                        >
+                            {title}
+                            <span className="tabular-nums">({items.length})</span>
+                            <ChevronDown
+                                size={14}
+                                aria-hidden="true"
+                                className={cn(
+                                    'shrink-0 transition-transform duration-(--duration-base) ease-(--ease-standard)',
+                                    expanded && 'rotate-180'
+                                )}
+                            />
+                        </button>
+                    </h2>
+                ) : (
+                    <h2 className="text-xs font-semibold text-brand-400 dark:text-brand-500 uppercase tracking-wider">{title}</h2>
+                )}
                 <div className="h-px bg-brand-200 dark:bg-brand-700 flex-1"></div>
             </div>
 
-            <SurfaceList>
+            {(!collapsible || expanded) && (
+            <SurfaceList
+                id={contentId}
+                className={collapsible ? 'animate-in fade-in slide-in-from-top-2 duration-(--duration-base)' : undefined}
+            >
                 {items.map(item => {
                     const assignee = memberMap.get(item.assignedTo);
                     const completedDate = item.completedAt ? parseISO(item.completedAt) : null;
@@ -1500,6 +1569,7 @@ const CompletedSection = React.memo(function CompletedSection({ title, items, on
                     );
                 })}
             </SurfaceList>
+            )}
         </div>
     );
 });

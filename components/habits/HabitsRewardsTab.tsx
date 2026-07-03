@@ -15,13 +15,19 @@ import EmptyState from '@/components/ui/EmptyState';
  *
  *  - a lifetime-points header,
  *  - the reward STORE (active rewards, instant redeem → deduct shared points),
- *  - "Recently redeemed" history (Household.redemptionHistory),
+ *  - "Recently redeemed" history (Household.redemptionHistory), capped with a
+ *    "+N more" show-more row,
  *  - the parent redemption REVIEW queue (Kid Mode only, when there are requests),
  *  - reward MANAGEMENT (create / edit / delete) — available to EVERY household.
  *
  * Redeeming uses the `redeemReward` mutation (atomic: deduct points + log history).
  * The former RewardsModal (where management/review used to live, Kid-Mode-gated)
  * has been dissolved into this tab.
+ *
+ * Reward MANAGEMENT is collapsed by default (`RewardManagerPanel` wraps its list
+ * in a `CollapsibleSection`) — the same rewards already appear in the store grid
+ * above, so showing them twice by default was redundant; the create/edit form
+ * opens in a `Drawer` regardless of the list's collapsed state.
  */
 const HabitsRewardsTab: React.FC = () => {
   const { rewardsInventory, totalPoints, redeemReward } = useGamification();

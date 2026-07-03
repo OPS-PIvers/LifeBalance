@@ -42,8 +42,14 @@ import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
 import { SafeToSpendHero } from '@/components/dashboard/SafeToSpendHero';
 import { CreditCardActivityWidget } from '@/components/dashboard/CreditCardActivityWidget';
 import { Section, SurfaceList } from '@/components/ui/Section';
+import { ShowMoreRow } from '@/components/ui/ShowMoreRow';
 import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
+
+// Cap the Action Queue like the sibling widgets (which cap at 5; the queue gets
+// one extra row since it's the page's primary triage surface). useActionQueue
+// pre-sorts by priority, so slicing keeps the most urgent items visible.
+const MAX_VISIBLE_QUEUE_ITEMS = 6;
 
 const Dashboard: React.FC = () => {
   // Consume the narrowest context slices so a change in one domain (e.g. a
@@ -86,6 +92,9 @@ const Dashboard: React.FC = () => {
   // form pre-tagged as a payment toward that card).
   const [payDownAccountId, setPayDownAccountId] = useState<string | null>(null);
   const handlePayDown = useCallback((accountId: string) => setPayDownAccountId(accountId), []);
+
+  // Whether the capped queue list is expanded to show every item.
+  const [queueExpanded, setQueueExpanded] = useState(false);
 
   // --- Action Queue triage: multi-select + swipe gestures ---
   const [selectionMode, setSelectionMode] = useState(false);
@@ -301,6 +310,14 @@ const Dashboard: React.FC = () => {
     }, items.length === 1 ? 'item' : `${items.length} items`);
   }, [selectedItems, deleteCalendarItem, deleteToDo, deleteTransaction, exitSelectionMode]);
 
+  // Selection mode always renders the FULL queue so bulk select/approve/defer
+  // operates on everything the user expects — the cap must never silently hide
+  // items during bulk operations.
+  const visibleQueueItems =
+    queueExpanded || selectionMode
+      ? actionQueue
+      : actionQueue.slice(0, MAX_VISIBLE_QUEUE_ITEMS);
+
   if (isLoading) {
     return <DashboardSkeleton />;
   }
@@ -394,7 +411,7 @@ const Dashboard: React.FC = () => {
         >
           {actionQueue.length > 0 ? (
             <SurfaceList>
-              {actionQueue.map(item => (
+              {visibleQueueItems.map(item => (
                 <ActionQueueItemCard
                   key={item.id}
                   item={item}
@@ -421,6 +438,14 @@ const Dashboard: React.FC = () => {
                   deleteCalendarItem={deleteCalendarItem}
                 />
               ))}
+              {!selectionMode && (
+                <ShowMoreRow
+                  hiddenCount={actionQueue.length - MAX_VISIBLE_QUEUE_ITEMS}
+                  expanded={queueExpanded}
+                  onToggle={() => setQueueExpanded(v => !v)}
+                  noun="item"
+                />
+              )}
             </SurfaceList>
           ) : (
             <EmptyState

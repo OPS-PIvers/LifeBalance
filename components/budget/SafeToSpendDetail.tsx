@@ -1,9 +1,10 @@
-import React from 'react';
-import { Wallet, Receipt, Clock } from 'lucide-react';
+import React, { useState } from 'react';
+import { ChevronDown, Wallet, Receipt, Clock } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
+import { cn } from '@/utils/cn';
 
 /**
  * Read-only Safe-to-Spend breakdown surfaced in the Money → Overview tab. It
@@ -11,10 +12,16 @@ import { Section, SurfaceList, Row } from '@/components/ui/Section';
  * Pending) using the memoized `safeToSpendBreakdown` the context already
  * exposes — no recomputation, no logic change. The Home hero stays the single
  * elevated surface; this is a calm grouped-flat companion in the domain.
+ *
+ * The headline stays always visible; the itemized rows + disclaimer are
+ * collapsed behind a "How is this calculated?" toggle by default, mirroring
+ * the exact interaction language SafeToSpendHero uses on Home for the same
+ * content.
  */
 export const SafeToSpendDetail: React.FC = () => {
   const { safeToSpendBreakdown: breakdown } = useFinance();
   const fmt = useFormatCurrency();
+  const [expanded, setExpanded] = useState(false);
 
   if (breakdown === undefined) return null;
 
@@ -42,39 +49,66 @@ export const SafeToSpendDetail: React.FC = () => {
           </span>
         </Row>
 
-        {/* Checking balance */}
-        <DetailRow
-          icon={<Wallet size={16} />}
-          label="Checking balance"
-          sub="Available cash"
-          value={fmt(breakdown.checkingBalance)}
-        />
+        {expanded && (
+          <div
+            id="sts-detail-breakdown"
+            className="animate-in fade-in slide-in-from-top-2 duration-(--duration-base)"
+          >
+            {/* Checking balance */}
+            <DetailRow
+              icon={<Wallet size={16} />}
+              label="Checking balance"
+              sub="Available cash"
+              value={fmt(breakdown.checkingBalance)}
+            />
 
-        {/* Unpaid bills */}
-        <DetailRow
-          icon={<Receipt size={16} />}
-          label="Unpaid bills this period"
-          sub="Reserved until next paycheck"
-          value={`- ${fmt(breakdown.unpaidBills)}`}
-          negative
-        />
+            {/* Unpaid bills */}
+            <DetailRow
+              icon={<Receipt size={16} />}
+              label="Unpaid bills this period"
+              sub="Reserved until next paycheck"
+              value={`- ${fmt(breakdown.unpaidBills)}`}
+              negative
+            />
 
-        {/* Pending transactions */}
-        {breakdown.pendingSpend > 0 && (
-          <DetailRow
-            icon={<Clock size={16} />}
-            label="Pending transactions"
-            sub="Spent but not yet cleared"
-            value={`- ${fmt(breakdown.pendingSpend)}`}
-            negative
-          />
+            {/* Pending transactions */}
+            {breakdown.pendingSpend > 0 && (
+              <DetailRow
+                icon={<Clock size={16} />}
+                label="Pending transactions"
+                sub="Spent but not yet cleared"
+                value={`- ${fmt(breakdown.pendingSpend)}`}
+                negative
+              />
+            )}
+
+            <div className="px-4 pt-3 pb-3.5 hairline-divider">
+              <p className="text-xxs text-brand-400 dark:text-brand-500 leading-relaxed">
+                Your available cash after bills due before your next paycheck and pending
+                (un-cleared) transactions. Bucket limits are not subtracted from this number.
+              </p>
+            </div>
+          </div>
         )}
-      </SurfaceList>
 
-      <p className="px-1 mt-2 text-xxs text-brand-400 dark:text-brand-500 leading-relaxed">
-        Your available cash after bills due before your next paycheck and pending (un-cleared)
-        transactions. Bucket limits are not subtracted from this number.
-      </p>
+        {/* Toggle */}
+        <button
+          type="button"
+          onClick={() => setExpanded(v => !v)}
+          aria-expanded={expanded}
+          aria-controls="sts-detail-breakdown"
+          className="flex w-full items-center gap-1 px-4 py-3 hairline-divider text-left text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-200 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-inset"
+        >
+          {expanded ? 'Hide breakdown' : 'How is this calculated?'}
+          <ChevronDown
+            size={14}
+            className={cn(
+              'transition-transform duration-(--duration-base) ease-(--ease-standard)',
+              expanded && 'rotate-180'
+            )}
+          />
+        </button>
+      </SurfaceList>
     </Section>
   );
 };
