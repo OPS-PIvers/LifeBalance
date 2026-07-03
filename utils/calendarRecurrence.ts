@@ -38,50 +38,50 @@ export function parseRecurringId(id: string): { templateId: string; date: string
 }
 
 /**
- * Calculates the first occurrence date on or after the range start.
- * Implements "jump" logic to skip years of iterations.
+ * Computes occurrence number `n` (0-based) directly from the original anchor date.
+ * Monthly occurrences MUST be derived from the anchor rather than by compounding
+ * addMonths on the previous (month-end-clamped) occurrence: date-fns clamps
+ * Jan 31 + 1 month to Feb 28, and compounding from that loses the anchor day
+ * forever (Feb 28 -> Mar 28 -> ...). Deriving from the anchor clamps each month
+ * independently (Jan 31 -> Feb 28 -> Mar 31 -> Apr 30) and guarantees the same
+ * occurrence gets the same date (and synthetic ID) regardless of window start,
+ * which paid-instance suppression in expandCalendarItems relies on.
  */
-function calculateStartDate(originalDate: Date, rangeStart: Date, frequency: string): Date {
-  let currentDate = originalDate;
-
-  // Only jump if we are behind
-  if (isBefore(originalDate, rangeStart)) {
-    if (frequency === 'weekly') {
-      const weeksDiff = Math.floor(differenceInCalendarWeeks(rangeStart, originalDate, { weekStartsOn: MONDAY }));
-      if (weeksDiff > 0) {
-        currentDate = addWeeks(originalDate, weeksDiff);
-      }
-    } else if (frequency === 'bi-weekly') {
-      const weeksDiff = Math.floor(differenceInCalendarWeeks(rangeStart, originalDate, { weekStartsOn: MONDAY }));
-      const jumps = Math.floor(weeksDiff / 2);
-      if (jumps > 0) {
-        currentDate = addWeeks(originalDate, jumps * 2);
-      }
-    } else if (frequency === 'monthly') {
-      const monthsDiff = differenceInCalendarMonths(rangeStart, originalDate);
-      if (monthsDiff > 0) {
-        currentDate = addMonths(originalDate, monthsDiff);
-      }
-    }
+function getOccurrenceDate(originalDate: Date, n: number, frequency: string): Date {
+  switch (frequency) {
+    case 'weekly':
+      return addWeeks(originalDate, n);
+    case 'bi-weekly':
+      return addWeeks(originalDate, n * 2);
+    case 'monthly':
+      return addMonths(originalDate, n);
+    default:
+      return originalDate; // Should not happen if validated
   }
-
-  return currentDate;
 }
 
 /**
- * Advances the date by one period based on frequency.
+ * Calculates the index of the first occurrence that can fall on or after the
+ * range start. Implements "jump" logic to skip years of iterations. May
+ * undershoot by one period (the generation loop filters dates before the
+ * range start) but never overshoots past a valid occurrence.
  */
-function getNextOccurrence(currentDate: Date, frequency: string): Date {
-  switch (frequency) {
-    case 'weekly':
-      return addWeeks(currentDate, 1);
-    case 'bi-weekly':
-      return addWeeks(currentDate, 2);
-    case 'monthly':
-      return addMonths(currentDate, 1);
-    default:
-      return currentDate; // Should not happen if validated
+function calculateStartIndex(originalDate: Date, rangeStart: Date, frequency: string): number {
+  // Only jump if we are behind
+  if (!isBefore(originalDate, rangeStart)) return 0;
+
+  if (frequency === 'weekly') {
+    const weeksDiff = Math.floor(differenceInCalendarWeeks(rangeStart, originalDate, { weekStartsOn: MONDAY }));
+    return Math.max(weeksDiff, 0);
   }
+  if (frequency === 'bi-weekly') {
+    const weeksDiff = Math.floor(differenceInCalendarWeeks(rangeStart, originalDate, { weekStartsOn: MONDAY }));
+    return Math.max(Math.floor(weeksDiff / 2), 0);
+  }
+  if (frequency === 'monthly') {
+    return Math.max(differenceInCalendarMonths(rangeStart, originalDate), 0);
+  }
+  return 0;
 }
 
 /**
@@ -113,7 +113,8 @@ export function generateRecurringInstances(
   const end = startOfDay(rangeEnd);
 
   // Optimization: Skip directly to the start of the range
-  let currentDate = calculateStartDate(originalDate, start, item.frequency);
+  let occurrenceIndex = calculateStartIndex(originalDate, start, item.frequency);
+  let currentDate = getOccurrenceDate(originalDate, occurrenceIndex, item.frequency);
 
   let iterationCount = 0;
 
@@ -131,13 +132,14 @@ export function generateRecurringInstances(
       });
     }
 
-    const nextDate = getNextOccurrence(currentDate, item.frequency);
+    const nextDate = getOccurrenceDate(originalDate, occurrenceIndex + 1, item.frequency);
 
     // Safety check to prevent infinite loop if date didn't change (e.g. unknown frequency)
     if (nextDate.getTime() === currentDate.getTime()) {
       iterationCount = MAX_ITERATIONS; // Break loop
     } else {
       currentDate = nextDate;
+      occurrenceIndex++;
     }
 
     iterationCount++;

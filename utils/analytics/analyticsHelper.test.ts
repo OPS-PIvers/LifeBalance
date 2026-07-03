@@ -123,6 +123,31 @@ describe('analyticsHelper', () => {
       expect(todayData?.count).toBe(4);
       expect(todayData?.intensity).toBe(4); // Max intensity
     });
+
+    it('normalizes intensity against the 90-day window max, not all-time max', () => {
+      // Window is 2023-07-18..2023-10-15. A peak day of 8 completions on
+      // 2023-06-01 (outside the window) must not set the intensity ceiling.
+      const oldPeak = Array.from({ length: 8 }, (_, i) => ({
+        id: `old-${i}`,
+        completedDates: ['2023-06-01']
+      } as Habit));
+      const inWindow = Array.from({ length: 5 }, (_, i) => ({
+        id: `new-${i}`,
+        completedDates: ['2023-10-15']
+      } as Habit));
+
+      const data = calculateHeatmapData([...oldPeak, ...inWindow]);
+
+      expect(data).toHaveLength(90);
+      // Off-window peak day is not rendered at all
+      expect(data.find(d => d.date === '2023-06-01')).toBeUndefined();
+
+      // Best in-window day (5 completions) gets max intensity; with the
+      // all-time max of 8 it would wrongly be 3 (5 < 8 * 0.75).
+      const todayData = data.find(d => d.date === '2023-10-15');
+      expect(todayData?.count).toBe(5);
+      expect(todayData?.intensity).toBe(4);
+    });
   });
 
   describe('calculateCategoryTrend', () => {

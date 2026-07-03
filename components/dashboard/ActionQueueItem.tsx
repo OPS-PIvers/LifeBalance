@@ -1,7 +1,8 @@
-import React, { useState, useMemo, memo } from 'react';
+import React, { useState, useMemo, memo, useRef } from 'react';
 import {
   CalendarClock, Receipt, Check, Trash2, Clock, ListTodo, AlertCircle, Sparkles, Pencil, Save, ChevronDown
 } from 'lucide-react';
+import { motion, useMotionValue, useTransform, PanInfo } from 'framer-motion';
 import { format, parseISO, isBefore, addDays, isAfter, startOfToday, isValid } from 'date-fns';
 import toast from 'react-hot-toast';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
@@ -10,18 +11,44 @@ import {
 } from '@/hooks/useActionQueue';
 import { HouseholdMember, BudgetBucket, Habit, Transaction, ToDo } from '@/types/schema';
 import { suggestHabitsForTransaction } from '@/utils/habitSuggestions';
+import { suggestCategoryForTransaction } from '@/utils/actionQueueSmart';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { cn } from '@/utils/cn';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { haptic } from '@/utils/haptics';
 import Input from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import Eyebrow from '@/components/ui/Eyebrow';
 import { Drawer } from '@/components/ui/Drawer';
+
+// Swipe affordance background colors per theme (same pattern as ShoppingItemRow).
+const SWIPE_COLORS = {
+  light: { defer: '#faf4ea', default: '#ffffff', approve: '#eef6f1' }, // warm-50 / white / money-bgPos
+  dark: { defer: '#3a2c15', default: '#242220', approve: '#0f2e23' },   // warm tint / brand-800 / money-pos tint
+};
+
+/** Drag distance (px) past which releasing the row commits the swipe action. */
+const SWIPE_THRESHOLD = 80;
+
+/** Hold duration (ms) before a press on a row enters multi-select mode. */
+const LONG_PRESS_MS = 500;
 
 interface ActionQueueItemProps {
   item: ActionQueueItem;
   isExpanded: boolean;
   setExpandedId: (id: string | null) => void;
   setPayModalItemId: (id: string | null) => void;
+
+  // Mobile triage: multi-select mode (bulk approve/defer/delete)
+  selectionMode: boolean;
+  isSelected: boolean;
+  onToggleSelect: (id: string) => void;
+  /** Long-press entry point — enter selection mode with this item selected. */
+  onEnterSelectionMode: (id: string) => void;
+  // Mobile triage: swipe gestures (right = instant approve, left = defer)
+  onSwipeApprove: (item: ActionQueueItem) => void;
+  onSwipeDefer: (item: ActionQueueItem) => void;
 
   // Data props passed down from parent to avoid consuming context
   buckets: BudgetBucket[];
@@ -48,6 +75,16 @@ const areActionQueueItemPropsEqual = (
   if (prev.isExpanded !== next.isExpanded ||
       prev.setExpandedId !== next.setExpandedId ||
       prev.setPayModalItemId !== next.setPayModalItemId) {
+    return false;
+  }
+
+  // Selection state & triage handlers
+  if (prev.selectionMode !== next.selectionMode ||
+      prev.isSelected !== next.isSelected ||
+      prev.onToggleSelect !== next.onToggleSelect ||
+      prev.onEnterSelectionMode !== next.onEnterSelectionMode ||
+      prev.onSwipeApprove !== next.onSwipeApprove ||
+      prev.onSwipeDefer !== next.onSwipeDefer) {
     return false;
   }
 
@@ -149,6 +186,12 @@ const SelectableChip: React.FC<SelectableChipProps> = ({ selected, onClick, chil
 // Updated 2026-02-19: Accepts context values as props to avoid re-rendering on unrelated context updates.
 export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
   item, isExpanded, setExpandedId, setPayModalItemId,
+  selectionMode,
+  isSelected,
+  onToggleSelect,
+  onEnterSelectionMode,
+  onSwipeApprove,
+  onSwipeDefer,
   buckets,
   habits,
   transactions,
@@ -176,6 +219,95 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
     date: ''
   });
   const [editErrors, setEditErrors] = useState<{ amount?: string; merchant?: string }>({});
+
+  // --- Swipe-to-triage gesture (right = approve/complete, left = defer) ---
+  const x = useMotionValue(0);
+  const reduceMotion = useReducedMotion();
+  const isDark = useMediaQuery('(prefers-color-scheme: dark)') ||
+    (typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
+  const palette = isDark ? SWIPE_COLORS.dark : SWIPE_COLORS.light;
+
+  // Swipe is a shortcut, never the only path: the Review button and expanded
+  // actions remain, so disabling it (reduced motion / expanded / select mode)
+  // loses no capability.
+  const swipeEnabled = !reduceMotion && !isExpanded && !selectionMode;
+
+  const bgColor = useTransform(
+    x,
+    [-100, -50, 0, 50, 100],
+    [palette.defer, palette.defer, palette.default, palette.approve, palette.approve]
+  );
+  const deferOpacity = useTransform(x, [-50, -20], [1, 0]);
+  const approveOpacity = useTransform(x, [20, 50], [0, 1]);
+  const deferScale = useTransform(x, [-100, -50], [1.2, 1]);
+  const approveScale = useTransform(x, [50, 100], [1, 1.2]);
+
+  const handleDragEnd = (_: unknown, info: PanInfo) => {
+    if (info.offset.x > SWIPE_THRESHOLD) {
+      haptic('light');
+      // Transactions that can't be instant-approved fall back to the review
+      // panel via handleExpand (which also opens the edit form for $0 stubs).
+      if (isTransactionQueueItem(item)) {
+        if (item.needsAmount) {
+          handleExpand();
+          toast('Add the amount, then approve.', { icon: '✏️' });
+          return;
+        }
+        if (!suggestCategoryForTransaction(item, buckets, transactions)) {
+          handleExpand();
+          toast('Pick a category to approve this one.', { icon: '🏷️' });
+          return;
+        }
+      }
+      onSwipeApprove(item);
+    } else if (info.offset.x < -SWIPE_THRESHOLD) {
+      haptic('light');
+      onSwipeDefer(item);
+    }
+  };
+
+  // --- Long-press → enter multi-select mode (standard mobile list pattern) ---
+  const longPressTimer = useRef<number | null>(null);
+  const longPressFired = useRef(false);
+  const pressOrigin = useRef<{ x: number; y: number } | null>(null);
+
+  const cancelLongPress = () => {
+    if (longPressTimer.current !== null) {
+      window.clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (selectionMode || isExpanded) return;
+    pressOrigin.current = { x: e.clientX, y: e.clientY };
+    longPressFired.current = false;
+    cancelLongPress();
+    longPressTimer.current = window.setTimeout(() => {
+      longPressTimer.current = null;
+      longPressFired.current = true;
+      haptic('medium');
+      onEnterSelectionMode(item.id);
+    }, LONG_PRESS_MS);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (longPressTimer.current === null || !pressOrigin.current) return;
+    // A press that starts moving is a swipe/scroll, not a long-press.
+    if (Math.hypot(e.clientX - pressOrigin.current.x, e.clientY - pressOrigin.current.y) > 10) {
+      cancelLongPress();
+    }
+  };
+
+  const handleRowClick = () => {
+    // Swallow the click generated by the pointer-up that ended a long-press,
+    // so entering selection mode doesn't immediately toggle the item back off.
+    if (longPressFired.current) {
+      longPressFired.current = false;
+      return;
+    }
+    if (selectionMode) onToggleSelect(item.id);
+  };
 
   // Memoize member lookup Map for O(1) access
   const memberMap = useMemo(() => {
@@ -329,14 +461,91 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
   const lowConfidenceHabits = suggestedHabits.filter(s => s.confidence === 'low');
   const remainingLowConfidenceHabits = lowConfidenceHabits.filter(s => !selectedHabitIds.includes(s.habit.id));
 
+  const approveLabel = isTodoQueueItem(item) ? 'Complete'
+    : isTransactionQueueItem(item) && item.needsAmount ? 'Add amount'
+    : 'Approve';
+
   return (
-    <div className="relative hairline-divider transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-brand-50 dark:hover:bg-brand-700/30 group">
+    <div className="relative overflow-hidden hairline-divider group">
+      {/* Background layer revealed by the swipe (right = approve, left = defer) */}
+      {swipeEnabled && (
+        <motion.div
+          className="absolute inset-0 z-0 flex items-center justify-between px-4"
+          style={{ backgroundColor: bgColor }}
+          aria-hidden="true"
+        >
+          <motion.div
+            style={{ opacity: approveOpacity, scale: approveScale }}
+            className="flex items-center gap-2 font-bold text-money-pos"
+          >
+            <Check size={20} />
+            <span>{approveLabel}</span>
+          </motion.div>
+          <motion.div
+            style={{ opacity: deferOpacity, scale: deferScale }}
+            className="flex items-center gap-2 font-bold ml-auto text-warm-600 dark:text-warm-300"
+          >
+            <Clock size={20} />
+            <span>Defer</span>
+          </motion.div>
+        </motion.div>
+      )}
+
+      {/* Foreground layer — draggable summary row */}
+      <motion.div
+        drag={swipeEnabled ? 'x' : false}
+        dragConstraints={{ left: 0, right: 0 }}
+        // With constraints pinned at 0, ALL movement is elastic overflow, so the
+        // visual displacement is offset × dragElastic. 0.5 keeps the resistance
+        // feel while still revealing the approve/defer affordance underneath
+        // (0.1 would cap a 150px swipe at a ~15px reveal).
+        dragElastic={0.5}
+        onDragEnd={swipeEnabled ? handleDragEnd : undefined}
+        style={{ x, touchAction: 'pan-y' }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={cancelLongPress}
+        onPointerCancel={cancelLongPress}
+        onClick={handleRowClick}
+        role={selectionMode ? 'checkbox' : undefined}
+        aria-checked={selectionMode ? isSelected : undefined}
+        aria-label={selectionMode ? `Select ${itemLabel}` : undefined}
+        tabIndex={selectionMode ? 0 : undefined}
+        onKeyDown={selectionMode ? (e) => {
+          if (e.key === ' ' || e.key === 'Enter') {
+            e.preventDefault();
+            onToggleSelect(item.id);
+          }
+        } : undefined}
+        className={cn(
+          'relative z-10 bg-white dark:bg-brand-800 transition-colors duration-(--duration-fast) ease-(--ease-standard)',
+          selectionMode
+            ? isSelected
+              ? 'bg-accent-50 dark:bg-accent-800/20 cursor-pointer'
+              : 'cursor-pointer hover:bg-brand-50 dark:hover:bg-brand-700/30'
+            : 'hover:bg-brand-50 dark:hover:bg-brand-700/30'
+        )}
+      >
       <div className="p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          {/* Icon */}
-          <div className={`w-9 h-9 rounded-card border flex items-center justify-center ${iconClasses}`}>
-             {iconComponent}
-          </div>
+          {/* Selection checkbox replaces the type icon in multi-select mode */}
+          {selectionMode ? (
+            <span
+              aria-hidden="true"
+              className={cn(
+                'w-9 h-9 rounded-card border-2 flex items-center justify-center transition-colors',
+                isSelected
+                  ? 'bg-accent-600 border-accent-600 text-white'
+                  : 'border-brand-300 dark:border-brand-600 text-transparent'
+              )}
+            >
+              <Check size={16} strokeWidth={3} />
+            </span>
+          ) : (
+            <div className={`w-9 h-9 rounded-card border flex items-center justify-center ${iconClasses}`}>
+               {iconComponent}
+            </div>
+          )}
           <div>
             <p className="font-semibold text-brand-800 dark:text-brand-100 text-sm">
               {isCalendarQueueItem(item) ? item.title :
@@ -369,7 +578,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
           ) : (isTransactionQueueItem(item) || isCalendarQueueItem(item)) ? (
             <span className="font-mono font-bold tabular-nums text-brand-900 dark:text-brand-50">{fmt(item.amount)}</span>
           ) : null}
-          {!isExpanded && (
+          {!isExpanded && !selectionMode && (
             <Button
               variant="primary"
               size="sm"
@@ -382,6 +591,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
           )}
         </div>
       </div>
+      </motion.div>
 
       {/* Review / approve flow lives in its own bottom sheet rather than
           expanding the row in place, so the list stays a static summary. */}

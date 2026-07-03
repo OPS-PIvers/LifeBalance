@@ -160,6 +160,12 @@ export interface Transaction {
    *  `plaidTransactionId` already exists, so re-syncs never duplicate. Absent on
    *  manual / scan / shortcut transactions. */
   plaidTransactionId?: string;
+  /** Action-Queue snooze for a `pending_review` transaction (yyyy-MM-dd, local).
+   *  Set by the "Defer" gesture on the Action Queue; while it is AFTER today the
+   *  row is hidden from the queue (it still counts toward pendingSpend /
+   *  Safe-to-Spend — deferring the review doesn't defer the money). Cleared when
+   *  the transaction is verified. Absent on never-deferred rows. */
+  reviewSnoozedUntil?: string;
 }
 
 export interface CalendarItem {

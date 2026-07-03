@@ -1295,6 +1295,9 @@ export const parseMagicAction = async (
     return result;
   } catch (error) {
     console.error("Gemini Magic Action Parse Error:", error);
+    // Quota-exceeded must reach the UI unchanged (see withErrorHandling) —
+    // returning 'unknown' would mislabel a rate-limit as unclear input.
+    if (error instanceof Error && error.message.includes("quota")) throw error;
     // Fallback or rethrow? Let's return unknown to be safe. A malformed AI
     // response (GeminiValidationError) lands here too and degrades gracefully.
     return { type: 'unknown', confidence: 0, data: {} };
@@ -1508,6 +1511,7 @@ export const analyzeHabitPatterns = async (
 
   } catch (error) {
     console.error("Gemini Habit Pattern Analysis Error:", error);
+    if (error instanceof Error && error.message.includes("quota")) throw error;
     throw new Error("Failed to analyze habit patterns.");
   }
 };

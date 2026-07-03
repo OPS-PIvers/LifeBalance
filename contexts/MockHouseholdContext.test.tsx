@@ -4,6 +4,7 @@ import { renderHook, act } from '@testing-library/react';
 import { MockHouseholdProvider } from './MockHouseholdContext';
 import { useFinance, useGamification, useHousehold } from './FirebaseHouseholdContext';
 import { calculateSafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
+import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { DEFAULT_TODO_POINTS } from '@/utils/todoPoints';
 import { getLocalDateString } from '@/utils/dateHelpers';
 
@@ -468,5 +469,86 @@ describe('MockHouseholdContext family challenges (Plan 080e)', () => {
     const created = result.current.challenges.find((c) => c.title === 'No Target Challenge');
     expect(created).toBeDefined();
     expect(created!.targetValue).toBeUndefined();
+  });
+});
+
+// Test Mode bug fixes: bucketSpentMap was a hardcoded empty Map (Budget page
+// always showed $0 spent) and addTransaction omitted payPeriodId (new pending
+// transactions were silently dropped from the Safe-to-Spend pending term).
+
+describe('MockHouseholdContext bucketSpentMap (Budget page spend tracking)', () => {
+  it('derives per-bucket spend from the seeded transactions instead of an empty map', () => {
+    const finance = captureFinance();
+    const groceries = finance.buckets.find((b) => b.name === 'Groceries');
+    const utilities = finance.buckets.find((b) => b.name === 'Utilities');
+    expect(groceries).toBeDefined();
+    expect(utilities).toBeDefined();
+
+    // Seed: Safeway $45.50 (Groceries) + PG&E $120 (Utilities), both verified.
+    expect(finance.bucketSpentMap.get(groceries!.id)).toEqual({ verified: 45.5, pending: 0 });
+    expect(finance.bucketSpentMap.get(utilities!.id)).toEqual({ verified: 120, pending: 0 });
+  });
+
+  it('matches the shared calculateBucketSpent derivation used by the real context', () => {
+    const finance = captureFinance();
+    expect(finance.bucketSpentMap).toEqual(
+      calculateBucketSpent(finance.buckets, finance.transactions, finance.currentPeriodId)
+    );
+  });
+
+  it('moves the bucket progress when a transaction is added in Test Mode', async () => {
+    const { result } = renderHook(() => useFinance(), { wrapper });
+    const groceries = result.current.buckets.find((b) => b.name === 'Groceries');
+    expect(groceries).toBeDefined();
+
+    await act(async () => {
+      await result.current.addTransaction({
+        amount: 10.25,
+        merchant: "Trader Joe's",
+        category: 'Groceries',
+        date: getLocalDateString(),
+        status: 'pending_review',
+        isRecurring: false,
+        source: 'manual',
+        autoCategorized: false,
+      });
+    });
+
+    expect(result.current.bucketSpentMap.get(groceries!.id)).toEqual({
+      verified: 45.5,
+      pending: 10.25,
+    });
+  });
+});
+
+describe('MockHouseholdContext addTransaction pay period (Safe-to-Spend pending term)', () => {
+  it('assigns the mock currentPeriodId so a new pending transaction lowers safeToSpend', async () => {
+    const { result } = renderHook(() => useFinance(), { wrapper });
+    const before = result.current.safeToSpendBreakdown;
+    expect(before?.pendingSpend).toBe(0);
+
+    await act(async () => {
+      await result.current.addTransaction({
+        amount: 50,
+        merchant: 'Receipt Scan Cafe',
+        category: 'Entertainment',
+        date: getLocalDateString(),
+        status: 'pending_review',
+        isRecurring: false,
+        source: 'camera-scan',
+        autoCategorized: true,
+      });
+    });
+
+    const created = result.current.transactions.find(
+      (t) => t.merchant === 'Receipt Scan Cafe'
+    );
+    expect(created).toBeDefined();
+    // Without a payPeriodId matching currentPeriodId, sumPendingSpend drops the tx.
+    expect(created!.payPeriodId).toBe(result.current.currentPeriodId);
+
+    const after = result.current.safeToSpendBreakdown;
+    expect(after?.pendingSpend).toBe(50);
+    expect(after?.safeToSpend).toBe((before?.safeToSpend ?? 0) - 50);
   });
 });

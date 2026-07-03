@@ -1,9 +1,11 @@
-import React, { useState, useCallback, Suspense } from 'react';
+import React, { useState, useCallback, useMemo, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { format, parseISO } from 'date-fns';
+import toast from 'react-hot-toast';
 import { useFinance, useGamification, useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { AccountPicker } from '@/components/budget/AccountPicker';
-import { BarChart2, CheckCircle2 } from 'lucide-react';
+import { BarChart2, Check, CheckCircle2, Clock, Trash2, X } from 'lucide-react';
 // Lazy-loaded so their heavy dependencies (e.g. recharts) stay out of the
 // initial Dashboard bundle and only load when a modal is actually opened.
 // The Analytics modal is retired: its Wallet charts now live in Money → Trends
@@ -14,8 +16,22 @@ const InsightsArchiveModal = React.lazy(() => import('@/components/modals/Insigh
 // Lazy so the heavy Drawer-based capture flow stays out of the Dashboard chunk;
 // it only loads when the "Pay down" quick action is used.
 const CaptureModal = React.lazy(() => import('@/components/modals/CaptureModal'));
-import { useActionQueue } from '@/hooks/useActionQueue';
+import {
+  useActionQueue,
+  isCalendarQueueItem,
+  isTodoQueueItem,
+  isTransactionQueueItem,
+  type ActionQueueItem,
+} from '@/hooks/useActionQueue';
 import { ActionQueueItemCard } from '@/components/dashboard/ActionQueueItem';
+import {
+  suggestAccountForCalendarItem,
+  suggestAccountIdForTransaction,
+  suggestCategoryForTransaction,
+  nextDeferDate,
+} from '@/utils/actionQueueSmart';
+import { showDeleteConfirmation } from '@/utils/toastHelpers';
+import { Button } from '@/components/ui/Button';
 import { InsightWidget } from '@/components/dashboard/InsightWidget';
 import { DailyHabitsWidget } from '@/components/dashboard/DailyHabitsWidget';
 import { KidsChoresWidget } from '@/components/dashboard/KidsChoresWidget';
@@ -34,6 +50,7 @@ const Dashboard: React.FC = () => {
   // shopping toggle) doesn't re-render the whole Dashboard.
   const { isLoading, currentUser, members, pendingItemsCount } = useHouseholdCore();
   const {
+    accounts,
     buckets,
     transactions,
     payCalendarItem,
@@ -69,6 +86,220 @@ const Dashboard: React.FC = () => {
   // form pre-tagged as a payment toward that card).
   const [payDownAccountId, setPayDownAccountId] = useState<string | null>(null);
   const handlePayDown = useCallback((accountId: string) => setPayDownAccountId(accountId), []);
+
+  // --- Action Queue triage: multi-select + swipe gestures ---
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+  const [isBulkApprovePickerOpen, setIsBulkApprovePickerOpen] = useState(false);
+  const [isBulkRunning, setIsBulkRunning] = useState(false);
+
+  const selectedItems = useMemo(
+    () => actionQueue.filter(i => selectedIds.has(i.id)),
+    [actionQueue, selectedIds]
+  );
+
+  const enterSelectionMode = useCallback((id?: string) => {
+    setExpandedId(null);
+    setSelectionMode(true);
+    setSelectedIds(id ? new Set([id]) : new Set());
+  }, []);
+
+  const exitSelectionMode = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+    setIsBulkApprovePickerOpen(false);
+  }, []);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const allSelected = actionQueue.length > 0 && selectedItems.length === actionQueue.length;
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds(prev =>
+      prev.size >= actionQueue.length ? new Set() : new Set(actionQueue.map(i => i.id))
+    );
+  }, [actionQueue]);
+
+  // Swipe right — instant approve with smart defaults. The card already
+  // deflects transactions that can't be instant-approved ($0 stubs, no
+  // resolvable category) into the review panel, so every item arriving here
+  // can be committed directly.
+  const handleSwipeApprove = useCallback(async (item: ActionQueueItem) => {
+    try {
+      if (isTodoQueueItem(item)) {
+        await completeToDo(item.id);
+        toast.success('To-Do completed! 🎉');
+        return;
+      }
+      if (isCalendarQueueItem(item)) {
+        const account = suggestAccountForCalendarItem(item, accounts, transactions);
+        if (!account) {
+          // No payable account to guess — fall back to the explicit pay sheet.
+          setPayModalItemId(item.id);
+          return;
+        }
+        await payCalendarItem(item.id, account.id, { silent: true });
+        toast.success(
+          item.type === 'expense'
+            ? `Paid from ${account.name}`
+            : `Received into ${account.name}`
+        );
+        return;
+      }
+      const category = suggestCategoryForTransaction(item, buckets, transactions);
+      if (!category) {
+        // The card's pre-check makes this unreachable in practice; expand as a
+        // safe fallback rather than guessing a category.
+        setExpandedId(item.id);
+        return;
+      }
+      const accountId = suggestAccountIdForTransaction(item, accounts, transactions);
+      await updateTransactionCategory(item.id, category, item.relatedHabitIds ?? [], accountId);
+      toast.success(`Approved · ${category}`);
+    } catch (error) {
+      console.error('[ActionQueue] Swipe approve failed:', error);
+      toast.error('Failed to approve. Please try again.');
+    }
+  }, [accounts, buckets, transactions, completeToDo, payCalendarItem, updateTransactionCategory]);
+
+  // Swipe left — instant defer: bills/to-dos move a day forward, pending
+  // transactions snooze out of the queue until tomorrow.
+  const handleSwipeDefer = useCallback(async (item: ActionQueueItem) => {
+    try {
+      if (isCalendarQueueItem(item)) {
+        await deferCalendarItem(item.id);
+        return;
+      }
+      if (isTodoQueueItem(item)) {
+        const newDate = nextDeferDate(item.date);
+        await updateToDo(item.id, { completeByDate: newDate });
+        toast.success(`Deferred to ${format(parseISO(newDate), 'MMM d')}`);
+        return;
+      }
+      const snoozeUntil = nextDeferDate(item.date);
+      await updateTransaction(item.id, { reviewSnoozedUntil: snoozeUntil }, { silent: true });
+      toast.success('Snoozed until tomorrow');
+    } catch (error) {
+      console.error('[ActionQueue] Swipe defer failed:', error);
+      toast.error('Failed to defer. Please try again.');
+    }
+  }, [deferCalendarItem, updateToDo, updateTransaction]);
+
+  // Bulk approve. `accountOverrideId` (from the picker) pays/tags every money
+  // item from that account; undefined = smart per-item assignment. Items that
+  // can't be auto-approved ($0 stubs, unresolvable category/account) are
+  // skipped and stay in the queue.
+  const runBulkApprove = useCallback(async (accountOverrideId?: string) => {
+    setIsBulkApprovePickerOpen(false);
+    setIsBulkRunning(true);
+    let approved = 0;
+    let skipped = 0;
+    for (const item of selectedItems) {
+      try {
+        if (isTodoQueueItem(item)) {
+          await completeToDo(item.id);
+          approved++;
+        } else if (isCalendarQueueItem(item)) {
+          const account = accountOverrideId
+            ? accounts.find(a => a.id === accountOverrideId)
+            : suggestAccountForCalendarItem(item, accounts, transactions);
+          if (!account) {
+            skipped++;
+            continue;
+          }
+          await payCalendarItem(item.id, account.id, { silent: true });
+          approved++;
+        } else if (isTransactionQueueItem(item)) {
+          if (item.needsAmount) {
+            skipped++;
+            continue;
+          }
+          const category = suggestCategoryForTransaction(item, buckets, transactions);
+          if (!category) {
+            skipped++;
+            continue;
+          }
+          const accountId =
+            accountOverrideId ?? suggestAccountIdForTransaction(item, accounts, transactions);
+          await updateTransactionCategory(item.id, category, item.relatedHabitIds ?? [], accountId);
+          approved++;
+        }
+      } catch (error) {
+        console.error('[ActionQueue] Bulk approve failed for item:', item.id, error);
+        skipped++;
+      }
+    }
+    setIsBulkRunning(false);
+    if (approved > 0) toast.success(`Approved ${approved} item${approved === 1 ? '' : 's'}`);
+    if (skipped > 0) toast(`${skipped} left in the queue (needs an amount, category, or account)`, { icon: '👀' });
+    exitSelectionMode();
+  }, [selectedItems, accounts, buckets, transactions, completeToDo, payCalendarItem, updateTransactionCategory, exitSelectionMode]);
+
+  const handleBulkApprove = useCallback(() => {
+    // Only money items involve an account; a to-dos-only selection completes
+    // directly without the picker detour.
+    const needsAccount = selectedItems.some(i => isCalendarQueueItem(i) || isTransactionQueueItem(i));
+    if (needsAccount && accounts.some(a => a.type !== 'credit')) {
+      setIsBulkApprovePickerOpen(true);
+    } else {
+      void runBulkApprove();
+    }
+  }, [selectedItems, accounts, runBulkApprove]);
+
+  const handleBulkDefer = useCallback(async () => {
+    setIsBulkRunning(true);
+    let deferred = 0;
+    let failed = 0;
+    for (const item of selectedItems) {
+      try {
+        if (isCalendarQueueItem(item)) {
+          await deferCalendarItem(item.id, { silent: true });
+        } else if (isTodoQueueItem(item)) {
+          await updateToDo(item.id, { completeByDate: nextDeferDate(item.date) });
+        } else {
+          await updateTransaction(item.id, { reviewSnoozedUntil: nextDeferDate(item.date) }, { silent: true });
+        }
+        deferred++;
+      } catch (error) {
+        console.error('[ActionQueue] Bulk defer failed for item:', item.id, error);
+        failed++;
+      }
+    }
+    setIsBulkRunning(false);
+    if (deferred > 0) toast.success(`Deferred ${deferred} item${deferred === 1 ? '' : 's'}`);
+    if (failed > 0) toast.error(`Failed to defer ${failed} item${failed === 1 ? '' : 's'}`);
+    exitSelectionMode();
+  }, [selectedItems, deferCalendarItem, updateToDo, updateTransaction, exitSelectionMode]);
+
+  const handleBulkDelete = useCallback(() => {
+    const items = selectedItems;
+    showDeleteConfirmation(async () => {
+      setIsBulkRunning(true);
+      let deleted = 0;
+      let failed = 0;
+      for (const item of items) {
+        try {
+          if (isCalendarQueueItem(item)) await deleteCalendarItem(item.id, { silent: true });
+          else if (isTodoQueueItem(item)) await deleteToDo(item.id);
+          else await deleteTransaction(item.id, { silent: true });
+          deleted++;
+        } catch (error) {
+          console.error('[ActionQueue] Bulk delete failed for item:', item.id, error);
+          failed++;
+        }
+      }
+      setIsBulkRunning(false);
+      if (deleted > 0) toast.success(`Deleted ${deleted} item${deleted === 1 ? '' : 's'}`);
+      if (failed > 0) toast.error(`Failed to delete ${failed} item${failed === 1 ? '' : 's'}`);
+      exitSelectionMode();
+    }, items.length === 1 ? 'item' : `${items.length} items`);
+  }, [selectedItems, deleteCalendarItem, deleteToDo, deleteTransaction, exitSelectionMode]);
 
   if (isLoading) {
     return <DashboardSkeleton />;
@@ -128,7 +359,9 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Action Queue — triage of what needs attention */}
+        {/* Action Queue — triage of what needs attention. Swipe right to
+            approve, swipe left to defer, long-press (or "Select") for bulk
+            approve/defer/delete. */}
         <Section
           title={
             <span className="flex items-center gap-2">
@@ -138,6 +371,25 @@ const Dashboard: React.FC = () => {
               />
               Action Queue {actionQueue.length > 0 && `(${actionQueue.length})`}
             </span>
+          }
+          action={
+            actionQueue.length > 0 ? (
+              selectionMode ? (
+                <button
+                  onClick={exitSelectionMode}
+                  className="text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-200 px-1 min-h-6"
+                >
+                  Cancel
+                </button>
+              ) : (
+                <button
+                  onClick={() => enterSelectionMode()}
+                  className="text-xs font-semibold text-accent-700 dark:text-accent-300 hover:underline px-1 min-h-6"
+                >
+                  Select
+                </button>
+              )
+            ) : undefined
           }
         >
           {actionQueue.length > 0 ? (
@@ -149,6 +401,12 @@ const Dashboard: React.FC = () => {
                   isExpanded={expandedId === item.id}
                   setExpandedId={setExpandedId}
                   setPayModalItemId={setPayModalItemId}
+                  selectionMode={selectionMode}
+                  isSelected={selectedIds.has(item.id)}
+                  onToggleSelect={toggleSelect}
+                  onEnterSelectionMode={enterSelectionMode}
+                  onSwipeApprove={handleSwipeApprove}
+                  onSwipeDefer={handleSwipeDefer}
                   buckets={buckets}
                   habits={habits}
                   transactions={transactions}
@@ -222,6 +480,76 @@ const Dashboard: React.FC = () => {
           setPayModalItemId(null);
         }}
       />
+
+      {/* Bulk approve: pick one account for everything, or smart-assign */}
+      <AccountPicker
+        isOpen={isBulkApprovePickerOpen}
+        onClose={() => setIsBulkApprovePickerOpen(false)}
+        title={`Approve ${selectedItems.length} item${selectedItems.length === 1 ? '' : 's'}`}
+        description="Pick one account for all selected items, or let each use its usual one."
+        topAction={{
+          label: 'Smart assign (recommended)',
+          description: 'Checking, or the account you used last time',
+          onSelect: () => void runBulkApprove(),
+        }}
+        onSelect={(accountId) => void runBulkApprove(accountId)}
+      />
+
+      {/* Bulk action bar — replaces the bottom nav while selecting (Gmail-style) */}
+      {selectionMode && (
+        <div className="fixed bottom-0 inset-x-0 z-banner bg-white dark:bg-brand-800 border-t border-brand-200 dark:border-brand-700 shadow-nav pb-safe">
+          <div className="px-4 py-3 space-y-2 max-w-lg mx-auto">
+            <div className="flex items-center justify-between text-xs font-semibold text-brand-500 dark:text-brand-400">
+              <span aria-live="polite">
+                {selectedItems.length} selected
+              </span>
+              <button
+                onClick={toggleSelectAll}
+                className="text-accent-700 dark:text-accent-300 hover:underline min-h-6 px-1"
+              >
+                {allSelected ? 'Clear all' : 'Select all'}
+              </button>
+            </div>
+            <div className="flex items-stretch gap-2">
+              <Button
+                variant="success"
+                className="flex-1"
+                disabled={selectedItems.length === 0 || isBulkRunning}
+                onClick={handleBulkApprove}
+                leftIcon={<Check size={16} />}
+              >
+                Approve
+              </Button>
+              <Button
+                variant="warning"
+                className="flex-1"
+                disabled={selectedItems.length === 0 || isBulkRunning}
+                onClick={() => void handleBulkDefer()}
+                leftIcon={<Clock size={16} />}
+              >
+                Defer
+              </Button>
+              <Button
+                variant="destructive"
+                className="flex-1"
+                disabled={selectedItems.length === 0 || isBulkRunning}
+                onClick={handleBulkDelete}
+                leftIcon={<Trash2 size={16} />}
+              >
+                Delete
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={exitSelectionMode}
+                aria-label="Exit selection mode"
+                className="px-3"
+              >
+                <X size={16} />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

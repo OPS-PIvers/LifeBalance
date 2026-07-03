@@ -14,7 +14,7 @@
  *   - `firebase-admin` exposes a single shared, reconfigurable mock Firestore.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
 // firebase-functions mocks
@@ -70,7 +70,8 @@ const adminMock = vi.hoisted(() => {
     collection: vi.fn(),
     recursiveDelete: vi.fn(() => Promise.resolve()),
   };
-  return { db };
+  const sendEachForMulticast = vi.fn();
+  return { db, sendEachForMulticast };
 });
 
 vi.mock("firebase-admin", () => {
@@ -84,12 +85,17 @@ vi.mock("firebase-admin", () => {
   return {
     initializeApp: vi.fn(),
     firestore,
-    messaging: () => ({ sendEachForMulticast: vi.fn() }),
+    messaging: () => ({ sendEachForMulticast: adminMock.sendEachForMulticast }),
   };
 });
 
 // Import AFTER mocks are registered.
-import { deletehousehold } from "./index";
+import {
+  deletehousehold,
+  findBillsDueOnDate,
+  sendbillreminders,
+  type BillCalendarItem,
+} from "./index";
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -243,5 +249,229 @@ describe("deletehousehold", () => {
 
     expect(result).toEqual({ success: true });
     expect(adminMock.db.recursiveDelete).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ===========================================================================
+// findBillsDueOnDate (recurring bill expansion for sendbillreminders)
+// ===========================================================================
+
+describe("findBillsDueOnDate", () => {
+  const monthlyRent: BillCalendarItem = {
+    id: "rent",
+    date: "2026-01-01",
+    isRecurring: true,
+    frequency: "monthly",
+    isPaid: false,
+    amount: 1200,
+  };
+
+  it("matches a recurring monthly bill on occurrences AFTER the anchor date", () => {
+    // The template's stored `date` stays at the anchor forever; a raw string
+    // comparison would only ever match 2026-01-01.
+    expect(findBillsDueOnDate([monthlyRent], "2026-02-01")).toHaveLength(1);
+    expect(findBillsDueOnDate([monthlyRent], "2026-03-01")).toHaveLength(1);
+    expect(findBillsDueOnDate([monthlyRent], "2026-01-01")).toHaveLength(1);
+  });
+
+  it("does not match dates that are not occurrences", () => {
+    expect(findBillsDueOnDate([monthlyRent], "2026-02-02")).toHaveLength(0);
+    // Never before the anchor.
+    expect(findBillsDueOnDate([monthlyRent], "2025-12-01")).toHaveLength(0);
+  });
+
+  it("clamps monthly occurrences to month-end from the anchor (Jan 31 -> Feb 28 -> Mar 31)", () => {
+    const bill: BillCalendarItem = {
+      id: "b1",
+      date: "2026-01-31",
+      isRecurring: true,
+      frequency: "monthly",
+    };
+    expect(findBillsDueOnDate([bill], "2026-02-28")).toHaveLength(1);
+    expect(findBillsDueOnDate([bill], "2026-03-31")).toHaveLength(1);
+    // Clamping must derive from the anchor, not compound from Feb 28.
+    expect(findBillsDueOnDate([bill], "2026-03-28")).toHaveLength(0);
+  });
+
+  it("matches weekly and bi-weekly occurrences", () => {
+    const weekly: BillCalendarItem = {
+      id: "w1",
+      date: "2026-06-01",
+      isRecurring: true,
+      frequency: "weekly",
+    };
+    const biweekly: BillCalendarItem = {
+      id: "bw1",
+      date: "2026-06-01",
+      isRecurring: true,
+      frequency: "bi-weekly",
+    };
+    expect(findBillsDueOnDate([weekly], "2026-06-08")).toHaveLength(1);
+    expect(findBillsDueOnDate([weekly], "2026-06-09")).toHaveLength(0);
+    expect(findBillsDueOnDate([biweekly], "2026-06-15")).toHaveLength(1);
+    expect(findBillsDueOnDate([biweekly], "2026-06-08")).toHaveLength(0);
+  });
+
+  it("suppresses occurrences covered by a paid or deleted instance doc", () => {
+    const paidInstance: BillCalendarItem = {
+      id: "rent_instance_2026-02-01",
+      date: "2026-02-01",
+      isPaid: true,
+      parentRecurringId: "rent",
+      amount: 1200,
+    };
+    const deletedInstance: BillCalendarItem = {
+      id: "rent_instance_2026-03-01",
+      date: "2026-03-01",
+      isDeleted: true,
+      parentRecurringId: "rent",
+    };
+    const items = [monthlyRent, paidInstance, deletedInstance];
+    expect(findBillsDueOnDate(items, "2026-02-01")).toHaveLength(0);
+    expect(findBillsDueOnDate(items, "2026-03-01")).toHaveLength(0);
+    // The next uncovered occurrence is still due.
+    expect(findBillsDueOnDate(items, "2026-04-01")).toHaveLength(1);
+  });
+
+  it("matches non-recurring bills only on their exact date and only when unpaid", () => {
+    const oneOff: BillCalendarItem = { id: "o1", date: "2026-02-01", amount: 50 };
+    const paidOneOff: BillCalendarItem = {
+      id: "o2",
+      date: "2026-02-01",
+      isPaid: true,
+    };
+    expect(findBillsDueOnDate([oneOff, paidOneOff], "2026-02-01")).toEqual([
+      oneOff,
+    ]);
+    expect(findBillsDueOnDate([oneOff], "2026-02-02")).toHaveLength(0);
+  });
+});
+
+// ===========================================================================
+// sendbillreminders (scheduled handler wiring)
+// ===========================================================================
+
+describe("sendbillreminders", () => {
+  interface MockQuery {
+    where: (...args: unknown[]) => MockQuery;
+    get: () => Promise<{ docs: Array<{ id: string; data: () => Record<string, unknown> }> }>;
+  }
+
+  /**
+   * Configure a single household with one member whose bill reminders fire at
+   * 09:00 UTC (daysBeforeDue = 3) and the given calendarItems docs.
+   */
+  function configureBillReminderHousehold(
+    calendarDocs: Array<{ id: string; data: Record<string, unknown> }>
+  ): void {
+    const member = {
+      uid: "u1",
+      fcmTokens: ["tok1"],
+      notificationPreferences: {
+        billReminders: { enabled: true, daysBeforeDue: 3, time: "9:00" },
+        timezone: "UTC",
+      },
+    };
+    const membersSnapshot = {
+      docs: [{ data: () => member, ref: { update: vi.fn() } }],
+    };
+    const calendarSnapshot = {
+      docs: calendarDocs.map((d) => ({ id: d.id, data: () => d.data })),
+    };
+    const calendarQuery: MockQuery = {
+      where: () => calendarQuery,
+      get: () => Promise.resolve(calendarSnapshot),
+    };
+    const householdDoc = {
+      id: HOUSEHOLD_ID,
+      data: () => ({ currency: "USD" }),
+      ref: {
+        collection: (name: string) => {
+          if (name === "members") {
+            return { get: () => Promise.resolve(membersSnapshot) };
+          }
+          if (name === "calendarItems") return calendarQuery;
+          return { get: () => Promise.resolve({ docs: [] }) };
+        },
+      },
+    };
+    adminMock.db.collection.mockImplementation((path: string) => {
+      if (path === "households") {
+        return { get: () => Promise.resolve({ docs: [householdDoc] }) };
+      }
+      return { where: () => ({ get: () => Promise.resolve({ docs: [] }) }) };
+    });
+  }
+
+  const runBillReminders = sendbillreminders as unknown as () => Promise<void>;
+
+  beforeEach(() => {
+    adminMock.sendEachForMulticast.mockImplementation(() =>
+      Promise.resolve({ successCount: 1, failureCount: 0, responses: [{ success: true }] })
+    );
+    vi.useFakeTimers();
+    // 09:30 UTC matches the member's 9:00 reminder hour; today = 2026-02-26,
+    // so with daysBeforeDue = 3 the target date is 2026-03-01.
+    vi.setSystemTime(new Date("2026-02-26T09:30:00Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("sends a reminder for a LATER occurrence of a recurring bill (not just the anchor)", async () => {
+    configureBillReminderHousehold([
+      {
+        id: "rent",
+        data: {
+          type: "expense",
+          date: "2026-01-01", // anchor; occurrence due 2026-03-01
+          isRecurring: true,
+          frequency: "monthly",
+          isPaid: false,
+          amount: 1200,
+        },
+      },
+    ]);
+
+    await runBillReminders();
+
+    expect(adminMock.sendEachForMulticast).toHaveBeenCalledTimes(1);
+    expect(adminMock.sendEachForMulticast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tokens: ["tok1"],
+        data: expect.objectContaining({ type: "bill_reminder" }),
+      })
+    );
+  });
+
+  it("does not send a reminder when the target occurrence was already paid", async () => {
+    configureBillReminderHousehold([
+      {
+        id: "rent",
+        data: {
+          type: "expense",
+          date: "2026-01-01",
+          isRecurring: true,
+          frequency: "monthly",
+          isPaid: false,
+          amount: 1200,
+        },
+      },
+      {
+        id: "rent_instance_2026-03-01",
+        data: {
+          type: "expense",
+          date: "2026-03-01",
+          isPaid: true,
+          parentRecurringId: "rent",
+          amount: 1200,
+        },
+      },
+    ]);
+
+    await runBillReminders();
+
+    expect(adminMock.sendEachForMulticast).not.toHaveBeenCalled();
   });
 });

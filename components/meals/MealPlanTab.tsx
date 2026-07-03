@@ -128,6 +128,10 @@ const MealPlanTab: React.FC = () => {
             .map(item => normalizeToKey(item.name))
       );
 
+      // Base new orders on the max existing order (not list length) — orders are
+      // never renumbered on delete, so length can be lower than the highest order.
+      const maxOrder = shoppingList.length > 0 ? Math.max(...shoppingList.map(i => i.order || 0)) : 0;
+
       const itemsToAdd = selectedIngredients
         .filter(ing => !unpurchasedSet.has(normalizeToKey(ing.name)))
         .map((ing, index) => {
@@ -141,7 +145,7 @@ const MealPlanTab: React.FC = () => {
                 isPurchased: false,
                 addedFromMealId: ingredientSelectorData?.mealId,
                 // Increment order for each new item to maintain sequence
-                order: shoppingList.length + index
+                order: maxOrder + 1 + index
             };
         });
 

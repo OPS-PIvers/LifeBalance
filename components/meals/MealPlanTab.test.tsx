@@ -1,14 +1,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import MealPlanTab from './MealPlanTab';
+
+// Mutable mock state so individual tests can supply fixtures.
+const mocks = vi.hoisted(() => ({
+  meals: [] as unknown[],
+  mealPlan: [] as unknown[],
+  shoppingList: [] as unknown[],
+  groceryCatalog: [] as unknown[],
+  addShoppingItems: vi.fn(),
+}));
 
 // Mock dependencies
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useMealPlan: () => ({
-    meals: [] as unknown[],
+    meals: mocks.meals,
     addMeal: vi.fn(),
     updateMeal: vi.fn(),
-    mealPlan: [] as unknown[],
+    mealPlan: mocks.mealPlan,
     addMealPlanItem: vi.fn(),
     updateMealPlanItem: vi.fn(),
     deleteMealPlanItem: vi.fn(),
@@ -16,13 +25,27 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   }),
   useShopping: () => ({
     addShoppingItem: vi.fn(),
-    addShoppingItems: vi.fn(),
-    shoppingList: [] as unknown[],
-    groceryCatalog: [] as unknown[],
+    addShoppingItems: mocks.addShoppingItems,
+    shoppingList: mocks.shoppingList,
+    groceryCatalog: mocks.groceryCatalog,
   }),
   useHouseholdCore: () => ({
     householdId: 'test-household',
   }),
+}));
+
+// Replace the real selector modal with a stub that confirms every passed
+// ingredient, so tests can drive handleConfirmIngredients directly.
+vi.mock('./IngredientSelectorModal', () => ({
+  IngredientSelectorModal: ({
+    ingredients,
+    onConfirm,
+  }: {
+    ingredients: { name: string; quantity?: string }[];
+    onConfirm: (selected: { name: string; quantity?: string }[]) => void;
+  }) => (
+    <button onClick={() => onConfirm(ingredients)}>Confirm all ingredients</button>
+  ),
 }));
 
 vi.mock('react-hot-toast', () => ({
@@ -71,6 +94,10 @@ vi.mock('lucide-react', () => ({
 describe('MealPlanTab', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    mocks.meals = [];
+    mocks.mealPlan = [];
+    mocks.shoppingList = [];
+    mocks.groceryCatalog = [];
   });
 
   afterEach(() => {
@@ -91,5 +118,31 @@ describe('MealPlanTab', () => {
     // We search for the date range text
     const dateRange = screen.getByText(/Oct 23 - Oct 29/i);
     expect(dateRange).toBeInTheDocument();
+  });
+
+  it('orders ingredient-selector items after the highest existing order, not list length', () => {
+    vi.setSystemTime(new Date(2023, 9, 25)); // Wednesday, Oct 25, 2023
+
+    mocks.meals = [
+      { id: 'meal-1', name: 'Tacos', ingredients: [{ name: 'Tortillas' }, { name: 'Beef' }], tags: [] },
+    ];
+    mocks.mealPlan = [
+      { id: 'plan-1', date: '2023-10-25', mealId: 'meal-1', mealName: 'Tacos', type: 'dinner', isCooked: false },
+    ];
+    // Length 2 but max order 3: an order-2 item was deleted, and deletes never
+    // renumber remaining orders — so length-based ordering would collide.
+    mocks.shoppingList = [
+      { id: 's1', name: 'Milk', category: 'Dairy', isPurchased: false, order: 1 },
+      { id: 's2', name: 'Eggs', category: 'Dairy', isPurchased: false, order: 3 },
+    ];
+
+    render(<MealPlanTab />);
+
+    fireEvent.click(screen.getByText(/Shop ingredients/i));
+    fireEvent.click(screen.getByText('Confirm all ingredients'));
+
+    expect(mocks.addShoppingItems).toHaveBeenCalledTimes(1);
+    const added = mocks.addShoppingItems.mock.calls[0]?.[0] as { name: string; order: number }[];
+    expect(added.map(item => item.order)).toEqual([4, 5]);
   });
 });

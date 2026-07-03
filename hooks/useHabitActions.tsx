@@ -30,7 +30,7 @@ import {
   getMultiplier
 } from '@/utils/habitLogic';
 import toast from 'react-hot-toast';
-import { format, parseISO, startOfWeek } from 'date-fns';
+import { addDays, format, parseISO, startOfWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 
 /**
@@ -301,35 +301,87 @@ export const useHabitActions = (
     const submissionTimestamp = timestamp || new Date().toISOString();
     const submissionDate = format(parseISO(submissionTimestamp), 'yyyy-MM-dd');
 
-    // Build the post-submission completion history first so the multiplier can be
-    // driven by the PROSPECTIVE streak (the streak that exists once this day is
-    // counted), matching client toggle semantics rather than the pre-submission
-    // streak. For "today" this equals streakForHabit(updatedCompletedDates); for a
-    // back-dated submission it's the streak ending on that day.
-    const updatedCompletedDates = [...habit.completedDates];
-    if (!updatedCompletedDates.includes(submissionDate)) {
-      updatedCompletedDates.push(submissionDate);
-      updatedCompletedDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-    }
+    try {
+      const today = getLocalDateString();
 
-    const prospectiveStreak = streakEndingOnForHabit(
-      { period: habit.period, completedDates: updatedCompletedDates },
-      submissionDate
-    );
-    const multiplier = getMultiplier(prospectiveStreak, habit.type === 'positive', habit.period);
+      // The submission's own period: the day itself for daily habits, the
+      // Monday-anchored week for weekly ones. A back-dated submission must only
+      // affect ITS period — never today's / this week's live counter.
+      const periodStartOf = (date: string): string =>
+        habit.period === 'weekly'
+          ? format(startOfWeek(parseISO(date), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+          : date;
+      const isCurrentPeriod = periodStartOf(submissionDate) === periodStartOf(today);
 
-    let pointsEarned = 0;
-    if (habit.scoringType === 'incremental') {
-      pointsEarned = count * Math.floor(habit.basePoints * multiplier);
-    } else {
-      // Threshold: check if this submission hits target
-      const newCount = habit.count + count;
-      if (newCount >= habit.targetCount && habit.count < habit.targetCount) {
+      // Lazy-reset parity with toggleHabit: a stale habit's count belongs to a
+      // previous period, so its live period counter is effectively 0.
+      const liveCount = isHabitStale(habit) ? 0 : habit.count;
+
+      // Count already recorded for the submission's own period. Current period:
+      // the live counter. Past period: the sum of that period's stored
+      // submissions — today's counter says nothing about a past day/week. Only
+      // threshold habits need this (incremental scoring is per-action).
+      let priorPeriodCount = liveCount;
+      if (!isCurrentPeriod && habit.scoringType !== 'incremental') {
+        const periodStart = periodStartOf(submissionDate);
+        const periodEnd = habit.period === 'weekly'
+          ? format(addDays(parseISO(periodStart), 6), 'yyyy-MM-dd')
+          : submissionDate;
+        const priorSnap = await getDocs(query(
+          collection(db, `households/${householdId}/habits/${habitId}/submissions`),
+          where('date', '>=', periodStart),
+          where('date', '<=', periodEnd),
+        ));
+        priorPeriodCount = priorSnap.docs.reduce(
+          (sum, d) => sum + (d.data() as HabitSubmission).count,
+          0
+        );
+      }
+      const newPeriodCount = priorPeriodCount + count;
+
+      // Threshold habits only mark the date complete once the submission's own
+      // period reaches the target — the rest of the subsystem (streaks, point
+      // recomputes) relies on the invariant "date in completedDates ⟹ target
+      // met that day". Incremental habits complete on any action (toggle parity).
+      const marksDateComplete =
+        habit.scoringType === 'incremental' || newPeriodCount >= habit.targetCount;
+
+      // Build the post-submission completion history so the multiplier can be
+      // driven by the PROSPECTIVE streak (the streak that exists once this day is
+      // counted), matching client toggle semantics rather than the pre-submission
+      // streak. For "today" this equals streakForHabit(updatedCompletedDates); for
+      // a back-dated submission it's the streak ending on that day.
+      const updatedCompletedDates = [...habit.completedDates];
+      if (marksDateComplete && !updatedCompletedDates.includes(submissionDate)) {
+        updatedCompletedDates.push(submissionDate);
+        updatedCompletedDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+      }
+
+      const prospectiveStreak = streakEndingOnForHabit(
+        { period: habit.period, completedDates: updatedCompletedDates },
+        submissionDate
+      );
+      const multiplier = getMultiplier(prospectiveStreak, habit.type === 'positive', habit.period);
+
+      // A period completed via the toggle path (whose counter has since been
+      // reset) leaves no submissions behind — the completedDates check stops a
+      // back-dated submission from awarding that period a second time.
+      const alreadyCompletedInPeriod = habit.completedDates.some(
+        d => periodStartOf(d) === periodStartOf(submissionDate)
+      );
+
+      let pointsEarned = 0;
+      if (habit.scoringType === 'incremental') {
+        pointsEarned = count * Math.floor(habit.basePoints * multiplier);
+      } else if (
+        newPeriodCount >= habit.targetCount &&
+        priorPeriodCount < habit.targetCount &&
+        !alreadyCompletedInPeriod
+      ) {
+        // Threshold: this submission pushes its OWN period over the target.
         pointsEarned = Math.floor(habit.basePoints * multiplier);
       }
-    }
 
-    try {
       // Create submission document
       const submission: Omit<HabitSubmission, 'id'> = {
         habitId,
@@ -353,7 +405,10 @@ export const useHabitActions = (
       addBatch.set(submissionRef, submission);
 
       addBatch.update(doc(db, `households/${householdId}/habits`, habitId), {
-        count: habit.count + count,
+        // Only a current-period submission bumps the live counter (a stale
+        // counter is lazily reset first); totalCount is lifetime so it always
+        // absorbs the count.
+        count: isCurrentPeriod ? liveCount + count : liveCount,
         totalCount: habit.totalCount + count,
         completedDates: updatedCompletedDates,
         streakDays: streakForHabit({ period: habit.period, completedDates: updatedCompletedDates }),
@@ -366,7 +421,6 @@ export const useHabitActions = (
       // mirroring deleteHabitSubmission / updateHabitSubmission. Total is always
       // adjusted (lifetime).
       if (pointsEarned !== 0) {
-        const today = getLocalDateString();
         const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
         const pointUpdates: Record<string, unknown> = {

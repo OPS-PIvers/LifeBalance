@@ -5,6 +5,7 @@ import { hashKidPin } from '@/utils/kidPin';
 import { computeTodoCompletionCredit } from '@/utils/todoPoints';
 import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
 import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
+import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import {
   Account,
   BudgetBucket,
@@ -36,6 +37,12 @@ import toast from 'react-hot-toast';
 // Helper to generate unique IDs
 const generateId = () => `mock-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
+// The mock's single tracked pay period. Seeded transactions, newly added
+// transactions, and the exposed `currentPeriodId` must all share this value —
+// `sumPendingSpend`/`calculateBucketSpent` filter by `payPeriodId === currentPeriodId`,
+// so a mismatch silently drops transactions from Safe-to-Spend and bucket progress.
+const MOCK_PAY_PERIOD_ID = '2024-01-01';
+
 // Seed data with realistic examples
 const SEED_ACCOUNTS: Account[] = [
   { id: 'acc1', name: 'Main Checking', type: 'checking', balance: 5420.50, lastUpdated: new Date().toISOString() },
@@ -55,13 +62,13 @@ const SEED_TRANSACTIONS: Transaction[] = [
     id: 'tx1', amount: 45.50, merchant: 'Safeway', category: 'Groceries',
     date: getLocalDateString(),
     status: 'verified', isRecurring: false, source: 'manual',
-    autoCategorized: false, payPeriodId: '2024-01-01'
+    autoCategorized: false, payPeriodId: MOCK_PAY_PERIOD_ID
   },
   {
     id: 'tx2', amount: 120.00, merchant: 'PG&E', category: 'Utilities',
     date: getLocalDateString(),
     status: 'verified', isRecurring: true, source: 'manual',
-    autoCategorized: false, payPeriodId: '2024-01-01'
+    autoCategorized: false, payPeriodId: MOCK_PAY_PERIOD_ID
   },
   // NOTE: intentionally no seeded Apple Pay $0 "awaiting amount" stub. A
   // pending_review transaction adds a "pending review" badge to the Money nav
@@ -318,7 +325,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
 
   // Transaction operations
   const addTransaction = useCallback(async (tx: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>) => {
-    const newTx = { ...tx, id: generateId() } as Transaction;
+    // Assign the mock pay period (the real context derives one via
+    // getPayPeriodForTransaction) so pending spend / bucket progress see the tx.
+    const newTx = { ...tx, id: generateId(), payPeriodId: MOCK_PAY_PERIOD_ID } as Transaction;
     setTransactions(prev => [...prev, newTx]);
     toast.success('Mock: Transaction added');
   }, []);
@@ -343,7 +352,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         ...t,
         id: generateId(),
         createdAt: new Date().toISOString(),
-        payPeriodId: '2024-01-01', // Mock pay period
+        payPeriodId: MOCK_PAY_PERIOD_ID,
         createdBy: 'test-user-id',
       } as Transaction));
 
@@ -752,7 +761,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   }, []);
 
   // Computed/derived state to match interface
-  const currentPeriodId = '2024-01-01';
+  const currentPeriodId = MOCK_PAY_PERIOD_ID;
   // Derive the safe-to-spend breakdown from the SAME pure calculator the real
   // Firebase context uses, so Test Mode exposes a well-formed, internally
   // consistent SafeToSpendBreakdown (incl. checkingBalance/unpaidBills/
@@ -791,7 +800,12 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     moduleVisibility,
 
   } as unknown as Household;
-  const bucketSpentMap = new Map();
+  // Same derivation as the real Firebase context, so Test Mode's Budget page
+  // shows real spent-vs-limit progress instead of a permanently empty map.
+  const bucketSpentMap = useMemo(
+    () => calculateBucketSpent(buckets, transactions, currentPeriodId),
+    [buckets, transactions, currentPeriodId]
+  );
 
   const contextValue: HouseholdContextType = {
     // Mock data is available synchronously — never in a loading state.

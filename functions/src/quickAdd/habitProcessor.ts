@@ -192,34 +192,47 @@ export function processToggleHabit(
   }
 
   // 2. Calculate Points
-  // The multiplier must reflect the streak INCLUDING the current completion
-  // (the "prospective" streak), matching the client (utils/habitLogic.ts).
-  // We dispatch by period so weekly habits use the ISO-week streak rather than
-  // the day-based one (which would reset on every ~7-day gap).
-  const prospectiveDates = habit.completedDates.includes(today)
-    ? habit.completedDates
-    : [...habit.completedDates, today];
-  const completionStreak = streakForPeriod(prospectiveDates, habit.period, today);
-  const multiplier = getMultiplier(
-    completionStreak,
-    habit.type === "positive",
-    habit.period
-  );
+  // The multiplier must reflect the streak the habit will have AFTER this
+  // action (the "prospective" streak), matching the client (utils/habitLogic.ts)
+  // branch-for-branch: `today` only enters the streak input when this action
+  // actually completes the habit today. We dispatch by period so weekly habits
+  // use the ISO-week streak rather than the day-based one (which would reset
+  // on every ~7-day gap).
   const sign = habit.type === "positive" ? 1 : -1;
+  let multiplier = 1.0;
 
   let isCompletedNow = false;
   let wasCompletedBefore = false;
 
+  const streakFor = (dates: string[]): number =>
+    streakForPeriod(dates, habit.period, today);
+
   if (habit.scoringType === "incremental") {
+    const target = habit.targetCount > 0 ? habit.targetCount : 1;
+    isCompletedNow = newCount >= target;
+    wasCompletedBefore = habit.count >= target;
+
+    // Only include today in the prospective dates when this 'up' toggle makes
+    // the habit newly complete today — a below-target action must not inflate
+    // the streak (and multiplier) by a day/week the habit hasn't earned yet.
+    const prospectiveDates =
+      direction === "up" &&
+      isCompletedNow &&
+      !habit.completedDates.includes(today)
+        ? [...habit.completedDates, today]
+        : habit.completedDates;
+    multiplier = getMultiplier(
+      streakFor(prospectiveDates),
+      habit.type === "positive",
+      habit.period
+    );
+
     // Incremental: Points on every action
     if (direction === "up") {
       pointsChange = sign * Math.floor(habit.basePoints * multiplier);
     } else {
       pointsChange = -sign * Math.floor(habit.basePoints * multiplier);
     }
-    const target = habit.targetCount > 0 ? habit.targetCount : 1;
-    isCompletedNow = newCount >= target;
-    wasCompletedBefore = habit.count >= target;
   } else {
     // Threshold: Points only when target hit
     const target = habit.targetCount;
@@ -227,8 +240,23 @@ export function processToggleHabit(
     wasCompletedBefore = habit.count >= target;
 
     if (isCompletedNow && !wasCompletedBefore) {
+      // Just hit target → award using the NEW streak (including today).
+      const prospectiveDates = habit.completedDates.includes(today)
+        ? habit.completedDates
+        : [...habit.completedDates, today];
+      multiplier = getMultiplier(
+        streakFor(prospectiveDates),
+        habit.type === "positive",
+        habit.period
+      );
       pointsChange = sign * Math.floor(habit.basePoints * multiplier);
     } else if (!isCompletedNow && wasCompletedBefore) {
+      // Just lost target → remove using the OLD streak (today still present).
+      multiplier = getMultiplier(
+        streakFor(habit.completedDates),
+        habit.type === "positive",
+        habit.period
+      );
       pointsChange = -sign * Math.floor(habit.basePoints * multiplier);
     }
   }
