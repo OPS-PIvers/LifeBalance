@@ -218,7 +218,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
             value={editingItem.category}
             onChange={e => setEditingItem({...editingItem, category: e.target.value})}
           />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
             <Input
               label="Default Qty"
               type="text"

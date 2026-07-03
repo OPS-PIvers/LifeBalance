@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CaptureTransactionManual } from './CaptureTransactionManual';
-import { Transaction, Habit, BudgetBucket } from '@/types/schema';
+import { Transaction, Habit, BudgetBucket, Store } from '@/types/schema';
 
 // Mock dependencies
 vi.mock('react-hot-toast', () => ({
@@ -33,6 +33,10 @@ describe('CaptureTransactionManual', () => {
   const mockHabits: Habit[] = [];
   const mockTransactions: Transaction[] = [];
   const mockBuckets: BudgetBucket[] = [];
+  const mockStores: Store[] = [
+    { id: 'store-1', name: 'Trader Joes' },
+    { id: 'store-2', name: 'Costco' },
+  ];
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -58,7 +62,85 @@ describe('CaptureTransactionManual', () => {
     expect(screen.getByText('Save Transaction')).toBeInTheDocument();
   });
 
-  it('collapses store/account/habit/recurring fields behind "Add details" by default', () => {
+  it('offers known store names as a datalist on the Merchant field (no separate Store select)', () => {
+    render(
+      <CaptureTransactionManual
+        onAddTransaction={mockOnAddTransaction}
+        onClose={mockOnClose}
+        dynamicCategories={mockCategories}
+        habits={mockHabits}
+        transactions={mockTransactions}
+        buckets={mockBuckets}
+        stores={mockStores}
+        accounts={[]}
+      />
+    );
+
+    const merchantInput = screen.getByPlaceholderText('e.g. Starbucks');
+    expect(merchantInput).toHaveAttribute('list');
+    const datalistId = merchantInput.getAttribute('list')!;
+    const options = Array.from(document.getElementById(datalistId)?.querySelectorAll('option') ?? []).map(
+      (o) => o.getAttribute('value')
+    );
+    expect(options).toEqual(['Trader Joes', 'Costco']);
+  });
+
+  it('resolves the store to the matching known store name on submit', async () => {
+    render(
+      <CaptureTransactionManual
+        onAddTransaction={mockOnAddTransaction}
+        onClose={mockOnClose}
+        dynamicCategories={mockCategories}
+        habits={mockHabits}
+        transactions={mockTransactions}
+        buckets={mockBuckets}
+        stores={mockStores}
+        accounts={[]}
+      />
+    );
+
+    fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '25.00' } });
+    // Case/whitespace differences from the canonical store name still match.
+    fireEvent.change(screen.getByPlaceholderText('e.g. Starbucks'), { target: { value: '  costco  ' } });
+
+    fireEvent.click(screen.getByText('Save Transaction'));
+
+    await waitFor(() => {
+      expect(mockOnAddTransaction).toHaveBeenCalledTimes(1);
+    });
+
+    const calledArg = mockOnAddTransaction.mock.calls[0]![0];
+    expect(calledArg).toMatchObject({ store: 'Costco' });
+  });
+
+  it('omits the store when the merchant does not match a known store', async () => {
+    render(
+      <CaptureTransactionManual
+        onAddTransaction={mockOnAddTransaction}
+        onClose={mockOnClose}
+        dynamicCategories={mockCategories}
+        habits={mockHabits}
+        transactions={mockTransactions}
+        buckets={mockBuckets}
+        stores={mockStores}
+        accounts={[]}
+      />
+    );
+
+    fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '25.00' } });
+    fireEvent.change(screen.getByPlaceholderText('e.g. Starbucks'), { target: { value: 'Some Random Shop' } });
+
+    fireEvent.click(screen.getByText('Save Transaction'));
+
+    await waitFor(() => {
+      expect(mockOnAddTransaction).toHaveBeenCalledTimes(1);
+    });
+
+    const calledArg = mockOnAddTransaction.mock.calls[0]![0];
+    expect(calledArg.store).toBeUndefined();
+  });
+
+  it('collapses account/habit/recurring fields behind "Add details" by default', () => {
     render(
       <CaptureTransactionManual
         onAddTransaction={mockOnAddTransaction}
@@ -79,13 +161,13 @@ describe('CaptureTransactionManual', () => {
     // The disclosure toggle is present but collapsed by default.
     const toggle = screen.getByRole('button', { name: /add details/i });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByText('Store (Optional)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Account (Optional)')).not.toBeInTheDocument();
     expect(screen.queryByText('Recurring Transaction')).not.toBeInTheDocument();
 
     fireEvent.click(toggle);
 
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByText('Store (Optional)')).toBeInTheDocument();
+    expect(screen.getByText('Account (Optional)')).toBeInTheDocument();
     expect(screen.getByText('Recurring Transaction')).toBeInTheDocument();
   });
 
@@ -104,7 +186,7 @@ describe('CaptureTransactionManual', () => {
     );
 
     // "Add details" is never expanded in this test.
-    expect(screen.queryByText('Store (Optional)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Account (Optional)')).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '25.00' } });
     fireEvent.change(screen.getByPlaceholderText('e.g. Starbucks'), { target: { value: 'Pizza Place' } });

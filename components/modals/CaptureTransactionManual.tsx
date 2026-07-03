@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useId, useState, useMemo } from 'react';
 import { Check, CheckCircle2, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { Transaction, Habit, BudgetBucket, Store, Account } from '@/types/schema';
 import { suggestHabitsForTransaction } from '@/utils/habitSuggestions';
+import { resolveStoreName } from '@/utils/stores';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -58,9 +59,11 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
   });
 
   const [subBucketId, setSubBucketId] = useState<string | undefined>(() => initialData?.subBucketId);
-  const [store, setStore] = useState(() => initialData?.store || '');
   const [accountId, setAccountId] = useState(() => initialData?.accountId || '');
   const [creditPayment, setCreditPayment] = useState(() => initialData?.creditPayment ?? false);
+
+  // Datalist id for the Merchant field's store-name autocomplete (see below).
+  const storeListId = useId();
 
   // Whether the chosen account is a credit card — only then is the
   // Charge/Payment toggle meaningful (a payment pays the card DOWN).
@@ -106,6 +109,15 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
     if (!merchant.trim() || habits.length === 0) return [];
     return suggestHabitsForTransaction(merchant, habits, transactions, 5);
   }, [merchant, habits, transactions]);
+
+  // Merchant now doubles as the Store field (a separate lower-cased "store"
+  // dropdown was redundant with the free-text merchant name). A native
+  // <datalist> on the Merchant input still offers known store names for
+  // autocomplete. The shared `resolveStoreName` helper derives
+  // `Transaction.store` at submit time: an exact (case-insensitive, trimmed)
+  // match against a known store snaps to that store's canonical name so the
+  // TransactionMasterList store filter keeps working; anything else omits the
+  // field (there's no prior transaction to preserve a store from).
 
   const handleManualSave = async () => {
     if (!amount || !merchant) {
@@ -162,7 +174,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
       autoCategorized: false,
       relatedHabitIds: selectedHabitIds.length > 0 ? selectedHabitIds : undefined,
       subBucketId: validatedSubBucketId,
-      store: store || undefined,
+      store: resolveStoreName(stores, merchant),
       accountId: accountId || undefined,
       // Only meaningful for a credit account; a charge (false) raises the card's
       // balance, a payment (true) pays it down. Undefined for asset accounts.
@@ -217,7 +229,17 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
         value={merchant}
         onChange={(e) => setMerchant(e.target.value)}
         placeholder="e.g. Starbucks"
+        list={storeListId}
+        autoComplete="off"
       />
+      {/* Known store names, offered as autocomplete on the Merchant field
+          above. Typing (or picking) an exact match resolves the transaction's
+          store to that canonical name on submit; see resolveStoreName(). */}
+      <datalist id={storeListId}>
+        {stores.map((s) => (
+          <option key={s.id} value={s.name} />
+        ))}
+      </datalist>
 
       <Input
         label="Date"
@@ -229,7 +251,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
       <div>
         <label id="manual-category-label" className="block text-xs font-semibold text-brand-400 dark:text-brand-400 uppercase tracking-wider mb-2">Category</label>
         <div
-          className="flex gap-2 overflow-x-auto pb-2 no-scrollbar"
+          className="flex gap-2 overflow-x-auto overscroll-x-contain pb-2 no-scrollbar"
           role="radiogroup"
           aria-labelledby="manual-category-label"
         >
@@ -261,33 +283,20 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
       */}
       <CollapsibleSection
         title="Add details"
-        subtitle="Store, account, habits & recurring"
+        subtitle="Account, habits & recurring"
         defaultOpen={false}
       >
         <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-4">
-            <Select
-              label="Store (Optional)"
-              value={store}
-              onChange={(e) => setStore(e.target.value)}
-            >
-              <option value="">Select Store...</option>
-              {stores.map(s => (
-                <option key={s.id} value={s.name}>{s.name}</option>
-              ))}
-            </Select>
-
-            <Select
-              label="Account (Optional)"
-              value={accountId}
-              onChange={(e) => setAccountId(e.target.value)}
-            >
-              <option value="">Select Account...</option>
-              {accounts.map(a => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </Select>
-          </div>
+          <Select
+            label="Account (Optional)"
+            value={accountId}
+            onChange={(e) => setAccountId(e.target.value)}
+          >
+            <option value="">Select Account...</option>
+            {accounts.map(a => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </Select>
 
           {isSelectedAccountCredit && (
             <div className="flex items-center justify-between p-4 bg-brand-50 dark:bg-brand-700/50 rounded-xl border border-brand-100 dark:border-brand-700">
@@ -316,7 +325,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
                 Sub-Category (Optional)
               </label>
               <div
-                className="flex gap-2 overflow-x-auto pb-2 no-scrollbar"
+                className="flex gap-2 overflow-x-auto overscroll-x-contain pb-2 no-scrollbar"
                 role="radiogroup"
                 aria-labelledby="manual-subbucket-label"
               >

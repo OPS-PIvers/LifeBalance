@@ -150,10 +150,10 @@ export interface Transaction {
    *  yet entered, so `amount` is a placeholder 0. Cleared (set false) once the
    *  user supplies the amount during review. Absent on normal transactions. */
   needsAmount?: boolean;
-  /** ISO timestamp set the first time the on-open "awaiting amount" drawer
-   *  surfaces this stub. Its presence suppresses future auto-pop (so a dismissed
-   *  stub lives only in the Action Queue). Stored on the shared transaction doc
-   *  so the suppression is cross-device. */
+  /** LEGACY — no longer written or read. The retired "awaiting amount" drawer
+   *  stamped this to suppress its auto-pop; the on-open review drawer now simply
+   *  re-opens while un-snoozed `pending_review` transactions remain. Kept so
+   *  historical docs carrying the field still type-check. */
   needsAmountPromptedAt?: string;
   /** Plaid `transaction_id` for transactions synced from a linked bank
    *  (`source: 'plaid'`). The dedup key: a sync skips any item whose

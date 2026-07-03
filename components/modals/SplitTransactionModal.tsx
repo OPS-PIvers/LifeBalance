@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { SurfaceList, Row } from '@/components/ui/Section';
+import { buildTransactionCategoryOptions } from '@/utils/categories';
 import toast from 'react-hot-toast';
 
 interface SplitTransactionModalProps {
@@ -30,9 +31,13 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
   const [splits, setSplits] = useState<SplitItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Dynamic Categories from buckets
+  // Dynamic Categories from buckets. Previously this list was fully
+  // alphabetized (including the "Budgeted in Calendar" sentinel), which
+  // diverged from every other category picker in the app. Standardized here
+  // on the shared helper's order — buckets in stored order, sentinel always
+  // last — so Split matches Edit/Capture/Review.
   const dynamicCategories = useMemo(() =>
-    [...buckets.map(b => b.name), 'Budgeted in Calendar'].sort(),
+    buildTransactionCategoryOptions(buckets),
   [buckets]);
 
   // Initialize splits when the transaction changes or the modal opens. Done

@@ -40,6 +40,18 @@ export const isTodoQueueItem = (item: ActionQueueItem): item is ToDoActionQueueI
   return item.queueType === 'todo';
 };
 
+/**
+ * A `pending_review` transaction is hidden from review surfaces (the Action
+ * Queue and the on-open review drawer) while its Action-Queue snooze is still in
+ * the future. Both sides are local `yyyy-MM-dd`, so a lexical compare is
+ * chronological. Snoozing defers the REVIEW only — the transaction still counts
+ * toward pendingSpend / Safe-to-Spend.
+ */
+export const isReviewSnoozed = (
+  tx: Pick<Transaction, 'reviewSnoozedUntil'>,
+  today: string,
+): boolean => !!tx.reviewSnoozedUntil && tx.reviewSnoozedUntil > today;
+
 export const useActionQueue = () => {
   const { transactions } = useFinance();
   const { todos } = useTodos();
@@ -101,7 +113,7 @@ export const useActionQueue = () => {
   // is chronological. It still counts toward pendingSpend / Safe-to-Spend.
   const pendingTx: ActionQueueItem[] = useMemo(() => showMoney ? transactions.filter(t =>
     t.status === 'pending_review' &&
-    !(t.reviewSnoozedUntil && t.reviewSnoozedUntil > localToday)
+    !isReviewSnoozed(t, localToday)
   ).map(t => ({ ...t, queueType: 'transaction' as const })) : [], [showMoney, transactions, localToday]);
 
   // 3. Immediate To-Dos (Overdue, Today or Tomorrow) — Plan→To-Dos domain

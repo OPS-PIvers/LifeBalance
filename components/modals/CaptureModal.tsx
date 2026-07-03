@@ -15,6 +15,7 @@ import { normalizeStoreName } from '@/utils/storeMatch';
 import { Drawer } from '@/components/ui/Drawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { findMatchingPendingTransaction, buildReceiptMergeUpdates } from '@/utils/transactionMatch';
+import { buildTransactionCategoryOptions } from '@/utils/categories';
 import { Button } from '@/components/ui/Button';
 import { SegmentedControl, SegmentedControlOption } from '@/components/ui/SegmentedControl';
 import { CaptureShoppingTab } from './CaptureShoppingTab';
@@ -122,7 +123,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
   const isMounted = useRef(true);
 
   // Dynamic Categories from buckets (Transaction)
-  const dynamicCategories = [...buckets.map(b => b.name), 'Budgeted in Calendar'];
+  const dynamicCategories = buildTransactionCategoryOptions(buckets);
   const habitTitles = habits.map(h => h.title);
 
   // --- To-Do State ---
@@ -517,7 +518,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
   // the row `pending_review`, so under the verified-only balance model (Plan 015)
   // it does NOT move the checking balance — the merged spend stays reflected via
   // Safe-to-Spend's pendingSpend term and debits only when the row is later
-  // verified. (Mirrors AwaitingAmountDrawer's promote-the-existing-stub pattern.)
+  // verified. (Mirrors the review flow's promote-the-existing-stub pattern.)
   const handleConfirmLink = async () => {
     if (!pendingMatch) return;
     setIsResolvingMatch(true);

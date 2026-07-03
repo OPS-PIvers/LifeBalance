@@ -7,7 +7,7 @@ import type { ModuleKey } from '@/types/schema';
 
 // Narrow context slices TopToolbar reads. Stub each with the minimal shape.
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
-  useFinance: () => ({ safeToSpend: 1234 }),
+  useFinance: () => ({ safeToSpendBreakdown: { safeToSpend: 1234 } }),
   useGamification: () => ({ dailyPoints: 10, weeklyPoints: 50 }),
   useHouseholdCore: () => ({ household: { pendingRedemptions: [] } }),
 }));

@@ -63,7 +63,7 @@ const BatchRescheduleModal: React.FC<BatchRescheduleModalProps> = ({
           Select a new due date for the <strong>{count}</strong> selected tasks.
         </p>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
             <button
                 onClick={setTomorrow}
                 className="py-2 px-3 bg-brand-50 dark:bg-brand-700/50 hover:bg-brand-100 dark:hover:bg-brand-700/50 text-brand-700 dark:text-brand-200 font-medium rounded-xl transition-colors text-sm border border-brand-200 dark:border-brand-700"

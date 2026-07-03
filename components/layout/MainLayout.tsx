@@ -6,6 +6,8 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import { LazyMount } from '@/components/ui/LazyMount';
 import { preloadOnIdle } from '@/utils/preloadOnIdle';
 import { useHouseholdCore, useFinance } from '@/contexts/FirebaseHouseholdContext';
+import { isReviewSnoozed } from '@/hooks/useActionQueue';
+import { getLocalDateString } from '@/utils/dateHelpers';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 
 // Lazy so the kid view (Plan 080b) stays out of the always-mounted boot bundle —
@@ -13,9 +15,9 @@ import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 const KidDashboard = lazy(() => import('@/components/kid/KidDashboard'));
 
 // Lazy (+ idle preload) so the Drawer/framer-motion stay out of the boot bundle.
-// Surfaced on app-open when there are Apple Pay $0 "awaiting amount" stubs.
-const loadAwaitingAmountDrawer = () => import('@/components/modals/AwaitingAmountDrawer');
-const AwaitingAmountDrawer = lazy(loadAwaitingAmountDrawer);
+// Surfaced on app-open whenever any un-snoozed pending_review transactions exist.
+const loadReviewPendingDrawer = () => import('@/components/modals/ReviewPendingDrawer');
+const ReviewPendingDrawer = lazy(loadReviewPendingDrawer);
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -27,36 +29,30 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const { transactions } = useFinance();
   const kidModeEnabled = useKidModeEnabled();
 
-  // Apple Pay $0 "awaiting amount" stubs that haven't been surfaced yet.
+  // Every un-snoozed pending_review transaction is a review candidate. Ordered
+  // newest-first (date desc) so the most recent activity is reviewed first.
   // Hooks are declared unconditionally (above the Kid-Mode early returns) to
   // satisfy rules-of-hooks; the drawer itself only renders in the normal shell.
-  const awaitingAmountStubs = useMemo(
+  const reviewToday = getLocalDateString();
+  const pendingReviewTransactions = useMemo(
     () =>
-      transactions.filter(
-        (t) => t.status === 'pending_review' && t.needsAmount === true && !t.needsAmountPromptedAt,
-      ),
-    [transactions],
+      transactions
+        .filter((t) => t.status === 'pending_review' && !isReviewSnoozed(t, reviewToday))
+        .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)),
+    [transactions, reviewToday],
   );
-  // Once-per-app-open: snapshot the stubs and auto-open the cycling drawer.
-  const [hasAutoOpenedAwaiting, setHasAutoOpenedAwaiting] = useState(false);
-  const [awaitingDrawerOpen, setAwaitingDrawerOpen] = useState(false);
-  const [awaitingOpenStubs, setAwaitingOpenStubs] = useState<typeof transactions>([]);
+  // Once-per-app-open: snapshot the pending transactions and auto-open the
+  // cycling review drawer.
+  const [hasAutoOpenedReview, setHasAutoOpenedReview] = useState(false);
+  const [reviewDrawerOpen, setReviewDrawerOpen] = useState(false);
+  const [reviewSnapshot, setReviewSnapshot] = useState<typeof transactions>([]);
 
-  useEffect(() => preloadOnIdle(loadAwaitingAmountDrawer), []);
-
-  // Decide the once-per-app-open trigger during render (guarded
-  // set-state-during-render — the documented React pattern, same as LazyMount —
-  // to avoid a setState-in-effect cascade). The drawer stamps
-  // `needsAmountPromptedAt` on these stubs so they never auto-pop again.
-  if (!isLoading && !hasAutoOpenedAwaiting && awaitingAmountStubs.length > 0) {
-    setHasAutoOpenedAwaiting(true);
-    setAwaitingOpenStubs(awaitingAmountStubs); // snapshot so the cycle is stable
-    setAwaitingDrawerOpen(true);
-  }
+  useEffect(() => preloadOnIdle(loadReviewPendingDrawer), []);
 
   // Active managed kid → Kid Mode. Validated against the live members list so a
   // stale sessionStorage value (e.g. a removed kid, or the flag turned off) falls
-  // straight back to the normal parent shell.
+  // straight back to the normal parent shell. Declared ABOVE the auto-open guard
+  // so the guard can exclude Kid-Mode renders (see below).
   const activeKid = useMemo(
     () =>
       kidModeEnabled && activeMemberId
@@ -64,6 +60,20 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         : undefined,
     [kidModeEnabled, activeMemberId, members],
   );
+
+  // Decide the once-per-app-open trigger during render (guarded
+  // set-state-during-render — the documented React pattern, same as LazyMount —
+  // to avoid a setState-in-effect cascade). Unlike the old needsAmount-stub
+  // flow, nothing is stamped on the docs: the drawer re-opens on EVERY app open
+  // while any un-snoozed pending_review transactions remain. Excluding
+  // `activeKid` keeps the flag from latching on a render destined for the
+  // Kid-Mode early return (which never mounts the review drawer) — otherwise it
+  // could be consumed without ever showing the drawer, or pop on Kid-Mode exit.
+  if (!isLoading && !activeKid && !hasAutoOpenedReview && pendingReviewTransactions.length > 0) {
+    setHasAutoOpenedReview(true);
+    setReviewSnapshot(pendingReviewTransactions); // snapshot so the cycle is stable
+    setReviewDrawerOpen(true);
+  }
 
   // On refresh while acting as a kid, the members listener hasn't resolved yet, so
   // `activeKid` is transiently undefined. Without this guard we would briefly render
@@ -108,13 +118,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         <BottomNav />
       </div>
 
-      {/* Apple Pay $0 "awaiting amount" cycler — lazy so Drawer/framer-motion
-          stay out of the boot bundle. Opens once per app-open when stubs exist. */}
-      <LazyMount when={awaitingDrawerOpen}>
-        <AwaitingAmountDrawer
-          stubs={awaitingOpenStubs}
-          isOpen={awaitingDrawerOpen}
-          onClose={() => setAwaitingDrawerOpen(false)}
+      {/* Pending-transaction review cycler — lazy so Drawer/framer-motion stay
+          out of the boot bundle. Opens once per app-open whenever any un-snoozed
+          pending_review transactions exist. */}
+      <LazyMount when={reviewDrawerOpen}>
+        <ReviewPendingDrawer
+          transactions={reviewSnapshot}
+          isOpen={reviewDrawerOpen}
+          onClose={() => setReviewDrawerOpen(false)}
         />
       </LazyMount>
     </div>

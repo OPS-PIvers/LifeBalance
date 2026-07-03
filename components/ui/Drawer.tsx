@@ -180,8 +180,10 @@ export const Drawer: React.FC<DrawerProps> = ({
                </div>
              )}
 
-             {/* Content */}
-             <div className={twMerge("scroll-contain-y flex-1", !footer && "pb-safe", !noPadding && "p-4")}>
+             {/* Content — overflow-x-hidden clips horizontally-overflowing children
+                 (e.g., native select/date/number inputs with intrinsic widths)
+                 so they don't trigger horizontal rubber-banding on mobile. */}
+             <div className={twMerge("scroll-contain-y flex-1 overflow-x-hidden", !footer && "pb-safe", !noPadding && "p-4")}>
                {children}
              </div>
 

@@ -521,6 +521,49 @@ describe('MockHouseholdContext bucketSpentMap (Budget page spend tracking)', () 
   });
 });
 
+describe('MockHouseholdContext updateTransactionCategory (verify + inline edit parity)', () => {
+  it('verifies a $0 needsAmount stub with amount/merchant overrides and credits related habits', async () => {
+    const { result } = renderHook(() => useHousehold(), { wrapper });
+
+    await act(async () => {
+      await result.current.addTransaction({
+        amount: 0,
+        merchant: 'Shell',
+        category: 'Uncategorized',
+        date: getLocalDateString(),
+        status: 'pending_review',
+        isRecurring: false,
+        source: 'shortcut',
+        autoCategorized: false,
+        needsAmount: true,
+      });
+    });
+    const stub = result.current.transactions.find((t) => t.merchant === 'Shell');
+    expect(stub).toBeDefined();
+
+    const habit = result.current.habits[0]!;
+    const beforeCount = habit.count;
+
+    await act(async () => {
+      await result.current.updateTransactionCategory(stub!.id, 'Gas', [habit.id], undefined, {
+        amount: 45.5,
+        merchant: 'Shell Gas',
+        clearNeedsAmount: true,
+      });
+    });
+
+    const verified = result.current.transactions.find((t) => t.id === stub!.id)!;
+    expect(verified.status).toBe('verified');
+    expect(verified.category).toBe('Gas');
+    expect(verified.amount).toBe(45.5);
+    expect(verified.merchant).toBe('Shell Gas');
+    expect(verified.needsAmount).toBe(false);
+    expect(verified.relatedHabitIds).toEqual([habit.id]);
+    // The related habit gets a count bump (mirrors the mock's toggleHabit).
+    expect(result.current.habits.find((h) => h.id === habit.id)!.count).toBe(beforeCount + 1);
+  });
+});
+
 describe('MockHouseholdContext addTransaction pay period (Safe-to-Spend pending term)', () => {
   it('assigns the mock currentPeriodId so a new pending transaction lowers safeToSpend', async () => {
     const { result } = renderHook(() => useFinance(), { wrapper });

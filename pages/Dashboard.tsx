@@ -2,7 +2,7 @@ import React, { useState, useCallback, useMemo, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
-import { useFinance, useGamification, useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
+import { useFinance, useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { AccountPicker } from '@/components/budget/AccountPicker';
 import { BarChart2, Check, CheckCircle2, Clock, Trash2, X } from 'lucide-react';
@@ -39,7 +39,6 @@ import { ActivityFeedWidget } from '@/components/dashboard/ActivityFeedWidget';
 import { PulseStripWidget } from '@/components/dashboard/PulseStripWidget';
 import { CreateChallengePayload } from '@/types/schema';
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
-import { SafeToSpendHero } from '@/components/dashboard/SafeToSpendHero';
 import { CreditCardActivityWidget } from '@/components/dashboard/CreditCardActivityWidget';
 import { Section, SurfaceList } from '@/components/ui/Section';
 import { ShowMoreRow } from '@/components/ui/ShowMoreRow';
@@ -66,7 +65,6 @@ const Dashboard: React.FC = () => {
     updateTransaction,
     deleteTransaction,
   } = useFinance();
-  const { habits } = useGamification();
   const { updateToDo, deleteToDo, completeToDo } = useTodos();
   const { isModuleEnabled } = useModuleVisibility();
   const navigate = useNavigate();
@@ -322,6 +320,87 @@ const Dashboard: React.FC = () => {
     return <DashboardSkeleton />;
   }
 
+  // Action Queue — triage of what needs attention. Swipe right to approve,
+  // swipe left to defer, long-press (or "Select") for bulk approve/defer/
+  // delete. Extracted once so it can render in either of two page positions
+  // (top when it has items, its original spot when empty) without duplicating
+  // the JSX.
+  const actionQueueSection = (
+    <Section
+      title={
+        <span className="flex items-center gap-2">
+          <span
+            className={`w-2 h-2 rounded-full ${actionQueue.length > 0 ? 'bg-habit-streak motion-safe:animate-pulse' : 'bg-money-pos'}`}
+            aria-hidden="true"
+          />
+          Action Queue {actionQueue.length > 0 && `(${actionQueue.length})`}
+        </span>
+      }
+      action={
+        actionQueue.length > 0 ? (
+          selectionMode ? (
+            <button
+              onClick={exitSelectionMode}
+              className="text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-200 px-1 min-h-6"
+            >
+              Cancel
+            </button>
+          ) : (
+            <button
+              onClick={() => enterSelectionMode()}
+              className="text-xs font-semibold text-accent-700 dark:text-accent-300 hover:underline px-1 min-h-6"
+            >
+              Select
+            </button>
+          )
+        ) : undefined
+      }
+    >
+      {actionQueue.length > 0 ? (
+        <SurfaceList>
+          {visibleQueueItems.map(item => (
+            <ActionQueueItemCard
+              key={item.id}
+              item={item}
+              isExpanded={expandedId === item.id}
+              setExpandedId={setExpandedId}
+              setPayModalItemId={setPayModalItemId}
+              selectionMode={selectionMode}
+              isSelected={selectedIds.has(item.id)}
+              onToggleSelect={toggleSelect}
+              onEnterSelectionMode={enterSelectionMode}
+              onSwipeApprove={handleSwipeApprove}
+              onSwipeDefer={handleSwipeDefer}
+              buckets={buckets}
+              transactions={transactions}
+              members={members}
+              updateToDo={updateToDo}
+              deleteToDo={deleteToDo}
+              completeToDo={completeToDo}
+              deferCalendarItem={deferCalendarItem}
+              deleteCalendarItem={deleteCalendarItem}
+            />
+          ))}
+          {!selectionMode && (
+            <ShowMoreRow
+              hiddenCount={actionQueue.length - MAX_VISIBLE_QUEUE_ITEMS}
+              expanded={queueExpanded}
+              onToggle={() => setQueueExpanded(v => !v)}
+              noun="item"
+            />
+          )}
+        </SurfaceList>
+      ) : (
+        <EmptyState
+          variant="surface"
+          icon={<CheckCircle2 />}
+          title="All caught up"
+          description="Nothing needs your attention right now."
+        />
+      )}
+    </Section>
+  );
+
   return (
     <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe">
 
@@ -347,10 +426,12 @@ const Dashboard: React.FC = () => {
 
       <div className="px-4 space-y-6">
 
-        {/* Hero: Safe to Spend — the single elevated surface on Home (money
-            domain — Plan 090). The `space-y-6` stack collapses cleanly when it's
-            removed (no doubled gap). */}
-        {isModuleEnabled('money') && <SafeToSpendHero />}
+        {/* Action Queue jumps to the top of the stack whenever it has items —
+            it's the page's primary triage surface, so it shouldn't sit below
+            the widgets when there's something to act on. When it's empty, it
+            stays in its original spot below the widgets (see below) so the
+            "All caught up" state doesn't dominate the top of the page. */}
+        {actionQueue.length > 0 && actionQueueSection}
 
         {/* Credit card activity — charges vs. paydowns this period so balances
             don't balloon (money domain). Self-nulls without any credit cards. */}
@@ -376,86 +457,9 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Action Queue — triage of what needs attention. Swipe right to
-            approve, swipe left to defer, long-press (or "Select") for bulk
-            approve/defer/delete. */}
-        <Section
-          title={
-            <span className="flex items-center gap-2">
-              <span
-                className={`w-2 h-2 rounded-full ${actionQueue.length > 0 ? 'bg-habit-streak motion-safe:animate-pulse' : 'bg-money-pos'}`}
-                aria-hidden="true"
-              />
-              Action Queue {actionQueue.length > 0 && `(${actionQueue.length})`}
-            </span>
-          }
-          action={
-            actionQueue.length > 0 ? (
-              selectionMode ? (
-                <button
-                  onClick={exitSelectionMode}
-                  className="text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-200 px-1 min-h-6"
-                >
-                  Cancel
-                </button>
-              ) : (
-                <button
-                  onClick={() => enterSelectionMode()}
-                  className="text-xs font-semibold text-accent-700 dark:text-accent-300 hover:underline px-1 min-h-6"
-                >
-                  Select
-                </button>
-              )
-            ) : undefined
-          }
-        >
-          {actionQueue.length > 0 ? (
-            <SurfaceList>
-              {visibleQueueItems.map(item => (
-                <ActionQueueItemCard
-                  key={item.id}
-                  item={item}
-                  isExpanded={expandedId === item.id}
-                  setExpandedId={setExpandedId}
-                  setPayModalItemId={setPayModalItemId}
-                  selectionMode={selectionMode}
-                  isSelected={selectedIds.has(item.id)}
-                  onToggleSelect={toggleSelect}
-                  onEnterSelectionMode={enterSelectionMode}
-                  onSwipeApprove={handleSwipeApprove}
-                  onSwipeDefer={handleSwipeDefer}
-                  buckets={buckets}
-                  habits={habits}
-                  transactions={transactions}
-                  members={members}
-                  updateTransactionCategory={updateTransactionCategory}
-                  updateTransaction={updateTransaction}
-                  deleteTransaction={deleteTransaction}
-                  updateToDo={updateToDo}
-                  deleteToDo={deleteToDo}
-                  completeToDo={completeToDo}
-                  deferCalendarItem={deferCalendarItem}
-                  deleteCalendarItem={deleteCalendarItem}
-                />
-              ))}
-              {!selectionMode && (
-                <ShowMoreRow
-                  hiddenCount={actionQueue.length - MAX_VISIBLE_QUEUE_ITEMS}
-                  expanded={queueExpanded}
-                  onToggle={() => setQueueExpanded(v => !v)}
-                  noun="item"
-                />
-              )}
-            </SurfaceList>
-          ) : (
-            <EmptyState
-              variant="surface"
-              icon={<CheckCircle2 />}
-              title="All caught up"
-              description="Nothing needs your attention right now."
-            />
-          )}
-        </Section>
+        {/* Empty-queue case: the "All caught up" section stays in its original
+            position below the widgets rather than leading the page. */}
+        {actionQueue.length === 0 && actionQueueSection}
 
         {/* Today's Habits — compact tracker (habits domain — Plan 090). */}
         {isModuleEnabled('habits') && <DailyHabitsWidget />}
