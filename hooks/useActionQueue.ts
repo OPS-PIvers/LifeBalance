@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   endOfDay, isBefore, parseISO, isSameDay, subMonths, addMonths,
-  startOfToday, isToday, isTomorrow, isValid
+  startOfDay, addDays, differenceInMilliseconds, isToday, isTomorrow, isValid
 } from 'date-fns';
 import { Transaction, CalendarItem, ToDo } from '@/types/schema';
 import { useFinance, useTodos, useExpandedCalendarItems } from '@/contexts/FirebaseHouseholdContext';
@@ -53,9 +53,34 @@ export const useActionQueue = () => {
   const showMoney = isModuleEnabled('money');
   const showTodos = isPlanTabVisible('todos');
 
-  // Use startOfToday for stable date reference across renders for the same day
-  // This prevents unnecessary re-calculations if the component re-renders
-  const today = useMemo(() => startOfToday(), []);
+  // Local-day anchor for every date comparison below. Held in state (not a
+  // mount-time memo) so an always-open dashboard (e.g. wall-mounted tablet PWA)
+  // rolls forward at local midnight instead of keeping yesterday's "today"
+  // until a remount. A self-rescheduling timeout re-derives the day just past
+  // midnight; setState with the unchanged string is a no-op, so renders only
+  // happen when the day actually flips.
+  const [localToday, setLocalToday] = useState(() => getLocalDateString());
+  useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const scheduleMidnightTick = () => {
+      const now = new Date();
+      // addDays is DST-safe (vs. a manual 24h add); the +1s buffer keeps a
+      // slightly-early wakeup from re-arming a zero-delay loop.
+      const msUntilMidnight =
+        differenceInMilliseconds(startOfDay(addDays(now, 1)), now) + 1000;
+      timeoutId = setTimeout(() => {
+        setLocalToday(getLocalDateString());
+        scheduleMidnightTick();
+      }, msUntilMidnight);
+    };
+    scheduleMidnightTick();
+    return () => clearTimeout(timeoutId);
+  }, []);
+
+  // parseISO on a local yyyy-MM-dd string yields local midnight — the same
+  // instant startOfToday() returns while `localToday` is current — so the Date
+  // anchors stay referentially stable within a day and advance with the tick.
+  const today = useMemo(() => parseISO(localToday), [localToday]);
   const endToday = useMemo(() => endOfDay(today), [today]);
 
   // Expand recurring calendar items for a reasonable range (1 month past to 3
@@ -74,7 +99,6 @@ export const useActionQueue = () => {
   // swipe/bulk "Defer" is snoozed (hidden) while its reviewSnoozedUntil is
   // still in the future; both sides are local yyyy-MM-dd, so lexical compare
   // is chronological. It still counts toward pendingSpend / Safe-to-Spend.
-  const localToday = useMemo(() => getLocalDateString(), []);
   const pendingTx: ActionQueueItem[] = useMemo(() => showMoney ? transactions.filter(t =>
     t.status === 'pending_review' &&
     !(t.reviewSnoozedUntil && t.reviewSnoozedUntil > localToday)

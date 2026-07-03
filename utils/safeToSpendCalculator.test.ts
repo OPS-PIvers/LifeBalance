@@ -645,6 +645,45 @@ describe('calculateSafeToSpend', () => {
     expect(result).toBe(5000);
   });
 
+  it('should fall back to name matching when bucketId is null (Firestore cleared field)', () => {
+    // Firestore surfaces a cleared optional field as null at runtime; a null
+    // bucketId must behave like an absent one and fall through to Strategy 2,
+    // not dead-end in the id match.
+    const billDate = formatIso(addDays(today, 5));
+    const groceriesBucket: BudgetBucket = { id: 'groc', name: 'Groceries', limit: 400, color: 'green', isVariable: true, isCore: false };
+    const items: CalendarItem[] = [
+      {
+        id: 'p1',
+        title: 'Next Paycheck',
+        amount: 2000,
+        date: nextPaycheckDate,
+        type: 'income',
+        isPaid: false
+      },
+      {
+        id: 'b1',
+        title: 'Groceries',
+        amount: 200,
+        date: billDate,
+        type: 'expense',
+        isPaid: false,
+        // Cast: the schema types bucketId as `string | undefined`, but Firestore
+        // can hand back null for cleared fields — simulate that runtime shape.
+        bucketId: null as unknown as string
+      }
+    ];
+
+    const result = calculateSafeToSpend(
+      mockAccounts,
+      items,
+      [groceriesBucket],
+      lastPaycheckDate
+    );
+
+    // Excluded via the whole-word name fallback despite the null bucketId.
+    expect(result).toBe(5000);
+  });
+
   it('should NOT exclude a bill when bucketId is set but does not match any bucket', () => {
     // If bucketId is present but points to a non-existent bucket, bill is NOT excluded.
     const billDate = formatIso(addDays(today, 5));

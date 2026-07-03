@@ -690,6 +690,27 @@ describe('habitLogic', () => {
         expect(calculatePointsForDate([habit], WED)).toBe(0);
         expect(calculatePointsForDate([habit], TUE)).toBe(10);
       });
+
+      it('threshold: awards a completed PAST week even while the current week is below target', () => {
+        // The live counter only describes the CURRENT week — a past week's
+        // presence in completedDates proves it was completed, so the current
+        // week sitting below target must not zero out the past week's award
+        // (mirrors the isCurrentWeek bypass in calculatePointsForDateRange).
+        const habit = weeklyHabit({
+          scoringType: 'threshold',
+          basePoints: 10,
+          targetCount: 3,
+          count: 1, // current week: 1 of 3 so far
+          totalCount: 4,
+          completedDates: [PREV_MON, PREV_WED, WED],
+          streakDays: 2,
+        });
+        // Past week: award on its FIRST completed day (streak 1 → 1.0x → 10).
+        expect(calculatePointsForDate([habit], PREV_MON)).toBe(10);
+        expect(calculatePointsForDate([habit], PREV_WED)).toBe(0);
+        // Current week still gated on the live counter.
+        expect(calculatePointsForDate([habit], WED)).toBe(0);
+      });
     });
   });
 

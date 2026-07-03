@@ -587,8 +587,13 @@ export const calculatePointsForDate = (
       } else {
         // Threshold: the week's single award landed on the FIRST completed day
         // of the week; later toggle-days entered completedDates with 0 points.
+        // `habit.count` is the live counter for the CURRENT week only, so gate
+        // on it just for the current week (a past week's presence in
+        // completedDates already proves it was completed) — mirrors the
+        // isCurrentWeek bypass in calculatePointsForDateRange.
         const firstSameWeekDay = sameWeekDates.reduce((a, b) => (a < b ? a : b));
-        if (habit.count >= habit.targetCount && targetDate === firstSameWeekDay) {
+        const isCurrentWeek = isSameWeek(parseISO(getLocalDateString()), ref, { weekStartsOn: 1 });
+        if ((!isCurrentWeek || habit.count >= habit.targetCount) && targetDate === firstSameWeekDay) {
           totalPoints += sign * perDayPoints;
         }
       }

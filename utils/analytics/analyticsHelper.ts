@@ -118,9 +118,17 @@ export const calculateHeatmapData = (habits: Habit[]) => {
   let maxCompletions = 0;
   const dailyCounts = new Map<string, number>();
 
+  // Only count completions inside the rendered window, so the intensity
+  // ceiling (maxCompletions) isn't set by a peak day the chart never shows.
+  // ISO date strings compare lexicographically = chronologically.
+  const startStr = format(startDate, 'yyyy-MM-dd');
+  const endStr = format(endDate, 'yyyy-MM-dd');
+
   habits.forEach(habit => {
     habit.completedDates?.forEach(date => {
-      dailyCounts.set(date, (dailyCounts.get(date) || 0) + 1);
+      if (date >= startStr && date <= endStr) {
+        dailyCounts.set(date, (dailyCounts.get(date) || 0) + 1);
+      }
     });
   });
 

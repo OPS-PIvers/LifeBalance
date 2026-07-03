@@ -67,8 +67,10 @@ function tokenize(text: string): string[] {
  *       exclusions.
  */
 function isBillCoveredByBucket(item: CalendarItem, buckets: BudgetBucket[]): boolean {
-  // Strategy 1: precise id-based match (no false positives possible)
-  if (item.bucketId !== undefined) {
+  // Strategy 1: precise id-based match (no false positives possible).
+  // Loose nullish check: Firestore can surface a cleared bucketId as null,
+  // which must fall through to name matching like an absent field.
+  if (item.bucketId != null) {
     return buckets.some(b => b.id === item.bucketId);
   }
 
