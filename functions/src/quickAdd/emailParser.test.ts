@@ -20,6 +20,20 @@ const DEBIT_EMAIL =
   "$45.67 at COSTCO WHSE #0712 on 07/01/2026. If you do not recognize this " +
   "purchase, please call 1-800-869-3557.";
 
+// The table-layout rendering of the same alert: label and value live in
+// separate cells, so tag-stripping (or copying a text selection from the
+// rendered email) puts them on separate LINES with no colon.
+const TABLE_LAYOUT_EMAIL = `WELLS FARGO
+We have your most recent transaction here
+Credit card
+...8899
+Amount
+$24.10
+Merchant
+TST* ANNA MARIA GENERAL S in ANNA MARIA, FL, USA
+Date
+07/03/2026`;
+
 describe("parseTransactionEmail", () => {
   it("parses the Wells Fargo credit alert format (labeled merchant)", () => {
     expect(parseTransactionEmail(CREDIT_EMAIL)).toEqual({
@@ -37,6 +51,36 @@ describe("parseTransactionEmail", () => {
       cardLast4: "1234",
       date: "2026-07-01",
     });
+  });
+
+  it("parses a table-layout alert (label and value on separate lines, no colons)", () => {
+    expect(parseTransactionEmail(TABLE_LAYOUT_EMAIL)).toEqual({
+      amount: 24.1,
+      merchant: "TST* ANNA MARIA GENERAL S in ANNA MARIA",
+      cardLast4: "8899",
+      date: "2026-07-03",
+    });
+  });
+
+  it("parses the table layout when delivered as HTML table cells", () => {
+    const html =
+      "<table><tr><td>Credit card</td><td>...8899</td></tr>" +
+      "<tr><td>Amount</td><td>$24.10</td></tr>" +
+      "<tr><td>Merchant</td><td>TST* ANNA MARIA GENERAL S</td></tr>" +
+      "<tr><td>Date</td><td>07/03/2026</td></tr></table>";
+    expect(parseTransactionEmail(html)).toEqual({
+      amount: 24.1,
+      merchant: "TST* ANNA MARIA GENERAL S",
+      cardLast4: "8899",
+      date: "2026-07-03",
+    });
+  });
+
+  it("does not read prose 'merchant' wording as a colon-less label", () => {
+    const parsed = parseTransactionEmail(
+      "If you don't recognize this\nmerchant, please call the number on the back of your card."
+    );
+    expect(parsed.merchant).toBeNull();
   });
 
   it("ignores the alert-threshold figure when only unlabeled amounts exist", () => {

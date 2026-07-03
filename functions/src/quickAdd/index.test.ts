@@ -962,6 +962,82 @@ Date: 07/01/2026`;
     expect(res.statusCode).toBe(400);
     expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
   });
+
+  it("present-but-empty emailText returns a Shortcut-wiring hint, not the generic amount error", async () => {
+    // The email automation ran but the body never reached the server (the
+    // emailText field isn't wired to "Get Text from Input"). The notification
+    // must name that mis-wiring instead of complaining about `amount`.
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { emailText: "" } }),
+      res
+    );
+    expect(res.statusCode).toBe(400);
+    const message = (res.body as { message: string }).message;
+    expect(message).toMatch(/emailText was empty/);
+    expect(message).toMatch(/Get Text from Input/);
+    expect(message).not.toMatch(/amount must be a valid number/);
+  });
+
+  it("whitespace-only emailText gets the same empty-emailText 400", async () => {
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { emailText: "   \n " } }),
+      res
+    );
+    expect(res.statusCode).toBe(400);
+    expect((res.body as { message: string }).message).toMatch(
+      /emailText was empty/
+    );
+  });
+
+  it("empty-emailText failure is audit-logged with the emailText redacted", async () => {
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { emailText: "" } }),
+      res
+    );
+    expect(res.statusCode).toBe(400);
+    expect(logAddMock).toHaveBeenCalled();
+    const logged = logAddMock.mock.calls[0]?.[0] as {
+      requestBody: Record<string, unknown>;
+      responseStatus: number;
+    };
+    expect(logged.responseStatus).toBe(400);
+    expect(logged.requestBody.emailText).toMatch(/^\[redacted email text/);
+  });
+
+  it("unparseable emailText failure is audit-logged", async () => {
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { emailText: "Your statement is ready to view." } }),
+      res
+    );
+    expect(res.statusCode).toBe(400);
+    expect(logAddMock).toHaveBeenCalled();
+    const logged = logAddMock.mock.calls[0]?.[0] as {
+      requestBody: Record<string, unknown>;
+      responseStatus: number;
+    };
+    expect(logged.responseStatus).toBe(400);
+    expect(logged.requestBody.emailText).toMatch(/^\[redacted email text/);
+  });
+
+  it("invalid-amount 400 names the body fields that did arrive and is audit-logged", async () => {
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { merchant: "Coffee", cardLast4: "8899" } }),
+      res
+    );
+    expect(res.statusCode).toBe(400);
+    const message = (res.body as { message: string }).message;
+    expect(message).toMatch(/amount must be a valid number/);
+    expect(message).toMatch(/Body fields received: merchant, cardLast4/);
+    const logged = logAddMock.mock.calls[0]?.[0] as {
+      responseStatus: number;
+    };
+    expect(logged.responseStatus).toBe(400);
+  });
 });
 
 // ===========================================================================

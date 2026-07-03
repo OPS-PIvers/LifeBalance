@@ -112,6 +112,12 @@ const MERCHANT_STOP =
 
 const MERCHANT_PATTERNS: readonly RegExp[] = [
   new RegExp(`merchant\\s*:\\s*([^\\n]+?)${MERCHANT_STOP}`, "i"),
+  // Table-layout emails (and text selections copied from them) render the
+  // label and value as separate cells, which tag-stripping turns into
+  // "Merchant" alone on its own line with the name on the next. Anchor to
+  // line start and require the value to open with an alphanumeric so prose
+  // like "…don't recognize this\nmerchant, please call…" can never match.
+  new RegExp(`^merchant\\s*:?\\s*([A-Za-z0-9][^\\n]*?)${MERCHANT_STOP}`, "im"),
   new RegExp(
     `\\$\\s*[\\d,]+\\.\\d{2}\\s+(?:purchase\\s+)?(?:at|from)\\s+([^\\n]+?)${MERCHANT_STOP}`,
     "i"
@@ -136,10 +142,12 @@ function extractMerchant(text: string): string | null {
  * "card x9876", "account ending in 4321". Requires the word card/account
  * within 30 non-digit chars so a stray year or amount is never grabbed; "$"
  * is also excluded from the gap so "card was charged $1234.56" can't read a
- * dollar amount as the last-4.
+ * dollar amount as the last-4. The gap MAY span line breaks: table-layout
+ * emails put "Credit card" and "...8899" in separate cells, which
+ * tag-stripping renders on separate lines.
  */
 function extractCardLast4(text: string): string | null {
-  const m = text.match(/\b(?:card|account)[^0-9$\n]{0,30}?(?<!\d)(\d{4})(?!\d)/i);
+  const m = text.match(/\b(?:card|account)[^0-9$]{0,30}?(?<!\d)(\d{4})(?!\d)/i);
   return m?.[1] ?? null;
 }
 

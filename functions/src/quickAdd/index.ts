@@ -335,6 +335,28 @@ export const quickAddExpense = onRequest(
     let rawCardLast4 = (req.body || {}).cardLast4;
     const rawAccountId = (req.body || {}).accountId;
 
+    // Card last-4 arrives as a short string ("...8899") or a number; anything
+    // longer than a masked-card fragment is bogus. Actual digit extraction /
+    // account matching happens after the household read below. This runs
+    // BEFORE any validation that audit-logs the body (logApiCall persists
+    // req.body), so a Shortcut that mis-captures a full card number never
+    // leaves more than the last 4 digits in our logs.
+    if (rawCardLast4 !== undefined && rawCardLast4 !== null) {
+      if (
+        (typeof rawCardLast4 !== "string" && typeof rawCardLast4 !== "number") ||
+        String(rawCardLast4).length > 30
+      ) {
+        errorResponse(res, 400, "cardLast4 must be a short string (e.g. '8899')", "BAD_REQUEST");
+        return;
+      }
+      // Sanitize the request body IN-PLACE to just the last 4 digits (or
+      // null). Account matching below still reads the original `rawCardLast4`
+      // (normalizeCardLast4 handles the mask forms).
+      if (req.body) {
+        req.body.cardLast4 = normalizeCardLast4(rawCardLast4);
+      }
+    }
+
     // Server-side email parsing: instead of running four fragile on-device
     // regexes, the bank-email Shortcut can send the WHOLE email body as
     // `emailText` and we extract amount/merchant/card/date here (emailParser.ts)
@@ -342,28 +364,59 @@ export const quickAddExpense = onRequest(
     // Explicitly provided fields always win — the parser only fills the gaps —
     // so existing regex-based Shortcuts keep working unchanged.
     const rawEmailText = (req.body || {}).emailText;
+    const emailKeyPresent = Object.prototype.hasOwnProperty.call(
+      req.body || {},
+      "emailText"
+    );
+    // Redact the blob IN-PLACE before anything logs the body (same treatment
+    // as cardLast4 above): logApiCall persists req.body — including the
+    // validation-failure audit entries below — and a full bank email can carry
+    // balances and account details that must never sit in audit logs;
+    // sanitizeForLogging's 500-char truncation is not enough.
+    if (emailKeyPresent && req.body) {
+      req.body.emailText =
+        typeof rawEmailText === "string"
+          ? `[redacted email text: ${rawEmailText.length} chars]`
+          : "[redacted email text: non-string value]";
+    }
     const emailProvided =
-      rawEmailText !== undefined && rawEmailText !== null && rawEmailText !== "";
-    if (emailProvided) {
-      if (typeof rawEmailText !== "string") {
+      typeof rawEmailText === "string" && rawEmailText.trim() !== "";
+    if (emailKeyPresent && !emailProvided) {
+      if (
+        rawEmailText !== undefined &&
+        rawEmailText !== null &&
+        typeof rawEmailText !== "string"
+      ) {
+        await logApiCall(householdId, apiKey.substring(0, 16), "expense", req.body, 400);
         errorResponse(res, 400, "emailText must be a string", "BAD_REQUEST");
         return;
       }
+      // The email Shortcut ran but the body never made it into the request.
+      // The usual mis-wiring is the emailText field not pointing at the "Get
+      // Text from Input" output — say so precisely, because this message is
+      // exactly what the Shortcut's own notification shows the user.
+      await logApiCall(householdId, apiKey.substring(0, 16), "expense", req.body, 400);
+      errorResponse(
+        res,
+        400,
+        "emailText was empty — the automation ran but no email body reached the " +
+          "server. In the Shortcut, set emailText to the Text output of " +
+          "“Get Text from Input” and set that action's input to Shortcut Input.",
+        "BAD_REQUEST"
+      );
+      return;
+    }
+    if (emailProvided) {
       if (rawEmailText.length > 100000) {
+        await logApiCall(householdId, apiKey.substring(0, 16), "expense", req.body, 400);
         errorResponse(res, 400, "emailText too long (max 100000 chars)", "BAD_REQUEST");
         return;
-      }
-      // Redact the blob IN-PLACE before anything logs the body (same treatment
-      // as cardLast4 below): logApiCall persists req.body, and a full bank
-      // email can carry balances and account details that must never sit in
-      // audit logs — sanitizeForLogging's 500-char truncation is not enough.
-      if (req.body) {
-        req.body.emailText = `[redacted email text: ${rawEmailText.length} chars]`;
       }
       const parsed = parseTransactionEmail(rawEmailText);
       if (parsed.amount === null && parsed.merchant === null) {
         // Nothing recognizable — tell the Shortcut owner (the notification
         // shows this message) instead of silently skipping the purchase.
+        await logApiCall(householdId, apiKey.substring(0, 16), "expense", req.body, 400);
         errorResponse(
           res,
           400,
@@ -390,6 +443,12 @@ export const quickAddExpense = onRequest(
       }
       if (isBlank(rawCardLast4)) {
         rawCardLast4 = parsed.cardLast4 ?? rawCardLast4;
+        // Keep the audit-log copy in step: the sanitize-in-place above ran on
+        // the blank client value, so the parsed last-4 that account routing
+        // will actually use must replace it (normalized, never more than 4).
+        if (req.body && rawCardLast4 !== undefined && rawCardLast4 !== null) {
+          req.body.cardLast4 = normalizeCardLast4(rawCardLast4);
+        }
       }
       if (isBlank(date)) {
         // undefined (not a blank string) so a parse miss falls back to today
@@ -448,12 +507,26 @@ export const quickAddExpense = onRequest(
     }
 
     if (typeof amount !== "number" || !Number.isFinite(amount)) {
-      logger.warn(`Invalid amount received: ${JSON.stringify({ rawAmount, amount, type: typeof rawAmount })}`);
+      // Name the body fields that DID arrive (names only — values may be
+      // sensitive): the Shortcut's own error notification then identifies
+      // which automation sent the bad request (emailText ⇒ the email one).
+      const receivedFields = Object.keys(req.body || {}).join(", ") || "none";
+      // rawAmount is unvalidated user input echoed into the log and response;
+      // cap it so an oversized string can't bloat either.
+      const safeRawAmount =
+        typeof rawAmount === "string" && rawAmount.length > 100
+          ? `${rawAmount.substring(0, 100)}... [TRUNCATED]`
+          : rawAmount;
+      logger.warn(
+        `Invalid amount received: ${JSON.stringify({ rawAmount: safeRawAmount, amount, type: typeof rawAmount, receivedFields })}`
+      );
+      await logApiCall(householdId, apiKey.substring(0, 16), "expense", req.body, 400);
       errorResponse(
         res,
         400,
-        `amount must be a valid number. Received: ${typeof rawAmount === 'undefined' ? 'undefined' : JSON.stringify(rawAmount)}. ` +
-          `Send a plain number (50 or -50) or a currency string ("$50.00"). Both positive and negative values are accepted.`,
+        `amount must be a valid number. Received: ${typeof safeRawAmount === 'undefined' ? 'undefined' : JSON.stringify(safeRawAmount)}. ` +
+          `Send a plain number (50 or -50) or a currency string ("$50.00"). Both positive and negative values are accepted. ` +
+          `Body fields received: ${receivedFields}.`,
         "BAD_REQUEST"
       );
       return;
@@ -491,7 +564,13 @@ export const quickAddExpense = onRequest(
 
     // Security: Input validation & sanitization
     if (!merchant || typeof merchant !== "string") {
-      errorResponse(res, 400, "merchant is required", "BAD_REQUEST");
+      await logApiCall(householdId, apiKey.substring(0, 16), "expense", req.body, 400);
+      errorResponse(
+        res,
+        400,
+        `merchant is required. Body fields received: ${Object.keys(req.body || {}).join(", ") || "none"}.`,
+        "BAD_REQUEST"
+      );
       return;
     }
 
@@ -511,27 +590,6 @@ export const quickAddExpense = onRequest(
       if (typeof notes !== "string" || notes.length > 500) {
         errorResponse(res, 400, "notes must be a string (max 500 chars)", "BAD_REQUEST");
         return;
-      }
-    }
-
-    // Card last-4 arrives as a short string ("...8899") or a number; anything
-    // longer than a masked-card fragment is bogus. Actual digit extraction /
-    // account matching happens after the household read below.
-    if (rawCardLast4 !== undefined && rawCardLast4 !== null) {
-      if (
-        (typeof rawCardLast4 !== "string" && typeof rawCardLast4 !== "number") ||
-        String(rawCardLast4).length > 30
-      ) {
-        errorResponse(res, 400, "cardLast4 must be a short string (e.g. '8899')", "BAD_REQUEST");
-        return;
-      }
-      // Sanitize the request body IN-PLACE to just the last 4 digits (or null)
-      // before anything logs it: logApiCall persists req.body, so a Shortcut
-      // that mis-captures a full card number must never leave more than the last
-      // 4 digits in our audit logs. Account matching below still reads the
-      // original `rawCardLast4` (normalizeCardLast4 handles the mask forms).
-      if (req.body) {
-        req.body.cardLast4 = normalizeCardLast4(rawCardLast4);
       }
     }
 
