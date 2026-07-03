@@ -10,6 +10,7 @@ interface SwitchProps {
   /** Checked-track color. 'accent' (default, evergreen) or 'warm' (amber — gamification surfaces). */
   tone?: 'accent' | 'warm';
   'aria-label'?: string;
+  'aria-labelledby'?: string;
 }
 
 const SWITCH_TONES = {
@@ -31,6 +32,7 @@ export const Switch: React.FC<SwitchProps> = ({
   id,
   tone = 'accent',
   'aria-label': ariaLabel,
+  'aria-labelledby': ariaLabelledby,
 }) => {
   // Fall back to a generated id so the <label htmlFor> always associates with
   // the input, even when no explicit id is passed by the call site.
@@ -49,6 +51,7 @@ export const Switch: React.FC<SwitchProps> = ({
         type="checkbox"
         id={inputId}
         aria-label={ariaLabel}
+        aria-labelledby={ariaLabelledby}
         checked={checked}
         onChange={(e) => !disabled && onCheckedChange(e.target.checked)}
         disabled={disabled}

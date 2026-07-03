@@ -446,7 +446,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
             <Switch
               checked={isRecurring}
               onCheckedChange={setIsRecurring}
-              aria-label="Recurring Transaction"
+              aria-labelledby="recurring-label"
             />
           </div>
         </div>
