@@ -79,7 +79,7 @@ import {
 } from '@/types/schema';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { normalizeToKey } from '@/utils/stringNormalizer';
-import { calculateSafeToSpendBreakdownFromExpanded, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
+import { calculateSafeToSpendBreakdownFromExpanded, resolveBucketForCalendarItem, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { effectiveAccountImpact, resolveTargetAccount } from '@/utils/accountImpact';
 import { processToggleHabit, calculatePointsForDate, calculatePointsForDateRange, computeManagedMemberPointsReset, isHabitStale, streakForHabit, streakEndingOnForHabit, getMultiplier, getHabitResetUpdate } from '@/utils/habitLogic';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
@@ -137,51 +137,6 @@ function mergeById<T extends { id: string }>(primary: T[], secondary: T[]): T[] 
  */
 function mapTransactionDoc(d: QueryDocumentSnapshot<Transaction>): Transaction {
   return d.data();
-}
-
-/**
- * Resolve which budget bucket covers a calendar bill, for auto-categorizing the
- * transaction created when the bill is paid. MUST mirror the matching rules of
- * isBillCoveredByBucket in utils/safeToSpendCalculator.ts (exact `bucketId`
- * match first, then whole-word tokenized name match with a 3-char minimum) —
- * the two matchers disagreeing means a bill safe-to-spend counts as NOT
- * bucket-covered could still be charged against that bucket once paid (e.g. a
- * raw substring match files "Las Vegas Hotel" under a "Gas" bucket).
- */
-const BUCKET_NAME_MIN_MATCH_LENGTH = 3;
-
-function tokenizeForBucketMatch(text: string): string[] {
-  return text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(t => t.length > 0);
-}
-
-function resolveBucketForCalendarItem(
-  item: Pick<CalendarItem, 'title' | 'bucketId'>,
-  buckets: BudgetBucket[]
-): BudgetBucket | undefined {
-  // Strategy 1: precise id-based match (no false positives possible).
-  // Loose nullish check: Firestore can surface a cleared bucketId as null,
-  // which must fall through to name matching like an absent field.
-  if (item.bucketId != null) {
-    return buckets.find(b => b.id === item.bucketId);
-  }
-
-  // Strategy 2: whole-word name match — the bucket name's tokens must appear as
-  // a consecutive whole-word phrase inside the bill title's tokens.
-  const titleTokens = tokenizeForBucketMatch(item.title);
-
-  return buckets.find(bucket => {
-    const bucketNormalized = bucket.name.toLowerCase().trim();
-    if (bucketNormalized.length < BUCKET_NAME_MIN_MATCH_LENGTH) return false;
-
-    const bucketTokens = tokenizeForBucketMatch(bucketNormalized);
-    if (bucketTokens.length === 0) return false;
-
-    const windowSize = bucketTokens.length;
-    for (let i = 0; i <= titleTokens.length - windowSize; i++) {
-      if (bucketTokens.every((bt, j) => titleTokens[i + j] === bt)) return true;
-    }
-    return false;
-  });
 }
 
 /**

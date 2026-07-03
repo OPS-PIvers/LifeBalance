@@ -62,19 +62,18 @@ vi.mock('lucide-react', () => ({
   Snowflake: () => <span data-testid="icon-snowflake" />,
 }));
 
-// Mock date-fns with controlled dates
+// Mock date-fns with controlled dates. `mockedYesterday.current` is mutable so
+// tests can simulate the local day rolling over while a card stays mounted.
+// Local-time strings (no trailing Z) keep the derived yyyy-MM-dd stable in any TZ.
+const { mockedYesterday } = vi.hoisted(() => ({
+  mockedYesterday: { current: new Date('2024-02-09T12:00:00') },
+}));
+
 vi.mock('date-fns', async () => {
   const actual = await vi.importActual<typeof import('date-fns')>('date-fns');
   return {
     ...actual,
-    format: (date: Date | number, formatStr: string) => {
-      // Use real format for most cases, but control for testing
-      return actual.format(date, formatStr);
-    },
-    subDays: (_date: Date | number, _days: number) => {
-      // Return a fixed "yesterday" date for testing
-      return new Date('2024-02-09T12:00:00Z');
-    },
+    subDays: (_date: Date | number, _days: number) => mockedYesterday.current,
   };
 });
 
@@ -155,6 +154,7 @@ describe('HabitCard - Streak Repair', () => {
     vi.clearAllMocks();
     setupMatchMedia(true); // Desktop for easier testing
     mockHouseholdContext.freezeBank = { tokens: 3 };
+    mockedYesterday.current = new Date('2024-02-09T12:00:00');
   });
 
   const baseHabit: Habit = {
@@ -212,6 +212,24 @@ describe('HabitCard - Streak Repair', () => {
     await user.click(screen.getByText(/Repair Streak/));
 
     expect(mockHouseholdContext.useFreezeBankToken).toHaveBeenCalledWith('h1', yesterdayStr);
+  });
+
+  it('repairs the current "yesterday" after a midnight rollover, not the mount-time one', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<HabitCard habit={baseHabit} />);
+
+    await user.click(screen.getByLabelText('Habit options menu'));
+    await user.click(screen.getByText(/Repair Streak/));
+    expect(mockHouseholdContext.useFreezeBankToken).toHaveBeenLastCalledWith('h1', '2024-02-09');
+
+    // The local day rolls over while the card stays mounted; a Firestore-driven
+    // habit update (changed lastUpdated) re-renders the same instance.
+    mockedYesterday.current = new Date('2024-02-10T12:00:00');
+    rerender(<HabitCard habit={{ ...baseHabit, lastUpdated: '2024-02-11T00:00:00Z' }} />);
+
+    await user.click(screen.getByLabelText('Habit options menu'));
+    await user.click(screen.getByText(/Repair Streak/));
+    expect(mockHouseholdContext.useFreezeBankToken).toHaveBeenLastCalledWith('h1', '2024-02-10');
   });
 
   it('does NOT show Repair Streak if user has 0 tokens', async () => {

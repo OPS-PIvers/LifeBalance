@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { Habit } from '@/types/schema';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { X, MoreVertical, Edit2, Trash2, Target, Calendar, Wrench } from 'lucide-react';
@@ -12,7 +12,8 @@ import { Button } from '@/components/ui/Button';
 import ProgressRing from '@/components/ui/ProgressRing';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { subDays, format } from 'date-fns';
+import { subDays } from 'date-fns';
+import { getLocalDateString } from '@/utils/dateHelpers';
 import { haptic } from '@/utils/haptics';
 import { getMultiplier } from '@/utils/habitLogic';
 import StreakFlame from './StreakFlame';
@@ -68,9 +69,11 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
   })();
 
   // Streak Repair Eligibility
-  // Memoized so this date string is computed once per mount rather than on
-  // every render of every card (habits lists can be long).
-  const yesterday = useMemo(() => format(subDays(new Date(), 1), 'yyyy-MM-dd'), []);
+  // Recomputed on every render (a cheap string format): card instances are
+  // long-lived (React.memo keyed list, sessions span midnight via
+  // useMidnightScheduler), so memoizing this per mount would leave the repair
+  // target pointing at the pre-rollover day and patch the wrong date.
+  const yesterday = getLocalDateString(subDays(new Date(), 1));
   const isEligibleForRepair =
     isPositive &&
     habit.period === 'daily' &&
