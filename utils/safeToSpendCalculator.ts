@@ -51,7 +51,7 @@ function tokenize(text: string): string[] {
 }
 
 /**
- * Determine whether a calendar expense item is covered by any budget bucket.
+ * Resolve which budget bucket covers a calendar expense item.
  *
  * Matching rules (applied in order):
  *  1. EXACT ID MATCH: if the item carries a `bucketId`, compare it directly to
@@ -65,17 +65,28 @@ function tokenize(text: string): string[] {
  *       title). The reverse direction (bill title inside bucket name) is dropped
  *       because it is almost always wrong and was the primary source of false
  *       exclusions.
+ *
+ * Exported as the SINGLE source of truth for bill↔bucket matching: both the
+ * safe-to-spend bill exclusion below and payCalendarItem's auto-categorization
+ * in FirebaseHouseholdContext use it. The two disagreeing means a bill that
+ * safe-to-spend counts as NOT bucket-covered could still be charged against
+ * that bucket once paid (double-counting the spend).
  */
-function isBillCoveredByBucket(item: CalendarItem, buckets: BudgetBucket[]): boolean {
-  // Strategy 1: precise id-based match (no false positives possible)
-  if (item.bucketId !== undefined) {
-    return buckets.some(b => b.id === item.bucketId);
+export function resolveBucketForCalendarItem(
+  item: Pick<CalendarItem, 'title' | 'bucketId'>,
+  buckets: BudgetBucket[]
+): BudgetBucket | undefined {
+  // Strategy 1: precise id-based match (no false positives possible).
+  // Loose nullish check: Firestore can surface a cleared bucketId as null,
+  // which must fall through to name matching like an absent field.
+  if (item.bucketId != null) {
+    return buckets.find(b => b.id === item.bucketId);
   }
 
   // Strategy 2: whole-word name match
   const titleTokens = tokenize(item.title);
 
-  return buckets.some(bucket => {
+  return buckets.find(bucket => {
     const bucketNormalized = bucket.name.toLowerCase().trim();
     if (bucketNormalized.length < BUCKET_NAME_MIN_MATCH_LENGTH) {
       // Too short to match reliably — skip.
@@ -95,6 +106,10 @@ function isBillCoveredByBucket(item: CalendarItem, buckets: BudgetBucket[]): boo
     }
     return false;
   });
+}
+
+function isBillCoveredByBucket(item: CalendarItem, buckets: BudgetBucket[]): boolean {
+  return resolveBucketForCalendarItem(item, buckets) !== undefined;
 }
 
 /**

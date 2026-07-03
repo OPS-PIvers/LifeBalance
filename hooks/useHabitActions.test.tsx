@@ -60,9 +60,17 @@ vi.mock('react-hot-toast', () => ({
 import { useHabitActions } from './useHabitActions';
 // The mocked updateDoc — updateHabit writes via updateDoc(ref, data), not a batch,
 // so we read its captured call args to assert on the whitelisted update payload.
-import { updateDoc } from 'firebase/firestore';
+// getDocs backs the prior-submissions lookup for back-dated threshold submissions.
+import { updateDoc, getDocs } from 'firebase/firestore';
 
 const updateDocMock = vi.mocked(updateDoc);
+const getDocsMock = vi.mocked(getDocs);
+
+// Minimal QuerySnapshot stand-in: one doc per prior submission count.
+const submissionsSnap = (counts: number[]) =>
+  ({ docs: counts.map(c => ({ data: () => ({ count: c }) })) }) as unknown as Awaited<
+    ReturnType<typeof getDocs>
+  >;
 
 const HOUSEHOLD_ID = 'house1';
 const householdPath = `households/${HOUSEHOLD_ID}`;
@@ -89,6 +97,9 @@ const baseHabit = (overrides: Partial<Habit>): Habit => ({
 
 const householdUpdate = () =>
   capturedUpdates.find(u => u.ref.__path === householdPath);
+
+const habitUpdate = () =>
+  capturedUpdates.find(u => u.ref.__path === `${householdPath}/habits/h1`);
 
 describe('useHabitActions.addHabitSubmission', () => {
   beforeEach(() => {
@@ -149,6 +160,11 @@ describe('useHabitActions.addHabitSubmission', () => {
     } else {
       expect(hh!.data['points.weekly']).toBeUndefined();
     }
+
+    // A back-dated submission must not bump today's live counter — only the
+    // lifetime total absorbs the count.
+    expect(habitUpdate()!.data['count']).toBe(0);
+    expect(habitUpdate()!.data['totalCount']).toBe(1);
   });
 
   it('credits the same value across daily, weekly and total within ONE batch commit', async () => {
@@ -190,6 +206,164 @@ describe('useHabitActions.addHabitSubmission', () => {
     expect(hh).toBeDefined();
     expect(hh!.data['points.total']).toEqual({ __increment: 15 });
     expect(hh!.data['points.daily']).toEqual({ __increment: 15 });
+  });
+});
+
+describe('useHabitActions.addHabitSubmission (threshold completion gating)', () => {
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    commitCount = 0;
+    incrementMock.mockClear();
+    getDocsMock.mockReset();
+  });
+
+  it('does NOT mark the date complete when a threshold submission is below target', async () => {
+    // Target 3, logging 1: no points (already correct), and the date must NOT
+    // enter completedDates — otherwise the corrective recompute later awards
+    // full threshold points for a day the target was never met.
+    const habit = baseHabit({ scoringType: 'threshold', targetCount: 3, count: 0 });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.addHabitSubmission('h1', 1);
+    });
+
+    expect(householdUpdate()).toBeUndefined();
+    const hu = habitUpdate();
+    expect(hu).toBeDefined();
+    expect(hu!.data['completedDates']).toEqual([]);
+    expect(hu!.data['streakDays']).toBe(0);
+    expect(hu!.data['count']).toBe(1);
+  });
+
+  it('marks the date complete and awards points when the submission reaches target', async () => {
+    const habit = baseHabit({ scoringType: 'threshold', targetCount: 2, count: 1 });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.addHabitSubmission('h1', 1);
+    });
+
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const hu = habitUpdate();
+    expect(hu).toBeDefined();
+    expect(hu!.data['completedDates']).toEqual([today]);
+    expect(hu!.data['count']).toBe(2);
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: 10 });
+  });
+});
+
+describe('useHabitActions.addHabitSubmission (back-dated submissions)', () => {
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    commitCount = 0;
+    incrementMock.mockClear();
+    getDocsMock.mockReset();
+    getDocsMock.mockResolvedValue(submissionsSnap([]));
+  });
+
+  const yesterday = () => format(subDays(new Date(), 1), 'yyyy-MM-dd');
+  const yesterdayTimestamp = () => `${yesterday()}T12:00:00`;
+
+  it('does not bump the live period counter for a back-dated submission', async () => {
+    // Daily threshold habit not yet done today: back-logging yesterday must not
+    // make today's counter read 1 (which would mark today complete and rob the
+    // genuine completion of its points).
+    const habit = baseHabit({ scoringType: 'threshold', targetCount: 1, count: 0 });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.addHabitSubmission('h1', 1, yesterdayTimestamp());
+    });
+
+    const hu = habitUpdate();
+    expect(hu).toBeDefined();
+    expect(hu!.data['count']).toBe(0);
+    expect(hu!.data['totalCount']).toBe(1);
+    expect(hu!.data['completedDates']).toEqual([yesterday()]);
+    expect(hu!.data['streakDays']).toBe(1);
+
+    const hh = householdUpdate();
+    expect(hh).toBeDefined();
+    expect(hh!.data['points.total']).toEqual({ __increment: 10 });
+    expect(hh!.data['points.daily']).toBeUndefined();
+  });
+
+  it('awards a back-dated threshold completion even when the habit is already complete today', async () => {
+    // habit.count (today's live counter) says nothing about yesterday: target
+    // attainment must be evaluated against yesterday's own recorded counts.
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const habit = baseHabit({
+      scoringType: 'threshold',
+      targetCount: 1,
+      count: 1,
+      completedDates: [today],
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.addHabitSubmission('h1', 1, yesterdayTimestamp());
+    });
+
+    const hh = householdUpdate();
+    expect(hh).toBeDefined();
+    expect(hh!.data['points.total']).toEqual({ __increment: 10 });
+
+    const hu = habitUpdate();
+    expect(hu!.data['count']).toBe(1);
+    expect(hu!.data['completedDates']).toEqual([today, yesterday()]);
+    expect(hu!.data['streakDays']).toBe(2);
+  });
+
+  it('does not re-award a past day already completed via the toggle path', async () => {
+    // Yesterday was completed by toggling (so it left no submission docs and its
+    // counter has since reset). Back-logging a submission for it must not pay twice.
+    const habit = baseHabit({
+      scoringType: 'threshold',
+      targetCount: 1,
+      count: 0,
+      completedDates: [yesterday()],
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.addHabitSubmission('h1', 1, yesterdayTimestamp());
+    });
+
+    expect(householdUpdate()).toBeUndefined();
+    expect(habitUpdate()!.data['completedDates']).toEqual([yesterday()]);
+  });
+
+  it("sums the back-dated day's prior submissions to decide target attainment", async () => {
+    // Yesterday already has submissions totalling 2 of a 3-target: logging 1
+    // more for yesterday crosses the target and completes THAT day.
+    getDocsMock.mockResolvedValue(submissionsSnap([2]));
+    const habit = baseHabit({ scoringType: 'threshold', targetCount: 3, count: 0 });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.addHabitSubmission('h1', 1, yesterdayTimestamp());
+    });
+
+    const hh = householdUpdate();
+    expect(hh).toBeDefined();
+    expect(hh!.data['points.total']).toEqual({ __increment: 10 });
+    expect(habitUpdate()!.data['completedDates']).toEqual([yesterday()]);
+    expect(habitUpdate()!.data['count']).toBe(0);
   });
 });
 

@@ -150,3 +150,53 @@ describe('geminiService hardening - graceful degradation', () => {
     expect(result).toEqual({ type: 'unknown', confidence: 0, data: {} });
   });
 });
+
+describe('geminiService hardening - quota-error propagation', () => {
+  beforeAll(() => {
+    process.env.VITE_GEMINI_API_KEY = 'test-key';
+  });
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // Make the next quota transaction read an at-cap counter so the real
+  // checkAndIncrementAiUsage throws 'Daily AI quota exceeded (...)'.
+  const mockQuotaAtCapOnce = async () => {
+    const { runTransaction } = await import('firebase/firestore');
+    vi.mocked(runTransaction).mockImplementationOnce(async (_db, fn) => {
+      const atCapTxn = {
+        get: vi.fn().mockResolvedValue({
+          exists: () => true,
+          data: () => ({
+            aiUsage: { dailyCount: Number.MAX_SAFE_INTEGER, lastResetDate: getLocalDateString() },
+          }),
+        }),
+        update: vi.fn(),
+      };
+      return await fn(atCapTxn as unknown as Parameters<typeof fn>[0]);
+    });
+  };
+
+  it('parseMagicAction rethrows the quota-exceeded error instead of returning unknown', async () => {
+    const { parseMagicAction } = await import('./geminiService');
+    await mockQuotaAtCapOnce();
+
+    await expect(parseMagicAction('hh', 'spent 5 at Target', {
+      categories: [], groceryCategories: [], todayDate: '2026-01-01',
+    })).rejects.toThrow(/Daily AI quota exceeded/);
+    expect(generateContentMock).not.toHaveBeenCalled();
+  });
+
+  it('analyzeHabitPatterns rethrows the quota-exceeded error instead of a generic failure', async () => {
+    const { analyzeHabitPatterns } = await import('./geminiService');
+    await mockQuotaAtCapOnce();
+
+    const habit = {
+      id: '1', title: 'Read', period: 'daily', streakDays: 0, completedDates: [],
+    } as unknown as import('@/types/schema').Habit;
+
+    await expect(analyzeHabitPatterns('hh', [habit]))
+      .rejects.toThrow(/Daily AI quota exceeded/);
+    expect(generateContentMock).not.toHaveBeenCalled();
+  });
+});
