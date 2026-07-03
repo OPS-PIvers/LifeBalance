@@ -375,6 +375,57 @@ describe("processToggleHabit — daily multiplier at streak boundaries", () => {
 });
 
 // ---------------------------------------------------------------------------
+// processToggleHabit — incremental target>1: today only joins the streak input
+// when this action completes the habit (client parity, utils/habitLogic.ts)
+// ---------------------------------------------------------------------------
+
+describe("processToggleHabit — incremental (target>1) prospective streak gating", () => {
+  /** Positive incremental habit, 3 actions to complete, 6-day streak ending yesterday. */
+  const incremental: Habit = {
+    ...baseHabit,
+    scoringType: "incremental",
+    targetCount: 3,
+    basePoints: 10,
+    completedDates: buildDailyDates(yesterday, 6),
+    streakDays: 6,
+    count: 0,
+    totalCount: 6,
+  };
+
+  it("below-target action does NOT count today toward the streak (6-day history → 1.5x, not 2.0x)", () => {
+    // First action of the day: newCount=1 < target=3 → not completed yet, so the
+    // streak input stays at the 6 completed prior days → 1.5x → 15 pts. The buggy
+    // server force-added today (streak 7 → 2.0x → 20 pts), diverging from the
+    // client for the exact same action.
+    const result = processToggleHabit(incremental, "up");
+    expect(result).not.toBeNull();
+    expect(result!.multiplier).toBe(1.5);
+    expect(result!.pointsChange).toBe(15); // floor(10 * 1.5)
+    // Today isn't complete, so it must not enter completedDates either.
+    expect(result!.updatedHabit.completedDates).not.toContain(today);
+  });
+
+  it("the COMPLETING action includes today in the streak (streak 7 → 2.0x)", () => {
+    const nearlyDone: Habit = { ...incremental, count: 2, totalCount: 8 };
+    const result = processToggleHabit(nearlyDone, "up");
+    expect(result).not.toBeNull();
+    expect(result!.multiplier).toBe(2.0);
+    expect(result!.pointsChange).toBe(20); // floor(10 * 2.0)
+    expect(result!.updatedHabit.completedDates).toContain(today);
+  });
+
+  it("a down-toggle below target uses the un-augmented history (no forced today)", () => {
+    // Undo a below-target action: today was never completed, so the streak input
+    // is the 6-day history → 1.5x → -15 pts (mirrors the +15 it undoes).
+    const oneLogged: Habit = { ...incremental, count: 1, totalCount: 7 };
+    const result = processToggleHabit(oneLogged, "down");
+    expect(result).not.toBeNull();
+    expect(result!.multiplier).toBe(1.5);
+    expect(result!.pointsChange).toBe(-15);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // processToggleHabit — weekly multiplier boundaries
 // ---------------------------------------------------------------------------
 

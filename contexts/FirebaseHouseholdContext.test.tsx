@@ -7,8 +7,10 @@ import type {
   BudgetBucket,
   CalendarItem,
   FreezeBank,
+  GroceryCatalogItem,
   Habit,
   QuickStockList,
+  ShoppingItem,
   Transaction,
 } from '@/types/schema';
 
@@ -1846,5 +1848,415 @@ describe('FirebaseHouseholdContext — updateQuickStockLists (bulk single-write)
     await expect(
       captured.value!.shopping.updateQuickStockLists([{ ...listA, items: ['cat1'] }, listB]),
     ).rejects.toThrow('firestore down');
+  });
+});
+
+// ===========================================================================
+// useFreezeBankToken — points TARGET routing. An assigned (kid) habit's points
+// must land on members/{assignedTo}.points, mirroring habitPointsTargetRef in
+// useHabitActions: the corrective recompute EXCLUDES assigned habits from the
+// household pool, so crediting the household doc here would leave its total
+// permanently inflated while the assignee is never paid for the patched day.
+// ===========================================================================
+describe('FirebaseHouseholdContext — useFreezeBankToken assigned-habit points routing', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // Wednesday 2026-06-17 (local); this week's Monday is 2026-06-15.
+    vi.setSystemTime(new Date(2026, 5, 17, 12, 0, 0, 0));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function seedFreezeBank(habit: Habit) {
+    emitCollection(`${householdPath}/habits`, [docSnap(habit.id, habit)]);
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+      freezeBank: {
+        tokens: 2, maxTokens: 3,
+        lastRolloverDate: '2026-06-01',
+        lastRolloverMonth: '2026-06',
+        history: [],
+      } satisfies FreezeBank,
+    });
+  }
+
+  it('credits the ASSIGNED member doc (not the household pool) for an assigned habit', async () => {
+    renderProvider();
+    seedFreezeBank(baseHabit({ id: 'hb1', type: 'positive', basePoints: 10, completedDates: [], assignedTo: 'kid_leo' }));
+
+    // 2026-06-16 (Tue of THIS week): past + within the current week, so both
+    // total and weekly are credited — to the assignee.
+    await act(async () => {
+      await captured.value!.gamification.useFreezeBankToken('hb1', '2026-06-16');
+    });
+
+    expect(batches).toHaveLength(1);
+    const batch = batches[0]!;
+    expect(batch.committed).toBe(true);
+
+    // Points land on the assignee's member doc...
+    const memberOps = opsForPath(batch, `${householdPath}/members/kid_leo`);
+    expect(memberOps).toHaveLength(1);
+    expect(memberOps[0]!.data!['points.total']).toEqual({ __increment: 10 });
+    expect(memberOps[0]!.data!['points.weekly']).toEqual({ __increment: 10 });
+
+    // ...while the household op (same batch) spends the token but gets NO points.
+    const hhOps = opsForPath(batch, householdPath);
+    expect(hhOps).toHaveLength(1);
+    const hhData = hhOps[0]!.data!;
+    expect((hhData['freezeBank'] as FreezeBank).tokens).toBe(1);
+    expect(hhData['points.total']).toBeUndefined();
+    expect(hhData['points.weekly']).toBeUndefined();
+  });
+
+  it('still credits the household pool for an UNASSIGNED habit (control)', async () => {
+    renderProvider();
+    seedFreezeBank(baseHabit({ id: 'hb1', type: 'positive', basePoints: 10, completedDates: [] }));
+
+    await act(async () => {
+      await captured.value!.gamification.useFreezeBankToken('hb1', '2026-06-16');
+    });
+
+    const batch = batches[0]!;
+    const hhData = opsForPath(batch, householdPath)[0]!.data!;
+    expect(hhData['points.total']).toEqual({ __increment: 10 });
+    // No member doc was touched.
+    expect(batch.ops.some(o => o.path.startsWith(`${householdPath}/members/`))).toBe(false);
+  });
+});
+
+// ===========================================================================
+// useFreezeBankToken — weekly cadence guard. A weekly habit earns its points at
+// most once per ISO week, so a week that already contains a completion was
+// never "missed": patching another day in it must be rejected (no token spent,
+// no double-credit) even though the day-based validator allows it.
+// ===========================================================================
+describe('FirebaseHouseholdContext — useFreezeBankToken weekly already-completed-week guard', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // Wednesday 2026-06-17 (local). Prior ISO week: Mon 2026-06-08 → Sun 2026-06-14.
+    vi.setSystemTime(new Date(2026, 5, 17, 12, 0, 0, 0));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function seedWeekly(completedDates: string[]) {
+    emitCollection(`${householdPath}/habits`, [
+      docSnap('hb1', baseHabit({
+        id: 'hb1', type: 'positive', period: 'weekly', basePoints: 20, completedDates,
+      })),
+    ]);
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+      freezeBank: {
+        tokens: 2, maxTokens: 3,
+        lastRolloverDate: '2026-06-01',
+        lastRolloverMonth: '2026-06',
+        history: [],
+      } satisfies FreezeBank,
+    });
+  }
+
+  it('rejects patching a day whose ISO week already contains a completion (no batch, no token spent)', async () => {
+    renderProvider();
+    // Completed Tue 2026-06-09; patch target Wed 2026-06-10 — SAME ISO week,
+    // already scored, streak never broken.
+    seedWeekly(['2026-06-09']);
+
+    await act(async () => {
+      await captured.value!.gamification.useFreezeBankToken('hb1', '2026-06-10');
+    });
+
+    // The mutation bails before opening a batch: no token spent, no points credit.
+    expect(batches).toHaveLength(0);
+  });
+
+  it('allows patching a day in a week with NO completion (control)', async () => {
+    renderProvider();
+    // Completed in the 2026-06-08 week; patch 2026-06-03 (prior week, empty).
+    seedWeekly(['2026-06-09']);
+
+    await act(async () => {
+      await captured.value!.gamification.useFreezeBankToken('hb1', '2026-06-03');
+    });
+
+    expect(batches).toHaveLength(1);
+    const batch = batches[0]!;
+    expect(batch.committed).toBe(true);
+    expect(opsForPath(batch, `${householdPath}/habits/hb1`)).toHaveLength(1);
+    expect((opsForPath(batch, householdPath)[0]!.data!['freezeBank'] as FreezeBank).tokens).toBe(1);
+  });
+});
+
+// ===========================================================================
+// Paycheck approval — an income item dated ON/BEFORE the current period start
+// (e.g. an older overdue paycheck approved after a newer one) must NOT rewind
+// lastPaycheckDate or snapshot an inverted period. The income is still
+// recorded, filed as historical (payPeriodId ''), and the balance credited.
+// ===========================================================================
+describe('FirebaseHouseholdContext — paycheck approval does not rewind the period', () => {
+  const account: Account = {
+    id: 'acc1', name: 'Checking', type: 'checking', balance: 100000,
+    lastUpdated: new Date().toISOString(),
+  } as Account;
+
+  function seed(lastPaycheckDate: string, incomeDate: string) {
+    emitCollection(`${householdPath}/accounts`, [docSnap('acc1', account)]);
+    emitCollection(`${householdPath}/buckets`, [
+      docSnap('b1', { id: 'b1', name: 'Groceries', limit: 50000, color: 'blue', isVariable: false, isCore: true } as BudgetBucket),
+    ]);
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+      lastPaycheckDate,
+    });
+    emitCollection(`${householdPath}/calendarItems`, [
+      docSnap('cal_income', {
+        id: 'cal_income', title: 'Paycheck', amount: 200000, date: incomeDate,
+        type: 'income', isPaid: false, isRecurring: false,
+      } as CalendarItem),
+    ]);
+  }
+
+  it('approving an OLDER income item leaves the period untouched and files it as historical', async () => {
+    renderProvider();
+    // Current period opened 2026-06-15; the stale unpaid paycheck is 2026-06-01.
+    seed('2026-06-15', '2026-06-01');
+
+    await act(async () => {
+      await captured.value!.finance.payCalendarItem('cal_income', 'acc1');
+    });
+
+    // ONE batch only — payCalendarItem's own income batch. No reset batch, so
+    // no bucketHistory snapshot (whose end would precede its start) and no
+    // per-bucket currentPeriodId rewrite.
+    expect(batches).toHaveLength(1);
+    const payBatch = batches[0]!;
+    expect(payBatch.committed).toBe(true);
+    expect(payBatch.ops.some(o => o.path.startsWith(`${householdPath}/bucketHistory`))).toBe(false);
+    expect(payBatch.ops.some(o => o.path.startsWith(`${householdPath}/buckets/`))).toBe(false);
+
+    // lastPaycheckDate is never written (would have rolled the pointer BACK).
+    const lastPaycheckWrites = payBatch.ops.filter(
+      o => o.path === householdPath && o.data !== undefined && 'lastPaycheckDate' in o.data,
+    );
+    expect(lastPaycheckWrites).toHaveLength(0);
+
+    // The income itself IS recorded: item paid, balance credited, transaction
+    // filed OUTSIDE the (unchanged) current period — not into a resurrected one.
+    expect(opsForPath(payBatch, `${householdPath}/calendarItems/cal_income`)[0]!.data).toMatchObject({ isPaid: true });
+    expect(opsForPath(payBatch, `${householdPath}/accounts/acc1`)[0]!.data!['balance']).toEqual({ __increment: 200000 });
+    const txSets = payBatch.ops.filter(
+      o => o.kind === 'set' && o.path.startsWith(`${householdPath}/transactions`),
+    );
+    expect(txSets).toHaveLength(1);
+    expect(txSets[0]!.data).toMatchObject({ category: 'Income', payPeriodId: '' });
+  });
+
+  it('approving an income item dated ON the current period start does not re-roll the period', async () => {
+    renderProvider();
+    seed('2026-06-15', '2026-06-15');
+
+    await act(async () => {
+      await captured.value!.finance.payCalendarItem('cal_income', 'acc1');
+    });
+
+    // No reset batch; the transaction files into the EXISTING period it matches.
+    expect(batches).toHaveLength(1);
+    const payBatch = batches[0]!;
+    expect(payBatch.ops.some(o => o.path.startsWith(`${householdPath}/bucketHistory`))).toBe(false);
+    const txSets = payBatch.ops.filter(
+      o => o.kind === 'set' && o.path.startsWith(`${householdPath}/transactions`),
+    );
+    expect(txSets[0]!.data).toMatchObject({ payPeriodId: '2026-06-15' });
+  });
+});
+
+// ===========================================================================
+// payCalendarItem — auto-categorization must use the SAME whole-word bucket
+// matching as safe-to-spend's bill exclusion (exact bucketId first, tokenized
+// whole-word name fallback), never a raw substring match: "Las Vegas Hotel"
+// paying into a "Gas" bucket double-counts the bill across the two surfaces.
+// ===========================================================================
+describe('FirebaseHouseholdContext — payCalendarItem bucket auto-categorization', () => {
+  const account: Account = {
+    id: 'acc1', name: 'Checking', type: 'checking', balance: 100000,
+    lastUpdated: new Date().toISOString(),
+  } as Account;
+
+  function seed(item: CalendarItem) {
+    emitCollection(`${householdPath}/accounts`, [docSnap('acc1', account)]);
+    emitCollection(`${householdPath}/buckets`, [
+      docSnap('b1', { id: 'b1', name: 'Gas', limit: 20000, color: 'blue', isVariable: false, isCore: true } as BudgetBucket),
+    ]);
+    emitCollection(`${householdPath}/calendarItems`, [docSnap(item.id, item)]);
+  }
+
+  function paidTxCategory(): unknown {
+    const txSets = batches[0]!.ops.filter(
+      o => o.kind === 'set' && o.path.startsWith(`${householdPath}/transactions`),
+    );
+    expect(txSets).toHaveLength(1);
+    return txSets[0]!.data!['category'];
+  }
+
+  it('does NOT categorize "Las Vegas Hotel" under a "Gas" bucket (substring false positive)', async () => {
+    renderProvider();
+    seed({
+      id: 'cal1', title: 'Las Vegas Hotel', amount: 45000, date: '2026-06-10',
+      type: 'expense', isPaid: false, isRecurring: false,
+    } as CalendarItem);
+
+    await act(async () => {
+      await captured.value!.finance.payCalendarItem('cal1', 'acc1');
+    });
+
+    expect(paidTxCategory()).toBe('Bills');
+  });
+
+  it('categorizes a whole-word match ("Gas Bill") under the "Gas" bucket', async () => {
+    renderProvider();
+    seed({
+      id: 'cal1', title: 'Gas Bill', amount: 8000, date: '2026-06-10',
+      type: 'expense', isPaid: false, isRecurring: false,
+    } as CalendarItem);
+
+    await act(async () => {
+      await captured.value!.finance.payCalendarItem('cal1', 'acc1');
+    });
+
+    expect(paidTxCategory()).toBe('Gas');
+  });
+
+  it('honors an exact bucketId over any name heuristic', async () => {
+    renderProvider();
+    seed({
+      id: 'cal1', title: 'Some Utility', amount: 8000, date: '2026-06-10',
+      type: 'expense', isPaid: false, isRecurring: false, bucketId: 'b1',
+    } as CalendarItem);
+
+    await act(async () => {
+      await captured.value!.finance.payCalendarItem('cal1', 'acc1');
+    });
+
+    expect(paidTxCategory()).toBe('Gas');
+  });
+});
+
+// ===========================================================================
+// splitTransaction — the PERSISTED split amount must be rounded to whole cents
+// with the SAME value used for the account delta. Persisting a raw sub-cent
+// amount (e.g. "3.005") while applying a rounded delta desyncs the stored docs
+// from the balance by a sub-cent forever.
+// ===========================================================================
+describe('FirebaseHouseholdContext — splitTransaction rounds persisted amounts', () => {
+  it('stores roundMoney(amount) on each split doc, matching the applied balance delta', async () => {
+    renderProvider();
+    emitCollection(`${householdPath}/accounts`, [
+      docSnap('acc1', {
+        id: 'acc1', name: 'Checking', type: 'checking', balance: 1000,
+        lastUpdated: new Date().toISOString(),
+      } as Account),
+    ]);
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+    });
+    emitCollection(`${householdPath}/transactions`, [
+      docSnap('tx1', {
+        id: 'tx1', amount: 10, merchant: 'Store', category: 'Dining', date: '2026-06-10',
+        status: 'verified', isRecurring: false, source: 'manual', autoCategorized: false,
+      } as Transaction),
+    ]);
+
+    await act(async () => {
+      // The amount Input allows typing 3 decimals; "3.005" reaches the context raw.
+      await captured.value!.finance.splitTransaction('tx1', [
+        { amount: 3.005, merchant: 'A', category: 'Dining', date: '2026-06-10', status: 'verified', isRecurring: false, source: 'manual', autoCategorized: false },
+        { amount: 7, merchant: 'B', category: 'Groceries', date: '2026-06-10', status: 'verified', isRecurring: false, source: 'manual', autoCategorized: false },
+      ]);
+    });
+
+    expect(batches).toHaveLength(1);
+    const batch = batches[0]!;
+    expect(batch.committed).toBe(true);
+
+    // Persisted amounts are whole cents — roundMoney(3.005) === 3.01, never 3.005.
+    const txSets = batch.ops.filter(
+      o => o.kind === 'set' && o.path.startsWith(`${householdPath}/transactions`),
+    );
+    expect(txSets).toHaveLength(2);
+    expect(txSets.map(o => o.data!['amount'])).toEqual([3.01, 7]);
+
+    // The balance delta was computed from those SAME rounded amounts:
+    // reverse original (+10) − 3.01 − 7 = −0.01.
+    const accOps = opsForPath(batch, `${householdPath}/accounts/acc1`);
+    expect(accOps).toHaveLength(1);
+    expect(accOps[0]!.data!['balance']).toEqual({ __increment: -0.01 });
+  });
+});
+
+// ===========================================================================
+// toggleShoppingItemPurchased — grocery-catalog dedup must key on normalized
+// NAME only (as every other catalog lookup does). Requiring the category to
+// match forked a duplicate catalog row whenever an item was recategorized,
+// fragmenting purchaseCount/defaultStore history across rows.
+// ===========================================================================
+describe('FirebaseHouseholdContext — grocery catalog dedup on purchase', () => {
+  function seed(shoppingItem: ShoppingItem, catalogItem: GroceryCatalogItem) {
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+    });
+    emitCollection(`${householdPath}/shoppingList`, [docSnap(shoppingItem.id, shoppingItem)]);
+    emitCollection(`${householdPath}/groceryCatalog`, [docSnap(catalogItem.id, catalogItem)]);
+  }
+
+  it('increments the existing same-name catalog row (refreshing its category) instead of forking a duplicate', async () => {
+    renderProvider();
+    seed(
+      // The user recategorized Milk to Dairy before checking it off...
+      { id: 's1', name: 'Milk', category: 'Dairy', isPurchased: false } as ShoppingItem,
+      // ...but the catalog row from its first purchase says Uncategorized.
+      { id: 'cat1', name: 'Milk', category: 'Uncategorized', purchaseCount: 1 } as GroceryCatalogItem,
+    );
+
+    await act(async () => {
+      await captured.value!.shopping.toggleShoppingItemPurchased('s1');
+    });
+
+    // NO new catalog row is created — the existing row is updated in place.
+    expect(addDocMock).not.toHaveBeenCalled();
+    const catalogUpdate = updateDocMock.mock.calls.find(
+      c => pathOf(c[0]) === `${householdPath}/groceryCatalog/cat1`,
+    );
+    expect(catalogUpdate).toBeDefined();
+    const updates = catalogUpdate![1] as unknown as Record<string, unknown>;
+    expect(updates['purchaseCount']).toEqual({ __increment: 1 });
+    // The category is refreshed to the item's latest categorization.
+    expect(updates['category']).toBe('Dairy');
+  });
+
+  it('still creates a catalog row for a genuinely new item name (control)', async () => {
+    renderProvider();
+    seed(
+      { id: 's1', name: 'Bread', category: 'Bakery', isPurchased: false } as ShoppingItem,
+      { id: 'cat1', name: 'Milk', category: 'Dairy', purchaseCount: 3 } as GroceryCatalogItem,
+    );
+
+    await act(async () => {
+      await captured.value!.shopping.toggleShoppingItemPurchased('s1');
+    });
+
+    expect(addDocMock).toHaveBeenCalledTimes(1);
+    const [collRef, data] = addDocMock.mock.calls[0]!;
+    expect(pathOf(collRef)).toBe(`${householdPath}/groceryCatalog`);
+    expect(data).toMatchObject({ name: 'Bread', category: 'Bakery', purchaseCount: 1 });
   });
 });

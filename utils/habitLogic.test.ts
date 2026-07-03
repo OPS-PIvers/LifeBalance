@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   isHabitStale,
   calculateStreak,
@@ -8,6 +8,7 @@ import {
   streakEndingOnForHabit,
   getMultiplier,
   processToggleHabit,
+  calculateResetPoints,
   streakEndingOn,
   calculatePointsForDate,
   calculatePointsForDateRange,
@@ -561,6 +562,208 @@ describe('habitLogic', () => {
       //   this week   → streak 3 → 1.5x → 15, count=3 → 45
       // Total = 10 + 15 + 45 = 70.
       expect(total).toBe(70);
+    });
+  });
+
+  // Weekly habits accumulate `count` across the whole ISO week and push every
+  // later toggle-day into completedDates, so the recomputes must score each
+  // ISO WEEK once — not each completion day independently (which over-counted
+  // and let the corrective sync write unearned points).
+  describe('weekly habits with multiple completion days in one ISO week', () => {
+    // Deterministic mid-week clock: Wed 2026-06-03 (ISO week starts Mon 2026-06-01).
+    const WED = '2026-06-03';
+    const TUE = '2026-06-02';
+    const MON = '2026-06-01';
+    const PREV_MON = '2026-05-25';
+    const PREV_WED = '2026-05-27';
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-06-03T12:00:00'));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const weeklyHabit = (overrides: Partial<Habit>): Habit => ({
+      ...baseHabit,
+      period: 'weekly',
+      lastUpdated: new Date().toISOString(),
+      ...overrides,
+    });
+
+    describe('calculatePointsForDateRange', () => {
+      it('incremental: scores the current week ONCE with habit.count, not per completion day', () => {
+        // 2 toggles Monday (+20), 1 toggle Wednesday (+10): count=3, credited 30.
+        const habit = weeklyHabit({
+          scoringType: 'incremental',
+          basePoints: 10,
+          count: 3,
+          totalCount: 3,
+          completedDates: [MON, WED],
+          streakDays: 1,
+        });
+        // Buggy per-day scoring: Mon 1x10 + Wed count(3)x10 = 40.
+        expect(calculatePointsForDateRange([habit], MON, WED)).toBe(30);
+      });
+
+      it('threshold: awards at most once per week even with several completion days', () => {
+        // "Gym 3x/week": completed Monday (+50), toggled again Wednesday (0 pts).
+        const habit = weeklyHabit({
+          scoringType: 'threshold',
+          basePoints: 50,
+          targetCount: 3,
+          count: 4,
+          totalCount: 4,
+          completedDates: [MON, WED],
+          streakDays: 1,
+        });
+        // Buggy per-day scoring: 50 + 50 = 100.
+        expect(calculatePointsForDateRange([habit], MON, WED)).toBe(50);
+      });
+
+      it('threshold: collapses a PAST week with multiple completion days into one award', () => {
+        const habit = weeklyHabit({
+          scoringType: 'threshold',
+          basePoints: 10,
+          targetCount: 1,
+          count: 1,
+          totalCount: 3,
+          completedDates: [PREV_MON, PREV_WED, WED],
+          streakDays: 2,
+        });
+        // Prev week (streak 1 → 1.0x) once = 10; current week (streak 2 → 1.5x) once = 15.
+        // Buggy per-day scoring: 10 + 10 + 15 = 35.
+        expect(calculatePointsForDateRange([habit], PREV_MON, WED)).toBe(25);
+      });
+
+      it('threshold: current week earns nothing when the counter is back below target', () => {
+        // Completed Monday then toggled back below target later: only "today" is
+        // stripped from completedDates, so Monday remains while count < target.
+        const habit = weeklyHabit({
+          scoringType: 'threshold',
+          basePoints: 50,
+          targetCount: 3,
+          count: 2,
+          totalCount: 2,
+          completedDates: [MON],
+          streakDays: 1,
+        });
+        expect(calculatePointsForDateRange([habit], MON, WED)).toBe(0);
+      });
+    });
+
+    describe('calculatePointsForDate', () => {
+      it('incremental: attributes only the remainder of habit.count to today, 1 to earlier week days', () => {
+        // count=3 across [Mon, Wed]: Wed (latest) gets count - 1 = 2, Mon gets 1.
+        const habit = weeklyHabit({
+          scoringType: 'incremental',
+          basePoints: 10,
+          count: 3,
+          totalCount: 3,
+          completedDates: [MON, WED],
+          streakDays: 1,
+        });
+        // Buggy: count(3) x 10 = 30 written to points.daily by the corrective sync.
+        expect(calculatePointsForDate([habit], WED)).toBe(20);
+        expect(calculatePointsForDate([habit], MON)).toBe(10);
+        // Per-day attributions sum to the week total from the range recompute.
+        expect(calculatePointsForDate([habit], WED) + calculatePointsForDate([habit], MON)).toBe(
+          calculatePointsForDateRange([habit], MON, WED)
+        );
+      });
+
+      it('threshold: credits only the FIRST completed day of the week, not later toggle-days', () => {
+        // Completed Tuesday (+10); Wednesday's toggle pushed WED into
+        // completedDates with zero points awarded.
+        const habit = weeklyHabit({
+          scoringType: 'threshold',
+          basePoints: 10,
+          targetCount: 2,
+          count: 3,
+          totalCount: 3,
+          completedDates: [TUE, WED],
+          streakDays: 1,
+        });
+        // Buggy: Wednesday's recompute returned +10 unearned daily points.
+        expect(calculatePointsForDate([habit], WED)).toBe(0);
+        expect(calculatePointsForDate([habit], TUE)).toBe(10);
+      });
+    });
+  });
+
+  describe('calculateResetPoints', () => {
+    const twoDaysAgo = format(subDays(new Date(), 2), 'yyyy-MM-dd');
+
+    it('returns 0 when count is 0', () => {
+      expect(calculateResetPoints({ ...baseHabit, count: 0 })).toBe(0);
+    });
+
+    it('deducts pre-completion increments at the WITHOUT-today multiplier (mirrors the award path)', () => {
+      // Incremental, targetCount 2, base 10, 2-day streak entering today.
+      // Toggle #1 (before target): prospective streak excludes today → 1.0x → +10.
+      // Toggle #2 (completes):     prospective streak includes today → 1.5x → +15.
+      // Credited +25; the buggy reset deducted 2 x 15 = 30, leaving points 5 short.
+      const habit: Habit = {
+        ...baseHabit,
+        scoringType: 'incremental',
+        targetCount: 2,
+        basePoints: 10,
+        count: 2,
+        totalCount: 2,
+        completedDates: [today, yesterday, twoDaysAgo],
+        streakDays: 3,
+      };
+      expect(calculateResetPoints(habit)).toBe(25);
+    });
+
+    it('deducts every increment at the with-today multiplier when the target is 1 (unchanged)', () => {
+      // With targetCount 1 the first toggle already completes the day, so ALL
+      // increments were credited at the with-today streak multiplier.
+      const habit: Habit = {
+        ...baseHabit,
+        scoringType: 'incremental',
+        targetCount: 1,
+        basePoints: 10,
+        count: 3,
+        totalCount: 3,
+        completedDates: [today, yesterday, twoDaysAgo],
+        streakDays: 3,
+      };
+      // Streak 3 → 1.5x → 3 x 15 = 45.
+      expect(calculateResetPoints(habit)).toBe(45);
+    });
+
+    it('deducts the single threshold award at the with-today multiplier (unchanged)', () => {
+      const habit: Habit = {
+        ...baseHabit,
+        scoringType: 'threshold',
+        targetCount: 2,
+        basePoints: 10,
+        count: 2,
+        totalCount: 2,
+        completedDates: [today, yesterday, twoDaysAgo],
+        streakDays: 3,
+      };
+      // Streak 3 → 1.5x → 15.
+      expect(calculateResetPoints(habit)).toBe(15);
+    });
+
+    it('uses 1.0x throughout for negative habits', () => {
+      const habit: Habit = {
+        ...baseHabit,
+        type: 'negative',
+        scoringType: 'incremental',
+        targetCount: 2,
+        basePoints: 10,
+        count: 2,
+        totalCount: 2,
+        completedDates: [today, yesterday, twoDaysAgo],
+        streakDays: 3,
+      };
+      // Negative habits never get streak multipliers: -1 x 2 x 10 = -20.
+      expect(calculateResetPoints(habit)).toBe(-20);
     });
   });
 

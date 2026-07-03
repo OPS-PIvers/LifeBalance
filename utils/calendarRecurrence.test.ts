@@ -131,6 +131,59 @@ describe('calendarRecurrence', () => {
       expect(result[2]!.date).toBe('2024-03-01');
     });
 
+    it('keeps month-end monthly items anchored to the original day across short months', () => {
+      const monthEndItem: CalendarItem = {
+        ...baseItem,
+        date: '2026-01-31',
+        isRecurring: true,
+        frequency: 'monthly'
+      };
+
+      const result = generateRecurringInstances(
+        monthEndItem,
+        parseISO('2026-01-01'),
+        parseISO('2026-05-31')
+      );
+
+      // Each occurrence clamps independently from the Jan 31 anchor:
+      // February clamps to the 28th, but March/May recover the 31st.
+      expect(result.map(i => i.date)).toEqual([
+        '2026-01-31',
+        '2026-02-28',
+        '2026-03-31',
+        '2026-04-30',
+        '2026-05-31',
+      ]);
+    });
+
+    it('produces identical monthly occurrence dates regardless of window start', () => {
+      const monthEndItem: CalendarItem = {
+        ...baseItem,
+        date: '2026-01-31',
+        isRecurring: true,
+        frequency: 'monthly'
+      };
+
+      // Expansion iterating from the anchor (window includes the anchor)...
+      const fromAnchor = generateRecurringInstances(
+        monthEndItem,
+        parseISO('2026-01-01'),
+        parseISO('2026-03-31')
+      );
+      // ...vs expansion that jumps into March (window starts mid-range).
+      const fromMarch = generateRecurringInstances(
+        monthEndItem,
+        parseISO('2026-03-01'),
+        parseISO('2026-03-31')
+      );
+
+      const marchFromAnchor = fromAnchor.find(i => i.date.startsWith('2026-03'));
+      expect(fromMarch.map(i => i.date)).toEqual([marchFromAnchor!.date]);
+      // Same occurrence must get the same synthetic ID across windows,
+      // otherwise paid-instance suppression breaks.
+      expect(fromMarch[0]!.id).toBe(marchFromAnchor!.id);
+    });
+
     it('optimizes start date for old recurring items (jump logic)', () => {
       const oldItem: CalendarItem = {
         ...baseItem,
@@ -304,6 +357,39 @@ describe('calendarRecurrence', () => {
       expect(ids).not.toContain('before-range');
       expect(ids).not.toContain('after-range');
       expect(ids).not.toContain('paid-out-of-range');
+    });
+
+    it('suppresses a paid month-end occurrence even when the window starts mid-range', () => {
+      const monthEndTemplate: CalendarItem = {
+        ...baseItem,
+        id: 'rent-template',
+        date: '2026-01-31',
+        isRecurring: true,
+        frequency: 'monthly'
+      };
+
+      // The March occurrence was paid; its date must match the expansion of any window.
+      const paidMarch: CalendarItem = {
+        ...baseItem,
+        id: 'rent-paid-march',
+        date: '2026-03-31',
+        isPaid: true,
+        parentRecurringId: 'rent-template'
+      };
+
+      // Window starting after the anchor (jump path), like a safe-to-spend
+      // window anchored on a mid-March paycheck.
+      const result = expandCalendarItems(
+        [monthEndTemplate, paidMarch],
+        parseISO('2026-03-15'),
+        parseISO('2026-04-30')
+      );
+
+      const marchInstances = result.filter(i => i.date.startsWith('2026-03'));
+      // Exactly one March instance: the paid one — no unpaid duplicate.
+      expect(marchInstances).toHaveLength(1);
+      expect(marchInstances[0]!.id).toBe('rent-paid-march');
+      expect(marchInstances[0]!.isPaid).toBe(true);
     });
 
     it('filters out deleted instances', () => {

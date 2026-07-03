@@ -456,7 +456,28 @@ export const calculateResetPoints = (habit: Habit): number => {
   const sign = habit.type === 'positive' ? 1 : -1;
 
   if (habit.scoringType === 'incremental') {
-    pointsToRemove = sign * habit.count * Math.floor(habit.basePoints * multiplier);
+    // Mirror processToggleHabit's award history: increments made BEFORE the
+    // target was reached were credited at the streak WITHOUT today (today only
+    // enters completedDates on the completing toggle), while the completing
+    // increment and any after it were credited at the streak WITH today.
+    // Deducting every increment at the current (with-today) multiplier would
+    // over-remove whenever completing today crossed a multiplier threshold.
+    const target = habit.targetCount > 0 ? habit.targetCount : 1;
+    const preCount = Math.min(habit.count, target - 1);
+    const postCount = habit.count - preCount;
+    const today = getLocalDateString();
+    const preMultiplier = getMultiplier(
+      streakForHabit({
+        period: habit.period,
+        completedDates: habit.completedDates.filter(d => d !== today),
+      }),
+      habit.type === 'positive',
+      habit.period,
+    );
+    pointsToRemove =
+      sign *
+      (preCount * Math.floor(habit.basePoints * preMultiplier) +
+        postCount * Math.floor(habit.basePoints * multiplier));
   } else {
     if (habit.count >= habit.targetCount) {
       pointsToRemove = sign * Math.floor(habit.basePoints * multiplier);
@@ -540,15 +561,47 @@ export const calculatePointsForDate = (
     // is unchanged.
     const dateStreak = streakEndingOnForHabit(habit, targetDate);
     const multiplier = getMultiplier(dateStreak, habit.type === 'positive', habit.period);
+    const perDayPoints = Math.floor(habit.basePoints * multiplier);
     const sign = habit.type === 'positive' ? 1 : -1;
+
+    if (habit.period === 'weekly') {
+      // Weekly habits accumulate `count` across the whole ISO week and push
+      // every later completion day into completedDates, so scoring the full
+      // counter (or the full threshold award) on EACH day of the week would
+      // re-award points earned on the week's other days.
+      const ref = parseISO(targetDate);
+      const sameWeekDates = habit.completedDates.filter(d =>
+        isSameWeek(parseISO(d), ref, { weekStartsOn: 1 })
+      );
+      if (habit.scoringType === 'incremental') {
+        // No per-day counters are stored, so attribute one completion to each
+        // other completed day of the week and the remainder to the LATEST day
+        // (in practice "today", where the live counter keeps growing) — the
+        // per-day attributions then sum to `count`, matching the range recompute.
+        const latestSameWeekDay = sameWeekDates.reduce((a, b) => (a > b ? a : b));
+        const completionsOnDate =
+          targetDate === latestSameWeekDay
+            ? Math.max(habit.count - (sameWeekDates.length - 1), 0)
+            : 1;
+        totalPoints += sign * completionsOnDate * perDayPoints;
+      } else {
+        // Threshold: the week's single award landed on the FIRST completed day
+        // of the week; later toggle-days entered completedDates with 0 points.
+        const firstSameWeekDay = sameWeekDates.reduce((a, b) => (a < b ? a : b));
+        if (habit.count >= habit.targetCount && targetDate === firstSameWeekDay) {
+          totalPoints += sign * perDayPoints;
+        }
+      }
+      continue;
+    }
 
     if (habit.scoringType === 'incremental') {
       // For incremental: points per count
-      totalPoints += sign * habit.count * Math.floor(habit.basePoints * multiplier);
+      totalPoints += sign * habit.count * perDayPoints;
     } else {
       // For threshold: points only if target met
       if (habit.count >= habit.targetCount) {
-        totalPoints += sign * Math.floor(habit.basePoints * multiplier);
+        totalPoints += sign * perDayPoints;
       }
     }
   }
@@ -592,6 +645,41 @@ export const calculatePointsForDateRange = (
     const sign = habit.type === 'positive' ? 1 : -1;
     const isPositive = habit.type === 'positive';
 
+    if (habit.period === 'weekly') {
+      // Weekly habits earn points once per ISO WEEK, not once per completion
+      // day: `count` accumulates across the whole week (only reset on week
+      // rollover) and every later toggle-day is pushed into completedDates.
+      // Scoring each day independently would re-award the same week's points,
+      // so collapse the range to one entry per ISO week.
+      const currentWeekStart = format(startOfISOWeek(parseISO(today)), 'yyyy-MM-dd');
+      const weekStarts = new Set(
+        completionsInRange.map(d => format(startOfISOWeek(parseISO(d)), 'yyyy-MM-dd'))
+      );
+      for (const weekStart of weekStarts) {
+        const weekStreak = streakEndingOnForHabit(habit, weekStart);
+        const multiplier = getMultiplier(weekStreak, isPositive, habit.period);
+        const perWeekPoints = Math.floor(habit.basePoints * multiplier);
+        const isCurrentWeek = weekStart === currentWeekStart;
+
+        if (habit.scoringType === 'incremental') {
+          // Current week: the live `count` already covers every completion made
+          // this week (on any day), matching what the per-toggle batches
+          // credited. Past weeks: no per-week counts are stored, so each counts
+          // as a single completion.
+          const completionsInWeek = isCurrentWeek ? habit.count : 1;
+          totalPoints += sign * completionsInWeek * perWeekPoints;
+        } else {
+          // Threshold: at most one award per week. For the current week require
+          // the counter to actually be at target (a toggle back below target
+          // strips only today from completedDates, not earlier week days).
+          if (!isCurrentWeek || habit.count >= habit.targetCount) {
+            totalPoints += sign * perWeekPoints;
+          }
+        }
+      }
+      continue;
+    }
+
     // Sum per-date so each day earns the multiplier its OWN streak warranted.
     // Applying one current-streak multiplier to the whole range causes point
     // totals to drift up/down on every recalc as the streak grows or breaks.
@@ -601,12 +689,11 @@ export const calculatePointsForDateRange = (
       const perDayPoints = Math.floor(habit.basePoints * multiplier);
 
       if (habit.scoringType === 'incremental') {
-        // We don't store historical per-day counts, so each past day counts as a
-        // single completion. The one exception is "today" (for both daily and
-        // weekly habits), where habit.count reflects the (possibly multiple)
-        // completions made today — preserving the multi-completion behavior the
-        // per-toggle batch already credited so the corrective sync doesn't erase
-        // earned points.
+        // We don't store historical per-day counts, so each past day counts as
+        // a single completion — except "today", where habit.count reflects the
+        // (possibly multiple) completions made today, preserving the
+        // multi-completion behavior the per-toggle batch already credited so
+        // the corrective sync doesn't erase earned points.
         const completionsOnDate = date === today ? habit.count : 1;
         totalPoints += sign * completionsOnDate * perDayPoints;
       } else {
