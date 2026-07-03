@@ -51,7 +51,7 @@ function toPlainText(input: string): string {
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
     .replace(/&quot;/gi, "\"")
-    .replace(/&#0?39;/g, "'")
+    .replace(/&(?:apos|#0?39);/gi, "'")
     .replace(/[ \t\u00a0]+/g, " ")
     .replace(/ ?\n ?/g, "\n");
 }
@@ -132,10 +132,12 @@ function extractMerchant(text: string): string | null {
 /**
  * Last 4 card digits: "credit card ...8899", "Debit Card ending in 1234",
  * "card x9876", "account ending in 4321". Requires the word card/account
- * within 30 non-digit chars so a stray year or amount is never grabbed.
+ * within 30 non-digit chars so a stray year or amount is never grabbed; "$"
+ * is also excluded from the gap so "card was charged $1234.56" can't read a
+ * dollar amount as the last-4.
  */
 function extractCardLast4(text: string): string | null {
-  const m = text.match(/\b(?:card|account)[^0-9\n]{0,30}?(?<!\d)(\d{4})(?!\d)/i);
+  const m = text.match(/\b(?:card|account)[^0-9$\n]{0,30}?(?<!\d)(\d{4})(?!\d)/i);
   return m?.[1] ?? null;
 }
 
@@ -145,12 +147,14 @@ const MONTH_NUMBERS: Record<string, number> = {
 };
 
 function extractDate(text: string): string | null {
-  // Numeric first — Wells Fargo uses MM/DD/YYYY; also accept ISO.
-  const numeric = text.match(
-    /(?<!\d)(\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{4}-\d{2}-\d{2})(?!\d)/
+  // Numeric first — Wells Fargo uses MM/DD/YYYY; also accept ISO. Try every
+  // occurrence: an earlier date-shaped token that fails calendar validation
+  // (e.g. a "13-40-2026" reference number) must not mask a real later date.
+  const numericMatches = text.matchAll(
+    /(?<!\d)(\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{4}-\d{2}-\d{2})(?!\d)/g
   );
-  if (numeric?.[1]) {
-    const normalized = normalizeUsDate(numeric[1]);
+  for (const numeric of numericMatches) {
+    const normalized = normalizeUsDate(numeric[1] ?? "");
     if (normalized) return normalized;
   }
   // Textual: "July 1, 2026" / "Jul 1 2026".

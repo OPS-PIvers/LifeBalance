@@ -88,6 +88,27 @@ describe("parseTransactionEmail", () => {
     expect(parsed.cardLast4).toBeNull();
   });
 
+  it("does not grab a dollar amount near 'card' as the card last-4", () => {
+    const parsed = parseTransactionEmail(
+      "Your card was used for purchases over $1000. Merchant: IKEA"
+    );
+    expect(parsed.cardLast4).toBeNull();
+  });
+
+  it("skips an invalid date-shaped token and finds the real date after it", () => {
+    const parsed = parseTransactionEmail(
+      "Reference 13-40-2026. You made a purchase of $5.00 at IKEA on 07/01/2026."
+    );
+    expect(parsed.date).toBe("2026-07-01");
+  });
+
+  it("decodes &apos; in merchant names from HTML emails", () => {
+    const html =
+      "<html><body><p>purchase of $8.50 with credit card ...8899</p>" +
+      "<p>Merchant: McDonald&apos;s</p></body></html>";
+    expect(parseTransactionEmail(html).merchant).toBe("McDonald's");
+  });
+
   it("returns amount without merchant when only a labeled amount exists", () => {
     const parsed = parseTransactionEmail("Charge approved. Amount: $12.00.");
     expect(parsed.amount).toBe(12);
