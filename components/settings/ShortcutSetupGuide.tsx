@@ -515,75 +515,31 @@ const EXAMPLES: ShortcutExample[] = [
       },
       { text: 'Select **Run Immediately** → **Next** → **New Blank Automation**.' },
       {
-        text: 'Add **Get Text from Input** — this turns the incoming email into plain text the next steps can search.',
-      },
-      {
-        text: 'Add **Match Text** and paste the **Amount** pattern below into its **Match** slot. It automatically searches the text from the previous step.',
-        copy: [
-          {
-            label: 'Amount pattern',
-            value: '(?<=purchase of \\$)[\\d,]+\\.\\d{2}',
-            hint: 'Finds “6.02” in “purchase of $6.02” (and ignores the “over $1.00” in the subject).',
-          },
-        ],
-      },
-      {
-        text: 'Add **Get Item from List** (set to **First Item**), then **Set Variable** → call it **Amount**.',
-      },
-      {
-        text: 'Repeat that three-action block (**Match Text** → **Get Item from List** → **Set Variable**) three more times with the patterns below, naming the variables **Merchant**, **Card**, and **Date**. Important: in each new **Match Text**, tap its **Text** slot and re-select the **Text** output from the “Get Text from Input” step — otherwise it searches the wrong thing.',
-        copy: [
-          {
-            label: 'Merchant pattern',
-            value: '(?<=Merchant: ).*',
-            hint: 'Grabs the store name after “Merchant:” (e.g. “Google CLOUD”).',
-          },
-          {
-            label: 'Card pattern',
-            value: '(?<=card )\\D*\\d{4}',
-            hint: 'Grabs “...8899” after “credit card” — LifeBalance keeps just the 4 digits.',
-          },
-          {
-            label: 'Date pattern',
-            value: '\\d{2}/\\d{2}/\\d{4}',
-            hint: 'Grabs the purchase date, e.g. “07/01/2026”.',
-          },
-        ],
+        text: 'Add **Get Text from Input** — this turns the incoming email into plain text. That’s the only preparation: LifeBalance reads the amount, merchant, card, and date out of the email on the server, so there are no patterns to copy.',
       },
     ],
     fields: [
-      { key: 'amount', type: 'Number', mode: 'variable', value: 'Amount' },
-      { key: 'merchant', type: 'Text', mode: 'variable', value: 'Merchant' },
       {
-        key: 'cardLast4',
+        key: 'emailText',
         type: 'Text',
         mode: 'variable',
-        value: 'Card',
-        hint: 'Routes the expense to the account whose Card Digits match.',
-      },
-      {
-        key: 'date',
-        type: 'Text',
-        mode: 'variable',
-        value: 'Date',
-        hint: 'The purchase date from the email — MM/DD/YYYY is fine.',
-      },
-      {
-        key: 'fromBankNotification',
-        type: 'Text',
-        mode: 'copy',
-        value: 'true',
-        hint: 'Fills a matching Apple Pay $0 hold instead of adding a duplicate.',
+        value: 'Text',
+        hint: 'Pick the **Text** output of the “Get Text from Input” step — the whole email. LifeBalance extracts the amount, merchant, card digits, and date server-side.',
       },
     ],
     finishSteps: [
+      {
+        text: 'Add **Show Notification**. Tap its message text and pick **Contents of URL** — after each run you’ll see exactly what LifeBalance extracted.',
+      },
       {
         text: 'Tap **Done**. Each purchase email now becomes a pending transaction on the matching card — review it in the **Budget** tab.',
       },
     ],
     after: [
       '**No Email trigger on your iOS?** Build the exact same actions as a regular shortcut, tap ⓘ → turn on **Show in Share Sheet**, then open an alert email → **Share** → run the shortcut.',
-      'If Wells Fargo rewords the email, the patterns may need a tweak — check what each variable captured after a real run.',
+      'Email alerts automatically fill a matching Apple Pay **$0 hold** instead of adding a duplicate — no extra field needed.',
+      'Gmail / Google Workspace accounts in Apple **Mail** are fetch-only, so the automation may run several minutes after the purchase — whenever Mail actually downloads the message.',
+      'If Wells Fargo rewords its emails, there’s nothing to fix on your phone — the server-side parser is updated centrally.',
       '**Plaid** (Budget tab) is the zero-maintenance alternative for settled amounts.',
     ],
   },
