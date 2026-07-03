@@ -916,6 +916,32 @@ Date: 07/01/2026`;
     expect(txData.merchant).toBe("STARBUCKS");
   });
 
+  it("blank explicit fields do not block emailText-parsed values", async () => {
+    // A Shortcut with an empty variable sends "" — the parser's values must
+    // still fill in (cardLast4 for routing, date, amount).
+    const add = vi.fn(() => Promise.resolve({ id: "tx1" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = { add };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({
+        body: { emailText: WF_EMAIL, amount: "", merchant: "", cardLast4: "", date: "" },
+      }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    const txData = add.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(txData.amount).toBe(6.02);
+    expect(txData.merchant).toBe("Google CLOUD");
+    expect(txData.date).toBe("2026-07-01");
+    // The parsed card digits survive the blank explicit value: the sanitized
+    // audit-log body carries the normalized last-4 used for account routing.
+    const logged = logAddMock.mock.calls[0]?.[0] as {
+      requestBody: Record<string, unknown>;
+    };
+    expect(logged.requestBody.cardLast4).toBe("8899");
+  });
+
   it("unparseable emailText returns 400 with a wording hint", async () => {
     const res = makeRes();
     await asHandler(quickAddExpense)(

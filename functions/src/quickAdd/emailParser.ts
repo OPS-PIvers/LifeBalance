@@ -36,7 +36,9 @@ export interface ParsedTransactionEmail {
  */
 function toPlainText(input: string): string {
   let text = input;
-  if (/<\s*(html|body|div|td|table|br|p)[\s>/]/i.test(text)) {
+  // Any tag-shaped token means HTML — real bank emails are often <span>-soup
+  // with no <html>/<body> wrapper, so don't require specific structural tags.
+  if (/<\/?[a-z][^>]*>/i.test(text)) {
     text = text
       .replace(/<style[\s\S]*?<\/style\s*>/gi, " ")
       .replace(/<script[\s\S]*?<\/script\s*>/gi, " ")

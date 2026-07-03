@@ -373,7 +373,11 @@ export const quickAddExpense = onRequest(
         );
         return;
       }
-      if (rawAmount === undefined || rawAmount === null || rawAmount === "") {
+      // A field counts as "missing" when absent OR blank — a Shortcut with an
+      // empty variable sends "" and must not block the parser's value.
+      const isBlank = (v: unknown): boolean =>
+        v === undefined || v === null || (typeof v === "string" && !v.trim());
+      if (isBlank(rawAmount)) {
         // No readable amount but a known merchant → fall through as a $0
         // "awaiting amount" stub (capture beats completeness, same philosophy
         // as the Apple Pay $0 pre-auth path below).
@@ -384,11 +388,13 @@ export const quickAddExpense = onRequest(
         // it under a review-obvious placeholder rather than dropping it.
         merchant = parsed.merchant ?? "Card purchase";
       }
-      if (rawCardLast4 === undefined || rawCardLast4 === null) {
+      if (isBlank(rawCardLast4)) {
         rawCardLast4 = parsed.cardLast4 ?? rawCardLast4;
       }
-      if (date === undefined || date === null || date === "") {
-        date = parsed.date ?? date;
+      if (isBlank(date)) {
+        // undefined (not a blank string) so a parse miss falls back to today
+        // below instead of failing date validation.
+        date = parsed.date ?? undefined;
       }
     }
 

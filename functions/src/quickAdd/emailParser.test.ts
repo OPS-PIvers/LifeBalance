@@ -102,6 +102,16 @@ describe("parseTransactionEmail", () => {
     expect(parsed.date).toBe("2026-07-01");
   });
 
+  it("strips span-soup HTML without structural html/body tags", () => {
+    const html =
+      '<span style="color:#333">You made a purchase of $6.02 with credit card ...8899.</span>' +
+      "<span>Merchant: Google CLOUD</span>";
+    const parsed = parseTransactionEmail(html);
+    expect(parsed.amount).toBe(6.02);
+    expect(parsed.merchant).toBe("Google CLOUD");
+    expect(parsed.cardLast4).toBe("8899");
+  });
+
   it("decodes &apos; in merchant names from HTML emails", () => {
     const html =
       "<html><body><p>purchase of $8.50 with credit card ...8899</p>" +
