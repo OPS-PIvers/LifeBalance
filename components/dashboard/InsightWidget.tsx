@@ -2,7 +2,7 @@ import React from 'react';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { useInsightActions } from '@/hooks/useInsightActions';
-import { Sparkles, History, Wand2, ArrowRight, Wallet, CheckCircle2, Plus, Trophy } from 'lucide-react';
+import { Sparkles, Wand2, ArrowRight, Wallet, CheckCircle2, Plus, Trophy } from 'lucide-react';
 import { CreateChallengePayload, Insight, InsightAction } from '@/types/schema';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
@@ -91,13 +91,14 @@ export const InsightWidget: React.FC<InsightWidgetProps> = React.memo(({ onOpenA
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2 mb-2">
             <Eyebrow as="h3" tone="warm">AI Insight</Eyebrow>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-3">
+              {/* Demoted to a quiet text link so "Get Insight" is the sole
+                  primary header action; min-h-11 preserves the tap target. */}
               <Button
-                variant="secondary"
+                variant="link"
                 size="sm"
-                className="min-h-11"
+                className="min-h-11 text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-200"
                 onClick={onOpenArchive}
-                leftIcon={<History size={12} />}
               >
                 History
               </Button>

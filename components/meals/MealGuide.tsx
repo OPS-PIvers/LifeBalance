@@ -138,24 +138,21 @@ export const MealGuide: React.FC<MealGuideProps> = ({ plan, hideMasthead }) => {
               >
                 <span className="font-display text-2xl font-bold text-brand-600 dark:text-brand-300 leading-none w-7 shrink-0 tabular-nums">{i + 1}</span>
                 <div className="flex-1 min-w-0">
-                  {meal.cuisine && <div className="text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-500">{meal.cuisine}</div>}
-                  <div className="font-bold text-brand-900 dark:text-brand-100 tracking-tight leading-snug text-balance">{meal.name}</div>
-                  {meal.blurb && <div className="text-xs text-brand-500 dark:text-brand-400 italic mt-0.5 leading-relaxed">{meal.blurb}</div>}
+                  {/* Scan-and-pick essentials only — name (+ cuisine inline), total
+                      duration, effort, and active minutes. The blurb and
+                      uses/saves hand-off tags are shown in the tap-through
+                      RecipeView instead of being duplicated here. */}
+                  <div className="font-bold text-brand-900 dark:text-brand-100 tracking-tight leading-snug text-balance">
+                    {meal.cuisine && (
+                      <span className="text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-500">{meal.cuisine} · </span>
+                    )}
+                    {meal.name}
+                  </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xxs font-semibold text-brand-500 dark:text-brand-400">
                     {meal.effort && <span className="text-brand-700 dark:text-brand-300">{effortLabel(meal.effort)}</span>}
                     {typeof meal.activeMin === 'number' && <span>{meal.activeMin}m active</span>}
                     <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" /> {fmtDur(sched.total)}</span>
                   </div>
-                  {(meal.uses?.length || meal.saves?.length) ? (
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {meal.uses?.map((u, k) => (
-                        <Tag key={`u${k}`} icon={<ArrowLeft className="w-3 h-3" />}>{u.item}</Tag>
-                      ))}
-                      {meal.saves?.map((s, k) => (
-                        <Tag key={`s${k}`} tone="save" icon={<ArrowRight className="w-3 h-3" />}>{s.item}</Tag>
-                      ))}
-                    </div>
-                  ) : null}
                 </div>
                 <ChevronRight className="w-5 h-5 text-brand-300 dark:text-brand-600 shrink-0 mt-1" />
               </button>

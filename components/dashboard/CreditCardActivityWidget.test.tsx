@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { CreditCardActivityWidget } from './CreditCardActivityWidget';
 import type { Account, Transaction } from '@/types/schema';
 
@@ -46,26 +46,46 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => {
 });
 
 describe('CreditCardActivityWidget', () => {
-  it('renders charges, payments, net and balance for the current period only', () => {
+  it('shows name and balance but collapses the Charged/Paid/Net detail by default', () => {
     render(<CreditCardActivityWidget onPayDown={() => {}} />);
 
     expect(screen.getByText('Credit card activity')).toBeInTheDocument();
     expect(screen.getByText('Visa')).toBeInTheDocument();
+    // current balance is always visible
+    expect(screen.getByText('$500.00')).toBeInTheDocument();
+    // detail line is hidden until the card row is expanded
+    expect(screen.queryByText('Charged')).not.toBeInTheDocument();
+    expect(screen.queryByText('+$150.00')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /visa/i })).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('expands to show charges, payments and net for the current period only', () => {
+    render(<CreditCardActivityWidget onPayDown={() => {}} />);
+
+    const toggle = screen.getByRole('button', { name: /visa/i });
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+
     // charges 120 + 30 = 150 (the other-period 999 is excluded)
     expect(screen.getByText('+$150.00')).toBeInTheDocument();
     // payments 50
     expect(screen.getByText('-$50.00')).toBeInTheDocument();
     // net 150 − 50 = 100
     expect(screen.getByText('+$100.00')).toBeInTheDocument();
-    // current balance
-    expect(screen.getByText('$500.00')).toBeInTheDocument();
+
+    // Tapping again collapses the detail line.
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Charged')).not.toBeInTheDocument();
   });
 
-  it('invokes onPayDown with the card id', () => {
+  it('invokes onPayDown with the card id without expanding the detail', () => {
     const onPayDown = vi.fn();
     render(<CreditCardActivityWidget onPayDown={onPayDown} />);
-    screen.getByRole('button', { name: /pay down/i }).click();
+    fireEvent.click(screen.getByRole('button', { name: /pay down/i }));
     expect(onPayDown).toHaveBeenCalledWith('cc');
+    // Pay down is independent of the disclosure toggle.
+    expect(screen.queryByText('Charged')).not.toBeInTheDocument();
   });
 
   it('renders nothing when there are no credit accounts', () => {

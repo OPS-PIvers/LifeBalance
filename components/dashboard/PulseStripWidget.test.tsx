@@ -128,6 +128,43 @@ describe('PulseStripWidget', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('shows the static "earned" label under Points even when a streak is active (no flame line)', () => {
+    // A daily habit completed today would previously have rendered the flame
+    // sub-line; DailyHabitsWidget now owns the streak signal on Home.
+    const value = {
+      transactions: [makeTransaction()],
+      habits: [makeHabit({ completedDates: ['2026-06-16'], streakDays: 1 })],
+      weeklyPoints: 120,
+    };
+    vi.mocked(useFinance).mockReturnValue(value as unknown as ReturnType<typeof useFinance>);
+    vi.mocked(useGamification).mockReturnValue(
+      value as unknown as ReturnType<typeof useGamification>,
+    );
+
+    render(<PulseStripWidget />);
+    expect(screen.getByText('earned')).toBeInTheDocument();
+    expect(screen.queryByText(/best active streak/)).not.toBeInTheDocument();
+  });
+
+  it('still renders when an active streak is the only habits signal (content gate keeps topStreak)', () => {
+    // Weekly habit completed this ISO week: topStreak > 0 but weeklyPoints = 0
+    // and no daily habits (consistencyTotal = 0). The strip must stay visible.
+    const value = {
+      transactions: [] as Transaction[],
+      habits: [makeHabit({ period: 'weekly', completedDates: ['2026-06-16'] })],
+      weeklyPoints: 0,
+    };
+    vi.mocked(useFinance).mockReturnValue(value as unknown as ReturnType<typeof useFinance>);
+    vi.mocked(useGamification).mockReturnValue(
+      value as unknown as ReturnType<typeof useGamification>,
+    );
+    setEnabledModules(['habits', 'plan', 'todos']);
+
+    render(<PulseStripWidget />);
+    expect(screen.getByText('Points')).toBeInTheDocument();
+    expect(screen.getByText('earned')).toBeInTheDocument();
+  });
+
   it('stays quiet when the only enabled domain (habits) is empty, despite stale spend data', () => {
     // Money is OFF but a transaction still exists (stale). Habits ON but empty.
     // The guard must weigh only enabled-domain content, so the widget hides

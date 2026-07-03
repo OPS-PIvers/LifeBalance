@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import ToDosPage from './ToDosPage';
 import { useTodos, useHouseholdCore, type TodosContextValue, type HouseholdCoreContextValue } from '@/contexts/FirebaseHouseholdContext';
 import { generateCsvExport } from '@/utils/exportUtils';
-import { format, subDays, startOfToday } from 'date-fns';
+import { format, subDays, addDays, startOfToday } from 'date-fns';
 import toast from 'react-hot-toast';
 
 // Mock dependencies
@@ -53,6 +53,7 @@ vi.mock('lucide-react', () => ({
   MoreHorizontal: () => <div data-testid="more-horizontal-icon" />,
   ClipboardList: () => <div data-testid="clipboard-list-icon" />,
   SlidersHorizontal: () => <div data-testid="sliders-icon" />,
+  ChevronDown: () => <div data-testid="chevron-down-icon" />,
 }));
 
 describe('ToDosPage', () => {
@@ -418,6 +419,113 @@ describe('ToDosPage', () => {
       expect(createBtn).toBeDisabled();
 
       expect(screen.getByText('No household members available to assign this task.')).toBeInTheDocument();
+    });
+  });
+
+  describe('List caps and collapsed history', () => {
+    // Radar bucket = due after the end of the current week; +10 days or more is
+    // always beyond it (endOfWeek is at most today+6), so these are deterministic.
+    const makeRadarTodos = (count: number) =>
+      Array.from({ length: count }, (_, i) => ({
+        id: `radar-${i + 1}`,
+        text: `Radar Task ${i + 1}`,
+        completeByDate: format(addDays(startOfToday(), 10 + i), 'yyyy-MM-dd'),
+        assignedTo: 'user1',
+        isCompleted: false,
+        createdBy: 'user1',
+        createdAt: new Date().toISOString(),
+      }));
+
+    it('caps On the Radar at 5 with a show-more row that reveals the rest', () => {
+      setup(makeRadarTodos(7));
+
+      // First five rows visible, the rest hidden behind the show-more row.
+      expect(screen.getByText('Radar Task 1')).toBeInTheDocument();
+      expect(screen.getByText('Radar Task 5')).toBeInTheDocument();
+      expect(screen.queryByText('Radar Task 6')).not.toBeInTheDocument();
+      expect(screen.queryByText('Radar Task 7')).not.toBeInTheDocument();
+
+      const showMore = screen.getByRole('button', { name: '+ 2 more tasks' });
+      expect(showMore).toHaveAttribute('aria-expanded', 'false');
+      fireEvent.click(showMore);
+
+      expect(screen.getByText('Radar Task 6')).toBeInTheDocument();
+      expect(screen.getByText('Radar Task 7')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Show fewer' })).toBeInTheDocument();
+    });
+
+    it('renders the full list in selection mode despite the cap', () => {
+      setup(makeRadarTodos(7));
+      enterSelectionMode();
+
+      // Every item must be selectable — the cap is bypassed and the row is gone.
+      expect(screen.getByText('Radar Task 6')).toBeInTheDocument();
+      expect(screen.getByText('Radar Task 7')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /more tasks/ })).not.toBeInTheDocument();
+
+      // Select all operates on all 7 items.
+      fireEvent.click(screen.getByText('Select all'));
+      expect(screen.getByText('7 selected')).toBeInTheDocument();
+    });
+
+    it('collapses This Week and Older History by default while Completed Today stays expanded', () => {
+      vi.useFakeTimers();
+      try {
+        // Friday, June 19 2026 — guarantees a "this week but not today/yesterday" slot.
+        vi.setSystemTime(new Date(2026, 5, 19, 12, 0, 0));
+        const completedTodos = [
+          {
+            id: 'c-today',
+            text: 'Done Today',
+            completeByDate: '2026-06-19',
+            assignedTo: 'user1',
+            isCompleted: true,
+            completedAt: new Date(2026, 5, 19, 9, 0, 0).toISOString(),
+            createdBy: 'user1',
+            createdAt: new Date(2026, 5, 19, 8, 0, 0).toISOString(),
+          },
+          {
+            id: 'c-week',
+            text: 'Done Tuesday',
+            completeByDate: '2026-06-16',
+            assignedTo: 'user1',
+            isCompleted: true,
+            completedAt: new Date(2026, 5, 16, 9, 0, 0).toISOString(), // Tue, same ISO week
+            createdBy: 'user1',
+            createdAt: new Date(2026, 5, 16, 8, 0, 0).toISOString(),
+          },
+          {
+            id: 'c-old',
+            text: 'Done Long Ago',
+            completeByDate: '2026-06-01',
+            assignedTo: 'user1',
+            isCompleted: true,
+            completedAt: new Date(2026, 5, 1, 9, 0, 0).toISOString(),
+            createdBy: 'user1',
+            createdAt: new Date(2026, 5, 1, 8, 0, 0).toISOString(),
+          },
+        ];
+        setup(completedTodos);
+        fireEvent.click(screen.getByText('Completed'));
+
+        // Recent bucket stays expanded; older buckets are collapsed.
+        expect(screen.getByText('Done Today')).toBeInTheDocument();
+        expect(screen.queryByText('Done Tuesday')).not.toBeInTheDocument();
+        expect(screen.queryByText('Done Long Ago')).not.toBeInTheDocument();
+
+        // Expanding This Week reveals its rows.
+        const weekToggle = screen.getByRole('button', { name: /This Week/ });
+        expect(weekToggle).toHaveAttribute('aria-expanded', 'false');
+        fireEvent.click(weekToggle);
+        expect(weekToggle).toHaveAttribute('aria-expanded', 'true');
+        expect(screen.getByText('Done Tuesday')).toBeInTheDocument();
+
+        // Older History expands independently.
+        fireEvent.click(screen.getByRole('button', { name: /Older History/ }));
+        expect(screen.getByText('Done Long Ago')).toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

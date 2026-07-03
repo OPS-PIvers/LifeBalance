@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, LogOut, Plus, Settings, User, Users } from 'lucide-react';
+import { AlertCircle, ArrowLeft, LogOut, Plus, Settings, User, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
@@ -10,9 +10,11 @@ import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 interface ProfileMenuProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Opens the Feedback modal (owned by TopToolbar, which keeps the lazy mount). */
+  onSendFeedback?: () => void;
 }
 
-const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose }) => {
+const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, onSendFeedback }) => {
   const { currentUser, logout } = useAuth();
   // Active-member (acting-as) state lives in the household context so the switch is
   // app-wide (the kid view in a later slice reads it), not local to this menu.
@@ -179,6 +181,19 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose }) => {
 
       {/* Menu Actions */}
       <div className="p-2">
+        <button
+          onClick={() => {
+            onSendFeedback?.();
+            onClose();
+          }}
+          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-700 hover:text-accent-700 dark:hover:text-accent-300 rounded-btn transition-colors text-left"
+          role="menuitem"
+          tabIndex={-1}
+        >
+          <AlertCircle className="w-4 h-4" />
+          Send Feedback
+        </button>
+
         <button
           onClick={() => {
             navigate('/settings');

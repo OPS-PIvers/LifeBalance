@@ -28,7 +28,7 @@ describe('SavedViewChips', () => {
     localStorage.clear();
   });
 
-  it('renders correctly', () => {
+  it('renders only the unobtrusive Save View control when there are no saved views', () => {
     render(
       <SavedViewChips
         householdId={householdId}
@@ -36,7 +36,32 @@ describe('SavedViewChips', () => {
         onApply={mockOnApply}
       />
     );
+    // No bordered "Views" row chrome for the empty state...
+    expect(screen.queryByText('Views')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('bookmark-icon')).not.toBeInTheDocument();
+    // ...but Save View is still reachable.
+    expect(screen.getByText('Save View')).toBeInTheDocument();
+  });
+
+  it('renders the full bordered row once a view exists', () => {
+    const view = {
+      id: '1',
+      name: 'Test View',
+      filters: currentFilters
+    };
+    localStorage.setItem(`transaction_views_${householdId}`, JSON.stringify([view]));
+
+    render(
+      <SavedViewChips
+        householdId={householdId}
+        currentFilters={currentFilters}
+        onApply={mockOnApply}
+      />
+    );
+
     expect(screen.getByText('Views')).toBeInTheDocument();
+    expect(screen.getByTestId('bookmark-icon')).toBeInTheDocument();
+    expect(screen.getByText('Test View')).toBeInTheDocument();
     expect(screen.getByText('Save View')).toBeInTheDocument();
   });
 

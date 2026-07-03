@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import Dashboard from './Dashboard';
@@ -28,9 +28,13 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useTodos: () => ({ updateToDo: vi.fn(), deleteToDo: vi.fn(), completeToDo: vi.fn() }),
 }));
 
-// The action queue is mixed-domain (PR4) — not under test here. Stub it empty.
+// The action queue is mixed-domain (PR4). Backed by a mutable array so the
+// cap/show-more tests can seed items; visibility tests leave it empty. The
+// factory only closes over `queueItems` (read at render time), so declaring it
+// after the hoisted vi.mock is safe.
+let queueItems: Array<{ id: string }> = [];
 vi.mock('@/hooks/useActionQueue', () => ({
-  useActionQueue: () => ({ actionQueue: [] }),
+  useActionQueue: () => ({ actionQueue: queueItems }),
 }));
 
 // Gated single-domain widgets — stub to identifiable text so the visibility
@@ -59,7 +63,9 @@ vi.mock('@/components/dashboard/CreditCardActivityWidget', () => ({
   CreditCardActivityWidget: () => null,
 }));
 vi.mock('@/components/dashboard/ActionQueueItem', () => ({
-  ActionQueueItemCard: () => null,
+  ActionQueueItemCard: ({ item }: { item: { id: string } }) => (
+    <div data-testid="queue-item">{item.id}</div>
+  ),
 }));
 vi.mock('@/components/budget/AccountPicker', () => ({
   AccountPicker: () => null,
@@ -92,6 +98,7 @@ const TRENDS_LABEL = 'View money trends';
 describe('Dashboard module visibility (Plan 090)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    queueItems = [];
     setEnabledModules(['habits', 'money', 'plan', 'todos', 'meals', 'shopping']);
   });
 
@@ -118,5 +125,46 @@ describe('Dashboard module visibility (Plan 090)', () => {
     // Money widgets stay.
     expect(screen.getByText('STS_HERO')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: TRENDS_LABEL })).toBeInTheDocument();
+  });
+});
+
+describe('Dashboard action queue cap', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setEnabledModules(['habits', 'money', 'plan', 'todos', 'meals', 'shopping']);
+    queueItems = Array.from({ length: 8 }, (_, i) => ({ id: `q-${i}` }));
+  });
+
+  it('renders at most 6 items with a show-more row that expands in place', () => {
+    renderDashboard();
+    expect(screen.getAllByTestId('queue-item')).toHaveLength(6);
+
+    const moreRow = screen.getByRole('button', { name: '+ 2 more items' });
+    expect(moreRow).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(moreRow);
+
+    expect(screen.getAllByTestId('queue-item')).toHaveLength(8);
+    expect(screen.getByRole('button', { name: 'Show fewer' })).toBeInTheDocument();
+  });
+
+  it('renders no show-more row when the queue fits under the cap', () => {
+    queueItems = Array.from({ length: 4 }, (_, i) => ({ id: `q-${i}` }));
+    renderDashboard();
+    expect(screen.getAllByTestId('queue-item')).toHaveLength(4);
+    expect(screen.queryByRole('button', { name: /more item/ })).not.toBeInTheDocument();
+  });
+
+  it('shows the FULL queue while selection mode is active, without a show-more row', () => {
+    renderDashboard();
+    expect(screen.getAllByTestId('queue-item')).toHaveLength(6);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+
+    expect(screen.getAllByTestId('queue-item')).toHaveLength(8);
+    expect(screen.queryByRole('button', { name: /more item/ })).not.toBeInTheDocument();
+
+    // Leaving selection mode restores the cap.
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getAllByTestId('queue-item')).toHaveLength(6);
   });
 });

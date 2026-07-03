@@ -76,6 +76,7 @@ vi.mock('lucide-react', () => ({
   Star: () => <div data-testid="star-icon" />,
   CheckCircle2: () => <div data-testid="check-circle-icon" />,
   MoreVertical: () => <div data-testid="more-vertical-icon" />,
+  MoreHorizontal: () => <div data-testid="more-horizontal-icon" />,
   Eye: () => <div data-testid="eye-icon" />,
   Utensils: () => <div data-testid="utensils-icon" />,
   // Weekly Plan modal + Meal Guide icons
@@ -144,5 +145,38 @@ describe('MealPlanTab', () => {
     expect(mocks.addShoppingItems).toHaveBeenCalledTimes(1);
     const added = mocks.addShoppingItems.mock.calls[0]?.[0] as { name: string; order: number }[];
     expect(added.map(item => item.order)).toEqual([4, 5]);
+  });
+
+  it('exposes Copy last week / Shop for this week behind the week-actions overflow menu', () => {
+    // Wednesday, Oct 25, 2023 — Monday-start week is Oct 23 - Oct 29.
+    vi.setSystemTime(new Date(2023, 9, 25));
+
+    mocks.meals = [
+      { id: 'meal-1', name: 'Tacos', ingredients: [{ name: 'Tortillas' }], tags: [] },
+    ];
+    mocks.mealPlan = [
+      // Falls within this week — feeds "Shop for this week".
+      { id: 'plan-this-week', date: '2023-10-25', mealId: 'meal-1', mealName: 'Tacos', type: 'dinner', isCooked: false },
+      // Falls within last week — feeds "Copy last week".
+      { id: 'plan-last-week', date: '2023-10-18', mealId: 'meal-1', mealName: 'Tacos', type: 'dinner', isCooked: false },
+    ];
+
+    render(<MealPlanTab />);
+
+    // The two buttons no longer sit in the header directly...
+    expect(screen.queryByText('Copy last week')).not.toBeInTheDocument();
+    expect(screen.queryByText('Shop week')).not.toBeInTheDocument();
+
+    // ...they live behind the overflow menu.
+    fireEvent.click(screen.getByLabelText('More week actions'));
+    expect(screen.getByRole('menu', { name: 'Week actions' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Shop for this week'));
+    expect(screen.getByText('Shop for the Week')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Cancel'));
+
+    fireEvent.click(screen.getByLabelText('More week actions'));
+    fireEvent.click(screen.getByText('Copy last week'));
+    expect(screen.getByText('Copy Last Week')).toBeInTheDocument();
   });
 });

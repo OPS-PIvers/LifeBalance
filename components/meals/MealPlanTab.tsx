@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useMealPlan, useShopping, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
-import { Plus, Trash2, Edit2, ChevronRight, ChevronLeft, ShoppingCart, Copy, CheckCircle2, MoreVertical, CalendarDays, Eye, Utensils } from 'lucide-react';
+import { Plus, Trash2, Edit2, ChevronRight, ChevronLeft, ShoppingCart, Copy, CheckCircle2, MoreVertical, MoreHorizontal, CalendarDays, Eye, Utensils } from 'lucide-react';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
@@ -13,6 +13,7 @@ import { AISuggestModal } from './AISuggestModal';
 import { RecipeImportModal } from './RecipeImportModal';
 import { WeeklyPlanModal } from './WeeklyPlanModal';
 import { Drawer } from '@/components/ui/Drawer';
+import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -73,6 +74,11 @@ const MealPlanTab: React.FC = () => {
 
   // Per-meal action sheet (replaces the cluttered inline icon buttons)
   const [actionSheetItem, setActionSheetItem] = useState<MealPlanItem | null>(null);
+
+  // Overflow menu for the two lower-frequency week actions (Copy last week /
+  // Shop for this week) — keeps the calendar header to nav + day-strip + the
+  // primary "Plan my week" action.
+  const [isWeekMenuOpen, setIsWeekMenuOpen] = useState(false);
 
   // "Plan my week" (AI generate / import weekly-meals plan)
   const [isWeeklyPlanOpen, setIsWeeklyPlanOpen] = useState(false);
@@ -632,6 +638,21 @@ const MealPlanTab: React.FC = () => {
   };
   const sheetDelete = (planItem: MealPlanItem) => { haptic('medium'); deleteMealPlanItem(planItem.id); setActionSheetItem(null); };
 
+  const weekMenuItems: MenuItem[] = [
+    {
+      key: 'copy-last-week',
+      label: 'Copy last week',
+      icon: <Copy size={16} />,
+      onSelect: handleCopyLastWeek,
+    },
+    {
+      key: 'shop-week',
+      label: 'Shop for this week',
+      icon: <ShoppingCart size={16} />,
+      onSelect: handleShopForWeek,
+    },
+  ];
+
   return (
     <div className="space-y-5 pb-20">
       {/* Calendar Header */}
@@ -653,13 +674,35 @@ const MealPlanTab: React.FC = () => {
                     {weekMealCount > 0 ? `${weekMealCount} meal${weekMealCount === 1 ? '' : 's'} planned` : 'Weekly plan'}
                 </div>
             </div>
-            <button
-                onClick={() => setSelectedDate(d => addDays(d, 7))}
-                className="p-3 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
-                aria-label="Next week"
-            >
-                <ChevronRight className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-1">
+                <button
+                    onClick={() => setSelectedDate(d => addDays(d, 7))}
+                    className="p-3 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
+                    aria-label="Next week"
+                >
+                    <ChevronRight className="w-5 h-5" />
+                </button>
+                <div className="relative">
+                    <button
+                        type="button"
+                        onClick={() => setIsWeekMenuOpen(v => !v)}
+                        className="p-3 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
+                        aria-label="More week actions"
+                        aria-haspopup="menu"
+                        aria-expanded={isWeekMenuOpen}
+                    >
+                        <MoreHorizontal className="w-5 h-5" />
+                    </button>
+                    <Menu
+                        isOpen={isWeekMenuOpen}
+                        onClose={() => setIsWeekMenuOpen(false)}
+                        items={weekMenuItems}
+                        ariaLabel="Week actions"
+                        position="top-10 right-0"
+                        className="min-w-[208px]"
+                    />
+                </div>
+            </div>
         </div>
 
         {/* Day strip — whole week at a glance */}
@@ -725,9 +768,9 @@ const MealPlanTab: React.FC = () => {
             Plan my week
         </Button>
 
-        {/* Week actions */}
-        <div className="flex gap-2">
-            {!isCurrentWeek && (
+        {/* Today — only shown once the user has navigated away from the current week */}
+        {!isCurrentWeek && (
+            <div className="flex">
                 <Button
                     variant="secondary"
                     size="sm"
@@ -736,26 +779,8 @@ const MealPlanTab: React.FC = () => {
                 >
                     Today
                 </Button>
-            )}
-            <Button
-                variant="secondary"
-                size="sm"
-                className="flex-1"
-                leftIcon={<Copy className="w-3.5 h-3.5" />}
-                onClick={handleCopyLastWeek}
-            >
-                Copy last week
-            </Button>
-            <Button
-                variant="subtle"
-                size="sm"
-                className="flex-1"
-                leftIcon={<ShoppingCart className="w-3.5 h-3.5" />}
-                onClick={handleShopForWeek}
-            >
-                Shop week
-            </Button>
-        </div>
+            </div>
+        )}
       </div>
 
       {/* Selected day agenda */}

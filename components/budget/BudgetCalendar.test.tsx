@@ -41,6 +41,7 @@ vi.mock('lucide-react', () => ({
   Download: () => <div data-testid="download" />,
   ChevronDown: () => <div data-testid="chevron-down" />,
   MoreVertical: () => <div data-testid="more-vertical" />,
+  MoreHorizontal: () => <div data-testid="more-horizontal" />,
   Repeat: () => <div data-testid="repeat" />,
   CalendarPlus: () => <div data-testid="calendar-plus" />,
   TrendingUp: () => <div data-testid="trending-up" />,
@@ -459,11 +460,15 @@ describe('BudgetCalendar', () => {
     expect(screen.getByText('January 15')).toBeInTheDocument();
   });
 
-  it('opens recurring manager modal when repeat button is clicked', () => {
+  it('opens recurring manager modal via the overflow menu', () => {
     render(<BudgetCalendar />);
 
-    const repeatButton = screen.getByLabelText('Manage Recurring Bills');
-    fireEvent.click(repeatButton);
+    // Open the overflow menu
+    const moreButton = screen.getByLabelText('More calendar actions');
+    fireEvent.click(moreButton);
+
+    // Select "Manage recurring bills"
+    fireEvent.click(screen.getByText('Manage recurring bills'));
 
     // Since we can't test the internal state of the modal easily without it being rendered,
     // and the modal is rendered conditionally inside the component:
@@ -471,5 +476,19 @@ describe('BudgetCalendar', () => {
     // We expect the modal text to appear.
     // The modal has text "Recurring Manager"
     expect(screen.getByText('Recurring Manager')).toBeInTheDocument();
+  });
+
+  it('exports the month to CSV via the overflow menu', () => {
+    render(<BudgetCalendar />);
+
+    const moreButton = screen.getByLabelText('More calendar actions');
+    fireEvent.click(moreButton);
+
+    fireEvent.click(screen.getByText('Export month to CSV'));
+
+    // The menu closes and the export handler runs (no events → error toast is
+    // exercised elsewhere; here we just confirm the menu item is wired and the
+    // menu dismisses itself after selection).
+    expect(screen.queryByText('Export month to CSV')).not.toBeInTheDocument();
   });
 });

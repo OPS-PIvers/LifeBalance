@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import type {
@@ -26,6 +27,28 @@ const denyRedemptionMock = vi.fn(async (_id: string) => {});
 
 vi.mock('@/hooks/useKidModeEnabled', () => ({
   useKidModeEnabled: () => mockUseKidModeEnabled(),
+}));
+
+// RewardManagerPanel's create/edit form now lives in a `Drawer` bottom sheet
+// rather than inline — stub it the same way HabitCard.test.tsx does so the
+// form's contents render unconditionally when `isOpen`, without needing a
+// framer-motion mock.
+vi.mock('@/components/ui/Drawer', () => ({
+  Drawer: ({
+    isOpen,
+    children,
+    title,
+  }: {
+    isOpen: boolean;
+    children: ReactNode;
+    title?: string;
+  }) =>
+    isOpen ? (
+      <div data-testid="reward-form-drawer">
+        {title && <h1>{title}</h1>}
+        {children}
+      </div>
+    ) : null,
 }));
 
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
@@ -100,21 +123,26 @@ beforeEach(() => {
 });
 
 describe('HabitsRewardsTab — store + redeem', () => {
-  it('lists active rewards and redeeming calls redeemReward with the reward id', () => {
+  it('lists the active reward in the store and redeeming calls redeemReward with the reward id', () => {
     render(<HabitsRewardsTab />);
-    // The title appears in both the store and the manage list — assert presence.
+    // The manage list is collapsed by default, so only the store copy of the
+    // title is present until "Manage rewards" is expanded.
     expect(screen.getAllByText('Movie Night').length).toBeGreaterThan(0);
     const redeem = screen.getByRole('button', { name: /^redeem$/i });
     fireEvent.click(redeem);
     expect(redeemRewardMock).toHaveBeenCalledWith('rw1');
   });
 
-  it('excludes inactive rewards from the store grid but keeps them in the manage list', () => {
+  it('excludes inactive rewards from the store grid but keeps them in the manage list once expanded', () => {
     mockRewards.mockReturnValue([makeReward({ id: 'rw1', title: 'Active One', active: true }),
       makeReward({ id: 'rw2', title: 'Hidden One', active: false })]);
     render(<HabitsRewardsTab />);
     // Store grid has a Redeem button only for the active reward.
     expect(screen.getAllByRole('button', { name: /^redeem$/i })).toHaveLength(1);
+    // The manage list is collapsed by default — the edit affordance isn't
+    // reachable until "Manage rewards" is expanded.
+    expect(screen.queryByRole('button', { name: /edit hidden one/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /manage rewards/i }));
     // The inactive reward is still listed (with an edit affordance) in management.
     expect(screen.getByRole('button', { name: /edit hidden one/i })).toBeInTheDocument();
   });
@@ -125,6 +153,23 @@ describe('HabitsRewardsTab — management for ALL households', () => {
     mockUseKidModeEnabled.mockReturnValue(false);
     render(<HabitsRewardsTab />);
     expect(screen.getByRole('button', { name: /add reward/i })).toBeInTheDocument();
+  });
+
+  it('collapses the manage list by default showing only the count, and "Add reward" opens the form Drawer without expanding it', () => {
+    mockRewards.mockReturnValue([makeReward({ id: 'rw1', title: 'Movie Night' })]);
+    render(<HabitsRewardsTab />);
+    const manageToggle = screen.getByRole('button', { name: /manage rewards/i });
+    expect(manageToggle).toHaveAttribute('aria-expanded', 'false');
+    // The count is visible while collapsed.
+    expect(manageToggle).toHaveTextContent('1');
+    // The manage-list edit affordance isn't in the DOM yet.
+    expect(screen.queryByRole('button', { name: /edit movie night/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /add reward/i }));
+    // The form Drawer opened...
+    expect(screen.getByLabelText('Title')).toBeInTheDocument();
+    // ...without expanding the manage list.
+    expect(manageToggle).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('hides the Kid-Mode reward-type field for a normal household', () => {
@@ -223,5 +268,28 @@ describe('HabitsRewardsTab — recently redeemed history', () => {
     expect(screen.getByText(/recently redeemed/i)).toBeInTheDocument();
     expect(screen.getByText('−50 pts')).toBeInTheDocument();
     expect(screen.getByText(/Sam/)).toBeInTheDocument();
+  });
+
+  it('caps the visible history at 5 with a show-more row, and expanding reveals the rest', () => {
+    mockMembers.mockReturnValue([PARENT]);
+    const records: RewardRedemptionRecord[] = Array.from({ length: 7 }, (_, i) => ({
+      id: `h${i}`,
+      rewardId: `rw${i}`,
+      rewardTitle: `Reward ${i}`,
+      icon: '🎁',
+      cost: 10 + i,
+      redeemedByUid: 'parent_1',
+      redeemedAt: new Date().toISOString(),
+    }));
+    mockHistory.mockReturnValue(records);
+    render(<HabitsRewardsTab />);
+
+    expect(screen.getAllByText(/^Reward \d$/)).toHaveLength(5);
+    const showMore = screen.getByRole('button', { name: /\+ 2 more redemptions/i });
+    expect(showMore).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(showMore);
+    expect(screen.getAllByText(/^Reward \d$/)).toHaveLength(7);
+    expect(screen.getByRole('button', { name: /show fewer/i })).toHaveAttribute('aria-expanded', 'true');
   });
 });

@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { History } from 'lucide-react';
 import { parseISO, isValid, formatDistanceToNowStrict } from 'date-fns';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
+import { ShowMoreRow } from '@/components/ui/ShowMoreRow';
 import type { HouseholdMember, RewardRedemptionRecord } from '@/types/schema';
 
 /**
@@ -9,11 +10,16 @@ import type { HouseholdMember, RewardRedemptionRecord } from '@/types/schema';
  * most-recent-first `Household.redemptionHistory` array (written atomically by
  * redeemReward alongside the point deduction). Renders nothing when empty so the
  * tab stays calm for a household that has never redeemed.
+ *
+ * Caps the rendered list at `MAX_VISIBLE` with a trailing `ShowMoreRow` so a
+ * long history doesn't push the store/manage sections further down the tab.
  */
 export interface RedemptionHistoryPanelProps {
   history: RewardRedemptionRecord[];
   members: HouseholdMember[];
 }
+
+const MAX_VISIBLE = 5;
 
 /** Relative "time ago" for an ISO timestamp, with a safe fallback. */
 const timeAgo = (iso: string): string => {
@@ -23,10 +29,14 @@ const timeAgo = (iso: string): string => {
 };
 
 const RedemptionHistoryPanel: React.FC<RedemptionHistoryPanelProps> = ({ history, members }) => {
+  const [expanded, setExpanded] = useState(false);
+
   if (history.length === 0) return null;
 
   const nameFor = (uid: string) =>
     members.find((m) => m.uid === uid)?.displayName ?? 'Someone';
+
+  const visibleHistory = expanded ? history : history.slice(0, MAX_VISIBLE);
 
   return (
     <Section
@@ -38,7 +48,7 @@ const RedemptionHistoryPanel: React.FC<RedemptionHistoryPanelProps> = ({ history
       }
     >
       <SurfaceList>
-        {history.map((rec) => {
+        {visibleHistory.map((rec) => {
           const when = timeAgo(rec.redeemedAt);
           return (
             <Row key={rec.id} dense>
@@ -58,6 +68,12 @@ const RedemptionHistoryPanel: React.FC<RedemptionHistoryPanelProps> = ({ history
             </Row>
           );
         })}
+        <ShowMoreRow
+          hiddenCount={history.length - MAX_VISIBLE}
+          expanded={expanded}
+          onToggle={() => setExpanded((v) => !v)}
+          noun="redemption"
+        />
       </SurfaceList>
     </Section>
   );
