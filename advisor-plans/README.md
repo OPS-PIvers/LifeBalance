@@ -52,7 +52,7 @@ runbook for flipping on the finished-but-dormant features (09).
 | 08 | [FirebaseHouseholdContext decomposition](./08-context-decomposition.md) | MED — 4,861-line file, still growing; pure mechanical split | L | MED | MED | best after 03 |
 | 09 | [Dormant-feature activation runbook (Kid Mode, Stripe)](./09-dormant-activation-runbook.md) | MED — ships finished work; mostly human go/no-go | S | LOW | HIGH | 02 (for Stripe) |
 
-**Suggested execution sequence:** ~~01~~ (done) → ~~05~~ (done) → 07 → 02 → 03 → 04 → 06 → 08,
+**Suggested execution sequence:** ~~01~~ (done) → ~~05~~ (done) → ~~07~~ (done) → 02 → 03 → 04 → 06 → 08,
 with 09's Kid-Mode half whenever the owner wants and its Stripe half after 02 ships.
 
 ## What this pass deliberately does NOT re-plan
