@@ -73,6 +73,13 @@ Matching policy (encode as table-driven unit tests):
   linkage.
 - The dupe is deleted **in the same `writeBatch`** as the keeper update (house atomicity
   rule — see CLAUDE.md "Atomicity" section; all money paths batch).
+- **Balance reversal on verified dupes:** under the verified-only balance model (Plan 015
+  Option A, shipped in #737), a `verified` transaction has already debited its account.
+  If the row being deleted is verified, the SAME batch must apply the compensating
+  balance delta (and if keeper and dupe are verified against *different* accounts, both
+  adjustments) — mirror how `deleteTransaction` in `contexts/FirebaseHouseholdContext.tsx`
+  reverses balances today. Deleting a verified dupe without the reversal silently
+  corrupts the account balance.
 
 ### C. Wire-in points (small, surgical)
 

@@ -29,7 +29,11 @@ idea, minimal field surface, DST handled where it's cheap (in the function, not 
   (`components/settings/NotificationSettings.tsx` → wherever `notificationPreferences` is
   persisted in `contexts/FirebaseHouseholdContext.tsx`) and the FCM token
   register/cleanup paths (`services/notificationService.ts` + the token-pruning code in
-  `functions/src/index.ts`'s send helper). Compute it with one shared pure helper
+  `functions/src/index.ts`'s send helper — note the pruning path uses
+  `FieldValue.arrayRemove`, which never observes the resulting array: after pruning,
+  re-read (or compute from the pre-prune snapshot) and set the flag to `false` when
+  `fcmTokens` goes empty, or pruned members keep matching the collection-group query
+  forever and the optimization silently decays). Compute it with one shared pure helper
   (client copy in `utils/`, server copy in `functions/src/` — the repo's established
   duplication pattern) so the writers can't drift.
 - **Deliberately NOT a per-hour timeslot.** The DST bugs and the migration complexity of

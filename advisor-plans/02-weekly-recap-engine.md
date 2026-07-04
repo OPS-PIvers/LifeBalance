@@ -37,9 +37,13 @@ New module `functions/src/recap/` (keep `index.ts` thin; put logic in testable p
    instead run **hourly on Sundays** (`0 * * * 0`) and, per member, send when the member's
    local time matches a default 17:00 (reuse the existing `isTimeToSend`/`formatInTimeZone`
    timezone pattern from the reminder jobs — see `functions/src/index.ts:180-225` and the
-   timezone handling described in CLAUDE.md). Dedupe with a `lastRecapWeek` marker
-   (ISO week string) on the household recap doc so retries/hourly re-entry can't
-   double-send.
+   timezone handling described in CLAUDE.md). Dedupe at TWO levels, because household
+   members can live in different timezones and reach Sunday 17:00 at different hours:
+   **generation** dedupes at the household level (a `lastRecapWeek` ISO-week marker on
+   the recap doc — generate once, first member to hit the window triggers it), while
+   **push delivery** dedupes per member (`lastRecapSentWeek` on the member doc). A
+   household-level skip alone would silently drop the push for members in later
+   timezones once the first member's send lands.
 2. **Data assembly (pure function, unit-tested):** for the household's trailing 7 local
    days: total verified spend vs. prior week, top 3 category deltas, Safe-to-Spend
    trajectory (reuse nothing from the client — recompute simply from transactions +
