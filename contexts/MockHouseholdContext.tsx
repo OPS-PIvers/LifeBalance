@@ -6,6 +6,9 @@ import { computeTodoCompletionCredit } from '@/utils/todoPoints';
 import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
 import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
+import { processToggleHabit, calculateResetPoints, streakForHabit } from '@/utils/habitLogic';
+import { accountImpactOf, effectiveAccountImpact, resolveTargetAccount } from '@/utils/accountImpact';
+import { roundMoney } from '@/utils/money';
 import {
   Account,
   BudgetBucket,
@@ -36,6 +39,28 @@ import toast from 'react-hot-toast';
 
 // Helper to generate unique IDs
 const generateId = () => `mock-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+/**
+ * Optional Test-Mode seed variant, set by the e2e suite BEFORE the app boots
+ * (via sessionStorage, same transport as the LIFEBALANCE_TEST_MODE flag):
+ *   - 'fresh' — boot with an EMPTY household (no accounts/buckets/transactions/
+ *     habits) so the onboarding wizard's "from nothing" path is walkable.
+ *   - 'stub'  — additionally seed one Apple Pay $0 `needsAmount` pending stub so
+ *     the review drawer's add-amount-inline path is walkable. Not seeded by
+ *     default because a pending_review row changes the Money nav link's
+ *     accessible name (", N pending review"), which the smoke spec matches
+ *     exactly.
+ * Absent/unknown values leave the default seeds untouched.
+ */
+const readTestSeedVariant = (): 'fresh' | 'stub' | null => {
+  try {
+    const v = window.sessionStorage.getItem('LIFEBALANCE_TEST_SEED');
+    return v === 'fresh' || v === 'stub' ? v : null;
+  } catch {
+    return null;
+  }
+};
+const TEST_SEED_VARIANT = readTestSeedVariant();
 
 // The mock's single tracked pay period. Seeded transactions, newly added
 // transactions, and the exposed `currentPeriodId` must all share this value —
@@ -70,12 +95,23 @@ const SEED_TRANSACTIONS: Transaction[] = [
     status: 'verified', isRecurring: true, source: 'manual',
     autoCategorized: false, payPeriodId: MOCK_PAY_PERIOD_ID
   },
-  // NOTE: intentionally no seeded Apple Pay $0 "awaiting amount" stub. A
-  // pending_review transaction adds a "pending review" badge to the Money nav
-  // link (changing its accessible name) and the e2e smoke test matches the nav
-  // link by exact name "Money"; a stub here breaks that. The stub flow is
-  // covered by ReviewPendingDrawer.test.tsx + the quickAdd function tests.
+  // NOTE: intentionally no seeded Apple Pay $0 "awaiting amount" stub in the
+  // DEFAULT seeds. A pending_review transaction adds a "pending review" badge
+  // to the Money nav link (changing its accessible name) and the e2e smoke
+  // test matches the nav link by exact name "Money"; a stub here breaks that.
+  // The e2e stub spec opts in via the 'stub' seed variant below; the unit-level
+  // flow is covered by ReviewPendingDrawer.test.tsx + the quickAdd tests.
 ];
+
+// 'stub' seed variant: one Apple Pay $0 pre-auth awaiting its real amount, the
+// exact shape the quickAdd endpoint writes (amount 0 + needsAmount), so the e2e
+// suite can walk the review drawer's inline add-amount path.
+const STUB_TRANSACTION: Transaction = {
+  id: 'tx_stub', amount: 0, merchant: 'Apple Pay', category: '',
+  date: getLocalDateString(),
+  status: 'pending_review', isRecurring: false, source: 'shortcut',
+  autoCategorized: false, needsAmount: true, payPeriodId: MOCK_PAY_PERIOD_ID,
+};
 
 const SEED_HABITS: Habit[] = [
   {
@@ -198,13 +234,18 @@ const SEED_REDEMPTION_HISTORY: RewardRedemptionRecord[] = [
 ];
 
 export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // State management with in-memory persistence
-  const [accounts, setAccounts] = useState<Account[]>(SEED_ACCOUNTS);
-  const [buckets, setBuckets] = useState<BudgetBucket[]>(SEED_BUCKETS);
-  const [transactions, setTransactions] = useState<Transaction[]>(SEED_TRANSACTIONS);
-  const [habits, setHabits] = useState<Habit[]>(SEED_HABITS);
+  // State management with in-memory persistence. The 'fresh' seed variant
+  // empties the money/habit collections (onboarding e2e); 'stub' appends the
+  // Apple Pay $0 stub to the default seeds (review-drawer e2e).
+  const isFresh = TEST_SEED_VARIANT === 'fresh';
+  const [accounts, setAccounts] = useState<Account[]>(isFresh ? [] : SEED_ACCOUNTS);
+  const [buckets, setBuckets] = useState<BudgetBucket[]>(isFresh ? [] : SEED_BUCKETS);
+  const [transactions, setTransactions] = useState<Transaction[]>(
+    isFresh ? [] : TEST_SEED_VARIANT === 'stub' ? [...SEED_TRANSACTIONS, STUB_TRANSACTION] : SEED_TRANSACTIONS
+  );
+  const [habits, setHabits] = useState<Habit[]>(isFresh ? [] : SEED_HABITS);
   const [calendarItems, setCalendarItems] = useState<CalendarItem[]>([]);
-  const [challenges, setChallenges] = useState<Challenge[]>(SEED_CHALLENGES);
+  const [challenges, setChallenges] = useState<Challenge[]>(isFresh ? [] : SEED_CHALLENGES);
   const [yearlyGoals] = useState<YearlyGoal[]>([]);
   const [rewards, setRewards] = useState<RewardItem[]>(SEED_REWARDS);
   const [pendingRedemptions, setPendingRedemptions] = useState<RewardRedemption[]>(SEED_PENDING_REDEMPTIONS);
@@ -323,14 +364,58 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Bucket deleted');
   }, []);
 
+  // Bucket-to-bucket limit transfer with the real context's validations
+  // (distinct buckets, positive amount, bounded by the source's limit) so the
+  // "Fix Overspending" drawer is fully walkable in Test Mode and totals
+  // conserve across the two limits.
+  const reallocateBucket = useCallback(async (sourceId: string, targetId: string, amount: number) => {
+    const sourceBucket = buckets.find(b => b.id === sourceId);
+    const targetBucket = buckets.find(b => b.id === targetId);
+    if (!sourceBucket || !targetBucket) return;
+    const roundedAmount = roundMoney(amount);
+    if (sourceId === targetId) {
+      toast.error('Pick two different buckets to move funds between.');
+      return;
+    }
+    if (!Number.isFinite(roundedAmount) || roundedAmount <= 0) {
+      toast.error('Enter an amount greater than zero to reallocate.');
+      return;
+    }
+    if (Math.round(roundedAmount * 100) > Math.round(sourceBucket.limit * 100)) {
+      toast.error(`${sourceBucket.name} doesn't have that much to reallocate.`);
+      return;
+    }
+    setBuckets(prev => prev.map(b => {
+      if (b.id === sourceId) return { ...b, limit: roundMoney(b.limit - roundedAmount) };
+      if (b.id === targetId) return { ...b, limit: roundMoney(b.limit + roundedAmount) };
+      return b;
+    }));
+    toast.success('Funds reallocated');
+  }, [buckets]);
+
   // Transaction operations
   const addTransaction = useCallback(async (tx: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>) => {
     // Assign the mock pay period (the real context derives one via
     // getPayPeriodForTransaction) so pending spend / bucket progress see the tx.
     const newTx = { ...tx, id: generateId(), payPeriodId: MOCK_PAY_PERIOD_ID } as Transaction;
+    // Verified-only, account-routed balance parity with the real context: a
+    // transaction created `verified` moves its tagged account's balance
+    // (falling back to checking); a `pending_review` capture moves nothing —
+    // it reaches Safe-to-Spend only via the calculator's pendingSpend term.
+    // Computed OUTSIDE the setState updaters (StrictMode double-invokes them).
+    const target = resolveTargetAccount(newTx.accountId, accounts);
+    const balanceDelta = effectiveAccountImpact(
+      { amount: newTx.amount, category: newTx.category, creditPayment: newTx.creditPayment, status: newTx.status },
+      target
+    );
     setTransactions(prev => [...prev, newTx]);
+    if (balanceDelta !== 0 && target) {
+      setAccounts(prev => prev.map(a => a.id === target.id
+        ? { ...a, balance: roundMoney(a.balance + balanceDelta), lastUpdated: new Date().toISOString() }
+        : a));
+    }
     toast.success('Mock: Transaction added');
-  }, []);
+  }, [accounts]);
 
   const updateTransaction = useCallback(async (id: string, updates: Partial<Transaction>) => {
     setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
@@ -340,8 +425,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // Test-Mode parity for the verify action: mark the transaction verified under
   // `category`, optionally (re)tag the account, and co-apply the same inline
   // `overrides` (amount/merchant/date + clearing the needsAmount stub flag) the
-  // real context accepts. Related habits get a simple count bump (mirrors the
-  // mock's toggleHabit); the mock keeps balances/points intentionally minimal.
+  // real context accepts. On the pending → verified transition the account
+  // balance moves (verified-only model), with `overrides.amount` driving the
+  // delta so a $0 stub debits the entered amount exactly once. Related habits
+  // get a simple count bump (mirrors the mock's toggleHabit).
   const updateTransactionCategory = useCallback(async (
     id: string,
     category: string,
@@ -350,6 +437,23 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     overrides?: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean },
   ) => {
     const clearAccount = accountId === null;
+    // Balance parity (computed OUTSIDE the setState updaters — StrictMode
+    // double-invokes them): only the pending_review → verified transition
+    // applies an impact; the pending row never touched any balance.
+    const existing = transactions.find(t => t.id === id);
+    if (existing && existing.status === 'pending_review') {
+      const effectiveAccountId = clearAccount ? undefined : (accountId ?? existing.accountId);
+      const target = resolveTargetAccount(effectiveAccountId, accounts);
+      const balanceDelta = accountImpactOf(
+        { amount: overrides?.amount ?? existing.amount, category, creditPayment: existing.creditPayment },
+        target
+      );
+      if (balanceDelta !== 0 && target) {
+        setAccounts(prev => prev.map(a => a.id === target.id
+          ? { ...a, balance: roundMoney(a.balance + balanceDelta), lastUpdated: new Date().toISOString() }
+          : a));
+      }
+    }
     setTransactions(prev => prev.map(t => {
       if (t.id !== id) return t;
       const next: Transaction = {
@@ -373,7 +477,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         : h));
     }
     toast.success('Mock: Verified & Categorized!');
-  }, []);
+  }, [transactions, accounts]);
 
   const deleteTransaction = useCallback(async (id: string) => {
     setTransactions(prev => prev.filter(t => t.id !== id));
@@ -457,14 +561,51 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Habits reordered');
   }, []);
 
-  const toggleHabit = useCallback(async (id: string, direction: 'up' | 'down') => {
-    setHabits(prev => prev.map(h => {
-      if (h.id !== id) return h;
-      const change = direction === 'up' ? 1 : -1;
-      return { ...h, count: Math.max(0, h.count + change), totalCount: Math.max(0, h.totalCount + change) };
-    }));
-    toast.success(`Mock: Habit ${direction === 'up' ? 'incremented' : 'decremented'}`);
+  // Credit (or debit, negative delta) the test user's points across all three
+  // windows plus the redeemable lifetime total — the same three-window update
+  // the real context's habit writeBatch applies to household points.
+  const creditPoints = useCallback((delta: number) => {
+    if (delta === 0) return;
+    setMembers(prev => prev.map(m => m.uid === 'test-user-id'
+      ? { ...m, points: { daily: m.points.daily + delta, weekly: m.points.weekly + delta, total: m.points.total + delta } }
+      : m));
+    setTotalPoints(prev => prev + delta);
   }, []);
+
+  // Full scoring parity with the real toggle path: reuse the SAME pure,
+  // unit-tested logic (streaks, period-aware multiplier, threshold vs
+  // incremental scoring, completedDates upkeep) instead of a bare count bump,
+  // so Test Mode's points/streak behavior matches production exactly.
+  const toggleHabit = useCallback(async (id: string, direction: 'up' | 'down') => {
+    const habit = habits.find(h => h.id === id);
+    if (!habit) return;
+    const result = processToggleHabit(habit, direction);
+    if (!result) return; // e.g. decrement below 0
+    setHabits(prev => prev.map(h => h.id === id ? { ...h, ...result.updatedHabit } : h));
+    creditPoints(result.pointsChange);
+    toast.success(`Mock: Habit ${direction === 'up' ? 'incremented' : 'decremented'}`);
+  }, [habits, creditPoints]);
+
+  // Manual reset (the card's X button): zero the period counter, drop today
+  // from completedDates, and reverse today's awarded points — mirroring the
+  // real context's atomic habit+points reset.
+  const resetHabit = useCallback(async (id: string) => {
+    const habit = habits.find(h => h.id === id);
+    if (!habit) return;
+    const pointsToRemove = calculateResetPoints(habit);
+    const newCompletedDates = habit.completedDates.filter(d => d !== getLocalDateString());
+    setHabits(prev => prev.map(h => h.id === id
+      ? {
+          ...h,
+          count: 0,
+          completedDates: newCompletedDates,
+          streakDays: streakForHabit({ period: h.period, completedDates: newCompletedDates }),
+          lastUpdated: new Date().toISOString(),
+        }
+      : h));
+    creditPoints(-pointsToRemove);
+    toast.success('Mock: Habit reset');
+  }, [habits, creditPoints]);
 
   // Calendar operations
   const addCalendarItem = useCallback(async (item: Omit<CalendarItem, 'id'>) => {
@@ -811,8 +952,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     [accounts, calendarItems, buckets, currentPeriodId, transactions]
   );
   const safeToSpend = safeToSpendBreakdown.safeToSpend;
-  const dailyPoints = 30;
-  const weeklyPoints = 150;
+  // Derived from the test user's member points so habit toggles/resets move
+  // the toolbar figures exactly like the real context (seeded 30/150).
+  const dailyPoints = members[0]?.points.daily ?? 0;
+  const weeklyPoints = members[0]?.points.weekly ?? 0;
   const currentUser = members[0] || null;
   const activeChallenge = challenges[0] || null;
   const activeYearlyGoals: YearlyGoal[] = [];
@@ -920,7 +1063,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateBucket,
     deleteBucket,
     updateBucketLimit: noOp,
-    reallocateBucket: noOp,
+    reallocateBucket,
     addTransaction,
     updateTransaction,
     updateTransactionCategory,
@@ -936,7 +1079,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     deleteHabit,
     reorderHabits,
     toggleHabit,
-    resetHabit: noOp,
+    resetHabit,
     addHabitSubmission: noOp,
     updateHabitSubmission: noOp,
     deleteHabitSubmission: noOp,
