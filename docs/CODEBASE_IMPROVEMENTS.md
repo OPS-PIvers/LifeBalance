@@ -1,3 +1,5 @@
+> **Historical — superseded by [`advisor-plans/`](../advisor-plans/README.md) (2026-07-04) for current priorities.** Kept as a record of the 2026-06-16 audit and implementation pass; do not work from this list.
+
 # Codebase Improvement Opportunities
 
 _A read-only audit of the LifeBalance codebase identifying high-impact areas for

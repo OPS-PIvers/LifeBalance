@@ -69,10 +69,13 @@ VITE_FIREBASE_STORAGE_BUCKET=your_project.firebasestorage.app
 VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
 VITE_FIREBASE_APP_ID=your_app_id
 VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id
-
-# Google Gemini API (Required for AI features)
-VITE_GEMINI_API_KEY=your_gemini_api_key
 ```
+
+For AI features in local development, either set `VITE_USE_GEMINI_PROXY=true` (routes
+calls through the `geminiproxy` Cloud Function, which holds the API key server-side —
+this is how production works; the deployed bundle contains no Gemini key) or set
+`VITE_GEMINI_API_KEY` for the direct SDK path. See `.env.local.example` for all
+optional variables (FCM VAPID key, admin UID, Test Mode).
 
 ### Running Locally
 
@@ -87,24 +90,23 @@ Access the app at `http://localhost:3000` (or the port shown in your terminal).
 ## 🏗 Architecture & Core Concepts
 
 ### State Management (`FirebaseHouseholdContext`)
-The application relies on a single, powerful context (`contexts/FirebaseHouseholdContext.tsx`) that acts as the "brain". It subscribes to multiple Firestore collections (accounts, transactions, habits, etc.) and provides a unified state to the entire app. It also handles business logic actions like `addTransaction` or `toggleHabit`.
+`contexts/FirebaseHouseholdContext.tsx` owns the Firestore listeners and business-logic actions (like `addTransaction` or `toggleHabit`), but exposes state through **domain-sliced contexts** (`useFinance()`, `useGamification()`, `useMealPlan()`, `useShopping()`, `useTodos()`, `useHouseholdCore()`) so a change in one domain doesn't re-render consumers of another. A backward-compatible `useHousehold()` shim composes all slices. See `CLAUDE.md` for details.
 
 ### The "Safe-to-Spend" Formula
-This is the application's "God Metric", located in `utils/safeToSpendCalculator.ts`. It ensures users never overspend by calculating:
+This is the application's core metric, located in `utils/safeToSpendCalculator.ts`:
 ```
 Safe-to-Spend = (Checking Balance)
-              - (Unpaid Bills due this month)
-              - (Adjusted Bucket Liabilities)
+              - (Unpaid Bills this paycheck → next)
+              - (Pending Spend this pay period)
 
 Where:
-Checking Balance      = Sum of all checking account balances (excludes savings/credit)
-Unpaid Bills          = Bills due this month that aren't covered by budget buckets
-Bucket Liabilities    = Sum of remaining limits across all budget buckets
-Pending Spend         = Sum of pending_review transactions
-Adjusted Bucket Liabilities = max(0, Bucket Liabilities - Pending Spend)
+Checking Balance = Sum of all checking account balances (excludes savings/credit)
+Unpaid Bills     = Expense calendar items between the current paycheck and the next
+                   that aren't covered by budget buckets
+Pending Spend    = Sum of current-period pending_review transactions (income excluded)
 ```
 
-**Note:** Bills are automatically excluded from the calculation if they match a budget bucket name to avoid double-counting liabilities.
+**Notes:** Bills are excluded if they match a budget bucket (by `bucketId`, falling back to bucket-name token matching) to avoid double-counting; bucket remaining limits are **not** otherwise subtracted. Internal summation happens in integer cents (`utils/money.ts`) to avoid floating-point drift, but stored values (e.g. `Transaction.amount`, `Account.balance`) are decimal dollars — the helpers take and return dollars.
 
 ### Routing
 The app uses `HashRouter` (e.g., `/#/dashboard`) instead of `BrowserRouter`. This is a deliberate choice to ensure compatibility with simple static hosting environments (like Firebase Hosting) without requiring complex server-side rewrite rules.
@@ -154,7 +156,7 @@ pnpm run deploy
 
 ## 🤖 AI Agent Guidelines
 
-If you are an AI agent working on this codebase, please refer to `AGENTS.md` in the root directory for strict coding rules, architectural constraints, and modification protocols. **This file is the single source of truth for code modifications.**
+If you are an AI agent working on this codebase, **`CLAUDE.md` is the single source of truth** for architecture, coding rules, and modification protocols (with `DESIGN.md` for styling). `AGENTS.md` is a thin pointer to it for tools that read that filename by convention.
 
 ## 📄 License
 

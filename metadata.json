@@ -1,7 +1,0 @@
-{
-  "name": "LifeBalance",
-  "description": "A Whole Life dashboard integrating Finance, Habits, and Meal Planning.",
-  "requestFramePermissions": [
-    "camera"
-  ]
-}

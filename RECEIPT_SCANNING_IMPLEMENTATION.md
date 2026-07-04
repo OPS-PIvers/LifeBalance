@@ -1,3 +1,5 @@
+> **Historical — stale implementation guide (banner added 2026-07-04).** The `quickAddReceipt` endpoint still returns `501 Not Implemented` (referenced from `types/schema.ts` `ApiKeyPermissions.receiptScanning`), but the code sample below predates the current Gemini setup: functions now use `@google/genai` (not `@google/generative-ai`), the `GEMINI_API_KEY` secret already exists (used by `functions/src/geminiProxy.ts`, the pattern to follow), and the model/pricing named here are outdated. If implementing, write a fresh plan in `advisor-plans/` modeled on `geminiProxy.ts`.
+
 # Receipt Scanning Cloud Function Implementation
 
 This document describes how to enable the `quickAddReceipt` endpoint for iOS Shortcuts.
