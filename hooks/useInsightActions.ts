@@ -1,6 +1,7 @@
 import { useFinance, useGamification, useHouseholdCore, useTodos } from '@/contexts/FirebaseHouseholdContext';
 import { InsightAction } from '@/types/schema';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { track } from '@/services/analytics';
 import toast from 'react-hot-toast';
 
 export const useInsightActions = () => {
@@ -34,6 +35,7 @@ export const useInsightActions = () => {
         }
 
         await updateBucketLimit(bucket.id, newLimit);
+        track('insight_action_executed', { type: action.type });
         // Toast handled by context
       }
       else if (action.type === 'create_habit') {
@@ -60,6 +62,7 @@ export const useInsightActions = () => {
           lastUpdated: new Date().toISOString(),
           weatherSensitive: false // Set default to false as required by schema
         });
+        track('insight_action_executed', { type: action.type });
         // Toast handled by context
       }
       else if (action.type === 'create_todo') {
@@ -75,6 +78,7 @@ export const useInsightActions = () => {
           assignedTo: currentUser?.uid || '',
           isCompleted: false
         });
+        track('insight_action_executed', { type: action.type });
         toast.success('Added to To-Do List');
       }
     } catch (e: unknown) {

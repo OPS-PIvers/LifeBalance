@@ -157,6 +157,20 @@ self.addEventListener('notificationclick', (event) => {
   // Build full URL for comparison and opening
   const fullUrlToOpen = new URL(targetPath, self.location.origin).href;
 
+  // Tag the URL we NAVIGATE/open with the notification type so the app can
+  // attribute the open (`notification_opened`): a service worker cannot call
+  // the GA client SDK, so the client reads + strips `nsrc` on boot. Window
+  // MATCHING above/below stays on the untagged path so focusing an already-open
+  // window behaves exactly as before. Keep this tagging in sync with
+  // utils/notificationSource.ts (appendNotificationSource).
+  const notificationType = typeof event.notification.data?.type === 'string'
+    ? event.notification.data.type
+    : '';
+  const taggedPath = notificationType
+    ? targetPath + (targetPath.includes('?') ? '&' : '?') + 'nsrc=' + encodeURIComponent(notificationType)
+    : targetPath;
+  const fullTaggedUrlToOpen = new URL(taggedPath, self.location.origin).href;
+
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       // Check if there's already a window open with matching URL or hash
@@ -179,13 +193,13 @@ self.addEventListener('notificationclick', (event) => {
         if ('focus' in client) {
           return client.focus().then(() => {
             // Navigate to the target URL via postMessage
-            client.postMessage({ type: 'NAVIGATE', url: targetPath });
+            client.postMessage({ type: 'NAVIGATE', url: taggedPath });
           });
         }
       }
       // If no window is open, open a new one
       if (clients.openWindow) {
-        return clients.openWindow(fullUrlToOpen);
+        return clients.openWindow(fullTaggedUrlToOpen);
       }
     })
   );

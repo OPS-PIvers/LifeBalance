@@ -114,6 +114,8 @@ import { kidProfileLimitReached } from '@/utils/entitlements';
 import { computeTodoCompletionCredit } from '@/utils/todoPoints';
 import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
+import { track } from '@/services/analytics';
+import { shouldTrackFirstTime, FIRST_TRANSACTION_FLAG } from '@/utils/firstTimeFlags';
 import toast from 'react-hot-toast';
 import { isSameDay, isSameWeek, parseISO, format, subDays, startOfWeek, addDays, startOfToday, isAfter, isValid, addMonths } from 'date-fns';
 
@@ -2708,7 +2710,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         });
       }
 
+      // Read the live window BEFORE the commit so latency-compensated listeners
+      // can't already include this write (ref, not `transactions`, to keep the
+      // callback's deps free of per-transaction churn).
+      const wasFirstTransaction = recentTransactionsRef.current.length === 0;
+
       await batch.commit();
+
+      track('transaction_added', { source: tx.source || 'manual' });
+      if (shouldTrackFirstTime(FIRST_TRANSACTION_FLAG, wasFirstTransaction)) track('first_transaction_added');
 
       // DO NOT update bucket.spent - it's now calculated in real-time from transactions
       // The bucketSpentMap effect will automatically recalculate when transactions change
@@ -2862,6 +2872,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     // Commit all writes atomically
     await batch.commit();
+
+    // Only the pending→verified promotion is the engagement signal (this method
+    // also handles pure category edits on already-verified rows).
+    if (existingTx.status === 'pending_review') track('transaction_verified');
 
     // DO NOT update bucket.spent - it's now calculated in real-time from transactions
     // The bucketSpentMap effect will automatically recalculate when transactions change
@@ -3375,6 +3389,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         });
       });
 
+      track('reward_redeemed', { via: 'self' });
       toast.success(`Redeemed: ${reward.title}`);
     } catch (error) {
       if (error instanceof Error && error.message === 'Not enough points') {
@@ -3575,6 +3590,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       if (notEnough) {
         toast.error('Not enough points');
       } else {
+        track('reward_redeemed', { via: 'parent_approval' });
         toast.success('Approved! 🎉');
       }
     } catch (error) {
@@ -4183,6 +4199,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           await addDoc(collection(db, `households/${householdId}/groceryCatalog`), sanitizeFirestoreData(newCatalogItem));
         }
 
+        track('shopping_item_checked');
         toast.success('Marked as purchased');
 
       } else {
@@ -4417,6 +4434,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         ...item,
         createdAt: serverTimestamp(),
       });
+      track('meal_planned');
       // Keep non-live weeks in sync (the live listener only covers current week ± 1).
       await refreshMealPlanWeek(parseISO(item.date));
       if (!options?.suppressToast) {
@@ -4625,6 +4643,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
       await addDoc(collection(db, `households/${householdId}/insights`), newInsight);
 
+      track('insight_generated');
       toast.success('New insight generated!', { id: 'insight-loading', icon: '✨' });
     } catch (error) {
       console.error("Failed to generate insight:", error);

@@ -29,6 +29,9 @@ The leverage is that **the app doesn't yet close its own loops**. Three loops, s
    (`sign_up`, `login` in `services/authService.ts:23`). Activation, retention, and
    feature engagement — the metrics the owner's own roadmap calls the whole ballgame —
    are unmeasurable. → Plan 01 instruments the funnel in an afternoon.
+   **✅ DONE (2026-07-04):** Plan 01 is shipped and its doc removed — ~20 activation/
+   engagement/retention events now fire client-side; the event dictionary lives in
+   `docs/PRODUCT_ROADMAP.md` Part 7.
 
 Everything else is supporting: cost/scale correctness before growth (06), a safety net
 for the money paths before the reconciliation work (07), keeping the agent-facing docs
@@ -39,7 +42,7 @@ runbook for flipping on the finished-but-dormant features (09).
 
 | # | Plan | Impact | Effort | Risk | Confidence | Depends on |
 |---|------|--------|--------|------|------------|------------|
-| 01 | [Analytics: activation & retention events](./01-analytics-activation-retention.md) | HIGH — unlocks measurement for everything else | S | LOW | HIGH | — |
+| 01 | ~~Analytics: activation & retention events~~ **✅ DONE 2026-07-04** (doc removed; event dictionary in `docs/PRODUCT_ROADMAP.md` Part 7) | HIGH — unlocks measurement for everything else | S | LOW | HIGH | — |
 | 02 | [Weekly recap + proactive insight engine](./02-weekly-recap-engine.md) | HIGH — flagship differentiator, retention loop, premium substance | M | MED | HIGH | 01 (to measure it) |
 | 03 | [Unified transaction identity & reconciliation](./03-transaction-identity-reconciliation.md) | HIGH — unblocks Plaid; kills duplicate-transaction distrust | L | MED | HIGH | 07 recommended first |
 | 04 | [Plaid activation: balance sync, dedup, runbook](./04-plaid-activation.md) | HIGH — automatic bank sync, the category-defining feature | M | MED | HIGH | 03 |
@@ -49,7 +52,7 @@ runbook for flipping on the finished-but-dormant features (09).
 | 08 | [FirebaseHouseholdContext decomposition](./08-context-decomposition.md) | MED — 4,861-line file, still growing; pure mechanical split | L | MED | MED | best after 03 |
 | 09 | [Dormant-feature activation runbook (Kid Mode, Stripe)](./09-dormant-activation-runbook.md) | MED — ships finished work; mostly human go/no-go | S | LOW | HIGH | 02 (for Stripe) |
 
-**Suggested execution sequence:** 01 → 05 (both trivial, immediate) → 07 → 02 → 03 → 04 → 06 → 08,
+**Suggested execution sequence:** ~~01~~ (done) → 05 (trivial, immediate) → 07 → 02 → 03 → 04 → 06 → 08,
 with 09's Kid-Mode half whenever the owner wants and its Stripe half after 02 ships.
 
 ## What this pass deliberately does NOT re-plan

@@ -14,6 +14,7 @@ import {
 import { db, auth } from '@/firebase.config';
 import { generateInviteCode } from '@/utils/inviteCodeGenerator';
 import { CONSENT_VERSION } from '@/utils/legal';
+import { track } from '@/services/analytics';
 
 /**
  * Get the household ID for a given user
@@ -97,6 +98,8 @@ export const createHousehold = async (userId: string, householdName: string): Pr
       consentVersion: CONSENT_VERSION,
     });
 
+    track('household_created');
+
     return householdRef.id;
   } catch (error) {
     console.error('Error creating household:', error);
@@ -160,6 +163,8 @@ export const joinHousehold = async (userId: string, inviteCode: string): Promise
     await updateDoc(doc(db, 'households', householdId), {
       memberUids: arrayUnion(userId),
     });
+
+    track('household_joined');
 
     return householdId;
   } catch (error: unknown) {
