@@ -155,7 +155,12 @@ Pages are `React.lazy`-loaded (see Routing). The always-mounted toolbar/nav moda
 
 ### Analytics
 
-Product analytics (GA4 via Firebase Analytics) go through `track(event, params?)` in [services/analytics.ts](services/analytics.ts) — a lazy, fully defensive wrapper: it initializes only in a production browser with a `measurementId` and `isSupported()`, loads `firebase/analytics` via dynamic `import()` (off the boot path), and no-ops (never throws) everywhere else. Events fired before init settles are queued (bounded at 20) and flushed once the SDK is ready, so boot-time events like `notification_opened` aren't dropped. ~20 activation/engagement/retention events fire client-side; the **event dictionary is in [docs/PRODUCT_ROADMAP.md](docs/PRODUCT_ROADMAP.md) Part 7** — add new events there when instrumenting. Supporting utils: [utils/firstTimeFlags.ts](utils/firstTimeFlags.ts) (once-per-device `first_transaction_added`/`first_habit_completed` via localStorage flags) and [utils/notificationSource.ts](utils/notificationSource.ts) (push-open attribution — the service worker can't call the GA SDK, so `public/sw.js` tags navigations with `?nsrc=<type>` and the app consumes it on boot via `trackNotificationOpenFromUrl()`; keep the sw.js tagging in sync with `appendNotificationSource`).
+Product analytics (GA4 via Firebase Analytics) go through `track(event, params?)` in [services/analytics.ts](services/analytics.ts) — a lazy, fully defensive wrapper:
+
+- **Initialization**: only in a production browser with a `measurementId` and `isSupported()`. The `firebase/analytics` SDK loads via dynamic `import()` (off the boot path); everywhere else (dev, tests, SSR, unsupported browsers) `track()` no-ops and never throws.
+- **Pre-init queue**: events fired before initialization settles are queued (bounded at 20) and flushed once the SDK is ready, so boot-time events like `notification_opened` aren't dropped.
+- **Event dictionary**: ~20 activation/engagement/retention events fire client-side; the dictionary lives in [docs/PRODUCT_ROADMAP.md](docs/PRODUCT_ROADMAP.md) Part 7 — add new events there when instrumenting.
+- **Supporting utils**: [utils/firstTimeFlags.ts](utils/firstTimeFlags.ts) (once-per-device `first_transaction_added`/`first_habit_completed` via localStorage flags) and [utils/notificationSource.ts](utils/notificationSource.ts) (push-open attribution — the service worker can't call the GA SDK, so `public/sw.js` tags navigations with `?nsrc=<type>` and the app consumes it on boot via `trackNotificationOpenFromUrl()`; keep the sw.js tagging in sync with `appendNotificationSource`).
 
 ### Feature Flags, Modules & Monetization
 
