@@ -352,6 +352,37 @@ from Phase 0 so you have the history when you need it:
   household-finance-and-habits market." That sentence, *backed by real cohort data*, is
   what gets a meeting.
 
+### Event dictionary (GA4 / Firebase Analytics)
+
+All events fire client-side via `track()` in `services/analytics.ts` (PROD-only,
+fire-and-forget). **No PII is ever sent** — no amounts, merchants, habit titles, or
+emails; params are limited to coarse types, booleans, and counts. Build GA4
+explorations against this table.
+
+| Event | Trigger | Params |
+|---|---|---|
+| `sign_up` | First-ever Google sign-in completes (`services/authService.ts`) | `method: 'google'` |
+| `login` | Returning-user sign-in completes | `method: 'google'` |
+| `household_created` | Household creation succeeds (`services/householdService.ts`) | — |
+| `household_joined` | Invite-code join succeeds | — |
+| `onboarding_completed` | Onboarding wizard finishes or is skipped (`completeOnboarding` succeeds) | `step` — wizard step the user finished from (`'done'` = full run; anything else = skip) |
+| `transaction_added` | Any transaction write commits (`addTransaction` in the context — every capture source converges there) | `source` — `manual` \| `camera-scan` \| `file-upload` \| `telegram` \| `recurring` \| `shortcut` \| `plaid` |
+| `first_transaction_added` | First `transaction_added` ever on this device (localStorage flag `lb_first_txn_tracked`) | — |
+| `transaction_verified` | A `pending_review` transaction is promoted to `verified` (`updateTransactionCategory`) | — |
+| `habit_toggled` | Habit toggle batch commits (`hooks/useHabitActions.tsx`) | `positive` — habit type is positive; `direction` — `up` \| `down` |
+| `first_habit_completed` | First upward habit toggle ever on this device (flag `lb_first_habit_tracked`) | — |
+| `insight_generated` | AI insight doc written (`refreshInsight`) | — |
+| `insight_action_executed` | An insight's suggested action runs successfully (`hooks/useInsightActions.ts`) | `type` — `update_bucket` \| `create_habit` \| `create_todo` |
+| `receipt_scanned` | Camera receipt OCR succeeds (`CaptureModal`) | — |
+| `statement_scanned` | Bank-statement/receipt file parse succeeds (`CaptureModal`) | `count` — transactions extracted |
+| `meal_planned` | Meal added to the weekly plan (`addMealPlanItem`) | — |
+| `shopping_item_checked` | Shopping item marked purchased (`toggleShoppingItemPurchased`) | — |
+| `reward_redeemed` | Reward redemption commits (`redeemReward`) or a kid request is approved (`approveRedemption`) | `via` — `self` \| `parent_approval` |
+| `notification_opened` | App boots from a push-notification click — the SW tags the URL with `?nsrc=<type>`, the client reads + strips it (`utils/notificationSource.ts`, `public/sw.js`) | `type` — `habit_reminder` \| `action_queue_reminder` \| `streak_warning` \| `bill_reminder` \| `budget_alert` \| `test_notification` |
+
+First-time events are approximate by design (per-device localStorage flags, no server
+state) — good enough for funnel analysis, not accounting.
+
 ---
 
 ## Part 8 — Concrete First 90 Days (solo, evenings/weekends)

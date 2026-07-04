@@ -10,6 +10,7 @@ import Input from '@/components/ui/Input';
 import Card from '@/components/ui/Card';
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
 import { cn } from '@/utils/cn';
+import { track } from '@/services/analytics';
 
 /** Wizard steps, in order. */
 const STEPS = ['welcome', 'balance', 'habits', 'invite', 'done'] as const;
@@ -106,6 +107,8 @@ const OnboardingWizard: React.FC = () => {
     setIsSubmitting(true);
     try {
       await completeOnboarding();
+      // `step` distinguishes a full run ('done') from an early skip.
+      track('onboarding_completed', { step });
     } catch (error) {
       // Don't trap the user on the wizard if the flag write fails; surface it
       // and continue to the dashboard regardless.
@@ -114,7 +117,7 @@ const OnboardingWizard: React.FC = () => {
     } finally {
       navigate('/', { replace: true });
     }
-  }, [completeOnboarding, isSubmitting, navigate]);
+  }, [completeOnboarding, isSubmitting, navigate, step]);
 
   /** Seed the checking account from the entered dollar amount, then advance. */
   const submitBalance = useCallback(async () => {

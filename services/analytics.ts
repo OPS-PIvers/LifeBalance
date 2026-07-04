@@ -22,19 +22,39 @@ type LogEventFn = typeof import('firebase/analytics')['logEvent'];
 let analytics: Analytics | null = null;
 let logEventFn: LogEventFn | null = null;
 let initPromise: Promise<void> | null = null;
+// Whether initialization has SETTLED (SDK ready, or permanently unavailable —
+// dev, unsupported browser, init failure). Until then, events are queued below
+// so boot-time calls (e.g. `notification_opened` fired from index.tsx before
+// the dynamic import resolves) aren't silently dropped in production.
+let initSettled = false;
+const MAX_PENDING_EVENTS = 20;
+const pendingEvents: Array<[string, Record<string, unknown> | undefined]> = [];
+
+function flushPendingEvents(): void {
+  if (analytics && logEventFn) {
+    for (const [event, params] of pendingEvents) {
+      try {
+        logEventFn(analytics, event, params);
+      } catch {
+        // Swallow — analytics must never break product code.
+      }
+    }
+  }
+  pendingEvents.length = 0;
+}
 
 function initAnalytics(): Promise<void> {
   if (initPromise) return initPromise;
   initPromise = (async (): Promise<void> => {
-    // Skip entirely outside a production browser session with a measurementId.
-    if (
-      typeof window === 'undefined' ||
-      !import.meta.env.PROD ||
-      !import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
-    ) {
-      return;
-    }
     try {
+      // Skip entirely outside a production browser session with a measurementId.
+      if (
+        typeof window === 'undefined' ||
+        !import.meta.env.PROD ||
+        !import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+      ) {
+        return;
+      }
       const mod = await import('firebase/analytics');
       if (await mod.isSupported()) {
         analytics = mod.getAnalytics(app);
@@ -43,6 +63,9 @@ function initAnalytics(): Promise<void> {
     } catch (e) {
       // Best-effort: analytics failures must never surface to the user.
       console.warn('Firebase Analytics unavailable:', e);
+    } finally {
+      initSettled = true;
+      flushPendingEvents();
     }
   })();
   return initPromise;
@@ -54,13 +77,17 @@ void initAnalytics();
 
 /**
  * Log a product analytics event. No-ops safely (and never throws) when
- * analytics isn't available — dev, tests, SSR, unsupported browsers, or before
- * async initialization has resolved.
+ * analytics isn't available — dev, tests, SSR, or unsupported browsers.
+ * Events fired before async initialization settles are queued (bounded) and
+ * flushed once the SDK is ready, so boot-time events aren't lost.
  */
 export function track(event: string, params?: Record<string, unknown>): void {
   if (!analytics || !logEventFn) {
-    // The first user interaction may beat the eager init; kick it off again.
-    void initAnalytics();
+    if (!initSettled) {
+      if (pendingEvents.length < MAX_PENDING_EVENTS) pendingEvents.push([event, params]);
+      // The first user interaction may beat the eager init; kick it off again.
+      void initAnalytics();
+    }
     return;
   }
   try {

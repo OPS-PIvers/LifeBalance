@@ -12,6 +12,7 @@ import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { useStoreResolver } from '@/hooks/useStoreResolver';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { normalizeStoreName } from '@/utils/storeMatch';
+import { track } from '@/services/analytics';
 import { Drawer } from '@/components/ui/Drawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { findMatchingPendingTransaction, buildReceiptMergeUpdates } from '@/utils/transactionMatch';
@@ -350,6 +351,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
         });
 
         const data: ReceiptData = await analyzeReceipt(householdId, base64Image, dynamicCategories, habitTitles, subBucketsMap, stores.map(s => s.name));
+        track('receipt_scanned');
         const category = matchCategory(data.category);
 
         const newTransaction: Transaction = {
@@ -450,6 +452,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
           };
         }));
       }
+      track('statement_scanned', { count: transactions.length || 1 });
       setView('review');
       toast.success(`Found ${transactions.length || 1} transaction(s)`);
     } catch (error) {

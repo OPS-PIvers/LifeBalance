@@ -32,6 +32,8 @@ import {
 import toast from 'react-hot-toast';
 import { addDays, format, parseISO, startOfWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { track } from '@/services/analytics';
+import { shouldTrackFirstTime, FIRST_HABIT_FLAG } from '@/utils/firstTimeFlags';
 
 /**
  * Plan 080c: the doc that receives a habit's points. An assigned (per-member /
@@ -213,7 +215,14 @@ export const useHabitActions = (
       });
     }
 
+    // Read BEFORE the commit so latency-compensated listeners can't already
+    // reflect this write when we derive "was this the first completion ever".
+    const wasFirstCompletion = direction === 'up' && !habitsRef.current.some(h => h.totalCount > 0);
+
     await batch.commit();
+
+    track('habit_toggled', { positive: habit.type === 'positive', direction });
+    if (shouldTrackFirstTime(FIRST_HABIT_FLAG, wasFirstCompletion)) track('first_habit_completed');
 
     // Toast feedback after the batch commits successfully
     if (result.pointsChange !== 0) {
