@@ -106,7 +106,7 @@ Unpaid Bills     = Expense calendar items between the current paycheck and the n
 Pending Spend    = Sum of current-period pending_review transactions (income excluded)
 ```
 
-**Notes:** Bills are excluded if they match a budget bucket (by `bucketId`, falling back to bucket-name token matching) to avoid double-counting; bucket remaining limits are **not** otherwise subtracted. All sums are in integer cents (`utils/money.ts`).
+**Notes:** Bills are excluded if they match a budget bucket (by `bucketId`, falling back to bucket-name token matching) to avoid double-counting; bucket remaining limits are **not** otherwise subtracted. Internal summation happens in integer cents (`utils/money.ts`) to avoid floating-point drift, but stored values (e.g. `Transaction.amount`, `Account.balance`) are decimal dollars — the helpers take and return dollars.
 
 ### Routing
 The app uses `HashRouter` (e.g., `/#/dashboard`) instead of `BrowserRouter`. This is a deliberate choice to ensure compatibility with simple static hosting environments (like Firebase Hosting) without requiring complex server-side rewrite rules.
