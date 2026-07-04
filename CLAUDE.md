@@ -8,9 +8,7 @@ LifeBalance is a React-based household management application combining finance 
 
 ## Development Commands
 
-This project uses **pnpm** (`packageManager: pnpm@9.15.0`) — always use `pnpm`, not `npm`. It is a pnpm workspace with two packages: the root app and `functions/` (Firebase Cloud Functions). See [pnpm-workspace.yaml](pnpm-workspace.yaml).
-
-> ⚠️ A stray `package-lock.json` exists alongside `pnpm-lock.yaml`; do not run `npm install` (it would desync dependencies from what CI resolves via pnpm).
+This project uses **pnpm** (`packageManager: pnpm@9.15.0`) — always use `pnpm`, never `npm` (an `npm install` would desync dependencies from what CI resolves via `pnpm-lock.yaml`). It is a pnpm workspace with two packages: the root app and `functions/` (Firebase Cloud Functions). See [pnpm-workspace.yaml](pnpm-workspace.yaml).
 
 ```bash
 # Install dependencies (root + functions workspace)
@@ -52,18 +50,19 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
 VITE_FIREBASE_APP_ID=your_app_id
 VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id
 
-# Gemini API (for AI features)
-VITE_GEMINI_API_KEY=your_gemini_api_key
-
 # Firebase Cloud Messaging (for push notifications)
 VITE_FIREBASE_VAPID_KEY=your_vapid_key_here
+
+# Firebase UID of the global administrator (gates the Developer Console)
+VITE_ADMIN_UID=your_uid_here
 ```
 
 **Required for:**
 - Firebase Authentication (Google Sign-In)
 - Firestore database persistence and real-time sync
-- AI features (Gemini API): receipt scanning, meal suggestions, grocery receipt parsing
 - Push notifications (FCM): habit reminders, budget alerts, streak warnings, bill reminders
+
+**Gemini / AI env vars (optional):** in **production** the client does **not** hold a Gemini API key — AI calls go through the `geminiproxy` Cloud Function (see External Services). The deploy workflow sets `VITE_USE_GEMINI_PROXY=true` and deliberately omits `VITE_GEMINI_API_KEY` from the bundle ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)). For **local development** you can either set `VITE_USE_GEMINI_PROXY=true` (uses the deployed proxy; requires the `GEMINI_API_KEY` Cloud Functions secret) or set `VITE_GEMINI_API_KEY` to use the direct SDK path. `VITE_GEMINI_MODEL` optionally overrides the model. `VITE_ENABLE_TEST_MODE=true` enables Test Mode (see below), which needs no AI/Firebase credentials at all.
 
 **Note:** `.env.local` is git-ignored to protect your credentials.
 
@@ -115,19 +114,23 @@ Habits support two scoring modes:
 
 **Atomicity:** Habit mutations that touch both a habit document and the household points — `toggleHabit`, `resetHabit`, `addHabitSubmission`, `updateHabitSubmission`, `deleteHabitSubmission` — commit in a single `writeBatch` so they can never diverge (see [hooks/useHabitActions.tsx](hooks/useHabitActions.tsx)). The same applies to bucket reallocation and paycheck approval, to the calendar/transaction money paths (`payCalendarItem`, `updateTransaction`, `deleteTransaction`), to `PointsBreakdownModal`'s habit+points edit, and to the multi-document context mutations `updateTransactionCategory` (transaction + checking-balance delta + related habits + points — its optional 5th `overrides` param co-commits an inline amount/merchant/date edit and clears the `needsAmount` stub flag in the SAME batch, with `overrides.amount` driving the balance delta so a `$0` stub debits the entered amount exactly once), `useFreezeBankToken` (habit + token balance **+ the patched day's points**, credited with the period-aware multiplier), and `addMember` (member doc + `memberUids`). Core scoring/streak logic is pure and unit-tested in [utils/habitLogic.ts](utils/habitLogic.ts).
 
-**Points sync:** the full daily/weekly/total recompute (`calculatePointsForDate`/`calculatePointsForDateRange`) is **not** re-run on every habit toggle — the per-toggle `writeBatch` delta is the source of truth. The corrective recompute is a ref-backed callback driven only by a once-per-household login sync and the midnight scheduler ([hooks/useMidnightScheduler.tsx](hooks/useMidnightScheduler.tsx)), so a toggle produces exactly one points write and drift is still corrected on login/rollover.
+**Points sync:** the full daily/weekly/total recompute (`calculatePointsForDate`/`calculatePointsForDateRange`) is **not** re-run on every habit toggle — the per-toggle `writeBatch` delta is the source of truth. The corrective recompute is a ref-backed callback driven only by a once-per-household login sync and the midnight scheduler ([hooks/useMidnightScheduler.ts](hooks/useMidnightScheduler.ts)), so a toggle produces exactly one points write and drift is still corrected on login/rollover.
 
 **Point recalculation:** `calculatePointsForDate`/`calculatePointsForDateRange` (used to re-sync daily/weekly/total points) reconstruct each completion day's streak via the period-aware `streakEndingOnForHabit()` (day- or week-based per `habit.period`) and apply the historical per-period multiplier — they do **not** apply the current streak to past days, so totals don't drift on recalculation.
 
 **Dates:** Calendar dates are stored as `yyyy-MM-dd` strings in the user's **local** timezone. Use `getLocalDateString()` from [utils/dateHelpers.ts](utils/dateHelpers.ts) to derive "today" — never `new Date().toISOString().split('T')[0]` (that returns the UTC day, which is wrong in the evening for western timezones). Also avoid `format(new Date(), 'yyyy-MM-dd')`; the app's call sites have all been migrated to `getLocalDateString()` so there is a single source of truth for "today".
 
-**Note:** Weather-sensitive bonuses are temporarily disabled. See [WEATHER_IMPLEMENTATION.md](WEATHER_IMPLEMENTATION.md) for future implementation plan.
+**Note:** The `Habit.weatherSensitive` field exists in the schema and is carried through the habit forms, but **no business logic reads it** — the weather-bonus feature was never built. [WEATHER_IMPLEMENTATION.md](WEATHER_IMPLEMENTATION.md) is a historical design doc; the feature-bloat audit ([plans/audit/07-feature-bloat-and-direction.md](plans/audit/07-feature-bloat-and-direction.md)) recommends removing the dead field, but that decision hasn't been executed. Don't build on this field without checking the current backlog ([advisor-plans/README.md](advisor-plans/README.md)).
 
 Habits auto-reset based on their `period` (daily/weekly).
 
 ### Routing
 
-Uses **HashRouter** (not BrowserRouter) to support deployment without server-side routing configuration. Routes are defined in [App.tsx](App.tsx); pages are `React.lazy`-loaded for code-splitting. Current routes: `/login`, `/setup` (public); `/` (Dashboard), `/lists`, `/budget`, `/habits`, `/meals`, `/shopping`, `/todos`, `/settings`, `/migrate-submissions` (protected via `ProtectedRoute` + `MainLayout`). Each protected route is wrapped in its own `ErrorBoundary` keyed on pathname, so a crash on one page doesn't take down the whole app.
+Uses **HashRouter** (not BrowserRouter) to support deployment without server-side routing configuration. Routes are defined in [App.tsx](App.tsx); pages are `React.lazy`-loaded for code-splitting. Current routes:
+- **Public:** `/login`, `/privacy`, `/terms`, `/setup`
+- **Protected** (via `ProtectedRoute`): `/onboarding` (full-page first-run wizard, `components/onboarding/OnboardingWizard.tsx`, rendered *without* `MainLayout`), then inside `MainLayout`: `/` (Dashboard), `/lists`, `/budget`, `/habits`, `/meals`, `/shopping`, `/todos`, `/settings`, `/migrate-submissions`. A catch-all `*` redirects to `/`.
+
+Each protected route is wrapped in its own `ErrorBoundary` keyed on pathname, so a crash on one page doesn't take down the whole app. `ProtectedRoute` checks auth only (no household → `/setup`); per-module page gating is done by the `ModuleRoute` wrapper ([components/auth/ModuleRoute.tsx](components/auth/ModuleRoute.tsx)) — see "Feature Flags, Modules & Monetization" below. When Kid Mode is active, `MainLayout` swaps the entire shell (toolbar + routed page + bottom nav) for the kid surface — see the Kid Mode entry in that same section.
 
 ### Code-Splitting & Boot Bundle
 
@@ -136,9 +139,10 @@ Pages are `React.lazy`-loaded (see Routing). The always-mounted toolbar/nav moda
 ### External Services
 
 **Gemini API** ([services/geminiService.ts](services/geminiService.ts)):
+- **Transport — server proxy in production:** when `VITE_USE_GEMINI_PROXY=true` (set by the deploy workflow), all Gemini calls go through the `geminiproxy` Firebase **callable** Cloud Function ([functions/src/geminiProxy.ts](functions/src/geminiProxy.ts)), which holds the `GEMINI_API_KEY` secret server-side; the client bundle contains **no API key**. Without the flag, the client uses the `@google/genai` SDK directly with `VITE_GEMINI_API_KEY` (local dev / tests only). The transport is chosen statically by the flag — there is no runtime fallback from proxy to direct.
 - The model is defined once in the exported `GEMINI_MODEL` constant (overridable via the optional `VITE_GEMINI_MODEL` env var) — change it there, not inline at call sites.
-- Calls go through a shared helper with a 30s timeout and bounded exponential-backoff retry on transient errors (429/503/network); non-transient errors are not retried.
-- The daily AI quota check-and-increment runs in a single Firestore `runTransaction` to avoid a check-then-increment race.
+- Calls go through a shared helper with timeout and bounded exponential-backoff retry on transient errors (429/503/network, including their callable equivalents `resource-exhausted`/`unavailable`); non-transient errors are not retried.
+- The daily AI quota check-and-increment runs in a single Firestore `runTransaction` to avoid a check-then-increment race. The `aiEnabled` flag on `app_config/global` is a kill-switch checked before calls (fail-open; see Feature Flags below), and when `billingEnabled` is on the daily cap becomes plan-aware via [utils/entitlements.ts](utils/entitlements.ts) (otherwise a flat legacy quota applies).
 - Plain TypeScript types are in [services/geminiService.types.ts](services/geminiService.types.ts) (re-exported from `geminiService`); import types from there in always-loaded modules so the `@google/genai` SDK stays out of the app boot path (the SDK functions are loaded via dynamic `import()`).
 - **Receipt Scanning**: `analyzeReceipt()` - OCR for expense receipts
   - Returns: merchant, amount, category, date
@@ -149,29 +153,50 @@ Pages are `React.lazy`-loaded (see Routing). The always-mounted toolbar/nav moda
 - **Grocery Receipt Parsing**: `parseGroceryReceipt()` - Extracts grocery items from receipt photos
   - Returns: array of items with name, category, quantity
 
+### Feature Flags, Modules & Monetization
+
+Systems agents will touch; one paragraph each, with pointers to deeper docs.
+
+**Feature flags (`app_config/global`):** [services/appConfig.ts](services/appConfig.ts) reads/writes operator flags on the shared `app_config/global` Firestore doc, each cached 60s: `openSignup`, `billingEnabled`, `kidModeEnabled`, `plaidEnabled` (all **fail-closed** — default `false` on missing doc/field/error) and `aiEnabled` (**fail-open** AI kill-switch, read by `geminiService.getAiEnabled()`). Consumed via per-flag async getters and mount-time hooks (`useKidModeEnabled`, `usePlaidEnabled`) — there is no flags React context. The admin Developer Console edits them via `readAppConfigFlags`/`setAppFlag`. `kidModeEnabled` has a DEV+Test-Mode-only short-circuit to `true`.
+
+**moduleVisibility:** households can hide whole modules. `ModuleKey = 'habits' | 'money' | 'plan' | 'todos' | 'meals' | 'shopping'` with `Household.moduleVisibility?: Partial<Record<ModuleKey, boolean>>` ([types/schema.ts](types/schema.ts)). Pure logic in [utils/moduleVisibility.ts](utils/moduleVisibility.ts) is **fail-open** (only explicit `false` disables; the Plan page auto-hides when all its tabs are off). Live values come from `useModuleVisibility()`; [components/auth/ModuleRoute.tsx](components/auth/ModuleRoute.tsx) redirects disabled pages to `/` and `BottomNav` hides their nav items.
+
+**Entitlements (Plan 050):** [utils/entitlements.ts](utils/entitlements.ts) is the single source of truth for what a plan unlocks — `getPlan()` (`'free'` unless a subscription is `active|trialing|past_due`), `isPremium()`, `getLimits()` (member/AI/history/kid-profile limits), `kidProfileLimitReached()`. All consumers gate on `billingEnabled` first; these are client-side UX limits **not yet enforced server-side** (the file says so — paid features must be server-gated before launch).
+
+**Stripe (written, dormant):** `functions/src/stripe/` contains `createcheckoutsession` + `stripewebhook`, fully implemented and tested but **deliberately NOT exported** from `functions/src/index.ts` — exporting would deploy them and require the `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` secrets to pre-exist, breaking CI deploys. Activation is a human step: [docs/STRIPE_SETUP_RUNBOOK.md](docs/STRIPE_SETUP_RUNBOOK.md).
+
+**Plaid (deployed, flag-gated):** `functions/src/plaid/` (link-token, public-token exchange, scheduled daily `plaidsynctransactions`, disconnect) **is exported/deployed**, using the `PLAID_CLIENT_ID`/`PLAID_SECRET`/`PLAID_ENV` secrets; the access token never reaches the client. The "Connect a bank" UI (`components/settings/ConnectBankCard.tsx`, `react-plaid-link`) renders only when the `plaidEnabled` flag is on. Runbook: [docs/PLAID_SETUP_RUNBOOK.md](docs/PLAID_SETUP_RUNBOOK.md).
+
+**Kid Mode (flag-gated):** when `kidModeEnabled` is on and `activeMemberId` points at a member with `isManaged === true`, `MainLayout` **early-returns the entire kid surface** (lazy `components/kid/KidDashboard.tsx` in its own ErrorBoundary) instead of toolbar + routed page + bottom nav, with a loading guard against flashing the parent shell. Kid PIN hashing in `utils/kidPin.ts` (`household.kidModePinHash`); managed-profile CRUD and `actAs`/`exitToParent` live in the household context. Plan: [plans/080-kid-mode-family-profiles.md](plans/080-kid-mode-family-profiles.md).
+
+**quickAdd / email capture pipeline:** the `quickAddExpense` HTTP endpoint (`functions/src/quickAdd/index.ts`, API-key auth for iOS Shortcuts) accepts a raw `emailText` body and runs three pure, unit-tested layers: [functions/src/quickAdd/emailParser.ts](functions/src/quickAdd/emailParser.ts) extracts `{amount, merchant, cardLast4, date}` from bank-alert emails (HTML-stripped; alert-threshold amounts excluded); [functions/src/quickAdd/accountMatch.ts](functions/src/quickAdd/accountMatch.ts) maps a card's last-4 to an account (unique match only) and normalizes US dates; [functions/src/quickAdd/reconcile.ts](functions/src/quickAdd/reconcile.ts) fills a prior Apple Pay `$0` `needsAmount` stub with the bank-notification amount (unique merchant match, else single-stub-in-30-min window; ambiguity → new row rather than a wrong merge). Other endpoints: `quickAddHabit`, `quickAddShoppingItem`, `quickAddNaturalLanguage`; `quickAddReceipt` still returns **501 Not Implemented**.
+
 ### Styling
 
-**Tailwind CSS** compiled via PostCSS at build time (not CDN):
-- Config in [tailwind.config.js](tailwind.config.js); PostCSS pipeline in [postcss.config.js](postcss.config.js); directives + custom utilities in [index.css](index.css)
-- Custom theme colors: `brand-*`, `money-*`, `habit-*`
-- Custom fonts: Inter (sans), JetBrains Mono (mono), loaded via Google Fonts in [index.html](index.html)
+**Tailwind CSS v4** compiled via PostCSS at build time (not CDN). **There is no Tailwind config file** (v4 needs none here) — all design tokens live in [index.css](index.css) under the `@theme` block, and **[DESIGN.md](DESIGN.md) is the source of truth** for how to use them:
+- PostCSS pipeline in [postcss.config.js](postcss.config.js) (`@tailwindcss/postcss`); [index.css](index.css) starts with `@import 'tailwindcss'` + `@plugin 'tailwindcss-animate'`, then the `@theme` token block and custom utilities
+- Color token families: `brand-*` (warm-paper neutrals), `accent-*` (evergreen; primary at `accent-600`), `warm-*` (amber), `money-*` (pos/neg + backgrounds), `habit-*` (streak/gold/blue)
+- Fonts are **self-hosted** from `public/fonts/` via `@font-face` in `index.css` (no Google Fonts/CDN): Fraunces (`--font-display`, serif display voice), Schibsted Grotesk (`--font-sans`), Geist Mono (`--font-mono`). Inter-everywhere and purple-gradient/glass looks are explicitly off-spec — see DESIGN.md's anti-patterns
 - Mobile-first with safe-area-inset support
 - `clsx` + `tailwind-merge` for conditional/merged class names
-- Entrance animations (`animate-in`, `fade-in`, `slide-in-from-*`, `zoom-in-*`) are provided by the **`tailwindcss-animate`** plugin (registered in [tailwind.config.js](tailwind.config.js)). They are fully suppressed for `prefers-reduced-motion` users via a guard in [index.css](index.css) (`.animate-in/.animate-out { animation: none }`).
+- Entrance animations (`animate-in`, `fade-in`, `slide-in-from-*`, `zoom-in-*`) come from the **`tailwindcss-animate`** plugin (loaded via `@plugin` in `index.css`). They are fully suppressed for `prefers-reduced-motion` users via a guard in [index.css](index.css) (`.animate-in/.animate-out { animation: none }`).
 
 ### Component Organization
 
 ```
 components/
   ├── analytics/    # Charts/analytics widgets (recharts; lazy-loaded)
-  ├── auth/         # Authentication components (ProtectedRoute, HouseholdInviteCard)
+  ├── auth/         # ProtectedRoute, ModuleRoute, HouseholdInviteCard
   ├── budget/       # Budget-specific UI components (TransactionMasterList is windowed with @tanstack/react-virtual)
   ├── dashboard/    # Dashboard widgets (PulseStripWidget, action queue, etc.)
   ├── habits/       # Habit tracking UI components
+  ├── kid/          # Kid Mode surface (KidDashboard; lazy-loaded shell swap)
   ├── layout/       # MainLayout, TopToolbar, BottomNav, OfflineBanner
   ├── meals/        # Meal planning components (MealPlanTab, ShoppingListTab)
-  ├── modals/       # Modal dialogs for forms
-  ├── settings/     # Settings sub-components (NotificationSettings, ThemeToggle)
+  ├── modals/       # Modal dialogs for forms (incl. DeveloperConsole)
+  ├── onboarding/   # First-run OnboardingWizard (route: /onboarding)
+  ├── settings/     # Settings sub-components (NotificationSettings, ConnectBankCard, ThemeToggle)
+  ├── transactions/ # Transaction review/list components
   └── ui/           # Reusable primitives (Button, Input, Card, Drawer, Skeleton, ConfirmDialog, etc.)
 
 pages/              # Route-level page components (lazy-loaded in App.tsx)
@@ -185,6 +210,8 @@ pages/              # Route-level page components (lazy-loaded in App.tsx)
   ├── Settings.tsx         # App settings and preferences
   ├── Login.tsx            # Authentication
   ├── HouseholdSetup.tsx   # Household creation/joining
+  ├── PrivacyPolicy.tsx    # Public /privacy page
+  ├── TermsOfService.tsx   # Public /terms page
   └── MigrateSubmissions.tsx # One-off data migration tool
 
 contexts/           # React Context providers (AuthContext, FirebaseHouseholdContext,
@@ -280,7 +307,7 @@ The Meals page ([pages/MealsPage.tsx](pages/MealsPage.tsx)) provides comprehensi
 - **AI-powered features**:
   - Receipt/statement scanning for quick transaction entry
   - AI meal suggestions based on budget and time constraints
-  - Dashboard insights (currently randomized, expandable for future AI integration)
+  - Dashboard insights generated by Gemini (`generateInsight()` via the context's `refreshInsight`)
 
 ## Code Quality Standards
 
@@ -355,9 +382,9 @@ See [LINT_SUPPRESSIONS.md](LINT_SUPPRESSIONS.md) for:
 - Status of each suppression (acceptable vs. needs fixing)
 - Action items for eliminating technical debt
 
-**Current stats** (run `grep -rln "eslint-disable" --include="*.ts" --include="*.tsx" . | grep -v node_modules` to refresh):
-- 0 blanket `/* eslint-disable */` files — all removed; only granular `eslint-disable-next-line` remain
-- The remaining granular disables are the legitimate `react-refresh/only-export-components` pattern on context/hook exports, plus a small set of pre-existing single-line `@typescript-eslint/no-explicit-any` / `react-hooks/set-state-in-effect` cases tracked in [LINT_SUPPRESSIONS.md](LINT_SUPPRESSIONS.md) - **REVIEW WHEN TOUCHED**
+**Current stats** (2026-07-04 audit; run `grep -rn "eslint-disable" --include="*.ts" --include="*.tsx" . | grep -v node_modules` to refresh):
+- 0 blanket `/* eslint-disable */` files — all removed; only granular `eslint-disable-next-line` remain (21 total)
+- 12× `react-refresh/only-export-components` on context/hook exports (legitimate pattern), 5× `react-hooks/set-state-in-effect` (each with a justification comment), 4× `@typescript-eslint/no-explicit-any` (all in one test file) — locations tracked in [LINT_SUPPRESSIONS.md](LINT_SUPPRESSIONS.md) - **REVIEW WHEN TOUCHED**
 - 0 `@ts-ignore` / `@ts-expect-error` / `@ts-nocheck`
 
 #### Enforcement
@@ -423,13 +450,14 @@ LifeBalance includes a **secure test mode** specifically designed for AI coding 
 - Mock household ID: `test-household-id`
 - No Firebase calls required
 
-**Mock Data:**
+**Mock Data** (seeded in [contexts/MockHouseholdContext.tsx](contexts/MockHouseholdContext.tsx)):
 - **Accounts**: 3 sample accounts (checking, savings, credit)
-- **Budget Buckets**: 4 categories (Groceries, Entertainment, Utilities, Gas)
+- **Budget Buckets**: 4 categories
 - **Transactions**: 2 sample transactions
-- **Habits**: 2 health habits ready for tracking
-- **Stores**: 2 stores (Safeway, Costco)
-- **Members**: 1 test user with points
+- **Habits**: 3 (2 shared + 1 kid-assigned chore)
+- **Stores**: 2
+- **Members**: 2 (the admin test user with points + a managed kid profile for Kid Mode)
+- Plus seed challenges, rewards, redemptions, todos, and a grocery catalog
 
 **Full CRUD Operations:**
 All context methods are fully implemented with **in-memory persistence**:
@@ -460,8 +488,8 @@ pnpm dev
 **Files:**
 - [contexts/MockAuthContext.tsx](contexts/MockAuthContext.tsx) - Mock authentication provider
 - [contexts/MockHouseholdContext.tsx](contexts/MockHouseholdContext.tsx) - Mock data provider with full CRUD
-- [App.tsx:55-90](App.tsx#L55-L90) - Dynamic import logic (tree-shaken in production)
-- [pages/Login.tsx:14-36](pages/Login.tsx#L14-L36) - Test mode activation
+- [App.tsx](App.tsx) - Dynamic import logic (tree-shaken in production)
+- [pages/Login.tsx](pages/Login.tsx) - Test mode activation (`?test=true` sets the sessionStorage flag)
 
 **Key Architecture:**
 - Uses **dynamic imports** (`import()`) to load mock providers

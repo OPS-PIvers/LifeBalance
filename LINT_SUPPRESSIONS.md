@@ -1,6 +1,6 @@
 # Lint and Type Error Suppressions Audit
 
-**Last Updated:** 2026-06-08
+**Last Updated:** 2026-07-04
 
 **WARNING:** This document tracks all ESLint and TypeScript error suppressions in the codebase. These suppressions are **technical debt** and should be eliminated whenever possible.
 
@@ -15,36 +15,31 @@ Suppressions should only exist for:
 
 ## Current Suppressions
 
-### Status: No blanket suppressions; a few granular ones remain
+### Status: No blanket suppressions; 21 granular ones remain (re-audited 2026-07-04)
 
 `pnpm lint` is green (0 errors, 0 warnings). There are **zero** blanket `/* eslint-disable */`
-files and **zero** `@ts-ignore`/`@ts-expect-error`/`@ts-nocheck`. A 2026-06-07 pass removed the
-six blanket-disabled files that a prior version of this doc had incorrectly marked resolved
-(`components/modals/CaptureModal.tsx`, `components/modals/AnalyticsModal.tsx`,
-`components/settings/NotificationSettings.tsx`, `utils/migrations/freezeBankMigration.ts`,
-`utils/freezeBankValidator.ts`, `pages/MigrateSubmissions.tsx`) and fixed the `as any` casts they
-were hiding (`AnalyticsModal`, `CaptureModal`) plus two `react-hooks/exhaustive-deps` suppressions
-(`SmartHabitAdjustModal`, `SmartHabitReorderModal`, fixed via a `habitsRef` snapshot).
+files and **zero** `@ts-ignore`/`@ts-expect-error`/`@ts-nocheck`.
 
-#### Remaining granular `eslint-disable-next-line` (pre-existing tech debt — fix when touched)
+Refresh this audit with:
+```bash
+grep -rn "eslint-disable" --include="*.ts" --include="*.tsx" . | grep -v node_modules
+```
 
-Legitimate (per policy — keep):
-- `react-refresh/only-export-components` on context/hook exports: `contexts/AuthContext.tsx`,
-  `contexts/ThemeContext.tsx`, `contexts/FirebaseHouseholdContext.tsx` — standard React pattern.
+#### Current granular `eslint-disable-next-line` inventory (21 total)
 
-Candidates to eliminate when next editing these files:
-- `react-hooks/set-state-in-effect`: `components/modals/BucketFormModal.tsx`,
-  `components/meals/ShoppingListTab.tsx`, `components/budget/BudgetBucketCard.tsx` — restructure to
-  derive state instead of setting it in an effect. (`ShoppingListTab`'s drag-reorder sync is the
-  pragmatic exception — eliminating it requires a `Reorder.Group` refactor; see `todo/`.)
+**`react-refresh/only-export-components` — 12× (legitimate pattern per policy — keep):**
+context/hook exports in `contexts/AuthContext.tsx` (×2), `contexts/ThemeContext.tsx` (×1), and
+`contexts/FirebaseHouseholdContext.tsx` (×9, one per exported slice hook).
 
-Resolved during the 2026-06-08 optimization pass (no longer suppressed):
-- `@typescript-eslint/no-explicit-any` in `components/analytics/CustomTooltip.tsx` (×2, now `unknown`
-  + a `typeof === 'number'` guard), `hooks/useGroceryOptimizer.ts` (×2, now `Record<string, unknown>`),
-  and `utils/firestoreSanitizer.ts` (now `unknown`/`Record<string, unknown>`).
+**`react-hooks/set-state-in-effect` — 5× (each carries a justification comment — review when touched):**
+- `components/modals/HabitSubmissionLogModal.tsx:65` — intentional load-on-open
+- `components/modals/BucketFormModal.tsx:37` — form state reset on open
+- `components/modals/DeveloperConsole.tsx:141` — intentional load-on-open
+- `contexts/FirebaseHouseholdContext.tsx:893` — intentional cross-household state teardown
+- `contexts/FirebaseHouseholdContext.tsx:1512` — intentional listener-window re-baseline
 
-These were out of scope for the optimization pass (granular, pre-existing, and in third-party/
-dynamic-data boundaries); they are tracked here so they're addressed as those files are touched.
+**`@typescript-eslint/no-explicit-any` — 4× (test-only — eliminate when next editing the file):**
+all in `pages/Habits.Export.test.tsx` (lines 132, 150, 173, 175).
 
 ### Historical Fixes
 

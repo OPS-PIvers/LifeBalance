@@ -1,36 +1,13 @@
-# TODO List
+# TODO
 
-This document lists all known missing features, incomplete functionalities, and technical debt in priority order.
+This file is no longer the backlog. Nearly every item it once listed has shipped
+(transaction master list, context split, virtualization, PWA service worker, data
+export, onboarding wizard, …) or was superseded by later planning passes.
 
-## 1. Immediate Priority (Critical for Core Usage)
+**Live backlog:** [advisor-plans/README.md](advisor-plans/README.md) (current, 2026-07-04 pass)
 
-- [ ] **Add "All Transactions" View**: Create a dedicated page or modal to view the master list of all transactions (historical and current). Currently, transactions are only visible within buckets or in the "Review" queue.
+**Prior passes (partly historical):**
+- [plans/README.md](plans/README.md) — 2026-06 audit + implementation plans
+- [todo/README.md](todo/README.md) — deferred ops/perf items
 
-## 2. High Priority (Important for UX/Retention)
-
-- [ ] **Offline Support (PWA)**:
-    - Install and configure `vite-plugin-pwa`.
-    - Set up a service worker for offline caching.
-    - Ensure Firebase offline persistence is verified.
-- [ ] **Budget History View**: Users cannot view past pay periods' performance. Implement a UI to visualize data from the `bucketHistory` collection.
-- [ ] **New User Onboarding**: Create a guided tour or wizard for new households to explain concepts like "Safe-to-Spend", "Buckets", and "Habits".
-- [ ] **Transaction Creation**: There is no "Add Transaction" button in the `Budget` view (only in the Dashboard FAB). Add a clear way to manually add transactions from the Budget page.
-
-## 3. Medium Priority (Enhancements)
-
-- [ ] **Recurring Transaction Manager**: While `BudgetCalendar` handles recurring items, there is no central "Subscriptions" or "Recurring Bills" list to manage them easily outside the calendar view.
-- [ ] **Data Export/Import**: Allow users to export their data (JSON/CSV) for backup or analysis.
-- [ ] **Accessibility Audit**: Review all modals and interactive elements for ARIA labels, keyboard navigation, and focus management.
-- [ ] **Gemini Integration in UI**: `refreshInsight` in context currently uses random strings. Connect it to `geminiService` to generate real insights based on transaction/habit data.
-- [ ] **Theme Polish**: Remove hardcoded colors in some components and strictly use Tailwind variables defined in `index.html`.
-
-## 4. Cleanup & Technical Debt
-
-- [ ] **Decide on Weather Feature**: `WEATHER_IMPLEMENTATION.md` exists, but the feature is not implemented. Either implement it (High effort) or remove the `weatherSensitive` field from the schema and the doc (Cleanup).
-- [ ] **Optimize Context**: `FirebaseHouseholdContext` is very large. Consider splitting it into smaller contexts (e.g., `FinancialContext`, `HabitContext`) to prevent unnecessary re-renders.
-
-## 5. Future Ideas
-
-- [ ] **Social Features**: Leaderboards between households?
-- [ ] **Advanced Analytics**: Year-over-year spending comparison.
-- [ ] **Integration**: Plaid integration for automatic bank syncing (replacing manual/OCR entry).
+Do not add items here — add them to `advisor-plans/`.

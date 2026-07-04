@@ -1,3 +1,5 @@
+> **Historical — unbuilt feature (banner added 2026-07-04).** The weather bonus was never implemented; only the dead `Habit.weatherSensitive` schema field exists (read by zero business logic). The feature-bloat audit ([plans/audit/07-feature-bloat-and-direction.md](plans/audit/07-feature-bloat-and-direction.md)) recommends removing that field. Technical details below are stale (e.g. the client no longer holds a Gemini API key — AI calls go through the `geminiproxy` Cloud Function). Do not implement from this doc without a fresh plan in `advisor-plans/`.
+
 # Weather Bonus Feature Implementation Guide
 
 This document outlines the plan to implement weather-based point bonuses for habits in LifeBalance.

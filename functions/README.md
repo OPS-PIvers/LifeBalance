@@ -215,8 +215,7 @@ function isTimeToSend(scheduledTime: string, timezone: string): boolean {
 For issues, check:
 1. Firebase Console logs
 2. Function deployment status
-3. [NOTIFICATIONS.md](../NOTIFICATIONS.md) - Full documentation
-4. [NOTIFICATIONS_QUICKSTART.md](../NOTIFICATIONS_QUICKSTART.md) - Quick setup
+3. [NOTIFICATIONS.md](../NOTIFICATIONS.md) - Full documentation (setup, deployment, testing, troubleshooting)
 
 ## License
 
