@@ -48,11 +48,11 @@ runbook for flipping on the finished-but-dormant features (09).
 | 04 | [Plaid activation: balance sync, dedup, runbook](./04-plaid-activation.md) | HIGH — automatic bank sync, the category-defining feature | M | MED | HIGH | 03 |
 | 05 | ~~Docs truth pass (CLAUDE.md et al.)~~ **✅ DONE 2026-07-04** (doc removed; CLAUDE.md/README/AGENTS.md/TODO.md/LINT_SUPPRESSIONS.md verified against source, stale docs pruned, analytics layer documented) | MED — compounds across every future agent session | S | LOW | HIGH | — |
 | 06 | [Notification fan-out cost fix](./06-notification-fanout-cost.md) | MED — 4 hourly full-collection scans; cost/scale correctness | M | MED | HIGH | — |
-| 07 | [E2E money-path suite](./07-e2e-money-paths.md) | MED — safety net under 03/04; today only one smoke spec | M | LOW | HIGH | — |
+| 07 | ~~E2E money-path suite~~ **✅ DONE 2026-07-04** (doc removed; 5 money-path specs in `e2e/` + Test-Mode parity fixes in `MockHouseholdContext`; recap spec deferred until Plan 02 ships) | MED — safety net under 03/04 | M | LOW | HIGH | — |
 | 08 | [FirebaseHouseholdContext decomposition](./08-context-decomposition.md) | MED — 4,861-line file, still growing; pure mechanical split | L | MED | MED | best after 03 |
 | 09 | [Dormant-feature activation runbook (Kid Mode, Stripe)](./09-dormant-activation-runbook.md) | MED — ships finished work; mostly human go/no-go | S | LOW | HIGH | 02 (for Stripe) |
 
-**Suggested execution sequence:** ~~01~~ (done) → ~~05~~ (done) → 07 → 02 → 03 → 04 → 06 → 08,
+**Suggested execution sequence:** ~~01~~ (done) → ~~05~~ (done) → ~~07~~ (done) → 02 → 03 → 04 → 06 → 08,
 with 09's Kid-Mode half whenever the owner wants and its Stripe half after 02 ships.
 
 ## What this pass deliberately does NOT re-plan
