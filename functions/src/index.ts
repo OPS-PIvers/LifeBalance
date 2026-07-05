@@ -1,6 +1,7 @@
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {onDocumentWritten} from "firebase-functions/v2/firestore";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
+import {defineString} from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { formatInTimeZone } from "date-fns-tz";
@@ -9,6 +10,7 @@ import { formatCurrency } from "./utils/formatCurrency";
 import {
   isTimeToSend,
   sendNotificationToUser,
+  computeAnyNotificationsEnabled,
   type HouseholdMember,
 } from "./shared/notifications";
 import { writeProactiveInsight, type ProactiveCapHouseholdDoc } from "./insights/writeProactiveInsight";
@@ -714,5 +716,110 @@ export const deletehousehold = onCall(
     });
 
     return { success: true };
+  }
+);
+
+/**
+ * The Firebase UID of the global administrator. Mirrors the client's
+ * VITE_ADMIN_UID (see contexts/AuthContext.tsx / pages/Settings.tsx
+ * isGlobalAdmin) so the same human is recognized as "the" admin on both
+ * sides — set this to the identical UID value when configuring the
+ * environment. Not a secret (a UID isn't sensitive), so `defineString`
+ * (not `defineSecret`) matches how this kind of non-sensitive per-deploy
+ * config is expressed via Cloud Functions params.
+ */
+const adminUid = defineString("ADMIN_UID");
+
+/**
+ * Callable function: one-off backfill of the denormalized
+ * `anyNotificationsEnabled` flag (Plan 06 PR-1) across every household's
+ * members. Idempotent and safe to re-run — each member's flag is simply
+ * recomputed from its current notificationPreferences + fcmTokens.
+ *
+ * Global-admin gated (not household-admin, since this touches ALL
+ * households): only the UID configured via the ADMIN_UID param may invoke it.
+ */
+export const backfillanynotificationsenabled = onCall(
+  {
+    cors: true,
+    timeoutSeconds: 540,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "The function must be called while authenticated."
+      );
+    }
+
+    const configuredAdminUid = adminUid.value();
+    if (!configuredAdminUid || request.auth.uid !== configuredAdminUid) {
+      throw new HttpsError(
+        "permission-denied",
+        "Only the global administrator can run this backfill."
+      );
+    }
+
+    let householdsScanned = 0;
+    let membersScanned = 0;
+    let membersUpdated = 0;
+
+    const householdsSnapshot = await db.collection("households").get();
+    householdsScanned = householdsSnapshot.docs.length;
+
+    for (const householdDoc of householdsSnapshot.docs) {
+      const membersSnapshot = await householdDoc.ref
+        .collection("members")
+        .get();
+
+      // Firestore batches cap at 500 writes; use 400 for headroom alongside
+      // any other writes that might occur in the same batch (precedent: the
+      // repo's other batched-write call sites use a similar sub-500 chunk size).
+      const BATCH_SIZE = 400;
+      let batch = db.batch();
+      let opsInBatch = 0;
+
+      for (const memberDoc of membersSnapshot.docs) {
+        membersScanned++;
+        const member = memberDoc.data() as HouseholdMember;
+        const computed = computeAnyNotificationsEnabled(
+          member.notificationPreferences,
+          member.fcmTokens
+        );
+
+        // Idempotent: only write when the stored flag actually differs (or is
+        // missing), so re-running the backfill after it already succeeded is a
+        // no-op pass with zero writes.
+        if (member.anyNotificationsEnabled !== computed) {
+          batch.update(memberDoc.ref, { anyNotificationsEnabled: computed });
+          opsInBatch++;
+          membersUpdated++;
+
+          if (opsInBatch >= BATCH_SIZE) {
+            await batch.commit();
+            batch = db.batch();
+            opsInBatch = 0;
+          }
+        }
+      }
+
+      if (opsInBatch > 0) {
+        await batch.commit();
+      }
+    }
+
+    logger.info("Backfill of anyNotificationsEnabled complete", {
+      householdsScanned,
+      membersScanned,
+      membersUpdated,
+      runBy: request.auth.uid,
+    });
+
+    return {
+      success: true,
+      householdsScanned,
+      membersScanned,
+      membersUpdated,
+    };
   }
 );

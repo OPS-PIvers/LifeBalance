@@ -2,6 +2,8 @@ import type { MessagePayload } from 'firebase/messaging';
 import { doc, updateDoc, arrayUnion, getDoc } from 'firebase/firestore';
 import { getMessagingInstance, db, auth } from '@/firebase.config';
 import { isIOSDevice, isPWA, supportsPush, parseIOSVersion } from '@/utils/platform';
+import { computeAnyNotificationsEnabled } from '@/utils/notificationFlags';
+import type { HouseholdMember } from '@/types/schema';
 import toast from 'react-hot-toast';
 
 // Re-export the pure platform helpers so existing
@@ -347,8 +349,25 @@ export const requestNotificationPermission = async (
           //
           // For MVP/small-scale use, arrayUnion is acceptable but expect delivery failures
           // to stale tokens (Firebase handles this gracefully with no user impact).
+          //
+          // Plan 06 (notification fan-out cost): recompute anyNotificationsEnabled in
+          // the SAME write. arrayUnion's result isn't observable client-side, so we
+          // compute the resulting token list ourselves from the memberDoc snapshot
+          // fetched above (a small staleness window vs. this exact write is
+          // acceptable — prefs rarely change mid-permission-flow).
+          const existingMember = memberDoc.data() as HouseholdMember | undefined;
+          const existingTokens = existingMember?.fcmTokens ?? [];
+          const tokensAfterUnion = existingTokens.includes(token)
+            ? existingTokens
+            : [...existingTokens, token];
+          const anyNotificationsEnabled = computeAnyNotificationsEnabled(
+            existingMember?.notificationPreferences,
+            tokensAfterUnion
+          );
+
           await updateDoc(memberRef, {
-            fcmTokens: arrayUnion(token)
+            fcmTokens: arrayUnion(token),
+            anyNotificationsEnabled,
           });
           toast.success('Notifications enabled!');
           // Dispatch event to notify App.tsx of permission change
@@ -452,9 +471,26 @@ export const refreshFCMTokenIfNeeded = async (
     if (token) {
       // Update token in Firestore
       const memberRef = doc(db, `households/${householdId}/members/${userId}`);
+
+      // Plan 06 (notification fan-out cost): recompute anyNotificationsEnabled in
+      // the SAME write, same reasoning as the initial-permission-grant path above
+      // (arrayUnion's result isn't observable client-side, so read the current
+      // doc and compute the post-union token list ourselves).
+      const memberDoc = await getDoc(memberRef);
+      const existingMember = memberDoc.data() as HouseholdMember | undefined;
+      const existingTokens = existingMember?.fcmTokens ?? [];
+      const tokensAfterUnion = existingTokens.includes(token)
+        ? existingTokens
+        : [...existingTokens, token];
+      const anyNotificationsEnabled = computeAnyNotificationsEnabled(
+        existingMember?.notificationPreferences,
+        tokensAfterUnion
+      );
+
       await updateDoc(memberRef, {
         fcmTokens: arrayUnion(token),
-        lastTokenRefresh: new Date().toISOString()
+        lastTokenRefresh: new Date().toISOString(),
+        anyNotificationsEnabled,
       });
 
       // Update local storage with refresh timestamp

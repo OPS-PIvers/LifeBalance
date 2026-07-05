@@ -50,6 +50,7 @@ import { generateJsonBackup, generateCsvExport } from '@/utils/exportUtils';
 import { HouseholdMember, NotificationPreferences, Transaction } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { doc, updateDoc } from 'firebase/firestore';
+import { computeAnyNotificationsEnabled } from '@/utils/notificationFlags';
 import { db } from '@/firebase.config';
 import DeveloperConsole from '@/components/modals/DeveloperConsole';
 import PaywallModal from '@/components/modals/PaywallModal';
@@ -303,8 +304,16 @@ const Settings: React.FC = () => {
     try {
       const memberRef = doc(db, 'households', householdId, 'members', user.uid);
 
+      // Recompute the denormalized fan-out flag in the SAME write as the
+      // preferences save so the two can never drift (Plan 06).
+      const anyNotificationsEnabled = computeAnyNotificationsEnabled(
+        preferences,
+        currentUser?.fcmTokens
+      );
+
       await updateDoc(memberRef, {
-        notificationPreferences: preferences
+        notificationPreferences: preferences,
+        anyNotificationsEnabled,
       });
     } catch (error) {
       console.error('Error saving notification preferences:', error);

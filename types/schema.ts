@@ -84,6 +84,14 @@ export interface HouseholdMember {
   // week ('2026-W27') of the last recap push sent to this member. Written
   // server-side only (the scheduled function); the client never writes it.
   lastRecapSentWeek?: string;
+
+  // Plan 06 (notification fan-out cost): denormalized "could this member ever
+  // receive a push" flag — true iff any notification category is enabled AND
+  // fcmTokens is non-empty. Maintained by the pref-save and FCM-token writers
+  // (see utils/notificationFlags.ts) so the four hourly scheduled Cloud
+  // Functions can query via a collection-group index instead of scanning
+  // every household/member (see functions/src/shared/notifications.ts).
+  anyNotificationsEnabled?: boolean;
 }
 
 export interface Account {
