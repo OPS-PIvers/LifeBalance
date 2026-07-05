@@ -43,7 +43,7 @@ export const Section: React.FC<SectionProps> = ({
 }) => (
   <section className={cn('w-full', className)} {...props}>
     {(title || action) && (
-      <div className="flex items-end justify-between px-1 mb-2">
+      <div className="flex items-end justify-between px-1 mb-1.5">
         {title ? (
           <h2 className="font-display text-sm font-semibold tracking-tight text-brand-700 dark:text-brand-200">
             {title}

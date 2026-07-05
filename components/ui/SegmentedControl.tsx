@@ -21,6 +21,13 @@ export interface SegmentedControlProps<T extends string> {
   tone?: 'accent' | 'warm';
   /** Disable the whole control (dims and blocks selection/keyboard nav). */
   disabled?: boolean;
+  /**
+   * `md` (default) reserves the full 44px (`min-h-11`) touch target for
+   * primary navigation. `sm` shrinks to `min-h-9`/tighter padding for
+   * secondary in-page filters/toggles (e.g. Active/Completed, a day picker)
+   * that don't need the primary-nav touch target.
+   */
+  size?: 'md' | 'sm';
 }
 
 const SEGMENTED_TONES = {
@@ -41,6 +48,7 @@ export const SegmentedControl = <T extends string>({
   showBorder = true,
   tone = 'accent',
   disabled = false,
+  size = 'md',
 }: SegmentedControlProps<T>) => {
   const toneStyles = SEGMENTED_TONES[tone];
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -92,7 +100,8 @@ export const SegmentedControl = <T extends string>({
             onClick={() => onChange(option.value)}
             onKeyDown={(e) => handleKeyDown(e, index)}
             className={cn(
-              "flex-1 min-h-11 py-2 rounded-sm text-sm font-bold transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 disabled:cursor-not-allowed",
+              "flex-1 rounded-sm text-sm font-bold transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 disabled:cursor-not-allowed",
+              size === 'sm' ? 'min-h-9 py-1.5' : 'min-h-11 py-2',
               toneStyles.ring,
               isActive
                 ? cn("bg-white border border-brand-200 dark:bg-brand-700 dark:border-brand-600", option.activeClassName || toneStyles.activeText)

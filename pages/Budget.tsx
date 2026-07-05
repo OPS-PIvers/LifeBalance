@@ -26,8 +26,8 @@ const BudgetSkeleton: React.FC = () => (
     <span className="sr-only">Loading money…</span>
 
     {/* Editorial title placeholder */}
-    <div className="px-5 pt-8 pb-6">
-      <Skeleton className="h-8 w-32 rounded-card" />
+    <div className="px-5 pt-5 pb-4">
+      <Skeleton className="h-6 w-32 rounded-card" />
     </div>
 
     <div className="px-4 space-y-6">

@@ -20,6 +20,7 @@ import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import { ShowMoreRow } from '@/components/ui/ShowMoreRow';
+import PageHeader from '@/components/ui/PageHeader';
 import { cn } from '@/utils/cn';
 import Input from '@/components/ui/Input';
 import BatchRescheduleModal from '@/components/modals/BatchRescheduleModal';
@@ -577,80 +578,74 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
   ];
 
   return (
-    <div className={cn("pt-8 px-4 max-w-2xl mx-auto space-y-8 min-h-screen", isSelectionMode ? "pb-40" : "pb-nav-safe")}>
+    <div className={cn("px-4 max-w-2xl mx-auto space-y-5 min-h-screen", isSelectionMode ? "pb-40" : "pb-nav-safe")}>
 
-      <div className="flex flex-col gap-6 mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            {isSelectionMode ? (
-              <div className="flex flex-col">
-                <h1 className="font-display text-3xl font-semibold tracking-tight text-brand-900 dark:text-brand-50">Select tasks</h1>
-                <button
-                    onClick={handleSelectAll}
-                    className="text-sm text-accent-600 dark:text-accent-300 font-medium flex items-center gap-1 mt-1 hover:text-accent-700 dark:hover:text-accent-200"
-                >
-                  <CheckSquare size={14} aria-hidden="true" className={selectedIds.size === allActiveCount && allActiveCount > 0 ? 'text-accent-600 dark:text-accent-300' : 'text-brand-300 dark:text-brand-500'} />
-                  {selectedIds.size === allActiveCount && allActiveCount > 0 ? 'Deselect all' : 'Select all'}
-                </button>
-              </div>
-            ) : (
-              <h1 className="font-display text-3xl font-semibold tracking-tight text-brand-900 dark:text-brand-50">To-do list</h1>
-            )}
-          </div>
-
-          <div className="flex gap-2 items-center">
-            {isSelectionMode ? (
-              /* While selecting, a visible Cancel (X) stays in the header so the
-                 way out is always one tap away — the overflow menu is hidden. */
+      <PageHeader
+        className="px-0"
+        title={isSelectionMode ? 'Select tasks' : 'To-do list'}
+        subtitle={
+          isSelectionMode ? (
+            <button
+              onClick={handleSelectAll}
+              className="text-sm text-accent-600 dark:text-accent-300 font-medium flex items-center gap-1 hover:text-accent-700 dark:hover:text-accent-200"
+            >
+              <CheckSquare size={14} aria-hidden="true" className={selectedIds.size === allActiveCount && allActiveCount > 0 ? 'text-accent-600 dark:text-accent-300' : 'text-brand-300 dark:text-brand-500'} />
+              {selectedIds.size === allActiveCount && allActiveCount > 0 ? 'Deselect all' : 'Select all'}
+            </button>
+          ) : undefined
+        }
+        actions={
+          isSelectionMode ? (
+            /* While selecting, a visible Cancel (X) stays in the header so the
+               way out is always one tap away — the overflow menu is hidden. */
+            <Button
+              variant="secondary"
+              size="icon"
+              onClick={() => setIsSelectionMode(false)}
+              className="bg-brand-100 border-brand-200 dark:bg-brand-700 dark:border-brand-600"
+              title="Cancel Selection"
+              aria-label="Cancel Selection"
+            >
+              <X size={20} />
+            </Button>
+          ) : (
+            /* Secondary actions (Export, Select multiple) collapse into one
+               top-right "…" overflow menu, matching the Shopping list header.
+               The primary add now lives in the sticky quick-add bar below. */
+            <div className="relative">
               <Button
-                variant="secondary"
+                variant="ghost-brand"
                 size="icon"
-                onClick={() => setIsSelectionMode(false)}
-                className="bg-brand-100 border-brand-200 dark:bg-brand-700 dark:border-brand-600"
-                title="Cancel Selection"
-                aria-label="Cancel Selection"
+                onClick={() => setMenuOpen((o) => !o)}
+                aria-label="To-do list actions"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                className="rounded-full min-w-11 min-h-11"
               >
-                <X size={20} />
+                <MoreHorizontal className="w-5 h-5" />
               </Button>
-            ) : (
-              /* Secondary actions (Export, Select multiple) collapse into one
-                 top-right "…" overflow menu, matching the Shopping list header.
-                 The primary add now lives in the sticky quick-add bar below. */
-              <div className="relative">
-                <Button
-                  variant="ghost-brand"
-                  size="icon"
-                  onClick={() => setMenuOpen((o) => !o)}
-                  aria-label="To-do list actions"
-                  aria-haspopup="menu"
-                  aria-expanded={menuOpen}
-                  className="rounded-full min-w-11 min-h-11"
-                >
-                  <MoreHorizontal className="w-5 h-5" />
-                </Button>
-                {menuOpen && (
-                  <Menu
-                    isOpen={menuOpen}
-                    onClose={() => setMenuOpen(false)}
-                    ariaLabel="To-do list actions"
-                    position="top-full right-0 mt-2"
-                    className="min-w-[208px]"
-                    items={menuItems}
-                  />
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+              {menuOpen && (
+                <Menu
+                  isOpen={menuOpen}
+                  onClose={() => setMenuOpen(false)}
+                  ariaLabel="To-do list actions"
+                  position="top-full right-0 mt-2"
+                  className="min-w-[208px]"
+                  items={menuItems}
+                />
+              )}
+            </div>
+          )
+        }
+      />
 
-        {/* View Toggle */}
-        <Tabs value={viewMode} onValueChange={(val) => setViewMode(val as 'active' | 'completed')}>
-          <TabsList className="self-start w-auto inline-flex">
-            <TabsTrigger value="active">Active</TabsTrigger>
-            <TabsTrigger value="completed">{completedBadge}</TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
+      {/* View Toggle */}
+      <Tabs value={viewMode} onValueChange={(val) => setViewMode(val as 'active' | 'completed')}>
+        <TabsList size="sm" className="self-start w-auto inline-flex">
+          <TabsTrigger value="active">Active</TabsTrigger>
+          <TabsTrigger value="completed">{completedBadge}</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {/* Anchored quick-add bar — same sticky inline-add structure as the
           shopping list: pinned to the top of the <main> scroller so it stays

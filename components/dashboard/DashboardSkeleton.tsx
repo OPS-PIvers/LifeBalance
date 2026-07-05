@@ -11,9 +11,9 @@ export const DashboardSkeleton: React.FC = () => (
     <span className="sr-only">Loading your dashboard…</span>
 
     {/* Greeting header */}
-    <div className="px-5 pt-8 pb-6 flex items-end justify-between">
+    <div className="px-5 pt-5 pb-4 flex items-end justify-between">
       <div className="space-y-2">
-        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-6 w-48" />
         <Skeleton className="h-4 w-36" />
       </div>
       <Skeleton className="h-11 w-11 rounded-card" />
