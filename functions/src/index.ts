@@ -11,6 +11,7 @@ import {
   isTimeToSend,
   sendNotificationToUser,
   computeAnyNotificationsEnabled,
+  loadNotifiableMembersByHousehold,
   type HouseholdMember,
 } from "./shared/notifications";
 import { writeProactiveInsight, type ProactiveCapHouseholdDoc } from "./insights/writeProactiveInsight";
@@ -58,15 +59,13 @@ const db = admin.firestore();
 export const sendhabitreminders = onSchedule("every 1 hours", async () => {
   logger.info("Checking for habit reminders to send");
 
-  const householdsSnapshot = await db.collection("households").get();
-  logger.info(`Found ${householdsSnapshot.docs.length} household(s)`);
+  const groups = await loadNotifiableMembersByHousehold(db);
+  logger.info(`Found ${groups.length} household(s) with notification-eligible members`);
 
-  for (const householdDoc of householdsSnapshot.docs) {
-    // Fetch members from subcollection
-    const membersSnapshot = await householdDoc.ref.collection("members").get();
-    logger.info(`Household ${householdDoc.id}: ${membersSnapshot.docs.length} member(s)`);
+  for (const group of groups) {
+    logger.info(`Household ${group.householdId}: ${group.memberDocs.length} member(s)`);
 
-    for (const memberDoc of membersSnapshot.docs) {
+    for (const memberDoc of group.memberDocs) {
       const member = memberDoc.data() as HouseholdMember;
       const prefs = member.notificationPreferences;
 
@@ -110,15 +109,13 @@ export const sendactionqueuereminders = onSchedule(
   async () => {
     logger.info("Checking for action queue reminders to send");
 
-    const householdsSnapshot = await db.collection("households").get();
-    logger.info(`Found ${householdsSnapshot.docs.length} household(s)`);
+    const groups = await loadNotifiableMembersByHousehold(db);
+    logger.info(`Found ${groups.length} household(s) with notification-eligible members`);
 
-    for (const householdDoc of householdsSnapshot.docs) {
-      // Fetch members from subcollection
-      const membersSnapshot = await householdDoc.ref.collection("members").get();
-      logger.info(`Household ${householdDoc.id}: ${membersSnapshot.docs.length} member(s)`);
+    for (const group of groups) {
+      logger.info(`Household ${group.householdId}: ${group.memberDocs.length} member(s)`);
 
-      for (const memberDoc of membersSnapshot.docs) {
+      for (const memberDoc of group.memberDocs) {
         const member = memberDoc.data() as HouseholdMember;
         const prefs = member.notificationPreferences;
 
@@ -136,7 +133,7 @@ export const sendactionqueuereminders = onSchedule(
 
         if (isTimeToSend(prefs.actionQueueReminders.time, prefs.timezone)) {
           // Get today's todos for this household
-          const todosSnapshot = await householdDoc.ref
+          const todosSnapshot = await group.householdRef
             .collection("todos")
             .where("assignedTo", "==", member.uid)
             .where("isCompleted", "==", false)
@@ -188,15 +185,13 @@ export const sendactionqueuereminders = onSchedule(
 export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
   logger.info("Checking for streak warnings to send");
 
-  const householdsSnapshot = await db.collection("households").get();
-  logger.info(`Found ${householdsSnapshot.docs.length} household(s)`);
+  const groups = await loadNotifiableMembersByHousehold(db);
+  logger.info(`Found ${groups.length} household(s) with notification-eligible members`);
 
-  for (const householdDoc of householdsSnapshot.docs) {
-    // Fetch members from subcollection
-    const membersSnapshot = await householdDoc.ref.collection("members").get();
-    logger.info(`Household ${householdDoc.id}: ${membersSnapshot.docs.length} member(s)`);
+  for (const group of groups) {
+    logger.info(`Household ${group.householdId}: ${group.memberDocs.length} member(s)`);
 
-    for (const memberDoc of membersSnapshot.docs) {
+    for (const memberDoc of group.memberDocs) {
       const member = memberDoc.data() as HouseholdMember;
       const prefs = member.notificationPreferences;
 
@@ -214,7 +209,7 @@ export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
 
       if (isTimeToSend(prefs.streakWarnings.time, prefs.timezone)) {
         // Get habits subcollection
-        const habitsSnapshot = await householdDoc.ref
+        const habitsSnapshot = await group.householdRef
           .collection("habits")
           .where("period", "==", "daily")
           .get();
@@ -275,11 +270,10 @@ export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
               // The cap state must come from a successful read — defaulting to
               // an empty doc would treat the count as 0 and clobber the real
               // cap state with a reset patch.
-              const householdSnap = await householdDoc.ref.get();
-              const data = householdSnap.data();
+              const data = await group.getHouseholdData();
               if (!data) {
                 logger.warn(
-                  `sendstreakwarnings: household ${householdDoc.id} doc missing/empty, skipping proactive insight`
+                  `sendstreakwarnings: household ${group.householdId} doc missing/empty, skipping proactive insight`
                 );
               } else {
                 const household = data as ProactiveCapHouseholdDoc;
@@ -294,7 +288,7 @@ export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
 
                 await writeProactiveInsight(
                   db,
-                  householdDoc.id,
+                  group.householdId,
                   household,
                   {
                     text: insightText,
@@ -308,7 +302,7 @@ export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
               }
             } catch (error) {
               logger.warn(
-                `sendstreakwarnings: proactive insight failed for household ${householdDoc.id}, continuing`,
+                `sendstreakwarnings: proactive insight failed for household ${group.householdId}, continuing`,
                 error
               );
             }
@@ -418,19 +412,19 @@ export const sendbillreminders = onSchedule(
   async () => {
     logger.info("Checking for bill reminders to send");
 
-    const householdsSnapshot = await db.collection("households").get();
-    logger.info(`Found ${householdsSnapshot.docs.length} household(s)`);
+    const groups = await loadNotifiableMembersByHousehold(db);
+    logger.info(`Found ${groups.length} household(s) with notification-eligible members`);
 
-    for (const householdDoc of householdsSnapshot.docs) {
-      // Fetch members from subcollection
-      const membersSnapshot = await householdDoc.ref.collection("members").get();
-      logger.info(`Household ${householdDoc.id}: ${membersSnapshot.docs.length} member(s)`);
+    for (const group of groups) {
+      logger.info(`Household ${group.householdId}: ${group.memberDocs.length} member(s)`);
 
       // Currency for user-facing money strings is sourced from the household doc
       // (the top-level `currency` field added by the client). Falls back to USD.
-      const currency = householdDoc.data()?.currency || "USD";
+      // Loaded lazily and only once per household, on first member that
+      // actually needs a bill reminder sent.
+      let currency: string | undefined;
 
-      for (const memberDoc of membersSnapshot.docs) {
+      for (const memberDoc of group.memberDocs) {
         const member = memberDoc.data() as HouseholdMember;
         const prefs = member.notificationPreferences;
 
@@ -447,11 +441,16 @@ export const sendbillreminders = onSchedule(
         logger.info(`Member ${member.uid}: has ${member.fcmTokens.length} token(s), scheduled time: ${prefs.billReminders.time}, timezone: ${prefs.timezone}`);
 
         if (isTimeToSend(prefs.billReminders.time, prefs.timezone)) {
+          if (currency === undefined) {
+            const householdData = await group.getHouseholdData();
+            currency = householdData?.currency || "USD";
+          }
+
           // Get calendar items (bills). Deliberately NOT filtered on isPaid:
           // paid instance docs (isPaid: true, parentRecurringId set) are needed
           // by findBillsDueOnDate to suppress already-paid occurrences of
           // recurring templates.
-          const calendarSnapshot = await householdDoc.ref
+          const calendarSnapshot = await group.householdRef
             .collection("calendarItems")
             .where("type", "==", "expense")
             .get();

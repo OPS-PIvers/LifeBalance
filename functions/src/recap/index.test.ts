@@ -19,9 +19,16 @@ vi.mock("firebase-functions/v2/scheduler", () => ({
   onSchedule: (_opts: unknown, handler: () => Promise<void>) => handler,
 }));
 
+// Hoisted so the vi.mock factory below (itself hoisted) can reference it, and
+// so a test can flip NOTIFICATIONS_FULL_SCAN without re-mocking the module.
+const fullScanParamHolder = vi.hoisted(() => ({ value: undefined as string | undefined }));
+
 vi.mock("firebase-functions/params", () => ({
   defineSecret: (_name: string) => ({
     value: () => "fake-gemini-key",
+  }),
+  defineString: (_name: string, opts: { default: string }) => ({
+    value: () => fullScanParamHolder.value ?? opts.default,
   }),
 }));
 
@@ -93,6 +100,37 @@ class FakeStore {
     return this.makeQuery(path, []);
   };
 
+  /**
+   * Minimal fake for `db.collectionGroup("members")`: scans every seeded
+   * collection whose path ends in `/members` (or is exactly "members"),
+   * applies the `.where()` clauses, and returns docs whose `ref` exposes
+   * `parent.parent` pointing at the owning household doc ref — mirroring the
+   * real Firestore collection-group doc ref shape that
+   * `loadNotifiableMembersByHousehold` relies on.
+   */
+  collectionGroup = (collectionId: string) => {
+    return this.makeGroupQuery(collectionId, []);
+  };
+
+  private makeGroupQuery = (collectionId: string, clauses: WhereClause[]) => {
+    return {
+      where: (field: string, op: string, value: unknown) =>
+        this.makeGroupQuery(collectionId, [...clauses, { field, op, value }]),
+      get: async () => {
+        const docs: Array<{ id: string; ref: unknown; data: () => DocData }> = [];
+        for (const [path, bucket] of this.collections.entries()) {
+          const segments = path.split("/");
+          if (segments[segments.length - 1] !== collectionId) continue;
+          for (const [id, data] of bucket.entries()) {
+            if (!matches(data, clauses)) continue;
+            docs.push({ id, ref: this.makeDocRef(`${path}/${id}`), data: () => data });
+          }
+        }
+        return { docs };
+      },
+    };
+  };
+
   private makeQuery = (path: string, clauses: WhereClause[]) => {
     const bucket = () => this.ensure(path);
     return {
@@ -116,6 +154,11 @@ class FakeStore {
     const segments = fullPath.split("/");
     const id = segments[segments.length - 1] as string;
     const collectionPath = segments.slice(0, -1).join("/");
+    // Parent doc ref (one level up from the containing collection), e.g. for
+    // "households/hh1/members/u1" -> the "households/hh1" doc ref. Undefined
+    // for top-level docs (collectionPath has no further "/").
+    const parentDocSegments = collectionPath.split("/");
+    const parentDocPath = parentDocSegments.slice(0, -1).join("/");
     return {
       id,
       __fullPath: fullPath,
@@ -127,6 +170,11 @@ class FakeStore {
       update: async (patch: DocData) => {
         const bucket = this.ensure(collectionPath);
         bucket.set(id, { ...(bucket.get(id) ?? {}), ...patch });
+      },
+      // Mirrors the real Firestore DocumentReference shape enough for
+      // loadNotifiableMembersByHousehold's `memberDoc.ref.parent.parent`.
+      parent: {
+        parent: parentDocPath ? this.makeDocRef(parentDocPath) : undefined,
       },
     };
   };
@@ -191,6 +239,10 @@ function freshMember(overrides: DocData = {}): DocData {
     displayName: "Alex",
     fcmTokens: ["token1"],
     points: { daily: 0, weekly: 10, total: 10 },
+    // Plan 06 PR-2: sendweeklyrecap now sources its household list from the
+    // anyNotificationsEnabled collection-group query, so every seeded member
+    // must carry the flag to be considered at all.
+    anyNotificationsEnabled: true,
     notificationPreferences: {
       timezone: "America/New_York",
       weeklyRecap: { enabled: true },
@@ -224,6 +276,7 @@ describe("sendweeklyrecap", () => {
     fakeStoreHolder.instance = store;
     generateContentMock.mockResolvedValue({ text: "AI summary of your week." });
     sendEachForMulticastMock.mockResolvedValue({ successCount: 1, failureCount: 0, responses: [] });
+    fullScanParamHolder.value = undefined;
   });
 
   afterEach(() => {
@@ -233,6 +286,45 @@ describe("sendweeklyrecap", () => {
   function run(): Promise<void> {
     return (sendweeklyrecap as unknown as SchedulerHandler)();
   }
+
+  it("never generates/sends for a household whose only member has anyNotificationsEnabled: false", async () => {
+    seedHousehold(store, {}, { u1: freshMember({ anyNotificationsEnabled: false }) });
+    store.seedCollection("app_config", { global: { billingEnabled: false } });
+
+    await run();
+
+    // Documented tradeoff: no recap doc is generated when no member is
+    // flagged, since generation piggybacks on the same flagged member list.
+    expect(store.getRaw(`households/${HOUSEHOLD_ID}/recaps/2026-W27`)).toBeUndefined();
+    expect(sendEachForMulticastMock).not.toHaveBeenCalled();
+  });
+
+  it("processes a household reached via two flagged members exactly once (single recap doc, two pushes)", async () => {
+    seedHousehold(store, {}, {
+      u1: freshMember(),
+      u2: freshMember({ uid: "u2", displayName: "Sam", fcmTokens: ["token2"] }),
+    });
+    store.seedCollection("app_config", { global: { billingEnabled: false } });
+
+    await run();
+
+    // Single recap doc for the household, not duplicated.
+    expect(store.getRaw(`households/${HOUSEHOLD_ID}/recaps/2026-W27`)).toBeDefined();
+    // Both flagged members received their own push.
+    expect(sendEachForMulticastMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("FALLBACK_FULL_SCAN='true' reproduces the same generation/send as the flagged-query path", async () => {
+    seedHousehold(store);
+    store.seedCollection("app_config", { global: { billingEnabled: false } });
+    fullScanParamHolder.value = "true";
+
+    await run();
+
+    const household = store.getRaw(`households/${HOUSEHOLD_ID}`) as { lastRecapWeek?: string };
+    expect(household.lastRecapWeek).toBe("2026-W27");
+    expect(sendEachForMulticastMock).toHaveBeenCalledTimes(1);
+  });
 
   it("generates the recap doc and sets lastRecapWeek on first run (premium household, billingEnabled off)", async () => {
     seedHousehold(store);
