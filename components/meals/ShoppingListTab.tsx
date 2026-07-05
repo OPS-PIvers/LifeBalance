@@ -498,14 +498,14 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
   ];
 
   return (
-    <div className="space-y-5 pb-20">
+    <div className="space-y-3 pb-20">
         {/* Title row — NOT sticky (scrolls away). Every secondary/bulk action
             collapses into one top-right overflow menu (Reminders/Todoist/To-Do
             pattern), reclaiming the old 4-icon cluster + the 3-button row. The
             trigger shows a spinner while AI Optimize runs so feedback survives a
             closed menu. */}
         <PageHeader
-            className="px-0"
+            className="px-0 pt-4 pb-2"
             title="Shopping list"
             actions={
                 <div className="relative">
@@ -538,19 +538,22 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
             }
         />
 
-        {/* Anchored add bar — pinned to the top of the single <main> scroller so
-            it stays visible while the list scrolls under it. Top (not bottom)
-            deliberately clears the global Capture FAB at bottom-center. The
-            per-host `stickyTopOffset` clears any sticky chrome above it (the
-            /lists tab strip). `-mx-4 px-4` bleeds the blurred bar to the content
-            edges; Reorder.Group stays a sibling below so its drag layer never
-            shares this pinned stacking context. */}
+        {/* Anchored add bar — `attached` so it reads as the list's first row
+            rather than a separately bordered/blurred toolbar band. Pinned to
+            the top of the single <main> scroller so it stays visible while the
+            list scrolls under it. Top (not bottom) deliberately clears the
+            global Capture FAB at bottom-center. The per-host `stickyTopOffset`
+            clears any sticky chrome above it (the /lists tab strip). `-mx-4
+            px-4` bleeds the bar to the content edges; Reorder.Group stays a
+            sibling below so its drag layer never shares this pinned stacking
+            context. */}
         <div
-            className="sticky z-20 -mx-4 px-4 py-3 bg-brand-50 dark:bg-brand-900 border-b border-brand-200 dark:border-brand-800"
+            className="sticky z-20 -mx-4 px-4 bg-white dark:bg-brand-800 border-b border-brand-200 dark:border-brand-700 rounded-t-2xl"
             style={{ top: `${stickyTopOffset}px` }}
         >
             <div className="flex items-center gap-2">
                 <QuickAddBar
+                    attached
                     onSubmit={handleSmartAdd}
                     inputRef={addInputRef}
                     value={newItemText}
@@ -591,7 +594,7 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
                             aria-label="Filter by store"
                             aria-expanded={isFilterOpen}
                             aria-haspopup="menu"
-                            className="flex items-center justify-center p-3 rounded-btn text-brand-600 hover:text-brand-900 hover:bg-brand-100 dark:text-brand-300 dark:hover:text-brand-50 dark:hover:bg-brand-700/50 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
+                            className="flex items-center justify-center p-3 text-brand-600 hover:text-brand-900 hover:bg-brand-100 dark:text-brand-300 dark:hover:text-brand-50 dark:hover:bg-brand-700/50 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
                         >
                             <Filter className="w-5 h-5" />
                         </button>
@@ -660,6 +663,7 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
         ) : items.length === 0 ? (
              <EmptyState
                 variant="surface"
+                size="compact"
                 icon={<ShoppingCart className="w-7 h-7" />}
                 title={filterStore ? `Nothing for ${filterStore}` : 'Your list is empty'}
                 description={filterStore ? 'No items match this store filter.' : 'Add items above to start your shopping list.'}
