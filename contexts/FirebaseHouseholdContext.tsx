@@ -55,7 +55,6 @@ import {
   Transaction,
   CalendarItem,
   Habit,
-  HabitSubmission,
   Challenge,
   RewardItem,
   RewardRedemption,
@@ -81,12 +80,12 @@ import {
 } from '@/types/schema';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { normalizeToKey } from '@/utils/stringNormalizer';
-import { calculateSafeToSpendBreakdownFromExpanded, resolveBucketForCalendarItem, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
+import { calculateSafeToSpendBreakdownFromExpanded, resolveBucketForCalendarItem } from '@/utils/safeToSpendCalculator';
 import { effectiveAccountImpact, resolveTargetAccount } from '@/utils/accountImpact';
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
 import { processToggleHabit, calculatePointsForDate, calculatePointsForDateRange, computeManagedMemberPointsReset, isHabitStale, streakForHabit, streakEndingOnForHabit, getMultiplier, getHabitResetUpdate } from '@/utils/habitLogic';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
-import { calculateBucketSpent, getTransactionsForBucket, type BucketSpent } from '@/utils/bucketSpentCalculator';
+import { calculateBucketSpent, getTransactionsForBucket } from '@/utils/bucketSpentCalculator';
 import { migrateBucketsToPeriods, needsMigration, migrateToPaycheckPeriods, needsPaycheckMigration } from '@/utils/migrations/payPeriodMigration';
 import { migrateFreezeBankToEnhanced, needsFreezeBankMigration } from '@/utils/migrations/freezeBankMigration';
 import { migrateOrphanedHabits, needsHabitMigration } from '@/utils/migrations/habitMigration';
@@ -122,37 +121,30 @@ import { track } from '@/services/analytics';
 import { shouldTrackFirstTime, FIRST_TRANSACTION_FLAG } from '@/utils/firstTimeFlags';
 import toast from 'react-hot-toast';
 import { isSameDay, isSameWeek, parseISO, format, subDays, startOfWeek, addDays, startOfToday, isAfter, isValid, addMonths } from 'date-fns';
+import { mergeById, mapTransactionDoc, mapTodoDoc } from '@/contexts/household/selectors';
+import type {
+  MutationOpts,
+  HouseholdContextType,
+  FinanceContextValue,
+  GamificationContextValue,
+  MealPlanContextValue,
+  ShoppingContextValue,
+  MealsContextValue,
+  TodosContextValue,
+  HouseholdCoreContextValue,
+} from '@/contexts/household/types';
 
-/**
- * Merge two lists of documents by `id`, keeping `primary` entries when an id
- * appears in both. Used to combine a live (windowed) listener result with
- * on-demand "load older" pages without ever showing duplicates.
- */
-function mergeById<T extends { id: string }>(primary: T[], secondary: T[]): T[] {
-  if (secondary.length === 0) return primary;
-  if (primary.length === 0) return secondary;
-  const seen = new Set(primary.map(p => p.id));
-  return [...primary, ...secondary.filter(s => !seen.has(s.id))];
-}
-
-/**
- * Map a typed transaction snapshot to a Transaction.
- * The converter attached via .withConverter(transactionConverter) already handles
- * id injection and Timestamp normalisation; this shim delegates to it so all
- * call sites (windowed listener + pagination helpers) share one code path.
- */
-function mapTransactionDoc(d: QueryDocumentSnapshot<Transaction>): Transaction {
-  return d.data();
-}
-
-/**
- * Map a typed to-do snapshot to a ToDo.
- * The converter attached via .withConverter(todoConverter) already handles
- * id injection and Timestamp normalisation.
- */
-function mapTodoDoc(d: QueryDocumentSnapshot<ToDo>): ToDo {
-  return d.data();
-}
+export type {
+  MutationOpts,
+  HouseholdContextType,
+  FinanceContextValue,
+  GamificationContextValue,
+  MealPlanContextValue,
+  ShoppingContextValue,
+  MealsContextValue,
+  TodosContextValue,
+  HouseholdCoreContextValue,
+};
 
 // ---------------------------------------------------------------------------
 // VERIFIED-ONLY, ACCOUNT-ROUTED BALANCE MODEL (Plan 015 "Option A" + account tagging)
@@ -188,363 +180,6 @@ function mapTodoDoc(d: QueryDocumentSnapshot<ToDo>): ToDo {
 // the new account's applied (merged per-account so a single batch never writes
 // the same doc twice).
 // ---------------------------------------------------------------------------
-
-/** Options accepted by mutations that normally toast per call. `silent: true`
- *  suppresses the per-item success toast so BULK flows (Action Queue
- *  multi-select) can show one summary toast instead of N stacked ones.
- *  Error toasts are never suppressed. */
-export interface MutationOpts {
-  silent?: boolean;
-}
-
-export interface HouseholdContextType {
-  // State
-  /** True during the initial cold load before the first household snapshot resolves. */
-  isLoading: boolean;
-  safeToSpend: number;
-  /**
-   * Itemized breakdown behind the safe-to-spend number (memoized, no re-expansion).
-   * Optional because alternate providers (e.g. the Test Mode mock context) may not
-   * supply it; the real Firebase provider always does.
-   */
-  safeToSpendBreakdown?: SafeToSpendBreakdown;
-  dailyPoints: number;
-  weeklyPoints: number;
-  totalPoints: number;
-  currentUser: HouseholdMember | null;
-  members: HouseholdMember[];
-  accounts: Account[];
-  buckets: BudgetBucket[];
-  calendarItems: CalendarItem[];
-  transactions: Transaction[];
-  habits: Habit[];
-  activeChallenge: Challenge | null;
-  challenges: Challenge[];
-  yearlyGoals: YearlyGoal[];
-  activeYearlyGoals: YearlyGoal[];
-  primaryYearlyGoal: YearlyGoal | null;
-  rewardsInventory: RewardItem[];
-  freezeBank: FreezeBank | null;
-  insight: string;
-  insightsHistory: Insight[];
-  isGeneratingInsight: boolean;
-  meals: Meal[];
-  shoppingList: ShoppingItem[];
-  mealPlan: MealPlanItem[];
-  todos: ToDo[];
-  groceryCatalog: GroceryCatalogItem[];
-  bucketHistory: BucketPeriodSnapshot[];
-  /** Weekly recaps (Plan 02) — newest first, bounded live window (RECAPS_LIMIT). */
-  recaps: WeeklyRecap[];
-
-  // --- Listener windowing / pagination ---
-  // The high-cardinality collections below are windowed on cold load (see
-  // utils/listenerWindows.ts) and expose "load older" helpers for history
-  // beyond the live window.
-  /** Inclusive lower bound (yyyy-MM-dd) of the live transactions window, or null when every transaction is loaded (no period tracking). */
-  transactionWindowStart: string | null;
-  /** True while older transactions are being fetched. */
-  isLoadingOlderTransactions: boolean;
-  /** True when older transactions may exist beyond the loaded set. */
-  hasMoreTransactions: boolean;
-  /** Fetch the next page of older transactions (cursor pagination). */
-  loadOlderTransactions: () => Promise<void>;
-  /** Fetch every remaining older transaction (e.g. before analytics or export). Resolves with the complete, merged transaction list. */
-  loadAllTransactions: () => Promise<Transaction[]>;
-  /** True while the full bucket history is being fetched. */
-  isLoadingOlderBucketHistory: boolean;
-  /** True when older bucket-history snapshots exist beyond the live window. */
-  hasMoreBucketHistory: boolean;
-  /** Fetch every bucket-history snapshot beyond the live window. */
-  loadAllBucketHistory: () => Promise<void>;
-  /** True when older insights exist beyond the live window. */
-  hasMoreInsights: boolean;
-  /** Fetch every insight beyond the live window. */
-  loadAllInsights: () => Promise<void>;
-  /** True while older completed to-dos are being fetched. */
-  isLoadingOlderTodos: boolean;
-  /** True when older completed to-dos exist beyond the live window. */
-  hasMoreCompletedTodos: boolean;
-  /** Fetch the next page of older completed to-dos. */
-  loadOlderCompletedTodos: () => Promise<void>;
-  /** Ensure the meal-plan entries for the week containing `date` are loaded. */
-  ensureMealPlanWeek: (date: Date) => Promise<void>;
-
-  // Natural Language Processing
-  pendingItemsCount: number;
-
-  // Shopping List Settings
-  stores: Store[];
-  groceryCategories: string[];
-  quickStockLists: QuickStockList[];
-
-  // iOS Shortcuts API Keys
-  apiKeys: HouseholdApiKey[];
-
-  // Pay Period Tracking State
-  householdId: string | null;
-  currentPeriodId: string;
-  bucketSpentMap: Map<string, BucketSpent>;
-  householdSettings: Household | null;
-  household: Household | null; // Alias for householdSettings
-
-  // Account Actions
-  addAccount: (account: Account) => Promise<void>;
-  updateAccountBalance: (id: string, newBalance: number) => Promise<void>;
-  setAccountGoal: (id: string, goal: number) => Promise<void>;
-  /** Set (or clear, with an empty string) the last-4 card digits used to
-   *  auto-route incoming Shortcut/Wells-Fargo-email transactions to this account. */
-  setAccountCardLast4: (id: string, cardLast4: string) => Promise<void>;
-  deleteAccount: (id: string) => Promise<void>;
-  updateAccountOrder: (accountId: string, newOrder: number) => Promise<void>;
-  reorderAccounts: (orderedIds: string[]) => Promise<void>;
-
-  // Bucket Actions
-  addBucket: (bucket: BudgetBucket) => Promise<void>;
-  updateBucket: (bucket: BudgetBucket) => Promise<void>;
-  deleteBucket: (id: string) => Promise<void>;
-  updateBucketLimit: (id: string, newLimit: number) => Promise<void>;
-  reallocateBucket: (sourceId: string, targetId: string, amount: number) => Promise<void>;
-
-  // Calendar Actions
-  addCalendarItem: (item: CalendarItem) => Promise<void>;
-  updateCalendarItem: (item: CalendarItem) => Promise<void>;
-  deleteCalendarItem: (id: string, opts?: MutationOpts) => Promise<void>;
-  payCalendarItem: (itemId: string, accountId: string, opts?: MutationOpts) => Promise<void>;
-  deferCalendarItem: (itemId: string, opts?: MutationOpts) => Promise<void>;
-
-  // Transaction Actions
-  addTransaction: (tx: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>) => Promise<void>;
-  /** Verify a pending transaction under `category`. Optional `accountId`
-   *  additionally (re)tags the transaction so the verify-time balance impact
-   *  lands on that account (used by the Action Queue's smart approve); pass
-   *  `null` to EXPLICITLY clear a previously-tagged account (the impact then
-   *  re-routes to checking). Optional `overrides` co-commit an inline edit
-   *  (amount/merchant/date, plus clearing the `needsAmount` stub flag) in the
-   *  SAME atomic batch, so verify + edit + account + habits + points can never
-   *  diverge; `overrides.amount` (not the possibly-stale stored amount) drives
-   *  the checking-balance delta. */
-  updateTransactionCategory: (
-    id: string,
-    category: string,
-    relatedHabitIds?: string[],
-    accountId?: string | null,
-    overrides?: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean },
-  ) => Promise<void>;
-  updateTransaction: (id: string, updates: Partial<Transaction>, opts?: MutationOpts) => Promise<void>;
-  deleteTransaction: (id: string, opts?: MutationOpts) => Promise<void>;
-  splitTransaction: (originalTransactionId: string, newTransactions: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[]) => Promise<void>;
-  /** Merge a `possibleDuplicateOf`-flagged pair of transactions (plan 03 PR-3):
-   *  applies `utils/transactionMerge`'s field-level winner set to the keeper,
-   *  deletes the dupe, and reverses the dupe's account-balance impact if it
-   *  was `verified` — all in ONE writeBatch (mirrors `deleteTransaction`). The
-   *  caller picks which id is the keeper vs. the dupe (typically via
-   *  `pickKeeper` from the same util). */
-  mergeTransactions: (keeperId: string, dupeId: string) => Promise<void>;
-  /** Dismiss a possible-duplicate flag without merging: clears
-   *  `possibleDuplicateOf` on the given transaction (single update, no batch
-   *  needed — nothing else changes). */
-  keepBothTransactions: (txnId: string) => Promise<void>;
-
-  // Habit Actions
-  addHabit: (habit: Habit) => Promise<string>;
-  updateHabit: (habit: Habit) => Promise<void>;
-  deleteHabit: (id: string) => Promise<void>;
-  reorderHabits: (updates: { id: string; order: number; category?: string }[]) => Promise<void>;
-  toggleHabit: (id: string, direction: 'up' | 'down') => Promise<void>;
-  resetHabit: (id: string) => Promise<void>;
-
-  // Habit Submission Actions
-  addHabitSubmission: (habitId: string, count: number, timestamp?: string) => Promise<void>;
-  updateHabitSubmission: (habitId: string, submissionId: string, updates: Partial<HabitSubmission>) => Promise<void>;
-  deleteHabitSubmission: (habitId: string, submissionId: string) => Promise<void>;
-  getHabitSubmissions: (habitId: string, startDate?: string, endDate?: string) => Promise<HabitSubmission[]>;
-
-  // Challenge & Reward Actions
-  updateChallenge: (challenge: Challenge) => Promise<void>;
-  // Plan 080e — create a NEW family challenge, decoupled from yearly goals (no
-  // yearlyGoalId required). createdBy/createdAt/month are filled in server-side.
-  addChallenge: (input: {
-    title: string;
-    description?: string;
-    relatedHabitIds: string[];
-    targetValue?: number;
-    month?: string;
-  }) => Promise<void>;
-  markChallengeComplete: (challengeId: string, success: boolean) => Promise<void>;
-  redeemReward: (rewardId: string) => Promise<void>;
-  // Plan 080d — Reward CRUD (parent-managed rewards store). createdBy is set
-  // server-side from the authenticated user on create.
-  addReward: (input: Omit<RewardItem, 'id' | 'createdBy'>) => Promise<void>;
-  updateReward: (reward: RewardItem) => Promise<void>;
-  deleteReward: (id: string) => Promise<void>;
-  // Plan 080d-2 — Reward REDEMPTION (kid requests → parent approves/denies).
-  // requestRedemption appends a pending RewardRedemption to the household doc.
-  // approveRedemption/denyRedemption resolve it (transactional + idempotent);
-  // approval deducts the kid's points and credits the allowance IOU.
-  requestRedemption: (rewardId: string, memberId: string) => Promise<void>;
-  approveRedemption: (redemptionId: string) => Promise<void>;
-  denyRedemption: (redemptionId: string) => Promise<void>;
-  refreshInsight: () => Promise<void>;
-
-  // Yearly Goal Actions
-  createYearlyGoal: (goal: Omit<YearlyGoal, 'id'>) => Promise<void>;
-  updateYearlyGoal: (goalId: string, updates: Partial<YearlyGoal>) => Promise<void>;
-  updateYearlyGoalProgress: (goalId: string, month: string, success: boolean) => Promise<void>;
-  deleteYearlyGoal: (goalId: string) => Promise<void>;
-
-  // Freeze Bank Actions
-  useFreezeBankToken: (habitId: string, targetDate: string) => Promise<void>;
-  rolloverFreezeBankTokens: () => Promise<void>;
-
-  // Member Management Actions
-  addMember: (memberData: Partial<HouseholdMember>) => Promise<void>;
-  updateMember: (memberId: string, updates: Partial<HouseholdMember>) => Promise<void>;
-  removeMember: (memberId: string) => Promise<void>;
-  deleteHousehold: () => Promise<void>;
-
-  // Kid Profile Actions (Plan 080a-2)
-  addKidProfile: (input: { displayName: string; avatarColor?: string; avatarEmoji?: string }) => Promise<void>;
-  updateKidProfile: (memberId: string, updates: { displayName?: string; avatarColor?: string; avatarEmoji?: string }) => Promise<void>;
-  removeKidProfile: (memberId: string) => Promise<void>;
-
-  // Active member (kid-mode switching)
-  activeMemberId: string | null;
-  actAs: (memberId: string) => void;
-  exitToParent: () => void;
-
-  // Onboarding
-  /** Mark the first-run onboarding wizard as finished so it is never shown again. */
-  completeOnboarding: () => Promise<void>;
-
-  /** Set the household's display currency (ISO-4217 code, e.g. 'USD', 'EUR'). */
-  setHouseholdCurrency: (currency: string) => Promise<void>;
-
-  /** Plan 090 — toggle a module on/off for the household (merge-writes moduleVisibility.<key>). */
-  setModuleVisibility: (key: ModuleKey, value: boolean) => Promise<void>;
-
-  /** Set (raw PIN, salted+hashed before write) or clear (null) the Kid Mode exit PIN. */
-  setKidModePin: (pin: string | null) => Promise<void>;
-
-  // Meal Actions
-  addMeal: (meal: Omit<Meal, 'id'>, options?: { suppressToast?: boolean }) => Promise<string>;
-  updateMeal: (meal: Meal) => Promise<void>;
-  deleteMeal: (id: string) => Promise<void>;
-
-  // Shopping List Actions
-  addShoppingItem: (item: Omit<ShoppingItem, 'id'>) => Promise<void>;
-  addShoppingItems: (items: Omit<ShoppingItem, 'id'>[]) => Promise<void>;
-  updateShoppingItem: (item: ShoppingItem) => Promise<void>;
-  reorderShoppingItems: (items: ShoppingItem[]) => Promise<void>;
-  deleteShoppingItem: (id: string) => Promise<void>;
-  toggleShoppingItemPurchased: (id: string) => Promise<void>;
-  clearPurchasedShoppingItems: () => Promise<void>;
-
-  // Shopping Settings Actions
-  addStore: (store: Omit<Store, 'id'>) => Promise<void>;
-  updateStore: (store: Store) => Promise<void>;
-  deleteStore: (id: string) => Promise<void>;
-  updateGroceryCategories: (categories: string[]) => Promise<void>;
-  addQuickStockList: (list: Omit<QuickStockList, 'id'>) => Promise<void>;
-  updateQuickStockList: (list: QuickStockList) => Promise<void>;
-  /**
-   * Replaces the ENTIRE quickStockLists array in a single write. Use this when a
-   * mutation touches more than one list at once (e.g. moving a catalog item from
-   * one list to another), so the change can't be split across two sequential
-   * `updateQuickStockList` calls that both start from the same stale snapshot and
-   * clobber each other.
-   */
-  updateQuickStockLists: (lists: QuickStockList[]) => Promise<void>;
-  deleteQuickStockList: (id: string) => Promise<void>;
-
-  // Grocery Catalog Actions
-  addGroceryCatalogItem: (item: Omit<GroceryCatalogItem, 'id'>) => Promise<string>;
-  updateGroceryCatalogItem: (id: string, updates: Partial<GroceryCatalogItem>) => Promise<void>;
-  deleteGroceryCatalogItem: (id: string) => Promise<void>;
-
-  // Meal Plan Actions
-  addMealPlanItem: (item: Omit<MealPlanItem, 'id'>, options?: { suppressToast?: boolean, throwOnError?: boolean }) => Promise<void>;
-  updateMealPlanItem: (id: string, updates: Partial<MealPlanItem>) => Promise<void>;
-  deleteMealPlanItem: (id: string) => Promise<void>;
-
-  // To-Do Actions
-  addToDo: (todo: Omit<ToDo, 'id' | 'createdAt' | 'createdBy'>) => Promise<void>;
-  updateToDo: (id: string, updates: Partial<ToDo>) => Promise<void>;
-  deleteToDo: (id: string) => Promise<void>;
-  completeToDo: (id: string) => Promise<void>;
-}
-
-// --- DOMAIN CONTEXT SLICES ---
-//
-// The household state is split into five domain slices so a component only
-// re-renders when the slice it actually reads changes (adding a transaction no
-// longer re-renders the meal planner, etc.). The slice value types are derived
-// from `HouseholdContextType` with `Pick` so they stay in sync with the legacy
-// shape automatically — there is a single source of truth for every field.
-
-export type FinanceContextValue = Pick<HouseholdContextType,
-  | 'safeToSpend' | 'safeToSpendBreakdown' | 'accounts' | 'buckets' | 'calendarItems' | 'transactions'
-  | 'currentPeriodId' | 'bucketSpentMap' | 'bucketHistory'
-  | 'transactionWindowStart' | 'isLoadingOlderTransactions' | 'hasMoreTransactions'
-  | 'loadOlderTransactions' | 'loadAllTransactions'
-  | 'isLoadingOlderBucketHistory' | 'hasMoreBucketHistory' | 'loadAllBucketHistory'
-  | 'addAccount' | 'updateAccountBalance' | 'setAccountGoal' | 'setAccountCardLast4' | 'deleteAccount'
-  | 'updateAccountOrder' | 'reorderAccounts'
-  | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'reallocateBucket'
-  | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
-  | 'addTransaction' | 'updateTransactionCategory' | 'updateTransaction' | 'deleteTransaction' | 'splitTransaction'
-  | 'mergeTransactions' | 'keepBothTransactions'
->;
-
-export type GamificationContextValue = Pick<HouseholdContextType,
-  | 'dailyPoints' | 'weeklyPoints' | 'totalPoints' | 'habits'
-  | 'activeChallenge' | 'challenges'
-  | 'yearlyGoals' | 'activeYearlyGoals' | 'primaryYearlyGoal'
-  | 'rewardsInventory' | 'freezeBank'
-  | 'addHabit' | 'updateHabit' | 'deleteHabit' | 'reorderHabits' | 'toggleHabit' | 'resetHabit'
-  | 'addHabitSubmission' | 'updateHabitSubmission' | 'deleteHabitSubmission' | 'getHabitSubmissions'
-  | 'updateChallenge' | 'addChallenge' | 'markChallengeComplete' | 'redeemReward'
-  | 'addReward' | 'updateReward' | 'deleteReward'
-  | 'requestRedemption' | 'approveRedemption' | 'denyRedemption'
-  | 'createYearlyGoal' | 'updateYearlyGoal' | 'updateYearlyGoalProgress' | 'deleteYearlyGoal'
-  | 'useFreezeBankToken' | 'rolloverFreezeBankTokens'
->;
-
-export type MealPlanContextValue = Pick<HouseholdContextType,
-  | 'meals' | 'mealPlan' | 'ensureMealPlanWeek'
-  | 'addMeal' | 'updateMeal' | 'deleteMeal'
-  | 'addMealPlanItem' | 'updateMealPlanItem' | 'deleteMealPlanItem'
->;
-
-export type ShoppingContextValue = Pick<HouseholdContextType,
-  | 'shoppingList' | 'groceryCatalog' | 'stores' | 'groceryCategories' | 'quickStockLists'
-  | 'addShoppingItem' | 'addShoppingItems' | 'updateShoppingItem' | 'reorderShoppingItems'
-  | 'deleteShoppingItem' | 'toggleShoppingItemPurchased' | 'clearPurchasedShoppingItems'
-  | 'addStore' | 'updateStore' | 'deleteStore' | 'updateGroceryCategories'
-  | 'addQuickStockList' | 'updateQuickStockList' | 'updateQuickStockLists' | 'deleteQuickStockList'
-  | 'addGroceryCatalogItem' | 'updateGroceryCatalogItem' | 'deleteGroceryCatalogItem'
->;
-
-/** Backward-compatible union of both meal-plan and shopping slices. */
-export type MealsContextValue = MealPlanContextValue & ShoppingContextValue;
-
-export type TodosContextValue = Pick<HouseholdContextType,
-  | 'todos' | 'addToDo' | 'updateToDo' | 'deleteToDo' | 'completeToDo'
-  | 'isLoadingOlderTodos' | 'hasMoreCompletedTodos' | 'loadOlderCompletedTodos'
->;
-
-export type HouseholdCoreContextValue = Pick<HouseholdContextType,
-  | 'isLoading' | 'currentUser' | 'members'
-  | 'insight' | 'insightsHistory' | 'isGeneratingInsight'
-  | 'hasMoreInsights' | 'loadAllInsights'
-  | 'pendingItemsCount' | 'apiKeys'
-  | 'householdId' | 'householdSettings' | 'household'
-  | 'refreshInsight' | 'addMember' | 'updateMember' | 'removeMember' | 'deleteHousehold'
-  | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'setKidModePin'
-  | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
-  | 'activeMemberId' | 'actAs' | 'exitToParent'
-  | 'recaps'
->;
 
 const FinanceContext = createContext<FinanceContextValue | undefined>(undefined);
 const GamificationContext = createContext<GamificationContextValue | undefined>(undefined);
