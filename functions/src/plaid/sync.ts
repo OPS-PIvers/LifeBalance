@@ -3,6 +3,8 @@ import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { PLAID_SECRETS, makePlaidClient } from "./client";
 import { plaidTransactionToDoc, type PlaidTxnInput } from "./mapping";
+import { decidePlaidWrite, type ExistingRow } from "./dedup";
+import { DUPLICATE_WINDOW_DAYS } from "../quickAdd/transactionIdentity";
 
 /** Plaid transaction ids are URL-safe; strip anything unexpected so the value is
  *  a safe Firestore doc id (deterministic id = cheap, idempotent dedup). */
@@ -56,6 +58,46 @@ export const plaidsynctransactions = onSchedule(
         .map((d) => d.data()?.name)
         .filter((n): n is string => typeof n === "string");
 
+      // Cross-path dedup (plan 03 PR-3): fetch this household's transactions
+      // once, up front, and reuse the same set as the fingerprint-window
+      // candidate pool for EVERY Plaid transaction in this sync (one query per
+      // household per sync, not per txn). A single-field `date >=` query needs
+      // no composite index; the window is small (≤ DUPLICATE_WINDOW_DAYS back
+      // from today, since that's the widest lag isLikelyDuplicate considers)
+      // so filtering candidates further (by day-distance to each incoming txn)
+      // happens in memory inside dedup.ts via isLikelyDuplicate itself.
+      const windowStart = new Date();
+      windowStart.setDate(windowStart.getDate() - DUPLICATE_WINDOW_DAYS);
+      const windowStartStr = windowStart.toISOString().slice(0, 10);
+      const recentSnap = await hhRef
+        .collection("transactions")
+        .where("date", ">=", windowStartStr)
+        .get();
+      const recentRows: ExistingRow[] = recentSnap.docs
+        .map((d): ExistingRow | null => {
+          const data = d.data() as Record<string, unknown>;
+          if (
+            typeof data.amount !== "number" ||
+            typeof data.merchant !== "string" ||
+            typeof data.date !== "string" ||
+            typeof data.category !== "string" ||
+            (data.status !== "verified" && data.status !== "pending_review")
+          ) {
+            return null;
+          }
+          return {
+            id: d.id,
+            amount: data.amount,
+            merchant: data.merchant,
+            date: data.date,
+            category: data.category,
+            status: data.status,
+            accountId: typeof data.accountId === "string" ? data.accountId : undefined,
+            needsAmount: data.needsAmount === true,
+          };
+        })
+        .filter((row): row is ExistingRow => row !== null);
+
       for (const itemDoc of items) {
         const { accessToken, cursor } = itemDoc.data() as {
           accessToken?: string;
@@ -78,9 +120,36 @@ export const plaidsynctransactions = onSchedule(
               );
               const existing = await ref.get();
               if (existing.exists) continue; // dedup (also preserves user edits)
+
+              const mapped = plaidTransactionToDoc(p as PlaidTxnInput, { bucketNames, lastPaycheckDate });
+              const decision = decidePlaidWrite(mapped, recentRows);
+
+              if (decision.action === "skip-annotate-existing") {
+                // A confident duplicate of an existing row from another path:
+                // don't write a second row — annotate the existing one with the
+                // Plaid link (its own `source` is left as-is; Plaid didn't win).
+                await hhRef.collection("transactions").doc(decision.existingId).update({
+                  plaidTransactionId: p.transaction_id,
+                });
+                continue;
+              }
+
               await ref.set({
-                ...plaidTransactionToDoc(p as PlaidTxnInput, { bucketNames, lastPaycheckDate }),
+                ...mapped,
+                ...(decision.possibleDuplicateOf ? { possibleDuplicateOf: decision.possibleDuplicateOf } : {}),
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+              // Newly-inserted Plaid rows are themselves eligible candidates for
+              // later transactions in this SAME page (e.g. two near-identical
+              // Plaid txns for the same purchase, unlikely but not impossible).
+              recentRows.push({
+                id: ref.id,
+                amount: mapped.amount,
+                merchant: mapped.merchant,
+                date: mapped.date,
+                category: mapped.category,
+                status: mapped.status,
+                needsAmount: false,
               });
             }
             nextCursor = resp.data.next_cursor;
