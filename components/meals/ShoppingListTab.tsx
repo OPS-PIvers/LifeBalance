@@ -534,6 +534,7 @@ const ShoppingListTab: React.FC = () => {
         {quickStockLists && quickStockLists.length > 0 && (
             <div>
                 <button
+                    type="button"
                     onClick={() => setRestockOpen((o) => !o)}
                     aria-expanded={restockOpen}
                     className="flex items-center gap-1.5 px-1 text-xxs font-bold uppercase tracking-wider text-brand-400 hover:text-brand-600 dark:text-brand-500 dark:hover:text-brand-300 transition-colors"
@@ -669,7 +670,8 @@ const ShoppingListTab: React.FC = () => {
                     />
                 ))
             ) : (
-                <Reorder.Group axis="y" values={items} onReorder={handleReorder} as="div">
+                // as="ul" so the li Reorder.Items nest validly; list-none kills marker styling
+                <Reorder.Group axis="y" values={items} onReorder={handleReorder} as="ul" className="list-none">
                     {items.map(item => (
                         <ShoppingItemRow
                             key={item.id}

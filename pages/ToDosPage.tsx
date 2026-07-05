@@ -679,6 +679,7 @@ const ToDosPage: React.FC = () => {
                         assignee. Retains aria-label "Add new task" so it is the
                         page's full-add entry point. */}
                     <button
+                      type="button"
                       onClick={openAddModal}
                       aria-label="Add new task"
                       title="Add with date & assignee"
