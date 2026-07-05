@@ -101,6 +101,15 @@ export interface Account {
    *  accounts without a card (savings) or the user hasn't tagged one leave it
    *  unset, and untagged transactions fall back to the checking account. */
   cardLast4?: string;
+  /** Advisory balance from a linked Plaid account (server-written by
+   *  `plaidsynctransactions`; see CLAUDE.md Atomicity notes). NEVER overwrites
+   *  `balance` — the manual field stays authoritative; these three fields only
+   *  power the "Update to bank balance" chip in the budget account cards.
+   *  Absent for accounts with no linked Plaid mapping. */
+  plaidBalanceCurrent?: number;
+  plaidBalanceAvailable?: number;
+  /** ISO timestamp of the last successful balance read for this account. */
+  plaidBalanceUpdatedAt?: string;
 }
 
 export interface SubBucket {
@@ -183,6 +192,24 @@ export interface Transaction {
    *  Safe-to-Spend — deferring the review doesn't defer the money). Cleared when
    *  the transaction is verified. Absent on never-deferred rows. */
   reviewSnoozedUntil?: string;
+  /** Plan 04: a Plaid `modified` update to a row the user already `verified`
+   *  (so it was NOT clobbered — see functions/src/plaid/revisions.ts). Holds
+   *  only the fields that actually changed. Surfacing a review UI for this is
+   *  OUT of scope for plan 04; the field is written and passed through so a
+   *  future review surface has something to read. Absent on rows with no
+   *  pending Plaid revision. */
+  plaidRevision?: {
+    amount?: number;
+    merchant?: string;
+    date?: string;
+    /** ISO timestamp of when the revision was recorded. */
+    revisedAt?: string;
+  };
+  /** Plan 04: Plaid reported this `verified` row as `removed` from the bank's
+   *  data (e.g. a pending charge that never settled). The row is NOT deleted
+   *  — the user's money already moved in-app — so this flags it for manual
+   *  reconciliation instead. Absent on rows Plaid has not reported removed. */
+  plaidRemoved?: boolean;
 }
 
 export interface CalendarItem {
