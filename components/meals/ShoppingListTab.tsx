@@ -497,7 +497,58 @@ const ShoppingListTab: React.FC = () => {
             className="px-0 pt-4 pb-2"
             title="Shopping list"
             actions={
-                <div className="relative">
+                <div className="flex items-center gap-1">
+                    {/* Store filter — lives in the title row (owner decision:
+                        filtering is about VIEWING the list, so it belongs with
+                        the page-level controls, not the add row). Quiet icon at
+                        rest; an accent pill with the store name + inline clear
+                        when active, so the scoped view stays glanceable. */}
+                    <div className="relative flex-none">
+                        {filterStore ? (
+                            <div className="flex items-center bg-accent-50 text-accent-700 dark:bg-accent-900/30 dark:text-accent-200 rounded-full">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsFilterOpen(!isFilterOpen)}
+                                    aria-label={`Filter by store: ${filterStore}`}
+                                    aria-expanded={isFilterOpen}
+                                    aria-haspopup="menu"
+                                    className="flex items-center gap-1.5 pl-3 pr-1.5 py-2 text-xs font-medium max-w-[38vw]"
+                                >
+                                    <Filter className="w-4 h-4 shrink-0" />
+                                    <span className="truncate">{filterStore}</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setFilterStore(null)}
+                                    aria-label="Clear store filter"
+                                    className="pr-2.5 py-2 hover:text-accent-900 dark:hover:text-accent-50 transition-colors"
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => setIsFilterOpen(!isFilterOpen)}
+                                aria-label="Filter by store"
+                                aria-expanded={isFilterOpen}
+                                aria-haspopup="menu"
+                                className="p-2 text-brand-500 hover:text-accent-600 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-400 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
+                            >
+                                <Filter className="w-5 h-5" />
+                            </button>
+                        )}
+
+                        {isFilterOpen && (
+                            <FilterDropdown
+                                filterStore={filterStore}
+                                stores={stores}
+                                onSelect={(name) => { setFilterStore(name); setIsFilterOpen(false); }}
+                                onClose={() => setIsFilterOpen(false)}
+                            />
+                        )}
+                    </div>
+                    <div className="relative">
                     <button
                         onClick={() => setMenuOpen((o) => !o)}
                         aria-label="Shopping list actions"
@@ -523,6 +574,7 @@ const ShoppingListTab: React.FC = () => {
                             items={menuItems}
                         />
                     )}
+                    </div>
                 </div>
             }
         />
@@ -585,53 +637,6 @@ const ShoppingListTab: React.FC = () => {
                     disabled={!newItemText.trim()}
                     submitLabel="Add item to shopping list"
                 />
-
-                {/* Filter — kept first-class & always visible (NOT in the overflow
-                    menu) because its active store scope must stay glanceable. A
-                    quiet icon at rest; an accent pill with the store name + inline
-                    clear when active (replacing the old "Clear filter: X" row). */}
-                <div className="relative flex-none mr-2">
-                    {filterStore ? (
-                        <div className="flex items-center bg-accent-50 text-accent-700 dark:bg-accent-900/30 dark:text-accent-200 rounded-btn">
-                            <button
-                                onClick={() => setIsFilterOpen(!isFilterOpen)}
-                                aria-label={`Filter by store: ${filterStore}`}
-                                aria-expanded={isFilterOpen}
-                                aria-haspopup="menu"
-                                className="flex items-center gap-1.5 pl-3 pr-1.5 py-3 text-xs font-medium max-w-[38vw]"
-                            >
-                                <Filter className="w-4 h-4 shrink-0" />
-                                <span className="truncate">{filterStore}</span>
-                            </button>
-                            <button
-                                onClick={() => setFilterStore(null)}
-                                aria-label="Clear store filter"
-                                className="pr-2.5 py-3 hover:text-accent-900 dark:hover:text-accent-50 transition-colors"
-                            >
-                                <X className="w-3.5 h-3.5" />
-                            </button>
-                        </div>
-                    ) : (
-                        <button
-                            onClick={() => setIsFilterOpen(!isFilterOpen)}
-                            aria-label="Filter by store"
-                            aria-expanded={isFilterOpen}
-                            aria-haspopup="menu"
-                            className="flex items-center justify-center p-3 rounded-btn text-brand-600 hover:text-brand-900 hover:bg-brand-100 dark:text-brand-300 dark:hover:text-brand-50 dark:hover:bg-brand-700/50 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
-                        >
-                            <Filter className="w-5 h-5" />
-                        </button>
-                    )}
-
-                    {isFilterOpen && (
-                        <FilterDropdown
-                            filterStore={filterStore}
-                            stores={stores}
-                            onSelect={(name) => { setFilterStore(name); setIsFilterOpen(false); }}
-                            onClose={() => setIsFilterOpen(false)}
-                        />
-                    )}
-                </div>
             </div>
 
             {isLoading ? (
