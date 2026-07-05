@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useMealPlan, useShopping, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
-import { Plus, Trash2, Edit2, ChevronRight, ChevronLeft, ShoppingCart, Copy, CheckCircle2, MoreVertical, MoreHorizontal, CalendarDays, Eye, Utensils } from 'lucide-react';
+import { Plus, Trash2, Edit2, ChevronRight, ShoppingCart, Copy, CheckCircle2, MoreVertical, MoreHorizontal, CalendarDays, Eye, Utensils } from 'lucide-react';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
@@ -22,6 +22,12 @@ import EmptyState from '@/components/ui/EmptyState';
 import { Sparkles } from 'lucide-react';
 import { haptic } from '@/utils/haptics';
 import clsx from 'clsx';
+
+// Scrollable date-strip range, in weeks either side of the current week. The
+// strip is one continuous run of days (not week pages), so navigation is a
+// free horizontal scroll; these bounds just cap how far it extends.
+const STRIP_WEEKS_BACK = 8;
+const STRIP_WEEKS_FORWARD = 12;
 
 // Static lookup tables — defined at module scope so they are never re-created.
 const MEAL_TYPE_ORDER: Record<string, number> = { breakfast: 0, lunch: 1, dinner: 2, snack: 3 };
@@ -180,25 +186,25 @@ const MealPlanTab: React.FC = () => {
   });
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
 
-  // Calendar Logic — memoized so re-renders caused by unrelated state (modals, etc.)
-  // don't recompute the week grid on every keystroke.
+  // Calendar Logic — `weekStart` still anchors the week-scoped actions (Plan my
+  // week, Copy last week, Shop for this week) to the week containing the
+  // selected day, even though navigation is now a free-scrolling day strip.
   const weekStart = useMemo(() => startOfWeek(selectedDate, { weekStartsOn: 1 }), [selectedDate]);
-  // Pre-format the per-day label strings here (once per week change) so the
-  // day-strip render doesn't call `format` four times per day on every render.
-  const weekDays = useMemo(
-    () =>
-      Array.from({ length: 7 }, (_, i) => {
-        const date = addDays(weekStart, i);
-        return {
-          date,
-          dateStr: format(date, 'yyyy-MM-dd'),
-          dayLetter: format(date, 'EEEEE'),
-          dayNumber: format(date, 'd'),
-          ariaLabel: format(date, 'EEEE, MMMM d'),
-        };
-      }),
-    [weekStart]
-  );
+  // The full run of days rendered in the scrollable strip. Anchored to the
+  // current week and pre-formatted once — the strip render never calls `format`.
+  const stripDays = useMemo(() => {
+    const rangeStart = addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), -7 * STRIP_WEEKS_BACK);
+    return Array.from({ length: 7 * (STRIP_WEEKS_BACK + STRIP_WEEKS_FORWARD + 1) }, (_, i) => {
+      const date = addDays(rangeStart, i);
+      return {
+        date,
+        dateStr: format(date, 'yyyy-MM-dd'),
+        dayLetter: format(date, 'EEEEE'),
+        dayNumber: format(date, 'd'),
+        ariaLabel: format(date, 'EEEE, MMMM d'),
+      };
+    });
+  }, []);
 
   const addIngredientsToShoppingList = async (mealIngredients: MealIngredient[]) => {
       const ingredientsToAdd = mealIngredients.filter(ing => {
@@ -589,30 +595,77 @@ const MealPlanTab: React.FC = () => {
 
   // --- Derived view data ---------------------------------------------------
   // Compute "now" once so all derived strings use the same instant.
-  const { todayStr, selectedDateStr, weekStartStr, weekEndStr, isCurrentWeek } = useMemo(() => {
-    const now = new Date();
-    const wStartStr = format(weekStart, 'yyyy-MM-dd');
-    return {
-      todayStr: format(now, 'yyyy-MM-dd'),
-      selectedDateStr: format(selectedDate, 'yyyy-MM-dd'),
-      weekStartStr: wStartStr,
-      weekEndStr: format(addDays(weekStart, 6), 'yyyy-MM-dd'),
-      isCurrentWeek: wStartStr === format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd'),
-    };
-  }, [selectedDate, weekStart]);
+  const { todayStr, selectedDateStr, weekStartStr } = useMemo(() => ({
+    todayStr: format(new Date(), 'yyyy-MM-dd'),
+    selectedDateStr: format(selectedDate, 'yyyy-MM-dd'),
+    weekStartStr: format(weekStart, 'yyyy-MM-dd'),
+  }), [selectedDate, weekStart]);
 
-  // Count meals per day this week (for the day-strip indicators) — O(N) scan.
-  // The aggregate week total is intentionally not surfaced as text: the
-  // day-strip dots already show it per-day (audit: redundant subtitle).
+  // Count meals per day (for the day-strip indicators) — O(N) scan over every
+  // loaded plan item, since the scrollable strip is no longer week-confined.
+  // Note: the listener only keeps the current week ± 1 (plus fetched weeks)
+  // live, so far-off days simply show no dots until they're visited.
   const countByDate = useMemo(() => {
     const counts = new Map<string, number>();
     for (const item of mealPlan || []) {
-      if (item.date >= weekStartStr && item.date <= weekEndStr) {
-        counts.set(item.date, (counts.get(item.date) || 0) + 1);
-      }
+      counts.set(item.date, (counts.get(item.date) || 0) + 1);
     }
     return counts;
-  }, [mealPlan, weekStartStr, weekEndStr]);
+  }, [mealPlan]);
+
+  // --- Scrollable strip mechanics -------------------------------------------
+  const stripRef = useRef<HTMLDivElement>(null);
+  const didInitialScrollRef = useRef(false);
+
+  // Center a day chip in the strip; instant on first paint, smooth afterwards.
+  const scrollStripTo = useCallback((dateStr: string) => {
+    const container = stripRef.current;
+    const chip = container?.querySelector<HTMLElement>(`[data-date="${dateStr}"]`);
+    if (!container || !chip) return;
+    const left = chip.offsetLeft - (container.clientWidth - chip.offsetWidth) / 2;
+    if (typeof container.scrollTo === 'function') {
+      container.scrollTo({ left, behavior: didInitialScrollRef.current ? 'smooth' : 'auto' });
+    } else {
+      // jsdom (tests) has no Element.scrollTo
+      container.scrollLeft = left;
+    }
+    didInitialScrollRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    scrollStripTo(selectedDateStr);
+  }, [selectedDateStr, scrollStripTo]);
+
+  // Month label above the strip follows the center of the viewport as the user
+  // scrolls. Reads are batched into one rAF per frame so rapid scroll events
+  // don't thrash layout (identical-string setState bails out, so it's cheap).
+  const [visibleMonth, setVisibleMonth] = useState(() => format(new Date(), 'MMMM yyyy'));
+  const scrollRafRef = useRef(0);
+  const handleStripScroll = useCallback(() => {
+    if (scrollRafRef.current) return;
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = 0;
+      const container = stripRef.current;
+      if (!container) return;
+      const first = container.children[0] as HTMLElement | undefined;
+      const second = container.children[1] as HTMLElement | undefined;
+      if (!first || !second) return;
+      const stride = second.offsetLeft - first.offsetLeft;
+      if (stride <= 0) return;
+      const rawIdx = Math.round((container.scrollLeft + container.clientWidth / 2 - first.offsetLeft) / stride);
+      const day = stripDays[Math.min(stripDays.length - 1, Math.max(0, rawIdx))];
+      if (day) setVisibleMonth(format(day.date, 'MMMM yyyy'));
+    });
+  }, [stripDays]);
+  useEffect(() => () => cancelAnimationFrame(scrollRafRef.current), []);
+
+  const handleJumpToToday = useCallback(() => {
+    const todayDateStr = format(new Date(), 'yyyy-MM-dd');
+    if (selectedDateStr !== todayDateStr) setSelectedDate(new Date());
+    // Re-center explicitly — when today is already selected the centering
+    // effect won't re-run because selectedDateStr is unchanged.
+    scrollStripTo(todayDateStr);
+  }, [scrollStripTo, selectedDateStr]);
 
   // Filtered + sorted meals for the selected day.
   const dayMeals = useMemo(
@@ -655,10 +708,122 @@ const MealPlanTab: React.FC = () => {
 
   return (
     <div className="space-y-3 pb-20">
-      {/* Selected day agenda — leads the page so today's meals are visible
-          without scrolling; the week strip is demoted to a slim secondary
-          control below it. */}
-      <div className="space-y-3 pt-2">
+      {/* Date selector — leads the page above the day's meals (owner request,
+          reversing the earlier agenda-first order). A slim actions row (month
+          label + Today / Plan my week / overflow) sits above one continuous
+          horizontally scrollable run of day chips, so date selection isn't
+          confined to a single week. */}
+      <div className="surface-section p-2 pt-1.5 space-y-1">
+        <div className="flex items-center justify-between pl-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-brand-500 dark:text-brand-400">
+                {visibleMonth}
+            </span>
+            <div className="flex items-center">
+                {/* Today — shown once the selection has left today */}
+                {selectedDateStr !== todayStr && (
+                    <button
+                        onClick={handleJumpToToday}
+                        aria-label="Jump to today"
+                        title="Today"
+                        className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50 shrink-0"
+                    >
+                        <CalendarDays className="w-4 h-4" />
+                    </button>
+                )}
+
+                <button
+                    onClick={() => setIsWeeklyPlanOpen(true)}
+                    aria-label="Plan my week"
+                    title="Plan my week"
+                    className="p-2 text-accent-600 hover:text-accent-700 hover:bg-accent-50 rounded-full transition-colors active:scale-95 dark:text-accent-300 dark:hover:text-accent-200 dark:hover:bg-accent-900/30 shrink-0"
+                >
+                    <Sparkles className="w-4 h-4" />
+                </button>
+
+                <div className="relative shrink-0">
+                    <button
+                        type="button"
+                        onClick={() => setIsWeekMenuOpen(v => !v)}
+                        className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
+                        aria-label="More week actions"
+                        aria-haspopup="menu"
+                        aria-expanded={isWeekMenuOpen}
+                    >
+                        <MoreHorizontal className="w-4 h-4" />
+                    </button>
+                    <Menu
+                        isOpen={isWeekMenuOpen}
+                        onClose={() => setIsWeekMenuOpen(false)}
+                        items={weekMenuItems}
+                        ariaLabel="Week actions"
+                        position="top-full right-0 mt-2"
+                        className="min-w-[208px]"
+                    />
+                </div>
+            </div>
+        </div>
+
+        {/* Day strip — one continuous scrollable run of days */}
+        <div
+            ref={stripRef}
+            onScroll={handleStripScroll}
+            className="relative flex gap-1 overflow-x-auto no-scrollbar snap-x"
+        >
+            {stripDays.map(day => {
+                const { dateStr } = day;
+                const count = countByDate.get(dateStr) || 0;
+                const isSelected = dateStr === selectedDateStr;
+                const isToday = dateStr === todayStr;
+
+                return (
+                    <button
+                        key={dateStr}
+                        data-date={dateStr}
+                        onClick={() => setSelectedDate(day.date)}
+                        aria-label={`${day.ariaLabel}${count > 0 ? `, ${count} meals planned` : ''}`}
+                        aria-pressed={isSelected}
+                        className={clsx(
+                            "w-12 shrink-0 snap-center flex flex-col items-center gap-0.5 py-1.5 rounded-btn transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95",
+                            isSelected
+                                ? "bg-accent-600"
+                                : "hover:bg-brand-100 dark:hover:bg-brand-700/50"
+                        )}
+                    >
+                        <span className={clsx(
+                            "text-xxs font-bold uppercase tracking-wide",
+                            isSelected ? "text-white/80" : "text-brand-400 dark:text-brand-500"
+                        )}>
+                            {day.dayLetter}
+                        </span>
+                        <span className={clsx(
+                            "w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold tabular-nums transition-colors",
+                            isSelected
+                                ? "text-white"
+                                : isToday
+                                    ? "bg-accent-100 text-accent-700 ring-1 ring-accent-300 dark:bg-accent-900/40 dark:text-accent-200 dark:ring-accent-700"
+                                    : "text-brand-700 dark:text-brand-300"
+                        )}>
+                            {day.dayNumber}
+                        </span>
+                        <span className="flex items-center justify-center gap-0.5 h-1">
+                            {Array.from({ length: Math.min(count, 3) }).map((_, i) => (
+                                <span
+                                    key={i}
+                                    className={clsx(
+                                        "w-1 h-1 rounded-full",
+                                        isSelected ? "bg-white/80" : "bg-accent-400"
+                                    )}
+                                />
+                            ))}
+                        </span>
+                    </button>
+                );
+            })}
+        </div>
+      </div>
+
+      {/* Selected day agenda */}
+      <div className="space-y-3">
         <div className="flex items-end justify-between px-1">
             <div>
                 <h3 className="font-display text-xl font-semibold text-brand-900 dark:text-brand-50 tracking-tight leading-none">
@@ -771,125 +936,6 @@ const MealPlanTab: React.FC = () => {
                 }
             />
         )}
-      </div>
-
-      {/* Slim week strip — a compact secondary control below today's meals
-          (owner decision: today's content leads, the calendar demotes). Week
-          nav + day-strip + "Plan my week" (now icon-only, secondary) all
-          collapse into one flat row instead of the previous full card. */}
-      <div className="surface-section p-2 flex items-center gap-1.5">
-        <button
-            onClick={() => setSelectedDate(d => addDays(d, -7))}
-            className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50 shrink-0"
-            aria-label="Previous week"
-        >
-            <ChevronLeft className="w-4 h-4" />
-        </button>
-
-        {/* Day strip — whole week at a glance */}
-        <div className="flex gap-0.5 flex-1 min-w-0">
-            {weekDays.map(day => {
-                const { dateStr } = day;
-                const count = countByDate.get(dateStr) || 0;
-                const isSelected = dateStr === selectedDateStr;
-                const isToday = dateStr === todayStr;
-
-                return (
-                    <button
-                        key={dateStr}
-                        onClick={() => setSelectedDate(day.date)}
-                        aria-label={`${day.ariaLabel}${count > 0 ? `, ${count} meals planned` : ''}`}
-                        aria-pressed={isSelected}
-                        className={clsx(
-                            "flex-1 flex flex-col items-center gap-0.5 py-1.5 rounded-btn transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95",
-                            isSelected
-                                ? "bg-accent-600"
-                                : "hover:bg-brand-100 dark:hover:bg-brand-700/50"
-                        )}
-                    >
-                        <span className={clsx(
-                            "text-xxs font-bold uppercase tracking-wide",
-                            isSelected ? "text-white/80" : "text-brand-400 dark:text-brand-500"
-                        )}>
-                            {day.dayLetter}
-                        </span>
-                        <span className={clsx(
-                            "w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold tabular-nums transition-colors",
-                            isSelected
-                                ? "text-white"
-                                : isToday
-                                    ? "bg-accent-100 text-accent-700 ring-1 ring-accent-300 dark:bg-accent-900/40 dark:text-accent-200 dark:ring-accent-700"
-                                    : "text-brand-700 dark:text-brand-300"
-                        )}>
-                            {day.dayNumber}
-                        </span>
-                        <span className="flex items-center justify-center gap-0.5 h-1">
-                            {Array.from({ length: Math.min(count, 3) }).map((_, i) => (
-                                <span
-                                    key={i}
-                                    className={clsx(
-                                        "w-1 h-1 rounded-full",
-                                        isSelected ? "bg-white/80" : "bg-accent-400"
-                                    )}
-                                />
-                            ))}
-                        </span>
-                    </button>
-                );
-            })}
-        </div>
-
-        <button
-            onClick={() => setSelectedDate(d => addDays(d, 7))}
-            className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50 shrink-0"
-            aria-label="Next week"
-        >
-            <ChevronRight className="w-4 h-4" />
-        </button>
-
-        {/* Today — only shown once the user has navigated away from the current week */}
-        {!isCurrentWeek && (
-            <button
-                onClick={() => setSelectedDate(new Date())}
-                aria-label="Jump to today"
-                title="Today"
-                className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50 shrink-0"
-            >
-                <CalendarDays className="w-4 h-4" />
-            </button>
-        )}
-
-        {/* "Plan my week" — demoted from a full-width primary Button to a small
-            icon-only secondary action alongside week nav. */}
-        <button
-            onClick={() => setIsWeeklyPlanOpen(true)}
-            aria-label="Plan my week"
-            title="Plan my week"
-            className="p-2 text-accent-600 hover:text-accent-700 hover:bg-accent-50 rounded-full transition-colors active:scale-95 dark:text-accent-300 dark:hover:text-accent-200 dark:hover:bg-accent-900/30 shrink-0"
-        >
-            <Sparkles className="w-4 h-4" />
-        </button>
-
-        <div className="relative shrink-0">
-            <button
-                type="button"
-                onClick={() => setIsWeekMenuOpen(v => !v)}
-                className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
-                aria-label="More week actions"
-                aria-haspopup="menu"
-                aria-expanded={isWeekMenuOpen}
-            >
-                <MoreHorizontal className="w-4 h-4" />
-            </button>
-            <Menu
-                isOpen={isWeekMenuOpen}
-                onClose={() => setIsWeekMenuOpen(false)}
-                items={weekMenuItems}
-                ariaLabel="Week actions"
-                position="bottom-full right-0 mb-2"
-                className="min-w-[208px]"
-            />
-        </div>
       </div>
 
       {/* Per-meal action sheet */}

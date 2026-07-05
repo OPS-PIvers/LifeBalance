@@ -113,13 +113,12 @@ describe('MealPlanTab', () => {
 
     render(<MealPlanTab />);
 
-    // Expected Monday start: Oct 23 - Oct 29 (Sunday start would be Oct 22 - Oct 28).
-    // The week-range headline was removed in the UX compaction (the slim week
-    // strip carries the days), so assert via the day-strip cells' aria-labels:
-    // first day is Monday Oct 23, and Sunday Oct 22 is not in the strip.
-    expect(screen.getByLabelText(/^Monday, October 23/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/^Sunday, October 29/)).toBeInTheDocument();
-    expect(screen.queryByLabelText(/^Sunday, October 22/)).not.toBeInTheDocument();
+    // The strip is a continuous scrollable run of days spanning 8 weeks back /
+    // 12 forward, anchored to a Monday-start week. From Wed Oct 25, the range
+    // begins Monday Aug 28 — a Sunday start would begin Sunday Aug 27 instead.
+    expect(screen.getByLabelText(/^Monday, August 28/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Sunday, August 27/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/^Wednesday, October 25/)).toBeInTheDocument();
   });
 
   it('orders ingredient-selector items after the highest existing order, not list length', () => {
