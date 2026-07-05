@@ -16,8 +16,6 @@ import {
   orderBy,
   increment,
   setDoc,
-  arrayUnion,
-  arrayRemove,
   limit,
   startAfter,
   type QueryDocumentSnapshot,
@@ -30,12 +28,10 @@ import {
   calendarItemConverter,
   householdMemberConverter,
   pendingItemConverter,
-  householdApiKeyConverter,
   insightConverter,
-  weeklyRecapConverter,
   transactionConverter,
 } from '@/utils/firestoreConverters';
-import { db, getFunctionsInstance } from '@/firebase.config';
+import { db } from '@/firebase.config';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Account,
@@ -71,28 +67,21 @@ import { processToggleHabit, calculatePointsForDate, calculatePointsForDateRange
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { calculateBucketSpent, getTransactionsForBucket } from '@/utils/bucketSpentCalculator';
 import { migrateBucketsToPeriods, needsMigration, migrateToPaycheckPeriods, needsPaycheckMigration } from '@/utils/migrations/payPeriodMigration';
-import { migrateFreezeBankToEnhanced, needsFreezeBankMigration } from '@/utils/migrations/freezeBankMigration';
 import { migrateOrphanedHabits, needsHabitMigration } from '@/utils/migrations/habitMigration';
 import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
 import { usePointsSync, type PointsSyncUpdate } from '@/hooks/usePointsSync';
 import { useHabitActions } from '@/hooks/useHabitActions';
 import { expandCalendarItems, parseRecurringId, isRecurringId } from '@/utils/calendarRecurrence';
 import { getLocalDateString } from '@/utils/dateHelpers';
-import { hashKidPin } from '@/utils/kidPin';
 import { roundMoney } from '@/utils/money';
 import { formatCurrency } from '@/utils/formatCurrency';
 import {
   BUCKET_HISTORY_LIMIT,
-  INSIGHTS_LIMIT,
-  RECAPS_LIMIT,
   TRANSACTION_PAGE_SIZE,
   getTransactionWindowStart,
   getMealPlanWindow,
 } from '@/utils/listenerWindows';
 import { ParsedShoppingList, ParsedTodoList, ParsedExpense } from '@/services/geminiService.types';
-import { newKidMemberId, buildKidMemberDoc } from '@/utils/kidProfile';
-import { getBillingEnabled } from '@/services/appConfig';
-import { kidProfileLimitReached } from '@/utils/entitlements';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { track } from '@/services/analytics';
 import { shouldTrackFirstTime, FIRST_TRANSACTION_FLAG } from '@/utils/firstTimeFlags';
@@ -103,6 +92,7 @@ import { attachTodoListeners } from '@/contexts/household/listeners/todoListener
 import { attachMealListeners } from '@/contexts/household/listeners/mealListeners';
 import { attachShoppingListeners } from '@/contexts/household/listeners/shoppingListeners';
 import { attachGamificationListeners } from '@/contexts/household/listeners/gamificationListeners';
+import { attachCoreListeners } from '@/contexts/household/listeners/coreListeners';
 import {
   makeAddToDo,
   makeTodoCrudMutations,
@@ -139,6 +129,19 @@ import {
   makeUseFreezeBankToken,
   makeRolloverFreezeBankTokens,
 } from '@/contexts/household/mutations/gamificationMutations';
+import {
+  makeHouseholdSettingsMutations,
+  makeRefreshInsight,
+} from '@/contexts/household/mutations/coreMutations';
+import {
+  makeAddMember,
+  makeMemberCrudMutations,
+  makeDeleteHousehold,
+} from '@/contexts/household/mutations/memberMutations';
+import {
+  makeAddKidProfile,
+  makeKidProfileCrudMutations,
+} from '@/contexts/household/mutations/kidMutations';
 import type {
   MutationOpts,
   HouseholdContextType,
@@ -665,22 +668,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       })
     );
 
-    // Weekly recaps listener (Plan 02) — bounded live window of the most recent
-    // few weeks. Docs are keyed by ISO week ('2026-Www'), which sorts
-    // chronologically as a string, so orderBy desc yields newest-first.
-    const recapsQuery = query(
-      collection(db, `households/${householdId}/recaps`).withConverter(weeklyRecapConverter),
-      orderBy('isoWeek', 'desc'),
-      limit(RECAPS_LIMIT)
-    );
-    unsubscribers.push(
-      onSnapshot(recapsQuery, (snapshot) => {
-        setRecaps(snapshot.docs.map(doc => doc.data()));
-      }, (error) => {
-        console.error('Error listening to recaps:', error);
-      })
-    );
-
     // (Transactions are handled by their own effect below so the window can
     // track the current pay period without re-subscribing every other listener.)
 
@@ -767,50 +754,21 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       })
     );
 
-    // Household settings listener (for pay period tracking and freeze bank)
-    const householdDocRef = doc(db, `households/${householdId}`);
-    unsubscribers.push(
-      onSnapshot(householdDocRef, async (snapshot) => {
-        const data = snapshot.data() as Household | undefined;
-        // Include the document ID in householdSettings
-        setHouseholdSettings(data ? { ...data, id: snapshot.id } : null);
-        // Core data has arrived — mark this household as loaded.
-        setLoadedHouseholdId(householdId);
-
-        // Extract and set freezeBank
-        if (data?.freezeBank) {
-          // Check if migration is needed
-          if (needsFreezeBankMigration(data.freezeBank)) {
-            try {
-              // Cast to unknown first to satisfy linter, then to legacy format expected by migration
-              await migrateFreezeBankToEnhanced(
-                householdId,
-                data.freezeBank as unknown as { current: number; accrued: number; lastMonth: string }
-              );
-              // Migration will trigger a new snapshot with updated data
-            } catch (error) {
-              console.error('[FreezeBank] Migration failed:', error);
-              // Fall back to a default freeze bank
-              setFreezeBank({
-                tokens: 2,
-                maxTokens: 3,
-                lastRolloverDate: getLocalDateString(),
-                lastRolloverMonth: format(new Date(), 'yyyy-MM'),
-                history: []
-              });
-            }
-          } else {
-            setFreezeBank(data.freezeBank as FreezeBank);
-          }
-        }
-      }, (error) => {
-        // Without this, a permission/network error would leave isLoading stuck
-        // true forever (permanent skeleton). Clear the loading state so the UI
-        // can recover and surface whatever data is available.
-        console.error('[Household] Failed to listen to household document:', error);
-        setLoadedHouseholdId(householdId);
-      })
-    );
+    // Core listeners: household doc (settings + freezeBank), recaps, API keys,
+    // insights (contexts/household/listeners/coreListeners.ts)
+    unsubscribers.push(...attachCoreListeners({
+      db,
+      householdId,
+      setHouseholdSettings: (data) => setHouseholdSettings(data),
+      setLoadedHouseholdId: (id) => setLoadedHouseholdId(id),
+      setFreezeBank: (data) => setFreezeBank(data),
+      setRecaps: (data) => setRecaps(data),
+      setApiKeys: (data) => setApiKeys(data),
+      setInsightsWindow: (data) => setInsightsWindow(data),
+      setHasMoreInsights: (data) => setHasMoreInsights(data),
+      setInsight: (text) => setInsight(text),
+      insightsLoadedAllRef,
+    }));
 
     // Meals + Meal Plan listeners (contexts/household/listeners/mealListeners.ts)
     unsubscribers.push(...attachMealListeners({
@@ -1052,47 +1010,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         createdAt: serverTimestamp()
       });
     }
-
-    // API Keys listener (for iOS Shortcuts)
-    const apiKeysQuery = query(collection(db, `households/${householdId}/apiKeys`).withConverter(householdApiKeyConverter));
-    unsubscribers.push(
-      onSnapshot(apiKeysQuery, (snapshot) => {
-        setApiKeys(snapshot.docs.map(doc => doc.data()));
-      }, (error) => {
-        // Silently ignore permission errors for non-admin users
-        if (error.code !== 'permission-denied') {
-          console.error('Error fetching API keys:', error);
-        }
-      })
-    );
-
-    // Insights listener — live window of the most recent N insights.
-    // The full archive is fetched on demand via loadAllInsights().
-    // Index (generatedAt DESC) is declared in firestore.indexes.json.
-    const insightsQuery = query(
-      collection(db, `households/${householdId}/insights`).withConverter(insightConverter),
-      orderBy('generatedAt', 'desc'),
-      limit(INSIGHTS_LIMIT)
-    );
-    unsubscribers.push(
-      onSnapshot(
-        insightsQuery,
-        (snapshot) => {
-          const data = snapshot.docs.map(doc => doc.data());
-          setInsightsWindow(data);
-          if (!insightsLoadedAllRef.current) {
-            setHasMoreInsights(snapshot.size >= INSIGHTS_LIMIT);
-          }
-          if (data.length > 0) {
-            setInsight(data[0]!.text); // length > 0 checked above
-          }
-        },
-        (error) => {
-          console.error('Error listening to insights collection:', error);
-          // Don't show error toast to user as this is non-critical data
-        }
-      )
-    );
 
     return () => {
       unsubscribers.forEach(unsub => unsub());
@@ -2879,97 +2796,19 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // --- ACTIONS: MEMBER MANAGEMENT ---
 
   const addMember = useCallback(async (memberData: Partial<HouseholdMember>) => {
-    if (!householdId) return;
-
-    try {
-      // If UID is not provided (e.g. manual add), generate one
-      // Note: These users cannot log in unless linked to a real auth account later
-      const newMemberUid = memberData.uid || crypto.randomUUID();
-
-      const member: HouseholdMember = {
-        uid: newMemberUid,
-        displayName: memberData.displayName || 'New Member',
-        email: memberData.email || '',
-        role: memberData.role || 'member',
-        // Spread memberData first, then override points to ensure new members start at 0
-        ...memberData,
-        points: { daily: 0, weekly: 0, total: 0 },
-      };
-
-      // Write the member doc and the household memberUids array in a SINGLE
-      // batch so they can't desync (a member doc without a matching memberUids
-      // entry would break household access rules).
-      const batch = writeBatch(db);
-      batch.set(doc(db, `households/${householdId}/members`, newMemberUid), {
-        ...member,
-        joinedAt: serverTimestamp(),
-      });
-      batch.update(doc(db, `households/${householdId}`), {
-        memberUids: arrayUnion(newMemberUid),
-      });
-      await batch.commit();
-
-      toast.success('Member added successfully');
-    } catch (error) {
-      console.error('[addMember] Failed:', error);
-      toast.error('Failed to add member');
-      throw error;
-    }
+    await makeAddMember({ db, householdId }).addMember(memberData);
   }, [householdId]);
 
   const updateMember = useCallback(async (memberId: string, updates: Partial<HouseholdMember>) => {
-    if (!householdId) return;
-
-    try {
-      await updateDoc(doc(db, `households/${householdId}/members`, memberId), updates);
-      toast.success('Member updated successfully');
-    } catch (error) {
-      console.error('[updateMember] Failed:', error);
-      toast.error('Failed to update member');
-      throw error;
-    }
+    await makeMemberCrudMutations({ db, householdId }).updateMember(memberId, updates);
   }, [householdId]);
 
   const removeMember = useCallback(async (memberId: string) => {
-    if (!householdId) return;
-
-    try {
-      // Use batch to make both operations atomic
-      const batch = writeBatch(db);
-
-      // 1. Remove from household memberUids array
-      const householdRef = doc(db, `households/${householdId}`);
-      batch.update(householdRef, {
-        memberUids: arrayRemove(memberId),
-      });
-
-      // 2. Delete member document from subcollection
-      const memberRef = doc(db, `households/${householdId}/members`, memberId);
-      batch.delete(memberRef);
-
-      // Commit both changes atomically
-      await batch.commit();
-
-      toast.success('Member removed successfully');
-    } catch (error) {
-      console.error('[removeMember] Failed:', error);
-      toast.error('Failed to remove member');
-      throw error;
-    }
+    await makeMemberCrudMutations({ db, householdId }).removeMember(memberId);
   }, [householdId]);
 
   const deleteHousehold = useCallback(async () => {
-    if (!householdId) return;
-    const [{ httpsCallable }, functions] = await Promise.all([
-      import('firebase/functions'),
-      getFunctionsInstance(),
-    ]);
-    const fn = httpsCallable(functions, 'deletehousehold');
-    await fn({ householdId });
-    toast.success('Household deleted');
-    // Hard reload so AuthContext re-resolves (no household -> routes to /setup) and
-    // all Firestore listeners tear down cleanly.
-    window.location.reload();
+    await makeDeleteHousehold({ householdId }).deleteHousehold();
   }, [householdId]);
 
   // --- ACTIONS: KID PROFILES (Plan 080a-2) ---
@@ -2977,68 +2816,18 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const addKidProfile = useCallback(async (
     input: { displayName: string; avatarColor?: string; avatarEmoji?: string }
   ): Promise<void> => {
-    if (!householdId) return;
-    const parentUid = user?.uid;
-    if (!parentUid) return;
-
-    // Plan 080e — managed-kid-profile cap. Per Plan 080 Principle 6 we gate the
-    // COUNT, never the mechanics: the cap is enforced ONLY while billing is live.
-    // While `billingEnabled` is off (current prod state) this whole block is
-    // skipped, so behavior is identical to before (ZERO change). getBillingEnabled
-    // is cheap/cached (60s TTL) and fails closed to `false`, keeping the gate
-    // dormant if config is unreachable. The cap is client-side PRODUCT logic for
-    // UX — never a security boundary (member creates for kids stay rules-allowed).
-    if (await getBillingEnabled()) {
-      const managedKidCount = membersRef.current.filter((m) => m.isManaged === true).length;
-      if (householdSettings && kidProfileLimitReached(householdSettings, managedKidCount)) {
-        toast.error('Kid profile limit reached. Upgrade to add more.');
-        throw new Error('Kid profile limit reached');
-      }
-    }
-
-    try {
-      const uid = newKidMemberId();
-      // Single doc write to the members subcollection ONLY — no memberUids update
-      // (no credential). A kid's synthetic uid can never be used to authenticate.
-      await setDoc(doc(db, `households/${householdId}/members`, uid), {
-        ...buildKidMemberDoc(input, parentUid, uid),
-        joinedAt: serverTimestamp(),
-      });
-      toast.success('Kid profile added');
-    } catch (error) {
-      console.error('[addKidProfile] Failed:', error);
-      toast.error('Failed to add kid profile');
-      throw error;
-    }
+    await makeAddKidProfile({ db, householdId, user, householdSettings, membersRef }).addKidProfile(input);
   }, [householdId, user, householdSettings]);
 
   const updateKidProfile = useCallback(async (
     memberId: string,
     updates: { displayName?: string; avatarColor?: string; avatarEmoji?: string }
   ): Promise<void> => {
-    if (!householdId) return;
-    try {
-      await updateDoc(doc(db, `households/${householdId}/members`, memberId), updates);
-    } catch (error) {
-      console.error('[updateKidProfile] Failed:', error);
-      toast.error('Failed to update kid profile');
-      throw error;
-    }
+    await makeKidProfileCrudMutations({ db, householdId, setActiveMemberId }).updateKidProfile(memberId, updates);
   }, [householdId]);
 
   const removeKidProfile = useCallback(async (memberId: string): Promise<void> => {
-    if (!householdId) return;
-    try {
-      // Kid was never added to memberUids — just delete the member doc.
-      await deleteDoc(doc(db, `households/${householdId}/members`, memberId));
-      // Functional update so the callback needn't depend on activeMemberId.
-      setActiveMemberId((prev) => (prev === memberId ? null : prev));
-      toast.success('Kid profile removed');
-    } catch (error) {
-      console.error('[removeKidProfile] Failed:', error);
-      toast.error('Failed to remove kid profile');
-      throw error;
-    }
+    await makeKidProfileCrudMutations({ db, householdId, setActiveMemberId }).removeKidProfile(memberId);
   }, [householdId]);
 
   const actAs = useCallback((memberId: string) => {
@@ -3066,13 +2855,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // --- ACTIONS: ONBOARDING ---
 
   const completeOnboarding = useCallback(async () => {
-    if (!householdId) return;
-    await updateDoc(doc(db, 'households', householdId), { onboardingComplete: true });
+    await makeHouseholdSettingsMutations({ db, householdId }).completeOnboarding();
   }, [householdId]);
 
   const setHouseholdCurrency = useCallback(async (currency: string) => {
-    if (!householdId) return;
-    await updateDoc(doc(db, 'households', householdId), { currency });
+    await makeHouseholdSettingsMutations({ db, householdId }).setHouseholdCurrency(currency);
   }, [householdId]);
 
   // Plan 090 — merge-write a single module flag using a dotted field path so
@@ -3080,21 +2867,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // fields by dotted path; a plain { moduleVisibility: {...} } would overwrite
   // the whole map). Fail-open default means absent keys stay enabled.
   const setModuleVisibility = useCallback(async (key: ModuleKey, value: boolean) => {
-    if (!householdId) return;
-    await updateDoc(doc(db, 'households', householdId), { [`moduleVisibility.${key}`]: value });
+    await makeHouseholdSettingsMutations({ db, householdId }).setModuleVisibility(key, value);
   }, [householdId]);
 
   // Plan 080b: set/clear the Kid Mode exit PIN. A raw PIN is salted+hashed here
   // (never stored plaintext); passing null removes the PIN so exiting needs none.
   const setKidModePin = useCallback(async (pin: string | null): Promise<void> => {
-    if (!householdId) return;
-    const ref = doc(db, 'households', householdId);
-    if (pin === null) {
-      await updateDoc(ref, { kidModePinHash: deleteField() });
-      return;
-    }
-    const kidModePinHash = await hashKidPin(pin);
-    await updateDoc(ref, { kidModePinHash });
+    await makeHouseholdSettingsMutations({ db, householdId }).setKidModePin(pin);
   }, [householdId]);
 
   // --- ACTIONS: MEALS ---
@@ -3263,53 +3042,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
 
   const refreshInsight = useCallback(async () => {
-    if (!householdId) return;
-
-    // Prevent rapid clicking and multiple API calls
-    if (isGeneratingInsight) {
-      toast.error('An insight is already being generated. Please wait.');
-      return;
-    }
-
-    // Validate that there's sufficient data to analyze
-    const hasTransactions = Array.isArray(transactions) && transactions.length > 0;
-    const hasHabits = Array.isArray(habits) && habits.length > 0;
-    if (!hasTransactions && !hasHabits) {
-      toast.error('Not enough data to generate insights yet. Add some transactions or habit activity first.');
-      return;
-    }
-
-    try {
-      setIsGeneratingInsight(true);
-      toast.loading('Generating insight...', { id: 'insight-loading' });
-
-      // Dynamically load Gemini service only when needed
-      const { generateInsight } = await import('@/services/geminiService');
-
-      // Get last 3 previous insights to avoid repetition
-      const previousInsightsTexts = insightsHistory
-        .slice(0, 3)
-        .map(i => i.text);
-
-      const { text, actions } = await generateInsight(householdId, transactions, habits, previousInsightsTexts);
-
-      const newInsight: Omit<Insight, 'id'> = {
-        text,
-        actions,
-        generatedAt: new Date().toISOString(),
-        type: 'general'
-      };
-
-      await addDoc(collection(db, `households/${householdId}/insights`), newInsight);
-
-      track('insight_generated');
-      toast.success('New insight generated!', { id: 'insight-loading', icon: '✨' });
-    } catch (error) {
-      console.error("Failed to generate insight:", error);
-      toast.error('Failed to generate insight', { id: 'insight-loading' });
-    } finally {
-      setIsGeneratingInsight(false);
-    }
+    await makeRefreshInsight({
+      db,
+      householdId,
+      isGeneratingInsight,
+      transactions,
+      habits,
+      insightsHistory,
+      setIsGeneratingInsight,
+    }).refreshInsight();
   }, [householdId, isGeneratingInsight, transactions, habits, insightsHistory]);
 
   // Check for freeze bank rollover on 1st of month (or first login)

@@ -1,0 +1,167 @@
+import {
+  collection,
+  query,
+  onSnapshot,
+  doc,
+  orderBy,
+  limit,
+  type Firestore,
+  type Unsubscribe,
+} from 'firebase/firestore';
+import {
+  householdApiKeyConverter,
+  insightConverter,
+  weeklyRecapConverter,
+} from '@/utils/firestoreConverters';
+import { Household, FreezeBank, Insight, HouseholdApiKey, WeeklyRecap } from '@/types/schema';
+import { migrateFreezeBankToEnhanced, needsFreezeBankMigration } from '@/utils/migrations/freezeBankMigration';
+import { getLocalDateString } from '@/utils/dateHelpers';
+import { RECAPS_LIMIT, INSIGHTS_LIMIT } from '@/utils/listenerWindows';
+import { format } from 'date-fns';
+
+/**
+ * Attaches the core household listeners that are cleanly separable from the
+ * members/pending-items logic (verbatim move from FirebaseHouseholdContext's
+ * main listener effect): the household doc (settings + freezeBank, with
+ * migration), weekly recaps, API keys, and the insights window.
+ *
+ * NOT included here (left in the main effect — see
+ * advisor-plans/08-context-decomposition.md step 4): the MEMBERS listener
+ * (entangled with the current-user-doc-recovery migration, keyed off
+ * `userRef`/`memberRecoveryAttemptedForHousehold`) and the PENDING ITEMS
+ * listener (entangled with the voice-command drain loop, which reads
+ * `bucketsRef`/`householdSettingsRef` and calls shopping/todo/transaction
+ * mutations). Both have cross-family dependencies that would not be a
+ * verbatim, dependency-array-preserving move.
+ */
+export function attachCoreListeners({
+  db,
+  householdId,
+  setHouseholdSettings,
+  setLoadedHouseholdId,
+  setFreezeBank,
+  setRecaps,
+  setApiKeys,
+  setInsightsWindow,
+  setHasMoreInsights,
+  setInsight,
+  insightsLoadedAllRef,
+}: {
+  db: Firestore;
+  householdId: string;
+  setHouseholdSettings: (settings: Household | null) => void;
+  setLoadedHouseholdId: (id: string) => void;
+  setFreezeBank: (freezeBank: FreezeBank | null) => void;
+  setRecaps: (recaps: WeeklyRecap[]) => void;
+  setApiKeys: (apiKeys: HouseholdApiKey[]) => void;
+  setInsightsWindow: (insights: Insight[]) => void;
+  setHasMoreInsights: (hasMore: boolean) => void;
+  setInsight: (text: string) => void;
+  insightsLoadedAllRef: { current: boolean };
+}): Unsubscribe[] {
+  const unsubscribers: Unsubscribe[] = [];
+
+  // Household settings listener (for pay period tracking and freeze bank)
+  const householdDocRef = doc(db, `households/${householdId}`);
+  unsubscribers.push(
+    onSnapshot(householdDocRef, async (snapshot) => {
+      const data = snapshot.data() as Household | undefined;
+      // Include the document ID in householdSettings
+      setHouseholdSettings(data ? { ...data, id: snapshot.id } : null);
+      // Core data has arrived — mark this household as loaded.
+      setLoadedHouseholdId(householdId);
+
+      // Extract and set freezeBank
+      if (data?.freezeBank) {
+        // Check if migration is needed
+        if (needsFreezeBankMigration(data.freezeBank)) {
+          try {
+            // Cast to unknown first to satisfy linter, then to legacy format expected by migration
+            await migrateFreezeBankToEnhanced(
+              householdId,
+              data.freezeBank as unknown as { current: number; accrued: number; lastMonth: string }
+            );
+            // Migration will trigger a new snapshot with updated data
+          } catch (error) {
+            console.error('[FreezeBank] Migration failed:', error);
+            // Fall back to a default freeze bank
+            setFreezeBank({
+              tokens: 2,
+              maxTokens: 3,
+              lastRolloverDate: getLocalDateString(),
+              lastRolloverMonth: format(new Date(), 'yyyy-MM'),
+              history: []
+            });
+          }
+        } else {
+          setFreezeBank(data.freezeBank as FreezeBank);
+        }
+      }
+    }, (error) => {
+      // Without this, a permission/network error would leave isLoading stuck
+      // true forever (permanent skeleton). Clear the loading state so the UI
+      // can recover and surface whatever data is available.
+      console.error('[Household] Failed to listen to household document:', error);
+      setLoadedHouseholdId(householdId);
+    })
+  );
+
+  // Weekly recaps listener (Plan 02) — bounded live window of the most recent
+  // few weeks. Docs are keyed by ISO week ('2026-Www'), which sorts
+  // chronologically as a string, so orderBy desc yields newest-first.
+  const recapsQuery = query(
+    collection(db, `households/${householdId}/recaps`).withConverter(weeklyRecapConverter),
+    orderBy('isoWeek', 'desc'),
+    limit(RECAPS_LIMIT)
+  );
+  unsubscribers.push(
+    onSnapshot(recapsQuery, (snapshot) => {
+      setRecaps(snapshot.docs.map(doc => doc.data()));
+    }, (error) => {
+      console.error('Error listening to recaps:', error);
+    })
+  );
+
+  // API Keys listener (for iOS Shortcuts)
+  const apiKeysQuery = query(collection(db, `households/${householdId}/apiKeys`).withConverter(householdApiKeyConverter));
+  unsubscribers.push(
+    onSnapshot(apiKeysQuery, (snapshot) => {
+      setApiKeys(snapshot.docs.map(doc => doc.data()));
+    }, (error) => {
+      // Silently ignore permission errors for non-admin users
+      if (error.code !== 'permission-denied') {
+        console.error('Error fetching API keys:', error);
+      }
+    })
+  );
+
+  // Insights listener — live window of the most recent N insights.
+  // The full archive is fetched on demand via loadAllInsights().
+  // Index (generatedAt DESC) is declared in firestore.indexes.json.
+  const insightsQuery = query(
+    collection(db, `households/${householdId}/insights`).withConverter(insightConverter),
+    orderBy('generatedAt', 'desc'),
+    limit(INSIGHTS_LIMIT)
+  );
+  unsubscribers.push(
+    onSnapshot(
+      insightsQuery,
+      (snapshot) => {
+        const data = snapshot.docs.map(doc => doc.data());
+        setInsightsWindow(data);
+        if (!insightsLoadedAllRef.current) {
+          setHasMoreInsights(snapshot.size >= INSIGHTS_LIMIT);
+        }
+        if (data.length > 0) {
+          setInsight(data[0]!.text); // length > 0 checked above
+        }
+      },
+      (error) => {
+        console.error('Error listening to insights collection:', error);
+        // Don't show error toast to user as this is non-critical data
+      }
+    )
+  );
+
+  return unsubscribers;
+}
