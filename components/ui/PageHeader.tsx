@@ -52,9 +52,9 @@ const PageHeader: React.FC<PageHeaderProps> = ({
         {title}
       </h1>
       {subtitle && (
-        <p className="mt-0.5 text-sm text-brand-500 dark:text-brand-400 font-medium">
+        <div className="mt-0.5 text-sm text-brand-500 dark:text-brand-400 font-medium">
           {subtitle}
-        </p>
+        </div>
       )}
     </div>
     {actions && <div className="shrink-0">{actions}</div>}

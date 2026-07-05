@@ -10,6 +10,8 @@ interface QuickAddBarProps {
   placeholder: string;
   inputRef?: React.Ref<HTMLInputElement>;
   'aria-label'?: string;
+  /** Forwarded to the underlying input (hyphenated JSX attrs aren't type-checked for forwarding). */
+  'aria-labelledby'?: string;
   /** Disable the submit button (e.g. when the value is empty). */
   disabled?: boolean;
   /** Applied to the <form> wrapper. */
@@ -48,6 +50,7 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
   placeholder,
   inputRef,
   'aria-label': ariaLabel,
+  'aria-labelledby': ariaLabelledBy,
   disabled,
   className,
   icon = <Plus size={20} />,
@@ -63,6 +66,7 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         aria-label={ariaLabel || placeholder}
+        aria-labelledby={ariaLabelledBy}
         className={cn(
           'w-full pl-4 pr-12 py-3 bg-white transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden placeholder:text-brand-400 dark:bg-brand-800 dark:text-brand-50 dark:placeholder:text-brand-500',
           attached
