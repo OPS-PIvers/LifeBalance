@@ -765,56 +765,51 @@ export const backfillanynotificationsenabled = onCall(
       );
     }
 
-    let householdsScanned = 0;
     let membersScanned = 0;
     let membersUpdated = 0;
 
-    const householdsSnapshot = await db.collection("households").get();
-    householdsScanned = householdsSnapshot.docs.length;
+    // One collection-group read replaces the households scan + per-household
+    // members reads (the N+1 shape gemini flagged) — same query family PR-2's
+    // scheduled jobs will use, so this also smoke-tests the fieldOverride index
+    // path end-to-end.
+    const membersSnapshot = await db.collectionGroup("members").get();
 
-    for (const householdDoc of householdsSnapshot.docs) {
-      const membersSnapshot = await householdDoc.ref
-        .collection("members")
-        .get();
+    // Firestore batches cap at 500 writes; use 400 for headroom alongside
+    // any other writes that might occur in the same batch (precedent: the
+    // repo's other batched-write call sites use a similar sub-500 chunk size).
+    const BATCH_SIZE = 400;
+    let batch = db.batch();
+    let opsInBatch = 0;
 
-      // Firestore batches cap at 500 writes; use 400 for headroom alongside
-      // any other writes that might occur in the same batch (precedent: the
-      // repo's other batched-write call sites use a similar sub-500 chunk size).
-      const BATCH_SIZE = 400;
-      let batch = db.batch();
-      let opsInBatch = 0;
+    for (const memberDoc of membersSnapshot.docs) {
+      membersScanned++;
+      const member = memberDoc.data() as HouseholdMember;
+      const computed = computeAnyNotificationsEnabled(
+        member.notificationPreferences,
+        member.fcmTokens
+      );
 
-      for (const memberDoc of membersSnapshot.docs) {
-        membersScanned++;
-        const member = memberDoc.data() as HouseholdMember;
-        const computed = computeAnyNotificationsEnabled(
-          member.notificationPreferences,
-          member.fcmTokens
-        );
+      // Idempotent: only write when the stored flag actually differs (or is
+      // missing), so re-running the backfill after it already succeeded is a
+      // no-op pass with zero writes.
+      if (member.anyNotificationsEnabled !== computed) {
+        batch.update(memberDoc.ref, { anyNotificationsEnabled: computed });
+        opsInBatch++;
+        membersUpdated++;
 
-        // Idempotent: only write when the stored flag actually differs (or is
-        // missing), so re-running the backfill after it already succeeded is a
-        // no-op pass with zero writes.
-        if (member.anyNotificationsEnabled !== computed) {
-          batch.update(memberDoc.ref, { anyNotificationsEnabled: computed });
-          opsInBatch++;
-          membersUpdated++;
-
-          if (opsInBatch >= BATCH_SIZE) {
-            await batch.commit();
-            batch = db.batch();
-            opsInBatch = 0;
-          }
+        if (opsInBatch >= BATCH_SIZE) {
+          await batch.commit();
+          batch = db.batch();
+          opsInBatch = 0;
         }
-      }
-
-      if (opsInBatch > 0) {
-        await batch.commit();
       }
     }
 
+    if (opsInBatch > 0) {
+      await batch.commit();
+    }
+
     logger.info("Backfill of anyNotificationsEnabled complete", {
-      householdsScanned,
       membersScanned,
       membersUpdated,
       runBy: request.auth.uid,
@@ -822,7 +817,6 @@ export const backfillanynotificationsenabled = onCall(
 
     return {
       success: true,
-      householdsScanned,
       membersScanned,
       membersUpdated,
     };

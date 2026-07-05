@@ -71,7 +71,9 @@ export function computeAnyNotificationsEnabled(
   fcmTokens: string[] | undefined
 ): boolean {
   if (!fcmTokens || fcmTokens.length === 0) return false;
-  if (!prefs) return false;
+  // No prefs object at all (legacy/new member): weeklyRecap's fail-open
+  // default still applies, so a member with tokens remains reachable.
+  if (!prefs) return true;
 
   const weeklyRecapEnabled = prefs.weeklyRecap?.enabled !== false;
 

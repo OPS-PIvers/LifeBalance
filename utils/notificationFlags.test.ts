@@ -17,8 +17,8 @@ describe('computeAnyNotificationsEnabled', () => {
     expect(computeAnyNotificationsEnabled({ ...basePrefs, habitReminders: { enabled: true, time: '08:00' } }, undefined)).toBe(false);
   });
 
-  it('is false with tokens but no prefs at all', () => {
-    expect(computeAnyNotificationsEnabled(undefined, ['token1'])).toBe(false);
+  it('is true with tokens but no prefs at all (weeklyRecap defaults to enabled)', () => {
+    expect(computeAnyNotificationsEnabled(undefined, ['token1'])).toBe(true);
   });
 
   it('is false when tokens exist but every category is disabled (weeklyRecap explicitly off)', () => {
