@@ -602,16 +602,16 @@ const MealPlanTab: React.FC = () => {
   }, [selectedDate, weekStart]);
 
   // Count meals per day this week (for the day-strip indicators) — O(N) scan.
-  const { countByDate, weekMealCount } = useMemo(() => {
+  // The aggregate week total is intentionally not surfaced as text: the
+  // day-strip dots already show it per-day (audit: redundant subtitle).
+  const countByDate = useMemo(() => {
     const counts = new Map<string, number>();
-    let total = 0;
     for (const item of mealPlan || []) {
       if (item.date >= weekStartStr && item.date <= weekEndStr) {
         counts.set(item.date, (counts.get(item.date) || 0) + 1);
-        total++;
       }
     }
-    return { countByDate: counts, weekMealCount: total };
+    return counts;
   }, [mealPlan, weekStartStr, weekEndStr]);
 
   // Filtered + sorted meals for the selected day.
@@ -654,137 +654,11 @@ const MealPlanTab: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-5 pb-20">
-      {/* Calendar Header */}
-      <div className="surface-section p-3 sm:p-5 space-y-4">
-        {/* Week navigation */}
-        <div className="flex items-center justify-between gap-2">
-            <button
-                onClick={() => setSelectedDate(d => addDays(d, -7))}
-                className="p-3 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
-                aria-label="Previous week"
-            >
-                <ChevronLeft className="w-5 h-5" />
-            </button>
-            <div className="text-center">
-                <h2 className="font-display text-base sm:text-lg font-semibold text-brand-900 dark:text-brand-50 tracking-tight leading-none">
-                    {format(weekStart, 'MMM d')} - {format(addDays(weekStart, 6), 'MMM d')}
-                </h2>
-                <div className="text-xxs text-brand-400 dark:text-brand-500 font-bold uppercase tracking-wider mt-1.5">
-                    {weekMealCount > 0 ? `${weekMealCount} meal${weekMealCount === 1 ? '' : 's'} planned` : 'Weekly plan'}
-                </div>
-            </div>
-            <div className="flex items-center gap-1">
-                <button
-                    onClick={() => setSelectedDate(d => addDays(d, 7))}
-                    className="p-3 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
-                    aria-label="Next week"
-                >
-                    <ChevronRight className="w-5 h-5" />
-                </button>
-                <div className="relative">
-                    <button
-                        type="button"
-                        onClick={() => setIsWeekMenuOpen(v => !v)}
-                        className="p-3 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
-                        aria-label="More week actions"
-                        aria-haspopup="menu"
-                        aria-expanded={isWeekMenuOpen}
-                    >
-                        <MoreHorizontal className="w-5 h-5" />
-                    </button>
-                    <Menu
-                        isOpen={isWeekMenuOpen}
-                        onClose={() => setIsWeekMenuOpen(false)}
-                        items={weekMenuItems}
-                        ariaLabel="Week actions"
-                        position="top-10 right-0"
-                        className="min-w-[208px]"
-                    />
-                </div>
-            </div>
-        </div>
-
-        {/* Day strip — whole week at a glance */}
-        <div className="flex gap-1 sm:gap-1.5">
-            {weekDays.map(day => {
-                const { dateStr } = day;
-                const count = countByDate.get(dateStr) || 0;
-                const isSelected = dateStr === selectedDateStr;
-                const isToday = dateStr === todayStr;
-
-                return (
-                    <button
-                        key={dateStr}
-                        onClick={() => setSelectedDate(day.date)}
-                        aria-label={`${day.ariaLabel}${count > 0 ? `, ${count} meals planned` : ''}`}
-                        aria-pressed={isSelected}
-                        className={clsx(
-                            "flex-1 flex flex-col items-center gap-1 py-2.5 rounded-btn transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95",
-                            isSelected
-                                ? "bg-accent-600"
-                                : "hover:bg-brand-100 dark:hover:bg-brand-700/50"
-                        )}
-                    >
-                        <span className={clsx(
-                            "text-xxs font-bold uppercase tracking-wide",
-                            isSelected ? "text-white/80" : "text-brand-400 dark:text-brand-500"
-                        )}>
-                            {day.dayLetter}
-                        </span>
-                        <span className={clsx(
-                            "w-7 h-7 flex items-center justify-center rounded-full text-sm font-bold tabular-nums transition-colors",
-                            isSelected
-                                ? "text-white"
-                                : isToday
-                                    ? "bg-accent-100 text-accent-700 ring-1 ring-accent-300 dark:bg-accent-900/40 dark:text-accent-200 dark:ring-accent-700"
-                                    : "text-brand-700 dark:text-brand-300"
-                        )}>
-                            {day.dayNumber}
-                        </span>
-                        <span className="flex items-center justify-center gap-0.5 h-1.5">
-                            {Array.from({ length: Math.min(count, 3) }).map((_, i) => (
-                                <span
-                                    key={i}
-                                    className={clsx(
-                                        "w-1 h-1 rounded-full",
-                                        isSelected ? "bg-white/80" : "bg-accent-400"
-                                    )}
-                                />
-                            ))}
-                        </span>
-                    </button>
-                );
-            })}
-        </div>
-
-        {/* Plan my week (AI generate / import) */}
-        <Button
-            variant="primary"
-            className="w-full"
-            leftIcon={<Sparkles className="w-4 h-4" />}
-            onClick={() => setIsWeeklyPlanOpen(true)}
-        >
-            Plan my week
-        </Button>
-
-        {/* Today — only shown once the user has navigated away from the current week */}
-        {!isCurrentWeek && (
-            <div className="flex">
-                <Button
-                    variant="secondary"
-                    size="sm"
-                    leftIcon={<CalendarDays className="w-3.5 h-3.5" />}
-                    onClick={() => setSelectedDate(new Date())}
-                >
-                    Today
-                </Button>
-            </div>
-        )}
-      </div>
-
-      {/* Selected day agenda */}
-      <div className="space-y-3">
+    <div className="space-y-3 pb-20">
+      {/* Selected day agenda — leads the page so today's meals are visible
+          without scrolling; the week strip is demoted to a slim secondary
+          control below it. */}
+      <div className="space-y-3 pt-2">
         <div className="flex items-end justify-between px-1">
             <div>
                 <h3 className="font-display text-xl font-semibold text-brand-900 dark:text-brand-50 tracking-tight leading-none">
@@ -882,6 +756,7 @@ const MealPlanTab: React.FC = () => {
         ) : (
             <EmptyState
                 variant="dashed"
+                size="compact"
                 icon={<Utensils className="w-7 h-7" />}
                 title="No meals planned"
                 description="Nothing planned for this day yet."
@@ -896,6 +771,125 @@ const MealPlanTab: React.FC = () => {
                 }
             />
         )}
+      </div>
+
+      {/* Slim week strip — a compact secondary control below today's meals
+          (owner decision: today's content leads, the calendar demotes). Week
+          nav + day-strip + "Plan my week" (now icon-only, secondary) all
+          collapse into one flat row instead of the previous full card. */}
+      <div className="surface-section p-2 flex items-center gap-1.5">
+        <button
+            onClick={() => setSelectedDate(d => addDays(d, -7))}
+            className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50 shrink-0"
+            aria-label="Previous week"
+        >
+            <ChevronLeft className="w-4 h-4" />
+        </button>
+
+        {/* Day strip — whole week at a glance */}
+        <div className="flex gap-0.5 flex-1 min-w-0">
+            {weekDays.map(day => {
+                const { dateStr } = day;
+                const count = countByDate.get(dateStr) || 0;
+                const isSelected = dateStr === selectedDateStr;
+                const isToday = dateStr === todayStr;
+
+                return (
+                    <button
+                        key={dateStr}
+                        onClick={() => setSelectedDate(day.date)}
+                        aria-label={`${day.ariaLabel}${count > 0 ? `, ${count} meals planned` : ''}`}
+                        aria-pressed={isSelected}
+                        className={clsx(
+                            "flex-1 flex flex-col items-center gap-0.5 py-1.5 rounded-btn transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95",
+                            isSelected
+                                ? "bg-accent-600"
+                                : "hover:bg-brand-100 dark:hover:bg-brand-700/50"
+                        )}
+                    >
+                        <span className={clsx(
+                            "text-xxs font-bold uppercase tracking-wide",
+                            isSelected ? "text-white/80" : "text-brand-400 dark:text-brand-500"
+                        )}>
+                            {day.dayLetter}
+                        </span>
+                        <span className={clsx(
+                            "w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold tabular-nums transition-colors",
+                            isSelected
+                                ? "text-white"
+                                : isToday
+                                    ? "bg-accent-100 text-accent-700 ring-1 ring-accent-300 dark:bg-accent-900/40 dark:text-accent-200 dark:ring-accent-700"
+                                    : "text-brand-700 dark:text-brand-300"
+                        )}>
+                            {day.dayNumber}
+                        </span>
+                        <span className="flex items-center justify-center gap-0.5 h-1">
+                            {Array.from({ length: Math.min(count, 3) }).map((_, i) => (
+                                <span
+                                    key={i}
+                                    className={clsx(
+                                        "w-1 h-1 rounded-full",
+                                        isSelected ? "bg-white/80" : "bg-accent-400"
+                                    )}
+                                />
+                            ))}
+                        </span>
+                    </button>
+                );
+            })}
+        </div>
+
+        <button
+            onClick={() => setSelectedDate(d => addDays(d, 7))}
+            className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50 shrink-0"
+            aria-label="Next week"
+        >
+            <ChevronRight className="w-4 h-4" />
+        </button>
+
+        {/* Today — only shown once the user has navigated away from the current week */}
+        {!isCurrentWeek && (
+            <button
+                onClick={() => setSelectedDate(new Date())}
+                aria-label="Jump to today"
+                title="Today"
+                className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50 shrink-0"
+            >
+                <CalendarDays className="w-4 h-4" />
+            </button>
+        )}
+
+        {/* "Plan my week" — demoted from a full-width primary Button to a small
+            icon-only secondary action alongside week nav. */}
+        <button
+            onClick={() => setIsWeeklyPlanOpen(true)}
+            aria-label="Plan my week"
+            title="Plan my week"
+            className="p-2 text-accent-600 hover:text-accent-700 hover:bg-accent-50 rounded-full transition-colors active:scale-95 dark:text-accent-300 dark:hover:text-accent-200 dark:hover:bg-accent-900/30 shrink-0"
+        >
+            <Sparkles className="w-4 h-4" />
+        </button>
+
+        <div className="relative shrink-0">
+            <button
+                type="button"
+                onClick={() => setIsWeekMenuOpen(v => !v)}
+                className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
+                aria-label="More week actions"
+                aria-haspopup="menu"
+                aria-expanded={isWeekMenuOpen}
+            >
+                <MoreHorizontal className="w-4 h-4" />
+            </button>
+            <Menu
+                isOpen={isWeekMenuOpen}
+                onClose={() => setIsWeekMenuOpen(false)}
+                items={weekMenuItems}
+                ariaLabel="Week actions"
+                position="bottom-full right-0 mb-2"
+                className="min-w-[208px]"
+            />
+        </div>
       </div>
 
       {/* Per-meal action sheet */}

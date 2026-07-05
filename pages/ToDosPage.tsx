@@ -20,7 +20,6 @@ import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import { ShowMoreRow } from '@/components/ui/ShowMoreRow';
-import PageHeader from '@/components/ui/PageHeader';
 import { cn } from '@/utils/cn';
 import Input from '@/components/ui/Input';
 import BatchRescheduleModal from '@/components/modals/BatchRescheduleModal';
@@ -578,13 +577,27 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
   ];
 
   return (
-    <div className={cn("px-4 max-w-2xl mx-auto space-y-5 min-h-screen", isSelectionMode ? "pb-40" : "pb-nav-safe")}>
+    <div className={cn("px-4 max-w-2xl mx-auto space-y-4 min-h-screen", isSelectionMode ? "pb-40" : "pb-nav-safe")}>
 
-      <PageHeader
-        className="px-0"
-        title={isSelectionMode ? 'Select tasks' : 'To-do list'}
-        subtitle={
-          isSelectionMode ? (
+      {/* Compact header unit: title + toggle/select-all row read as one block
+          (tight gap, no PageHeader padding tax) since the Plan tab-strip
+          already labels this page "To-Dos". */}
+      <div className="pt-4 flex items-center justify-between gap-3">
+        <div className="min-w-0 flex items-center gap-3">
+          <h1 className="font-display text-xl font-semibold tracking-tight text-brand-900 dark:text-brand-50">
+            {isSelectionMode ? 'Select tasks' : 'To-do list'}
+          </h1>
+          {!isSelectionMode && (
+            <Tabs value={viewMode} onValueChange={(val) => setViewMode(val as 'active' | 'completed')}>
+              <TabsList size="sm" className="w-auto inline-flex">
+                <TabsTrigger value="active">Active</TabsTrigger>
+                <TabsTrigger value="completed">{completedBadge}</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          )}
+        </div>
+        {isSelectionMode ? (
+          <div className="flex items-center gap-3 shrink-0">
             <button
               onClick={handleSelectAll}
               className="text-sm text-accent-600 dark:text-accent-300 font-medium flex items-center gap-1 hover:text-accent-700 dark:hover:text-accent-200"
@@ -592,12 +605,8 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
               <CheckSquare size={14} aria-hidden="true" className={selectedIds.size === allActiveCount && allActiveCount > 0 ? 'text-accent-600 dark:text-accent-300' : 'text-brand-300 dark:text-brand-500'} />
               {selectedIds.size === allActiveCount && allActiveCount > 0 ? 'Deselect all' : 'Select all'}
             </button>
-          ) : undefined
-        }
-        actions={
-          isSelectionMode ? (
-            /* While selecting, a visible Cancel (X) stays in the header so the
-               way out is always one tap away — the overflow menu is hidden. */
+            {/* While selecting, a visible Cancel (X) stays in the header so the
+               way out is always one tap away — the overflow menu is hidden. */}
             <Button
               variant="secondary"
               size="icon"
@@ -608,48 +617,41 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
             >
               <X size={20} />
             </Button>
-          ) : (
-            /* Secondary actions (Export, Select multiple) collapse into one
-               top-right "…" overflow menu, matching the Shopping list header.
-               The primary add now lives in the sticky quick-add bar below. */
-            <div className="relative">
-              <Button
-                variant="ghost-brand"
-                size="icon"
-                onClick={() => setMenuOpen((o) => !o)}
-                aria-label="To-do list actions"
-                aria-haspopup="menu"
-                aria-expanded={menuOpen}
-                className="rounded-full min-w-11 min-h-11"
-              >
-                <MoreHorizontal className="w-5 h-5" />
-              </Button>
-              {menuOpen && (
-                <Menu
-                  isOpen={menuOpen}
-                  onClose={() => setMenuOpen(false)}
-                  ariaLabel="To-do list actions"
-                  position="top-full right-0 mt-2"
-                  className="min-w-[208px]"
-                  items={menuItems}
-                />
-              )}
-            </div>
-          )
-        }
-      />
+          </div>
+        ) : (
+          /* Secondary actions (Export, Select multiple) collapse into one
+             top-right "…" overflow menu, matching the Shopping list header.
+             The primary add now lives in the sticky quick-add bar below. */
+          <div className="relative shrink-0">
+            <Button
+              variant="ghost-brand"
+              size="icon"
+              onClick={() => setMenuOpen((o) => !o)}
+              aria-label="To-do list actions"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              className="rounded-full min-w-11 min-h-11"
+            >
+              <MoreHorizontal className="w-5 h-5" />
+            </Button>
+            {menuOpen && (
+              <Menu
+                isOpen={menuOpen}
+                onClose={() => setMenuOpen(false)}
+                ariaLabel="To-do list actions"
+                position="top-full right-0 mt-2"
+                className="min-w-[208px]"
+                items={menuItems}
+              />
+            )}
+          </div>
+        )}
+      </div>
 
-      {/* View Toggle */}
-      <Tabs value={viewMode} onValueChange={(val) => setViewMode(val as 'active' | 'completed')}>
-        <TabsList size="sm" className="self-start w-auto inline-flex">
-          <TabsTrigger value="active">Active</TabsTrigger>
-          <TabsTrigger value="completed">{completedBadge}</TabsTrigger>
-        </TabsList>
-      </Tabs>
-
-      {/* Anchored quick-add bar — same sticky inline-add structure as the
-          shopping list: pinned to the top of the <main> scroller so it stays
-          visible while the list scrolls under it. Top (not bottom) deliberately
+      {/* Anchored quick-add bar — `attached` so it reads as the first row of
+          the list below it rather than a separately bordered/blurred toolbar
+          band. Pinned to the top of the <main> scroller so it stays visible
+          while the list scrolls under it. Top (not bottom) deliberately
           clears the global Capture FAB at bottom-center. Quick-add defaults to
           due-today / current user; the adjacent "details" button opens the full
           form for a custom date or assignee. `stickyTopOffset` clears the /lists
@@ -658,11 +660,12 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
           completed view, where adding has no context. */}
       {viewMode === 'active' && !isSelectionMode && (
         <div
-          className="sticky z-20 -mx-4 px-4 py-3 bg-brand-50/95 dark:bg-brand-900/95 backdrop-blur border-b border-brand-200 dark:border-brand-800"
+          className="sticky z-20 -mx-4 px-4 bg-white dark:bg-brand-800 border-b border-brand-200 dark:border-brand-700 rounded-t-2xl"
           style={{ top: `${stickyTopOffset}px` }}
         >
           <div className="flex items-center gap-2">
             <QuickAddBar
+              attached
               onSubmit={handleQuickAdd}
               inputRef={quickAddRef}
               value={quickText}
