@@ -3124,8 +3124,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       const keeperTx = transactions.find(tx => tx.id === keeperId);
       const dupeTx = transactions.find(tx => tx.id === dupeId);
       if (!keeperTx || !dupeTx) {
-        toast.error('Transaction not found');
-        return;
+        // Throw (not return) so callers' catch blocks run and the review UI
+        // doesn't advance as if the merge succeeded. The outer catch shows
+        // the failure toast and re-throws.
+        throw new Error('Transaction not found');
       }
 
       const updates = buildMergeUpdates(keeperTx, dupeTx);

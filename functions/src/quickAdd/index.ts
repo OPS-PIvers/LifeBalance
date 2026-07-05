@@ -38,7 +38,7 @@ import {
   type AccountLike,
 } from "./accountMatch";
 import { parseTransactionEmail } from "./emailParser";
-import { isLikelyDuplicate, type IdentityTransaction } from "./transactionIdentity";
+import { DUPLICATE_WINDOW_DAYS, isLikelyDuplicate, type IdentityTransaction } from "./transactionIdentity";
 
 const db = admin.firestore();
 
@@ -683,14 +683,19 @@ export const quickAddExpense = onRequest(
       // (any source), which can never touch the original stub-fill behavior.
       let possibleDuplicateOf: string | undefined;
       try {
-        const cutoff = admin.firestore.Timestamp.fromMillis(
-          Date.now() - RECONCILE_WINDOW_MS
+        // The QUERY window must cover the identity-dedup horizon (±3 calendar
+        // days, +1 for timezone slack) — the stub-fill pass keeps its own much
+        // tighter 30-minute gate via the per-row filter below. Querying only
+        // 30 minutes back would silently miss e.g. a Plaid row from yesterday.
+        const queryCutoff = admin.firestore.Timestamp.fromMillis(
+          Date.now() - (DUPLICATE_WINDOW_DAYS + 1) * 24 * 60 * 60 * 1000
         );
+        const stubCutoffMs = Date.now() - RECONCILE_WINDOW_MS;
         // Single where() → covered by the automatic single-field index on
-        // createdAt; the window is tiny so we filter the rest in memory.
+        // createdAt; the window is small so we filter the rest in memory.
         const recentSnap = await db
           .collection(transactionsPath)
-          .where("createdAt", ">=", cutoff)
+          .where("createdAt", ">=", queryCutoff)
           .get();
 
         const reconcileCandidates: ReconcileCandidate[] = [];
@@ -700,8 +705,15 @@ export const quickAddExpense = onRequest(
           const data = d.data() as Record<string, unknown>;
           refById.set(d.id, d.ref);
 
-          // Stub-fill candidates: only source:'shortcut' pending rows (unchanged).
+          // Stub-fill candidates: only source:'shortcut' pending rows created
+          // within the ORIGINAL 30-minute reconcile window — the wider query
+          // above must not widen stub-fill's behavior.
+          const createdAt = data.createdAt as admin.firestore.Timestamp | undefined;
+          const withinStubWindow =
+            createdAt instanceof admin.firestore.Timestamp &&
+            createdAt.toMillis() >= stubCutoffMs;
           if (
+            withinStubWindow &&
             data.source === "shortcut" &&
             data.status === "pending_review" &&
             typeof data.amount === "number" &&

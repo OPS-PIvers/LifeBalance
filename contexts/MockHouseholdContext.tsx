@@ -526,8 +526,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     const keeperTx = transactions.find(t => t.id === keeperId);
     const dupeTx = transactions.find(t => t.id === dupeId);
     if (!keeperTx || !dupeTx) {
+      // Match the real context: throw so callers' catch paths run instead of
+      // treating the merge as a success.
       toast.error('Transaction not found');
-      return;
+      throw new Error('Transaction not found');
     }
 
     const updates = buildMergeUpdates(keeperTx, dupeTx);
