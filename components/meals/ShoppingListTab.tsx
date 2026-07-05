@@ -580,7 +580,7 @@ const ShoppingListTab: React.FC = () => {
                     inputRef={addInputRef}
                     value={newItemText}
                     onChange={setNewItemText}
-                    placeholder="Add item (e.g. Milk)..."
+                    placeholder="Add item..."
                     disabled={!newItemText.trim()}
                     submitLabel="Add item to shopping list"
                 />

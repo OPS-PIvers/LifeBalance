@@ -669,7 +669,7 @@ const ToDosPage: React.FC = () => {
                       inputRef={quickAddRef}
                       value={quickText}
                       onChange={setQuickText}
-                      placeholder="Add a task (e.g. Take out trash)..."
+                      placeholder="Add a task..."
                       aria-label="Quick add task"
                       disabled={!quickText.trim()}
                       submitLabel="Add task"

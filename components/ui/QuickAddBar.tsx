@@ -61,6 +61,36 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
   submitLabel,
   attached = false,
 }) => {
+  if (attached) {
+    // In-card row: plain flex — the input and submit button are SIBLINGS, so
+    // the placeholder can never run underneath the button (the old absolute
+    // overlay clipped long placeholders against the button edge). The submit
+    // is a quiet accent icon, not a filled square, so the row reads as a list
+    // row rather than a widget pasted into the card.
+    return (
+      <form onSubmit={onSubmit} className={cn('flex flex-1 items-center min-w-0', className)}>
+        <input
+          ref={inputRef}
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          aria-label={ariaLabel || placeholder}
+          aria-labelledby={ariaLabelledBy}
+          className="min-w-0 flex-1 pl-4 pr-2 py-3.5 bg-transparent border-0 outline-hidden focus:ring-0 placeholder:truncate placeholder:text-brand-400 dark:text-brand-50 dark:placeholder:text-brand-500 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
+        />
+        <button
+          type="submit"
+          disabled={disabled}
+          aria-label={submitLabel || 'Add'}
+          className="flex-none flex items-center justify-center p-3 rounded-btn text-accent-600 hover:text-accent-700 hover:bg-accent-50 disabled:text-brand-300 dark:text-accent-300 dark:hover:text-accent-200 dark:hover:bg-accent-900/20 dark:disabled:text-brand-600 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-inset"
+        >
+          {icon}
+        </button>
+      </form>
+    );
+  }
+
   return (
     <form onSubmit={onSubmit} className={cn('relative flex-1', className)}>
       <input
@@ -71,12 +101,7 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
         placeholder={placeholder}
         aria-label={ariaLabel || placeholder}
         aria-labelledby={ariaLabelledBy}
-        className={cn(
-          'w-full pl-4 pr-12 py-3.5 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden placeholder:text-brand-400 dark:text-brand-50 dark:placeholder:text-brand-500',
-          attached
-            ? 'bg-transparent border-0 focus:ring-0'
-            : 'border border-brand-200 rounded-btn bg-white focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 dark:bg-brand-800 dark:border-brand-600'
-        )}
+        className="w-full pl-4 pr-12 py-3.5 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden placeholder:text-brand-400 dark:text-brand-50 dark:placeholder:text-brand-500 border border-brand-200 rounded-btn bg-white focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 dark:bg-brand-800 dark:border-brand-600"
       />
       <Button
         type="submit"
