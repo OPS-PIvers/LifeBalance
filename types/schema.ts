@@ -180,6 +180,11 @@ export interface Transaction {
    *  `plaidTransactionId` already exists, so re-syncs never duplicate. Absent on
    *  manual / scan / shortcut transactions. */
   plaidTransactionId?: string;
+  /** Plan 03: doc id of an existing transaction this row is a *possible*
+   *  duplicate of (verdict 'possible' from `utils/transactionIdentity.ts` at
+   *  ingestion time). The review UI renders a Merge / Keep-both choice; both
+   *  actions clear the flag. Absent on rows with no suspected twin. */
+  possibleDuplicateOf?: string;
   /** Action-Queue snooze for a `pending_review` transaction (yyyy-MM-dd, local).
    *  Set by the "Defer" gesture on the Action Queue; while it is AFTER today the
    *  row is hidden from the queue (it still counts toward pendingSpend /

@@ -8,14 +8,22 @@ import { Transaction } from '@/types/schema';
 const {
   mockUpdateTransactionCategory,
   mockDeleteTransaction,
+  mockMergeTransactions,
+  mockKeepBothTransactions,
   mockOnDone,
   mockToast,
 } = vi.hoisted(() => ({
   mockUpdateTransactionCategory: vi.fn((..._args: unknown[]) => Promise.resolve()),
   mockDeleteTransaction: vi.fn((..._args: unknown[]) => Promise.resolve()),
+  mockMergeTransactions: vi.fn((..._args: unknown[]) => Promise.resolve()),
+  mockKeepBothTransactions: vi.fn((..._args: unknown[]) => Promise.resolve()),
   mockOnDone: vi.fn(),
   mockToast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 }));
+
+// Transactions the form's `useFinance().transactions` should resolve
+// `possibleDuplicateOf` against — mutable per-test via `mockTransactions.length = 0; mockTransactions.push(...)`.
+const mockTransactions: Transaction[] = [];
 
 // Mock the domain slices consumed by the form (same pattern as
 // EditTransactionModal.test.tsx).
@@ -26,9 +34,11 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
       { id: '1', name: 'Groceries' },
       { id: '2', name: 'Gas' },
     ],
-    transactions: [] as unknown[],
+    transactions: mockTransactions,
     updateTransactionCategory: mockUpdateTransactionCategory,
     deleteTransaction: mockDeleteTransaction,
+    mergeTransactions: mockMergeTransactions,
+    keepBothTransactions: mockKeepBothTransactions,
   }),
   useGamification: () => ({ habits: [] as unknown[] }),
 }));
@@ -39,6 +49,7 @@ vi.mock('react-hot-toast', () => ({ default: mockToast }));
 vi.mock('lucide-react', () => ({
   Check: () => <div data-testid="icon-check" />,
   ChevronDown: () => <div data-testid="icon-chevron-down" />,
+  Copy: () => <div data-testid="icon-copy" />,
   Sparkles: () => <div data-testid="icon-sparkles" />,
   Trash2: () => <div data-testid="icon-trash" />,
   Loader2: () => <div data-testid="icon-loader" />,
@@ -60,6 +71,7 @@ const baseTx: Transaction = {
 describe('TransactionReviewForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockTransactions.length = 0;
   });
 
   it('shows a selected Income chip for an income transaction', () => {
@@ -133,5 +145,84 @@ describe('TransactionReviewForm', () => {
 
     const call = mockUpdateTransactionCategory.mock.calls[0]!;
     expect(call[4]).toMatchObject({ amount: 12.5, clearNeedsAmount: true });
+  });
+
+  describe('possible-duplicate notice (plan 03 PR-3)', () => {
+    const otherTx: Transaction = {
+      ...baseTx,
+      id: 'tx2',
+      merchant: 'Coffee Shop',
+      amount: 24.99,
+      date: '2026-06-11',
+    };
+
+    it('renders a notice with Merge / Keep both when possibleDuplicateOf resolves to an existing transaction', () => {
+      mockTransactions.push(otherTx);
+      render(
+        <TransactionReviewForm
+          transaction={{ ...baseTx, possibleDuplicateOf: 'tx2' }}
+          onDone={mockOnDone}
+        />
+      );
+
+      expect(screen.getByText(/possible duplicate of/i)).toBeInTheDocument();
+      expect(screen.getByText('Coffee Shop')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^merge$/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /keep both/i })).toBeInTheDocument();
+    });
+
+    it('renders no notice when possibleDuplicateOf points at a row that no longer exists', () => {
+      render(
+        <TransactionReviewForm
+          transaction={{ ...baseTx, possibleDuplicateOf: 'gone' }}
+          onDone={mockOnDone}
+        />
+      );
+
+      expect(screen.queryByText(/possible duplicate of/i)).not.toBeInTheDocument();
+    });
+
+    it('renders no notice when the transaction has no possibleDuplicateOf', () => {
+      render(<TransactionReviewForm transaction={baseTx} onDone={mockOnDone} />);
+      expect(screen.queryByText(/possible duplicate of/i)).not.toBeInTheDocument();
+    });
+
+    it('Merge calls mergeTransactions with the pickKeeper-chosen keeper/dupe pair', async () => {
+      const user = userEvent.setup();
+      mockTransactions.push(otherTx);
+      render(
+        <TransactionReviewForm
+          transaction={{ ...baseTx, possibleDuplicateOf: 'tx2' }}
+          onDone={mockOnDone}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /^merge$/i }));
+
+      expect(mockMergeTransactions).toHaveBeenCalledTimes(1);
+      // Both rows are pending_review with no distinguishing richness/createdAt,
+      // so pickKeeper's stable tiebreak keeps whichever is passed as `a`
+      // (the flagged transaction itself) — assert a keeper/dupe pair from
+      // {tx1, tx2}, not upstream identity-verdict details this test doesn't own.
+      const [keeperId, dupeId] = mockMergeTransactions.mock.calls[0]!;
+      expect([keeperId, dupeId].sort()).toEqual(['tx1', 'tx2']);
+      expect(mockOnDone).toHaveBeenCalled();
+    });
+
+    it('Keep both calls keepBothTransactions with the flagged transaction id and does not call onDone', async () => {
+      const user = userEvent.setup();
+      mockTransactions.push(otherTx);
+      render(
+        <TransactionReviewForm
+          transaction={{ ...baseTx, possibleDuplicateOf: 'tx2' }}
+          onDone={mockOnDone}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /keep both/i }));
+
+      expect(mockKeepBothTransactions).toHaveBeenCalledWith('tx1');
+      expect(mockOnDone).not.toHaveBeenCalled();
+    });
   });
 });
