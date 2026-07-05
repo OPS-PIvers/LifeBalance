@@ -1294,15 +1294,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }, [householdId, habits]);
 
   // Merge duplicate recipes (same name up to case/spacing/punctuation) —
-  // owner-approved cleanup; run-once guarded like the migrations above.
-  const hasAttemptedMealDedup = useRef(false);
+  // owner-approved cleanup; run-once guarded per household (keyed on the id,
+  // not a boolean, so switching households still gets its own pass).
+  const attemptedMealDedupFor = useRef<string | null>(null);
   useEffect(() => {
     if (!householdId || !meals.length) return;
-    if (hasAttemptedMealDedup.current) return;
+    if (attemptedMealDedupFor.current === householdId) return;
 
     if (needsMealDedup(meals)) {
       // Mark as attempted before running to prevent race conditions/loops
-      hasAttemptedMealDedup.current = true;
+      attemptedMealDedupFor.current = householdId;
       console.log('[Migration] Starting duplicate-meal merge...');
       // Errors are caught and logged inside migrateDuplicateMeals.
       migrateDuplicateMeals(householdId, meals);

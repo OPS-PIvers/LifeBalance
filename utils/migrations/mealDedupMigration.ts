@@ -140,6 +140,8 @@ export async function migrateDuplicateMeals(householdId: string, meals: Meal[]):
       for (const loserId of plan.loserIds) allLoserToSurvivor.set(loserId, plan.survivor.id);
     }
 
+    const survivorNameById = new Map(plans.map(p => [p.survivor.id, p.survivor.name]));
+
     // Find every plan item referencing a merged-away meal ('in' max 30 per query).
     const loserIds = Array.from(allLoserToSurvivor.keys());
     const planItemRepoints: { id: string; mealId: string; mealName: string }[] = [];
@@ -152,8 +154,7 @@ export async function migrateDuplicateMeals(householdId: string, meals: Meal[]):
         const mealId = d.data().mealId as string;
         const survivorId = allLoserToSurvivor.get(mealId);
         if (survivorId) {
-          const survivor = plans.find(p => p.survivor.id === survivorId)?.survivor;
-          planItemRepoints.push({ id: d.id, mealId: survivorId, mealName: survivor?.name || '' });
+          planItemRepoints.push({ id: d.id, mealId: survivorId, mealName: survivorNameById.get(survivorId) || '' });
         }
       });
     }
