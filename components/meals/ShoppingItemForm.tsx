@@ -63,9 +63,8 @@ export const ShoppingItemForm: React.FC<ShoppingItemFormProps> = ({
         store: needsStore ? suggestion!.store! : item.store,
       });
     }
-    // Only re-run when the item identity changes (new item being edited).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item.id]);
+    // The id-ref guard above makes this once-per-item even with full deps.
+  }, [item, suggestion, onChange]);
 
   const showCategorySuggestionHint =
     !!suggestion?.category && (item.category === suggestion.category);
@@ -118,7 +117,9 @@ export const ShoppingItemForm: React.FC<ShoppingItemFormProps> = ({
 
   return (
     <div className="flex flex-col h-full">
-        <div className="p-6 space-y-4 flex-1 overflow-y-auto">
+        {/* px-4 matches the Drawer header/footer gutter so labels, fields, and
+            the "Edit item" title all share one left edge. */}
+        <div className="px-4 py-5 space-y-4 flex-1 overflow-y-auto">
             <Input
                 label="Item name"
                 type="text"
@@ -144,35 +145,41 @@ export const ShoppingItemForm: React.FC<ShoppingItemFormProps> = ({
                     <label className="text-xs font-semibold text-brand-500 dark:text-brand-400 uppercase tracking-wider block mb-1.5">
                         Quantity
                     </label>
-                    <div className="flex items-center gap-1.5">
-                        <div className="flex items-center border border-brand-200 dark:border-brand-700 rounded-btn overflow-hidden shrink-0 bg-white dark:bg-brand-800">
-                            <button
-                                type="button"
-                                aria-label="Decrease quantity"
-                                onClick={handleDecrement}
-                                className="p-2.5 text-brand-500 hover:bg-brand-100 dark:text-brand-400 dark:hover:bg-brand-700/50 transition-colors"
-                            >
-                                <Minus size={14} />
-                            </button>
-                            <span className="px-2 text-sm font-medium text-brand-900 dark:text-brand-100 min-w-[1.5rem] text-center tabular-nums">
-                                {parsedQuantity.count}
-                            </span>
-                            <button
-                                type="button"
-                                aria-label="Increase quantity"
-                                onClick={handleIncrement}
-                                className="p-2.5 text-brand-500 hover:bg-brand-100 dark:text-brand-400 dark:hover:bg-brand-700/50 transition-colors"
-                            >
-                                <Plus size={14} />
-                            </button>
-                        </div>
+                    {/* One FIELD_BASE surface so it matches the selects' height exactly;
+                        focus-within stands in for the inner input's focus ring. */}
+                    <div
+                        className={cn(
+                            FIELD_BASE,
+                            "flex items-stretch p-0 overflow-hidden focus-within:border-accent-500 focus-within:ring-2 focus-within:ring-accent-500/40"
+                        )}
+                    >
+                        <button
+                            type="button"
+                            aria-label="Decrease quantity"
+                            onClick={handleDecrement}
+                            className="px-2.5 self-stretch text-brand-500 hover:bg-brand-100 dark:text-brand-400 dark:hover:bg-brand-700/50 transition-colors shrink-0"
+                        >
+                            <Minus size={14} />
+                        </button>
+                        <span className="self-center font-medium min-w-[1.25rem] text-center tabular-nums">
+                            {parsedQuantity.count}
+                        </span>
+                        <button
+                            type="button"
+                            aria-label="Increase quantity"
+                            onClick={handleIncrement}
+                            className="px-2.5 self-stretch text-brand-500 hover:bg-brand-100 dark:text-brand-400 dark:hover:bg-brand-700/50 transition-colors shrink-0"
+                        >
+                            <Plus size={14} />
+                        </button>
+                        <span aria-hidden="true" className="w-px self-stretch bg-brand-200 dark:bg-brand-700" />
                         <input
                             type="text"
                             value={parsedQuantity.unit}
                             onChange={handleUnitChange}
                             placeholder="unit"
                             aria-label="Quantity unit"
-                            className={cn(FIELD_BASE, "p-2.5 min-w-0 flex-1 text-sm")}
+                            className="min-w-0 flex-1 p-3 bg-transparent border-0 outline-hidden text-brand-900 dark:text-brand-100 placeholder:text-brand-400 dark:placeholder:text-brand-500"
                         />
                     </div>
                 </div>
