@@ -11,6 +11,7 @@ import {
   sendNotificationToUser,
   type HouseholdMember,
 } from "./shared/notifications";
+import { writeProactiveInsight, type ProactiveCapHouseholdDoc } from "./insights/writeProactiveInsight";
 
 // Re-export for consumers that imported this from index.ts before the
 // extraction to shared/notifications.ts.
@@ -248,6 +249,68 @@ export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
             },
             memberDoc.ref
           );
+
+          // Proactive insight (plan 02 part C): "streak rescue". Piggybacks on
+          // this same job — no new cron. For any habit with a long (>=7 day)
+          // streak at risk, surface a suggestion in the Insight feed (the same
+          // `households/{id}/insights` collection the manual "refresh insight"
+          // button writes to, so the existing dashboard UI renders it for
+          // free). Subject to the shared 2/week/household proactive-insight cap.
+          const longStreakAtRisk = habitsAtRisk.find(
+            (doc) => (doc.data().streakDays ?? 0) >= 7
+          );
+          if (longStreakAtRisk) {
+            // Fully best-effort: any failure here must never block the streak
+            // warning above or the remaining members/households. The
+            // deterministic doc id also makes the write idempotent across the
+            // member loop (each member finds the same at-risk habit) and
+            // across hourly re-runs on the same local day, so one rescue never
+            // burns more than one slot of the weekly cap.
+            try {
+              const habit = longStreakAtRisk.data();
+              const streakDays = habit.streakDays ?? 0;
+
+              // The cap state must come from a successful read — defaulting to
+              // an empty doc would treat the count as 0 and clobber the real
+              // cap state with a reset patch.
+              const householdSnap = await householdDoc.ref.get();
+              const data = householdSnap.data();
+              if (!data) {
+                logger.warn(
+                  `sendstreakwarnings: household ${householdDoc.id} doc missing/empty, skipping proactive insight`
+                );
+              } else {
+                const household = data as ProactiveCapHouseholdDoc;
+                const freezeBank = data.freezeBank;
+                const tokens = freezeBank?.tokens ?? freezeBank?.current;
+                const hasFreezeToken = typeof tokens === "number" && tokens > 0;
+
+                const suggestion = hasFreezeToken
+                  ? ` If you can't get to it today, use a freeze bank token to protect it.`
+                  : "";
+                const insightText = `"${habit.title ?? "A habit"}" has a ${streakDays}-day streak that's about to break today.${suggestion}`;
+
+                await writeProactiveInsight(
+                  db,
+                  householdDoc.id,
+                  household,
+                  {
+                    text: insightText,
+                    generatedAt: new Date().toISOString(),
+                    type: "habits",
+                  },
+                  new Date(),
+                  prefs.timezone || "UTC",
+                  `streak_rescue_${longStreakAtRisk.id}_${today}`
+                );
+              }
+            } catch (error) {
+              logger.warn(
+                `sendstreakwarnings: proactive insight failed for household ${householdDoc.id}, continuing`,
+                error
+              );
+            }
+          }
         } else {
           logger.info(`Member ${member.uid}: no habits at risk, skipping notification`);
         }
