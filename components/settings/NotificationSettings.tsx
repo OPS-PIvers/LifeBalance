@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clock, DollarSign, Flame, Calendar, ListTodo, Send, Info } from 'lucide-react';
+import { Clock, DollarSign, Flame, Calendar, ListTodo, Send, Info, Newspaper } from 'lucide-react';
 import { NotificationPreferences } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { getFunctionsInstance } from '@/firebase.config';
@@ -37,6 +37,11 @@ const DEFAULT_PREFERENCES: NotificationPreferences = {
     daysBeforeDue: 1,
     time: '09:00'
   },
+  // Weekly recap defaults ON — a fixed Sunday-evening send (no time selection),
+  // so the switch is the only control.
+  weeklyRecap: {
+    enabled: true
+  },
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
 };
 
@@ -68,6 +73,7 @@ const mergePreferences = (current?: NotificationPreferences): NotificationPrefer
   budgetAlerts: { ...DEFAULT_PREFERENCES.budgetAlerts, ...current?.budgetAlerts },
   streakWarnings: { ...DEFAULT_PREFERENCES.streakWarnings, ...current?.streakWarnings },
   billReminders: { ...DEFAULT_PREFERENCES.billReminders, ...current?.billReminders },
+  weeklyRecap: { enabled: true, ...current?.weeklyRecap },
   timezone: current?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
 });
 
@@ -440,6 +446,27 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                 </div>
               </div>
             )}
+          </div>
+        </Row>
+
+        {/* Weekly Recap — fixed Sunday-evening send, so no time select */}
+        <Row className="items-start">
+          <div className="w-10 h-10 bg-accent-50 dark:bg-accent-500/15 rounded-btn flex items-center justify-center shrink-0">
+            <Newspaper className="w-5 h-5 text-accent-600 dark:text-accent-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <h4 className="font-semibold text-brand-900 dark:text-brand-100">Weekly Recap</h4>
+                <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">Your week in review — spending, habits, and what&apos;s ahead. Arrives Sunday evening.</p>
+              </div>
+              <Switch
+                id="notif-weekly-recap"
+                aria-label="Weekly recap notifications"
+                checked={preferences.weeklyRecap?.enabled ?? true}
+                onCheckedChange={() => handleToggle('weeklyRecap')}
+              />
+            </div>
           </div>
         </Row>
       </SurfaceList>

@@ -1,4 +1,5 @@
 import React, { useState, ReactNode, useCallback, useMemo, useRef } from 'react';
+import { format } from 'date-fns';
 import { HouseholdContextType, HouseholdSliceProviders } from './FirebaseHouseholdContext';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { hashKidPin } from '@/utils/kidPin';
@@ -33,7 +34,8 @@ import {
   BucketPeriodSnapshot,
   Household,
   FreezeBank,
-  ModuleKey
+  ModuleKey,
+  WeeklyRecap
 } from '@/types/schema';
 import toast from 'react-hot-toast';
 
@@ -289,6 +291,36 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   todosRef.current = todos;
   const [groceryCatalog, setGroceryCatalog] = useState<GroceryCatalogItem[]>(SEED_GROCERY_CATALOG);
   const [bucketHistory] = useState<BucketPeriodSnapshot[]>([]); // Mock empty history
+  // One canned weekly recap (Plan 02) so Test Mode renders the Dashboard recap
+  // card + drawer. Anchored to the CURRENT ISO week with a fresh generatedAt so
+  // the card's 4-day freshness window always passes. Numbers stay consistent
+  // with the seed data (checking spend, 2 seeded members, the Read habit).
+  const [recaps] = useState<WeeklyRecap[]>(() => [{
+    id: format(new Date(), "RRRR-'W'II"),
+    isoWeek: format(new Date(), "RRRR-'W'II"),
+    generatedAt: new Date().toISOString(),
+    totalSpend: 187.45,
+    priorWeekSpend: 243.1,
+    topCategoryDeltas: [
+      { category: 'Groceries', current: 92.5, prior: 128.2 },
+      { category: 'Entertainment', current: 45.0, prior: 62.4 },
+      { category: 'Gas', current: 49.95, prior: 52.5 },
+    ],
+    habitCompletions: 9,
+    streaksAtRisk: [{ habitTitle: 'Exercise 30min', streakDays: 5 }],
+    pointsByMember: [
+      { memberId: 'test-user-id', name: 'Test User', points: 120 },
+      { memberId: 'kid_leo', name: 'Leo', points: 35 },
+    ],
+    upcomingBills: [
+      { title: 'Rent', amount: 1200, date: getLocalDateString(new Date(Date.now() + 3 * 86400000)) },
+      { title: 'Internet', amount: 65, date: getLocalDateString(new Date(Date.now() + 5 * 86400000)) },
+    ],
+    narrative:
+      '🧪 Test Mode: You spent 23% less than last week — groceries did the heavy lifting. Keep the exercise streak alive tonight to lock in your multiplier.',
+    narrativeSource: 'template',
+    premium: true,
+  }]);
   const [insightsHistory] = useState<Insight[]>([]);
   const [insight] = useState("🧪 Test Mode: This is mock data for AI testing");
   const [stores, setStores] = useState<Store[]>(SEED_STORES);
@@ -1025,6 +1057,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     todos,
     groceryCatalog,
     bucketHistory,
+    recaps,
     insightsHistory,
     insight,
     stores,

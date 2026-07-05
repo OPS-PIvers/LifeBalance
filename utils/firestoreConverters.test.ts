@@ -29,6 +29,7 @@ import {
   pendingItemConverter,
   householdApiKeyConverter,
   insightConverter,
+  weeklyRecapConverter,
   transactionConverter,
   todoConverter,
 } from './firestoreConverters';
@@ -684,6 +685,66 @@ describe('insightConverter', () => {
   it('(b) partial doc without optional actions does not throw', () => {
     const partial = { text: 'Great job!', generatedAt: '2024-01-01', type: 'general' };
     expect(() => insightConverter.fromFirestore(fakeSnap('ins-2', partial))).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WeeklyRecap — Timestamp normalisation for generatedAt
+// ---------------------------------------------------------------------------
+describe('weeklyRecapConverter', () => {
+  const wellFormed = {
+    isoWeek: '2026-W27',
+    generatedAt: '2026-07-05T22:00:00.000Z',
+    totalSpend: 412.5,
+    priorWeekSpend: 468.13,
+    topCategoryDeltas: [{ category: 'Groceries', current: 180, prior: 220 }],
+    habitCompletions: 12,
+    streaksAtRisk: [{ habitTitle: 'Read 30 mins', streakDays: 9 }],
+    pointsByMember: [{ memberId: 'user-1', name: 'Test User', points: 85 }],
+    upcomingBills: [{ title: 'Rent', amount: 1200, date: '2026-07-08' }],
+    narrative: 'A calm spending week — nice work.',
+    narrativeSource: 'ai',
+    premium: true,
+  };
+
+  it('(a) well-formed doc: fromFirestore injects id (the ISO week) and preserves fields', () => {
+    const result = weeklyRecapConverter.fromFirestore(fakeSnap('2026-W27', wellFormed));
+    expect(result.id).toBe('2026-W27');
+    expect(result.isoWeek).toBe('2026-W27');
+    expect(result.totalSpend).toBe(412.5);
+    expect(result.narrativeSource).toBe('ai');
+    expect(result.topCategoryDeltas).toEqual([{ category: 'Groceries', current: 180, prior: 220 }]);
+  });
+
+  it('(a) well-formed doc: toFirestore strips id', () => {
+    const recap = { ...wellFormed, id: '2026-W27' };
+    const out = callToFirestore(weeklyRecapConverter, recap);
+    expect('id' in out).toBe(false);
+    expect(out['isoWeek']).toBe('2026-W27');
+  });
+
+  it('(a) Timestamp generatedAt is converted to ISO string', () => {
+    const ts = Timestamp.fromDate(new Date('2026-07-05T22:00:00.000Z'));
+    const result = weeklyRecapConverter.fromFirestore(
+      fakeSnap('2026-W27', { ...wellFormed, generatedAt: ts })
+    );
+    expect(result.generatedAt).toBe('2026-07-05T22:00:00.000Z');
+  });
+
+  it('(b) partial doc with missing sections does not throw', () => {
+    const partial = {
+      isoWeek: '2026-W26',
+      generatedAt: '2026-06-28T22:00:00.000Z',
+      totalSpend: 0,
+      priorWeekSpend: 0,
+      narrative: '',
+      narrativeSource: 'template',
+      premium: false,
+    };
+    expect(() => weeklyRecapConverter.fromFirestore(fakeSnap('2026-W26', partial))).not.toThrow();
+    const result = weeklyRecapConverter.fromFirestore(fakeSnap('2026-W26', partial));
+    expect(result.id).toBe('2026-W26');
+    expect(result.premium).toBe(false);
   });
 });
 

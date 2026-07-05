@@ -55,6 +55,7 @@ import type {
   Insight,
   Transaction,
   ToDo,
+  WeeklyRecap,
 } from '@/types/schema';
 
 // ---------------------------------------------------------------------------
@@ -311,6 +312,28 @@ export const insightConverter: FirestoreDataConverter<Insight> = {
   },
   fromFirestore(snapshot: QueryDocumentSnapshot): Insight {
     return { ...snapshot.data(), id: snapshot.id } as Insight;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// WeeklyRecap — doc id IS the ISO week; preserves Timestamp→ISO normalisation
+// for generatedAt. Server-written (Admin SDK) but the converter still strips
+// the synthetic id defensively on any client write path.
+// ---------------------------------------------------------------------------
+export const weeklyRecapConverter: FirestoreDataConverter<WeeklyRecap> = {
+  toFirestore(recap: WeeklyRecap): DocumentData {
+    return omitKey(recap, 'id');
+  },
+  fromFirestore(snapshot: QueryDocumentSnapshot): WeeklyRecap {
+    const d = snapshot.data();
+    return {
+      ...d,
+      id: snapshot.id,
+      generatedAt:
+        d['generatedAt'] instanceof Timestamp
+          ? d['generatedAt'].toDate().toISOString()
+          : d['generatedAt'],
+    } as WeeklyRecap;
   },
 };
 

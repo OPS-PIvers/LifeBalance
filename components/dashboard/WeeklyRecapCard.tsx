@@ -1,0 +1,210 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { X, Lock, ChevronRight, Sparkles } from 'lucide-react';
+import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
+import { consumeRecapParam } from '@/utils/recapParam';
+import { track } from '@/services/analytics';
+import { roundMoney } from '@/utils/money';
+import { cn } from '@/utils/cn';
+import { Section } from '@/components/ui/Section';
+import { WeeklyRecapDrawer } from '@/components/dashboard/WeeklyRecapDrawer';
+import type { WeeklyRecap } from '@/types/schema';
+
+/**
+ * WeeklyRecapCard — Dashboard surface for the server-generated weekly recap
+ * (Plan 02, `households/{id}/recaps/{isoWeek}`).
+ *
+ * Shows the LATEST recap for a few days after it lands (Sunday → Wednesday),
+ * dismissible per ISO week (localStorage). Headline numbers render for every
+ * plan; the AI narrative is blurred behind a small upsell row when the recap
+ * was generated for a free household (`premium: false`). Tapping the card —
+ * or arriving via the `?recap=<isoWeek>` push deep link — opens the full
+ * detail drawer. The drawer mounts even when the card itself is hidden
+ * (dismissed/stale) so a late push open still works.
+ */
+
+/** How long after generation the card stays on the Dashboard. */
+const FRESHNESS_WINDOW_MS = 4 * 24 * 60 * 60 * 1000;
+
+const dismissKey = (isoWeek: string) => `lb_recap_dismissed_${isoWeek}`;
+
+/**
+ * Whether the latest recap should render as a card right now: fresh (within
+ * the window, with a sane timestamp) and not dismissed for that ISO week.
+ * Module helper (not inline in the component) so the impure reads — clock +
+ * localStorage — stay out of the render body proper.
+ */
+function shouldShowCard(recap: WeeklyRecap): boolean {
+  const ageMs = Date.now() - new Date(recap.generatedAt).getTime();
+  if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > FRESHNESS_WINDOW_MS) return false;
+  try {
+    return window.localStorage.getItem(dismissKey(recap.isoWeek)) !== '1';
+  } catch {
+    return true;
+  }
+}
+
+const persistDismiss = (isoWeek: string): void => {
+  try {
+    window.localStorage.setItem(dismissKey(isoWeek), '1');
+  } catch {
+    // Best-effort — the in-session state still hides the card.
+  }
+};
+
+export const WeeklyRecapCard: React.FC = () => {
+  const { recaps } = useHouseholdCore();
+  const fmt = useFormatCurrency();
+
+  const latest: WeeklyRecap | undefined = recaps[0];
+
+  // Dismissal — per-isoWeek session state; persistence lives in localStorage
+  // (read via shouldShowCard so a re-mount stays hidden).
+  const [dismissedWeek, setDismissedWeek] = useState<string | null>(null);
+
+  // Detail drawer target. `drawerWeek` is set by a card tap; `pushWeek` by the
+  // `?recap=<isoWeek>` deep link (held until the recaps listener delivers,
+  // since the push open usually beats the first snapshot).
+  const [drawerWeek, setDrawerWeek] = useState<string | null>(null);
+  const [pushWeek, setPushWeek] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Consume the deep-link param once on mount. The setState is deferred to a
+    // macrotask (external-input subscription style) rather than called
+    // synchronously in the effect body; deliberately no cleanup — under
+    // StrictMode's double-effect the second run sees the already-stripped URL
+    // and no-ops, so a cleanup would cancel the only real timer.
+    const week = consumeRecapParam();
+    if (!week) return;
+    window.setTimeout(() => {
+      track('recap_push_opened');
+      setPushWeek(week);
+    }, 0);
+  }, []);
+
+  // Resolve the push target once recaps arrive: the requested week when it's
+  // in the live window, else the latest.
+  const pushRecap = useMemo<WeeklyRecap | null>(() => {
+    if (!pushWeek) return null;
+    return recaps.find(r => r.isoWeek === pushWeek) ?? recaps[0] ?? null;
+  }, [pushWeek, recaps]);
+
+  // Fire `recap_viewed` once per push-opened week. A ref (not state) — nothing
+  // renders from it, and it dedupes StrictMode's doubled effect runs.
+  const trackedPushWeekRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pushRecap) return;
+    if (trackedPushWeekRef.current === pushRecap.isoWeek) return;
+    trackedPushWeekRef.current = pushRecap.isoWeek;
+    track('recap_viewed', { isoWeek: pushRecap.isoWeek, source: 'push' });
+  }, [pushRecap]);
+
+  const tappedRecap = useMemo<WeeklyRecap | null>(
+    () => (drawerWeek ? (recaps.find(r => r.isoWeek === drawerWeek) ?? null) : null),
+    [drawerWeek, recaps]
+  );
+  const activeRecap = tappedRecap ?? pushRecap;
+
+  const closeDrawer = () => {
+    setDrawerWeek(null);
+    setPushWeek(null);
+  };
+
+  const drawer = (
+    <WeeklyRecapDrawer recap={activeRecap} isOpen={activeRecap !== null} onClose={closeDrawer} />
+  );
+
+  // --- Card visibility -----------------------------------------------------
+  if (!latest) return drawer;
+  if (dismissedWeek === latest.isoWeek || !shouldShowCard(latest)) {
+    return drawer;
+  }
+
+  const diff = roundMoney(latest.totalSpend - latest.priorWeekSpend);
+  const spentLess = diff < 0;
+
+  const openDrawer = () => {
+    setDrawerWeek(latest.isoWeek);
+    track('recap_viewed', { isoWeek: latest.isoWeek, source: 'card' });
+  };
+
+  const dismiss = () => {
+    persistDismiss(latest.isoWeek);
+    setDismissedWeek(latest.isoWeek);
+  };
+
+  return (
+    <>
+      <Section
+        title="Your week in review"
+        action={
+          <button
+            onClick={dismiss}
+            className="p-1 min-h-6 text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300"
+            aria-label="Dismiss weekly recap"
+          >
+            <X size={16} />
+          </button>
+        }
+      >
+        <button
+          onClick={openDrawer}
+          className="w-full text-left surface-section p-4 space-y-3 hover:border-brand-300 dark:hover:border-brand-600 active:scale-[0.99] transition-[transform,colors] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+          aria-label={`Open weekly recap for ${latest.isoWeek}`}
+        >
+          {/* Headline numbers — money in directional tokens, habits in amber */}
+          <div className="flex items-baseline justify-between gap-3">
+            <div>
+              <span className="stat-num text-2xl font-bold text-accent-700 dark:text-accent-300">
+                {fmt(latest.totalSpend, { decimals: 0 })}
+              </span>
+              <span className="ml-1.5 text-xs font-medium text-brand-500 dark:text-brand-400">
+                spent
+              </span>
+              {latest.priorWeekSpend > 0 && diff !== 0 && (
+                <span
+                  className={cn(
+                    'ml-2 text-xs font-semibold',
+                    spentLess ? 'text-money-pos' : 'text-money-neg'
+                  )}
+                >
+                  {spentLess ? '↓' : '↑'} {fmt(Math.abs(diff), { decimals: 0 })} vs last week
+                </span>
+              )}
+            </div>
+            <span className="flex items-center gap-1 text-xs font-semibold text-warm-700 dark:text-warm-300 shrink-0">
+              <Sparkles size={12} aria-hidden="true" />
+              {latest.habitCompletions} habit{latest.habitCompletions === 1 ? '' : 's'} done
+            </span>
+          </div>
+
+          {/* Narrative snippet — blurred + upsell when the recap is free-tier */}
+          {latest.premium ? (
+            <p className="text-sm text-brand-600 dark:text-brand-300 line-clamp-2">
+              {latest.narrative}
+            </p>
+          ) : (
+            <div>
+              <p
+                className="text-sm text-brand-600 dark:text-brand-300 line-clamp-2 blur-sm select-none"
+                aria-hidden="true"
+              >
+                {latest.narrative || 'Your personalized weekly summary is ready to read.'}
+              </p>
+              <span className="mt-1.5 flex items-center gap-1.5 text-xs font-semibold text-warm-700 dark:text-warm-300">
+                <Lock size={12} aria-hidden="true" />
+                Unlock your personal recap with Premium
+              </span>
+            </div>
+          )}
+
+          <span className="flex items-center gap-0.5 text-xs font-semibold text-accent-700 dark:text-accent-300">
+            See the full recap
+            <ChevronRight size={14} aria-hidden="true" />
+          </span>
+        </button>
+      </Section>
+      {drawer}
+    </>
+  );
+};

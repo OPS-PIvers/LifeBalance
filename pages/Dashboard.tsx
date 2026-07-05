@@ -37,6 +37,7 @@ import { DailyHabitsWidget } from '@/components/dashboard/DailyHabitsWidget';
 import { KidsChoresWidget } from '@/components/dashboard/KidsChoresWidget';
 import { ActivityFeedWidget } from '@/components/dashboard/ActivityFeedWidget';
 import { PulseStripWidget } from '@/components/dashboard/PulseStripWidget';
+import { WeeklyRecapCard } from '@/components/dashboard/WeeklyRecapCard';
 import { CreateChallengePayload } from '@/types/schema';
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
 import { CreditCardActivityWidget } from '@/components/dashboard/CreditCardActivityWidget';
@@ -439,6 +440,12 @@ const Dashboard: React.FC = () => {
 
         {/* The Pulse strip — money + habits balance, the app's thesis metric */}
         <PulseStripWidget />
+
+        {/* Weekly recap (Plan 02) — fresh for a few days after the Sunday
+            generation, dismissible; also hosts the recap detail drawer (which
+            must stay mounted for the ?recap= push deep link even when the
+            card itself is hidden). */}
+        <WeeklyRecapCard />
 
         {/* Pending Voice Commands Banner */}
         {pendingItemsCount > 0 && (

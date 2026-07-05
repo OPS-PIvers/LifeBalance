@@ -42,6 +42,13 @@ export interface NotificationPreferences {
     time: string; // HH:MM format (24-hour)
   };
 
+  // Weekly recap push (Plan 02). Sent server-side Sundays ~17:00 in the
+  // member's timezone; no time selection needed, so it's a bare toggle.
+  // Optional so legacy docs deserialize — treat absent as enabled (default ON).
+  weeklyRecap?: {
+    enabled: boolean;
+  };
+
   // General notification settings
   timezone?: string; // IANA timezone (e.g., 'America/New_York')
 }
@@ -72,6 +79,11 @@ export interface HouseholdMember {
   avatarColor?: string; // kid-friendly avatar accent (e.g. a brand-* / habit-* token)
   avatarEmoji?: string; // kid-friendly avatar glyph
   allowanceCents?: number; // tracked IOU/allowance ledger (NOT an in-app payout)
+
+  // Plan 02 (weekly recap): per-member push-delivery dedupe marker — the ISO
+  // week ('2026-W27') of the last recap push sent to this member. Written
+  // server-side only (the scheduled function); the client never writes it.
+  lastRecapSentWeek?: string;
 }
 
 export interface Account {
@@ -514,6 +526,11 @@ export interface Household {
     priceId?: string;
   };
 
+  // Plan 02 (weekly recap): household-level generation dedupe marker — the ISO
+  // week ('2026-W27') of the last generated recap. Written server-side only by
+  // the scheduled recap function; absent until the first recap is generated.
+  lastRecapWeek?: string;
+
   // Legacy fields for migration support
   startDate?: string; // YYYY-MM-DD format - deprecated, use lastPaycheckDate
   payPeriodSettings?: { startDate: string }; // Deprecated, use lastPaycheckDate
@@ -627,6 +644,28 @@ export interface Insight {
   generatedAt: string; // ISO timestamp
   type: 'general' | 'spending' | 'habits';
   actions?: InsightAction[];
+}
+
+/**
+ * Weekly recap (Plan 02) — one doc per ISO week at
+ * `households/{id}/recaps/{isoWeek}`, written server-side Sundays by the
+ * scheduled recap function (Admin SDK; clients only read). The synthetic `id`
+ * equals the doc id, which equals `isoWeek`. Money fields are decimal dollars.
+ */
+export interface WeeklyRecap {
+  id: string;
+  isoWeek: string; // e.g. '2026-W27'
+  generatedAt: string; // ISO timestamp
+  totalSpend: number; // decimal dollars
+  priorWeekSpend: number;
+  topCategoryDeltas: Array<{ category: string; current: number; prior: number }>;
+  habitCompletions: number;
+  streaksAtRisk: Array<{ habitTitle: string; streakDays: number }>;
+  pointsByMember: Array<{ memberId: string; name: string; points: number }>;
+  upcomingBills: Array<{ title: string; amount: number; date: string }>;
+  narrative: string;
+  narrativeSource: 'ai' | 'template';
+  premium: boolean;
 }
 
 export interface BetaTester {

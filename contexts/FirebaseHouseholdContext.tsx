@@ -43,6 +43,7 @@ import {
   pendingItemConverter,
   householdApiKeyConverter,
   insightConverter,
+  weeklyRecapConverter,
   transactionConverter,
   todoConverter,
 } from '@/utils/firestoreConverters';
@@ -75,7 +76,8 @@ import {
   QuickStockList,
   HouseholdApiKey,
   PendingItem,
-  ModuleKey
+  ModuleKey,
+  WeeklyRecap
 } from '@/types/schema';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { normalizeToKey } from '@/utils/stringNormalizer';
@@ -100,6 +102,7 @@ import { formatCurrency } from '@/utils/formatCurrency';
 import {
   BUCKET_HISTORY_LIMIT,
   INSIGHTS_LIMIT,
+  RECAPS_LIMIT,
   TRANSACTION_PAGE_SIZE,
   TODO_COMPLETED_PAGE_SIZE,
   getTransactionWindowStart,
@@ -230,6 +233,8 @@ export interface HouseholdContextType {
   todos: ToDo[];
   groceryCatalog: GroceryCatalogItem[];
   bucketHistory: BucketPeriodSnapshot[];
+  /** Weekly recaps (Plan 02) — newest first, bounded live window (RECAPS_LIMIT). */
+  recaps: WeeklyRecap[];
 
   // --- Listener windowing / pagination ---
   // The high-cardinality collections below are windowed on cold load (see
@@ -525,6 +530,7 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'setKidModePin'
   | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
   | 'activeMemberId' | 'actAs' | 'exitToParent'
+  | 'recaps'
 >;
 
 const FinanceContext = createContext<FinanceContextValue | undefined>(undefined);
@@ -780,6 +786,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const completedTodoWindowStartRef = useRef<Date | null>(null);
   const [groceryCatalog, setGroceryCatalog] = useState<GroceryCatalogItem[]>([]);
   // Bucket history: live window (most-recent N periods) merged with older history.
+  // Weekly recaps (Plan 02) — bounded live window, newest first (see RECAPS_LIMIT).
+  const [recaps, setRecaps] = useState<WeeklyRecap[]>([]);
   const [bucketHistoryWindow, setBucketHistoryWindow] = useState<BucketPeriodSnapshot[]>([]);
   const [bucketHistoryOlder, setBucketHistoryOlder] = useState<BucketPeriodSnapshot[]>([]);
   const bucketHistory = useMemo(
@@ -926,6 +934,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     completedTodoWindowStartRef.current = null;
     setHasMoreCompletedTodos(true);
     setIsLoadingOlderTodos(false);
+    setRecaps([]);
     setBucketHistoryWindow([]);
     setBucketHistoryOlder([]);
     bucketHistoryLoadedAllRef.current = false;
@@ -988,6 +997,22 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         }
       }, (error) => {
         console.error('Error listening to bucketHistory:', error);
+      })
+    );
+
+    // Weekly recaps listener (Plan 02) — bounded live window of the most recent
+    // few weeks. Docs are keyed by ISO week ('2026-Www'), which sorts
+    // chronologically as a string, so orderBy desc yields newest-first.
+    const recapsQuery = query(
+      collection(db, `households/${householdId}/recaps`).withConverter(weeklyRecapConverter),
+      orderBy('isoWeek', 'desc'),
+      limit(RECAPS_LIMIT)
+    );
+    unsubscribers.push(
+      onSnapshot(recapsQuery, (snapshot) => {
+        setRecaps(snapshot.docs.map(doc => doc.data()));
+      }, (error) => {
+        console.error('Error listening to recaps:', error);
       })
     );
 
@@ -4857,12 +4882,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     activeMemberId,
     actAs,
     exitToParent,
+    recaps,
   }), [
     isLoading, currentUser, members, insight, insightsHistory, isGeneratingInsight, hasMoreInsights, loadAllInsights,
     pendingItemsCount, apiKeys,
     householdId, householdSettings, refreshInsight, addMember, updateMember, removeMember, deleteHousehold,
     completeOnboarding, setHouseholdCurrency, setModuleVisibility, setKidModePin,
     addKidProfile, updateKidProfile, removeKidProfile, activeMemberId, actAs, exitToParent,
+    recaps,
   ]);
 
   return (
