@@ -300,10 +300,16 @@ export async function loadNotifiableMembersByHousehold(
 
     let group = byHousehold.get(householdRef.id);
     if (!group) {
+      // Memoize the household read: jobs may call getHouseholdData once per
+      // member of the group, and it should cost one Firestore read total.
+      let householdDataPromise: Promise<admin.firestore.DocumentData | undefined> | undefined;
       group = {
         householdId: householdRef.id,
         householdRef,
-        getHouseholdData: async () => (await householdRef.get()).data(),
+        getHouseholdData: () => {
+          householdDataPromise ??= householdRef.get().then((snap) => snap.data());
+          return householdDataPromise;
+        },
         memberDocs: [],
       };
       byHousehold.set(householdRef.id, group);

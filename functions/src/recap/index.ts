@@ -145,7 +145,7 @@ async function processHousehold(
 
   // ---- Household-level generation dedupe -------------------------------
   if (household.lastRecapWeek !== isoWeek) {
-    await generateRecap(db, householdId, memberDocs, isoWeek, triggeringTimezone, premium);
+    await generateRecap(db, householdId, isoWeek, triggeringTimezone, premium);
   } else {
     logger.info(`sendweeklyrecap: household ${householdId} already has a recap for ${isoWeek}, skipping generation`);
   }
@@ -182,7 +182,6 @@ async function processHousehold(
 async function generateRecap(
   db: admin.firestore.Firestore,
   householdId: string,
-  memberDocs: admin.firestore.QueryDocumentSnapshot[],
   isoWeek: string,
   timezone: string,
   premium: boolean
@@ -238,9 +237,13 @@ async function generateRecap(
     };
   });
 
-  // Members were already fetched by processHousehold — reuse the snapshot
-  // instead of a second Firestore read.
-  const members: RecapMember[] = memberDocs.map((d) => {
+  // The recap's per-member stats must cover ALL household members — the
+  // collection-group list processHousehold works from is filtered to
+  // notification-enabled members only, and a member with notifications off
+  // must still appear in pointsByMember. One extra read per generating
+  // household per week.
+  const membersSnap = await db.collection(`households/${householdId}/members`).get();
+  const members: RecapMember[] = membersSnap.docs.map((d) => {
     const data = d.data() as RecapMemberDoc;
     return {
       // Member docs are keyed by uid; fall back to the doc id if the field is absent.
