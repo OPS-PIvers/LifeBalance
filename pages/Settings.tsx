@@ -455,11 +455,11 @@ const Settings: React.FC = () => {
                   <p className="font-semibold text-brand-900 dark:text-brand-50 tracking-tight truncate text-sm">
                     {user?.displayName || 'User'}
                   </p>
-                  {currentUser?.role === 'admin' ? (
+                  {currentUser && (currentUser.role === 'admin' ? (
                     <Crown size={12} className="text-warm-500 shrink-0" aria-label="Admin" />
                   ) : (
                     <Shield size={12} className="text-accent-600 dark:text-accent-400 shrink-0" aria-label="Member" />
-                  )}
+                  ))}
                 </div>
                 <p className="text-xs text-brand-500 dark:text-brand-400 truncate">{user?.email}</p>
               </div>
