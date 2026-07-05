@@ -223,7 +223,10 @@
   }
   ::-webkit-date-and-time-value {
     margin: 0;
-    text-align: left;
+    /* `inherit` (not `left`) so a `text-center`/`text-right` utility on the
+       input still governs the value, matching Tailwind v4's preflight default;
+       text inputs are start-aligned, so the default rendering is unchanged. */
+    text-align: inherit;
     /* Keep the value's line box at one text line so the control can't collapse
        shorter than a sibling text input / select. */
     min-height: 1.5em;
