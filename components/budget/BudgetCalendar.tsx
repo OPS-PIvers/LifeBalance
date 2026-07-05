@@ -31,6 +31,15 @@ const BudgetCalendar: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
 
+  // Selecting a day anchors BOTH states: without this, picking an
+  // adjacent-month day in the expanded grid (or collapsing/re-expanding after
+  // strip navigation) leaves the month header/grid on the old `currentDate`
+  // while the agenda shows the new selection.
+  const handleSelectDate = (day: Date) => {
+    setSelectedDate(day);
+    setCurrentDate(day);
+  };
+
   // Month grid is collapsed to a compact week strip by default (UX audit
   // Batch 3 — the day's agenda is the actionable content and should render
   // first without scrolling; the full month grid is secondary/occasional).
@@ -479,7 +488,7 @@ const BudgetCalendar: React.FC = () => {
               size="icon-sm"
               onClick={toggleGridExpanded}
               aria-expanded={isGridExpanded}
-              aria-controls="budget-calendar-month-grid"
+              aria-controls={isGridExpanded ? 'budget-calendar-month-grid' : undefined}
               className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn"
               aria-label={isGridExpanded ? 'Collapse to week view' : 'Expand to month view'}
             >
@@ -526,11 +535,11 @@ const BudgetCalendar: React.FC = () => {
                     tabIndex={0}
                     aria-label={ariaLabel}
                     aria-pressed={isSelected}
-                    onClick={() => setSelectedDate(day)}
+                    onClick={() => handleSelectDate(day)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
-                        setSelectedDate(day);
+                        handleSelectDate(day);
                       }
                     }}
                     className={`
@@ -578,7 +587,7 @@ const BudgetCalendar: React.FC = () => {
                   key={day.toString()}
                   aria-label={ariaLabel}
                   aria-pressed={isSelected}
-                  onClick={() => setSelectedDate(day)}
+                  onClick={() => handleSelectDate(day)}
                   className={cn(
                     'relative flex flex-col items-center justify-center gap-0.5 rounded-card py-2 text-sm font-medium transition-[background-color,color] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
                     isSelected
