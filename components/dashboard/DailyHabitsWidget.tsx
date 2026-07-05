@@ -7,7 +7,6 @@ import { Link } from 'react-router-dom';
 import SectionActionLink from '@/components/ui/SectionActionLink';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
 import { cn } from '@/utils/cn';
-import ProgressRing from '@/components/ui/ProgressRing';
 
 const MAX_VISIBLE_HABITS = 5;
 const DEFAULT_ORDER_FALLBACK = 999;
@@ -40,13 +39,6 @@ export const DailyHabitsWidget: React.FC = React.memo(() => {
       });
   }, [habits, today]);
 
-  const stats = useMemo(() => {
-    const total = dailyHabits.length;
-    const completed = dailyHabits.filter(h => h.isCompleted).length;
-    const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
-    return { total, completed, percent };
-  }, [dailyHabits]);
-
   if (dailyHabits.length === 0) return null;
 
   const visibleHabits = dailyHabits.slice(0, MAX_VISIBLE_HABITS);
@@ -60,30 +52,9 @@ export const DailyHabitsWidget: React.FC = React.memo(() => {
       }
     >
       <SurfaceList>
-        {/* Progress header row */}
-        <Row className="justify-between">
-          <div>
-            <p className="text-xs text-brand-500 dark:text-brand-400 font-medium mb-0.5">Today&apos;s progress</p>
-            <div className="flex items-baseline gap-2">
-              <span className="stat-num text-2xl font-bold text-brand-900 dark:text-brand-50">
-                {stats.completed}/{stats.total}
-              </span>
-              <span className="text-sm font-semibold text-brand-400 dark:text-brand-500">done</span>
-            </div>
-          </div>
-
-          {/* Circular progress — aria-hidden because the % is shown as text */}
-          <ProgressRing
-            percent={stats.percent}
-            barClassName={stats.percent === 100 ? 'text-money-pos' : 'text-warm-500'}
-          >
-            <span className="stat-num text-xxs font-bold text-brand-600 dark:text-brand-300">
-              {stats.percent}%
-            </span>
-          </ProgressRing>
-        </Row>
-
-        {/* Habit rows */}
+        {/* Habit rows — the progress-ring header (done/total, %) was removed:
+            it duplicated PulseStripWidget's Consistency cell shown just above
+            (same %/done-total for today) — see UX content audit Batch 4. */}
         {visibleHabits.map(habit => (
           <Row key={habit.id} className="justify-between">
             <div className="flex items-center gap-3 min-w-0">

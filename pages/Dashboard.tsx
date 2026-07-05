@@ -447,21 +447,25 @@ const Dashboard: React.FC = () => {
             card itself is hidden). */}
         <WeeklyRecapCard />
 
-        {/* Pending Voice Commands Banner */}
+        {/* Pending Voice Commands Banner — on the shared Section wrapper so it
+            reads as the same idiom as every other widget, not a bespoke ad hoc
+            container. */}
         {pendingItemsCount > 0 && (
-          <div className="surface-section p-4 animate-in fade-in slide-in-from-top-2 duration-(--duration-base)">
-            <div className="flex items-center gap-3">
-              <div className="w-2 h-2 rounded-full bg-accent-500 motion-safe:animate-pulse"></div>
-              <div className="flex-1">
-                <h3 className="font-display text-sm font-semibold text-brand-900 dark:text-brand-100">
-                  Processing voice command{pendingItemsCount !== 1 ? 's' : ''}
-                </h3>
-                <p className="text-xs text-brand-500 dark:text-brand-400 mt-0.5">
-                  Adding {pendingItemsCount} item{pendingItemsCount !== 1 ? 's' : ''} from your Siri shortcuts…
-                </p>
+          <Section className="animate-in fade-in slide-in-from-top-2 duration-(--duration-base)">
+            <div className="surface-section p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 rounded-full bg-accent-500 motion-safe:animate-pulse"></div>
+                <div className="flex-1">
+                  <h3 className="font-display text-sm font-semibold text-brand-900 dark:text-brand-100">
+                    Processing voice command{pendingItemsCount !== 1 ? 's' : ''}
+                  </h3>
+                  <p className="text-xs text-brand-500 dark:text-brand-400 mt-0.5">
+                    Adding {pendingItemsCount} item{pendingItemsCount !== 1 ? 's' : ''} from your Siri shortcuts…
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          </Section>
         )}
 
         {/* Empty-queue case: the "All caught up" section stays in its original
