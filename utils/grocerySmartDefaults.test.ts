@@ -92,6 +92,11 @@ describe('parseQuantity', () => {
     expect(parseQuantity('.25')).toEqual({ count: 0.25, unit: '' });
   });
 
+  it('parses trailing-dot decimals without leaking the dot into the unit', () => {
+    expect(parseQuantity('1. lbs')).toEqual({ count: 1, unit: 'lbs' });
+    expect(parseQuantity('2.')).toEqual({ count: 2, unit: '' });
+  });
+
   it('handles undefined/empty as default 1 with empty unit', () => {
     expect(parseQuantity(undefined)).toEqual({ count: 1, unit: '' });
     expect(parseQuantity('')).toEqual({ count: 1, unit: '' });
