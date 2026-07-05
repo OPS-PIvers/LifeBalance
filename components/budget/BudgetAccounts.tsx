@@ -2,10 +2,12 @@
 import React, { useState, useMemo } from 'react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
-import { Pencil, Check, Plus, Target, Star, GripVertical, Trash2, MoreVertical, Landmark, CreditCard } from 'lucide-react';
+import { Pencil, Check, Plus, Target, Star, GripVertical, Trash2, MoreVertical, Landmark, CreditCard, Banknote } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Account } from '@/types/schema';
-import { sumMoney, subtractMoney } from '@/utils/money';
+import { sumMoney, subtractMoney, roundMoney } from '@/utils/money';
+import { shouldOfferBalanceAdoption } from '@/utils/plaidBalance';
+import { track } from '@/services/analytics';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -166,6 +168,16 @@ const BudgetAccounts: React.FC = () => {
       updateAccountBalance(id, num);
     }
     setEditingId(null);
+  };
+
+  // Adopt the advisory Plaid balance for an account: writes through the
+  // NORMAL balance-update path (same as manual editing) so history/alerts
+  // fire correctly — never a direct Firestore write. The manual `balance`
+  // field remains authoritative; this just syncs it to match the bank.
+  const handleAdoptPlaidBalance = (account: Account) => {
+    if (typeof account.plaidBalanceCurrent !== 'number') return;
+    updateAccountBalance(account.id, roundMoney(account.plaidBalanceCurrent));
+    track('plaid_balance_adopted');
   };
 
   // Drag handlers
@@ -351,6 +363,21 @@ const BudgetAccounts: React.FC = () => {
               barClassName="bg-habit-gold"
               ariaLabel={`${Math.round(progress)}% to goal`}
             />
+          </div>
+        )}
+
+        {/* Advisory Plaid balance chip — only when a linked bank balance has
+            diverged from the manual balance by more than the threshold. */}
+        {shouldOfferBalanceAdoption(account) && (
+          <div className="ml-7">
+            <button
+              type="button"
+              onClick={() => handleAdoptPlaidBalance(account)}
+              className="inline-flex items-center gap-1.5 text-xxs font-medium text-accent-700 dark:text-accent-300 bg-accent-50 dark:bg-accent-900/30 hover:bg-accent-100 dark:hover:bg-accent-900/50 rounded-full px-2.5 py-1 transition-colors"
+            >
+              <Banknote size={11} aria-hidden />
+              Update to bank balance {fmt(account.plaidBalanceCurrent ?? 0)}
+            </button>
           </div>
         )}
       </Row>

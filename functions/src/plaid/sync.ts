@@ -4,6 +4,7 @@ import * as logger from "firebase-functions/logger";
 import { PLAID_SECRETS, makePlaidClient } from "./client";
 import { plaidTransactionToDoc, type PlaidTxnInput } from "./mapping";
 import { decidePlaidWrite, type ExistingRow } from "./dedup";
+import { decideModifiedWrite, decideRemovedWrite, type RevisableRow } from "./revisions";
 import { DUPLICATE_WINDOW_DAYS } from "../quickAdd/transactionIdentity";
 
 /** Plaid transaction ids are URL-safe; strip anything unexpected so the value is
@@ -18,8 +19,20 @@ const docIdFor = (transactionId: string): string =>
  * and a user-verified txn is never clobbered). The per-item cursor is persisted
  * after each page so a crash resumes from the last committed point.
  *
- * v1 handles ADDED only; `modified`/`removed` are deferred (must not clobber a
- * user-verified/edited transaction — see the runbook).
+ * MODIFIED/REMOVED (plan 04): decided by the pure helpers in revisions.ts —
+ * an untouched (`pending_review`) row is overwritten/deleted directly; a
+ * user-`verified` row is never clobbered (a `plaidRevision` delta or
+ * `plaidRemoved` flag is written instead so a future review UI can surface
+ * it). "Untouched" === `status === 'pending_review'`, since every client
+ * mutation path that edits a row's fields also flips it to `verified` — see
+ * revisions.ts's file comment for the full argument.
+ *
+ * BALANCE SYNC (plan 04): `transactionsSync`'s response includes `accounts`
+ * with current balances (Plaid SDK ^42, no extra product needed) — those are
+ * written, per mapped LifeBalance account (via the item's `accountMap`, set
+ * at link time in exchange.ts), as `plaidBalanceCurrent`/`plaidBalanceAvailable`/
+ * `plaidBalanceUpdatedAt`. The manual `Account.balance` field is NEVER
+ * touched here; these are purely advisory (see utils/plaidBalance.ts).
  */
 export const plaidsynctransactions = onSchedule(
   { schedule: "every 24 hours", secrets: PLAID_SECRETS, timeoutSeconds: 540 },
@@ -99,20 +112,31 @@ export const plaidsynctransactions = onSchedule(
         .filter((row): row is ExistingRow => row !== null);
 
       for (const itemDoc of items) {
-        const { accessToken, cursor } = itemDoc.data() as {
+        const { accessToken, cursor, accountMap } = itemDoc.data() as {
           accessToken?: string;
           cursor?: string | null;
+          accountMap?: Record<string, string>;
         };
         if (!accessToken) continue;
 
         try {
           let nextCursor = cursor ?? undefined;
           let hasMore = true;
+          // Balance sync (plan 04, section B): Plaid returns the SAME current
+          // balances on every page, so remember the last page's `accounts`
+          // array and stamp the mapped LifeBalance accounts ONCE after the
+          // cursor walk — per-page writes would be redundant Firestore writes
+          // and needless client listener churn on multi-page initial syncs.
+          let latestAccounts: Awaited<
+            ReturnType<typeof plaid.transactionsSync>
+          >["data"]["accounts"] = [];
           while (hasMore) {
             const resp = await plaid.transactionsSync({
               access_token: accessToken,
               cursor: nextCursor,
             });
+            if (resp.data.accounts?.length) latestAccounts = resp.data.accounts;
+
             const added = resp.data.added ?? [];
             for (const p of added) {
               const ref = db.doc(
@@ -152,12 +176,103 @@ export const plaidsynctransactions = onSchedule(
                 needsAmount: false,
               });
             }
+
+            // MODIFIED (plan 04): a Plaid revision to a transaction we already
+            // wrote. Only applies to rows this sync itself created (matched by
+            // the deterministic `plaid_<id>` doc id) — if we never wrote it
+            // (e.g. it was added+modified between two of our syncs and only
+            // shows up as `modified` here because our cursor skipped past the
+            // `added` event), there's nothing to update.
+            for (const p of resp.data.modified ?? []) {
+              const ref = db.doc(
+                `households/${householdId}/transactions/${docIdFor(p.transaction_id)}`,
+              );
+              const existingSnap = await ref.get();
+              if (!existingSnap.exists) continue;
+              const existingData = existingSnap.data() as Record<string, unknown>;
+              const existingRow: RevisableRow = {
+                id: ref.id,
+                status: existingData.status === "verified" ? "verified" : "pending_review",
+              };
+              const mapped = plaidTransactionToDoc(p as PlaidTxnInput, { bucketNames, lastPaycheckDate });
+              const decision = decideModifiedWrite(
+                existingRow,
+                mapped,
+                {
+                  amount: typeof existingData.amount === "number" ? existingData.amount : mapped.amount,
+                  merchant: typeof existingData.merchant === "string" ? existingData.merchant : mapped.merchant,
+                  category: typeof existingData.category === "string" ? existingData.category : mapped.category,
+                  date: typeof existingData.date === "string" ? existingData.date : mapped.date,
+                },
+              );
+              if (decision.action === "overwrite") {
+                // Skip a no-op write (a `modified` event can carry changes to
+                // fields we don't track).
+                const changed =
+                  decision.fields.amount !== existingData.amount ||
+                  decision.fields.merchant !== existingData.merchant ||
+                  decision.fields.category !== existingData.category ||
+                  decision.fields.date !== existingData.date;
+                if (changed) {
+                  await ref.update({
+                    amount: decision.fields.amount,
+                    merchant: decision.fields.merchant,
+                    category: decision.fields.category,
+                    date: decision.fields.date,
+                  });
+                }
+              } else if (Object.keys(decision.revision).length > 0) {
+                await ref.update({
+                  plaidRevision: { ...decision.revision, revisedAt: new Date().toISOString() },
+                });
+              }
+            }
+
+            // REMOVED (plan 04): a transaction Plaid no longer reports (e.g. a
+            // pending auth that never settled). Same matched-by-us constraint
+            // as `modified` above.
+            for (const r of resp.data.removed ?? []) {
+              const ref = db.doc(
+                `households/${householdId}/transactions/${docIdFor(r.transaction_id)}`,
+              );
+              const existingSnap = await ref.get();
+              if (!existingSnap.exists) continue;
+              const existingData = existingSnap.data() as Record<string, unknown>;
+              const existingRow: RevisableRow = {
+                id: ref.id,
+                status: existingData.status === "verified" ? "verified" : "pending_review",
+              };
+              const decision = decideRemovedWrite(existingRow);
+              if (decision === "delete") {
+                await ref.delete();
+              } else {
+                await ref.update({ plaidRemoved: true });
+              }
+            }
+
             nextCursor = resp.data.next_cursor;
             hasMore = resp.data.has_more;
             // Persist the cursor after each page so a crash resumes safely.
             await itemDoc.ref.update({
               cursor: nextCursor,
               lastSyncedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          }
+
+          // Advisory balance stamp — once per item per run (see note above).
+          for (const plaidAccount of latestAccounts) {
+            const lifeBalanceAccountId = accountMap?.[plaidAccount.account_id];
+            if (!lifeBalanceAccountId) continue; // unmapped — nothing to stamp
+            const balances = plaidAccount.balances;
+            // `current`/`available` are nullable per the Plaid SDK; skip a
+            // reading entirely rather than writing `null` into a `number`-typed
+            // client field. `current` is the primary signal for the affordance
+            // (utils/plaidBalance.ts) so without it there is nothing to stamp.
+            if (balances.current == null) continue;
+            await hhRef.collection("accounts").doc(lifeBalanceAccountId).update({
+              plaidBalanceCurrent: balances.current,
+              ...(balances.available != null ? { plaidBalanceAvailable: balances.available } : {}),
+              plaidBalanceUpdatedAt: new Date().toISOString(),
             });
           }
         } catch (err) {

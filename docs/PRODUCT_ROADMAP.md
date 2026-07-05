@@ -383,6 +383,8 @@ explorations against this table.
 | `recap_push_opened` | App arrives via the weekly recap push deep link (`?recap=<isoWeek>`, consumed by `utils/recapParam.ts`) | — |
 | `duplicate_merged` | A `possibleDuplicateOf`-flagged transaction pair is merged (`mergeTransactions` in the context, or the Merge action in `TransactionReviewForm`) | `source` — the deleted duplicate row's `Transaction.source` |
 | `duplicate_kept_both` | A `possibleDuplicateOf` flag is dismissed without merging (`keepBothTransactions` / the Keep-both action) | — |
+| `bank_linked` | A Plaid Link flow completes and `plaidexchangepublictoken` succeeds (`components/settings/ConnectBankCard.tsx`) | — |
+| `plaid_balance_adopted` | The "Update to bank balance" chip is tapped on a budget account card (`components/budget/BudgetAccounts.tsx`) | — |
 
 First-time events are approximate by design (per-device localStorage flags, no server
 state) — good enough for funnel analysis, not accounting.
