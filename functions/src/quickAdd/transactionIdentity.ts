@@ -47,6 +47,16 @@ export interface IdentityTransaction {
 /** Calendar-day window within which a Plaid post-date can lag the original capture. */
 export const DUPLICATE_WINDOW_DAYS = 3;
 
+/**
+ * Within this many calendar days a match is confident enough to auto-merge
+ * (`'duplicate'`). Between this and {@link DUPLICATE_WINDOW_DAYS} the verdict
+ * downgrades to `'possible'` — the plan's known hard case: an identical
+ * recurring charge two days apart (daily coffee, a resubscription) is
+ * indistinguishable from a lagged post by amount+merchant+date alone, so it
+ * must surface as a user choice ("Merge / Keep both"), never silently merge.
+ */
+export const AUTO_DUPLICATE_WINDOW_DAYS = 1;
+
 /** Convert a stored (always-positive) dollar amount to integer cents, avoiding float drift. */
 const amountCents = (amount: number): number => Math.round(Math.abs(amount) * 100);
 
@@ -113,13 +123,14 @@ export function fingerprint(txn: IdentityTransaction): string {
  *    account (when both known and differ, no match) and merchant similarity;
  *    this mirrors reconcile.ts's stub-fill contract at the policy level
  *    without changing reconcile.ts's own decision path.
- *  - Otherwise: same account (when both known; unknown-either-side does NOT
- *    disqualify) + same amount-cents + date within
- *    {@link DUPLICATE_WINDOW_DAYS} calendar days + `merchantSimilar` →
- *    `'duplicate'`.
- *  - Same amount-cents + within the date window but merchant dissimilar, OR
- *    either account unknown (so we can't be sure it's not a different
- *    card) → `'possible'`.
+ *  - Otherwise: same account (both known) + same amount-cents + date within
+ *    {@link AUTO_DUPLICATE_WINDOW_DAYS} calendar days + `merchantSimilar` →
+ *    `'duplicate'` (safe to auto-merge/annotate).
+ *  - Same amount-cents + within {@link DUPLICATE_WINDOW_DAYS} but any
+ *    confidence signal missing — merchant dissimilar, either account
+ *    unknown, or the dates are 2–3 days apart (could be a genuine second
+ *    charge from a recurring merchant) → `'possible'` (surface a
+ *    Merge / Keep-both choice, never auto-merge).
  *  - Otherwise → `'distinct'`. This is also the outcome for two identical
  *    recurring subscriptions posted a few days apart when they're NOT within
  *    the window, or — the documented hard case — when they're both
@@ -148,15 +159,17 @@ export function isLikelyDuplicate(a: IdentityTransaction, b: IdentityTransaction
   const eitherIsStub = Boolean(a.needsAmount || b.needsAmount);
   const similar = merchantSimilar(a.merchant, b.merchant);
 
+  const withinAutoWindow = dayDistance <= AUTO_DUPLICATE_WINDOW_DAYS;
+
   if (eitherIsStub) {
     // Amount is a wildcard for a stub — only merchant + account can decide.
-    if (similar) return accountsKnown ? "duplicate" : "possible";
+    if (similar) return accountsKnown && withinAutoWindow ? "duplicate" : "possible";
     return "possible";
   }
 
   const amountsMatch = amountCents(a.amount) === amountCents(b.amount);
   if (!amountsMatch) return "distinct";
 
-  if (similar && accountsKnown) return "duplicate";
+  if (similar && accountsKnown && withinAutoWindow) return "duplicate";
   return "possible";
 }

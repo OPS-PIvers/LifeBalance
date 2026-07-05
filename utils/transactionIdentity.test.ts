@@ -122,15 +122,15 @@ describe('isLikelyDuplicate — table-driven policy matrix', () => {
       expected: 'distinct',
     },
     {
-      name: 'recurring identical subscription two days apart, same account → duplicate (within window)',
-      // This is the case the plan calls out as needing a comment: two days is
-      // INSIDE the ±3-day window, so by the stated policy this reads as the
-      // same purchase (e.g. a delayed post-date). A true two-days-apart
-      // resubscription is indistinguishable from a lagged post without extra
-      // signal (e.g. a recurrence id), which this pairwise policy does not have.
+      name: 'recurring identical subscription two days apart → possible, never auto-merged',
+      // The plan's known hard case: a genuine second charge from a recurring
+      // merchant 2 days apart is indistinguishable from a lagged post by
+      // amount+merchant+date alone. Auto-merging would silently swallow a real
+      // transaction, so beyond AUTO_DUPLICATE_WINDOW_DAYS (±1) the verdict
+      // downgrades to 'possible' and the review UI asks the user.
       a: { accountId: 'checking', amount: 9.99, date: '2026-06-01', merchant: 'Netflix' },
       b: { accountId: 'checking', amount: 9.99, date: '2026-06-03', merchant: 'Netflix' },
-      expected: 'duplicate',
+      expected: 'possible',
     },
     {
       name: 'both rows verified → never match, regardless of similarity',
@@ -157,10 +157,10 @@ describe('isLikelyDuplicate — table-driven policy matrix', () => {
       expected: 'distinct',
     },
     {
-      name: 'exactly at the window boundary (3 days) with everything else matching → duplicate',
+      name: 'at the outer window boundary (3 days) → possible (inside DUPLICATE_WINDOW_DAYS, outside auto-merge)',
       a: { accountId: 'checking', amount: 40, date: '2026-06-24', merchant: 'Gas' },
       b: { accountId: 'checking', amount: 40, date: '2026-06-27', merchant: 'Gas' },
-      expected: 'duplicate',
+      expected: 'possible',
     },
     {
       name: 'one day past the window boundary (4 days) → distinct',
