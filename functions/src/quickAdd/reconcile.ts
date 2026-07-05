@@ -27,7 +27,17 @@
  *
  * Pure + dependency-light on purpose (mirrors `utils/transactionMatch.ts` on the
  * client): data in, decision out — no Firestore here, trivially unit-testable.
+ *
+ * `pickFillTarget`'s merchant-match decision delegates to `merchantSimilar`
+ * from `./transactionIdentity` (plan 03 PR-1) — the shared token-overlap
+ * comparator now used across all reconciliation call sites. `normalizeMerchant`
+ * stays HERE (not delegated) because it is itself directly unit-tested for
+ * exact string output in reconcile.test.ts, and its punctuation handling
+ * differs from the identity module's own normalizer (see the divergence note
+ * in transactionIdentity.ts) — swapping its output would be an unrelated
+ * behavior change this PR does not make.
  */
+import { merchantSimilar } from "./transactionIdentity";
 
 /**
  * How close in time the two triggers must fire to be considered the same
@@ -112,7 +122,7 @@ export function pickFillTarget(
 
   const key = normalizeMerchant(incoming.merchant);
   if (key) {
-    const byMerchant = stubs.filter((s) => normalizeMerchant(s.merchant) === key);
+    const byMerchant = stubs.filter((s) => merchantSimilar(s.merchant, incoming.merchant));
     if (byMerchant.length === 1) return byMerchant[0] ?? null; // strong match
     if (byMerchant.length > 1) return null; // ambiguous → don't guess
   }
