@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { WeeklyRecap } from '@/types/schema';
 import { track } from '@/services/analytics';
@@ -113,7 +113,11 @@ describe('WeeklyRecapCard', () => {
     // The deep-link consume defers its setState to a macrotask — wait for it.
     expect(await screen.findByTestId('recap-drawer')).toHaveTextContent('2026-W27');
     expect(track).toHaveBeenCalledWith('recap_push_opened');
-    expect(track).toHaveBeenCalledWith('recap_viewed', { isoWeek: '2026-W27', source: 'push' });
+    // recap_viewed fires in a passive effect after the drawer's commit — the
+    // drawer can be queryable a beat before the effect runs, so wait for it.
+    await waitFor(() =>
+      expect(track).toHaveBeenCalledWith('recap_viewed', { isoWeek: '2026-W27', source: 'push' })
+    );
     // The param is stripped from the address bar.
     expect(window.location.search).toBe('');
   });
