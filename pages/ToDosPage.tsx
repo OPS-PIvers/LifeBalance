@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef, useId } from 'react';
 import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import { useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown } from 'lucide-react';
+import { Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { ToDo, HouseholdMember } from '@/types/schema';
@@ -25,19 +25,7 @@ import Input from '@/components/ui/Input';
 import BatchRescheduleModal from '@/components/modals/BatchRescheduleModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
-interface ToDosPageProps {
-  /**
-   * Pixel offset for the sticky quick-add bar's `top`, to clear any sticky
-   * chrome a host renders above it. Default 0 (the standalone /todos route,
-   * where nothing is pinned above). /lists passes its sticky tab-strip height
-   * so the add bar pins just below it — mirrors ShoppingListTab.stickyTopOffset.
-   * Inline `style.top` (not a Tailwind `top-[]` class) because the value is
-   * host-driven and dynamic classes won't compile.
-   */
-  stickyTopOffset?: number;
-}
-
-const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
+const ToDosPage: React.FC = () => {
   const {
     todos,
     addToDo,
@@ -648,54 +636,16 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
         )}
       </div>
 
-      {/* Anchored quick-add bar — the standalone rounded input floating on the
-          page background (the earlier `attached` full-bleed card band read as a
-          detached gray stripe over the separately-rounded list below — owner
-          feedback 2026-07-05). Pinned to the top of the <main> scroller so it
-          stays visible while the list scrolls under it. Top (not bottom)
-          deliberately clears the global Capture FAB at bottom-center. Quick-add
-          defaults to due-today / current user; the adjacent "details" button
-          opens the full form for a custom date or assignee. `stickyTopOffset`
-          clears the /lists tab strip (0 on the standalone /todos route).
-          `-mx-4 px-4` bleeds the blurred backdrop to the content edges. Hidden
-          in selection mode and the completed view, where adding has no
-          context. */}
-      {viewMode === 'active' && !isSelectionMode && (
-        <div
-          className="sticky z-20 -mx-4 px-4 py-2 bg-brand-50/95 dark:bg-brand-900/95 backdrop-blur"
-          style={{ top: `${stickyTopOffset}px` }}
-        >
-          <div className="flex items-center gap-2">
-            <QuickAddBar
-              onSubmit={handleQuickAdd}
-              inputRef={quickAddRef}
-              value={quickText}
-              onChange={setQuickText}
-              placeholder="Add a task (e.g. Take out trash)..."
-              aria-label="Quick add task"
-              disabled={!quickText.trim()}
-              submitLabel="Add task"
-            />
-
-            {/* Details — opens the full form to set a custom due date / assignee.
-                Kept first-class & always visible (like the shopping filter pill).
-                Retains aria-label "Add new task" so it is the page's full-add
-                entry point. */}
-            <button
-              onClick={openAddModal}
-              aria-label="Add new task"
-              title="Add with date & assignee"
-              className="flex-none flex items-center justify-center p-3 rounded-btn text-brand-600 hover:text-brand-900 hover:bg-brand-100 dark:text-brand-300 dark:hover:text-brand-50 dark:hover:bg-brand-700/50 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
-            >
-              <SlidersHorizontal className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-      )}
-
       {viewMode === 'active' ? (
           <>
-            {/* Immediate Section */}
+            {/* Immediate Section — quick-add lives INSIDE this section's list
+                surface as its first row (owner request: the add field should be
+                row one of the list, not a detached floating band). Quick-add
+                defaults to due-today / current user, which is exactly this
+                section's scope, so it's the natural home. The row scrolls with
+                the card (no longer sticky) — the global Capture FAB covers
+                add-while-scrolled. Hidden in selection mode and the completed
+                view, where adding has no context. */}
             <Section
                 title="Immediate"
                 subtitle="Overdue, Today & Tomorrow"
@@ -711,6 +661,33 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
                 onToggleSelection={toggleSelection}
+                addRow={!isSelectionMode ? (
+                  <div className="flex items-center gap-2">
+                    <QuickAddBar
+                      attached
+                      onSubmit={handleQuickAdd}
+                      inputRef={quickAddRef}
+                      value={quickText}
+                      onChange={setQuickText}
+                      placeholder="Add a task..."
+                      aria-label="Quick add task"
+                      disabled={!quickText.trim()}
+                      submitLabel="Add task"
+                    />
+
+                    {/* Details — opens the full form to set a custom due date /
+                        assignee. Retains aria-label "Add new task" so it is the
+                        page's full-add entry point. */}
+                    <button
+                      onClick={openAddModal}
+                      aria-label="Add new task"
+                      title="Add with date & assignee"
+                      className="flex-none flex items-center justify-center p-3 mr-2 rounded-btn text-brand-600 hover:text-brand-900 hover:bg-brand-100 dark:text-brand-300 dark:hover:text-brand-50 dark:hover:bg-brand-700/50 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
+                    >
+                      <SlidersHorizontal className="w-5 h-5" />
+                    </button>
+                  </div>
+                ) : undefined}
             />
 
             {/* Upcoming Section */}
@@ -751,18 +728,15 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
                 onToggleSelection={toggleSelection}
             />
 
+            {/* The Immediate section's add row is always visible in Active view
+                (rendered even with zero items), so there's no truly "empty"
+                active state anymore — this note only shows when there's
+                nothing beyond what the Immediate card already offers. */}
             {immediate.length === 0 && upcoming.length === 0 && radar.length === 0 && (
-                 <EmptyState
-                     variant="surface"
-                     icon={<ClipboardList size={28} />}
-                     title="All caught up"
-                     description="No active tasks. Add one to get started."
-                     action={
-                         <Button variant="primary" onClick={openAddModal} leftIcon={<Plus size={16} />}>
-                             New Task
-                         </Button>
-                     }
-                 />
+                 <p className="px-1 text-sm text-brand-400 dark:text-brand-500 flex items-center gap-1.5">
+                     <ClipboardList size={14} aria-hidden="true" />
+                     All caught up — add a task above to get started.
+                 </p>
             )}
           </>
       ) : (
@@ -1292,17 +1266,26 @@ interface SectionProps {
    * select-all/batch actions always operate on the full visible list.
    */
   maxVisible?: number;
+  /**
+   * Optional content rendered as the FIRST ROW of this section's `SurfaceList`
+   * (e.g. the quick-add bar). When provided, the section renders even if
+   * `items` is empty — the add row must always be visible, not just when
+   * there's something to show below it.
+   */
+  addRow?: React.ReactNode;
 }
 
 // Sub-component for sections.
 // Uses a custom memo comparator: when `selectedIds` changes, re-render is skipped unless
 // at least one of this section's own items changed its selected/deselected state.
 // This prevents toggling an item in one section from re-rendering the other two sections.
-const Section = React.memo(function Section({ title, subtitle, items, color, onComplete, onEdit, onDelete, onDuplicate, onMoveToTomorrow, onMore, memberMap, isSelectionMode, selectedIds, onToggleSelection, maxVisible }: SectionProps) {
+const Section = React.memo(function Section({ title, subtitle, items, color, onComplete, onEdit, onDelete, onDuplicate, onMoveToTomorrow, onMore, memberMap, isSelectionMode, selectedIds, onToggleSelection, maxVisible, addRow }: SectionProps) {
   // Show-more state for capped lists (hooks must run before the empty early-return).
   const [expanded, setExpanded] = useState(false);
 
-  if (items.length === 0) return null;
+  // Without an add row, an empty section renders nothing (unchanged). With an
+  // add row, the section always renders — the add row is the whole point.
+  if (items.length === 0 && !addRow) return null;
 
   const sectionDotColors = {
     rose: 'bg-money-neg',
@@ -1328,7 +1311,8 @@ const Section = React.memo(function Section({ title, subtitle, items, color, onC
         <span className="text-xs font-semibold text-brand-400 dark:text-brand-500 uppercase tracking-wider">{subtitle}</span>
       </div>
 
-      <SurfaceList className="[&>*:first-child_.hairline-divider]:border-t-0">
+      <SurfaceList className="[&>*:first-child]:border-t-0 [&>*:first-child_.hairline-divider]:border-t-0">
+        {addRow}
         {visibleItems.map(item => (
           <TodoRow
             key={item.id}
@@ -1374,7 +1358,8 @@ const Section = React.memo(function Section({ title, subtitle, items, color, onC
     prev.onDuplicate === next.onDuplicate &&
     prev.onMoveToTomorrow === next.onMoveToTomorrow &&
     prev.onMore === next.onMore &&
-    prev.onToggleSelection === next.onToggleSelection;
+    prev.onToggleSelection === next.onToggleSelection &&
+    prev.addRow === next.addRow;
   if (!sameOtherProps) return false;
   // selectedIds reference changed — only re-render if at least one item in THIS
   // section switched its selected/deselected state.
