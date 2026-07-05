@@ -739,3 +739,51 @@ describe('server-only collections', () => {
     );
   });
 });
+
+describe('recaps (weekly recap docs — written only by Cloud Functions)', () => {
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = asFirestore(ctx.firestore());
+      await setDoc(doc(db, 'households', H1, 'recaps', '2026-W25'), {
+        weekOf: '2026-W25',
+        summary: 'Great week!',
+        createdAt: '2026-06-22T00:00:00.000Z',
+      });
+    });
+  });
+
+  it('a household member can read a recap doc', async () => {
+    await assertSucceeds(
+      getDoc(doc(dbFor(BOB), 'households', H1, 'recaps', '2026-W25')),
+    );
+  });
+
+  it('a member cannot create a recap doc', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'recaps', '2026-W26'), {
+        weekOf: '2026-W26',
+        summary: 'Sneaky client write',
+      }),
+    );
+  });
+
+  it('a member cannot update a recap doc', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'recaps', '2026-W25'), {
+        summary: 'Edited by client',
+      }),
+    );
+  });
+
+  it('a member cannot delete a recap doc', async () => {
+    await assertFails(
+      deleteDoc(doc(dbFor(BOB), 'households', H1, 'recaps', '2026-W25')),
+    );
+  });
+
+  it('a non-member cannot read a recap doc', async () => {
+    await assertFails(
+      getDoc(doc(dbFor(CAROL), 'households', H1, 'recaps', '2026-W25')),
+    );
+  });
+});

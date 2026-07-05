@@ -783,6 +783,12 @@ service cloud.firestore {
         allow read, write: if false;
       }
 
+      // Weekly recaps subcollection — written ONLY by Cloud Functions (Admin SDK bypasses rules).
+      match /recaps/{recapId} {
+        allow read: if isMemberOf(householdId);
+        allow write: if false;
+      }
+
       // All other subcollections that do not have explicit match blocks
       // Proper multi-household isolation using member document checks
       // Specific collections with custom rules are excluded via the conditions below
@@ -808,7 +814,8 @@ service cloud.firestore {
                      subcollection != 'bucketHistory' &&
                      subcollection != 'challenges' &&
                      subcollection != 'yearlyGoals' &&
-                     subcollection != 'rewards';
+                     subcollection != 'rewards' &&
+                     subcollection != 'recaps';
       }
     }
 

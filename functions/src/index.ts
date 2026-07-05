@@ -6,6 +6,16 @@ import * as logger from "firebase-functions/logger";
 import { formatInTimeZone } from "date-fns-tz";
 import { addMonths, differenceInCalendarDays, format, parseISO } from "date-fns";
 import { formatCurrency } from "./utils/formatCurrency";
+import {
+  isTimeToSend,
+  sendNotificationToUser,
+  type HouseholdMember,
+} from "./shared/notifications";
+import { writeProactiveInsight, type ProactiveCapHouseholdDoc } from "./insights/writeProactiveInsight";
+
+// Re-export for consumers that imported this from index.ts before the
+// extraction to shared/notifications.ts.
+export { isTimeToSend } from "./shared/notifications";
 
 admin.initializeApp();
 
@@ -35,144 +45,10 @@ export { plaidexchangepublictoken } from "./plaid/exchange";
 export { plaidsynctransactions } from "./plaid/sync";
 export { plaiddisconnectbank } from "./plaid/disconnect";
 
+// Weekly recap engine (Plan 02).
+export { sendweeklyrecap } from "./recap";
+
 const db = admin.firestore();
-const messaging = admin.messaging();
-
-interface NotificationPreferences {
-  habitReminders: {
-    enabled: boolean;
-    time: string;
-  };
-  actionQueueReminders: {
-    enabled: boolean;
-    time: string;
-  };
-  budgetAlerts: {
-    enabled: boolean;
-    threshold?: number;
-  };
-  streakWarnings: {
-    enabled: boolean;
-    time: string;
-  };
-  billReminders: {
-    enabled: boolean;
-    daysBeforeDue: number;
-    time: string;
-  };
-  timezone?: string;
-}
-
-interface HouseholdMember {
-  uid: string;
-  displayName: string;
-  email?: string;
-  fcmTokens?: string[];
-  notificationPreferences?: NotificationPreferences;
-}
-
-/**
- * Helper function to send a notification to a user.
- * @param memberRef - Optional Firestore document reference for the member. When
- *   provided, any permanently-invalid FCM tokens detected in the multicast response
- *   are removed from the member's `fcmTokens` array via arrayRemove so they are
- *   not retried on future sends.
- */
-async function sendNotificationToUser(
-  fcmTokens: string[],
-  title: string,
-  body: string,
-  data?: Record<string, string>,
-  memberRef?: admin.firestore.DocumentReference
-): Promise<void> {
-  if (!fcmTokens || fcmTokens.length === 0) {
-    logger.info("No FCM tokens available for user");
-    return;
-  }
-
-  const message = {
-    notification: {
-      title,
-      body,
-    },
-    data: data || {},
-    tokens: fcmTokens,
-  };
-
-  try {
-    const response = await messaging.sendEachForMulticast(message);
-    logger.info(
-      `Successfully sent notification: ${response.successCount} succeeded, ${response.failureCount} failed`
-    );
-
-    // Remove permanently-invalid tokens from Firestore so they are not retried.
-    if (response.failureCount > 0) {
-      const tokensToRemove: string[] = [];
-      const permanentErrorCodes = [
-        "messaging/registration-token-not-registered",
-        "messaging/invalid-registration-token",
-        "messaging/mismatched-credential"
-      ];
-
-      response.responses.forEach((resp, idx) => {
-        if (!resp.success && resp.error?.code && permanentErrorCodes.includes(resp.error.code)) {
-          const token = fcmTokens[idx];
-          if (token !== undefined) {
-            tokensToRemove.push(token);
-          }
-        }
-      });
-
-      if (tokensToRemove.length > 0) {
-        logger.info("Removing stale FCM tokens:", tokensToRemove);
-        if (memberRef) {
-          try {
-            await memberRef.update({
-              fcmTokens: admin.firestore.FieldValue.arrayRemove(...tokensToRemove),
-            });
-          } catch (cleanupError) {
-            // A cleanup failure must never break notification delivery.
-            logger.error("Failed to remove stale FCM tokens:", cleanupError);
-          }
-        }
-      }
-    }
-  } catch (error) {
-    logger.error("Error sending notification:", error);
-  }
-}
-
-/**
- * Helper function to check if current time matches scheduled time
- * This function now correctly handles timezones and relaxed matching for hourly crons
- */
-export function isTimeToSend(
-  scheduledTime: string,
-  timezone: string = "UTC"
-): boolean {
-  // Validate scheduledTime format (HH:MM)
-  if (!/^\d{1,2}:\d{2}$/.test(scheduledTime)) {
-    logger.warn(`Invalid scheduled time format: ${scheduledTime}`);
-    return false;
-  }
-
-  const now = new Date();
-
-  let currentHour: number;
-  try {
-    // formatInTimeZone throws if timezone is invalid
-    const hourStr = formatInTimeZone(now, timezone, "H");
-    currentHour = parseInt(hourStr, 10);
-  } catch (_e) {
-    logger.warn(`Invalid timezone '${timezone}', falling back to UTC`);
-    const hourStr = formatInTimeZone(now, "UTC", "H");
-    currentHour = parseInt(hourStr, 10);
-  }
-
-  const [schedHour] = scheduledTime.split(":").map(Number);
-
-  return currentHour === schedHour;
-}
 
 /**
  * Scheduled function: Runs every hour to check for habit reminders
@@ -373,6 +249,68 @@ export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
             },
             memberDoc.ref
           );
+
+          // Proactive insight (plan 02 part C): "streak rescue". Piggybacks on
+          // this same job — no new cron. For any habit with a long (>=7 day)
+          // streak at risk, surface a suggestion in the Insight feed (the same
+          // `households/{id}/insights` collection the manual "refresh insight"
+          // button writes to, so the existing dashboard UI renders it for
+          // free). Subject to the shared 2/week/household proactive-insight cap.
+          const longStreakAtRisk = habitsAtRisk.find(
+            (doc) => (doc.data().streakDays ?? 0) >= 7
+          );
+          if (longStreakAtRisk) {
+            // Fully best-effort: any failure here must never block the streak
+            // warning above or the remaining members/households. The
+            // deterministic doc id also makes the write idempotent across the
+            // member loop (each member finds the same at-risk habit) and
+            // across hourly re-runs on the same local day, so one rescue never
+            // burns more than one slot of the weekly cap.
+            try {
+              const habit = longStreakAtRisk.data();
+              const streakDays = habit.streakDays ?? 0;
+
+              // The cap state must come from a successful read — defaulting to
+              // an empty doc would treat the count as 0 and clobber the real
+              // cap state with a reset patch.
+              const householdSnap = await householdDoc.ref.get();
+              const data = householdSnap.data();
+              if (!data) {
+                logger.warn(
+                  `sendstreakwarnings: household ${householdDoc.id} doc missing/empty, skipping proactive insight`
+                );
+              } else {
+                const household = data as ProactiveCapHouseholdDoc;
+                const freezeBank = data.freezeBank;
+                const tokens = freezeBank?.tokens ?? freezeBank?.current;
+                const hasFreezeToken = typeof tokens === "number" && tokens > 0;
+
+                const suggestion = hasFreezeToken
+                  ? ` If you can't get to it today, use a freeze bank token to protect it.`
+                  : "";
+                const insightText = `"${habit.title ?? "A habit"}" has a ${streakDays}-day streak that's about to break today.${suggestion}`;
+
+                await writeProactiveInsight(
+                  db,
+                  householdDoc.id,
+                  household,
+                  {
+                    text: insightText,
+                    generatedAt: new Date().toISOString(),
+                    type: "habits",
+                  },
+                  new Date(),
+                  prefs.timezone || "UTC",
+                  `streak_rescue_${longStreakAtRisk.id}_${today}`
+                );
+              }
+            } catch (error) {
+              logger.warn(
+                `sendstreakwarnings: proactive insight failed for household ${householdDoc.id}, continuing`,
+                error
+              );
+            }
+          }
         } else {
           logger.info(`Member ${member.uid}: no habits at risk, skipping notification`);
         }
