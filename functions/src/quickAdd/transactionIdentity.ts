@@ -89,8 +89,13 @@ export function merchantSimilar(a: string, b: string): boolean {
   const nb = normalizeForComparison(b);
   if (!na || !nb) return false;
   if (na === nb) return true;
-  const tokensA = new Set(na.split(" "));
-  const tokensB = new Set(nb.split(" "));
+  // Single-character tokens (e.g. the stray "s" that apostrophe-stripping
+  // leaves behind) carry no identifying signal — a {"s"} ⊆ {"trader","joe","s"}
+  // subset hit would be a false positive. They only count via the exact-equality
+  // path above (which still matches short names like "H M" to themselves).
+  const tokensA = new Set(na.split(" ").filter((t) => t.length >= 2));
+  const tokensB = new Set(nb.split(" ").filter((t) => t.length >= 2));
+  if (tokensA.size === 0 || tokensB.size === 0) return false;
   const [smaller, larger] = tokensA.size <= tokensB.size ? [tokensA, tokensB] : [tokensB, tokensA];
   for (const token of smaller) {
     if (!larger.has(token)) return false;

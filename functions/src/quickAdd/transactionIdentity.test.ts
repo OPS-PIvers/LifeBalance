@@ -38,6 +38,13 @@ describe("merchantSimilar", () => {
     expect(merchantSimilar("!!!", "Amatista")).toBe(false);
     expect(merchantSimilar("", "")).toBe(false);
   });
+
+  it("does not match on single-character tokens (no false positives from stray letters)", () => {
+    expect(merchantSimilar("s", "Trader Joe's")).toBe(false);
+    expect(merchantSimilar("Trader Joe's", "s")).toBe(false);
+    // Exact equality of short names still works via the equality path.
+    expect(merchantSimilar("H&M", "h&m")).toBe(true);
+  });
 });
 
 describe("fingerprint", () => {
