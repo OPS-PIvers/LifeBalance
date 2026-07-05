@@ -538,22 +538,23 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
             }
         />
 
-        {/* Anchored add bar — `attached` so it reads as the list's first row
-            rather than a separately bordered/blurred toolbar band. Pinned to
-            the top of the single <main> scroller so it stays visible while the
-            list scrolls under it. Top (not bottom) deliberately clears the
-            global Capture FAB at bottom-center. The per-host `stickyTopOffset`
-            clears any sticky chrome above it (the /lists tab strip). `-mx-4
-            px-4` bleeds the bar to the content edges; Reorder.Group stays a
+        {/* Anchored add bar — the standalone rounded input floating on the
+            page background (the earlier `attached` full-bleed card band read
+            as a detached gray stripe over the separately-rounded list below —
+            owner feedback 2026-07-05). Pinned to the top of the single <main>
+            scroller so it stays visible while the list scrolls under it. Top
+            (not bottom) deliberately clears the global Capture FAB at
+            bottom-center. The per-host `stickyTopOffset` clears any sticky
+            chrome above it (the /lists tab strip). `-mx-4 px-4` bleeds the
+            blurred backdrop to the content edges; Reorder.Group stays a
             sibling below so its drag layer never shares this pinned stacking
             context. */}
         <div
-            className="sticky z-20 -mx-4 px-4 bg-white dark:bg-brand-800 border-b border-brand-200 dark:border-brand-700 rounded-t-2xl"
+            className="sticky z-20 -mx-4 px-4 py-2 bg-brand-50/95 dark:bg-brand-900/95 backdrop-blur"
             style={{ top: `${stickyTopOffset}px` }}
         >
             <div className="flex items-center gap-2">
                 <QuickAddBar
-                    attached
                     onSubmit={handleSmartAdd}
                     inputRef={addInputRef}
                     value={newItemText}
