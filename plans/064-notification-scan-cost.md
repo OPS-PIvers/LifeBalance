@@ -1,3 +1,5 @@
+> **SUPERSEDED by advisor-plans/06 (shipped).**
+
 # Plan 064 — Stop the hourly full-collection notification scans (cost at scale)
 
 > **Status:** TODO · **Tag:** `[C→H]` (Claude builds; a **human watches** the collection-group

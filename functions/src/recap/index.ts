@@ -3,7 +3,7 @@ import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { formatInTimeZone } from "date-fns-tz";
-import { isTimeToSend, sendNotificationToUser, type HouseholdMember } from "../shared/notifications";
+import { isTimeToSend, sendNotificationToUser, loadNotifiableMembersByHousehold, type HouseholdMember, type NotifiableHouseholdGroup } from "../shared/notifications";
 import { isoWeekId } from "../shared/isoWeek";
 import { assembleWeeklyRecap, type RecapCalendarItem, type RecapHabit, type RecapMember, type RecapTransaction } from "./dataAssembly";
 import { buildTemplateNarrative, generateNarrative } from "./narrative";
@@ -87,15 +87,26 @@ export const sendweeklyrecap = onSchedule(
 
     const billingEnabled = await readBillingEnabled(db);
 
-    const householdsSnapshot = await db.collection("households").get();
-    logger.info(`sendweeklyrecap: found ${householdsSnapshot.docs.length} household(s)`);
+    // Plan 06 PR-2: only households with at least one notification-eligible
+    // member are considered. NOTE (documented tradeoff): a household whose
+    // members ALL have notifications off (anyNotificationsEnabled: false for
+    // everyone) will no longer have a recap doc GENERATED at all, since
+    // generation now piggybacks on this same flagged member list rather than
+    // a full household scan. This is acceptable because the recap card is
+    // only ever surfaced to a member who opens the app — and a member with
+    // every notification category off is, by definition, not one who has
+    // weeklyRecap push enabled either (weeklyRecap defaults to enabled, so
+    // anyNotificationsEnabled is false for a member only when they've
+    // explicitly turned it off along with everything else).
+    const groups = await loadNotifiableMembersByHousehold(db);
+    logger.info(`sendweeklyrecap: found ${groups.length} household(s) with notification-eligible members`);
 
-    for (const householdDoc of householdsSnapshot.docs) {
+    for (const group of groups) {
       try {
-        await processHousehold(db, householdDoc, billingEnabled);
+        await processHousehold(db, group, billingEnabled);
       } catch (error) {
         // One household's failure must never throw out of the whole run.
-        logger.error(`sendweeklyrecap: failed processing household ${householdDoc.id}`, error);
+        logger.error(`sendweeklyrecap: failed processing household ${group.householdId}`, error);
       }
     }
   }
@@ -103,14 +114,13 @@ export const sendweeklyrecap = onSchedule(
 
 async function processHousehold(
   db: admin.firestore.Firestore,
-  householdDoc: admin.firestore.QueryDocumentSnapshot,
+  group: NotifiableHouseholdGroup,
   billingEnabled: boolean
 ): Promise<void> {
-  const householdId = householdDoc.id;
-  const household = householdDoc.data() as RecapHouseholdDoc;
+  const householdId = group.householdId;
+  const household = ((await group.getHouseholdData()) ?? {}) as RecapHouseholdDoc;
 
-  const membersSnapshot = await householdDoc.ref.collection("members").get();
-  const memberDocs = membersSnapshot.docs;
+  const memberDocs = group.memberDocs;
 
   // Does ANY member's local clock currently read Sunday 17:00? That member's
   // timezone also defines which ISO week we generate the recap for.

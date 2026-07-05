@@ -1,3 +1,5 @@
+> **SUPERSEDED by advisor-plans/06 (shipped).**
+
 # Handoff: Stop full-collection scans in scheduled notification functions
 
 **Status:** Not started · **Priority:** Medium (Firestore read cost / scalability) · **Risk:** Medium (needs a member-field migration)

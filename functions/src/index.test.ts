@@ -61,6 +61,7 @@ vi.mock("firebase-functions/logger", () => ({
 interface MockDb {
   doc: ReturnType<typeof vi.fn>;
   collection: ReturnType<typeof vi.fn>;
+  collectionGroup: ReturnType<typeof vi.fn>;
   recursiveDelete: ReturnType<typeof vi.fn>;
   batch: ReturnType<typeof vi.fn>;
 }
@@ -69,6 +70,9 @@ const adminMock = vi.hoisted(() => {
   const db: MockDb = {
     doc: vi.fn(),
     collection: vi.fn(),
+    collectionGroup: vi.fn(() => ({
+      where: () => ({ get: () => Promise.resolve({ docs: [] }) }),
+    })),
     recursiveDelete: vi.fn(() => Promise.resolve()),
     batch: vi.fn(),
   };
@@ -90,6 +94,19 @@ vi.mock("firebase-admin", () => {
     messaging: () => ({ sendEachForMulticast: adminMock.sendEachForMulticast }),
   };
 });
+
+// Hoisted so the vi.mock factory below (itself hoisted) can reference it, and
+// so tests can flip NOTIFICATIONS_FULL_SCAN without re-mocking the module.
+const fullScanParamHolder = vi.hoisted(() => ({ value: undefined as string | undefined }));
+
+vi.mock("firebase-functions/params", () => ({
+  defineString: (_name: string, opts: { default: string }) => ({
+    value: () => fullScanParamHolder.value ?? opts.default,
+  }),
+  defineSecret: (_name: string) => ({
+    value: () => "fake-secret",
+  }),
+}));
 
 // Import AFTER mocks are registered.
 import {
@@ -362,21 +379,26 @@ describe("sendbillreminders", () => {
 
   /**
    * Configure a single household with one member whose bill reminders fire at
-   * 09:00 UTC (daysBeforeDue = 3) and the given calendarItems docs.
+   * 09:00 UTC (daysBeforeDue = 3) and the given calendarItems docs. Wires BOTH
+   * the collection-group query path (default) and the full-scan fallback path
+   * (`db.collection("households")`) so tests can exercise either via
+   * `fullScanParamHolder.value`.
+   *
+   * `memberOverrides` lets tests add a second, non-flagged member (to prove it
+   * is never read) or otherwise vary the member doc shape.
    */
   function configureBillReminderHousehold(
-    calendarDocs: Array<{ id: string; data: Record<string, unknown> }>
+    calendarDocs: Array<{ id: string; data: Record<string, unknown> }>,
+    extraMembers: Array<Record<string, unknown>> = []
   ): void {
     const member = {
       uid: "u1",
       fcmTokens: ["tok1"],
+      anyNotificationsEnabled: true,
       notificationPreferences: {
         billReminders: { enabled: true, daysBeforeDue: 3, time: "9:00" },
         timezone: "UTC",
       },
-    };
-    const membersSnapshot = {
-      docs: [{ data: () => member, ref: { update: vi.fn() } }],
     };
     const calendarSnapshot = {
       docs: calendarDocs.map((d) => ({ id: d.id, data: () => d.data })),
@@ -385,13 +407,40 @@ describe("sendbillreminders", () => {
       where: () => calendarQuery,
       get: () => Promise.resolve(calendarSnapshot),
     };
+    const householdRef = {
+      id: HOUSEHOLD_ID,
+      get: () => Promise.resolve({ exists: true, data: () => ({ currency: "USD" }) }),
+      collection: (name: string) => {
+        if (name === "calendarItems") return calendarQuery;
+        return { get: () => Promise.resolve({ docs: [] }) };
+      },
+    };
+    const allMembers = [member, ...extraMembers];
+    const flaggedMemberDocs = allMembers
+      .filter((m) => m.anyNotificationsEnabled === true)
+      .map((m) => ({ data: () => m, ref: { update: vi.fn(), parent: { parent: householdRef } } }));
+
+    adminMock.db.collectionGroup.mockImplementation((path: string) => {
+      if (path === "members") {
+        return { where: () => ({ get: () => Promise.resolve({ docs: flaggedMemberDocs }) }) };
+      }
+      return { where: () => ({ get: () => Promise.resolve({ docs: [] }) }) };
+    });
+
+    // Full-scan fallback path.
     const householdDoc = {
       id: HOUSEHOLD_ID,
       data: () => ({ currency: "USD" }),
       ref: {
+        ...householdRef,
         collection: (name: string) => {
           if (name === "members") {
-            return { get: () => Promise.resolve(membersSnapshot) };
+            return {
+              get: () =>
+                Promise.resolve({
+                  docs: allMembers.map((m) => ({ data: () => m, ref: { update: vi.fn() } })),
+                }),
+            };
           }
           if (name === "calendarItems") return calendarQuery;
           return { get: () => Promise.resolve({ docs: [] }) };
@@ -416,10 +465,76 @@ describe("sendbillreminders", () => {
     // 09:30 UTC matches the member's 9:00 reminder hour; today = 2026-02-26,
     // so with daysBeforeDue = 3 the target date is 2026-03-01.
     vi.setSystemTime(new Date("2026-02-26T09:30:00Z"));
+    fullScanParamHolder.value = undefined;
   });
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it("never reads a member whose anyNotificationsEnabled flag is false", async () => {
+    configureBillReminderHousehold(
+      [
+        {
+          id: "rent",
+          data: {
+            type: "expense",
+            date: "2026-01-01",
+            isRecurring: true,
+            frequency: "monthly",
+            isPaid: false,
+            amount: 1200,
+          },
+        },
+      ],
+      [
+        {
+          uid: "u2",
+          fcmTokens: ["tok2"],
+          anyNotificationsEnabled: false,
+          notificationPreferences: {
+            billReminders: { enabled: true, daysBeforeDue: 3, time: "9:00" },
+            timezone: "UTC",
+          },
+        },
+      ]
+    );
+
+    await runBillReminders();
+
+    // Only the flagged member (tok1) is ever sent to — the collection-group
+    // query already excluded u2, so its reminder pref is never even inspected.
+    expect(adminMock.sendEachForMulticast).toHaveBeenCalledTimes(1);
+    expect(adminMock.sendEachForMulticast).toHaveBeenCalledWith(
+      expect.objectContaining({ tokens: ["tok1"] })
+    );
+  });
+
+  it("FALLBACK_FULL_SCAN='true' reproduces the same send as the flagged-query path", async () => {
+    configureBillReminderHousehold([
+      {
+        id: "rent",
+        data: {
+          type: "expense",
+          date: "2026-01-01",
+          isRecurring: true,
+          frequency: "monthly",
+          isPaid: false,
+          amount: 1200,
+        },
+      },
+    ]);
+    fullScanParamHolder.value = "true";
+
+    await runBillReminders();
+
+    expect(adminMock.sendEachForMulticast).toHaveBeenCalledTimes(1);
+    expect(adminMock.sendEachForMulticast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tokens: ["tok1"],
+        data: expect.objectContaining({ type: "bill_reminder" }),
+      })
+    );
   });
 
   it("sends a reminder for a LATER occurrence of a recurring bill (not just the anchor)", async () => {
@@ -496,18 +611,17 @@ describe("sendstreakwarnings", () => {
    */
   function configureStreakWarningHousehold(
     habitDocs: Array<{ id: string; data: Record<string, unknown> }>,
-    householdData: Record<string, unknown> = {}
+    householdData: Record<string, unknown> = {},
+    extraMembers: Array<Record<string, unknown>> = []
   ): { insightSetSpy: ReturnType<typeof vi.fn>; householdUpdateSpy: ReturnType<typeof vi.fn>; insightDocSpy: ReturnType<typeof vi.fn> } {
     const member = {
       uid: "u1",
       fcmTokens: ["tok1"],
+      anyNotificationsEnabled: true,
       notificationPreferences: {
         streakWarnings: { enabled: true, time: "9:00" },
         timezone: "UTC",
       },
-    };
-    const membersSnapshot = {
-      docs: [{ data: () => member, ref: { update: vi.fn() } }],
     };
     const habitsSnapshot = {
       docs: habitDocs.map((d) => ({ id: d.id, data: () => d.data })),
@@ -517,24 +631,40 @@ describe("sendstreakwarnings", () => {
       get: () => Promise.resolve(habitsSnapshot),
     };
 
+    const allMembers = [member, ...extraMembers];
+
     let currentHouseholdData = { ...householdData };
     const householdDocRef = {
+      id: HOUSEHOLD_ID,
       get: () =>
         Promise.resolve({
           exists: true,
           data: () => currentHouseholdData,
         }),
       collection: (name: string) => {
-        if (name === "members") return { get: () => Promise.resolve(membersSnapshot) };
         if (name === "habits") return habitsQuery;
+        if (name === "members") {
+          return {
+            get: () =>
+              Promise.resolve({
+                docs: allMembers.map((m) => ({ data: () => m, ref: { update: vi.fn() } })),
+              }),
+          };
+        }
         return { get: () => Promise.resolve({ docs: [] }) };
       },
     };
-    const householdDoc = {
-      id: HOUSEHOLD_ID,
-      data: () => currentHouseholdData,
-      ref: householdDocRef,
-    };
+
+    const flaggedMemberDocs = allMembers
+      .filter((m) => m.anyNotificationsEnabled === true)
+      .map((m) => ({ data: () => m, ref: { update: vi.fn(), parent: { parent: householdDocRef } } }));
+
+    adminMock.db.collectionGroup.mockImplementation((path: string) => {
+      if (path === "members") {
+        return { where: () => ({ get: () => Promise.resolve({ docs: flaggedMemberDocs }) }) };
+      }
+      return { where: () => ({ get: () => Promise.resolve({ docs: [] }) }) };
+    });
 
     // Written deterministic ids — lets the idempotency test observe that a
     // second run with the same `streak_rescue_<habitId>_<today>` id is skipped.
@@ -550,6 +680,13 @@ describe("sendstreakwarnings", () => {
       get: () => Promise.resolve({ exists: id !== undefined && existingInsightIds.has(id) }),
     }));
 
+    const householdDoc = {
+      id: HOUSEHOLD_ID,
+      data: () => currentHouseholdData,
+      ref: householdDocRef,
+    };
+
+    // Full-scan fallback path.
     adminMock.db.collection.mockImplementation((path: string) => {
       if (path === "households") {
         return { get: () => Promise.resolve({ docs: [householdDoc] }) };
@@ -583,10 +720,71 @@ describe("sendstreakwarnings", () => {
     vi.useFakeTimers();
     // 09:30 UTC matches the member's 9:00 streak-warning hour.
     vi.setSystemTime(new Date("2026-07-06T09:30:00Z")); // a Monday, ISO week 2026-W28
+    fullScanParamHolder.value = undefined;
   });
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it("never reads a member whose anyNotificationsEnabled flag is false", async () => {
+    configureStreakWarningHousehold(
+      [{ id: "h1", data: { period: "daily", title: "Read", streakDays: 9, completedDates: [] } }],
+      {},
+      [
+        {
+          uid: "u2",
+          fcmTokens: ["tok2"],
+          anyNotificationsEnabled: false,
+          notificationPreferences: { streakWarnings: { enabled: true, time: "9:00" }, timezone: "UTC" },
+        },
+      ]
+    );
+
+    await runStreakWarnings();
+
+    // Only the flagged member's token appears in the send.
+    expect(adminMock.sendEachForMulticast).toHaveBeenCalledTimes(1);
+    expect(adminMock.sendEachForMulticast).toHaveBeenCalledWith(
+      expect.objectContaining({ tokens: ["tok1"] })
+    );
+  });
+
+  it("processes a household reached via two flagged members exactly once (not twice)", async () => {
+    configureStreakWarningHousehold(
+      [{ id: "h1", data: { period: "daily", title: "Read", streakDays: 9, completedDates: [] } }],
+      {},
+      [
+        {
+          uid: "u2",
+          fcmTokens: ["tok2"],
+          anyNotificationsEnabled: true,
+          notificationPreferences: { streakWarnings: { enabled: true, time: "9:00" }, timezone: "UTC" },
+        },
+      ]
+    );
+
+    await runStreakWarnings();
+
+    // Two members, each gets their own send — but the habits subcollection
+    // (and the proactive-insight cap logic keyed on the household) is only
+    // read/evaluated once per household per member, not duplicated across a
+    // re-fetch of the household itself.
+    expect(adminMock.sendEachForMulticast).toHaveBeenCalledTimes(2);
+  });
+
+  it("FALLBACK_FULL_SCAN='true' reproduces the same send as the flagged-query path", async () => {
+    configureStreakWarningHousehold([
+      { id: "h1", data: { period: "daily", title: "Read", streakDays: 4, completedDates: [] } },
+    ]);
+    fullScanParamHolder.value = "true";
+
+    await runStreakWarnings();
+
+    expect(adminMock.sendEachForMulticast).toHaveBeenCalledTimes(1);
+    expect(adminMock.sendEachForMulticast).toHaveBeenCalledWith(
+      expect.objectContaining({ tokens: ["tok1"] })
+    );
   });
 
   it("sends the notification but does NOT write a proactive insight for a short (<7 day) at-risk streak", async () => {

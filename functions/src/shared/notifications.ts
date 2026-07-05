@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { formatInTimeZone } from "date-fns-tz";
+import { defineString } from "firebase-functions/params";
 
 export interface NotificationPreferences {
   habitReminders: {
@@ -213,4 +214,106 @@ export function isTimeToSend(
   const [schedHour] = scheduledTime.split(":").map(Number);
 
   return currentHour === schedHour;
+}
+
+/**
+ * Plan 06 PR-2 escape hatch: when set to the literal string "true", the
+ * scheduled notification jobs fall back to the pre-PR-2 full
+ * `db.collection("households").get()` scan instead of the flagged
+ * collection-group query. Defaulted to "" (falsy) so CI's non-interactive
+ * `firebase deploy` never prompts/fails on an unset param — the same trap
+ * documented on `ADMIN_UID` in index.ts. An operator flips it via the
+ * functions env only if a bad backfill is suspected.
+ */
+const notificationsFullScanParam = defineString("NOTIFICATIONS_FULL_SCAN", {
+  default: "",
+});
+
+/** One household's worth of pre-loaded, notification-eligible members. */
+export interface NotifiableHouseholdGroup {
+  householdId: string;
+  householdRef: admin.firestore.DocumentReference;
+  /** Lazily fetched — most jobs need at most currency/freezeBank/etc., not the
+   *  full document, and some (habit/action-queue reminders) don't need it at
+   *  all. Call this only when the job actually needs household-level data. */
+  getHouseholdData: () => Promise<admin.firestore.DocumentData | undefined>;
+  memberDocs: admin.firestore.QueryDocumentSnapshot[];
+}
+
+/**
+ * Plan 06 PR-2 — shared loader used by all five scheduled notification jobs
+ * (sendhabitreminders, sendactionqueuereminders, sendstreakwarnings,
+ * sendbillreminders, sendweeklyrecap) so the collection-group switch and its
+ * fallback live in exactly one place.
+ *
+ * Normal path: a single `collectionGroup("members").where("anyNotificationsEnabled", "==", true)`
+ * query replaces the full `households` collection scan + per-household
+ * `members` subcollection reads. Member docs are grouped by their parent
+ * household (`doc.ref.parent.parent`) so a household reached via two flagged
+ * members is still processed exactly once.
+ *
+ * Fallback path (`NOTIFICATIONS_FULL_SCAN` param === "true", or the optional
+ * `forceFullScan` override used by tests): reproduces the original
+ * `households.get()` -> per-household `members.get()` shape, with NO
+ * `anyNotificationsEnabled` filtering, so a bad backfill degrades to the
+ * previous (correct, just expensive) behavior rather than silently dropping
+ * members.
+ */
+export async function loadNotifiableMembersByHousehold(
+  db: admin.firestore.Firestore,
+  forceFullScan?: boolean
+): Promise<NotifiableHouseholdGroup[]> {
+  const fullScan = forceFullScan ?? notificationsFullScanParam.value() === "true";
+
+  if (fullScan) {
+    logger.info("loadNotifiableMembersByHousehold: FALLBACK_FULL_SCAN active, scanning all households");
+    const householdsSnapshot = await db.collection("households").get();
+    const groups: NotifiableHouseholdGroup[] = [];
+    for (const householdDoc of householdsSnapshot.docs) {
+      const membersSnapshot = await householdDoc.ref.collection("members").get();
+      groups.push({
+        householdId: householdDoc.id,
+        householdRef: householdDoc.ref,
+        getHouseholdData: async () => householdDoc.data(),
+        memberDocs: membersSnapshot.docs,
+      });
+    }
+    return groups;
+  }
+
+  const membersSnapshot = await db
+    .collectionGroup("members")
+    .where("anyNotificationsEnabled", "==", true)
+    .get();
+
+  const byHousehold = new Map<string, NotifiableHouseholdGroup>();
+  for (const memberDoc of membersSnapshot.docs) {
+    const householdRef = memberDoc.ref.parent.parent;
+    if (!householdRef) {
+      // A `members` doc with no parent household should be impossible under
+      // the app's data model, but guard defensively rather than throw.
+      logger.warn(
+        `loadNotifiableMembersByHousehold: member doc ${memberDoc.ref.path} has no parent household, skipping`
+      );
+      continue;
+    }
+
+    let group = byHousehold.get(householdRef.id);
+    if (!group) {
+      group = {
+        householdId: householdRef.id,
+        householdRef,
+        getHouseholdData: async () => (await householdRef.get()).data(),
+        memberDocs: [],
+      };
+      byHousehold.set(householdRef.id, group);
+    }
+    group.memberDocs.push(memberDoc);
+  }
+
+  logger.info(
+    `loadNotifiableMembersByHousehold: ${membersSnapshot.docs.length} flagged member(s) across ${byHousehold.size} household(s)`
+  );
+
+  return Array.from(byHousehold.values());
 }
