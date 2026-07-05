@@ -886,7 +886,7 @@ const MealPlanTab: React.FC = () => {
                 onClose={() => setIsWeekMenuOpen(false)}
                 items={weekMenuItems}
                 ariaLabel="Week actions"
-                position="top-10 right-0"
+                position="bottom-full right-0 mb-2"
                 className="min-w-[208px]"
             />
         </div>

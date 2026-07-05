@@ -684,7 +684,7 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
               onClick={openAddModal}
               aria-label="Add new task"
               title="Add with date & assignee"
-              className="flex-none flex items-center justify-center p-3 text-brand-600 hover:text-brand-900 hover:bg-brand-100 dark:text-brand-300 dark:hover:text-brand-50 dark:hover:bg-brand-700/50 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
+              className="flex-none flex items-center justify-center p-3 rounded-btn text-brand-600 hover:text-brand-900 hover:bg-brand-100 dark:text-brand-300 dark:hover:text-brand-50 dark:hover:bg-brand-700/50 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
             >
               <SlidersHorizontal className="w-5 h-5" />
             </button>
