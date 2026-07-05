@@ -162,6 +162,10 @@ Product analytics (GA4 via Firebase Analytics) go through `track(event, params?)
 - **Event dictionary**: ~20 activation/engagement/retention events fire client-side; the dictionary lives in [docs/PRODUCT_ROADMAP.md](docs/PRODUCT_ROADMAP.md) Part 7 — add new events there when instrumenting.
 - **Supporting utils**: [utils/firstTimeFlags.ts](utils/firstTimeFlags.ts) (once-per-device `first_transaction_added`/`first_habit_completed` via localStorage flags) and [utils/notificationSource.ts](utils/notificationSource.ts) (push-open attribution — the service worker can't call the GA SDK, so `public/sw.js` tags navigations with `?nsrc=<type>` and the app consumes it on boot via `trackNotificationOpenFromUrl()`; keep the sw.js tagging in sync with `appendNotificationSource`).
 
+### Weekly Recap
+
+Weekly recaps (Plan 02) are written **server-side** on Sundays (per-member-timezone scheduled function, separate PR) to `households/{id}/recaps/{isoWeek}` (`WeeklyRecap` in [types/schema.ts](types/schema.ts); doc id = ISO week, e.g. `2026-W27`). The client subscribes with a bounded newest-first listener (`RECAPS_LIMIT` in [utils/listenerWindows.ts](utils/listenerWindows.ts), converter `weeklyRecapConverter`) exposed as `recaps` on the **core slice** (`useHouseholdCore`). The Dashboard shows [WeeklyRecapCard](components/dashboard/WeeklyRecapCard.tsx) for ~4 days after generation (dismissible per-week via localStorage); tapping it — or arriving via the push deep link `/?recap=<isoWeek>` ([utils/recapParam.ts](utils/recapParam.ts), dual search/hash parsing like `notificationSource`) — opens [WeeklyRecapDrawer](components/dashboard/WeeklyRecapDrawer.tsx). The narrative section is **premium-gated** (blurred + upsell when `recap.premium === false`); headline numbers show for every plan. Push delivery is opt-out via the `weeklyRecap` key in `NotificationPreferences` (toggle in `NotificationSettings`, default ON). Analytics: `recap_viewed` / `recap_push_opened`.
+
 ### Feature Flags, Modules & Monetization
 
 Systems agents will touch; one paragraph each, with pointers to deeper docs.

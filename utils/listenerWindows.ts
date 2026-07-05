@@ -25,6 +25,9 @@ export const BUCKET_HISTORY_LIMIT = 12;
 /** Insights: live listener keeps the most recent N insights. */
 export const INSIGHTS_LIMIT = 20;
 
+/** Weekly recaps: live listener keeps the most recent N weeks (Plan 02). */
+export const RECAPS_LIMIT = 4;
+
 /** To-dos: completed items are only kept live if completed within the last N days. */
 export const TODO_COMPLETED_WINDOW_DAYS = 30;
 

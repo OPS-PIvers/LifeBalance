@@ -379,6 +379,8 @@ explorations against this table.
 | `shopping_item_checked` | Shopping item marked purchased (`toggleShoppingItemPurchased`) | — |
 | `reward_redeemed` | Reward redemption commits (`redeemReward`) or a kid request is approved (`approveRedemption`) | `via` — `self` \| `parent_approval` |
 | `notification_opened` | App boots from a push-notification click — the SW tags the URL with `?nsrc=<type>`, the client reads + strips it (`utils/notificationSource.ts`, `public/sw.js`) | `type` — `habit_reminder` \| `action_queue_reminder` \| `streak_warning` \| `bill_reminder` \| `budget_alert` \| `test_notification` |
+| `recap_viewed` | Weekly recap detail drawer opens (`components/dashboard/WeeklyRecapCard.tsx`) | `isoWeek` — the recap's ISO week; `source` — `card` \| `push` |
+| `recap_push_opened` | App arrives via the weekly recap push deep link (`?recap=<isoWeek>`, consumed by `utils/recapParam.ts`) | — |
 
 First-time events are approximate by design (per-device localStorage flags, no server
 state) — good enough for funnel analysis, not accounting.

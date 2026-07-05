@@ -13,6 +13,7 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
     currentUser: { displayName: 'Test User' },
     members: [],
     pendingItemsCount: 0,
+    recaps: [],
   }),
   useFinance: () => ({
     buckets: [],
@@ -46,6 +47,9 @@ vi.mock('@/components/dashboard/DailyHabitsWidget', () => ({
 // Mixed-domain / unrelated widgets (PR4 + dormant) — rendered but inert.
 vi.mock('@/components/dashboard/PulseStripWidget', () => ({
   PulseStripWidget: () => null,
+}));
+vi.mock('@/components/dashboard/WeeklyRecapCard', () => ({
+  WeeklyRecapCard: () => null,
 }));
 vi.mock('@/components/dashboard/InsightWidget', () => ({
   InsightWidget: () => null,
