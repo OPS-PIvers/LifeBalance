@@ -110,6 +110,20 @@ describe("assembleWeeklyRecap", () => {
     ]);
   });
 
+  it("groups mixed-cased category names as one category, keeping first-seen casing", () => {
+    const transactions: RecapTransaction[] = [
+      { amount: 30, category: "Groceries", date: "2026-06-30", status: "verified" },
+      { amount: 20, category: "groceries", date: "2026-07-01", status: "verified" },
+      // lowercase income must still be excluded
+      { amount: 500, category: "income", date: "2026-07-01", status: "verified" },
+    ];
+    const result = assembleWeeklyRecap(baseInput({ transactions }));
+    expect(result.totalSpend).toBe(50);
+    expect(result.topCategoryDeltas).toEqual([
+      { category: "Groceries", current: 50, prior: 0 },
+    ]);
+  });
+
   it("excludes categories with zero delta from topCategoryDeltas", () => {
     const transactions: RecapTransaction[] = [
       { amount: 20, category: "Same", date: "2026-06-30", status: "verified" },

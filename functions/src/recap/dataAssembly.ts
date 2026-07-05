@@ -82,6 +82,15 @@ function addDays(dateStr: string, days: number): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function isCountedSpend(t: RecapTransaction, start: string, end: string): boolean {
+  return (
+    t.status === "verified" &&
+    t.category.toLowerCase() !== INCOME_CATEGORY.toLowerCase() &&
+    t.date >= start &&
+    t.date <= end
+  );
+}
+
 /** Sums verified, non-income transaction amounts (in cents) within [start, end] inclusive. */
 function sumVerifiedSpendCents(
   transactions: RecapTransaction[],
@@ -89,27 +98,30 @@ function sumVerifiedSpendCents(
   end: string
 ): number {
   return transactions
-    .filter(
-      (t) =>
-        t.status === "verified" &&
-        t.category !== INCOME_CATEGORY &&
-        t.date >= start &&
-        t.date <= end
-    )
+    .filter((t) => isCountedSpend(t, start, end))
     .reduce((sum, t) => sum + toCents(t.amount), 0);
 }
 
-/** Sums verified, non-income transaction amounts (in cents) within [start, end], grouped by category. */
+/**
+ * Sums verified, non-income transaction amounts (in cents) within [start, end],
+ * grouped by lowercased category so mixed-casing ("Groceries" vs "groceries")
+ * can't split one category into two; the first-seen casing is kept for display.
+ */
 function sumVerifiedSpendByCategoryCents(
   transactions: RecapTransaction[],
   start: string,
   end: string
-): Map<string, number> {
-  const byCategory = new Map<string, number>();
+): Map<string, { display: string; cents: number }> {
+  const byCategory = new Map<string, { display: string; cents: number }>();
   for (const t of transactions) {
-    if (t.status !== "verified" || t.category === INCOME_CATEGORY) continue;
-    if (t.date < start || t.date > end) continue;
-    byCategory.set(t.category, (byCategory.get(t.category) ?? 0) + toCents(t.amount));
+    if (!isCountedSpend(t, start, end)) continue;
+    const key = t.category.toLowerCase();
+    const existing = byCategory.get(key);
+    if (existing) {
+      existing.cents += toCents(t.amount);
+    } else {
+      byCategory.set(key, { display: t.category, cents: toCents(t.amount) });
+    }
   }
   return byCategory;
 }
@@ -133,11 +145,13 @@ export function assembleWeeklyRecap(input: DataAssemblyInput): AssembledRecap {
 
   const allCategories = new Set([...currentByCategory.keys(), ...priorByCategory.keys()]);
   const topCategoryDeltas = Array.from(allCategories)
-    .map((category) => {
-      const currentCents = currentByCategory.get(category) ?? 0;
-      const priorCents = priorByCategory.get(category) ?? 0;
+    .map((key) => {
+      const currentEntry = currentByCategory.get(key);
+      const priorEntry = priorByCategory.get(key);
+      const currentCents = currentEntry?.cents ?? 0;
+      const priorCents = priorEntry?.cents ?? 0;
       return {
-        category,
+        category: currentEntry?.display ?? priorEntry?.display ?? key,
         current: toDollars(currentCents),
         prior: toDollars(priorCents),
         absDeltaCents: Math.abs(currentCents - priorCents),

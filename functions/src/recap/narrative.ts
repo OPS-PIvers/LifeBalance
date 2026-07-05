@@ -94,6 +94,12 @@ export async function generateNarrative(
       model: RECAP_GEMINI_MODEL,
       contents: prompt,
     });
+    // If the timeout wins the race below, this promise is abandoned but still
+    // live — without its own handler, a late rejection becomes an
+    // unhandledRejection that can crash the Functions runtime.
+    callPromise.catch((error) => {
+      logger.warn("generateNarrative: abandoned Gemini call settled with an error", error);
+    });
 
     const timeoutPromise = new Promise<never>((_resolve, reject) => {
       timer = setTimeout(() => reject(new Error("Gemini recap narrative call timed out")), timeoutMs);
