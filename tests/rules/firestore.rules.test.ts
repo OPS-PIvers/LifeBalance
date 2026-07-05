@@ -266,6 +266,19 @@ describe('member access', () => {
     );
   });
 
+  it('rejects a transaction whose possibleDuplicateOf is its own id', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'transactions', 'txn-self-dup'), {
+        amount: 25.5,
+        merchant: 'Coffee Shop',
+        category: 'Dining',
+        date: '2026-06-22',
+        status: 'pending_review',
+        possibleDuplicateOf: 'txn-self-dup',
+      }),
+    );
+  });
+
   it('rejects a transaction whose possibleDuplicateOf exceeds the length cap', async () => {
     await assertFails(
       setDoc(doc(dbFor(BOB), 'households', H1, 'transactions', 'txn-bad-dup'), {
