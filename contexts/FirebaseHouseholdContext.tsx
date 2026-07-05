@@ -114,9 +114,27 @@ import { mergeById, mapTransactionDoc } from '@/contexts/household/selectors';
 import { attachTodoListeners } from '@/contexts/household/listeners/todoListeners';
 import { attachMealListeners } from '@/contexts/household/listeners/mealListeners';
 import { attachShoppingListeners } from '@/contexts/household/listeners/shoppingListeners';
-import { makeTodoMutations } from '@/contexts/household/mutations/todoMutations';
-import { makeMealMutations } from '@/contexts/household/mutations/mealMutations';
-import { makeShoppingMutations } from '@/contexts/household/mutations/shoppingMutations';
+import {
+  makeAddToDo,
+  makeTodoCrudMutations,
+  makeCompleteToDo,
+  makeLoadOlderCompletedTodos,
+} from '@/contexts/household/mutations/todoMutations';
+import {
+  makeAddMeal,
+  makeMealCrudMutations,
+  makeRefreshMealPlanWeek,
+  makeEnsureMealPlanWeek,
+  makeAddMealPlanItem,
+  makeMealPlanItemEditMutations,
+} from '@/contexts/household/mutations/mealMutations';
+import {
+  makeShoppingListMutations,
+  makeToggleShoppingItemPurchased,
+  makeClearPurchasedShoppingItems,
+  makeStoreSettingsMutations,
+  makeDeleteStore,
+} from '@/contexts/household/mutations/shoppingMutations';
 import type {
   MutationOpts,
   HouseholdContextType,
@@ -1236,8 +1254,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }, [householdId]);
 
   const loadOlderCompletedTodos = useCallback(async () => {
-    await makeTodoMutations({
-      db, householdId, user, membersRef,
+    await makeLoadOlderCompletedTodos({
+      db, householdId,
       completedTodoWindowStartRef, completedTodoCursorRef,
       setIsLoadingOlderTodos, setOlderCompletedTodos, setHasMoreCompletedTodos,
     }).loadOlderCompletedTodos();
@@ -1246,15 +1264,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // Fetch a single week of meal-plan entries that falls outside the live window,
   // replacing any previously-loaded entries for that week (so edits stay correct).
   const refreshMealPlanWeek = useCallback(async (date: Date) => {
-    await makeMealMutations({
-      db, householdId, user, mealPlanRef, loadedMealPlanWeeksRef, mealPlanWindowRef, setMealPlanExtra,
+    await makeRefreshMealPlanWeek({
+      db, householdId, loadedMealPlanWeeksRef, mealPlanWindowRef, setMealPlanExtra,
     }).refreshMealPlanWeek(date);
   }, [householdId]);
 
   // Public helper: load a navigated-to week once (no-op if already loaded/live).
   const ensureMealPlanWeek = useCallback(async (date: Date) => {
-    await makeMealMutations({
-      db, householdId, user, mealPlanRef, loadedMealPlanWeeksRef, mealPlanWindowRef, setMealPlanExtra,
+    await makeEnsureMealPlanWeek({
+      loadedMealPlanWeeksRef, mealPlanWindowRef, refreshMealPlanWeek,
     }).ensureMealPlanWeek(date);
   }, [refreshMealPlanWeek]);
 
@@ -3676,77 +3694,71 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // --- ACTIONS: MEALS ---
 
   const addMeal = useCallback(async (meal: Omit<Meal, 'id'>, options?: { suppressToast?: boolean }): Promise<string> => {
-    return makeMealMutations({
-      db, householdId, user, mealPlanRef, loadedMealPlanWeeksRef, mealPlanWindowRef, setMealPlanExtra,
-    }).addMeal(meal, options);
+    return makeAddMeal({ db, householdId, user }).addMeal(meal, options);
   }, [householdId, user]);
 
   const updateMeal = useCallback(async (meal: Meal) => {
-    await makeMealMutations({
-      db, householdId, user, mealPlanRef, loadedMealPlanWeeksRef, mealPlanWindowRef, setMealPlanExtra,
-    }).updateMeal(meal);
+    await makeMealCrudMutations({ db, householdId }).updateMeal(meal);
   }, [householdId]);
 
   const deleteMeal = useCallback(async (id: string) => {
-    await makeMealMutations({
-      db, householdId, user, mealPlanRef, loadedMealPlanWeeksRef, mealPlanWindowRef, setMealPlanExtra,
-    }).deleteMeal(id);
+    await makeMealCrudMutations({ db, householdId }).deleteMeal(id);
   }, [householdId]);
 
   // --- ACTIONS: SHOPPING LIST ---
 
   const addShoppingItem = useCallback(async (item: Omit<ShoppingItem, 'id'>) => {
-    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).addShoppingItem(item);
+    await makeShoppingListMutations({ db, householdId }).addShoppingItem(item);
   }, [householdId]);
 
   const addShoppingItems = useCallback(async (items: Omit<ShoppingItem, 'id'>[]) => {
-    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).addShoppingItems(items);
+    await makeShoppingListMutations({ db, householdId }).addShoppingItems(items);
   }, [householdId]);
 
   const updateShoppingItem = useCallback(async (item: ShoppingItem) => {
-    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).updateShoppingItem(item);
+    await makeShoppingListMutations({ db, householdId }).updateShoppingItem(item);
   }, [householdId]);
 
   const reorderShoppingItems = useCallback(async (items: ShoppingItem[]) => {
-    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).reorderShoppingItems(items);
+    await makeShoppingListMutations({ db, householdId }).reorderShoppingItems(items);
   }, [householdId]);
 
   const deleteShoppingItem = useCallback(async (id: string) => {
-    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).deleteShoppingItem(id);
+    await makeShoppingListMutations({ db, householdId }).deleteShoppingItem(id);
   }, [householdId]);
 
   const toggleShoppingItemPurchased = useCallback(async (id: string) => {
-    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).toggleShoppingItemPurchased(id);
+    await makeToggleShoppingItemPurchased({ db, householdId, shoppingList, groceryCatalog }).toggleShoppingItemPurchased(id);
   }, [householdId, shoppingList, groceryCatalog]);
 
   const clearPurchasedShoppingItems = useCallback(async () => {
-    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).clearPurchasedShoppingItems();
+    await makeClearPurchasedShoppingItems({ db, householdId, shoppingList }).clearPurchasedShoppingItems();
   }, [householdId, shoppingList]);
 
   // --- ACTIONS: SHOPPING SETTINGS ---
 
   const addStore = useCallback(async (store: Omit<Store, 'id'>) => {
-    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).addStore(store);
+    await makeShoppingListMutations({ db, householdId }).addStore(store);
   }, [householdId]);
 
   const updateStore = useCallback(async (updatedStore: Store) => {
-    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).updateStore(updatedStore);
+    await makeStoreSettingsMutations({ db, householdId, householdSettings }).updateStore(updatedStore);
   }, [householdId, householdSettings]);
 
   const deleteStore = useCallback(async (id: string) => {
-    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).deleteStore(id);
+    await makeDeleteStore({ db, householdId, householdSettings, shoppingList }).deleteStore(id);
   }, [householdId, householdSettings, shoppingList]);
 
   const updateGroceryCategories = useCallback(async (categories: string[]) => {
-    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).updateGroceryCategories(categories);
+    await makeShoppingListMutations({ db, householdId }).updateGroceryCategories(categories);
   }, [householdId]);
 
   const addQuickStockList = useCallback(async (list: Omit<QuickStockList, 'id'>) => {
-    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).addQuickStockList(list);
+    await makeShoppingListMutations({ db, householdId }).addQuickStockList(list);
   }, [householdId]);
 
   const updateQuickStockList = useCallback(async (updatedList: QuickStockList) => {
-    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).updateQuickStockList(updatedList);
+    await makeStoreSettingsMutations({ db, householdId, householdSettings }).updateQuickStockList(updatedList);
   }, [householdId, householdSettings]);
 
   // Replace the WHOLE quickStockLists array in one write. Callers that touch
@@ -3756,45 +3768,39 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // those would start from the same stale `householdSettings` snapshot and the
   // second write would clobber the first.
   const updateQuickStockLists = useCallback(async (lists: QuickStockList[]) => {
-    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).updateQuickStockLists(lists);
+    await makeShoppingListMutations({ db, householdId }).updateQuickStockLists(lists);
   }, [householdId]);
 
   const deleteQuickStockList = useCallback(async (id: string) => {
-    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).deleteQuickStockList(id);
+    await makeStoreSettingsMutations({ db, householdId, householdSettings }).deleteQuickStockList(id);
   }, [householdId, householdSettings]);
 
   // --- ACTIONS: GROCERY CATALOG ---
 
   const addGroceryCatalogItem = useCallback(async (item: Omit<GroceryCatalogItem, 'id'>): Promise<string> => {
-    return makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).addGroceryCatalogItem(item);
+    return makeShoppingListMutations({ db, householdId }).addGroceryCatalogItem(item);
   }, [householdId]);
 
   const updateGroceryCatalogItem = useCallback(async (id: string, updates: Partial<GroceryCatalogItem>) => {
-    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).updateGroceryCatalogItem(id, updates);
+    await makeShoppingListMutations({ db, householdId }).updateGroceryCatalogItem(id, updates);
   }, [householdId]);
 
   const deleteGroceryCatalogItem = useCallback(async (id: string) => {
-    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).deleteGroceryCatalogItem(id);
+    await makeShoppingListMutations({ db, householdId }).deleteGroceryCatalogItem(id);
   }, [householdId]);
 
   // --- ACTIONS: MEAL PLAN ---
 
   const addMealPlanItem = useCallback(async (item: Omit<MealPlanItem, 'id'>, options?: { suppressToast?: boolean, throwOnError?: boolean }) => {
-    await makeMealMutations({
-      db, householdId, user, mealPlanRef, loadedMealPlanWeeksRef, mealPlanWindowRef, setMealPlanExtra,
-    }).addMealPlanItem(item, options);
+    await makeAddMealPlanItem({ db, householdId, user, refreshMealPlanWeek }).addMealPlanItem(item, options);
   }, [householdId, user, refreshMealPlanWeek]);
 
   const updateMealPlanItem = useCallback(async (id: string, updates: Partial<MealPlanItem>) => {
-    await makeMealMutations({
-      db, householdId, user, mealPlanRef, loadedMealPlanWeeksRef, mealPlanWindowRef, setMealPlanExtra,
-    }).updateMealPlanItem(id, updates);
+    await makeMealPlanItemEditMutations({ db, householdId, mealPlanRef, refreshMealPlanWeek }).updateMealPlanItem(id, updates);
   }, [householdId, refreshMealPlanWeek]);
 
   const deleteMealPlanItem = useCallback(async (id: string) => {
-    await makeMealMutations({
-      db, householdId, user, mealPlanRef, loadedMealPlanWeeksRef, mealPlanWindowRef, setMealPlanExtra,
-    }).deleteMealPlanItem(id);
+    await makeMealPlanItemEditMutations({ db, householdId, mealPlanRef, refreshMealPlanWeek }).deleteMealPlanItem(id);
   }, [householdId, refreshMealPlanWeek]);
 
   // --- ACTIONS: TO-DOS ---
@@ -3809,11 +3815,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
   const addToDo = useCallback(async (todo: Omit<ToDo, 'id' | 'createdAt' | 'createdBy'>) => {
-    await makeTodoMutations({
-      db, householdId, user, membersRef,
-      completedTodoWindowStartRef, completedTodoCursorRef,
-      setIsLoadingOlderTodos, setOlderCompletedTodos, setHasMoreCompletedTodos,
-    }).addToDo(todo);
+    await makeAddToDo({ db, householdId, user }).addToDo(todo);
   }, [householdId, user]);
 
   /**
@@ -3825,11 +3827,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
   const updateToDo = useCallback(async (id: string, updates: Partial<ToDo>) => {
-    await makeTodoMutations({
-      db, householdId, user, membersRef,
-      completedTodoWindowStartRef, completedTodoCursorRef,
-      setIsLoadingOlderTodos, setOlderCompletedTodos, setHasMoreCompletedTodos,
-    }).updateToDo(id, updates);
+    await makeTodoCrudMutations({ db, householdId }).updateToDo(id, updates);
   }, [householdId]);
 
   /**
@@ -3841,11 +3839,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
   const deleteToDo = useCallback(async (id: string) => {
-    await makeTodoMutations({
-      db, householdId, user, membersRef,
-      completedTodoWindowStartRef, completedTodoCursorRef,
-      setIsLoadingOlderTodos, setOlderCompletedTodos, setHasMoreCompletedTodos,
-    }).deleteToDo(id);
+    await makeTodoCrudMutations({ db, householdId }).deleteToDo(id);
   }, [householdId]);
 
   /**
@@ -3858,11 +3852,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
   const completeToDo = useCallback(async (id: string) => {
-    await makeTodoMutations({
-      db, householdId, user, membersRef,
-      completedTodoWindowStartRef, completedTodoCursorRef,
-      setIsLoadingOlderTodos, setOlderCompletedTodos, setHasMoreCompletedTodos,
-    }).completeToDo(id);
+    await makeCompleteToDo({ db, householdId, membersRef }).completeToDo(id);
   }, [householdId]);
 
 

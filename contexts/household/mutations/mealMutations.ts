@@ -19,23 +19,21 @@ import { getWeekRange } from '@/utils/listenerWindows';
 import { track } from '@/services/analytics';
 import type { User } from 'firebase/auth';
 
-/**
- * Pure-ish factory for the meal + meal-plan mutation family
- * (`makeMealMutations`), moved verbatim out of FirebaseHouseholdContext.
- * `deps` mirrors exactly what the closures previously captured from the
- * provider's scope, so the provider can wire these into its existing
- * `useCallback`s with UNCHANGED dependency arrays.
- */
-export function makeMealMutations(deps: {
+// Pure-ish factories for the meal + meal-plan mutation family, moved verbatim
+// out of FirebaseHouseholdContext. The factories are split by the exact set
+// of REACTIVE values each function's original closure captured, so every
+// provider `useCallback` constructs a deps object containing only what its
+// original closure actually used — its dependency array stays byte-identical
+// AND eslint's exhaustive-deps analysis sees no phantom dependencies.
+// (Refs and setState setters are hook-stable and ride along where needed.)
+
+/** addMeal — original closure captured `householdId`, `user`. */
+export function makeAddMeal(deps: {
   db: Firestore;
   householdId: string | null;
   user: User | null;
-  mealPlanRef: { current: MealPlanItem[] };
-  loadedMealPlanWeeksRef: { current: Set<string> };
-  mealPlanWindowRef: { current: { start: string; end: string } };
-  setMealPlanExtra: (updater: (prev: MealPlanItem[]) => MealPlanItem[]) => void;
 }) {
-  const { db, householdId, user, mealPlanRef, loadedMealPlanWeeksRef, mealPlanWindowRef, setMealPlanExtra } = deps;
+  const { db, householdId, user } = deps;
 
   const addMeal = async (meal: Omit<Meal, 'id'>, options?: { suppressToast?: boolean }): Promise<string> => {
     if (!householdId || !user) throw new Error("Not authenticated");
@@ -54,6 +52,16 @@ export function makeMealMutations(deps: {
       throw error;
     }
   };
+
+  return { addMeal };
+}
+
+/** updateMeal / deleteMeal — original closures captured only `householdId`. */
+export function makeMealCrudMutations(deps: {
+  db: Firestore;
+  householdId: string | null;
+}) {
+  const { db, householdId } = deps;
 
   const updateMeal = async (meal: Meal) => {
     if (!householdId) return;
@@ -82,6 +90,22 @@ export function makeMealMutations(deps: {
     }
   };
 
+  return { updateMeal, deleteMeal };
+}
+
+/**
+ * refreshMealPlanWeek — original closure captured `householdId` plus the
+ * hook-stable `mealPlanWindowRef` / `loadedMealPlanWeeksRef` / `setMealPlanExtra`.
+ */
+export function makeRefreshMealPlanWeek(deps: {
+  db: Firestore;
+  householdId: string | null;
+  loadedMealPlanWeeksRef: { current: Set<string> };
+  mealPlanWindowRef: { current: { start: string; end: string } };
+  setMealPlanExtra: (updater: (prev: MealPlanItem[]) => MealPlanItem[]) => void;
+}) {
+  const { db, householdId, loadedMealPlanWeeksRef, mealPlanWindowRef, setMealPlanExtra } = deps;
+
   // Fetch a single week of meal-plan entries that falls outside the live window,
   // replacing any previously-loaded entries for that week (so edits stay correct).
   const refreshMealPlanWeek = async (date: Date) => {
@@ -104,6 +128,20 @@ export function makeMealMutations(deps: {
     }
   };
 
+  return { refreshMealPlanWeek };
+}
+
+/**
+ * ensureMealPlanWeek — original closure captured the provider-level
+ * `refreshMealPlanWeek` callback plus hook-stable refs.
+ */
+export function makeEnsureMealPlanWeek(deps: {
+  loadedMealPlanWeeksRef: { current: Set<string> };
+  mealPlanWindowRef: { current: { start: string; end: string } };
+  refreshMealPlanWeek: (date: Date) => Promise<void>;
+}) {
+  const { loadedMealPlanWeeksRef, mealPlanWindowRef, refreshMealPlanWeek } = deps;
+
   // Public helper: load a navigated-to week once (no-op if already loaded/live).
   const ensureMealPlanWeek = async (date: Date) => {
     const { start, end } = getWeekRange(date);
@@ -112,6 +150,21 @@ export function makeMealMutations(deps: {
     if (loadedMealPlanWeeksRef.current.has(start)) return;
     await refreshMealPlanWeek(date);
   };
+
+  return { ensureMealPlanWeek };
+}
+
+/**
+ * addMealPlanItem — original closure captured `householdId`, `user`, and the
+ * provider-level `refreshMealPlanWeek` callback.
+ */
+export function makeAddMealPlanItem(deps: {
+  db: Firestore;
+  householdId: string | null;
+  user: User | null;
+  refreshMealPlanWeek: (date: Date) => Promise<void>;
+}) {
+  const { db, householdId, user, refreshMealPlanWeek } = deps;
 
   const addMealPlanItem = async (item: Omit<MealPlanItem, 'id'>, options?: { suppressToast?: boolean, throwOnError?: boolean }) => {
     if (!householdId || !user) return;
@@ -136,6 +189,22 @@ export function makeMealMutations(deps: {
       }
     }
   };
+
+  return { addMealPlanItem };
+}
+
+/**
+ * updateMealPlanItem / deleteMealPlanItem — original closures captured
+ * `householdId` and the provider-level `refreshMealPlanWeek` callback, plus
+ * the hook-stable `mealPlanRef`.
+ */
+export function makeMealPlanItemEditMutations(deps: {
+  db: Firestore;
+  householdId: string | null;
+  mealPlanRef: { current: MealPlanItem[] };
+  refreshMealPlanWeek: (date: Date) => Promise<void>;
+}) {
+  const { db, householdId, mealPlanRef, refreshMealPlanWeek } = deps;
 
   const updateMealPlanItem = async (id: string, updates: Partial<MealPlanItem>) => {
     if (!householdId) return;
@@ -167,9 +236,5 @@ export function makeMealMutations(deps: {
     }
   };
 
-  return {
-    addMeal, updateMeal, deleteMeal,
-    refreshMealPlanWeek, ensureMealPlanWeek,
-    addMealPlanItem, updateMealPlanItem, deleteMealPlanItem,
-  };
+  return { updateMealPlanItem, deleteMealPlanItem };
 }

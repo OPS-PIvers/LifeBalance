@@ -28,30 +28,21 @@ import { TODO_COMPLETED_PAGE_SIZE } from '@/utils/listenerWindows';
 import { mergeById, mapTodoDoc } from '@/contexts/household/selectors';
 import type { User } from 'firebase/auth';
 
-/**
- * Pure-ish factory for the to-do mutation family (`makeTodoMutations`), moved
- * verbatim out of FirebaseHouseholdContext. `deps` mirrors exactly what the
- * closures previously captured from the provider's scope, so the provider can
- * wire these into its existing `useCallback`s with UNCHANGED dependency
- * arrays (pass live values via `deps` at call time rather than re-deriving
- * dependency arrays here).
- */
-export function makeTodoMutations(deps: {
+// Pure-ish factories for the to-do mutation family, moved verbatim out of
+// FirebaseHouseholdContext. The factories are split by the exact set of
+// REACTIVE values each function's original closure captured, so every
+// provider `useCallback` constructs a deps object containing only what its
+// original closure actually used — its dependency array stays byte-identical
+// AND eslint's exhaustive-deps analysis sees no phantom dependencies.
+// (Refs and setState setters are hook-stable and ride along where needed.)
+
+/** addToDo — original closure captured `householdId`, `user`. */
+export function makeAddToDo(deps: {
   db: Firestore;
   householdId: string | null;
   user: User | null;
-  membersRef: { current: HouseholdMember[] };
-  completedTodoWindowStartRef: { current: Date | null };
-  completedTodoCursorRef: { current: QueryDocumentSnapshot<DocumentData> | null };
-  setIsLoadingOlderTodos: (v: boolean) => void;
-  setOlderCompletedTodos: (updater: (prev: ToDo[]) => ToDo[]) => void;
-  setHasMoreCompletedTodos: (v: boolean) => void;
 }) {
-  const {
-    db, householdId, user, membersRef,
-    completedTodoWindowStartRef, completedTodoCursorRef,
-    setIsLoadingOlderTodos, setOlderCompletedTodos, setHasMoreCompletedTodos,
-  } = deps;
+  const { db, householdId, user } = deps;
 
   /**
    * Adds a new to-do item.
@@ -79,6 +70,16 @@ export function makeTodoMutations(deps: {
       throw error; // Re-throw so callers can handle the error with contextual messaging
     }
   };
+
+  return { addToDo };
+}
+
+/** updateToDo / deleteToDo — original closures captured only `householdId`. */
+export function makeTodoCrudMutations(deps: {
+  db: Firestore;
+  householdId: string | null;
+}) {
+  const { db, householdId } = deps;
 
   /**
    * Updates an existing to-do item.
@@ -120,6 +121,20 @@ export function makeTodoMutations(deps: {
       throw error; // Re-throw so callers can handle the error with contextual messaging
     }
   };
+
+  return { updateToDo, deleteToDo };
+}
+
+/**
+ * completeToDo — original closure captured `householdId` plus the
+ * hook-stable `membersRef`.
+ */
+export function makeCompleteToDo(deps: {
+  db: Firestore;
+  householdId: string | null;
+  membersRef: { current: HouseholdMember[] };
+}) {
+  const { db, householdId, membersRef } = deps;
 
   /**
    * Marks a to-do item as completed.
@@ -172,6 +187,28 @@ export function makeTodoMutations(deps: {
     }
   };
 
+  return { completeToDo };
+}
+
+/**
+ * loadOlderCompletedTodos — original closure captured `householdId` plus the
+ * hook-stable cursor/window refs and setState setters.
+ */
+export function makeLoadOlderCompletedTodos(deps: {
+  db: Firestore;
+  householdId: string | null;
+  completedTodoWindowStartRef: { current: Date | null };
+  completedTodoCursorRef: { current: QueryDocumentSnapshot<DocumentData> | null };
+  setIsLoadingOlderTodos: (v: boolean) => void;
+  setOlderCompletedTodos: (updater: (prev: ToDo[]) => ToDo[]) => void;
+  setHasMoreCompletedTodos: (v: boolean) => void;
+}) {
+  const {
+    db, householdId,
+    completedTodoWindowStartRef, completedTodoCursorRef,
+    setIsLoadingOlderTodos, setOlderCompletedTodos, setHasMoreCompletedTodos,
+  } = deps;
+
   const loadOlderCompletedTodos = async () => {
     const windowStart = completedTodoWindowStartRef.current;
     if (!householdId || !windowStart) return;
@@ -197,5 +234,5 @@ export function makeTodoMutations(deps: {
     }
   };
 
-  return { addToDo, updateToDo, deleteToDo, completeToDo, loadOlderCompletedTodos };
+  return { loadOlderCompletedTodos };
 }

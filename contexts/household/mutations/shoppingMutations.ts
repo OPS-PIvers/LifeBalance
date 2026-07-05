@@ -17,24 +17,24 @@ import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import { track } from '@/services/analytics';
 
+// Pure-ish factories for the shopping-list, shopping-settings, and
+// grocery-catalog mutation families, moved verbatim out of
+// FirebaseHouseholdContext. The factories are split by the exact set of
+// REACTIVE values each function's original closure captured, so every
+// provider `useCallback` constructs a deps object containing only what its
+// original closure actually used — its dependency array stays byte-identical
+// AND eslint's exhaustive-deps analysis sees no phantom dependencies.
+
 /**
- * Pure-ish factory for the shopping-list, shopping-settings, and
- * grocery-catalog mutation families (`makeShoppingMutations`), moved
- * verbatim out of FirebaseHouseholdContext. `deps` mirrors exactly what the
- * closures previously captured from the provider's scope, so the provider
- * can wire these into its existing `useCallback`s with UNCHANGED dependency
- * arrays.
+ * Mutations whose original closures captured only `householdId` (plus the
+ * module-stable `db`): plain shopping-list CRUD, simple household-doc
+ * settings writes, and grocery-catalog CRUD.
  */
-export function makeShoppingMutations(deps: {
+export function makeShoppingListMutations(deps: {
   db: Firestore;
   householdId: string | null;
-  householdSettings: Household | null;
-  shoppingList: ShoppingItem[];
-  groceryCatalog: GroceryCatalogItem[];
 }) {
-  const { db, householdId, householdSettings, shoppingList, groceryCatalog } = deps;
-
-  // --- ACTIONS: SHOPPING LIST ---
+  const { db, householdId } = deps;
 
   const addShoppingItem = async (item: Omit<ShoppingItem, 'id'>) => {
     if (!householdId) return;
@@ -116,6 +116,123 @@ export function makeShoppingMutations(deps: {
     }
   };
 
+  const addStore = async (store: Omit<Store, 'id'>) => {
+    if (!householdId) return;
+    try {
+      const newStore = { ...store, id: crypto.randomUUID() };
+      await updateDoc(doc(db, `households/${householdId}`), {
+        stores: arrayUnion(newStore)
+      });
+      toast.success('Store added');
+    } catch (error) {
+      console.error('[addStore] Failed:', error);
+      toast.error('Failed to add store');
+    }
+  };
+
+  const updateGroceryCategories = async (categories: string[]) => {
+    if (!householdId) return;
+    try {
+      await updateDoc(doc(db, `households/${householdId}`), {
+        groceryCategories: categories
+      });
+      toast.success('Categories updated');
+    } catch (error) {
+      console.error('[updateGroceryCategories] Failed:', error);
+      toast.error('Failed to update categories');
+    }
+  };
+
+  const addQuickStockList = async (list: Omit<QuickStockList, 'id'>) => {
+    if (!householdId) return;
+    try {
+      const newList = { ...list, id: crypto.randomUUID() };
+      await updateDoc(doc(db, `households/${householdId}`), {
+        quickStockLists: arrayUnion(newList)
+      });
+      toast.success('Template created');
+    } catch (error) {
+      console.error('[addQuickStockList] Failed:', error);
+      toast.error('Failed to create template');
+    }
+  };
+
+  // Replace the WHOLE quickStockLists array in one write. Callers that touch
+  // multiple lists in a single user action (e.g. reassigning a catalog item
+  // between lists) must compute the final array locally and persist it here,
+  // rather than firing two sequential updateQuickStockList() calls — both of
+  // those would start from the same stale `householdSettings` snapshot and the
+  // second write would clobber the first.
+  const updateQuickStockLists = async (lists: QuickStockList[]) => {
+    if (!householdId) return;
+    try {
+      await updateDoc(doc(db, `households/${householdId}`), {
+        quickStockLists: lists
+      });
+    } catch (error) {
+      // Rethrow rather than swallow: the sole caller (handleQuickListChange)
+      // shows its own "Failed to update list" toast and skips the success toast
+      // on throw. Swallowing here would let the caller report success on a failed
+      // write (and double-toast the error).
+      console.error('[updateQuickStockLists] Failed:', error);
+      throw error;
+    }
+  };
+
+  const addGroceryCatalogItem = async (item: Omit<GroceryCatalogItem, 'id'>): Promise<string> => {
+    if (!householdId) throw new Error("Household ID missing");
+    try {
+      const docRef = await addDoc(collection(db, `households/${householdId}/groceryCatalog`), item);
+      return docRef.id;
+    } catch (error) {
+      console.error('[addGroceryCatalogItem] Failed:', error);
+      toast.error('Failed to add to history');
+      throw error;
+    }
+  };
+
+  const updateGroceryCatalogItem = async (id: string, updates: Partial<GroceryCatalogItem>) => {
+    if (!householdId) return;
+    try {
+      await updateDoc(doc(db, `households/${householdId}/groceryCatalog`, id), updates);
+      toast.success('Item updated');
+    } catch (error) {
+      console.error('[updateGroceryCatalogItem] Failed:', error);
+      toast.error('Failed to update item');
+    }
+  };
+
+  const deleteGroceryCatalogItem = async (id: string) => {
+    if (!householdId) return;
+    try {
+      await deleteDoc(doc(db, `households/${householdId}/groceryCatalog`, id));
+      toast.success('Removed from history');
+    } catch (error) {
+      console.error('[deleteGroceryCatalogItem] Failed:', error);
+      toast.error('Failed to remove item');
+    }
+  };
+
+  return {
+    addShoppingItem, addShoppingItems, updateShoppingItem, reorderShoppingItems,
+    deleteShoppingItem, addStore, updateGroceryCategories,
+    addQuickStockList, updateQuickStockLists,
+    addGroceryCatalogItem, updateGroceryCatalogItem, deleteGroceryCatalogItem,
+  };
+}
+
+/**
+ * toggleShoppingItemPurchased — original closure captured
+ * `householdId`, `shoppingList`, `groceryCatalog`.
+ */
+export function makeToggleShoppingItemPurchased(deps: {
+  db: Firestore;
+  householdId: string | null;
+  shoppingList: ShoppingItem[];
+  groceryCatalog: GroceryCatalogItem[];
+}) {
+  const { db, householdId, shoppingList, groceryCatalog } = deps;
+
   const toggleShoppingItemPurchased = async (id: string) => {
     if (!householdId) return;
 
@@ -184,6 +301,20 @@ export function makeShoppingMutations(deps: {
     }
   };
 
+  return { toggleShoppingItemPurchased };
+}
+
+/**
+ * clearPurchasedShoppingItems — original closure captured
+ * `householdId`, `shoppingList`.
+ */
+export function makeClearPurchasedShoppingItems(deps: {
+  db: Firestore;
+  householdId: string | null;
+  shoppingList: ShoppingItem[];
+}) {
+  const { db, householdId, shoppingList } = deps;
+
   const clearPurchasedShoppingItems = async () => {
     if (!householdId) return;
 
@@ -206,21 +337,19 @@ export function makeShoppingMutations(deps: {
     }
   };
 
-  // --- ACTIONS: SHOPPING SETTINGS ---
+  return { clearPurchasedShoppingItems };
+}
 
-  const addStore = async (store: Omit<Store, 'id'>) => {
-    if (!householdId) return;
-    try {
-      const newStore = { ...store, id: crypto.randomUUID() };
-      await updateDoc(doc(db, `households/${householdId}`), {
-        stores: arrayUnion(newStore)
-      });
-      toast.success('Store added');
-    } catch (error) {
-      console.error('[addStore] Failed:', error);
-      toast.error('Failed to add store');
-    }
-  };
+/**
+ * updateStore / updateQuickStockList / deleteQuickStockList — original
+ * closures captured `householdId`, `householdSettings`.
+ */
+export function makeStoreSettingsMutations(deps: {
+  db: Firestore;
+  householdId: string | null;
+  householdSettings: Household | null;
+}) {
+  const { db, householdId, householdSettings } = deps;
 
   const updateStore = async (updatedStore: Store) => {
     if (!householdId || !householdSettings) return;
@@ -238,6 +367,53 @@ export function makeShoppingMutations(deps: {
       toast.error('Failed to update store');
     }
   };
+
+  const updateQuickStockList = async (updatedList: QuickStockList) => {
+    if (!householdId || !householdSettings) return;
+    try {
+      const currentLists = householdSettings.quickStockLists || [];
+      const newLists = currentLists.map(l => l.id === updatedList.id ? updatedList : l);
+
+      await updateDoc(doc(db, `households/${householdId}`), {
+        quickStockLists: newLists
+      });
+      toast.success('Template updated');
+    } catch (error) {
+      console.error('[updateQuickStockList] Failed:', error);
+      toast.error('Failed to update template');
+    }
+  };
+
+  const deleteQuickStockList = async (id: string) => {
+    if (!householdId || !householdSettings) return;
+    try {
+      const currentLists = householdSettings.quickStockLists || [];
+      const newLists = currentLists.filter(l => l.id !== id);
+
+      await updateDoc(doc(db, `households/${householdId}`), {
+        quickStockLists: newLists
+      });
+      toast.success('Template deleted');
+    } catch (error) {
+      console.error('[deleteQuickStockList] Failed:', error);
+      toast.error('Failed to delete template');
+    }
+  };
+
+  return { updateStore, updateQuickStockList, deleteQuickStockList };
+}
+
+/**
+ * deleteStore — original closure captured `householdId`,
+ * `householdSettings`, `shoppingList`.
+ */
+export function makeDeleteStore(deps: {
+  db: Firestore;
+  householdId: string | null;
+  householdSettings: Household | null;
+  shoppingList: ShoppingItem[];
+}) {
+  const { db, householdId, householdSettings, shoppingList } = deps;
 
   const deleteStore = async (id: string) => {
     if (!householdId || !householdSettings) return;
@@ -276,128 +452,5 @@ export function makeShoppingMutations(deps: {
     }
   };
 
-  const updateGroceryCategories = async (categories: string[]) => {
-    if (!householdId) return;
-    try {
-      await updateDoc(doc(db, `households/${householdId}`), {
-        groceryCategories: categories
-      });
-      toast.success('Categories updated');
-    } catch (error) {
-      console.error('[updateGroceryCategories] Failed:', error);
-      toast.error('Failed to update categories');
-    }
-  };
-
-  const addQuickStockList = async (list: Omit<QuickStockList, 'id'>) => {
-    if (!householdId) return;
-    try {
-      const newList = { ...list, id: crypto.randomUUID() };
-      await updateDoc(doc(db, `households/${householdId}`), {
-        quickStockLists: arrayUnion(newList)
-      });
-      toast.success('Template created');
-    } catch (error) {
-      console.error('[addQuickStockList] Failed:', error);
-      toast.error('Failed to create template');
-    }
-  };
-
-  const updateQuickStockList = async (updatedList: QuickStockList) => {
-    if (!householdId || !householdSettings) return;
-    try {
-      const currentLists = householdSettings.quickStockLists || [];
-      const newLists = currentLists.map(l => l.id === updatedList.id ? updatedList : l);
-
-      await updateDoc(doc(db, `households/${householdId}`), {
-        quickStockLists: newLists
-      });
-      toast.success('Template updated');
-    } catch (error) {
-      console.error('[updateQuickStockList] Failed:', error);
-      toast.error('Failed to update template');
-    }
-  };
-
-  // Replace the WHOLE quickStockLists array in one write. Callers that touch
-  // multiple lists in a single user action (e.g. reassigning a catalog item
-  // between lists) must compute the final array locally and persist it here,
-  // rather than firing two sequential updateQuickStockList() calls — both of
-  // those would start from the same stale `householdSettings` snapshot and the
-  // second write would clobber the first.
-  const updateQuickStockLists = async (lists: QuickStockList[]) => {
-    if (!householdId) return;
-    try {
-      await updateDoc(doc(db, `households/${householdId}`), {
-        quickStockLists: lists
-      });
-    } catch (error) {
-      // Rethrow rather than swallow: the sole caller (handleQuickListChange)
-      // shows its own "Failed to update list" toast and skips the success toast
-      // on throw. Swallowing here would let the caller report success on a failed
-      // write (and double-toast the error).
-      console.error('[updateQuickStockLists] Failed:', error);
-      throw error;
-    }
-  };
-
-  const deleteQuickStockList = async (id: string) => {
-    if (!householdId || !householdSettings) return;
-    try {
-      const currentLists = householdSettings.quickStockLists || [];
-      const newLists = currentLists.filter(l => l.id !== id);
-
-      await updateDoc(doc(db, `households/${householdId}`), {
-        quickStockLists: newLists
-      });
-      toast.success('Template deleted');
-    } catch (error) {
-      console.error('[deleteQuickStockList] Failed:', error);
-      toast.error('Failed to delete template');
-    }
-  };
-
-  // --- ACTIONS: GROCERY CATALOG ---
-
-  const addGroceryCatalogItem = async (item: Omit<GroceryCatalogItem, 'id'>): Promise<string> => {
-    if (!householdId) throw new Error("Household ID missing");
-    try {
-      const docRef = await addDoc(collection(db, `households/${householdId}/groceryCatalog`), item);
-      return docRef.id;
-    } catch (error) {
-      console.error('[addGroceryCatalogItem] Failed:', error);
-      toast.error('Failed to add to history');
-      throw error;
-    }
-  };
-
-  const updateGroceryCatalogItem = async (id: string, updates: Partial<GroceryCatalogItem>) => {
-    if (!householdId) return;
-    try {
-      await updateDoc(doc(db, `households/${householdId}/groceryCatalog`, id), updates);
-      toast.success('Item updated');
-    } catch (error) {
-      console.error('[updateGroceryCatalogItem] Failed:', error);
-      toast.error('Failed to update item');
-    }
-  };
-
-  const deleteGroceryCatalogItem = async (id: string) => {
-    if (!householdId) return;
-    try {
-      await deleteDoc(doc(db, `households/${householdId}/groceryCatalog`, id));
-      toast.success('Removed from history');
-    } catch (error) {
-      console.error('[deleteGroceryCatalogItem] Failed:', error);
-      toast.error('Failed to remove item');
-    }
-  };
-
-  return {
-    addShoppingItem, addShoppingItems, updateShoppingItem, reorderShoppingItems,
-    deleteShoppingItem, toggleShoppingItemPurchased, clearPurchasedShoppingItems,
-    addStore, updateStore, deleteStore, updateGroceryCategories,
-    addQuickStockList, updateQuickStockList, updateQuickStockLists, deleteQuickStockList,
-    addGroceryCatalogItem, updateGroceryCatalogItem, deleteGroceryCatalogItem,
-  };
+  return { deleteStore };
 }
