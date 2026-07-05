@@ -2,8 +2,8 @@
 import React, { useState, useMemo } from 'react';
 import { useFinance, useTodos } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
-import { format, isSameMonth, isSameDay, isToday, addMonths, subMonths } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, Copy, CheckSquare, Download, MoreVertical, MoreHorizontal, Repeat, CalendarPlus } from 'lucide-react';
+import { format, isSameMonth, isSameDay, isToday, addMonths, subMonths, startOfWeek, addDays } from 'date-fns';
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, Trash2, Edit2, Copy, CheckSquare, Download, MoreVertical, MoreHorizontal, Repeat, CalendarPlus } from 'lucide-react';
 import { CalendarItem } from '@/types/schema';
 import { useCalendarGrid } from '@/hooks/useCalendarGrid';
 import { expandCalendarItems, parseRecurringId, isRecurringId } from '@/utils/calendarRecurrence';
@@ -17,8 +17,12 @@ import { Switch } from '@/components/ui/Switch';
 import EmptyState from '@/components/ui/EmptyState';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
+import { cn } from '@/utils/cn';
 import toast from 'react-hot-toast';
 import RecurringBillsModal from './RecurringBillsModal';
+
+/** localStorage key remembering the user's month-grid expand/collapse choice. */
+const GRID_EXPANDED_KEY = 'lifebalance:budgetCalendar:gridExpanded';
 
 const BudgetCalendar: React.FC = () => {
   const { calendarItems, addCalendarItem, updateCalendarItem, deleteCalendarItem, accounts } = useFinance();
@@ -26,6 +30,26 @@ const BudgetCalendar: React.FC = () => {
   const fmt = useFormatCurrency();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
+
+  // Month grid is collapsed to a compact week strip by default (UX audit
+  // Batch 3 — the day's agenda is the actionable content and should render
+  // first without scrolling; the full month grid is secondary/occasional).
+  // Choice is remembered across visits via localStorage.
+  const [isGridExpanded, setIsGridExpanded] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem(GRID_EXPANDED_KEY) === 'true';
+  });
+  const toggleGridExpanded = () => {
+    setIsGridExpanded(v => {
+      const next = !v;
+      try {
+        window.localStorage.setItem(GRID_EXPANDED_KEY, String(next));
+      } catch {
+        // localStorage unavailable (private browsing) — in-memory state still works
+      }
+      return next;
+    });
+  };
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -44,6 +68,14 @@ const BudgetCalendar: React.FC = () => {
   const [frequency, setFrequency] = useState<'monthly' | 'bi-weekly' | 'weekly'>('monthly');
 
   const { monthStart, startDate, endDate, days } = useCalendarGrid(currentDate);
+
+  // Compact week strip (matches the Meals day-strip pattern): the 7 days
+  // containing `selectedDate`, always anchored to the week it falls in.
+  const weekStripDays = useMemo(() => {
+    const wStart = startOfWeek(selectedDate);
+    return Array.from({ length: 7 }, (_, i) => addDays(wStart, i));
+  }, [selectedDate]);
+
   const weekDays: { abbr: string; full: string }[] = [
     { abbr: 'S', full: 'Sunday' },
     { abbr: 'M', full: 'Monday' },
@@ -249,120 +281,12 @@ const BudgetCalendar: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-(--duration-base)">
-      {/* Calendar Card */}
-      <div className="surface-section p-6">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="font-display font-semibold text-xl text-brand-900 dark:text-brand-100 tracking-tight">
-            {format(currentDate, 'MMMM yyyy')}
-          </h2>
-          <div className="flex gap-2">
-            <div className="relative">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setIsMenuOpen(v => !v)}
-                className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn"
-                aria-label="More calendar actions"
-                aria-haspopup="menu"
-                aria-expanded={isMenuOpen}
-              >
-                <MoreHorizontal size={20} />
-              </Button>
-              <Menu
-                isOpen={isMenuOpen}
-                onClose={() => setIsMenuOpen(false)}
-                items={calendarMenuItems}
-                ariaLabel="Calendar actions"
-                position="top-10 right-0"
-                className="min-w-[208px]"
-              />
-            </div>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-              className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn"
-              aria-label="Previous month"
-            >
-              <ChevronLeft size={20} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-              className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn"
-              aria-label="Next month"
-            >
-              <ChevronRight size={20} />
-            </Button>
-          </div>
-        </div>
-
-        {/* Grid */}
-        <div className="grid grid-cols-7 mb-4" role="row">
-          {weekDays.map((d, i) => (
-            <div key={`${d.full}-${i}`} role="columnheader" className="text-center text-xs font-semibold text-brand-400 dark:text-brand-500 py-2">
-              <abbr title={d.full} className="no-underline">{d.abbr}</abbr>
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 gap-y-3">
-          {days.map(day => {
-            const dayKey = format(day, 'yyyy-MM-dd');
-            const dateItems = calendarItemsByDate.get(dayKey) ?? [];
-            const hasIncome = dateItems.some(i => i.type === 'income');
-            const hasExpense = dateItems.some(i => i.type === 'expense');
-            const hasTodo = (pendingTodosByDate.get(dayKey)?.length ?? 0) > 0;
-            const isSelected = isSameDay(day, selectedDate);
-
-            const eventParts: string[] = [];
-            if (hasIncome) eventParts.push('income');
-            if (hasExpense) eventParts.push('expense');
-            if (hasTodo) eventParts.push('tasks');
-            const ariaLabel = eventParts.length > 0
-              ? `${format(day, 'MMMM d, yyyy')}, has ${eventParts.join(', ')}`
-              : format(day, 'MMMM d, yyyy');
-
-            return (
-              <div
-                key={day.toString()}
-                role="button"
-                tabIndex={0}
-                aria-label={ariaLabel}
-                aria-pressed={isSelected}
-                onClick={() => setSelectedDate(day)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setSelectedDate(day);
-                  }
-                }}
-                className={`
-                  relative flex flex-col items-center justify-center h-11 w-11 mx-auto rounded-card text-sm font-medium cursor-pointer transition-[background-color,color,transform] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40
-                  ${!isSameMonth(day, monthStart) ? 'text-brand-300 dark:text-brand-600' : 'text-brand-600 dark:text-brand-300'}
-                  ${isSelected ? 'bg-accent-600 dark:bg-accent-600 text-white scale-105 ring-2 ring-accent-600 ring-offset-2 ring-offset-white dark:ring-offset-brand-800' : 'hover:bg-brand-100 dark:hover:bg-brand-700/50'}
-                  ${isToday(day) && !isSelected ? 'text-accent-700 dark:text-accent-300 font-bold bg-brand-100 dark:bg-brand-700/50' : ''}
-                `}
-              >
-                {format(day, 'd')}
-
-                {/* Dots */}
-                <div className="absolute bottom-1.5 flex gap-0.5">
-                  {hasIncome && <div className="w-1 h-1 rounded-full bg-money-pos"></div>}
-                  {hasExpense && <div className="w-1 h-1 rounded-full bg-money-neg"></div>}
-                  {hasTodo && <div className="w-1 h-1 rounded-full bg-habit-blue"></div>}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Detail List */}
+    <div className="space-y-4 animate-in fade-in duration-(--duration-base)">
+      {/* Selected-day agenda — renders FIRST (UX audit Batch 3): the day's
+          bills/tasks are the actionable content and must be visible without
+          scrolling. The month grid (below) is secondary/collapsed by default. */}
       <div>
-        <div className="flex items-center justify-between mb-4 px-2">
+        <div className="flex items-center justify-between mb-3 px-1">
           <h3 className="font-display font-semibold text-brand-900 dark:text-brand-100 text-lg tracking-tight">
             {format(selectedDate, 'MMMM d')}
           </h3>
@@ -379,14 +303,16 @@ const BudgetCalendar: React.FC = () => {
         {selectedItems.length === 0 && selectedTodos.length === 0 ? (
           <EmptyState
             variant="surface"
-            icon={<CalendarPlus size={28} />}
+            size="compact"
+            icon={<CalendarPlus size={20} />}
             title="Nothing scheduled"
-            description="No events or tasks on this day. Add a bill, income, or one-time expense."
+            description="No events or tasks on this day."
             action={
               <Button
-                variant="primary"
+                variant="secondary"
+                size="sm"
                 onClick={openAddModal}
-                leftIcon={<Plus size={18} />}
+                leftIcon={<Plus size={14} />}
               >
                 Create Event
               </Button>
@@ -454,15 +380,6 @@ const BudgetCalendar: React.FC = () => {
 
                   {/* Action Buttons */}
                   <div className="flex items-center gap-2">
-                    {/* Status Indicator (non-interactive - use Dashboard queue to approve) */}
-                    <div>
-                      {item.isPaid ? (
-                        <CheckCircle2 size={18} className="text-money-pos" />
-                      ) : (
-                        <Circle size={18} className="text-brand-300 dark:text-brand-600" />
-                      )}
-                    </div>
-
                     {/* Edit/Delete (Desktop) */}
                     <div className="hidden md:flex items-center gap-1">
                       {!item.isPaid && (
@@ -502,6 +419,185 @@ const BudgetCalendar: React.FC = () => {
               </Row>
             ))}
           </SurfaceList>
+        )}
+      </div>
+
+      {/* Calendar surface — compact week strip by default, with an affordance
+          to expand into the full month grid (UX audit Batch 3). */}
+      <div className="surface-section p-4">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-display font-semibold text-base text-brand-900 dark:text-brand-100 tracking-tight">
+            {format(isGridExpanded ? currentDate : selectedDate, 'MMMM yyyy')}
+          </h2>
+          <div className="flex items-center gap-1">
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setIsMenuOpen(v => !v)}
+                className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn"
+                aria-label="More calendar actions"
+                aria-haspopup="menu"
+                aria-expanded={isMenuOpen}
+              >
+                <MoreHorizontal size={20} />
+              </Button>
+              <Menu
+                isOpen={isMenuOpen}
+                onClose={() => setIsMenuOpen(false)}
+                items={calendarMenuItems}
+                ariaLabel="Calendar actions"
+                position="top-10 right-0"
+                className="min-w-[208px]"
+              />
+            </div>
+            {isGridExpanded && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setCurrentDate(subMonths(currentDate, 1))}
+                  className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn"
+                  aria-label="Previous month"
+                >
+                  <ChevronLeft size={20} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setCurrentDate(addMonths(currentDate, 1))}
+                  className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn"
+                  aria-label="Next month"
+                >
+                  <ChevronRight size={20} />
+                </Button>
+              </>
+            )}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={toggleGridExpanded}
+              aria-expanded={isGridExpanded}
+              aria-controls="budget-calendar-month-grid"
+              className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn"
+              aria-label={isGridExpanded ? 'Collapse to week view' : 'Expand to month view'}
+            >
+              <ChevronDown
+                size={20}
+                className={cn('transition-transform duration-(--duration-base) ease-(--ease-standard)', isGridExpanded && 'rotate-180')}
+              />
+            </Button>
+          </div>
+        </div>
+
+        {isGridExpanded ? (
+          <div id="budget-calendar-month-grid">
+            {/* Weekday labels */}
+            <div className="grid grid-cols-7 mb-3" role="row">
+              {weekDays.map((d, i) => (
+                <div key={`${d.full}-${i}`} role="columnheader" className="text-center text-xs font-semibold text-brand-400 dark:text-brand-500 py-2">
+                  <abbr title={d.full} className="no-underline">{d.abbr}</abbr>
+                </div>
+              ))}
+            </div>
+            {/* Full month grid */}
+            <div className="grid grid-cols-7 gap-y-2">
+              {days.map(day => {
+                const dayKey = format(day, 'yyyy-MM-dd');
+                const dateItems = calendarItemsByDate.get(dayKey) ?? [];
+                const hasIncome = dateItems.some(i => i.type === 'income');
+                const hasExpense = dateItems.some(i => i.type === 'expense');
+                const hasTodo = (pendingTodosByDate.get(dayKey)?.length ?? 0) > 0;
+                const isSelected = isSameDay(day, selectedDate);
+
+                const eventParts: string[] = [];
+                if (hasIncome) eventParts.push('income');
+                if (hasExpense) eventParts.push('expense');
+                if (hasTodo) eventParts.push('tasks');
+                const ariaLabel = eventParts.length > 0
+                  ? `${format(day, 'MMMM d, yyyy')}, has ${eventParts.join(', ')}`
+                  : format(day, 'MMMM d, yyyy');
+
+                return (
+                  <div
+                    key={day.toString()}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={ariaLabel}
+                    aria-pressed={isSelected}
+                    onClick={() => setSelectedDate(day)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedDate(day);
+                      }
+                    }}
+                    className={`
+                      relative flex flex-col items-center justify-center h-10 w-10 mx-auto rounded-card text-sm font-medium cursor-pointer transition-[background-color,color,transform] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40
+                      ${!isSameMonth(day, monthStart) ? 'text-brand-300 dark:text-brand-600' : 'text-brand-600 dark:text-brand-300'}
+                      ${isSelected ? 'bg-accent-600 dark:bg-accent-600 text-white scale-105 ring-2 ring-accent-600 ring-offset-2 ring-offset-white dark:ring-offset-brand-800' : 'hover:bg-brand-100 dark:hover:bg-brand-700/50'}
+                      ${isToday(day) && !isSelected ? 'text-accent-700 dark:text-accent-300 font-bold bg-brand-100 dark:bg-brand-700/50' : ''}
+                    `}
+                  >
+                    {format(day, 'd')}
+
+                    {/* Dots */}
+                    <div className="absolute bottom-1 flex gap-0.5">
+                      {hasIncome && <div className="w-1 h-1 rounded-full bg-money-pos"></div>}
+                      {hasExpense && <div className="w-1 h-1 rounded-full bg-money-neg"></div>}
+                      {hasTodo && <div className="w-1 h-1 rounded-full bg-habit-blue"></div>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          /* Compact week strip (matches Meals' day-strip pattern) */
+          <div className="grid grid-cols-7 gap-1">
+            {weekStripDays.map(day => {
+              const dayKey = format(day, 'yyyy-MM-dd');
+              const dateItems = calendarItemsByDate.get(dayKey) ?? [];
+              const hasIncome = dateItems.some(i => i.type === 'income');
+              const hasExpense = dateItems.some(i => i.type === 'expense');
+              const hasTodo = (pendingTodosByDate.get(dayKey)?.length ?? 0) > 0;
+              const isSelected = isSameDay(day, selectedDate);
+
+              const eventParts: string[] = [];
+              if (hasIncome) eventParts.push('income');
+              if (hasExpense) eventParts.push('expense');
+              if (hasTodo) eventParts.push('tasks');
+              const ariaLabel = eventParts.length > 0
+                ? `${format(day, 'EEEE, MMMM d, yyyy')}, has ${eventParts.join(', ')}`
+                : format(day, 'EEEE, MMMM d, yyyy');
+
+              return (
+                <button
+                  type="button"
+                  key={day.toString()}
+                  aria-label={ariaLabel}
+                  aria-pressed={isSelected}
+                  onClick={() => setSelectedDate(day)}
+                  className={cn(
+                    'relative flex flex-col items-center justify-center gap-0.5 rounded-card py-2 text-sm font-medium transition-[background-color,color] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
+                    isSelected
+                      ? 'bg-accent-600 dark:bg-accent-600 text-white'
+                      : 'hover:bg-brand-100 dark:hover:bg-brand-700/50 text-brand-600 dark:text-brand-300',
+                    isToday(day) && !isSelected && 'text-accent-700 dark:text-accent-300 font-bold bg-brand-100 dark:bg-brand-700/50'
+                  )}
+                >
+                  <span className="text-xxs uppercase tracking-wide opacity-70">{format(day, 'EEEEE')}</span>
+                  <span>{format(day, 'd')}</span>
+                  <div className="flex gap-0.5 h-1">
+                    {hasIncome && <div className="w-1 h-1 rounded-full bg-money-pos"></div>}
+                    {hasExpense && <div className="w-1 h-1 rounded-full bg-money-neg"></div>}
+                    {hasTodo && <div className="w-1 h-1 rounded-full bg-habit-blue"></div>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         )}
       </div>
 

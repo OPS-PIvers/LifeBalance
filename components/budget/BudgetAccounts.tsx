@@ -386,22 +386,14 @@ const BudgetAccounts: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Net Worth Header — solid evergreen hero (no gradient/glass) */}
-      <div className="bg-accent-600 dark:bg-accent-700 rounded-lg p-8 text-white shadow-raised text-center">
-        <p className="font-display text-xs font-semibold uppercase tracking-widest text-white/70 mb-1">Total Net Worth</p>
-        <p className="text-4xl font-mono font-bold tracking-tight tabular-nums">
+      {/* Net Worth — compact stat row (was an oversized p-8 hero; Assets/
+          Liabilities totals are repeated in the section headers below, so this
+          keeps only the headline figure — UX audit Batch 3). */}
+      <div className="bg-accent-600 dark:bg-accent-700 rounded-lg px-5 py-4 text-white shadow-raised flex items-center justify-between">
+        <p className="font-display text-xs font-semibold uppercase tracking-widest text-white/70">Total Net Worth</p>
+        <p className="text-2xl font-mono font-bold tracking-tight tabular-nums">
           {fmt(netWorth)}
         </p>
-        <div className="flex justify-center gap-6 mt-3 text-sm">
-          <div>
-            <span className="text-white/65">Assets:</span>{' '}
-            <span className="text-white font-mono tabular-nums">{fmt(assets)}</span>
-          </div>
-          <div>
-            <span className="text-white/65">Liabilities:</span>{' '}
-            <span className="text-white font-mono tabular-nums">{fmt(debts)}</span>
-          </div>
-        </div>
       </div>
 
       {/* Assets Section */}
@@ -451,12 +443,13 @@ const BudgetAccounts: React.FC = () => {
         />
       )}
 
-       {/* Add Account Button */}
+       {/* Add Account Button — compact inline row, not a tall full-width dashed block */}
        <Button
         variant="dashed"
+        size="sm"
         onClick={() => setIsAddModalOpen(true)}
-        className="w-full py-4 rounded-card"
-        leftIcon={<Plus size={20} />}
+        className="w-full py-2.5 rounded-card"
+        leftIcon={<Plus size={16} />}
       >
         Add Account
       </Button>

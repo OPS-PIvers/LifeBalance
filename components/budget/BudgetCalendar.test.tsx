@@ -74,6 +74,9 @@ describe('BudgetCalendar', () => {
     vi.setSystemTime(new Date('2024-01-15'));
 
     vi.clearAllMocks();
+    // The month grid expand/collapse choice persists in localStorage — clear it
+    // so each test starts in the default collapsed (week-strip) state.
+    window.localStorage.clear();
     (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       calendarItems: [],
       addCalendarItem: mockAddCalendarItem,
@@ -312,6 +315,10 @@ describe('BudgetCalendar', () => {
       // Current date is mocked to 2024-01-15, so month is January 2024
       expect(screen.getByText('January 2024')).toBeInTheDocument();
 
+      // Month navigation only shows in the expanded month view (week strip is
+      // the collapsed default — UX audit Batch 3).
+      fireEvent.click(screen.getByLabelText('Expand to month view'));
+
       // Click Next
       fireEvent.click(screen.getByLabelText('Next month'));
       expect(screen.getByText('February 2024')).toBeInTheDocument();
@@ -438,6 +445,10 @@ describe('BudgetCalendar', () => {
 
   it('day cells have role=button, tabIndex, and aria-label for keyboard access', () => {
     render(<BudgetCalendar />);
+
+    // The full month grid (with its div[role=button] day cells) only renders
+    // when expanded; the collapsed default is the compact week strip.
+    fireEvent.click(screen.getByLabelText('Expand to month view'));
 
     // All day cells should be keyboard-accessible buttons
     const dayButtons = screen.getAllByRole('button').filter(el => el.getAttribute('aria-label')?.match(/\w+ \d+, \d{4}/));

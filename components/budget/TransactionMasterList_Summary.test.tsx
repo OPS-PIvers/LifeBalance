@@ -42,6 +42,7 @@ vi.mock('@/components/ui/Modal', () => ({ Modal: ({ children }: { children: Reac
 vi.mock('lucide-react', () => ({
   Search: () => <div />,
   Filter: () => <div />,
+  ChevronDown: () => <div />,
   X: () => <div />,
   Edit: () => <div />,
   Trash2: () => <div />,
