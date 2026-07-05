@@ -79,6 +79,8 @@ Application state lives in `FirebaseHouseholdContext` ([contexts/FirebaseHouseho
 
 A backward-compatible `useHousehold()` shim composes all slices (and `useMeals()` composes the two meal slices) for un-migrated consumers; prefer the granular hooks in new/heavy components. The always-mounted `TopToolbar` and the heavy `CaptureModal`, plus `ProfileMenu` and `useInsightActions`, have been migrated off the shim onto narrow slices so they only re-render on the state they actually read. `MockHouseholdContext` mirrors these slices for Test Mode.
 
+`FirebaseHouseholdContext.tsx` is the provider component and public re-export surface, but its listener/mutation bodies live in `contexts/household/{listeners,mutations}/` as one factory module per domain family (e.g. `financeListeners.ts` + `financeMutations.ts`/`transactionMutations.ts`/`calendarMutations.ts`), plus shared `contexts/household/types.ts` (slice value interfaces) and `selectors.ts`. Each provider `useCallback`/listener-attach call constructs a small deps object and delegates to a `make*`/`attach*` factory — this is a pure file decomposition (Plan 08), not a behavior change: dependency arrays, memo boundaries, and batch compositions are unchanged from before the split.
+
 All data is persisted in **Firestore** with real-time synchronization across devices using Firebase's `onSnapshot` listeners.
 
 Firestore is initialized in [firebase.config.ts](firebase.config.ts) with **offline persistence** (`persistentLocalCache` + multi-tab manager), with a safe fallback to the default in-memory cache where IndexedDB is unavailable (SSR, private browsing, CI). This enables offline reads and faster cold starts for the PWA.

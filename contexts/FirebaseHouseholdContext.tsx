@@ -6,8 +6,6 @@ import {
   doc,
   addDoc,
   updateDoc,
-  deleteDoc,
-  deleteField,
   serverTimestamp,
   writeBatch,
   getDoc,
@@ -16,20 +14,13 @@ import {
   orderBy,
   increment,
   setDoc,
-  limit,
-  startAfter,
   type QueryDocumentSnapshot,
   type DocumentData,
 } from 'firebase/firestore';
 import {
-  accountConverter,
-  budgetBucketConverter,
-  bucketPeriodSnapshotConverter,
-  calendarItemConverter,
   householdMemberConverter,
   pendingItemConverter,
   insightConverter,
-  transactionConverter,
 } from '@/utils/firestoreConverters';
 import { db } from '@/firebase.config';
 import { useAuth } from '@/contexts/AuthContext';
@@ -59,40 +50,59 @@ import {
   ModuleKey,
   WeeklyRecap
 } from '@/types/schema';
-import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
-import { calculateSafeToSpendBreakdownFromExpanded, resolveBucketForCalendarItem } from '@/utils/safeToSpendCalculator';
-import { effectiveAccountImpact, resolveTargetAccount } from '@/utils/accountImpact';
-import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
-import { processToggleHabit, calculatePointsForDate, calculatePointsForDateRange, computeManagedMemberPointsReset, isHabitStale, getHabitResetUpdate } from '@/utils/habitLogic';
-import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
-import { calculateBucketSpent, getTransactionsForBucket } from '@/utils/bucketSpentCalculator';
+import { calculateSafeToSpendBreakdownFromExpanded } from '@/utils/safeToSpendCalculator';
+import { calculatePointsForDate, calculatePointsForDateRange, computeManagedMemberPointsReset, isHabitStale, getHabitResetUpdate } from '@/utils/habitLogic';
+import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { migrateBucketsToPeriods, needsMigration, migrateToPaycheckPeriods, needsPaycheckMigration } from '@/utils/migrations/payPeriodMigration';
 import { migrateOrphanedHabits, needsHabitMigration } from '@/utils/migrations/habitMigration';
 import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
 import { usePointsSync, type PointsSyncUpdate } from '@/hooks/usePointsSync';
 import { useHabitActions } from '@/hooks/useHabitActions';
-import { expandCalendarItems, parseRecurringId, isRecurringId } from '@/utils/calendarRecurrence';
+import { expandCalendarItems } from '@/utils/calendarRecurrence';
 import { getLocalDateString } from '@/utils/dateHelpers';
-import { roundMoney } from '@/utils/money';
 import { formatCurrency } from '@/utils/formatCurrency';
 import {
-  BUCKET_HISTORY_LIMIT,
-  TRANSACTION_PAGE_SIZE,
   getTransactionWindowStart,
   getMealPlanWindow,
 } from '@/utils/listenerWindows';
 import { ParsedShoppingList, ParsedTodoList, ParsedExpense } from '@/services/geminiService.types';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
-import { track } from '@/services/analytics';
-import { shouldTrackFirstTime, FIRST_TRANSACTION_FLAG } from '@/utils/firstTimeFlags';
 import toast from 'react-hot-toast';
-import { isSameDay, isSameWeek, parseISO, format, subDays, startOfWeek, addDays, startOfToday, isAfter, isValid, addMonths } from 'date-fns';
-import { mergeById, mapTransactionDoc } from '@/contexts/household/selectors';
+import { isSameDay, isSameWeek, parseISO, format, startOfWeek, addMonths } from 'date-fns';
+import { mergeById } from '@/contexts/household/selectors';
 import { attachTodoListeners } from '@/contexts/household/listeners/todoListeners';
 import { attachMealListeners } from '@/contexts/household/listeners/mealListeners';
 import { attachShoppingListeners } from '@/contexts/household/listeners/shoppingListeners';
 import { attachGamificationListeners } from '@/contexts/household/listeners/gamificationListeners';
 import { attachCoreListeners } from '@/contexts/household/listeners/coreListeners';
+import { attachFinanceListeners, attachTransactionsListener } from '@/contexts/household/listeners/financeListeners';
+import {
+  makeAccountMutations,
+  makeBucketCrudMutations,
+  makeReallocateBucket,
+  makeResetBucketsForNewPeriod,
+  makeInitializeFirstPeriod,
+  makeHandlePaycheckApproval,
+  makeTransactionLoaders,
+  makeLoadAllBucketHistory,
+} from '@/contexts/household/mutations/financeMutations';
+import {
+  makeAddCalendarItem,
+  makeUpdateCalendarItem,
+  makeCalendarDeleteMutations,
+  makeDeleteCalendarItem,
+  makePayCalendarItem,
+  makeDeferCalendarItem,
+} from '@/contexts/household/mutations/calendarMutations';
+import {
+  makeAddTransaction,
+  makeUpdateTransactionCategory,
+  makeUpdateTransaction,
+  makeDeleteTransaction,
+  makeMergeTransactions,
+  makeKeepBothTransactions,
+  makeSplitTransaction,
+} from '@/contexts/household/mutations/transactionMutations';
 import {
   makeAddToDo,
   makeTodoCrudMutations,
@@ -625,64 +635,21 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     const unsubscribers: (() => void)[] = [];
 
-    // Accounts listener
-    const accountsQuery = query(collection(db, `households/${householdId}/accounts`).withConverter(accountConverter));
-    unsubscribers.push(
-      onSnapshot(accountsQuery, (snapshot) => {
-        setAccounts(snapshot.docs.map(doc => doc.data()));
-      }, (error) => {
-        console.error('[accounts] listener failed:', error);
-        toast.error('Lost connection to your accounts. Safe-to-Spend may be out of date.');
-      })
-    );
-
-    // Buckets listener
-    const bucketsQuery = query(collection(db, `households/${householdId}/buckets`).withConverter(budgetBucketConverter));
-    unsubscribers.push(
-      onSnapshot(bucketsQuery, (snapshot) => {
-        setBuckets(snapshot.docs.map(doc => doc.data()));
-      }, (error) => {
-        console.error('[buckets] listener failed:', error);
-        toast.error('Lost connection to your budget. Safe-to-Spend may be out of date.');
-      })
-    );
-
-    // Bucket History listener — live window of the most recent N periods.
-    // Older snapshots are fetched on demand via loadAllBucketHistory().
-    const historyQuery = query(
-      collection(db, `households/${householdId}/bucketHistory`).withConverter(bucketPeriodSnapshotConverter),
-      orderBy('periodStartDate', 'desc'),
-      limit(BUCKET_HISTORY_LIMIT)
-    );
-    unsubscribers.push(
-      onSnapshot(historyQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => doc.data());
-        setBucketHistoryWindow(data);
-        // A full page means there are (probably) older periods to load. Don't
-        // flip this back on once the caller has already loaded everything.
-        if (!bucketHistoryLoadedAllRef.current) {
-          setHasMoreBucketHistory(snapshot.size >= BUCKET_HISTORY_LIMIT);
-        }
-      }, (error) => {
-        console.error('Error listening to bucketHistory:', error);
-      })
-    );
+    // Accounts, Buckets, Bucket History, Calendar Items listeners
+    // (contexts/household/listeners/financeListeners.ts)
+    unsubscribers.push(...attachFinanceListeners({
+      db,
+      householdId,
+      setAccounts: (data) => setAccounts(data),
+      setBuckets: (data) => setBuckets(data),
+      setBucketHistoryWindow: (data) => setBucketHistoryWindow(data),
+      setHasMoreBucketHistory: (data) => setHasMoreBucketHistory(data),
+      bucketHistoryLoadedAllRef,
+      setCalendarItems: (data) => setCalendarItems(data),
+    }));
 
     // (Transactions are handled by their own effect below so the window can
     // track the current pay period without re-subscribing every other listener.)
-
-    // Calendar listener
-    const calQuery = query(collection(db, `households/${householdId}/calendarItems`).withConverter(calendarItemConverter));
-    unsubscribers.push(
-      onSnapshot(calQuery, (snapshot) => {
-        setCalendarItems(snapshot.docs.map(doc => doc.data()));
-      }, (error) => {
-        // Calendar items feed Safe-to-Spend; a silent failure would leave that
-        // metric stale. Surface it like the accounts/buckets listeners do.
-        console.error('[calendarItems] listener failed:', error);
-        toast.error('Failed to sync calendar items. Some figures may be out of date.');
-      })
-    );
 
     // Habits, Challenges, Yearly Goals, Rewards listeners (contexts/household/listeners/gamificationListeners.ts)
     unsubscribers.push(...attachGamificationListeners({
@@ -1043,15 +1010,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setTransactionWindowStart(windowStart);
     setHasMoreTransactions(windowStart !== null);
 
-    const txCollection = collection(db, `households/${householdId}/transactions`).withConverter(transactionConverter);
-    const txQuery = windowStart
-      ? query(txCollection, where('date', '>=', windowStart), orderBy('date', 'desc'))
-      : query(txCollection);
-
-    const unsubscribe = onSnapshot(txQuery, (snapshot) => {
-      setRecentTransactions(snapshot.docs.map(mapTransactionDoc));
-    }, (error) => {
-      console.error('Error listening to transactions:', error);
+    const unsubscribe = attachTransactionsListener({
+      db,
+      householdId,
+      windowStart,
+      setRecentTransactions: (data) => setRecentTransactions(data),
     });
 
     return () => unsubscribe();
@@ -1064,69 +1027,26 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // --- LISTENER WINDOWING: ON-DEMAND LOADERS ---
 
   const loadOlderTransactions = useCallback(async () => {
-    const windowStart = txWindowStartRef.current;
-    if (!householdId || windowStart === null) return;
-    setIsLoadingOlderTransactions(true);
-    try {
-      const txCollection = collection(db, `households/${householdId}/transactions`).withConverter(transactionConverter);
-      const cursor = txOlderCursorRef.current;
-      const olderQuery = cursor
-        ? query(txCollection, where('date', '<', windowStart), orderBy('date', 'desc'), startAfter(cursor), limit(TRANSACTION_PAGE_SIZE))
-        : query(txCollection, where('date', '<', windowStart), orderBy('date', 'desc'), limit(TRANSACTION_PAGE_SIZE));
-      const snap = await getDocs(olderQuery);
-      if (snap.docs.length > 0) {
-        txOlderCursorRef.current = snap.docs[snap.docs.length - 1] ?? null;
-        const page = snap.docs.map(mapTransactionDoc);
-        setOlderTransactions(prev => mergeById(prev, page));
-      }
-      setHasMoreTransactions(snap.docs.length === TRANSACTION_PAGE_SIZE);
-    } catch (error) {
-      console.error('[loadOlderTransactions] Failed:', error);
-      toast.error('Failed to load older transactions');
-    } finally {
-      setIsLoadingOlderTransactions(false);
-    }
+    await makeTransactionLoaders({
+      db, householdId,
+      txWindowStartRef, txOlderCursorRef, recentTransactionsRef,
+      setIsLoadingOlderTransactions, setOlderTransactions, setHasMoreTransactions,
+    }).loadOlderTransactions();
   }, [householdId]);
 
   const loadAllTransactions = useCallback(async (): Promise<Transaction[]> => {
-    const windowStart = txWindowStartRef.current;
-    // No window (period tracking off) → everything is already loaded.
-    if (!householdId || windowStart === null) return recentTransactionsRef.current;
-    setIsLoadingOlderTransactions(true);
-    try {
-      const txCollection = collection(db, `households/${householdId}/transactions`).withConverter(transactionConverter);
-      const snap = await getDocs(query(txCollection, where('date', '<', windowStart), orderBy('date', 'desc')));
-      const older = snap.docs.map(mapTransactionDoc);
-      txOlderCursorRef.current = snap.docs.length ? snap.docs[snap.docs.length - 1] ?? null : null;
-      setOlderTransactions(older);
-      setHasMoreTransactions(false);
-      return mergeById(recentTransactionsRef.current, older);
-    } catch (error) {
-      console.error('[loadAllTransactions] Failed:', error);
-      toast.error('Failed to load full transaction history');
-      return recentTransactionsRef.current;
-    } finally {
-      setIsLoadingOlderTransactions(false);
-    }
+    return makeTransactionLoaders({
+      db, householdId,
+      txWindowStartRef, txOlderCursorRef, recentTransactionsRef,
+      setIsLoadingOlderTransactions, setOlderTransactions, setHasMoreTransactions,
+    }).loadAllTransactions();
   }, [householdId]);
 
   const loadAllBucketHistory = useCallback(async () => {
-    if (!householdId) return;
-    setIsLoadingOlderBucketHistory(true);
-    try {
-      const snap = await getDocs(query(
-        collection(db, `households/${householdId}/bucketHistory`).withConverter(bucketPeriodSnapshotConverter),
-        orderBy('periodStartDate', 'desc')
-      ));
-      bucketHistoryLoadedAllRef.current = true;
-      setBucketHistoryOlder(snap.docs.map(doc => doc.data()));
-      setHasMoreBucketHistory(false);
-    } catch (error) {
-      console.error('[loadAllBucketHistory] Failed:', error);
-      toast.error('Failed to load full budget history');
-    } finally {
-      setIsLoadingOlderBucketHistory(false);
-    }
+    await makeLoadAllBucketHistory({
+      db, householdId, bucketHistoryLoadedAllRef,
+      setIsLoadingOlderBucketHistory, setBucketHistoryOlder, setHasMoreBucketHistory,
+    }).loadAllBucketHistory();
   }, [householdId]);
 
   const loadAllInsights = useCallback(async () => {
@@ -1437,789 +1357,115 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   // --- ACTIONS: ACCOUNTS ---
 
+  // --- ACTIONS: ACCOUNTS ---
+  // (contexts/household/mutations/financeMutations.ts)
+
   const addAccount = useCallback(async (account: Account) => {
-    if (!householdId || !user) return;
-    await addDoc(collection(db, `households/${householdId}/accounts`), {
-      ...account,
-      createdBy: user.uid,
-      lastUpdated: serverTimestamp(),
-    });
-    toast.success('Account added');
+    await makeAccountMutations({ db, householdId, user }).addAccount(account);
   }, [householdId, user]);
 
   const updateAccountBalance = useCallback(async (id: string, newBalance: number) => {
-    if (!householdId) return;
-    await updateDoc(doc(db, `households/${householdId}/accounts`, id), {
-      balance: newBalance,
-      lastUpdated: serverTimestamp(),
-    });
-    toast.success('Account updated');
-  }, [householdId]);
+    await makeAccountMutations({ db, householdId, user }).updateAccountBalance(id, newBalance);
+  }, [householdId, user]);
 
   const setAccountGoal = useCallback(async (id: string, goal: number) => {
-    if (!householdId) return;
-    await updateDoc(doc(db, `households/${householdId}/accounts`, id), {
-      monthlyGoal: goal,
-    });
-    toast.success('Goal set');
-  }, [householdId]);
+    await makeAccountMutations({ db, householdId, user }).setAccountGoal(id, goal);
+  }, [householdId, user]);
 
   const setAccountCardLast4 = useCallback(async (id: string, cardLast4: string) => {
-    if (!householdId) return;
-    // Defensive guard (the UI validates too): a non-empty but sub-4-digit value
-    // would store something that can never match an incoming card, so reject it.
-    const rawDigits = cardLast4.replace(/\D/g, '');
-    if (rawDigits && rawDigits.length < 4) {
-      toast.error('Card digits must be the last 4 numbers');
-      return;
-    }
-    // Keep only digits and cap at the last 4 so "...8899" / "8899" both store as
-    // "8899". An empty result clears the field (untags the card).
-    const digits = rawDigits.slice(-4);
-    await updateDoc(doc(db, `households/${householdId}/accounts`, id), {
-      cardLast4: digits ? digits : deleteField(),
-    });
-    toast.success(digits ? 'Card digits saved' : 'Card digits cleared');
-  }, [householdId]);
+    await makeAccountMutations({ db, householdId, user }).setAccountCardLast4(id, cardLast4);
+  }, [householdId, user]);
 
   const deleteAccount = useCallback(async (id: string) => {
-    if (!householdId) return;
-    // NOTE: transactions tagged to this account are intentionally left as-is
-    // (no migration). Their `accountId` becomes a dangling reference, which
-    // resolveTargetAccount() resolves to the checking account on the next
-    // mutation. A pending charge orphaned from a deleted credit/savings account
-    // stays excluded from Safe-to-Spend (sumPendingSpend excludes any accountId
-    // not in the current checking set).
-    await deleteDoc(doc(db, `households/${householdId}/accounts`, id));
-    toast.success('Account deleted');
-  }, [householdId]);
+    await makeAccountMutations({ db, householdId, user }).deleteAccount(id);
+  }, [householdId, user]);
 
   const updateAccountOrder = useCallback(async (accountId: string, newOrder: number) => {
-    if (!householdId) return;
-    await updateDoc(doc(db, `households/${householdId}/accounts`, accountId), {
-      order: newOrder,
-    });
-  }, [householdId]);
+    await makeAccountMutations({ db, householdId, user }).updateAccountOrder(accountId, newOrder);
+  }, [householdId, user]);
 
   const reorderAccounts = useCallback(async (orderedIds: string[]) => {
-    if (!householdId) return;
-    try {
-      const batch = writeBatch(db);
-      orderedIds.forEach((id, index) => {
-        const accountRef = doc(db, `households/${householdId}/accounts`, id);
-        batch.update(accountRef, { order: index });
-      });
-      await batch.commit();
-    } catch (error) {
-      console.error('[reorderAccounts] Failed:', error);
-      toast.error('Failed to reorder accounts');
-      throw error;
-    }
-  }, [householdId]);
+    await makeAccountMutations({ db, householdId, user }).reorderAccounts(orderedIds);
+  }, [householdId, user]);
 
   // --- ACTIONS: BUCKETS ---
+  // (contexts/household/mutations/financeMutations.ts)
 
   const addBucket = useCallback(async (bucket: BudgetBucket) => {
-    if (!householdId || !user) return;
-    // Exclude 'id' field - it's not stored in Firestore (document ID is separate)
-    const { id: _id, spent: _spent, ...bucketWithoutId } = bucket;
-    const sanitizedBucket = sanitizeFirestoreData(bucketWithoutId);
-    await addDoc(collection(db, `households/${householdId}/buckets`), {
-      ...sanitizedBucket,
-      createdBy: user.uid,
-    });
-    toast.success('Bucket added');
+    await makeBucketCrudMutations({ db, householdId, user }).addBucket(bucket);
   }, [householdId, user]);
 
   const updateBucket = useCallback(async (bucket: BudgetBucket) => {
-    if (!householdId) return;
-    await updateDoc(doc(db, `households/${householdId}/buckets`, bucket.id), {
-      name: bucket.name,
-      limit: bucket.limit,
-      color: bucket.color,
-      isVariable: bucket.isVariable,
-      isCore: bucket.isCore,
-      // DO NOT update spent - it's calculated in real-time
-    });
-    toast.success('Bucket updated');
-  }, [householdId]);
+    await makeBucketCrudMutations({ db, householdId, user }).updateBucket(bucket);
+  }, [householdId, user]);
 
   const deleteBucket = useCallback(async (id: string) => {
-    if (!householdId) return;
-    await deleteDoc(doc(db, `households/${householdId}/buckets`, id));
-    toast.success('Bucket deleted');
-  }, [householdId]);
+    await makeBucketCrudMutations({ db, householdId, user }).deleteBucket(id);
+  }, [householdId, user]);
 
   const updateBucketLimit = useCallback(async (id: string, newLimit: number) => {
-    if (!householdId) return;
-    await updateDoc(doc(db, `households/${householdId}/buckets`, id), {
-      limit: newLimit,
-    });
-    toast.success('Limit updated');
-  }, [householdId]);
+    await makeBucketCrudMutations({ db, householdId, user }).updateBucketLimit(id, newLimit);
+  }, [householdId, user]);
 
   const reallocateBucket = useCallback(async (sourceId: string, targetId: string, amount: number) => {
-    if (!householdId) return;
-
-    const sourceBucket = buckets.find(b => b.id === sourceId);
-    const targetBucket = buckets.find(b => b.id === targetId);
-
-    if (!sourceBucket || !targetBucket) return;
-
-    // Round to whole cents up front so sub-cent input or float drift can't write
-    // fractional cents into a bucket limit via increment() below.
-    const roundedAmount = roundMoney(amount);
-
-    // Validate input before writing — otherwise a bad amount flows straight into
-    // the increments below: source===target collapses to a single same-doc update
-    // that fabricates funds, a non-positive/non-finite amount reverses or no-ops
-    // the transfer, and an amount above the source's limit drives that limit
-    // negative. The caller is fire-and-forget, so surface the problem with a toast
-    // and bail rather than throw.
-    if (sourceId === targetId) {
-      toast.error('Pick two different buckets to move funds between.');
-      return;
-    }
-    if (!Number.isFinite(roundedAmount) || roundedAmount <= 0) {
-      toast.error('Enter an amount greater than zero to reallocate.');
-      return;
-    }
-    // Compare in integer cents so float drift can't reject an exact full move.
-    if (Math.round(roundedAmount * 100) > Math.round(sourceBucket.limit * 100)) {
-      toast.error(`${sourceBucket.name} doesn't have that much to reallocate.`);
-      return;
-    }
-
-    // Commit both limit changes in a single batch so a partial write can never
-    // leave the source debited without crediting the target. Use increment()
-    // (server-side field value) rather than absolute values from local state so
-    // concurrent edits to either bucket's limit are not clobbered.
-    const batch = writeBatch(db);
-    batch.update(doc(db, `households/${householdId}/buckets`, sourceId), {
-      limit: increment(-roundedAmount),
-    });
-    batch.update(doc(db, `households/${householdId}/buckets`, targetId), {
-      limit: increment(roundedAmount),
-    });
-    await batch.commit();
-
-    toast.success('Funds reallocated');
+    await makeReallocateBucket({ db, householdId, buckets }).reallocateBucket(sourceId, targetId, amount);
   }, [householdId, buckets]);
 
   // --- ACTIONS: PAY PERIOD MANAGEMENT ---
+  // (contexts/household/mutations/financeMutations.ts)
 
   const resetBucketsForNewPeriod = useCallback(async (newPeriodId: string) => {
-    if (!householdId || !currentPeriodId) return;
-
-    try {
-      const batch = writeBatch(db);
-
-      // Create snapshots for all buckets from the old period
-      for (const bucket of buckets) {
-        const spent = bucketSpentMap.get(bucket.id) || { verified: 0, pending: 0 };
-        const bucketTransactions = getTransactionsForBucket(bucket.name, transactions, currentPeriodId);
-
-        const periodStart = currentPeriodId;
-        const periodEnd = format(subDays(parseISO(newPeriodId), 1), 'yyyy-MM-dd');
-
-        // Create snapshot in bucketHistory subcollection
-        const snapshotRef = doc(collection(db, `households/${householdId}/bucketHistory`));
-        batch.set(snapshotRef, {
-          bucketId: bucket.id,
-          bucketName: bucket.name,
-          periodId: currentPeriodId,
-          periodStartDate: periodStart,
-          periodEndDate: periodEnd,
-          limit: bucket.limit,
-          totalSpent: spent.verified,
-          totalPending: spent.pending,
-          transactionCount: bucketTransactions.length,
-          createdAt: new Date().toISOString(),
-        });
-
-        // Update bucket's current period
-        const bucketRef = doc(db, `households/${householdId}/buckets`, bucket.id);
-        batch.update(bucketRef, {
-          currentPeriodId: newPeriodId,
-          lastResetDate: periodStart,
-        });
-      }
-
-      // Advance the household's last paycheck date IN THE SAME BATCH as the
-      // bucket resets, so periods can never desync (either everything commits
-      // or nothing does).
-      const householdRef = doc(db, `households/${householdId}`);
-      batch.update(householdRef, {
-        lastPaycheckDate: newPeriodId,
-      });
-
-      // Commit all changes atomically
-      await batch.commit();
-      toast.success('Buckets reset for new pay period');
-    } catch (error) {
-      console.error('[resetBucketsForNewPeriod] Failed:', error);
-      toast.error('Failed to reset period. Please try again.');
-      throw error; // Re-throw so handlePaycheckApproval can catch it
-    }
+    await makeResetBucketsForNewPeriod({
+      db, householdId, currentPeriodId, buckets, bucketSpentMap, transactions,
+    }).resetBucketsForNewPeriod(newPeriodId);
   }, [householdId, currentPeriodId, buckets, bucketSpentMap, transactions]);
 
   const initializeFirstPeriod = useCallback(async (paycheckDate: string) => {
-    if (!householdId || !user) return;
-
-    try {
-      const batch = writeBatch(db);
-
-      // Set household's first paycheck
-      const householdRef = doc(db, `households/${householdId}`);
-      batch.update(householdRef, {
-        lastPaycheckDate: paycheckDate,
-      });
-
-      // Initialize all buckets with this period ID
-      for (const bucket of buckets) {
-        const bucketRef = doc(db, `households/${householdId}/buckets`, bucket.id);
-        batch.update(bucketRef, {
-          currentPeriodId: paycheckDate,
-          lastResetDate: paycheckDate,
-        });
-      }
-
-      await batch.commit();
-      toast.success('Pay period tracking initialized!');
-    } catch (error) {
-      console.error('[initializeFirstPeriod] Failed:', error);
-      toast.error('Failed to initialize period tracking');
-      throw error; // Re-throw so handlePaycheckApproval can catch it
-    }
+    await makeInitializeFirstPeriod({ db, householdId, user, buckets }).initializeFirstPeriod(paycheckDate);
   }, [householdId, user, buckets]);
 
   const handlePaycheckApproval = useCallback(async (paycheckDate: string) => {
-    if (!householdId || !user) return;
-
-    try {
-      if (!currentPeriodId) {
-        // First paycheck ever - initialize period tracking
-        await initializeFirstPeriod(paycheckDate);
-        return;
-      }
-
-      // A paycheck dated ON/BEFORE the current period start (e.g. an older
-      // overdue income item approved from the Action Queue AFTER a newer one)
-      // must NOT roll the period: resetBucketsForNewPeriod would rewind
-      // lastPaycheckDate and snapshot a period whose end precedes its start,
-      // orphaning every current-period transaction. Record the income (done by
-      // payCalendarItem) without touching period tracking. yyyy-MM-dd strings
-      // compare lexicographically, so a plain string compare is date-correct.
-      if (paycheckDate <= currentPeriodId) return;
-
-      // Reset buckets for the period that just ended. This also advances the
-      // household's lastPaycheckDate within the same atomic batch, so the bucket
-      // resets and the period pointer can never desync from a partial write.
-      await resetBucketsForNewPeriod(paycheckDate);
-    } catch (error) {
-      console.error('[handlePaycheckApproval] Failed:', error);
-      toast.error('Failed to process paycheck approval. Please try again.');
-      throw error;
-    }
+    await makeHandlePaycheckApproval({
+      householdId, user, currentPeriodId, initializeFirstPeriod, resetBucketsForNewPeriod,
+    }).handlePaycheckApproval(paycheckDate);
   }, [householdId, user, currentPeriodId, initializeFirstPeriod, resetBucketsForNewPeriod]);
 
   // --- ACTIONS: CALENDAR ---
+  // (contexts/household/mutations/financeMutations.ts)
 
   const addCalendarItem = useCallback(async (item: CalendarItem) => {
-    if (!householdId || !user) return;
-
-    try {
-      // Exclude 'id' field - it's not stored in Firestore (document ID is separate)
-      const { id: _id, ...itemWithoutId } = item;
-      const sanitizedItem = sanitizeFirestoreData(itemWithoutId);
-
-      await addDoc(collection(db, `households/${householdId}/calendarItems`), {
-        ...sanitizedItem,
-        createdBy: user.uid,
-      });
-      toast.success('Event added');
-    } catch (error) {
-      console.error('[addCalendarItem] Failed:', error);
-      toast.error('Failed to add event. Please try again.');
-      throw error;
-    }
+    await makeAddCalendarItem({ db, householdId, user }).addCalendarItem(item);
   }, [householdId, user]);
 
   const updateCalendarItem = useCallback(async (item: CalendarItem) => {
-    if (!householdId) return;
-
-    try {
-      const updates: Record<string, unknown> = {
-        title: item.title,
-        amount: item.amount,
-        date: item.date,
-        type: item.type,
-        isPaid: item.isPaid,
-        isRecurring: item.isRecurring,
-      };
-
-      // Handle frequency field: delete it if not recurring, otherwise include it
-      if (item.isRecurring && item.frequency) {
-        updates.frequency = item.frequency;
-      } else if (!item.isRecurring) {
-        // Explicitly delete the frequency field when toggling off recurring
-        updates.frequency = deleteField();
-      }
-
-      const sanitizedUpdates = sanitizeFirestoreData(updates);
-      await updateDoc(doc(db, `households/${householdId}/calendarItems`, item.id), sanitizedUpdates);
-      toast.success('Event updated');
-    } catch (error) {
-      console.error('[updateCalendarItem] Failed:', error);
-      toast.error('Failed to update event. Please try again.');
-      throw error;
-    }
+    await makeUpdateCalendarItem({ db, householdId }).updateCalendarItem(item);
   }, [householdId]);
 
   const deleteRecurringInstance = useCallback(async (syntheticId: string, opts?: MutationOpts) => {
-    if (!householdId || !user) return;
-
-    try {
-      // Parse synthetic ID to get template ID and date
-      const parsed = parseRecurringId(syntheticId);
-      if (!parsed) return;
-      const { templateId: parentRecurringId, date: specificDate } = parsed;
-
-      // Find the recurring template to get item details
-      const template = calendarItems.find(i => i.id === parentRecurringId);
-      if (!template) return;
-
-      // Check if this specific date has already been deleted or paid
-      const existingInstance = calendarItems.find(
-        i => i.parentRecurringId === parentRecurringId && i.date === specificDate
-      );
-      if (existingInstance) {
-        // If it's already a paid/deleted instance, just delete that record
-        await deleteDoc(doc(db, `households/${householdId}/calendarItems`, existingInstance.id));
-        if (!opts?.silent) toast.success('Instance deleted');
-        return;
-      }
-
-      // Create a deleted instance marker
-      await addDoc(collection(db, `households/${householdId}/calendarItems`), {
-        title: template.title,
-        amount: template.amount,
-        date: specificDate,
-        type: template.type,
-        isPaid: false,
-        isRecurring: false,
-        isDeleted: true,
-        parentRecurringId: parentRecurringId,
-        createdBy: user.uid,
-      });
-
-      if (!opts?.silent) toast.success('Instance deleted');
-    } catch (error) {
-      console.error('[deleteRecurringInstance] Failed:', error);
-      toast.error('Failed to delete instance. Please try again.');
-      throw error;
-    }
+    await makeCalendarDeleteMutations({ db, householdId, user, calendarItems }).deleteRecurringInstance(syntheticId, opts);
   }, [householdId, user, calendarItems]);
 
   const deleteCalendarItem = useCallback(async (id: string, opts?: MutationOpts) => {
-    if (!householdId) return;
-
-    try {
-      // Check if this is a recurring instance (synthetic ID with date suffix)
-      const isRecurringInstance = isRecurringId(id);
-
-      if (isRecurringInstance) {
-        // Delete only this instance, not the entire series
-        await deleteRecurringInstance(id, opts);
-      } else {
-        // Direct deletion for non-recurring items or templates
-        await deleteDoc(doc(db, `households/${householdId}/calendarItems`, id));
-        if (!opts?.silent) toast.success('Event deleted');
-      }
-    } catch (error) {
-      console.error('[deleteCalendarItem] Failed:', error);
-      toast.error('Failed to delete event. Please try again.');
-      throw error;
-    }
+    await makeDeleteCalendarItem({ db, householdId, deleteRecurringInstance }).deleteCalendarItem(id, opts);
   }, [householdId, deleteRecurringInstance]);
 
   const payCalendarItem = useCallback(async (itemId: string, accountId: string, opts?: MutationOpts) => {
-    if (!householdId || !user) return;
-
-    try {
-      const account = accounts.find(a => a.id === accountId);
-      if (!account) return;
-
-      // Check if this is a recurring instance
-      const isRecurringInstance = isRecurringId(itemId);
-
-      let item: CalendarItem | undefined;
-      let parentRecurringId: string | undefined;
-      let specificDate: string;
-
-      if (isRecurringInstance) {
-        // Parse synthetic ID to get original template ID and date
-        const parsed = parseRecurringId(itemId);
-        if (!parsed) return;
-        parentRecurringId = parsed.templateId;
-        specificDate = parsed.date;
-
-        // Find the recurring template
-        const template = calendarItems.find(i => i.id === parentRecurringId);
-        if (!template) return;
-
-        // Check if this specific date has already been paid
-        const existingPaidInstance = calendarItems.find(
-          i => i.parentRecurringId === parentRecurringId && i.date === specificDate && i.isPaid
-        );
-        if (existingPaidInstance) return;
-
-        // Create item object for this specific instance
-        item = {
-          ...template,
-          date: specificDate,
-        };
-      } else {
-        // Non-recurring item
-        item = calendarItems.find(i => i.id === itemId);
-        if (!item || item.isPaid) return;
-        specificDate = item.date;
-      }
-
-      // NEW: If this is an income item (paycheck), trigger period reset BEFORE creating transaction.
-      // This runs as its own prior atomic op before the writeBatch below.
-      if (item.type === 'income') {
-        await handlePaycheckApproval(specificDate);
-      }
-
-      // Auto-categorize before building the batch, using the same bucket-matching
-      // rules as safe-to-spend's bill exclusion (see resolveBucketForCalendarItem).
-      let category = 'Bills';
-      if (item.type === 'expense') {
-        const matchedBucket = resolveBucketForCalendarItem(item, buckets);
-        if (matchedBucket) category = matchedBucket.name;
-      } else {
-        category = 'Income';
-      }
-
-      // Transaction dated to when the item was actually due/scheduled
-      // (specificDate), not "today" — so a bill due on the 10th but paid on the
-      // 15th records against the 10th and lands in the correct pay period.
-      const transactionDate = specificDate;
-      // For an INCOME item we already awaited handlePaycheckApproval(specificDate)
-      // above. When it ADVANCED the period (paycheck dated after the current
-      // period start), the closure-captured householdSettings still holds the OLD
-      // date, so deriving the period from it would file the opening paycheck into
-      // the period that just closed — use the just-approved date directly:
-      // getPayPeriodForTransaction(specificDate, specificDate) === specificDate,
-      // i.e. the new period this paycheck opens. When the approval was a no-op
-      // (paycheck dated on/before the current period start — the pointer must not
-      // rewind), keep the current period so the income files as historical rather
-      // than opening a resurrected period.
-      const priorPeriodId = householdSettings?.lastPaycheckDate;
-      const effectiveLastPaycheck =
-        item.type === 'income' && (!priorPeriodId || specificDate > priorPeriodId)
-          ? specificDate
-          : priorPeriodId;
-      const payPeriodId = getPayPeriodForTransaction(transactionDate, effectiveLastPaycheck);
-
-      // Account balance delta. Using increment() (a server-side delta) instead of
-      // writing an absolute balance computed from local state prevents lost
-      // updates when household members act concurrently.
-      const balanceDelta = item.type === 'expense' ? -item.amount : item.amount;
-
-      // Atomically commit the calendar item, account balance, and transaction in a
-      // single writeBatch so they can never partially apply (e.g. balance moves but
-      // the bill isn't marked paid). Pre-allocate the new transaction ref so it can
-      // participate in the batch.
-      const payBatch = writeBatch(db);
-
-      // 1. Create or update the paid calendar item
-      if (isRecurringInstance) {
-        // Create a new paid instance record
-        const newCalendarRef = doc(collection(db, `households/${householdId}/calendarItems`));
-        payBatch.set(newCalendarRef, {
-          title: item.title,
-          amount: item.amount,
-          date: specificDate,
-          type: item.type,
-          isPaid: true,
-          isRecurring: false, // Individual instances are not recurring
-          parentRecurringId: parentRecurringId,
-          createdBy: user.uid,
-        });
-      } else {
-        // Mark non-recurring item as paid
-        payBatch.update(doc(db, `households/${householdId}/calendarItems`, itemId), {
-          isPaid: true,
-        });
-      }
-
-      // 2. Update account balance
-      payBatch.update(doc(db, `households/${householdId}/accounts`, accountId), {
-        balance: increment(roundMoney(balanceDelta)),
-        lastUpdated: serverTimestamp(),
-      });
-
-      // 3. Create transaction. `accountId` records which account the bill was
-      // paid from — it's what lets the Action Queue's swipe-approve suggest
-      // "the account you used last time" for this bill going forward.
-      const newTransactionRef = doc(collection(db, `households/${householdId}/transactions`));
-      payBatch.set(newTransactionRef, {
-        amount: item.amount,
-        merchant: item.title,
-        category: category,
-        date: transactionDate,
-        status: 'verified',
-        isRecurring: !!item.isRecurring,
-        source: 'recurring',
-        autoCategorized: true,
-        payPeriodId,
-        accountId,
-        createdBy: user.uid,
-        createdAt: serverTimestamp(),
-      });
-
-      await payBatch.commit();
-
-      // DO NOT update bucket.spent - it's now calculated in real-time from transactions
-
-      if (!opts?.silent) toast.success(item.type === 'expense' ? 'Bill Paid' : 'Income Received');
-    } catch (error) {
-      console.error('[payCalendarItem] Failed:', error);
-      toast.error('Failed to process payment. Please try again.');
-      throw error;
-    }
+    await makePayCalendarItem({
+      db, householdId, user, accounts, calendarItems, buckets, householdSettings, handlePaycheckApproval,
+    }).payCalendarItem(itemId, accountId, opts);
   }, [householdId, user, accounts, calendarItems, buckets, householdSettings, handlePaycheckApproval]);
 
   const deferCalendarItem = useCallback(async (itemId: string, opts?: MutationOpts) => {
-    if (!householdId || !user) return;
-
-    // Common date calculation logic:
-    // "Tomorrow", unless the item is already in the future, then +1 day from item date.
-    // This ensures deferring always pushes it forward relative to today.
-    const calculateDeferredDate = (currentDateString: string): string => {
-      const today = startOfToday();
-      const tomorrowDate = addDays(today, 1);
-      const originalDate = parseISO(currentDateString);
-
-      if (!isValid(originalDate)) {
-        return format(tomorrowDate, 'yyyy-MM-dd');
-      }
-
-      // Default: defer to tomorrow relative to TODAY
-      // If original date is in the future (after today), add 1 day to it
-      // So if due Jan 10 (and today is Jan 5), deferring makes it Jan 11.
-      // If due Jan 1 (and today is Jan 5), deferring makes it Jan 6 (tomorrow).
-      const deferredFromOriginal = addDays(originalDate, 1);
-
-      // If deferredFromOriginal is after tomorrow, use it. Otherwise use tomorrow.
-      const newDate = isAfter(deferredFromOriginal, tomorrowDate)
-        ? deferredFromOriginal
-        : tomorrowDate;
-
-      return format(newDate, 'yyyy-MM-dd');
-    };
-
-    // Check if this is a recurring instance
-    const isRecurringInstance = isRecurringId(itemId);
-
-    if (isRecurringInstance) {
-      // For recurring instances:
-      // 1. Create a one-time deferred item
-      // 2. Hide (delete) the original recurring instance to prevent duplication
-
-      const parsed = parseRecurringId(itemId);
-      if (!parsed) return;
-      const { templateId: parentRecurringId, date: specificDate } = parsed;
-
-      // Find the recurring template
-      const template = calendarItems.find(i => i.id === parentRecurringId);
-      if (!template) return;
-
-      const newDate = calculateDeferredDate(specificDate);
-
-      // 1. Create deferred item
-      await addDoc(collection(db, `households/${householdId}/calendarItems`), {
-        title: template.title,
-        amount: template.amount,
-        date: newDate,
-        type: template.type,
-        isPaid: false,
-        isRecurring: false,
-        createdBy: user.uid,
-      });
-
-      // 2. Delete/Hide original instance
-      // We create a "tombstone" with isDeleted: true to hide this specific instance from expansion
-      await addDoc(collection(db, `households/${householdId}/calendarItems`), {
-        title: template.title,
-        amount: template.amount,
-        date: specificDate,
-        type: template.type,
-        isPaid: false,
-        isRecurring: false,
-        isDeleted: true,
-        parentRecurringId: parentRecurringId,
-        createdBy: user.uid,
-      });
-
-      if (!opts?.silent) {
-        toast.success(`Deferred to ${format(parseISO(newDate), 'MMM d')}`);
-      }
-    } else {
-      // Non-recurring item - just move the date
-      const item = calendarItems.find(i => i.id === itemId);
-      if (!item) return;
-
-      const newDate = calculateDeferredDate(item.date);
-
-      await updateDoc(doc(db, `households/${householdId}/calendarItems`, itemId), {
-        date: newDate,
-      });
-
-      if (!opts?.silent) {
-        toast.success(`Deferred to ${format(parseISO(newDate), 'MMM d')}`);
-      }
-    }
+    await makeDeferCalendarItem({ db, householdId, user, calendarItems }).deferCalendarItem(itemId, opts);
   }, [householdId, user, calendarItems]);
 
   // --- ACTIONS: TRANSACTIONS ---
+  // (contexts/household/mutations/transactionMutations.ts)
 
   const addTransaction = useCallback(async (tx: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>) => {
-    if (!householdId) {
-      console.error('[addTransaction] No household selected');
-      throw new Error('No household selected');
-    }
-    if (!user) {
-      console.error('[addTransaction] Not authenticated');
-      throw new Error('Not authenticated');
-    }
-
-    // Validate required fields before attempting Firestore write.
-    // Note: a falsy check would wrongly reject a legitimate $0 transaction, so
-    // we only reject non-numbers / NaN here (negative amounts are valid too,
-    // e.g. refunds).
-    if (typeof tx.amount !== 'number' || isNaN(tx.amount)) {
-      console.error('[addTransaction] Invalid amount:', tx.amount, typeof tx.amount);
-      throw new Error('Invalid amount');
-    }
-    if (!tx.merchant || typeof tx.merchant !== 'string' || !tx.merchant.trim()) {
-      console.error('[addTransaction] Invalid merchant:', tx.merchant, typeof tx.merchant);
-      throw new Error('Invalid merchant');
-    }
-    if (!tx.category || typeof tx.category !== 'string') {
-      console.error('[addTransaction] Invalid category:', tx.category, typeof tx.category);
-      throw new Error('Invalid category');
-    }
-    if (!tx.date || typeof tx.date !== 'string') {
-      console.error('[addTransaction] Invalid date:', tx.date, typeof tx.date);
-      throw new Error('Invalid date');
-    }
-    if (!['verified', 'pending_review'].includes(tx.status)) {
-      console.error('[addTransaction] Invalid status:', tx.status);
-      throw new Error('Invalid status');
-    }
-    if (typeof tx.isRecurring !== 'boolean') {
-      console.error('[addTransaction] isRecurring must be boolean, got:', tx.isRecurring, typeof tx.isRecurring);
-      throw new Error('isRecurring must be boolean');
-    }
-    if (typeof tx.autoCategorized !== 'boolean') {
-      console.error('[addTransaction] autoCategorized must be boolean, got:', tx.autoCategorized, typeof tx.autoCategorized);
-      throw new Error('autoCategorized must be boolean');
-    }
-
-    try {
-      // Round to whole cents once so the stored amount and the balance delta are
-      // guaranteed to match exactly (no float drift between doc and account).
-      const roundedAmount = roundMoney(tx.amount);
-
-      // Assign pay period ID based on paycheck approval
-      const payPeriodId = getPayPeriodForTransaction(tx.date, householdSettings?.lastPaycheckDate);
-
-      // Build the document data explicitly to ensure compliance with Firestore rules
-      const docData: Record<string, unknown> = {
-        amount: roundedAmount,
-        merchant: tx.merchant.trim(),
-        category: tx.category,
-        date: tx.date,
-        status: tx.status,
-        isRecurring: tx.isRecurring,
-        source: tx.source || 'manual',
-        autoCategorized: tx.autoCategorized,
-        payPeriodId: payPeriodId || null,
-        createdBy: user.uid,
-        createdAt: serverTimestamp(),
-      };
-
-      // Add optional fields only if they exist and are not empty strings
-      if (tx.relatedHabitIds && tx.relatedHabitIds.length > 0) {
-        docData.relatedHabitIds = tx.relatedHabitIds;
-      }
-      if (tx.store && tx.store.trim()) {
-        docData.store = tx.store.trim();
-      }
-      const trimmedAccountId = tx.accountId && tx.accountId.trim() ? tx.accountId.trim() : undefined;
-      if (trimmedAccountId) {
-        docData.accountId = trimmedAccountId;
-      }
-      // creditPayment only matters on a credit account; persist only when true
-      // (absent ⇒ charge), matching the optional-field convention above.
-      if (tx.creditPayment === true) {
-        docData.creditPayment = true;
-      }
-      if (tx.subBucketId && tx.subBucketId.trim()) {
-        docData.subBucketId = tx.subBucketId.trim();
-      }
-      if (tx.notes && tx.notes.trim()) {
-        docData.notes = tx.notes.trim();
-      }
-
-      // VERIFIED-ONLY, ACCOUNT-ROUTED BALANCE: a new transaction touches a
-      // balance only if it is created `verified`. A `pending_review` capture
-      // (receipt / AI scan / Apple Pay stub) does NOT move any balance — it
-      // influences Safe-to-Spend solely via the calculator's pendingSpend term,
-      // so moving a balance here too would subtract it twice. The impact lands
-      // on the TAGGED account (credit charges raise the card's debt; checking
-      // expenses debit checking), falling back to checking when untagged.
-      const target = resolveTargetAccount(trimmedAccountId, accounts);
-      const balanceDelta = effectiveAccountImpact(
-        { amount: roundedAmount, category: tx.category, creditPayment: tx.creditPayment, status: tx.status },
-        target
-      );
-
-      // Commit the new transaction and the account-balance delta in a SINGLE
-      // writeBatch so they can never partially apply. Pre-allocate the
-      // transaction ref so it participates in the batch.
-      const batch = writeBatch(db);
-      const txRef = doc(collection(db, `households/${householdId}/transactions`));
-      batch.set(txRef, docData);
-
-      // Update the target account balance only when the (verified) impact is
-      // non-zero (server-side delta avoids lost updates from concurrent edits).
-      if (balanceDelta !== 0 && target) {
-        batch.update(doc(db, `households/${householdId}/accounts`, target.id), {
-          balance: increment(roundMoney(balanceDelta)),
-          lastUpdated: serverTimestamp(),
-        });
-      }
-
-      // Read the live window BEFORE the commit so latency-compensated listeners
-      // can't already include this write (ref, not `transactions`, to keep the
-      // callback's deps free of per-transaction churn).
-      const wasFirstTransaction = recentTransactionsRef.current.length === 0;
-
-      await batch.commit();
-
-      track('transaction_added', { source: tx.source || 'manual' });
-      if (shouldTrackFirstTime(FIRST_TRANSACTION_FLAG, wasFirstTransaction)) track('first_transaction_added');
-
-      // DO NOT update bucket.spent - it's now calculated in real-time from transactions
-      // The bucketSpentMap effect will automatically recalculate when transactions change
-    } catch (error) {
-      console.error('Error adding transaction:', error);
-      throw error; // Re-throw to let caller handle
-    }
+    await makeAddTransaction({
+      db, householdId, user, householdSettings, accounts, recentTransactionsRef,
+    }).addTransaction(tx);
   }, [householdId, user, householdSettings, accounts]);
 
   const updateTransactionCategory = useCallback(async (
@@ -2229,494 +1475,33 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     accountId?: string | null,
     overrides?: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean },
   ) => {
-    if (!householdId || !currentUser) return;
-
-    // Verifying a pending transaction may also increment related habits and the
-    // household points. Commit the transaction update, the checking-balance
-    // delta, every habit update, and the points increment in a SINGLE writeBatch
-    // so they can never diverge (a partial failure previously left habits/points
-    // inconsistent).
-    const batch = writeBatch(db);
-    let totalPointsChange = 0;
-    let successfulHabitsCount = 0;
-
-    // VERIFIED-ONLY BALANCE (Plan 015): this is the primary "verify" action — it
-    // sets status to `verified` and may change the category. A pending_review
-    // transaction has NOT yet touched the balance, so promoting it to verified
-    // must apply its (now effective) impact; if it was already verified this is a
-    // pure category change (delta = newImpact − oldImpact, e.g. expense→Income
-    // flips the sign). before = the existing transaction; after = same amount
-    // with the new category + verified status.
-    // If the transaction isn't in local state we cannot know its amount, so we
-    // can't apply the correct balance delta. Bail rather than verify it with a
-    // zero delta (which would mark it verified without ever debiting checking) —
-    // matching updateTransaction/deleteTransaction, which also require the row.
-    const existingTx = transactions.find(t => t.id === id);
-    if (!existingTx) {
-      toast.error('Transaction not found');
-      return;
-    }
-    // An optional `accountId` (Action Queue smart approve) re-tags the
-    // transaction, so the OLD and NEW target accounts may differ. Reverse the
-    // old account's effective impact (0 for a pending row) and apply the new
-    // account's, merged per-account so one batch never writes the same doc
-    // twice — the same rule `updateTransaction` uses. Promoting a pending
-    // credit charge to verified raises the card's debt; verifying a checking
-    // expense debits checking.
-    // `accountId === null` is an EXPLICIT clear of a previously-tagged account
-    // (distinct from `undefined`, which leaves the existing tag untouched). A
-    // clear removes the stored field and re-routes the impact to the checking
-    // fallback via resolveTargetAccount(undefined, …).
-    const clearAccount = accountId === null;
-    const newAccountId = clearAccount ? undefined : (accountId?.trim() || undefined);
-    const oldTarget = resolveTargetAccount(existingTx.accountId, accounts);
-    const newTarget = resolveTargetAccount(
-      clearAccount ? undefined : (newAccountId ?? existingTx.accountId),
-      accounts,
-    );
-
-    // An inline edit (Action Queue / on-open review) can change the amount in the
-    // same verify. Use the OVERRIDE amount (not the possibly-stale/zero stored
-    // amount) for the applied impact, so a $0 "awaiting amount" stub debits the
-    // entered amount exactly once (reverse 0, apply −entered). Round to whole
-    // cents before it drives both the stored amount and the balance delta.
-    const editedAmount = overrides?.amount !== undefined ? roundMoney(overrides.amount) : undefined;
-    const effectiveAmount = editedAmount ?? existingTx.amount;
-
-    const reverseDelta = -effectiveAccountImpact(existingTx, oldTarget);
-    const applyDelta = effectiveAccountImpact(
-      { amount: effectiveAmount, category, creditPayment: existingTx.creditPayment, status: 'verified' },
-      newTarget
-    );
-    const deltasByAccountId = new Map<string, number>();
-    if (oldTarget) deltasByAccountId.set(oldTarget.id, (deltasByAccountId.get(oldTarget.id) ?? 0) + reverseDelta);
-    if (newTarget) deltasByAccountId.set(newTarget.id, (deltasByAccountId.get(newTarget.id) ?? 0) + applyDelta);
-
-    // A date edit re-buckets the transaction into the pay period covering the new
-    // date (mirrors updateTransaction).
-    const editedPayPeriodId = overrides?.date
-      ? getPayPeriodForTransaction(overrides.date, householdSettings?.lastPaycheckDate)
-      : undefined;
-
-    // 1. Update Transaction. Verifying resolves any Action-Queue snooze, so the
-    // stale marker doesn't linger on the doc. Inline edits (amount/merchant/date)
-    // and clearing the `needsAmount` stub flag co-commit here in the same op.
-    batch.update(doc(db, `households/${householdId}/transactions`, id), {
-      category,
-      status: 'verified',
-      relatedHabitIds: relatedHabitIds || [],
-      // An explicit clear removes the tag; a new tag sets it; undefined leaves it.
-      ...(clearAccount ? { accountId: deleteField() } : newAccountId ? { accountId: newAccountId } : {}),
-      ...(existingTx.reviewSnoozedUntil ? { reviewSnoozedUntil: deleteField() } : {}),
-      ...(editedAmount !== undefined ? { amount: editedAmount } : {}),
-      ...(overrides?.merchant !== undefined ? { merchant: overrides.merchant } : {}),
-      // Truthy guard (not `!== undefined`): a blank date must not write an
-      // undefined payPeriodId (WriteBatch.update throws on undefined). With the
-      // truthy guard, editedPayPeriodId is only computed when a date is present.
-      ...(overrides?.date ? { date: overrides.date, payPeriodId: editedPayPeriodId } : {}),
-      ...(overrides?.clearNeedsAmount ? { needsAmount: false } : {}),
-    });
-
-    // 1b. Apply the account-balance impact of the status/category transition in
-    // the SAME batch (server-side delta avoids lost updates from concurrent edits).
-    for (const [accId, delta] of deltasByAccountId) {
-      const rounded = roundMoney(delta);
-      if (rounded !== 0) {
-        batch.update(doc(db, `households/${householdId}/accounts`, accId), {
-          balance: increment(rounded),
-          lastUpdated: serverTimestamp(),
-        });
-      }
-    }
-
-    // 2. Increment Habits if any
-    if (relatedHabitIds && relatedHabitIds.length > 0) {
-      for (const habitId of relatedHabitIds) {
-        const habit = habits.find(h => h.id === habitId);
-        if (habit) {
-          // Use extracted business logic
-          const result = processToggleHabit(habit, 'up');
-          if (result) {
-            batch.update(doc(db, `households/${householdId}/habits`, habitId), {
-              count: result.updatedHabit.count,
-              totalCount: result.updatedHabit.totalCount,
-              completedDates: result.updatedHabit.completedDates,
-              streakDays: result.updatedHabit.streakDays,
-              lastUpdated: serverTimestamp(),
-            });
-
-            // Accumulate points change
-            totalPointsChange += result.pointsChange;
-            successfulHabitsCount++;
-          }
-        } else {
-          console.warn(`Habit ID ${habitId} not found in habits array. Skipping habit increment.`);
-        }
-      }
-
-      // 3. Update Household Points
-      if (totalPointsChange !== 0) {
-        batch.update(doc(db, `households/${householdId}`), {
-          'points.daily': increment(totalPointsChange),
-          'points.weekly': increment(totalPointsChange),
-          'points.total': increment(totalPointsChange),
-        });
-      }
-    }
-
-    // Commit all writes atomically
-    await batch.commit();
-
-    // Only the pending→verified promotion is the engagement signal (this method
-    // also handles pure category edits on already-verified rows).
-    if (existingTx.status === 'pending_review') track('transaction_verified');
-
-    // DO NOT update bucket.spent - it's now calculated in real-time from transactions
-    // The bucketSpentMap effect will automatically recalculate when transactions change
-
-    // Toast feedback for habits (only after a successful commit)
-    if (totalPointsChange !== 0) {
-      const sign = totalPointsChange > 0 ? '+' : '';
-      toast(
-        <div className="flex items-center gap-2">
-          <span className="font-bold">{sign}{totalPointsChange} pts</span>
-          <span className="text-sm opacity-80">from {successfulHabitsCount} habit(s)</span>
-        </div>,
-        {
-          duration: 2000,
-          icon: '🌟',
-          style: {
-            background: '#ECFDF5',
-            color: '#065F46',
-            border: '1px solid #A7F3D0',
-          },
-        }
-      );
-    }
-
-    toast.success('Verified & Categorized!');
+    await makeUpdateTransactionCategory({
+      db, householdId, currentUser, habits, transactions, accounts, householdSettings,
+    }).updateTransactionCategory(id, category, relatedHabitIds, accountId, overrides);
   }, [householdId, currentUser, habits, transactions, accounts, householdSettings]);
 
   const updateTransaction = useCallback(async (id: string, updates: Partial<Transaction>, opts?: MutationOpts) => {
-    if (!householdId) return;
-
-    try {
-      const transaction = transactions.find(tx => tx.id === id);
-      if (!transaction) {
-        toast.error('Transaction not found');
-        return;
-      }
-
-      // Round any incoming amount to whole cents before it is both stored (via
-      // sanitizedUpdates below) and used for the balance delta, so the persisted
-      // amount and the account balance can't drift by sub-cent amounts.
-      if (updates.amount !== undefined) {
-        updates.amount = roundMoney(updates.amount);
-      }
-
-      // VERIFIED-ONLY, ACCOUNT-ROUTED BALANCE: an edit can change amount,
-      // category, status, accountId AND creditPayment simultaneously, and the
-      // OLD and NEW target accounts may differ (and be different types). Reverse
-      // the old account's effective impact and apply the new account's, then
-      // merge per-account so a single batch never writes the same doc twice.
-      // This single rule handles every case:
-      //   - amount/category/status change on the same account → net impact delta
-      //   - re-tag checking→card (or card→card)              → money moves accounts
-      //   - pending → verified / verified → pending          → apply / reverse
-      //   - credit charge ↔ payment toggle                   → sign flip on the card
-      const newAmount = updates.amount ?? transaction.amount;
-      const newCategory = updates.category ?? transaction.category;
-      const newStatus = updates.status ?? transaction.status;
-      const newAccountId = 'accountId' in updates
-        ? (updates.accountId?.trim() || undefined)
-        : transaction.accountId;
-      const newCreditPayment = 'creditPayment' in updates ? updates.creditPayment : transaction.creditPayment;
-
-      const oldTarget = resolveTargetAccount(transaction.accountId, accounts);
-      const newTarget = resolveTargetAccount(newAccountId, accounts);
-
-      const reverseDelta = -effectiveAccountImpact(transaction, oldTarget);
-      const applyDelta = effectiveAccountImpact(
-        { amount: newAmount, category: newCategory, creditPayment: newCreditPayment, status: newStatus },
-        newTarget
-      );
-
-      // Merge by account id: when old and new resolve to the SAME doc, Firestore
-      // rejects two writes to it in one batch, so collapse to a single net delta.
-      const deltasByAccountId = new Map<string, number>();
-      if (oldTarget) deltasByAccountId.set(oldTarget.id, (deltasByAccountId.get(oldTarget.id) ?? 0) + reverseDelta);
-      if (newTarget) deltasByAccountId.set(newTarget.id, (deltasByAccountId.get(newTarget.id) ?? 0) + applyDelta);
-
-      // Recalculate pay period if date changed
-      let payPeriodId = transaction.payPeriodId;
-      if (updates.date) {
-        payPeriodId = getPayPeriodForTransaction(updates.date, householdSettings?.lastPaycheckDate);
-      }
-
-      // Sanitize optional string fields - remove undefined or empty strings from updates
-      // This prevents Firestore validation errors for empty strings
-      const sanitizedUpdates: Record<string, unknown> = { ...updates };
-      if (sanitizedUpdates.store === undefined || sanitizedUpdates.store === '') {
-        delete sanitizedUpdates.store;
-        // Clearing a store: omitting the field leaves the old value in
-        // Firestore, so a caller explicitly clearing a previously-set store
-        // (present `store` key with an empty/undefined value) must remove it
-        // with deleteField(). Callers that simply omit `store` are unaffected.
-        if ('store' in updates && !updates.store && transaction.store) {
-          sanitizedUpdates.store = deleteField();
-        }
-      } else if (typeof sanitizedUpdates.store === 'string') {
-        sanitizedUpdates.store = sanitizedUpdates.store.trim();
-      }
-      if (sanitizedUpdates.accountId === undefined || sanitizedUpdates.accountId === '') {
-        delete sanitizedUpdates.accountId;
-        // Untagging: omitting the field leaves the old value in Firestore, so a
-        // caller explicitly clearing a previously-tagged account must remove it
-        // with deleteField(). (The balance delta already re-routes to checking.)
-        if ('accountId' in updates && !updates.accountId && transaction.accountId) {
-          sanitizedUpdates.accountId = deleteField();
-        }
-      } else if (typeof sanitizedUpdates.accountId === 'string') {
-        sanitizedUpdates.accountId = sanitizedUpdates.accountId.trim();
-      }
-      // creditPayment is only persisted when true (absent ⇒ charge). If the
-      // caller is explicitly clearing a previously-true flag, remove it from the
-      // doc with deleteField(); otherwise just drop the non-true value.
-      if (sanitizedUpdates.creditPayment !== true) {
-        delete sanitizedUpdates.creditPayment;
-        if ('creditPayment' in updates && updates.creditPayment !== true && transaction.creditPayment) {
-          sanitizedUpdates.creditPayment = deleteField();
-        }
-      }
-      if (sanitizedUpdates.subBucketId === undefined || sanitizedUpdates.subBucketId === '') {
-        delete sanitizedUpdates.subBucketId;
-      } else if (typeof sanitizedUpdates.subBucketId === 'string') {
-        sanitizedUpdates.subBucketId = sanitizedUpdates.subBucketId.trim();
-      }
-      if (sanitizedUpdates.notes === undefined || sanitizedUpdates.notes === '') {
-        delete sanitizedUpdates.notes;
-      } else if (typeof sanitizedUpdates.notes === 'string') {
-        sanitizedUpdates.notes = sanitizedUpdates.notes.trim();
-      }
-
-      // Atomically commit the transaction update and the account balance deltas in
-      // a single writeBatch so they can never partially apply.
-      const updateBatch = writeBatch(db);
-
-      updateBatch.update(doc(db, `households/${householdId}/transactions`, id), {
-        ...sanitizedUpdates,
-        payPeriodId,
-      });
-
-      // Apply each account's net effective-impact delta (atomic server-side
-      // increment). A re-tag moves money off the old account and onto the new.
-      for (const [accId, delta] of deltasByAccountId) {
-        const rounded = roundMoney(delta);
-        if (rounded !== 0) {
-          updateBatch.update(doc(db, `households/${householdId}/accounts`, accId), {
-            balance: increment(rounded),
-            lastUpdated: serverTimestamp(),
-          });
-        }
-      }
-
-      await updateBatch.commit();
-
-      if (!opts?.silent) toast.success('Transaction updated!');
-    } catch (error) {
-      console.error('[updateTransaction] Failed:', error);
-      toast.error('Failed to update transaction');
-      throw error;
-    }
+    await makeUpdateTransaction({
+      db, householdId, transactions, householdSettings, accounts,
+    }).updateTransaction(id, updates, opts);
   }, [householdId, transactions, householdSettings, accounts]);
 
   const deleteTransaction = useCallback(async (id: string, opts?: MutationOpts) => {
-    if (!householdId) return;
-
-    try {
-      const transaction = transactions.find(tx => tx.id === id);
-      if (!transaction) {
-        toast.error('Transaction not found');
-        return;
-      }
-
-      // Atomically restore the target account balance and delete the
-      // transaction in a single writeBatch so they can never partially apply
-      // (server-side delta avoids lost updates from concurrent edits / stale
-      // local state).
-      const deleteBatch = writeBatch(db);
-
-      // VERIFIED-ONLY, ACCOUNT-ROUTED BALANCE: reverse only the EFFECTIVE impact,
-      // on the account the transaction was tagged to. A verified transaction had
-      // applied its account-aware impact, so deleting it reverses that (e.g.
-      // deleting a verified card charge lowers the card's debt again); a
-      // pending_review transaction never touched any balance, so deleting it must
-      // NOT move a balance (its effective impact is 0).
-      const target = resolveTargetAccount(transaction.accountId, accounts);
-      const balanceDelta = -effectiveAccountImpact(transaction, target);
-      if (balanceDelta !== 0 && target) {
-        deleteBatch.update(doc(db, `households/${householdId}/accounts`, target.id), {
-          balance: increment(roundMoney(balanceDelta)),
-          lastUpdated: serverTimestamp(),
-        });
-      }
-
-      deleteBatch.delete(doc(db, `households/${householdId}/transactions`, id));
-
-      await deleteBatch.commit();
-
-      if (!opts?.silent) toast.success('Transaction deleted');
-    } catch (error) {
-      console.error('[deleteTransaction] Failed:', error);
-      toast.error('Failed to delete transaction');
-      throw error;
-    }
+    await makeDeleteTransaction({ db, householdId, transactions, accounts }).deleteTransaction(id, opts);
   }, [householdId, transactions, accounts]);
 
   const mergeTransactions = useCallback(async (keeperId: string, dupeId: string) => {
-    if (!householdId) return;
-
-    try {
-      const keeperTx = transactions.find(tx => tx.id === keeperId);
-      const dupeTx = transactions.find(tx => tx.id === dupeId);
-      if (!keeperTx || !dupeTx) {
-        // Throw (not return) so callers' catch blocks run and the review UI
-        // doesn't advance as if the merge succeeded. The outer catch shows
-        // the failure toast and re-throws.
-        throw new Error('Transaction not found');
-      }
-
-      const updates = buildMergeUpdates(keeperTx, dupeTx);
-
-      const mergeBatch = writeBatch(db);
-
-      mergeBatch.update(doc(db, `households/${householdId}/transactions`, keeperId), {
-        ...updates,
-        // Always clear the flag on the surviving row — Firestore rejects a
-        // plain `undefined`, so this uses the deleteField() sentinel rather
-        // than routing through the pure `buildMergeUpdates` patch.
-        possibleDuplicateOf: deleteField(),
-      });
-
-      // VERIFIED-ONLY, ACCOUNT-ROUTED BALANCE: deleting the dupe must reverse
-      // its EFFECTIVE impact on the account it was tagged to — exactly the
-      // same rule `deleteTransaction` applies. A pending_review dupe never
-      // touched a balance, so this is a no-op for the (expected) common case
-      // of merging two still-pending rows; it only fires when the dupe was
-      // independently verified against a (possibly different) account than
-      // the keeper, so both accounts are adjusted correctly.
-      const dupeTarget = resolveTargetAccount(dupeTx.accountId, accounts);
-      const dupeBalanceDelta = -effectiveAccountImpact(dupeTx, dupeTarget);
-      if (dupeBalanceDelta !== 0 && dupeTarget) {
-        mergeBatch.update(doc(db, `households/${householdId}/accounts`, dupeTarget.id), {
-          balance: increment(roundMoney(dupeBalanceDelta)),
-          lastUpdated: serverTimestamp(),
-        });
-      }
-
-      mergeBatch.delete(doc(db, `households/${householdId}/transactions`, dupeId));
-
-      await mergeBatch.commit();
-
-      track('duplicate_merged', { source: dupeTx.source });
-      toast.success('Transactions merged');
-    } catch (error) {
-      console.error('[mergeTransactions] Failed:', error);
-      toast.error('Failed to merge transactions');
-      throw error;
-    }
+    await makeMergeTransactions({ db, householdId, transactions, accounts }).mergeTransactions(keeperId, dupeId);
   }, [householdId, transactions, accounts]);
 
   const keepBothTransactions = useCallback(async (txnId: string) => {
-    if (!householdId) return;
-
-    try {
-      await updateDoc(doc(db, `households/${householdId}/transactions`, txnId), {
-        possibleDuplicateOf: deleteField(),
-      });
-      track('duplicate_kept_both');
-    } catch (error) {
-      console.error('[keepBothTransactions] Failed:', error);
-      toast.error('Failed to update transaction');
-      throw error;
-    }
+    await makeKeepBothTransactions({ db, householdId }).keepBothTransactions(txnId);
   }, [householdId]);
 
   const splitTransaction = useCallback(async (originalTransactionId: string, newTransactions: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[]) => {
-    if (!householdId || !user) return;
-
-    try {
-      const batch = writeBatch(db);
-      const originalTx = transactions.find(t => t.id === originalTransactionId);
-
-      if (!originalTx) {
-        throw new Error('Original transaction not found');
-      }
-
-      // Round each split's STORED amount to whole cents ONCE, and use the same
-      // value for the account deltas below (mirrors addTransaction). Persisting
-      // the caller's raw amount (e.g. a typed "3.005") while applying a rounded
-      // balance delta would desync the doc from the balance by a sub-cent forever.
-      const roundedSplits = newTransactions.map(tx => ({ ...tx, amount: roundMoney(tx.amount) }));
-
-      // 1. Delete original transaction
-      const originalTxRef = doc(db, `households/${householdId}/transactions`, originalTransactionId);
-      batch.delete(originalTxRef);
-
-      // 2. Create new transactions
-      roundedSplits.forEach(tx => {
-        const newTxRef = doc(collection(db, `households/${householdId}/transactions`));
-        const payPeriodId = getPayPeriodForTransaction(tx.date, householdSettings?.lastPaycheckDate);
-
-        batch.set(newTxRef, {
-          ...tx,
-          payPeriodId: payPeriodId || null,
-          createdBy: user.uid,
-          createdAt: serverTimestamp(),
-        });
-      });
-
-      // 3. VERIFIED-ONLY, ACCOUNT-ROUTED BALANCE: the net change is
-      // Σ effectiveAccountImpact(newSplit, its target) − effectiveAccountImpact(original, its target).
-      // Splits may land on different accounts than the original and from each
-      // other, so accumulate per-account and merge (a single batch must not write
-      // the same account doc twice). When a VERIFIED expense is split into
-      // verified expenses on the same account summing to the same total this nets
-      // to 0 (historical no-op); splitting a PENDING_REVIEW capture into verified
-      // splits applies their now-effective impact to the correct accounts.
-      const deltasByAccountId = new Map<string, number>();
-      const origTarget = resolveTargetAccount(originalTx.accountId, accounts);
-      if (origTarget) {
-        deltasByAccountId.set(origTarget.id, (deltasByAccountId.get(origTarget.id) ?? 0) - effectiveAccountImpact(originalTx, origTarget));
-      }
-      for (const tx of roundedSplits) {
-        const t = resolveTargetAccount(tx.accountId?.trim() || undefined, accounts);
-        if (t) {
-          // tx.amount is already rounded to whole cents above — the SAME value
-          // that was persisted — so the per-account delta can't desync from the
-          // stored amount by a sub-cent.
-          deltasByAccountId.set(t.id, (deltasByAccountId.get(t.id) ?? 0) + effectiveAccountImpact({ amount: tx.amount, category: tx.category, creditPayment: tx.creditPayment, status: tx.status }, t));
-        }
-      }
-      for (const [accId, delta] of deltasByAccountId) {
-        const rounded = roundMoney(delta);
-        if (rounded !== 0) {
-          batch.update(doc(db, `households/${householdId}/accounts`, accId), {
-            balance: increment(rounded),
-            lastUpdated: serverTimestamp(),
-          });
-        }
-      }
-
-      // 4. Commit batch
-      await batch.commit();
-
-      toast.success('Transaction split successfully');
-    } catch (error) {
-      console.error('[splitTransaction] Failed:', error);
-      toast.error('Failed to split transaction');
-      throw error;
-    }
+    await makeSplitTransaction({
+      db, householdId, user, transactions, householdSettings, accounts,
+    }).splitTransaction(originalTransactionId, newTransactions);
   }, [householdId, user, transactions, householdSettings, accounts]);
 
 

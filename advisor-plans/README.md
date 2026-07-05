@@ -49,10 +49,10 @@ runbook for flipping on the finished-but-dormant features (09).
 | 05 | ~~Docs truth pass (CLAUDE.md et al.)~~ **✅ DONE 2026-07-04** (doc removed; CLAUDE.md/README/AGENTS.md/TODO.md/LINT_SUPPRESSIONS.md verified against source, stale docs pruned, analytics layer documented) | MED — compounds across every future agent session | S | LOW | HIGH | — |
 | 06 | ~~Notification fan-out cost fix~~ **✅ DONE 2026-07-05** (doc removed; `anyNotificationsEnabled` flag + backfill + collection-group index shipped in PR-1/#805-#806; the four scheduled jobs + `sendweeklyrecap` switched to the flagged `collectionGroup("members")` query with a `FALLBACK_FULL_SCAN` escape hatch in this PR) | MED — 4 hourly full-collection scans; cost/scale correctness | M | MED | HIGH | — |
 | 07 | ~~E2E money-path suite~~ **✅ DONE 2026-07-04** (doc removed; 5 money-path specs in `e2e/` + Test-Mode parity fixes in `MockHouseholdContext`; recap spec deferred until Plan 02 ships) | MED — safety net under 03/04 | M | LOW | HIGH | — |
-| 08 | [FirebaseHouseholdContext decomposition](./08-context-decomposition.md) | MED — 4,861-line file, still growing; pure mechanical split | L | MED | MED | best after 03 |
+| 08 | ~~FirebaseHouseholdContext decomposition~~ **✅ DONE 2026-07-05** (doc removed; 5 move-only PRs — types+selectors, todo/meal/shopping, gamification, core/members/kid, finance/transactions/calendar — `FirebaseHouseholdContext.tsx` ~4,992 → 2,070 lines as the provider + re-export shim, listener/mutation factories under `contexts/household/{listeners,mutations}`; entangled closures deliberately left in the provider: the pending-items voice drain and the members listener) | MED — 4,861-line file, still growing; pure mechanical split | L | MED | MED | best after 03 |
 | 09 | [Dormant-feature activation runbook (Kid Mode, Stripe)](./09-dormant-activation-runbook.md) | MED — ships finished work; mostly human go/no-go | S | LOW | HIGH | 02 (for Stripe) |
 
-**Suggested execution sequence:** ~~01~~ (done) → ~~05~~ (done) → ~~07~~ (done) → ~~02~~ (done) → ~~03~~ (done) → ~~04~~ (done) → ~~06~~ (done) → 08,
+**Suggested execution sequence:** ~~01~~ (done) → ~~05~~ (done) → ~~07~~ (done) → ~~02~~ (done) → ~~03~~ (done) → ~~04~~ (done) → ~~06~~ (done) → ~~08~~ (done),
 with 09's Kid-Mode half whenever the owner wants and its Stripe half after 02 ships.
 
 ## What this pass deliberately does NOT re-plan
