@@ -40,6 +40,50 @@ export interface HouseholdMember {
   email?: string;
   fcmTokens?: string[];
   notificationPreferences?: NotificationPreferences;
+  // Plan 06 (notification fan-out cost): denormalized "could this member ever
+  // receive a push" flag, maintained by the pref/token writers so the four
+  // hourly scheduled jobs can query via a collection-group index instead of
+  // scanning every household/member. See computeAnyNotificationsEnabled below.
+  anyNotificationsEnabled?: boolean;
+}
+
+/**
+ * Plan 06 (notification fan-out cost) — pure helper computing the denormalized
+ * `anyNotificationsEnabled` flag maintained on each HouseholdMember doc.
+ *
+ * True iff the member has at least one FCM token AND at least one notification
+ * category that could fire is enabled:
+ *   - habitReminders / actionQueueReminders / streakWarnings / billReminders:
+ *     counted enabled only when `.enabled === true`.
+ *   - weeklyRecap: this pref is fail-open (absent/undefined defaults to ON;
+ *     only an explicit `enabled: false` opts out — see NotificationPreferences
+ *     above). For THIS flag's purpose ("could any push ever be sent to this
+ *     member") we treat weeklyRecap as enabled unless explicitly disabled,
+ *     matching that fail-open spirit. Note the weekly recap job additionally
+ *     gates on premium status server-side — that's a separate check the recap
+ *     job still performs; this flag only answers "is a push category live".
+ *
+ * Kept in perfect parity with the client copy in utils/notificationFlags.ts —
+ * mirror any change there.
+ */
+export function computeAnyNotificationsEnabled(
+  prefs: NotificationPreferences | undefined,
+  fcmTokens: string[] | undefined
+): boolean {
+  if (!fcmTokens || fcmTokens.length === 0) return false;
+  // No prefs object at all (legacy/new member): weeklyRecap's fail-open
+  // default still applies, so a member with tokens remains reachable.
+  if (!prefs) return true;
+
+  const weeklyRecapEnabled = prefs.weeklyRecap?.enabled !== false;
+
+  return (
+    prefs.habitReminders?.enabled === true ||
+    prefs.actionQueueReminders?.enabled === true ||
+    prefs.streakWarnings?.enabled === true ||
+    prefs.billReminders?.enabled === true ||
+    weeklyRecapEnabled
+  );
 }
 
 /**
@@ -101,9 +145,32 @@ export async function sendNotificationToUser(
         logger.info("Removing stale FCM tokens:", tokensToRemove);
         if (memberRef) {
           try {
-            await memberRef.update({
+            // FieldValue.arrayRemove mutates server-side — the resulting array
+            // is never observable to us here. Compute it ourselves from the
+            // in-scope pre-prune `fcmTokens` array so we know whether the
+            // member is left with zero tokens.
+            const remainingTokens = fcmTokens.filter(
+              (t) => !tokensToRemove.includes(t)
+            );
+
+            const update: Record<string, unknown> = {
               fcmTokens: admin.firestore.FieldValue.arrayRemove(...tokensToRemove),
-            });
+            };
+
+            // Only flip the flag OFF when pruning empties the token array.
+            // When tokens remain, leave `anyNotificationsEnabled` untouched:
+            // we don't have this member's notificationPreferences in scope
+            // here (deliberately not adding a Firestore read just to recompute
+            // a flag the pref writers already maintain), so we can only ever
+            // safely narrow the flag to false, never widen it to true.
+            // Getting this wrong (leaving `true` on empty tokens) would mean
+            // a pruned member with no working tokens keeps matching the
+            // collection-group query in every future scheduled run forever.
+            if (remainingTokens.length === 0) {
+              update.anyNotificationsEnabled = false;
+            }
+
+            await memberRef.update(update);
           } catch (cleanupError) {
             // A cleanup failure must never break notification delivery.
             logger.error("Failed to remove stale FCM tokens:", cleanupError);
