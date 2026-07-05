@@ -9,14 +9,12 @@ import {
   deleteDoc,
   deleteField,
   serverTimestamp,
-  type FieldValue,
   writeBatch,
   getDoc,
   getDocs,
   where,
   orderBy,
   increment,
-  runTransaction,
   setDoc,
   arrayUnion,
   arrayRemove,
@@ -30,10 +28,6 @@ import {
   budgetBucketConverter,
   bucketPeriodSnapshotConverter,
   calendarItemConverter,
-  habitConverter,
-  challengeConverter,
-  yearlyGoalConverter,
-  rewardItemConverter,
   householdMemberConverter,
   pendingItemConverter,
   householdApiKeyConverter,
@@ -51,14 +45,11 @@ import {
   Habit,
   Challenge,
   RewardItem,
-  RewardRedemption,
-  RewardRedemptionRecord,
   HouseholdMember,
   Household,
   BucketPeriodSnapshot,
   YearlyGoal,
   FreezeBank,
-  FreezeBankHistoryEntry,
   Meal,
   ShoppingItem,
   MealPlanItem,
@@ -76,14 +67,12 @@ import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { calculateSafeToSpendBreakdownFromExpanded, resolveBucketForCalendarItem } from '@/utils/safeToSpendCalculator';
 import { effectiveAccountImpact, resolveTargetAccount } from '@/utils/accountImpact';
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
-import { processToggleHabit, calculatePointsForDate, calculatePointsForDateRange, computeManagedMemberPointsReset, isHabitStale, streakForHabit, streakEndingOnForHabit, getMultiplier, getHabitResetUpdate } from '@/utils/habitLogic';
+import { processToggleHabit, calculatePointsForDate, calculatePointsForDateRange, computeManagedMemberPointsReset, isHabitStale, getHabitResetUpdate } from '@/utils/habitLogic';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { calculateBucketSpent, getTransactionsForBucket } from '@/utils/bucketSpentCalculator';
 import { migrateBucketsToPeriods, needsMigration, migrateToPaycheckPeriods, needsPaycheckMigration } from '@/utils/migrations/payPeriodMigration';
 import { migrateFreezeBankToEnhanced, needsFreezeBankMigration } from '@/utils/migrations/freezeBankMigration';
 import { migrateOrphanedHabits, needsHabitMigration } from '@/utils/migrations/habitMigration';
-import { calculateChallengeProgress } from '@/utils/challengeCalculator';
-import { canUseFreezeBankToken } from '@/utils/freezeBankValidator';
 import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
 import { usePointsSync, type PointsSyncUpdate } from '@/hooks/usePointsSync';
 import { useHabitActions } from '@/hooks/useHabitActions';
@@ -104,7 +93,6 @@ import { ParsedShoppingList, ParsedTodoList, ParsedExpense } from '@/services/ge
 import { newKidMemberId, buildKidMemberDoc } from '@/utils/kidProfile';
 import { getBillingEnabled } from '@/services/appConfig';
 import { kidProfileLimitReached } from '@/utils/entitlements';
-import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { track } from '@/services/analytics';
 import { shouldTrackFirstTime, FIRST_TRANSACTION_FLAG } from '@/utils/firstTimeFlags';
@@ -114,6 +102,7 @@ import { mergeById, mapTransactionDoc } from '@/contexts/household/selectors';
 import { attachTodoListeners } from '@/contexts/household/listeners/todoListeners';
 import { attachMealListeners } from '@/contexts/household/listeners/mealListeners';
 import { attachShoppingListeners } from '@/contexts/household/listeners/shoppingListeners';
+import { attachGamificationListeners } from '@/contexts/household/listeners/gamificationListeners';
 import {
   makeAddToDo,
   makeTodoCrudMutations,
@@ -135,6 +124,21 @@ import {
   makeStoreSettingsMutations,
   makeDeleteStore,
 } from '@/contexts/household/mutations/shoppingMutations';
+import {
+  makeCreateYearlyGoal,
+  makeYearlyGoalCrudMutations,
+  makeUpdateYearlyGoalProgress,
+  makeUpdateChallenge,
+  makeAddChallenge,
+  makeMarkChallengeComplete,
+  makeRedeemReward,
+  makeAddReward,
+  makeRewardCrudMutations,
+  makeRequestRedemption,
+  makeRedemptionResolutionMutations,
+  makeUseFreezeBankToken,
+  makeRolloverFreezeBankTokens,
+} from '@/contexts/household/mutations/gamificationMutations';
 import type {
   MutationOpts,
   HouseholdContextType,
@@ -693,45 +697,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       })
     );
 
-    // Habits listener
-    const habitsQuery = query(collection(db, `households/${householdId}/habits`).withConverter(habitConverter));
-    unsubscribers.push(
-      onSnapshot(habitsQuery, (snapshot) => {
-        setHabits(snapshot.docs.map(doc => doc.data()));
-      }, (error) => {
-        console.error('[habits] listener failed:', error);
-      })
-    );
-
-    // Challenges listener
-    const challengesQuery = query(collection(db, `households/${householdId}/challenges`).withConverter(challengeConverter));
-    unsubscribers.push(
-      onSnapshot(challengesQuery, (snapshot) => {
-        setChallenges(snapshot.docs.map(doc => doc.data()));
-      }, (error) => {
-        console.error('[challenges] listener failed:', error);
-      })
-    );
-
-    // Yearly Goals listener
-    const yearlyGoalsQuery = query(collection(db, `households/${householdId}/yearlyGoals`).withConverter(yearlyGoalConverter));
-    unsubscribers.push(
-      onSnapshot(yearlyGoalsQuery, (snapshot) => {
-        setYearlyGoals(snapshot.docs.map(doc => doc.data()));
-      }, (error) => {
-        console.error('[yearlyGoals] listener failed:', error);
-      })
-    );
-
-    // Rewards listener
-    const rewardsQuery = query(collection(db, `households/${householdId}/rewards`).withConverter(rewardItemConverter));
-    unsubscribers.push(
-      onSnapshot(rewardsQuery, (snapshot) => {
-        setRewards(snapshot.docs.map(doc => doc.data()));
-      }, (error) => {
-        console.error('[rewards] listener failed:', error);
-      })
-    );
+    // Habits, Challenges, Yearly Goals, Rewards listeners (contexts/household/listeners/gamificationListeners.ts)
+    unsubscribers.push(...attachGamificationListeners({
+      db,
+      householdId,
+      setHabits: (data) => setHabits(data),
+      setChallenges: (data) => setChallenges(data),
+      setYearlyGoals: (data) => setYearlyGoals(data),
+      setRewards: (data) => setRewards(data),
+    }));
 
     // Members listener
     const membersQuery = query(collection(db, `households/${householdId}/members`).withConverter(householdMemberConverter));
@@ -2829,121 +2803,29 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }, [householdId, user, transactions, householdSettings, accounts]);
 
 
-  // --- ACTIONS: YEARLY GOALS ---
+  // --- ACTIONS: YEARLY GOALS, CHALLENGES, REWARDS, FREEZE BANK ---
+  // (contexts/household/mutations/gamificationMutations.ts)
 
   const createYearlyGoal = useCallback(async (goal: Omit<YearlyGoal, 'id'>) => {
-    if (!householdId || !user) return;
-
-    await addDoc(collection(db, `households/${householdId}/yearlyGoals`), {
-      ...goal,
-      createdBy: user.uid,
-      createdAt: serverTimestamp(),
-      status: 'in_progress',
-      successfulMonths: [],
-    });
-
-    toast.success('Yearly goal created!');
+    await makeCreateYearlyGoal({ db, householdId, user }).createYearlyGoal(goal);
   }, [householdId, user]);
 
   const updateYearlyGoal = useCallback(async (goalId: string, updates: Partial<YearlyGoal>) => {
-    if (!householdId) return;
+    await makeYearlyGoalCrudMutations({ db, householdId }).updateYearlyGoal(goalId, updates);
+  }, [householdId]);
 
-    await updateDoc(doc(db, `households/${householdId}/yearlyGoals`, goalId), updates);
-    toast.success('Yearly goal updated');
+  const deleteYearlyGoal = useCallback(async (goalId: string) => {
+    await makeYearlyGoalCrudMutations({ db, householdId }).deleteYearlyGoal(goalId);
   }, [householdId]);
 
   const updateYearlyGoalProgress = useCallback(async (goalId: string, month: string, success: boolean) => {
-    if (!householdId) return;
-
-    const goal = yearlyGoals.find(g => g.id === goalId);
-    if (!goal) return;
-
-    let updatedMonths = [...goal.successfulMonths];
-
-    if (success && !updatedMonths.includes(month)) {
-      updatedMonths.push(month);
-    } else if (!success && updatedMonths.includes(month)) {
-      updatedMonths = updatedMonths.filter(m => m !== month);
-    }
-
-    // Check if yearly goal is achieved
-    const isAchieved = updatedMonths.length >= goal.requiredMonths;
-
-    // achievedAt is a string on read, but we write a server timestamp; type the
-    // write object to accept a FieldValue for that field instead of casting.
-    const updates: Partial<Omit<YearlyGoal, 'achievedAt'>> & { achievedAt?: string | FieldValue } = {
-      successfulMonths: updatedMonths,
-    };
-
-    if (isAchieved && goal.status !== 'achieved') {
-      updates.status = 'achieved';
-      updates.achievedAt = serverTimestamp();
-    }
-
-    await updateDoc(doc(db, `households/${householdId}/yearlyGoals`, goalId), updates);
-
-    if (isAchieved) {
-      toast.success(`🎉 Yearly goal achieved: ${goal.title}!`, { duration: 5000 });
-    }
+    await makeUpdateYearlyGoalProgress({ db, householdId, yearlyGoals }).updateYearlyGoalProgress(goalId, month, success);
   }, [householdId, yearlyGoals]);
 
-  const deleteYearlyGoal = useCallback(async (goalId: string) => {
-    if (!householdId) return;
-
-    await deleteDoc(doc(db, `households/${householdId}/yearlyGoals`, goalId));
-    toast.success('Yearly goal deleted');
-  }, [householdId]);
-
-  // --- ACTIONS: CHALLENGES & REWARDS ---
-
   const updateChallenge = useCallback(async (challenge: Challenge) => {
-    if (!householdId) return;
-
-    // Calculate currentValue from linked habits
-    const linkedHabits = habits.filter(h => challenge.relatedHabitIds.includes(h.id));
-
-    const { currentValue } = calculateChallengeProgress(challenge, linkedHabits);
-
-    // Build update object, filtering out undefined values (Firestore rejects undefined)
-    const updatedChallenge = Object.fromEntries(
-      Object.entries({
-        ...challenge,
-        currentValue,
-        // Support both old and new schema fields
-        targetValue: challenge.targetValue ?? challenge.targetTotalCount,
-        targetType: challenge.targetType ?? 'count',
-      }).filter(([, value]) => value !== undefined)
-    );
-
-    if (activeChallenge?.id) {
-      await updateDoc(doc(db, `households/${householdId}/challenges`, activeChallenge.id), updatedChallenge);
-    } else {
-      // Remove placeholder ID if it exists
-      const { id: _id, ...newChallengeData } = updatedChallenge;
-
-      await addDoc(collection(db, `households/${householdId}/challenges`), {
-        ...newChallengeData,
-        createdBy: user?.uid,
-        createdAt: serverTimestamp(),
-      });
-    }
-    toast.success('Challenge Updated');
+    await makeUpdateChallenge({ db, householdId, habits, activeChallenge, user }).updateChallenge(challenge);
   }, [householdId, habits, activeChallenge, user]);
 
-  // Plan 080e — create a NEW family challenge. Unlike the legacy inline-create
-  // path inside `updateChallenge`, this is DECOUPLED from yearly goals: it never
-  // sets `yearlyGoalId`. It is the write behind the dormant "New family
-  // challenge" form (gated on kidModeEnabled at the call site), so this method is
-  // inert for every non-kid-mode surface — nothing calls it while Kid Mode is off.
-  //
-  // Firestore-rules note (no rules change per Plan 080e): the existing
-  // /challenges create rule requires a non-empty `yearlyRewardLabel`
-  // (isValidString) and its `hasOnly` allowlist does NOT include
-  // `isFamilyChallenge`. So we (a) write a sensible default label to stay
-  // rules-valid, and (b) deliberately do NOT persist `isFamilyChallenge` — the
-  // kid surfaces key off the *active* challenge, not that flag, so persistence
-  // isn't needed. createdAt is an ISO string (the rule expects a string, not a
-  // serverTimestamp sentinel).
   const addChallenge = useCallback(async (input: {
     title: string;
     description?: string;
@@ -2951,523 +2833,47 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     targetValue?: number;
     month?: string;
   }): Promise<void> => {
-    if (!householdId) return;
-    const title = input.title.trim();
-    if (!title) return;
-
-    try {
-      // Build with Object.fromEntries so an absent description/targetValue is
-      // omitted entirely (Firestore rejects `undefined`).
-      const data = Object.fromEntries(
-        Object.entries({
-          month: input.month ?? format(new Date(), 'yyyy-MM'),
-          title,
-          description: input.description?.trim() || undefined,
-          relatedHabitIds: input.relatedHabitIds,
-          targetType: 'count' as const,
-          // Defensive: only persist a positive target; 0/negative are dropped
-          // (omitted via the undefined filter below) rather than written.
-          targetValue: input.targetValue != null && input.targetValue > 0 ? input.targetValue : undefined,
-          status: 'active' as const,
-          // Default reward label — keeps the write within the existing /challenges
-          // create rule (which requires a non-empty yearlyRewardLabel). The family
-          // challenge has no yearly-goal coupling; this is just a display label.
-          yearlyRewardLabel: 'Family goal',
-          createdBy: user?.uid,
-          createdAt: new Date().toISOString(),
-        }).filter(([, value]) => value !== undefined)
-      );
-
-      await addDoc(collection(db, `households/${householdId}/challenges`), data);
-      toast.success('Family challenge created');
-    } catch (error) {
-      console.error('[addChallenge] Failed:', error);
-      toast.error('Failed to create challenge');
-      throw error;
-    }
+    await makeAddChallenge({ db, householdId, user }).addChallenge(input);
   }, [householdId, user]);
 
   const markChallengeComplete = useCallback(async (challengeId: string, success: boolean) => {
-    if (!householdId) return;
-
-    const challenge = challenges.find(c => c.id === challengeId);
-    if (!challenge) return;
-
-    // Update challenge status
-    await updateDoc(doc(db, `households/${householdId}/challenges`, challengeId), {
-      status: success ? 'success' : 'failed',
-      completedAt: serverTimestamp(),
-    });
-
-    // If successful and linked to yearly goal, update yearly goal progress
-    if (success && challenge.yearlyGoalId) {
-      const monthKey = challenge.month; // Already in YYYY-MM format
-      await updateYearlyGoalProgress(challenge.yearlyGoalId, monthKey, true);
-    }
-
-    toast.success(success ? '🎉 Challenge completed!' : 'Challenge marked failed');
+    await makeMarkChallengeComplete({ db, householdId, challenges, updateYearlyGoalProgress }).markChallengeComplete(challengeId, success);
   }, [householdId, challenges, updateYearlyGoalProgress]);
 
   const redeemReward = useCallback(async (rewardId: string) => {
-    if (!householdId) return;
-
-    const reward = rewards.find(r => r.id === rewardId);
-    if (!reward) return;
-
-    // Use transaction to atomically check points, deduct them, AND append the
-    // redemption-history record in one write — so the shared point total and the
-    // "Recently redeemed" log can never diverge (and concurrent redemptions can't
-    // race past the affordability check). History is a bounded, most-recent-first
-    // array on the household doc (rules-free, like pendingRedemptions); we read the
-    // current array inside the txn and prepend + slice to the cap.
-    try {
-      await runTransaction(db, async (transaction) => {
-        const householdRef = doc(db, `households/${householdId}`);
-        const householdDoc = await transaction.get(householdRef);
-
-        if (!householdDoc.exists()) {
-          throw new Error('Household not found');
-        }
-
-        const data = householdDoc.data();
-        const currentTotalPoints = data.points?.total || 0;
-
-        if (currentTotalPoints < reward.cost) {
-          throw new Error('Not enough points');
-        }
-
-        const record: RewardRedemptionRecord = {
-          id: crypto.randomUUID(),
-          rewardId: reward.id,
-          rewardTitle: reward.title,
-          icon: reward.icon,
-          cost: reward.cost,
-          // userRef (not the `user` closure) so the callback isn't recreated when
-          // Firebase refreshes the auth token hourly.
-          redeemedByUid: userRef.current?.uid ?? '',
-          redeemedAt: new Date().toISOString(),
-        };
-        // Defensive: guard against a corrupted/legacy non-array redemptionHistory
-        // so the spread below can't throw.
-        const existingHistory = Array.isArray(data.redemptionHistory)
-          ? (data.redemptionHistory as RewardRedemptionRecord[])
-          : [];
-        const nextHistory = [record, ...existingHistory].slice(0, REDEMPTION_HISTORY_LIMIT);
-
-        // Atomically deduct points and log the redemption.
-        transaction.update(householdRef, {
-          'points.total': increment(-reward.cost),
-          redemptionHistory: nextHistory,
-        });
-      });
-
-      track('reward_redeemed', { via: 'self' });
-      toast.success(`Redeemed: ${reward.title}`);
-    } catch (error) {
-      if (error instanceof Error && error.message === 'Not enough points') {
-        toast.error('Not enough points');
-      } else {
-        console.error('[redeemReward] Transaction failed:', error);
-        toast.error('Failed to redeem reward');
-      }
-    }
+    await makeRedeemReward({ db, householdId, rewards, userRef }).redeemReward(rewardId);
   }, [householdId, rewards]);
 
-  // --- ACTIONS: REWARD CRUD (Plan 080d) ---
-  // Writes to the households/{hid}/rewards subcollection (the live store). The
-  // deprecated Household.rewardsInventory array is NOT touched. createdBy is set
-  // from the authenticated user so it satisfies the rules' ownership check.
-
   const addReward = useCallback(async (input: Omit<RewardItem, 'id' | 'createdBy'>) => {
-    if (!householdId || !user) return;
-
-    try {
-      await addDoc(collection(db, `households/${householdId}/rewards`), {
-        ...input,
-        createdBy: user.uid,
-      });
-      toast.success('Reward added');
-    } catch (error) {
-      console.error('[addReward] Failed:', error);
-      toast.error('Failed to add reward');
-      throw error;
-    }
+    await makeAddReward({ db, householdId, user }).addReward(input);
   }, [householdId, user]);
 
   const updateReward = useCallback(async (reward: RewardItem) => {
-    if (!householdId) return;
-
-    // Build the FULL desired state so a type/target switch can't leave orphaned
-    // data behind. Strip the synthetic id and the immutable createdBy (the rules
-    // block createdBy changes, and id is not a Firestore field). Optional kid
-    // fields that no longer apply are removed with deleteField() rather than left
-    // stale — e.g. switching 'allowance' → 'realWorld' drops allowanceCents, and
-    // clearing the target kid drops targetMemberId. Deleting optional keys still
-    // satisfies the rule's hasOnly()/isValidReward() (title/cost/icon stay present).
-    const updates = {
-      title: reward.title,
-      cost: reward.cost,
-      icon: reward.icon,
-      type: reward.type,
-      active: reward.active,
-      allowanceCents: reward.type === 'allowance' ? reward.allowanceCents : deleteField(),
-      targetMemberId: reward.targetMemberId ? reward.targetMemberId : deleteField(),
-    };
-
-    try {
-      await updateDoc(doc(db, `households/${householdId}/rewards`, reward.id), updates);
-      toast.success('Reward updated');
-    } catch (error) {
-      console.error('[updateReward] Failed:', error);
-      toast.error('Failed to update reward');
-      throw error;
-    }
+    await makeRewardCrudMutations({ db, householdId }).updateReward(reward);
   }, [householdId]);
 
   const deleteReward = useCallback(async (id: string) => {
-    if (!householdId) return;
-
-    try {
-      await deleteDoc(doc(db, `households/${householdId}/rewards`, id));
-      toast.success('Reward deleted');
-    } catch (error) {
-      console.error('[deleteReward] Failed:', error);
-      toast.error('Failed to delete reward');
-      throw error;
-    }
+    await makeRewardCrudMutations({ db, householdId }).deleteReward(id);
   }, [householdId]);
 
-  // --- ACTIONS: REWARD REDEMPTION (Plan 080d-2) ---
-  // A kid requests a reward → a parent approves (deduct points + credit allowance
-  // IOU) or denies. Pending requests live in the household doc's bounded
-  // `pendingRedemptions` array (removed on resolve). The kid never has a
-  // credential — every write here runs in the acting-as parent's session
-  // (Principle 2), so member/household rules pass. The household-doc update rule
-  // is field-permissive, so this needs no firestore.rules change.
-
   const requestRedemption = useCallback(async (rewardId: string, memberId: string) => {
-    if (!householdId || !user) return;
-
-    const reward = rewards.find(r => r.id === rewardId);
-    if (!reward) {
-      toast.error('That reward is no longer available');
-      return;
-    }
-
-    // Capture a SNAPSHOT of the reward's redemption-relevant fields so a later
-    // edit/delete of the reward can't change what was requested. allowanceCents
-    // is only carried for allowance rewards (omit the key otherwise — Firestore
-    // rejects undefined). type defaults to 'realWorld' when absent on a legacy reward.
-    const redemption: RewardRedemption = {
-      id: crypto.randomUUID(),
-      rewardId: reward.id,
-      rewardTitle: reward.title,
-      memberId,
-      cost: reward.cost,
-      type: reward.type ?? 'realWorld',
-      ...(reward.type === 'allowance' && reward.allowanceCents !== undefined
-        ? { allowanceCents: reward.allowanceCents }
-        : {}),
-      status: 'pending',
-      requestedAt: new Date().toISOString(),
-      requestedByUid: user.uid,
-    };
-
-    try {
-      // Append to the household doc's pendingRedemptions inside a transaction so a
-      // fast double-tap / two tabs can't create TWO pending entries for the same
-      // (memberId, rewardId) — which would let a parent approve both and
-      // double-deduct points / double-credit allowance. We read the current queue
-      // and skip the write when a matching pending entry already exists, rather
-      // than arrayUnion-ing a fresh unique-id entry blindly.
-      let alreadyPending = false;
-      await runTransaction(db, async (transaction) => {
-        const householdRef = doc(db, `households/${householdId}`);
-        const householdDoc = await transaction.get(householdRef);
-        if (!householdDoc.exists()) throw new Error('Household not found');
-
-        const pending = (householdDoc.data().pendingRedemptions as RewardRedemption[] | undefined) ?? [];
-        if (pending.some(p => p.memberId === memberId && p.rewardId === rewardId)) {
-          // A request for this reward by this member is already queued — no-op.
-          alreadyPending = true;
-          return;
-        }
-        transaction.update(householdRef, { pendingRedemptions: [...pending, redemption] });
-      });
-
-      if (alreadyPending) {
-        toast.success('Already requested!');
-      } else {
-        toast.success(`Sent! A grown-up will review "${reward.title}" 🎁`);
-      }
-    } catch (error) {
-      console.error('[requestRedemption] Failed:', error);
-      toast.error('Could not send your request. Try again.');
-      throw error;
-    }
+    await makeRequestRedemption({ db, householdId, user, rewards }).requestRedemption(rewardId, memberId);
   }, [householdId, user, rewards]);
 
   const approveRedemption = useCallback(async (redemptionId: string) => {
-    if (!householdId) return;
-
-    try {
-      // `notEnough` short-circuits approval when the kid can no longer afford the
-      // reward (their points.total fell below the cost between request and
-      // approval). We leave the request pending so the parent can retry later, and
-      // surface a distinct toast after the transaction resolves.
-      let notEnough = false;
-      await runTransaction(db, async (transaction) => {
-        const householdRef = doc(db, `households/${householdId}`);
-        // ALL reads first (Firestore requires reads before writes): household doc,
-        // then — once we know the target member — the kid's member doc.
-        const householdDoc = await transaction.get(householdRef);
-        if (!householdDoc.exists()) throw new Error('Household not found');
-
-        const pending = (householdDoc.data().pendingRedemptions as RewardRedemption[] | undefined) ?? [];
-        const redemption = pending.find(r => r.id === redemptionId);
-        // IDEMPOTENT: already resolved (removed by a prior approve/deny) → no-op,
-        // so a double-tap can't deduct points twice.
-        if (!redemption) return;
-
-        const memberRef = doc(db, `households/${householdId}/members`, redemption.memberId);
-        const memberDoc = await transaction.get(memberRef);
-        const currentTotal = (memberDoc.data() as HouseholdMember | undefined)?.points?.total ?? 0;
-
-        // AFFORDABILITY: never let approval drive the kid's points negative. If they
-        // can't afford it now, reject (leave pending) — kids' rewards carry no debt.
-        if (currentTotal < redemption.cost) {
-          notEnough = true;
-          return;
-        }
-
-        const delta = redemptionMemberDelta(redemption);
-        // DEFENSE-IN-DEPTH: strip ALL entries for this (memberId, rewardId), not
-        // just the matched id, so a stray duplicate that slipped past the request
-        // dedup can never be approved a second time. The member is still credited
-        // exactly ONCE (one delta below).
-        const remaining = pending.filter(
-          r => !(r.memberId === redemption.memberId && r.rewardId === redemption.rewardId)
-        );
-
-        // Remove the request(s) from the queue AND apply the member delta in ONE
-        // transaction, so the kid's points/allowance can never diverge from the
-        // resolved queue.
-        transaction.update(householdRef, { pendingRedemptions: remaining });
-        transaction.update(memberRef, {
-          'points.total': increment(delta.pointsDelta),
-          ...(delta.allowanceDelta ? { allowanceCents: increment(delta.allowanceDelta) } : {}),
-        });
-      });
-
-      if (notEnough) {
-        toast.error('Not enough points');
-      } else {
-        track('reward_redeemed', { via: 'parent_approval' });
-        toast.success('Approved! 🎉');
-      }
-    } catch (error) {
-      console.error('[approveRedemption] Failed:', error);
-      toast.error('Could not approve the request. Try again.');
-      throw error;
-    }
+    await makeRedemptionResolutionMutations({ db, householdId }).approveRedemption(redemptionId);
   }, [householdId]);
 
   const denyRedemption = useCallback(async (redemptionId: string) => {
-    if (!householdId) return;
-
-    try {
-      await runTransaction(db, async (transaction) => {
-        const householdRef = doc(db, `households/${householdId}`);
-        const householdDoc = await transaction.get(householdRef);
-        if (!householdDoc.exists()) throw new Error('Household not found');
-
-        const pending = (householdDoc.data().pendingRedemptions as RewardRedemption[] | undefined) ?? [];
-        const redemption = pending.find(r => r.id === redemptionId);
-        // IDEMPOTENT: already resolved → no-op. Deny touches no points/allowance.
-        if (!redemption) return;
-
-        transaction.update(householdRef, {
-          pendingRedemptions: pending.filter(r => r.id !== redemptionId),
-        });
-      });
-      toast.success('Request dismissed');
-    } catch (error) {
-      console.error('[denyRedemption] Failed:', error);
-      toast.error('Could not dismiss the request. Try again.');
-      throw error;
-    }
+    await makeRedemptionResolutionMutations({ db, householdId }).denyRedemption(redemptionId);
   }, [householdId]);
 
-  // --- ACTIONS: FREEZE BANK ---
-
   const useFreezeBankToken = useCallback(async (habitId: string, targetDate: string) => {
-    if (!householdId || !freezeBank || freezeBank.tokens <= 0) {
-      toast.error('No freeze tokens available');
-      return;
-    }
-
-    const habit = habits.find(h => h.id === habitId);
-    if (!habit) return;
-
-    // Validate token usage
-    const validation = canUseFreezeBankToken(habit, targetDate, freezeBank.tokens);
-    if (!validation.allowed) {
-      toast.error(validation.reason || 'Cannot use freeze token');
-      return;
-    }
-
-    // A weekly habit earns its points at most once per ISO week, so a week that
-    // already contains a completion was never "missed": patching another day in
-    // it would burn a token on an intact streak and double-credit the week.
-    // canUseFreezeBankToken is day-based and cannot see this, so guard here.
-    if (
-      habit.period === 'weekly' &&
-      habit.completedDates.some(d => isSameWeek(parseISO(d), parseISO(targetDate), { weekStartsOn: 1 }))
-    ) {
-      toast.error(`${habit.title} was already completed during that week — no token needed.`);
-      return;
-    }
-
-    // Add the date to completedDates if not already present
-    const updatedCompletedDates = [...habit.completedDates];
-    if (!updatedCompletedDates.includes(targetDate)) {
-      updatedCompletedDates.push(targetDate);
-      updatedCompletedDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-    }
-
-    // Recalculate streak with patched date (period-aware: weekly habits count weeks)
-    const newStreak = streakForHabit({ period: habit.period, completedDates: updatedCompletedDates });
-
-    // Compute the points the patched day itself earns, using the per-date model
-    // (utils/habitLogic): the multiplier is driven by the streak that ends on the
-    // patched day within the now-patched completion history, mirroring how
-    // calculatePointsForDateRange scores a past completed day (one completion,
-    // period-aware multiplier). Freeze tokens only apply to positive habits on a
-    // PAST day, so this never touches points.daily (today) — it credits
-    // points.total always and points.weekly when the patched day is in the
-    // current week. Without this the patched day's points were silently dropped.
-    const patchedDayStreak = streakEndingOnForHabit(
-      { period: habit.period, completedDates: updatedCompletedDates },
-      targetDate
-    );
-    const patchedMultiplier = getMultiplier(patchedDayStreak, true, habit.period);
-    const patchedDayPoints = Math.floor(habit.basePoints * patchedMultiplier);
-
-    // Create history entry
-    const historyEntry: FreezeBankHistoryEntry = {
-      id: crypto.randomUUID(),
-      type: 'used',
-      amount: -1,
-      date: getLocalDateString(),
-      habitId,
-      habitDate: targetDate,
-      notes: `Used token to patch ${habit.title} on ${targetDate}`,
-      createdAt: new Date().toISOString(),
-    };
-
-    // Update freezeBank balance and history
-    const updatedFreezeBank: FreezeBank = {
-      ...freezeBank,
-      tokens: freezeBank.tokens - 1,
-      history: [...freezeBank.history, historyEntry],
-    };
-
-    // Patch the habit and decrement the token in a SINGLE batch so a date can
-    // never be patched into the habit without a token being consumed (or vice
-    // versa) if one of the two writes were to fail.
-    const batch = writeBatch(db);
-    batch.update(doc(db, `households/${householdId}/habits`, habitId), {
-      completedDates: updatedCompletedDates,
-      streakDays: newStreak,
-    });
-
-    // Credit the patched day's points in the SAME batch as the token spend +
-    // habit patch, so points can never diverge from the patched completion.
-    const householdUpdates: Record<string, FieldValue | FreezeBank> = {
-      freezeBank: updatedFreezeBank,
-    };
-    const pointsUpdates: Record<string, FieldValue> = {};
-    if (patchedDayPoints !== 0) {
-      const todayStr = getLocalDateString();
-      const weekStartStr = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-      // Lifetime total always gets the patched day's points.
-      pointsUpdates['points.total'] = increment(patchedDayPoints);
-      // Weekly only when the patched (past) day falls within the current week.
-      // Daily is never touched: the validator guarantees targetDate is in the past.
-      if (targetDate >= weekStartStr && targetDate <= todayStr) {
-        pointsUpdates['points.weekly'] = increment(patchedDayPoints);
-      }
-    }
-    // Points route to the same target as every other points-writing path (see
-    // habitPointsTargetRef in hooks/useHabitActions.tsx): an assigned (kid)
-    // habit credits members/{assignedTo}.points, an unassigned habit credits
-    // the shared household pool. The corrective recompute EXCLUDES assigned
-    // habits from the household pool, so crediting it here would leave the
-    // household total permanently inflated while the assignee never gets paid.
-    // The freezeBank spend always stays on the household doc, in the same batch.
-    if (habit.assignedTo && Object.keys(pointsUpdates).length > 0) {
-      batch.update(doc(db, `households/${householdId}/members`, habit.assignedTo), pointsUpdates);
-    } else {
-      Object.assign(householdUpdates, pointsUpdates);
-    }
-    batch.update(doc(db, `households/${householdId}`), householdUpdates);
-    await batch.commit();
-
-    toast.success(`❄️ Freeze token used! ${habit.title} patched for ${targetDate}`);
+    await makeUseFreezeBankToken({ db, householdId, freezeBank, habits }).useFreezeBankToken(habitId, targetDate);
   }, [householdId, freezeBank, habits]);
 
   const rolloverFreezeBankTokens = useCallback(async () => {
-    if (!householdId || !freezeBank) return;
-
-    const now = new Date();
-    const currentMonth = format(now, 'yyyy-MM');
-
-    // Only rollover if we're in a new month
-    if (freezeBank.lastRolloverMonth === currentMonth) return;
-
-    // Calculate new balance: min(current, 1) + 2, max 3
-    const rolloverAmount = Math.min(freezeBank.tokens, 1);
-    const newBalance = Math.min(rolloverAmount + 2, 3);
-    const tokensAdded = newBalance - freezeBank.tokens;
-
-    // Bank already full this month: no tokens to add. Still record the month
-    // guard (so we don't re-check every call) but skip the history entry and the
-    // misleading "0 tokens added!" toast.
-    if (tokensAdded === 0) {
-      await updateDoc(doc(db, `households/${householdId}`), {
-        freezeBank: {
-          ...freezeBank,
-          lastRolloverDate: format(now, 'yyyy-MM-dd'),
-          lastRolloverMonth: currentMonth,
-        },
-      });
-      return;
-    }
-
-    // Create history entry
-    const historyEntry: FreezeBankHistoryEntry = {
-      id: crypto.randomUUID(),
-      type: 'rollover',
-      amount: tokensAdded,
-      date: format(now, 'yyyy-MM-dd'),
-      notes: `Monthly rollover: ${rolloverAmount} carried + 2 new = ${newBalance} total`,
-      createdAt: new Date().toISOString(),
-    };
-
-    // Update freezeBank
-    const updatedFreezeBank: FreezeBank = {
-      ...freezeBank,
-      tokens: newBalance,
-      lastRolloverDate: format(now, 'yyyy-MM-dd'),
-      lastRolloverMonth: currentMonth,
-      history: [...freezeBank.history, historyEntry],
-    };
-
-    await updateDoc(doc(db, `households/${householdId}`), {
-      freezeBank: updatedFreezeBank,
-    });
-
-    toast.success(`❄️ Freeze Bank rollover: ${tokensAdded} tokens added!`);
+    await makeRolloverFreezeBankTokens({ db, householdId, freezeBank }).rolloverFreezeBankTokens();
   }, [householdId, freezeBank]);
 
   // --- ACTIONS: MEMBER MANAGEMENT ---
