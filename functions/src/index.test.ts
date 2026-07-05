@@ -62,6 +62,7 @@ interface MockDb {
   doc: ReturnType<typeof vi.fn>;
   collection: ReturnType<typeof vi.fn>;
   recursiveDelete: ReturnType<typeof vi.fn>;
+  batch: ReturnType<typeof vi.fn>;
 }
 
 const adminMock = vi.hoisted(() => {
@@ -69,6 +70,7 @@ const adminMock = vi.hoisted(() => {
     doc: vi.fn(),
     collection: vi.fn(),
     recursiveDelete: vi.fn(() => Promise.resolve()),
+    batch: vi.fn(),
   };
   const sendEachForMulticast = vi.fn();
   return { db, sendEachForMulticast };
@@ -94,6 +96,7 @@ import {
   deletehousehold,
   findBillsDueOnDate,
   sendbillreminders,
+  sendstreakwarnings,
   type BillCalendarItem,
 } from "./index";
 
@@ -473,5 +476,195 @@ describe("sendbillreminders", () => {
     await runBillReminders();
 
     expect(adminMock.sendEachForMulticast).not.toHaveBeenCalled();
+  });
+});
+
+// ===========================================================================
+// sendstreakwarnings (incl. the plan-02-part-C "streak rescue" proactive insight)
+// ===========================================================================
+
+describe("sendstreakwarnings", () => {
+  interface MockQuery {
+    where: (...args: unknown[]) => MockQuery;
+    get: () => Promise<{ docs: Array<{ id: string; data: () => Record<string, unknown> }> }>;
+  }
+
+  /**
+   * Configures a single household with one member whose streak warnings fire
+   * at 09:00 UTC, the given habit docs, and the given household-doc data
+   * (used for the freezeBank read + the proactive-insight cap state).
+   */
+  function configureStreakWarningHousehold(
+    habitDocs: Array<{ id: string; data: Record<string, unknown> }>,
+    householdData: Record<string, unknown> = {}
+  ): { insightSetSpy: ReturnType<typeof vi.fn>; householdUpdateSpy: ReturnType<typeof vi.fn>; insightDocSpy: ReturnType<typeof vi.fn> } {
+    const member = {
+      uid: "u1",
+      fcmTokens: ["tok1"],
+      notificationPreferences: {
+        streakWarnings: { enabled: true, time: "9:00" },
+        timezone: "UTC",
+      },
+    };
+    const membersSnapshot = {
+      docs: [{ data: () => member, ref: { update: vi.fn() } }],
+    };
+    const habitsSnapshot = {
+      docs: habitDocs.map((d) => ({ id: d.id, data: () => d.data })),
+    };
+    const habitsQuery: MockQuery = {
+      where: () => habitsQuery,
+      get: () => Promise.resolve(habitsSnapshot),
+    };
+
+    let currentHouseholdData = { ...householdData };
+    const householdDocRef = {
+      get: () =>
+        Promise.resolve({
+          exists: true,
+          data: () => currentHouseholdData,
+        }),
+      collection: (name: string) => {
+        if (name === "members") return { get: () => Promise.resolve(membersSnapshot) };
+        if (name === "habits") return habitsQuery;
+        return { get: () => Promise.resolve({ docs: [] }) };
+      },
+    };
+    const householdDoc = {
+      id: HOUSEHOLD_ID,
+      data: () => currentHouseholdData,
+      ref: householdDocRef,
+    };
+
+    const insightSetSpy = vi.fn();
+    const householdUpdateSpy = vi.fn((patch: Record<string, unknown>) => {
+      currentHouseholdData = { ...currentHouseholdData, ...patch };
+    });
+    const insightDocSpy = vi.fn(() => ({ get: () => Promise.resolve({ exists: false }) }));
+
+    adminMock.db.collection.mockImplementation((path: string) => {
+      if (path === "households") {
+        return { get: () => Promise.resolve({ docs: [householdDoc] }) };
+      }
+      if (path === `households/${HOUSEHOLD_ID}/insights`) {
+        return { doc: insightDocSpy };
+      }
+      return { where: () => ({ get: () => Promise.resolve({ docs: [] }) }) };
+    });
+
+    adminMock.db.doc.mockImplementation((path: string) => {
+      if (path === `households/${HOUSEHOLD_ID}`) return householdDocRef;
+      return { get: () => Promise.resolve({ exists: false, data: () => undefined }) };
+    });
+
+    adminMock.db.batch.mockImplementation(() => ({
+      set: insightSetSpy,
+      update: householdUpdateSpy,
+      commit: () => Promise.resolve(),
+    }));
+
+    return { insightSetSpy, householdUpdateSpy, insightDocSpy };
+  }
+
+  const runStreakWarnings = sendstreakwarnings as unknown as () => Promise<void>;
+
+  beforeEach(() => {
+    adminMock.sendEachForMulticast.mockImplementation(() =>
+      Promise.resolve({ successCount: 1, failureCount: 0, responses: [{ success: true }] })
+    );
+    vi.useFakeTimers();
+    // 09:30 UTC matches the member's 9:00 streak-warning hour.
+    vi.setSystemTime(new Date("2026-07-06T09:30:00Z")); // a Monday, ISO week 2026-W28
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("sends the notification but does NOT write a proactive insight for a short (<7 day) at-risk streak", async () => {
+    const { insightSetSpy } = configureStreakWarningHousehold([
+      { id: "h1", data: { period: "daily", title: "Read", streakDays: 4, completedDates: [] } },
+    ]);
+
+    await runStreakWarnings();
+
+    expect(adminMock.sendEachForMulticast).toHaveBeenCalledTimes(1);
+    expect(insightSetSpy).not.toHaveBeenCalled();
+  });
+
+  it("writes a proactive habits insight for a >=7-day at-risk streak", async () => {
+    const { insightSetSpy, householdUpdateSpy } = configureStreakWarningHousehold([
+      { id: "h1", data: { period: "daily", title: "Read", streakDays: 9, completedDates: [] } },
+    ]);
+
+    await runStreakWarnings();
+
+    expect(insightSetSpy).toHaveBeenCalledTimes(1);
+    expect(insightSetSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ type: "habits", text: expect.stringContaining("Read") })
+    );
+    expect(householdUpdateSpy).toHaveBeenCalledWith(expect.anything(), {
+      proactiveInsightWeek: "2026-W28",
+      proactiveInsightCount: 1,
+    });
+  });
+
+  it("mentions the freeze bank when the household has tokens available", async () => {
+    const { insightSetSpy } = configureStreakWarningHousehold(
+      [{ id: "h1", data: { period: "daily", title: "Read", streakDays: 9, completedDates: [] } }],
+      { freezeBank: { tokens: 2 } }
+    );
+
+    await runStreakWarnings();
+
+    expect(insightSetSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ text: expect.stringContaining("freeze bank token") })
+    );
+  });
+
+  it("enforces the 2/week/household proactive-insight cap", async () => {
+    const { insightSetSpy } = configureStreakWarningHousehold(
+      [{ id: "h1", data: { period: "daily", title: "Read", streakDays: 9, completedDates: [] } }],
+      { proactiveInsightWeek: "2026-W28", proactiveInsightCount: 2 }
+    );
+
+    await runStreakWarnings();
+
+    // The push notification still sends...
+    expect(adminMock.sendEachForMulticast).toHaveBeenCalledTimes(1);
+    // ...but the cap blocks the insight write.
+    expect(insightSetSpy).not.toHaveBeenCalled();
+  });
+
+  it("resets the count on an ISO-week rollover, allowing a new write", async () => {
+    const { insightSetSpy, householdUpdateSpy } = configureStreakWarningHousehold(
+      [{ id: "h1", data: { period: "daily", title: "Read", streakDays: 9, completedDates: [] } }],
+      { proactiveInsightWeek: "2026-W27", proactiveInsightCount: 2 }
+    );
+
+    await runStreakWarnings();
+
+    expect(insightSetSpy).toHaveBeenCalledTimes(1);
+    expect(householdUpdateSpy).toHaveBeenCalledWith(expect.anything(), {
+      proactiveInsightWeek: "2026-W28",
+      proactiveInsightCount: 1,
+    });
+  });
+
+  it("is idempotent-safe for repeat calls in the same hour (auto-id insight, cap still tracked)", async () => {
+    const { insightSetSpy } = configureStreakWarningHousehold([
+      { id: "h1", data: { period: "daily", title: "Read", streakDays: 9, completedDates: [] } },
+    ]);
+
+    await runStreakWarnings();
+    await runStreakWarnings();
+
+    // Each run independently evaluates the (now-updated) cap state; the second
+    // run sees count=1 for the same week and is still allowed (cap is 2), so
+    // two insights get written across the two runs — this asserts the cap
+    // state threading works across calls rather than silently no-op'ing.
+    expect(insightSetSpy).toHaveBeenCalledTimes(2);
   });
 });

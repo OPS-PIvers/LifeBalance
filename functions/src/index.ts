@@ -11,6 +11,7 @@ import {
   sendNotificationToUser,
   type HouseholdMember,
 } from "./shared/notifications";
+import { writeProactiveInsight, type ProactiveCapHouseholdDoc } from "./insights/writeProactiveInsight";
 
 // Re-export for consumers that imported this from index.ts before the
 // extraction to shared/notifications.ts.
@@ -248,6 +249,57 @@ export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
             },
             memberDoc.ref
           );
+
+          // Proactive insight (plan 02 part C): "streak rescue". Piggybacks on
+          // this same job — no new cron. For any habit with a long (>=7 day)
+          // streak at risk, surface a suggestion in the Insight feed (the same
+          // `households/{id}/insights` collection the manual "refresh insight"
+          // button writes to, so the existing dashboard UI renders it for
+          // free). Subject to the shared 2/week/household proactive-insight cap.
+          const longStreakAtRisk = habitsAtRisk.find(
+            (doc) => (doc.data().streakDays ?? 0) >= 7
+          );
+          if (longStreakAtRisk) {
+            const habit = longStreakAtRisk.data();
+            const streakDays = habit.streakDays ?? 0;
+
+            // Best-effort read of the household doc, both for the freeze bank
+            // (to mention token availability) and for the proactive-insight
+            // cap state. Never blocks the notification above on failure.
+            let household: ProactiveCapHouseholdDoc = {};
+            let hasFreezeToken = false;
+            try {
+              const householdSnap = await householdDoc.ref.get();
+              const data = householdSnap.data();
+              household = (data ?? {}) as ProactiveCapHouseholdDoc;
+              const freezeBank = data?.freezeBank;
+              const tokens = freezeBank?.tokens ?? freezeBank?.current;
+              hasFreezeToken = typeof tokens === "number" && tokens > 0;
+            } catch (error) {
+              logger.warn(
+                `sendstreakwarnings: failed to read household ${householdDoc.id} for proactive insight, skipping`,
+                error
+              );
+            }
+
+            const suggestion = hasFreezeToken
+              ? ` If you can't get to it today, use a freeze bank token to protect it.`
+              : "";
+            const insightText = `"${habit.title ?? "A habit"}" has a ${streakDays}-day streak that's about to break today.${suggestion}`;
+
+            await writeProactiveInsight(
+              db,
+              householdDoc.id,
+              household,
+              {
+                text: insightText,
+                generatedAt: new Date().toISOString(),
+                type: "habits",
+              },
+              new Date(),
+              prefs.timezone || "UTC"
+            );
+          }
         } else {
           logger.info(`Member ${member.uid}: no habits at risk, skipping notification`);
         }

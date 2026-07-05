@@ -493,6 +493,16 @@ export interface Household {
   // so writing this array needs no firestore.rules change.
   pendingRedemptions?: RewardRedemption[];
 
+  // Plan 02 part C (proactive insight triggers): server-written cap-tracking
+  // fields for insights written by scheduled/trigger functions (streak-rescue,
+  // budget-anomaly) rather than the manual "refresh insight" button. Capped at
+  // 2 proactive insights per household per ISO week — see
+  // functions/src/insights/proactiveCap.ts (the single source of truth for the
+  // cap logic). The client never writes these; it only needs to tolerate their
+  // presence on the household doc.
+  proactiveInsightWeek?: string; // ISO week id, e.g. "2026-W27"
+  proactiveInsightCount?: number; // Count of proactive insights written for that week
+
   // Rewards center: log of completed instant redemptions (the adult flow — points
   // are deducted from the shared household total). Bounded + most-recent-first,
   // capped at REDEMPTION_HISTORY_LIMIT (utils/redemption.ts) so the doc stays small.
