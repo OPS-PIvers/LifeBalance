@@ -4,9 +4,11 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import Input from '@/components/ui/Input';
-import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import Select from '@/components/ui/Select';
 import { SurfaceList, Row } from '@/components/ui/Section';
-import { Search, ChevronRight, Copy, X, ArrowUpAZ, Calendar, Star, ChefHat } from 'lucide-react';
+import { FIELD_BASE } from '@/components/ui/fieldStyles';
+import { cn } from '@/utils/cn';
+import { Search, ChevronRight, ChevronDown, Copy, X, Star, ChefHat, Check } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 interface CookbookModalProps {
@@ -29,6 +31,7 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<SortOption>('name');
+  const [tagsOpen, setTagsOpen] = useState(false);
 
   // Derive unique tags from all meals
   const allTags = useMemo(() => {
@@ -130,39 +133,72 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
             className="bg-white dark:bg-brand-700/50"
           />
 
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-             {/* Sort Dropdown (Simplified as buttons for mobile friendliness) */}
-             <SegmentedControl
-                name="Sort recipes"
-                value={sortBy}
-                onChange={setSortBy}
-                className="shrink-0"
-                options={[
-                    { value: 'name', label: <ArrowUpAZ size={16} aria-hidden="true" />, ariaLabel: 'Sort by Name' },
-                    { value: 'lastCooked', label: <Calendar size={16} aria-hidden="true" />, ariaLabel: 'Sort by Recently Cooked' },
-                    { value: 'rating', label: <Star size={16} aria-hidden="true" />, ariaLabel: 'Sort by Rating' },
-                ]}
-             />
-
-             <div className="h-6 w-px bg-brand-200 dark:bg-brand-700 mx-1 shrink-0" />
-
-             {/* Tag Filters */}
-             {allTags.map(tag => (
-                <button
-                    key={tag}
-                    type="button"
-                    onClick={() => toggleTag(tag)}
-                    aria-pressed={selectedTags.includes(tag)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors whitespace-nowrap ${
-                        selectedTags.includes(tag)
-                        ? 'bg-accent-600 text-white border-accent-600'
-                        : 'bg-white text-brand-600 border-brand-200 hover:border-brand-300 dark:bg-brand-700/50 dark:text-brand-300 dark:border-brand-600 dark:hover:border-brand-500/50'
-                    }`}
+          {/* Sort + tag-filter dropdowns (owner request — replaces the tiny
+              icon toggles and the horizontally scrolling chip row). */}
+          <div className="flex gap-2">
+             <div className="flex-1 min-w-0">
+                <Select
+                    aria-label="Sort recipes"
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as SortOption)}
+                    className="text-sm bg-white dark:bg-brand-700/50"
                 >
-                    {tag}
-                </button>
-             ))}
+                    <option value="name">Name A–Z</option>
+                    <option value="lastCooked">Recently cooked</option>
+                    <option value="rating">Highest rated</option>
+                </Select>
+             </div>
+
+             {allTags.length > 0 && (
+                <div className="flex-1 min-w-0">
+                    <button
+                        type="button"
+                        onClick={() => setTagsOpen(v => !v)}
+                        aria-expanded={tagsOpen}
+                        aria-controls="cookbook-tags-panel"
+                        className={cn(FIELD_BASE, "flex items-center justify-between gap-2 text-left text-sm bg-white dark:bg-brand-700/50")}
+                    >
+                        <span className={cn("truncate", selectedTags.length === 0 && "text-brand-400 dark:text-brand-500")}>
+                            {selectedTags.length > 0 ? `${selectedTags.length} tag${selectedTags.length === 1 ? '' : 's'}` : 'All tags'}
+                        </span>
+                        <ChevronDown size={20} className={cn("shrink-0 text-brand-400 dark:text-brand-500 transition-transform", tagsOpen && "rotate-180")} />
+                    </button>
+                </div>
+             )}
           </div>
+
+          {tagsOpen && allTags.length > 0 && (
+             <div id="cookbook-tags-panel" className="flex flex-wrap gap-2 pt-1" role="group" aria-label="Filter by tag">
+                {allTags.map(tag => {
+                    const isSelected = selectedTags.includes(tag);
+                    return (
+                        <button
+                            key={tag}
+                            type="button"
+                            onClick={() => toggleTag(tag)}
+                            aria-pressed={isSelected}
+                            className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors whitespace-nowrap inline-flex items-center gap-1 ${
+                                isSelected
+                                ? 'bg-accent-600 text-white border-accent-600'
+                                : 'bg-white text-brand-600 border-brand-200 hover:border-brand-300 dark:bg-brand-700/50 dark:text-brand-300 dark:border-brand-600 dark:hover:border-brand-500/50'
+                            }`}
+                        >
+                            {isSelected && <Check size={12} aria-hidden="true" />}
+                            {tag}
+                        </button>
+                    );
+                })}
+                {selectedTags.length > 0 && (
+                    <button
+                        type="button"
+                        onClick={() => setSelectedTags([])}
+                        className="px-3 py-1.5 rounded-full text-xs font-bold text-brand-500 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-200 transition-colors"
+                    >
+                        Clear
+                    </button>
+                )}
+             </div>
+          )}
         </div>
         </>
       }

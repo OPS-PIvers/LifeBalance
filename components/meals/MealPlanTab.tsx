@@ -3,6 +3,7 @@ import { useMealPlan, useShopping, useHouseholdCore } from '@/contexts/FirebaseH
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
 import { Plus, Trash2, Edit2, ChevronRight, ShoppingCart, Copy, CheckCircle2, MoreVertical, MoreHorizontal, CalendarDays, Eye, Utensils } from 'lucide-react';
 import { normalizeToKey } from '@/utils/stringNormalizer';
+import { normalizeMealName, mergeFormIntoMeal } from '@/utils/migrations/mealDedupMigration';
 import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
 import { IngredientSelectorModal } from './IngredientSelectorModal';
@@ -465,20 +466,39 @@ const MealPlanTab: React.FC = () => {
                rating: existingMeal?.rating ?? 0
            } as Meal);
       } else {
-          // Create new meal in library
-          try {
-            mealId = await addMeal({
-                name: currentMeal.name!,
-                description: currentMeal.description,
-                ingredients: currentMeal.ingredients || [],
-                instructions: currentMeal.instructions || [],
-                recipeUrl: currentMeal.recipeUrl || '',
-                tags: currentMeal.tags || [],
-                rating: 0
-            });
-          } catch (_error) {
-            toast.error('Failed to save meal');
-            return;
+          // Duplicate guard: if a recipe with the same name (up to
+          // case/spacing/punctuation) already exists, update that recipe
+          // instead of creating a copy — non-empty form fields win, existing
+          // content is preserved. Skipped for an explicit "Save as New Meal
+          // (Copy)", which is an intentional duplicate.
+          const existing = forceNew
+            ? undefined
+            : meals.find(m => normalizeMealName(m.name) === normalizeMealName(currentMeal.name!));
+          if (existing) {
+              try {
+                await updateMeal(mergeFormIntoMeal(existing, currentMeal));
+                mealId = existing.id;
+                toast(`Matched your existing "${existing.name}" recipe`, { icon: '📖' });
+              } catch (_error) {
+                toast.error('Failed to save meal');
+                return;
+              }
+          } else {
+              // Create new meal in library
+              try {
+                mealId = await addMeal({
+                    name: currentMeal.name!,
+                    description: currentMeal.description,
+                    ingredients: currentMeal.ingredients || [],
+                    instructions: currentMeal.instructions || [],
+                    recipeUrl: currentMeal.recipeUrl || '',
+                    tags: currentMeal.tags || [],
+                    rating: 0
+                });
+              } catch (_error) {
+                toast.error('Failed to save meal');
+                return;
+              }
           }
       }
 

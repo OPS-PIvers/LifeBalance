@@ -55,6 +55,7 @@ import { calculatePointsForDate, calculatePointsForDateRange, computeManagedMemb
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { migrateBucketsToPeriods, needsMigration, migrateToPaycheckPeriods, needsPaycheckMigration } from '@/utils/migrations/payPeriodMigration';
 import { migrateOrphanedHabits, needsHabitMigration } from '@/utils/migrations/habitMigration';
+import { migrateDuplicateMeals, needsMealDedup } from '@/utils/migrations/mealDedupMigration';
 import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
 import { usePointsSync, type PointsSyncUpdate } from '@/hooks/usePointsSync';
 import { useHabitActions } from '@/hooks/useHabitActions';
@@ -1291,6 +1292,22 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     runHabitMigration();
   }, [householdId, habits]);
+
+  // Merge duplicate recipes (same name up to case/spacing/punctuation) —
+  // owner-approved cleanup; run-once guarded like the migrations above.
+  const hasAttemptedMealDedup = useRef(false);
+  useEffect(() => {
+    if (!householdId || !meals.length) return;
+    if (hasAttemptedMealDedup.current) return;
+
+    if (needsMealDedup(meals)) {
+      // Mark as attempted before running to prevent race conditions/loops
+      hasAttemptedMealDedup.current = true;
+      console.log('[Migration] Starting duplicate-meal merge...');
+      // Errors are caught and logged inside migrateDuplicateMeals.
+      migrateDuplicateMeals(householdId, meals);
+    }
+  }, [householdId, meals]);
 
   // Persist the corrected points + reset markers for the corrective sync.
   // Stable across renders (keyed on householdId) so it doesn't re-fire the sync.

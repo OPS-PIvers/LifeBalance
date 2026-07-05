@@ -117,28 +117,35 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
 
   const content = (
     <div className="flex flex-col h-full max-h-[80vh] sm:max-h-[calc(100dvh-10rem)]">
-        <div className="flex-1 scroll-contain-y p-6 space-y-6 overflow-y-auto overscroll-contain">
-            {/* Top Actions */}
+        {/* px-4 matches the Drawer header/footer gutter so labels/fields share
+            one left edge with the title. */}
+        <div className="flex-1 scroll-contain-y px-4 py-5 space-y-6 overflow-y-auto overscroll-contain">
+            {/* Start-from tiles — equal width & height, icon over a one-line
+                label (the old side-by-side icon+text buttons wrapped "AI
+                Suggest" onto two lines at phone widths). */}
             <div className={`grid gap-2 ${onOpenImport ? 'grid-cols-3' : 'grid-cols-2'}`}>
                 <button
                     onClick={onOpenCookbook}
-                    className="flex items-center justify-center gap-2 py-3 px-4 bg-accent-50 text-accent-700 rounded-btn hover:bg-accent-100 font-bold text-sm transition-colors duration-(--duration-fast) ease-(--ease-standard) border border-accent-200 dark:bg-accent-500/15 dark:text-accent-300 dark:border-accent-500/25 dark:hover:bg-accent-500/25"
+                    className="flex flex-col items-center justify-center gap-1.5 py-3 px-2 bg-accent-50 text-accent-700 rounded-btn hover:bg-accent-100 font-bold text-xs transition-colors duration-(--duration-fast) ease-(--ease-standard) border border-accent-200 dark:bg-accent-500/15 dark:text-accent-300 dark:border-accent-500/25 dark:hover:bg-accent-500/25 active:scale-95"
                 >
-                    <ChefHat className="w-4.5 h-4.5" /> Cookbook
+                    <ChefHat className="w-5 h-5" aria-hidden="true" />
+                    <span className="whitespace-nowrap">Cookbook</span>
                 </button>
                 {onOpenImport && (
                     <button
                         onClick={onOpenImport}
-                        className="flex items-center justify-center gap-2 py-3 px-4 bg-brand-100 text-brand-700 rounded-btn hover:bg-brand-200 font-bold text-sm transition-colors duration-(--duration-fast) ease-(--ease-standard) border border-brand-200 dark:bg-brand-700/50 dark:text-brand-200 dark:border-brand-600 dark:hover:bg-brand-700"
+                        className="flex flex-col items-center justify-center gap-1.5 py-3 px-2 bg-brand-100 text-brand-700 rounded-btn hover:bg-brand-200 font-bold text-xs transition-colors duration-(--duration-fast) ease-(--ease-standard) border border-brand-200 dark:bg-brand-700/50 dark:text-brand-200 dark:border-brand-600 dark:hover:bg-brand-700 active:scale-95"
                     >
-                        <FileText className="w-4.5 h-4.5" /> Import
+                        <FileText className="w-5 h-5" aria-hidden="true" />
+                        <span className="whitespace-nowrap">Import</span>
                     </button>
                 )}
                 <button
                     onClick={onOpenAI}
-                    className="flex items-center justify-center gap-2 py-3 px-4 bg-warm-50 text-warm-700 rounded-btn hover:bg-warm-100 font-bold text-sm transition-colors duration-(--duration-fast) ease-(--ease-standard) border border-warm-200 dark:bg-warm-500/15 dark:text-warm-300 dark:border-warm-500/25 dark:hover:bg-warm-500/25"
+                    className="flex flex-col items-center justify-center gap-1.5 py-3 px-2 bg-warm-50 text-warm-700 rounded-btn hover:bg-warm-100 font-bold text-xs transition-colors duration-(--duration-fast) ease-(--ease-standard) border border-warm-200 dark:bg-warm-500/15 dark:text-warm-300 dark:border-warm-500/25 dark:hover:bg-warm-500/25 active:scale-95"
                 >
-                    <Sparkles className="w-4.5 h-4.5" /> AI Suggest
+                    <Sparkles className="w-5 h-5" aria-hidden="true" />
+                    <span className="whitespace-nowrap">AI Suggest</span>
                 </button>
             </div>
 
@@ -322,7 +329,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                               id="ingredient-name"
                               type="text"
                               placeholder="Item name"
-                              className="flex-1 rounded-xl border-brand-200 bg-white text-base focus:border-accent-500 focus:ring-accent-500/40 outline-hidden p-2.5 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+                              className="flex-1 min-w-0 rounded-xl border-brand-200 bg-white text-base focus:border-accent-500 focus:ring-accent-500/40 outline-hidden p-2.5 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
                               value={ingredientName}
                               onChange={(e) => setIngredientName(e.target.value)}
                               onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddIngredient())}
