@@ -707,11 +707,15 @@ export const quickAddExpense = onRequest(
 
           // Stub-fill candidates: only source:'shortcut' pending rows created
           // within the ORIGINAL 30-minute reconcile window — the wider query
-          // above must not widen stub-fill's behavior.
-          const createdAt = data.createdAt as admin.firestore.Timestamp | undefined;
-          const withinStubWindow =
-            createdAt instanceof admin.firestore.Timestamp &&
-            createdAt.toMillis() >= stubCutoffMs;
+          // above must not widen stub-fill's behavior. Duck-typed (not
+          // instanceof) because tests mock firebase-admin; a row with no
+          // parseable createdAt can only reach here through a mock anyway —
+          // the query itself filters on createdAt, so real docs always carry
+          // it — and is treated as in-window to match the old query-only gate.
+          const createdAt = data.createdAt as { toMillis?: () => number } | undefined;
+          const createdAtMs =
+            typeof createdAt?.toMillis === "function" ? createdAt.toMillis() : undefined;
+          const withinStubWindow = createdAtMs === undefined || createdAtMs >= stubCutoffMs;
           if (
             withinStubWindow &&
             data.source === "shortcut" &&
