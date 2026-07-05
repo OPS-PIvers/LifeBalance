@@ -83,6 +83,7 @@ import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import { calculateSafeToSpendBreakdownFromExpanded, resolveBucketForCalendarItem, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { effectiveAccountImpact, resolveTargetAccount } from '@/utils/accountImpact';
+import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
 import { processToggleHabit, calculatePointsForDate, calculatePointsForDateRange, computeManagedMemberPointsReset, isHabitStale, streakForHabit, streakEndingOnForHabit, getMultiplier, getHabitResetUpdate } from '@/utils/habitLogic';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { calculateBucketSpent, getTransactionsForBucket, type BucketSpent } from '@/utils/bucketSpentCalculator';
@@ -333,6 +334,17 @@ export interface HouseholdContextType {
   updateTransaction: (id: string, updates: Partial<Transaction>, opts?: MutationOpts) => Promise<void>;
   deleteTransaction: (id: string, opts?: MutationOpts) => Promise<void>;
   splitTransaction: (originalTransactionId: string, newTransactions: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[]) => Promise<void>;
+  /** Merge a `possibleDuplicateOf`-flagged pair of transactions (plan 03 PR-3):
+   *  applies `utils/transactionMerge`'s field-level winner set to the keeper,
+   *  deletes the dupe, and reverses the dupe's account-balance impact if it
+   *  was `verified` — all in ONE writeBatch (mirrors `deleteTransaction`). The
+   *  caller picks which id is the keeper vs. the dupe (typically via
+   *  `pickKeeper` from the same util). */
+  mergeTransactions: (keeperId: string, dupeId: string) => Promise<void>;
+  /** Dismiss a possible-duplicate flag without merging: clears
+   *  `possibleDuplicateOf` on the given transaction (single update, no batch
+   *  needed — nothing else changes). */
+  keepBothTransactions: (txnId: string) => Promise<void>;
 
   // Habit Actions
   addHabit: (habit: Habit) => Promise<string>;
@@ -481,6 +493,7 @@ export type FinanceContextValue = Pick<HouseholdContextType,
   | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'reallocateBucket'
   | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
   | 'addTransaction' | 'updateTransactionCategory' | 'updateTransaction' | 'deleteTransaction' | 'splitTransaction'
+  | 'mergeTransactions' | 'keepBothTransactions'
 >;
 
 export type GamificationContextValue = Pick<HouseholdContextType,
@@ -3104,6 +3117,73 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   }, [householdId, transactions, accounts]);
 
+  const mergeTransactions = useCallback(async (keeperId: string, dupeId: string) => {
+    if (!householdId) return;
+
+    try {
+      const keeperTx = transactions.find(tx => tx.id === keeperId);
+      const dupeTx = transactions.find(tx => tx.id === dupeId);
+      if (!keeperTx || !dupeTx) {
+        toast.error('Transaction not found');
+        return;
+      }
+
+      const updates = buildMergeUpdates(keeperTx, dupeTx);
+
+      const mergeBatch = writeBatch(db);
+
+      mergeBatch.update(doc(db, `households/${householdId}/transactions`, keeperId), {
+        ...updates,
+        // Always clear the flag on the surviving row — Firestore rejects a
+        // plain `undefined`, so this uses the deleteField() sentinel rather
+        // than routing through the pure `buildMergeUpdates` patch.
+        possibleDuplicateOf: deleteField(),
+      });
+
+      // VERIFIED-ONLY, ACCOUNT-ROUTED BALANCE: deleting the dupe must reverse
+      // its EFFECTIVE impact on the account it was tagged to — exactly the
+      // same rule `deleteTransaction` applies. A pending_review dupe never
+      // touched a balance, so this is a no-op for the (expected) common case
+      // of merging two still-pending rows; it only fires when the dupe was
+      // independently verified against a (possibly different) account than
+      // the keeper, so both accounts are adjusted correctly.
+      const dupeTarget = resolveTargetAccount(dupeTx.accountId, accounts);
+      const dupeBalanceDelta = -effectiveAccountImpact(dupeTx, dupeTarget);
+      if (dupeBalanceDelta !== 0 && dupeTarget) {
+        mergeBatch.update(doc(db, `households/${householdId}/accounts`, dupeTarget.id), {
+          balance: increment(roundMoney(dupeBalanceDelta)),
+          lastUpdated: serverTimestamp(),
+        });
+      }
+
+      mergeBatch.delete(doc(db, `households/${householdId}/transactions`, dupeId));
+
+      await mergeBatch.commit();
+
+      track('duplicate_merged', { source: dupeTx.source });
+      toast.success('Transactions merged');
+    } catch (error) {
+      console.error('[mergeTransactions] Failed:', error);
+      toast.error('Failed to merge transactions');
+      throw error;
+    }
+  }, [householdId, transactions, accounts]);
+
+  const keepBothTransactions = useCallback(async (txnId: string) => {
+    if (!householdId) return;
+
+    try {
+      await updateDoc(doc(db, `households/${householdId}/transactions`, txnId), {
+        possibleDuplicateOf: deleteField(),
+      });
+      track('duplicate_kept_both');
+    } catch (error) {
+      console.error('[keepBothTransactions] Failed:', error);
+      toast.error('Failed to update transaction');
+      throw error;
+    }
+  }, [householdId]);
+
   const splitTransaction = useCallback(async (originalTransactionId: string, newTransactions: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[]) => {
     if (!householdId || !user) return;
 
@@ -4742,6 +4822,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateTransaction,
     deleteTransaction,
     splitTransaction,
+    mergeTransactions,
+    keepBothTransactions,
   }), [
     safeToSpend, safeToSpendBreakdown, accounts, buckets, calendarItems, transactions, currentPeriodId, bucketSpentMap, bucketHistory,
     transactionWindowStart, isLoadingOlderTransactions, hasMoreTransactions, loadOlderTransactions, loadAllTransactions,
@@ -4750,6 +4832,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addBucket, updateBucket, deleteBucket, updateBucketLimit, reallocateBucket,
     addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem,
     addTransaction, updateTransactionCategory, updateTransaction, deleteTransaction, splitTransaction,
+    mergeTransactions, keepBothTransactions,
   ]);
 
   const gamificationValue = useMemo<GamificationContextValue>(() => ({

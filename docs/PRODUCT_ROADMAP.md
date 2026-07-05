@@ -381,6 +381,8 @@ explorations against this table.
 | `notification_opened` | App boots from a push-notification click — the SW tags the URL with `?nsrc=<type>`, the client reads + strips it (`utils/notificationSource.ts`, `public/sw.js`) | `type` — `habit_reminder` \| `action_queue_reminder` \| `streak_warning` \| `bill_reminder` \| `budget_alert` \| `test_notification` |
 | `recap_viewed` | Weekly recap detail drawer opens (`components/dashboard/WeeklyRecapCard.tsx`) | `isoWeek` — the recap's ISO week; `source` — `card` \| `push` |
 | `recap_push_opened` | App arrives via the weekly recap push deep link (`?recap=<isoWeek>`, consumed by `utils/recapParam.ts`) | — |
+| `duplicate_merged` | A `possibleDuplicateOf`-flagged transaction pair is merged (`mergeTransactions` in the context, or the Merge action in `TransactionReviewForm`) | `source` — the deleted duplicate row's `Transaction.source` |
+| `duplicate_kept_both` | A `possibleDuplicateOf` flag is dismissed without merging (`keepBothTransactions` / the Keep-both action) | — |
 
 First-time events are approximate by design (per-device localStorage flags, no server
 state) — good enough for funnel analysis, not accounting.

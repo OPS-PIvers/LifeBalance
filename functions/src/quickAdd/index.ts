@@ -38,6 +38,7 @@ import {
   type AccountLike,
 } from "./accountMatch";
 import { parseTransactionEmail } from "./emailParser";
+import { isLikelyDuplicate, type IdentityTransaction } from "./transactionIdentity";
 
 const db = admin.firestore();
 
@@ -671,40 +672,42 @@ export const quickAddExpense = onRequest(
         }
       }
 
-      // --- Reconcile the two Apple Pay capture paths (see reconcile.ts) ---
-      // When the bank-notification Shortcut posts the REAL settled amount, try to
-      // fill a just-created Apple Pay $0 "awaiting amount" stub instead of writing
-      // a duplicate row. Gated behind `fromBankNotification` so only that Shortcut
-      // triggers a merge; everything else keeps the original create-only path (and
-      // skips this extra read entirely).
-      if (fromBankNotification && amount > 0) {
-        try {
-          const cutoff = admin.firestore.Timestamp.fromMillis(
-            Date.now() - RECONCILE_WINDOW_MS
-          );
-          // Single where() → covered by the automatic single-field index on
-          // createdAt; the window is tiny so we filter the rest in memory.
-          const recentSnap = await db
-            .collection(transactionsPath)
-            .where("createdAt", ">=", cutoff)
-            .get();
+      // --- Reconcile the two Apple Pay capture paths (see reconcile.ts), then
+      // cross-path dedup against ALL recent transactions (plan 03 PR-3) ---
+      // Fetch the household's recent rows ONCE (same query as before, now
+      // unconditional so the identity-dedup pass below can reuse it without a
+      // second read) and try the stub-fill merge first — it keeps priority and
+      // its own gating (fromBankNotification, amount > 0, source:'shortcut'
+      // stubs only) is unchanged. Only when stub-fill does NOT short-circuit do
+      // we fall through to the broader duplicate check against every recent row
+      // (any source), which can never touch the original stub-fill behavior.
+      let possibleDuplicateOf: string | undefined;
+      try {
+        const cutoff = admin.firestore.Timestamp.fromMillis(
+          Date.now() - RECONCILE_WINDOW_MS
+        );
+        // Single where() → covered by the automatic single-field index on
+        // createdAt; the window is tiny so we filter the rest in memory.
+        const recentSnap = await db
+          .collection(transactionsPath)
+          .where("createdAt", ">=", cutoff)
+          .get();
 
-          const candidates: ReconcileCandidate[] = [];
-          const refById = new Map<
-            string,
-            admin.firestore.DocumentReference
-          >();
-          for (const d of recentSnap.docs) {
-            const data = d.data() as Record<string, unknown>;
-            // Only correlate against other Shortcut-origin pending rows — never
-            // touch manual / Plaid / receipt transactions.
-            if (data.source !== "shortcut" || data.status !== "pending_review") {
-              continue;
-            }
-            if (typeof data.amount !== "number" || !Number.isFinite(data.amount)) {
-              continue;
-            }
-            candidates.push({
+        const reconcileCandidates: ReconcileCandidate[] = [];
+        const identityCandidates: (IdentityTransaction & { id: string })[] = [];
+        const refById = new Map<string, admin.firestore.DocumentReference>();
+        for (const d of recentSnap.docs) {
+          const data = d.data() as Record<string, unknown>;
+          refById.set(d.id, d.ref);
+
+          // Stub-fill candidates: only source:'shortcut' pending rows (unchanged).
+          if (
+            data.source === "shortcut" &&
+            data.status === "pending_review" &&
+            typeof data.amount === "number" &&
+            Number.isFinite(data.amount)
+          ) {
+            reconcileCandidates.push({
               id: d.id,
               amount: data.amount,
               merchant: typeof data.merchant === "string" ? data.merchant : "",
@@ -712,12 +715,33 @@ export const quickAddExpense = onRequest(
               accountId:
                 typeof data.accountId === "string" ? data.accountId : undefined,
             });
-            refById.set(d.id, d.ref);
           }
 
+          // Identity-dedup candidates: any source/status, best-effort defaults
+          // for fields this narrow recent-row read may not carry.
+          if (
+            typeof data.amount === "number" &&
+            Number.isFinite(data.amount) &&
+            (data.status === "verified" || data.status === "pending_review")
+          ) {
+            identityCandidates.push({
+              id: d.id,
+              amount: data.amount,
+              merchant: typeof data.merchant === "string" ? data.merchant : "",
+              date: typeof data.date === "string" ? data.date : transactionDate,
+              category: typeof data.category === "string" ? data.category : "",
+              status: data.status,
+              accountId:
+                typeof data.accountId === "string" ? data.accountId : undefined,
+              needsAmount: data.needsAmount === true,
+            });
+          }
+        }
+
+        if (fromBankNotification && amount > 0) {
           const target = pickFillTarget(
             { amount, merchant: merchant.trim(), category, accountId: resolvedAccountId },
-            candidates
+            reconcileCandidates
           );
           const targetRef = target ? refById.get(target.id) : undefined;
           if (target && targetRef) {
@@ -741,14 +765,64 @@ export const quickAddExpense = onRequest(
             });
             return;
           }
-          // No unambiguous stub to fill → fall through and create a normal row.
-        } catch (reconcileErr) {
-          // Reconciliation is best-effort: a lookup/update failure must never
-          // block capture, so log and fall through to the normal create path.
-          logger.warn(
-            `Reconcile lookup failed; creating a new transaction instead: ${reconcileErr}`
-          );
+          // No unambiguous stub to fill → fall through to identity dedup, then a normal row.
         }
+
+        // Cross-path duplicate check: did this same purchase already arrive via
+        // another path (Plaid, manual, a receipt scan, …)? A confident match
+        // annotates the EXISTING row instead of inserting a second one; a
+        // weaker ('possible') match still inserts, flagged for the review UI.
+        const incoming: IdentityTransaction = {
+          amount,
+          merchant: merchant.trim(),
+          date: transactionDate,
+          category,
+          status: "pending_review",
+          accountId: resolvedAccountId,
+        };
+        let confidentDuplicateId: string | undefined;
+        for (const row of identityCandidates) {
+          const verdict = isLikelyDuplicate(incoming, row);
+          if (verdict === "duplicate") {
+            confidentDuplicateId = row.id;
+            possibleDuplicateOf = row.id;
+            break;
+          }
+          if (verdict === "possible" && !possibleDuplicateOf) {
+            possibleDuplicateOf = row.id;
+          }
+        }
+        if (confidentDuplicateId) {
+          // The purchase already exists as another row (e.g. it already arrived
+          // via Plaid) — skip creating a second transaction entirely rather
+          // than annotate; quickAdd has no id of its own worth stamping onto
+          // the existing row (unlike Plaid sync's `plaidTransactionId`).
+          await logApiCall(householdId, apiKey.substring(0, 16), "expense", req.body, 200);
+          jsonResponse(res, 200, {
+            success: true,
+            merged: true,
+            message: `Already recorded: ${formatCurrency(amount, { currency })} at ${merchant} (matched an existing transaction)`,
+            data: {
+              transactionId: confidentDuplicateId,
+              amount,
+              merchant,
+              category,
+              date: transactionDate,
+              status: "pending_review",
+              accountId: resolvedAccountId ?? null,
+            },
+          });
+          return;
+        }
+        // If we get here the verdict was at most 'possible' (or no match) —
+        // possibleDuplicateOf (if set) flags the new row created below.
+      } catch (reconcileErr) {
+        // Reconciliation/dedup is best-effort: a lookup/update failure must
+        // never block capture, so log and fall through to the normal create path.
+        logger.warn(
+          `Reconcile/dedup lookup failed; creating a new transaction instead: ${reconcileErr}`
+        );
+        possibleDuplicateOf = undefined;
       }
 
       // Calculate the pay period for this transaction. Use the shared, ported
@@ -781,6 +855,10 @@ export const quickAddExpense = onRequest(
         // Apple Pay $0 pre-auth stub: flags the review UI that the real amount
         // still needs to be entered. Omitted for normal (amount > 0) expenses.
         ...(amount === 0 ? { needsAmount: true } : {}),
+        // Plan 03: a weaker ('possible') identity match against an existing
+        // row — the review UI surfaces a Merge / Keep-both choice. Omitted
+        // when no candidate scored 'possible' (or the dedup lookup failed).
+        ...(possibleDuplicateOf ? { possibleDuplicateOf } : {}),
       };
 
       const transactionRef = await db

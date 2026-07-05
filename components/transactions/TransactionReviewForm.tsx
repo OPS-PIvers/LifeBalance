@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Check, ChevronDown, Sparkles, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, Copy, Sparkles, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import { Transaction, INCOME_CATEGORY } from '@/types/schema';
@@ -7,6 +7,7 @@ import { suggestHabitsForTransaction } from '@/utils/habitSuggestions';
 import { suggestAccountIdForTransaction, suggestCategoryForTransaction } from '@/utils/actionQueueSmart';
 import { buildTransactionCategoryOptions } from '@/utils/categories';
 import { roundMoney } from '@/utils/money';
+import { pickKeeper } from '@/utils/transactionMerge';
 import { useFinance, useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { cn } from '@/utils/cn';
 import Input from '@/components/ui/Input';
@@ -69,8 +70,20 @@ export interface TransactionReviewFormProps {
  * the account + credits habits in ONE atomic context call.
  */
 const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transaction, onDone, onDeleted }) => {
-  const { accounts, buckets, transactions, updateTransactionCategory, deleteTransaction } = useFinance();
+  const {
+    accounts, buckets, transactions,
+    updateTransactionCategory, deleteTransaction,
+    mergeTransactions, keepBothTransactions,
+  } = useFinance();
   const { habits } = useGamification();
+
+  // Plan 03 PR-3: a flagged possible duplicate of another existing row.
+  // Resolved by id (not trusted blindly) so a stale/deleted reference never
+  // renders a broken notice.
+  const possibleDuplicate = transaction.possibleDuplicateOf
+    ? transactions.find(t => t.id === transaction.possibleDuplicateOf)
+    : undefined;
+  const [isMerging, setIsMerging] = useState(false);
 
   // An income transaction (e.g. a Venmo/paycheck deposit) has no budget bucket,
   // so `buildTransactionCategoryOptions` never contains INCOME_CATEGORY. Prepend
@@ -172,8 +185,64 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
     });
   };
 
+  const handleMergeDuplicate = async () => {
+    if (!possibleDuplicate) return;
+    setIsMerging(true);
+    try {
+      const { keeper, dupe } = pickKeeper(transaction, possibleDuplicate);
+      await mergeTransactions(keeper.id, dupe.id);
+      onDone();
+    } catch (error) {
+      console.error('Failed to merge duplicate transaction:', error);
+      toast.error('Failed to merge transactions');
+    } finally {
+      setIsMerging(false);
+    }
+  };
+
+  const handleKeepBothDuplicate = async () => {
+    try {
+      await keepBothTransactions(transaction.id);
+    } catch (error) {
+      console.error('Failed to dismiss duplicate flag:', error);
+      toast.error('Failed to update transaction');
+    }
+  };
+
   return (
     <div className="space-y-4">
+      {possibleDuplicate && (
+        <div className="rounded-card border border-warm-200 bg-warm-50 px-3 py-2.5 space-y-2 dark:border-warm-700 dark:bg-warm-900/20">
+          <div className="flex items-start gap-2">
+            <Copy size={14} className="mt-0.5 shrink-0 text-warm-600 dark:text-warm-400" />
+            <p className="text-xs text-warm-700 dark:text-warm-300">
+              Possible duplicate of <span className="font-semibold">{possibleDuplicate.merchant}</span>
+              {' — '}${possibleDuplicate.amount.toFixed(2)} on {possibleDuplicate.date}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="warning"
+              size="sm"
+              className="flex-1 text-xs"
+              onClick={handleMergeDuplicate}
+              disabled={isMerging}
+            >
+              Merge
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="flex-1 text-xs"
+              onClick={handleKeepBothDuplicate}
+              disabled={isMerging}
+            >
+              Keep both
+            </Button>
+          </div>
+        </div>
+      )}
+
       <Input
         label="Merchant"
         type="text"

@@ -9,7 +9,9 @@ import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/util
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { processToggleHabit, calculateResetPoints, streakForHabit } from '@/utils/habitLogic';
 import { accountImpactOf, effectiveAccountImpact, resolveTargetAccount } from '@/utils/accountImpact';
+import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
 import { roundMoney } from '@/utils/money';
+import { track } from '@/services/analytics';
 import {
   Account,
   BudgetBucket,
@@ -514,6 +516,52 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const deleteTransaction = useCallback(async (id: string) => {
     setTransactions(prev => prev.filter(t => t.id !== id));
     toast.success('Mock: Transaction deleted');
+  }, []);
+
+  // Test-Mode parity for the Merge action (plan 03 PR-3): applies the same
+  // field-level winner set as the real context, deletes the dupe, and
+  // reverses the dupe's balance impact if it was verified — mirroring
+  // `deleteTransaction`'s balance-reversal rule above.
+  const mergeTransactions = useCallback(async (keeperId: string, dupeId: string) => {
+    const keeperTx = transactions.find(t => t.id === keeperId);
+    const dupeTx = transactions.find(t => t.id === dupeId);
+    if (!keeperTx || !dupeTx) {
+      toast.error('Transaction not found');
+      return;
+    }
+
+    const updates = buildMergeUpdates(keeperTx, dupeTx);
+
+    const dupeTarget = resolveTargetAccount(dupeTx.accountId, accounts);
+    const dupeBalanceDelta = -effectiveAccountImpact(dupeTx, dupeTarget);
+    if (dupeBalanceDelta !== 0 && dupeTarget) {
+      setAccounts(prev => prev.map(a => a.id === dupeTarget.id
+        ? { ...a, balance: roundMoney(a.balance + dupeBalanceDelta), lastUpdated: new Date().toISOString() }
+        : a));
+    }
+
+    setTransactions(prev => {
+      const withoutDupe = prev.filter(t => t.id !== dupeId);
+      return withoutDupe.map(t => {
+        if (t.id !== keeperId) return t;
+        const merged: Transaction = { ...t, ...updates };
+        delete merged.possibleDuplicateOf;
+        return merged;
+      });
+    });
+
+    track('duplicate_merged', { source: dupeTx.source });
+    toast.success('Mock: Transactions merged');
+  }, [transactions, accounts]);
+
+  const keepBothTransactions = useCallback(async (txnId: string) => {
+    setTransactions(prev => prev.map(t => {
+      if (t.id !== txnId) return t;
+      const next = { ...t };
+      delete next.possibleDuplicateOf;
+      return next;
+    }));
+    track('duplicate_kept_both');
   }, []);
 
   const splitTransaction = useCallback(async (originalTransactionId: string, newTransactions: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[]) => {
@@ -1102,6 +1150,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateTransactionCategory,
     deleteTransaction,
     splitTransaction,
+    mergeTransactions,
+    keepBothTransactions,
     addCalendarItem,
     updateCalendarItem,
     deleteCalendarItem,
