@@ -1,10 +1,14 @@
 import React from 'react';
 import { ShoppingItem, Store as StoreType, QuickStockList } from '@/types/schema';
-import { Store, Trash2, ShoppingBag } from 'lucide-react';
+import { Trash2, ShoppingBag, Minus, Plus, ChevronDown, Check } from 'lucide-react';
 import { TEMPLATE_ICONS } from '@/data/templateIcons';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
+import { FIELD_BASE } from '@/components/ui/fieldStyles';
+import { cn } from '@/utils/cn';
+import { parseQuantity, formatQuantity } from '@/utils/grocerySmartDefaults';
+import type { SuggestedDefaults } from '@/utils/grocerySmartDefaults';
 
 interface ShoppingItemFormProps {
   item: ShoppingItem;
@@ -14,20 +18,103 @@ interface ShoppingItemFormProps {
   stores: StoreType[];
   categories: string[];
   quickStockLists?: QuickStockList[];
-  activeQuickList?: QuickStockList;
-  onQuickListChange?: (item: ShoppingItem, newListId: string) => void;
+  activeQuickLists?: QuickStockList[];
+  onQuickListToggle?: (item: ShoppingItem, listId: string, member: boolean) => void;
+  suggestion?: SuggestedDefaults | null;
 }
 
 // O(1) lookup for quick-list icons.
 const templateIconMap = new Map(TEMPLATE_ICONS.map(i => [i.id, i.icon]));
 
-export const ShoppingItemForm: React.FC<ShoppingItemFormProps> = ({ item, onChange, onSave, onDelete, stores, categories, quickStockLists, activeQuickList, onQuickListChange }) => {
+export const ShoppingItemForm: React.FC<ShoppingItemFormProps> = ({
+  item,
+  onChange,
+  onSave,
+  onDelete,
+  stores,
+  categories,
+  quickStockLists,
+  activeQuickLists,
+  onQuickListToggle,
+  suggestion,
+}) => {
   const handleFieldChange = React.useCallback(
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       onChange({ ...item, [e.target.name]: e.target.value });
     },
     [item, onChange]
   );
+
+  // Apply the suggestion (category/store) once per item id, only when the
+  // field is currently empty/Uncategorized. Guarded by a ref so re-renders of
+  // the same item don't keep re-applying (e.g. after the user clears it back out).
+  const appliedForIdRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (appliedForIdRef.current === item.id) return;
+    appliedForIdRef.current = item.id;
+
+    const needsCategory = (!item.category || item.category === 'Uncategorized') && !!suggestion?.category;
+    const needsStore = !item.store && !!suggestion?.store;
+
+    if (needsCategory || needsStore) {
+      onChange({
+        ...item,
+        category: needsCategory ? suggestion!.category! : item.category,
+        store: needsStore ? suggestion!.store! : item.store,
+      });
+    }
+    // Only re-run when the item identity changes (new item being edited).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
+
+  const showCategorySuggestionHint =
+    !!suggestion?.category && (item.category === suggestion.category);
+  const showStoreSuggestionHint =
+    !!suggestion?.store && (item.store === suggestion.store);
+
+  // --- Quantity stepper ---
+  const parsedQuantity = React.useMemo(() => parseQuantity(item.quantity), [item.quantity]);
+
+  const updateQuantity = React.useCallback(
+    (next: { count?: number; unit?: string }) => {
+      const merged = {
+        count: next.count ?? parsedQuantity.count,
+        unit: next.unit ?? parsedQuantity.unit,
+      };
+      onChange({ ...item, quantity: formatQuantity(merged) });
+    },
+    [item, onChange, parsedQuantity]
+  );
+
+  const handleDecrement = () => {
+    updateQuantity({ count: Math.max(1, parsedQuantity.count - 1) });
+  };
+  const handleIncrement = () => {
+    updateQuantity({ count: parsedQuantity.count + 1 });
+  };
+  const handleUnitChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    updateQuantity({ unit: e.target.value });
+  };
+
+  // --- Store select (includes the item's current store if not in the list) ---
+  const storeOptions = React.useMemo(() => {
+    const names = stores.map(s => s.name);
+    if (item.store && !names.some(n => n.toLowerCase() === item.store!.toLowerCase())) {
+      return [...names, item.store];
+    }
+    return names;
+  }, [stores, item.store]);
+
+  // --- Quick lists dropdown ---
+  const [isQuickListsOpen, setIsQuickListsOpen] = React.useState(false);
+  const activeIds = React.useMemo(
+    () => new Set((activeQuickLists ?? []).map(l => l.id)),
+    [activeQuickLists]
+  );
+  const quickListsSummary =
+    activeQuickLists && activeQuickLists.length > 0
+      ? activeQuickLists.map(l => l.name).join(', ')
+      : 'None';
 
   return (
     <div className="flex flex-col h-full">
@@ -40,100 +127,140 @@ export const ShoppingItemForm: React.FC<ShoppingItemFormProps> = ({ item, onChan
                 onChange={handleFieldChange}
             />
             <div className="grid grid-cols-2 gap-4 [&>*]:min-w-0">
-                 <Select
-                    label="Category"
-                    name="category"
-                    value={item.category || 'Uncategorized'}
-                    onChange={handleFieldChange}
-                 >
-                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                </Select>
-                <Input
-                    label="Quantity"
-                    type="text"
-                    name="quantity"
-                    value={item.quantity || ''}
-                    onChange={handleFieldChange}
-                />
+                 <div>
+                     <Select
+                        label="Category"
+                        name="category"
+                        value={item.category || 'Uncategorized'}
+                        onChange={handleFieldChange}
+                     >
+                        {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                    </Select>
+                    {showCategorySuggestionHint && (
+                        <p className="text-xs text-brand-400 dark:text-brand-500 mt-1">Suggested</p>
+                    )}
+                 </div>
+                <div>
+                    <label className="text-xs font-semibold text-brand-500 dark:text-brand-400 uppercase tracking-wider block mb-1.5">
+                        Quantity
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                        <div className="flex items-center border border-brand-200 dark:border-brand-700 rounded-btn overflow-hidden shrink-0 bg-white dark:bg-brand-800">
+                            <button
+                                type="button"
+                                aria-label="Decrease quantity"
+                                onClick={handleDecrement}
+                                className="p-2.5 text-brand-500 hover:bg-brand-100 dark:text-brand-400 dark:hover:bg-brand-700/50 transition-colors"
+                            >
+                                <Minus size={14} />
+                            </button>
+                            <span className="px-2 text-sm font-medium text-brand-900 dark:text-brand-100 min-w-[1.5rem] text-center tabular-nums">
+                                {parsedQuantity.count}
+                            </span>
+                            <button
+                                type="button"
+                                aria-label="Increase quantity"
+                                onClick={handleIncrement}
+                                className="p-2.5 text-brand-500 hover:bg-brand-100 dark:text-brand-400 dark:hover:bg-brand-700/50 transition-colors"
+                            >
+                                <Plus size={14} />
+                            </button>
+                        </div>
+                        <input
+                            type="text"
+                            value={parsedQuantity.unit}
+                            onChange={handleUnitChange}
+                            placeholder="unit"
+                            aria-label="Quantity unit"
+                            className={cn(FIELD_BASE, "p-2.5 min-w-0 flex-1 text-sm")}
+                        />
+                    </div>
+                </div>
             </div>
             <div>
-                <Input
+                <Select
                     label="Store"
-                    type="text"
                     name="store"
                     value={item.store || ''}
                     onChange={handleFieldChange}
-                    placeholder="Optional"
-                />
-                 {/* Quick Store Chips in Edit Modal */}
-                 {stores.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                        {stores.map(store => (
-                            <button
-                                key={store.id}
-                                type="button"
-                                onClick={() => onChange({...item, store: store.name})}
-                                className={`px-2.5 py-2 rounded-sm text-xs font-medium border transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center gap-1 ${
-                                    item.store?.toLowerCase() === store.name.toLowerCase()
-                                    ? 'bg-accent-100 text-accent-800 border-accent-200 dark:bg-accent-900/40 dark:text-accent-200 dark:border-accent-700'
-                                    : 'bg-white text-brand-500 border-brand-200 hover:bg-brand-50 dark:bg-brand-700/50 dark:text-brand-400 dark:border-brand-600 dark:hover:bg-brand-700'
-                                }`}
-                            >
-                                <Store size={10} /> {store.name}
-                            </button>
-                        ))}
-                    </div>
+                >
+                    <option value="">No store</option>
+                    {storeOptions.map(name => <option key={name} value={name}>{name}</option>)}
+                </Select>
+                {showStoreSuggestionHint && (
+                    <p className="text-xs text-brand-400 dark:text-brand-500 mt-1">Suggested</p>
                 )}
             </div>
 
-            {/* Quick List assignment — moved out of the row to keep the list dense. */}
-            {quickStockLists && quickStockLists.length > 0 && onQuickListChange && (
+            {/* Quick lists — compact multi-select dropdown */}
+            {quickStockLists && quickStockLists.length > 0 && onQuickListToggle && (
                 <div>
-                    <label className="text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider">Quick list</label>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                        {quickStockLists.map(list => {
-                            const ListIcon = (list.icon && templateIconMap.get(list.icon)) || ShoppingBag;
-                            const isActive = activeQuickList?.id === list.id;
-                            return (
-                                <button
-                                    key={list.id}
-                                    type="button"
-                                    // Empty string toggles the item OFF the list (matches the row's prior behaviour).
-                                    onClick={() => onQuickListChange(item, isActive ? '' : list.id)}
-                                    className={`px-2.5 py-2 rounded-sm text-xs font-medium border transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center gap-1 ${
-                                        isActive
-                                        ? 'bg-accent-100 text-accent-800 border-accent-200 dark:bg-accent-900/40 dark:text-accent-200 dark:border-accent-700'
-                                        : 'bg-white text-brand-500 border-brand-200 hover:bg-brand-50 dark:bg-brand-700/50 dark:text-brand-400 dark:border-brand-600 dark:hover:bg-brand-700'
-                                    }`}
-                                >
-                                    <ListIcon size={10} /> {list.name}
-                                </button>
-                            );
-                        })}
-                    </div>
+                    <label className="text-xs font-semibold text-brand-500 dark:text-brand-400 uppercase tracking-wider block mb-1.5">
+                        Quick lists
+                    </label>
+                    <button
+                        type="button"
+                        aria-expanded={isQuickListsOpen}
+                        aria-controls="quick-lists-panel"
+                        onClick={() => setIsQuickListsOpen(o => !o)}
+                        className={cn(FIELD_BASE, "flex items-center justify-between text-left text-sm")}
+                    >
+                        <span className="truncate text-brand-900 dark:text-brand-100">{quickListsSummary}</span>
+                        <ChevronDown
+                            size={18}
+                            className={cn(
+                                "text-brand-400 dark:text-brand-500 transition-transform duration-(--duration-fast) ease-(--ease-standard) shrink-0",
+                                isQuickListsOpen && "rotate-180"
+                            )}
+                        />
+                    </button>
+                    {isQuickListsOpen && (
+                        <div id="quick-lists-panel" className="mt-2 border border-brand-200 dark:border-brand-700 rounded-btn overflow-hidden divide-y divide-brand-100 dark:divide-brand-700">
+                            {quickStockLists.map(list => {
+                                const ListIcon = (list.icon && templateIconMap.get(list.icon)) || ShoppingBag;
+                                const isMember = activeIds.has(list.id);
+                                return (
+                                    <button
+                                        key={list.id}
+                                        type="button"
+                                        aria-pressed={isMember}
+                                        onClick={() => onQuickListToggle(item, list.id, !isMember)}
+                                        className={cn(
+                                            "w-full flex items-center gap-2 px-3 py-2.5 text-sm text-left transition-colors",
+                                            isMember
+                                                ? "bg-accent-50 text-accent-800 dark:bg-accent-900/30 dark:text-accent-200"
+                                                : "bg-white text-brand-700 hover:bg-brand-50 dark:bg-brand-800 dark:text-brand-300 dark:hover:bg-brand-700/50"
+                                        )}
+                                    >
+                                        <ListIcon size={14} className="shrink-0" />
+                                        <span className="flex-1 truncate">{list.name}</span>
+                                        {isMember && <Check size={14} className="shrink-0" />}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             )}
-
+        </div>
+        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-800 shrink-0 flex items-center gap-3">
             {onDelete && (
                 <Button
                     type="button"
                     variant="ghost-danger"
-                    size="sm"
-                    leftIcon={<Trash2 size={16} />}
+                    size="lg"
+                    aria-label="Delete item"
                     onClick={onDelete}
-                    className="-mx-1"
                 >
-                    Delete item
+                    <Trash2 size={20} />
                 </Button>
             )}
-        </div>
-        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-800 shrink-0">
             <Button
                 variant="primary"
                 size="lg"
                 onClick={onSave}
                 disabled={!item.name.trim()}
-                className="w-full"
+                className="flex-1"
             >
                 Save changes
             </Button>
