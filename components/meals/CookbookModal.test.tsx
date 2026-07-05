@@ -23,11 +23,11 @@ vi.mock('@/components/ui/Input', () => ({
 vi.mock('lucide-react', () => ({
   Search: () => <div data-testid="search-icon" />,
   ChevronRight: () => <div data-testid="chevron-right-icon" />,
+  ChevronDown: () => <div data-testid="chevron-down-icon" />,
   Copy: () => <div data-testid="copy-icon" />,
   X: () => <div data-testid="x-icon" />,
-  ArrowUpAZ: () => <div data-testid="sort-az-icon" />,
-  Calendar: () => <div data-testid="calendar-icon" />,
   Star: () => <div data-testid="star-icon" />,
+  Check: () => <div data-testid="check-icon" />,
   ChefHat: () => <div data-testid="chef-hat-icon" />,
 }));
 
@@ -148,8 +148,9 @@ describe('CookbookModal', () => {
       />
     );
 
-    const tagButton = screen.getByRole('button', { name: 'Vegetarian' });
-    fireEvent.click(tagButton);
+    // Tags live behind the "All tags" dropdown now
+    fireEvent.click(screen.getByRole('button', { name: 'All tags' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Vegetarian' }));
 
     expect(screen.getByText('Vegetable Curry')).toBeInTheDocument();
     expect(screen.queryByText('Adobo Chicken')).not.toBeInTheDocument();
@@ -167,8 +168,8 @@ describe('CookbookModal', () => {
       />
     );
 
-    const sortButton = screen.getByRole('radio', { name: 'Sort by Rating' });
-    fireEvent.click(sortButton);
+    const sortSelect = screen.getByLabelText('Sort recipes');
+    fireEvent.change(sortSelect, { target: { value: 'rating' } });
 
     const items = screen.getAllByText(/Adobo Chicken|Beef Stir Fry|Vegetable Curry/);
     // Should be descending rating: Adobo (5), Beef (4), Curry (3)
@@ -224,7 +225,8 @@ describe('CookbookModal', () => {
     );
 
     expect(screen.getByLabelText('Close')).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Sort by Name' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Sort recipes')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'All tags' })).toHaveAttribute('aria-expanded', 'false');
     expect(screen.getAllByLabelText('Clone as New Meal')[0]).toBeInTheDocument();
 
     // Check aria-labelledby on modal
