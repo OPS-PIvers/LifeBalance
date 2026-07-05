@@ -414,7 +414,12 @@ const ShoppingListTab: React.FC = () => {
     // list untouched (the old handler forced exclusive single-list membership;
     // the redesigned drawer supports belonging to multiple quick lists at once).
     const handleQuickListToggle = useCallback(async (item: ShoppingItem, listId: string, member: boolean) => {
-        if (!householdId) return;
+        if (!householdId || !quickStockLists?.length) return;
+        // Never create an empty-named catalog item (name cleared mid-edit).
+        if (!item.name.trim()) {
+            toast.error('Item name cannot be empty');
+            return;
+        }
 
         try {
             // 1. Find or Create Catalog Item

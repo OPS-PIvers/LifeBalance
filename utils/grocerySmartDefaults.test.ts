@@ -87,6 +87,11 @@ describe('parseQuantity', () => {
     expect(parseQuantity('1.5 lbs')).toEqual({ count: 1.5, unit: 'lbs' });
   });
 
+  it('parses leading-dot decimals', () => {
+    expect(parseQuantity('.5 lbs')).toEqual({ count: 0.5, unit: 'lbs' });
+    expect(parseQuantity('.25')).toEqual({ count: 0.25, unit: '' });
+  });
+
   it('handles undefined/empty as default 1 with empty unit', () => {
     expect(parseQuantity(undefined)).toEqual({ count: 1, unit: '' });
     expect(parseQuantity('')).toEqual({ count: 1, unit: '' });
