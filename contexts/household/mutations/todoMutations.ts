@@ -155,9 +155,15 @@ export function makeCompleteToDo(deps: {
       // dormancy gate (computeTodoCompletionCredit) returns null, so the only
       // write is the todo update — byte-for-byte the prior behaviour for normal
       // households with no managed-kid members.
+      // Read through the converter so `todo` gets the same synthetic-id
+      // injection and legacy-Timestamp normalization every other todo read
+      // gets (see todoListeners.ts / loadOlderCompletedTodos below). The
+      // batch.update below stays on the unconverted `todoRef` — updateDoc's
+      // plain field map (with `serverTimestamp()`) doesn't go through
+      // `toFirestore` either way, so this keeps behavior unchanged.
       const todoRef = doc(db, `households/${householdId}/todos`, id);
-      const snap = await getDoc(todoRef);
-      const todo = snap.data() as ToDo | undefined;
+      const snap = await getDoc(todoRef.withConverter(todoConverter));
+      const todo = snap.data();
       if (!todo) {
         throw new Error('To-Do not found');
       }
