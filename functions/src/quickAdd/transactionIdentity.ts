@@ -1,0 +1,162 @@
+/**
+ * Shared "same real-world purchase?" identity logic.
+ *
+ * A single purchase can enter LifeBalance through up to eight paths (manual
+ * entry, receipt scan, bank-statement scan, voice capture, iOS Shortcut
+ * quickAdd, bank-alert email, Plaid sync, Apple Pay $0 stub — see
+ * advisor-plans/03-transaction-identity-reconciliation.md). Today each pair of
+ * paths is reconciled by its own bespoke matcher (`utils/transactionMatch.ts`,
+ * `functions/src/quickAdd/reconcile.ts`); this module is the SINGLE shared
+ * notion of "are these two rows the same purchase" that those (and future
+ * Plaid/quickAdd wire-ins) delegate to.
+ *
+ * This is PR-1 of plan 03: the identity primitives + absorbing the two
+ * existing reconcilers' internals, with ZERO intended behavior change (their
+ * existing test suites are the regression gate — see the file-level comments
+ * in reconcile.ts / transactionMatch.ts for what still routes through their
+ * OWN historical normalizer for that reason).
+ *
+ * Deliberately duplicated (not imported) from `utils/transactionIdentity.ts`
+ * — same precedent as `utils/habitLogic.ts` / `streakLogic.ts`, since the
+ * client bundle and the Cloud Functions package are separate builds with no
+ * shared runtime. Keep the two copies IDENTICAL when editing either.
+ */
+import { differenceInCalendarDays, parseISO } from "date-fns";
+
+/** Matches INCOME_CATEGORY in the app (types/schema.ts) — kept local because
+ *  the functions package doesn't import client types (same precedent as
+ *  functions/src/plaid/mapping.ts). */
+export const INCOME_CATEGORY = "Income";
+
+/** Verdict returned by {@link isLikelyDuplicate}. */
+export type DuplicateVerdict = "duplicate" | "possible" | "distinct";
+
+/** Minimal shape {@link fingerprint}/{@link isLikelyDuplicate} need from a transaction-like row. */
+export interface IdentityTransaction {
+  amount: number;
+  merchant: string;
+  /** yyyy-MM-dd local date string. */
+  date: string;
+  category: string;
+  status: "verified" | "pending_review";
+  accountId?: string;
+  /** Apple Pay $0 pre-authorization stub awaiting its real amount. */
+  needsAmount?: boolean;
+}
+
+/** Calendar-day window within which a Plaid post-date can lag the original capture. */
+export const DUPLICATE_WINDOW_DAYS = 3;
+
+/** Convert a stored (always-positive) dollar amount to integer cents, avoiding float drift. */
+const amountCents = (amount: number): number => Math.round(Math.abs(amount) * 100);
+
+/**
+ * Normalize a merchant/store label for token comparison: lowercase, strip
+ * everything but letters/numbers/whitespace (Unicode-aware), collapse
+ * whitespace. This is the identity module's OWN normalizer — a conservative
+ * superset shape shared by both callers' historical behavior — used only by
+ * {@link merchantSimilar} for the new duplicate-verdict policy. It intentionally
+ * does NOT replace `normalizeMerchant` (reconcile.ts) or `normalizeStoreName`
+ * (storeMatch.ts): those two diverge on punctuation handling (see module
+ * comment) and each caller's existing tests pin its own historical behavior.
+ */
+function normalizeForComparison(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Token-overlap merchant comparison: normalizes both names and considers them
+ * similar when they're equal, or one's token set is a subset of the other's
+ * (handles "Amatista" vs "Amatista Cookhouse", store-number suffixes, etc.).
+ * Empty-vs-empty is NOT similar (nothing to compare).
+ */
+export function merchantSimilar(a: string, b: string): boolean {
+  const na = normalizeForComparison(a);
+  const nb = normalizeForComparison(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const tokensA = new Set(na.split(" "));
+  const tokensB = new Set(nb.split(" "));
+  const [smaller, larger] = tokensA.size <= tokensB.size ? [tokensA, tokensB] : [tokensB, tokensA];
+  for (const token of smaller) {
+    if (!larger.has(token)) return false;
+  }
+  return true;
+}
+
+/**
+ * Candidate key for cheaply finding *possible* duplicates — NOT a unique id
+ * (two distinct purchases can share one; a real duplicate check must still
+ * run {@link isLikelyDuplicate}). Uses `'none'` for an unknown account so two
+ * untagged rows still group together.
+ */
+export function fingerprint(txn: IdentityTransaction): string {
+  const accountKey = txn.accountId ?? "none";
+  return `${accountKey}|${amountCents(txn.amount)}|${txn.date}`;
+}
+
+/**
+ * Decide whether two transaction-like rows likely represent the SAME
+ * real-world purchase. Pairwise only — never chain through a third row.
+ *
+ * Policy (see advisor-plans/03-transaction-identity-reconciliation.md):
+ *  - Never match two rows that are both `verified` (each already represents
+ *    a settled, user-confirmed entry).
+ *  - Never match across income vs. expense (`category === INCOME_CATEGORY`
+ *    on one side only).
+ *  - `needsAmount` stub on either side: amount is a wildcard (the stub's
+ *    amount is a 0 placeholder, not a real value to compare) — match on
+ *    account (when both known and differ, no match) and merchant similarity;
+ *    this mirrors reconcile.ts's stub-fill contract at the policy level
+ *    without changing reconcile.ts's own decision path.
+ *  - Otherwise: same account (when both known; unknown-either-side does NOT
+ *    disqualify) + same amount-cents + date within
+ *    {@link DUPLICATE_WINDOW_DAYS} calendar days + `merchantSimilar` →
+ *    `'duplicate'`.
+ *  - Same amount-cents + within the date window but merchant dissimilar, OR
+ *    either account unknown (so we can't be sure it's not a different
+ *    card) → `'possible'`.
+ *  - Otherwise → `'distinct'`. This is also the outcome for two identical
+ *    recurring subscriptions posted a few days apart when they're NOT within
+ *    the window, or — the documented hard case — when they're both
+ *    unambiguously separate charges the window can't tell apart; callers
+ *    that need subscription-cadence awareness must use their own recurrence
+ *    metadata, since amount+merchant+date alone cannot safely distinguish
+ *    "the same $9.99 charge, delayed" from "next month's $9.99 charge".
+ */
+export function isLikelyDuplicate(a: IdentityTransaction, b: IdentityTransaction): DuplicateVerdict {
+  if (a.status === "verified" && b.status === "verified") return "distinct";
+
+  const aIsIncome = a.category === INCOME_CATEGORY;
+  const bIsIncome = b.category === INCOME_CATEGORY;
+  if (aIsIncome !== bIsIncome) return "distinct";
+
+  const aDay = parseISO(a.date);
+  const bDay = parseISO(b.date);
+  if (Number.isNaN(aDay.getTime()) || Number.isNaN(bDay.getTime())) return "distinct";
+  const dayDistance = Math.abs(differenceInCalendarDays(aDay, bDay));
+  if (dayDistance > DUPLICATE_WINDOW_DAYS) return "distinct";
+
+  const accountsKnown = Boolean(a.accountId && b.accountId);
+  const accountsConflict = Boolean(a.accountId && b.accountId && a.accountId !== b.accountId);
+  if (accountsConflict) return "distinct";
+
+  const eitherIsStub = Boolean(a.needsAmount || b.needsAmount);
+  const similar = merchantSimilar(a.merchant, b.merchant);
+
+  if (eitherIsStub) {
+    // Amount is a wildcard for a stub — only merchant + account can decide.
+    if (similar) return accountsKnown ? "duplicate" : "possible";
+    return "possible";
+  }
+
+  const amountsMatch = amountCents(a.amount) === amountCents(b.amount);
+  if (!amountsMatch) return "distinct";
+
+  if (similar && accountsKnown) return "duplicate";
+  return "possible";
+}

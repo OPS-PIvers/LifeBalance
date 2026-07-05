@@ -11,6 +11,15 @@
  * "Trader Joe's" on the receipt matches a "trader joes" transaction. Amount is
  * deliberately NOT part of the match: an Apple Pay `$0` stub has amount 0, so
  * amount equality would defeat the primary use case (filling that stub in).
+ *
+ * Plan 03 PR-1 note: `normalizeStoreName`'s exact-equality comparison here is
+ * intentionally NOT replaced by the newer `merchantSimilar` token-overlap
+ * comparator in `utils/transactionIdentity.ts` — `normalizeStoreName` treats
+ * apostrophes/periods differently than that module's own normalizer (see the
+ * divergence note there), and this file's tests pin the exact-equality
+ * behavior. `isLikelyDuplicate`/`fingerprint` are the shared vocabulary future
+ * wire-ins (Plaid sync, quickAdd — plan 03 PR-3) should use for NEW duplicate
+ * detection; this file keeps its historical store-based matching unchanged.
  */
 import { differenceInCalendarDays, parseISO } from 'date-fns';
 
