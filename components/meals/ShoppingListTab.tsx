@@ -19,6 +19,7 @@ import { QuickAddBar } from '@/components/ui/QuickAddBar';
 import EmptyState from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import PageHeader from '@/components/ui/PageHeader';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
 import { haptic } from '@/utils/haptics';
 import { generateCsvExport } from '@/utils/exportUtils';
@@ -503,36 +504,39 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
             pattern), reclaiming the old 4-icon cluster + the 3-button row. The
             trigger shows a spinner while AI Optimize runs so feedback survives a
             closed menu. */}
-        <div className="flex justify-between items-center">
-            <h1 className="font-display text-3xl font-semibold tracking-tight text-brand-900 dark:text-brand-50">Shopping list</h1>
-            <div className="relative">
-                <button
-                    onClick={() => setMenuOpen((o) => !o)}
-                    aria-label="Shopping list actions"
-                    aria-haspopup="menu"
-                    aria-expanded={menuOpen}
-                    className="p-2 text-brand-500 hover:text-accent-600 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-400 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
-                >
-                    {isOptimizing
-                        ? <Loader2 className="w-5 h-5 animate-spin" />
-                        : <MoreHorizontal className="w-5 h-5" />}
-                </button>
-                {/* Mounted only while open: Menu builds its button elements
-                    eagerly (JSX children evaluate before Popover discards them
-                    when closed), so gating here keeps add-input keystrokes from
-                    re-walking the menu tree. */}
-                {menuOpen && (
-                    <Menu
-                        isOpen={menuOpen}
-                        onClose={() => setMenuOpen(false)}
-                        ariaLabel="Shopping list actions"
-                        position="top-full right-0 mt-2"
-                        className="min-w-[208px]"
-                        items={menuItems}
-                    />
-                )}
-            </div>
-        </div>
+        <PageHeader
+            className="px-0"
+            title="Shopping list"
+            actions={
+                <div className="relative">
+                    <button
+                        onClick={() => setMenuOpen((o) => !o)}
+                        aria-label="Shopping list actions"
+                        aria-haspopup="menu"
+                        aria-expanded={menuOpen}
+                        className="p-2 text-brand-500 hover:text-accent-600 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-400 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
+                    >
+                        {isOptimizing
+                            ? <Loader2 className="w-5 h-5 animate-spin" />
+                            : <MoreHorizontal className="w-5 h-5" />}
+                    </button>
+                    {/* Mounted only while open: Menu builds its button elements
+                        eagerly (JSX children evaluate before Popover discards them
+                        when closed), so gating here keeps add-input keystrokes from
+                        re-walking the menu tree. */}
+                    {menuOpen && (
+                        <Menu
+                            isOpen={menuOpen}
+                            onClose={() => setMenuOpen(false)}
+                            ariaLabel="Shopping list actions"
+                            position="top-full right-0 mt-2"
+                            className="min-w-[208px]"
+                            items={menuItems}
+                        />
+                    )}
+                </div>
+            }
+        />
 
         {/* Anchored add bar — pinned to the top of the single <main> scroller so
             it stays visible while the list scrolls under it. Top (not bottom)

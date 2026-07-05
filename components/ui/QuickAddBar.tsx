@@ -18,15 +18,28 @@ interface QuickAddBarProps {
   icon?: React.ReactNode;
   /** aria-label for the submit button. */
   submitLabel?: string;
+  /**
+   * When true, renders as a flush first-row of the list it feeds instead of a
+   * standalone bordered/rounded input — drop the host's own detached
+   * bordered/blurred band and render this directly atop a `SurfaceList` (or
+   * similar) so the add bar reads as the list's first row, not a separate
+   * toolbar. Defaults to `false` (unchanged standalone look).
+   */
+  attached?: boolean;
 }
 
 /**
- * Presentational sticky quick-add bar: a `<form>` wrapping a styled text input
- * with an absolutely-positioned round accent submit button overlaid at the
- * right edge. Holds no state and no submit logic — the host owns the value
- * state, the submit handler, the input ref, and the disabled rule. Shared by
- * the to-do quick-add bar and the shopping-list smart-add bar so the visual
- * shell stays in lockstep.
+ * Presentational quick-add bar: a `<form>` wrapping a styled text input with
+ * an absolutely-positioned round accent submit button overlaid at the right
+ * edge. Holds no state and no submit logic — the host owns the value state,
+ * the submit handler, the input ref, and the disabled rule. Shared by the
+ * to-do quick-add bar and the shopping-list smart-add bar so the visual shell
+ * stays in lockstep.
+ *
+ * Default (`attached=false`) is a standalone rounded/bordered input, unchanged
+ * from before. Pass `attached` to flatten the input into a flush top row (no
+ * radius, no own border) for hosts that want it to sit directly on top of a
+ * list surface instead of inside a separately-bordered/blurred band.
  */
 export const QuickAddBar: React.FC<QuickAddBarProps> = ({
   value,
@@ -39,6 +52,7 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
   className,
   icon = <Plus size={20} />,
   submitLabel,
+  attached = false,
 }) => {
   return (
     <form onSubmit={onSubmit} className={cn('relative flex-1', className)}>
@@ -49,7 +63,12 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         aria-label={ariaLabel || placeholder}
-        className="w-full pl-4 pr-12 py-3 bg-white border border-brand-200 rounded-btn focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden placeholder:text-brand-400 dark:bg-brand-800 dark:border-brand-600 dark:text-brand-50 dark:placeholder:text-brand-500"
+        className={cn(
+          'w-full pl-4 pr-12 py-3 bg-white transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden placeholder:text-brand-400 dark:bg-brand-800 dark:text-brand-50 dark:placeholder:text-brand-500',
+          attached
+            ? 'border-0 border-b border-brand-200 dark:border-brand-700 focus:ring-0 focus:border-accent-500'
+            : 'border border-brand-200 rounded-btn focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 dark:border-brand-600'
+        )}
       />
       <Button
         type="submit"

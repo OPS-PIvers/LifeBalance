@@ -21,6 +21,12 @@ interface TabsContextValue {
 
 const TabsContext = React.createContext<TabsContextValue | null>(null);
 
+// Separate from TabsContext (which is scoped to the whole Tabs root) because
+// size is a per-TabsList concern — a page could in principle render more than
+// one TabsList under a single Tabs root. Defaults to 'md' when no TabsList
+// ancestor is present (shouldn't happen in practice, but keeps TabsTrigger safe).
+const TabsSizeContext = React.createContext<'md' | 'sm'>('md');
+
 // Tabs: a routed/tabpanel control (role=tablist/tab/tabpanel + arrow-key roving
 // focus + animated TabsContent). Shares the pill-in-trough track + white active
 // chrome with SegmentedControl — reach for SegmentedControl instead for an inline
@@ -63,6 +69,8 @@ export const Tabs: React.FC<TabsProps> = ({
   );
 };
 
+TabsContext.displayName = 'TabsContext';
+
 /** Derive stable ids from the shared prefix and a tab's value. */
 function useTabIds(tabValue: string, idPrefix: string) {
   // Replace characters that are invalid in HTML id attributes
@@ -72,9 +80,20 @@ function useTabIds(tabValue: string, idPrefix: string) {
   return { triggerId, panelId };
 }
 
-export const TabsList: React.FC<{ children: React.ReactNode; className?: string }> = ({
+export const TabsList: React.FC<{
+  children: React.ReactNode;
+  className?: string;
+  /**
+   * `md` (default) reserves the full 44px (`min-h-11`) primary-nav touch
+   * target. `sm` shrinks triggers to `min-h-9`/tighter padding for secondary
+   * in-page tab strips (e.g. a day picker) — reserve `md` for primary
+   * bottom-nav-adjacent navigation.
+   */
+  size?: 'md' | 'sm';
+}> = ({
   children,
   className,
+  size = 'md',
 }) => {
   const context = React.useContext(TabsContext);
   if (!context) throw new Error('TabsList must be used within Tabs');
@@ -111,16 +130,18 @@ export const TabsList: React.FC<{ children: React.ReactNode; className?: string 
   };
 
   return (
-    <div
-      className={cn(
-        'bg-brand-100 dark:bg-brand-800 p-1 rounded-xl flex flex-nowrap gap-1 overflow-x-auto no-scrollbar border border-brand-200 dark:border-brand-700',
-        className
-      )}
-      role="tablist"
-      onKeyDown={handleKeyDown}
-    >
-      {children}
-    </div>
+    <TabsSizeContext.Provider value={size}>
+      <div
+        className={cn(
+          'bg-brand-100 dark:bg-brand-800 p-1 rounded-xl flex flex-nowrap gap-1 overflow-x-auto no-scrollbar border border-brand-200 dark:border-brand-700',
+          className
+        )}
+        role="tablist"
+        onKeyDown={handleKeyDown}
+      >
+        {children}
+      </div>
+    </TabsSizeContext.Provider>
   );
 };
 
@@ -132,6 +153,7 @@ export const TabsTrigger: React.FC<{
 }> = ({ value, children, className, disabled }) => {
   const context = React.useContext(TabsContext);
   if (!context) throw new Error('TabsTrigger must be used within Tabs');
+  const size = React.useContext(TabsSizeContext);
 
   const { registerTab, unregisterTab, idPrefix } = context;
   const { triggerId, panelId } = useTabIds(value, idPrefix);
@@ -154,7 +176,8 @@ export const TabsTrigger: React.FC<{
       onClick={() => !disabled && context.onValueChange(value)}
       disabled={disabled}
       className={cn(
-        'inline-flex flex-none items-center justify-center gap-2 min-h-11 px-3 py-2 text-sm font-semibold tracking-tight rounded-sm transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
+        'inline-flex flex-none items-center justify-center gap-2 text-sm font-semibold tracking-tight rounded-sm transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
+        size === 'sm' ? 'min-h-9 px-2.5 py-1.5' : 'min-h-11 px-3 py-2',
         isActive
           ? 'bg-white text-accent-700 border border-brand-200 dark:bg-brand-700 dark:text-accent-200 dark:border-brand-600'
           : 'text-brand-500 hover:text-brand-700 hover:bg-white/60 dark:text-brand-400 dark:hover:text-brand-200 dark:hover:bg-brand-700/50',

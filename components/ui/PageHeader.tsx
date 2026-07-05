@@ -19,10 +19,15 @@ export interface PageHeaderProps {
 /**
  * Canonical page masthead: the editorial display title, an optional muted
  * subtitle, and an optional right-aligned actions slot, on the standard
- * `px-5 pt-8 pb-6` rhythm. Replaces the per-page hand-rolled header markup so
- * every route shares one title size, weight, gutter, and top inset (see the UI
- * 10x audit — page headers were spelled several different ways and three pages
- * had none at all). Pages adopt it in a later batch.
+ * `px-5 pt-5 pb-4` compact rhythm. Replaces the per-page hand-rolled header
+ * markup so every route shares one title size, weight, gutter, and top inset
+ * (see the UI 10x audit — page headers were spelled several different ways
+ * and three pages had none at all). The scale is deliberately compact
+ * (`text-xl`, tight padding) across every page — including "hero" landing
+ * pages like Dashboard — per the UX content audit's "compact everywhere"
+ * decision: utility-scale titles read better once the app has several dozen
+ * screens sharing one masthead, and a single scale is easier to keep
+ * consistent than a per-page hero/utility split.
  */
 const PageHeader: React.FC<PageHeaderProps> = ({
   title,
@@ -34,7 +39,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
 }) => (
   <header
     className={cn(
-      'px-5 pt-8 pb-6 flex justify-between gap-3',
+      'px-5 pt-5 pb-4 flex justify-between gap-3',
       align === 'end' ? 'items-end' : 'items-start',
       className
     )}
@@ -42,12 +47,12 @@ const PageHeader: React.FC<PageHeaderProps> = ({
     <div className="min-w-0">
       <h1
         id={titleId}
-        className="font-display text-3xl font-semibold tracking-tight text-brand-900 dark:text-brand-50"
+        className="font-display text-xl font-semibold tracking-tight text-brand-900 dark:text-brand-50"
       >
         {title}
       </h1>
       {subtitle && (
-        <p className="mt-1 text-sm text-brand-500 dark:text-brand-400 font-medium">
+        <p className="mt-0.5 text-sm text-brand-500 dark:text-brand-400 font-medium">
           {subtitle}
         </p>
       )}
