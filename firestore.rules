@@ -356,6 +356,7 @@ service cloud.firestore {
                               isValidOptionalString(request.resource.data.get('needsAmountPromptedAt', null), 30) && // ISO timestamp
                               isValidOptionalString(request.resource.data.get('reviewSnoozedUntil', null), 10) && // YYYY-MM-DD Action-Queue snooze
                               isValidOptionalString(request.resource.data.get('plaidTransactionId', null), 100) && // Plaid dedup key (server writes via Admin SDK; this is defense-in-depth)
+                              isValidOptionalString(request.resource.data.get('possibleDuplicateOf', null), 100) && // Plan 03: doc id of a suspected duplicate row (cleared by Merge/Keep-both)
                               // Booleans
                               (request.resource.data.get('isRecurring', null) == null || isValidBoolean(request.resource.data.isRecurring)) &&
                               (request.resource.data.get('autoCategorized', null) == null || isValidBoolean(request.resource.data.autoCategorized)) &&

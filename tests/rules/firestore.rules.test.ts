@@ -253,6 +253,32 @@ describe('member access', () => {
     );
   });
 
+  it('can create a transaction carrying possibleDuplicateOf (Plan 03 dedup flag)', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'transactions', 'txn-possible-dup'), {
+        amount: 25.5,
+        merchant: 'Coffee Shop',
+        category: 'Dining',
+        date: '2026-06-22',
+        status: 'pending_review',
+        possibleDuplicateOf: 'txn-seed',
+      }),
+    );
+  });
+
+  it('rejects a transaction whose possibleDuplicateOf exceeds the length cap', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'transactions', 'txn-bad-dup'), {
+        amount: 25.5,
+        merchant: 'Coffee Shop',
+        category: 'Dining',
+        date: '2026-06-22',
+        status: 'pending_review',
+        possibleDuplicateOf: 'x'.repeat(101),
+      }),
+    );
+  });
+
   it('can create a well-formed habit', async () => {
     await assertSucceeds(
       setDoc(doc(dbFor(BOB), 'households', H1, 'habits', 'habit-new'), {
