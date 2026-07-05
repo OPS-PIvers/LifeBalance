@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useShopping, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem, QuickStockList } from '@/types/schema';
-import { Plus, Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Share2, Save, ShoppingCart, MoreHorizontal, ChevronDown } from 'lucide-react';
+import { Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Share2, Save, ShoppingCart, MoreHorizontal, ChevronDown } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import type { OptimizableItem } from '@/services/geminiService.types';
@@ -73,18 +73,7 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({ filterStore, stores, on
   );
 };
 
-interface ShoppingListTabProps {
-  /**
-   * Pixel offset for the sticky add bar's `top`, to clear any sticky chrome a
-   * host renders above it. Default 0 (e.g. /shopping and /meals, where nothing
-   * is pinned above). /lists passes its sticky tab-strip height so the add bar
-   * pins just below it. Inline `style.top` is used (not a Tailwind `top-[]`
-   * class) because the value is host-driven and dynamic classes won't compile.
-   */
-  stickyTopOffset?: number;
-}
-
-const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }) => {
+const ShoppingListTab: React.FC = () => {
   const {
     shoppingList,
     addShoppingItem,
@@ -538,23 +527,55 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
             }
         />
 
-        {/* Anchored add bar — the standalone rounded input floating on the
-            page background (the earlier `attached` full-bleed card band read
-            as a detached gray stripe over the separately-rounded list below —
-            owner feedback 2026-07-05). Pinned to the top of the single <main>
-            scroller so it stays visible while the list scrolls under it. Top
-            (not bottom) deliberately clears the global Capture FAB at
-            bottom-center. The per-host `stickyTopOffset` clears any sticky
-            chrome above it (the /lists tab strip). `-mx-4 px-4` bleeds the
-            blurred backdrop to the content edges; Reorder.Group stays a
-            sibling below so its drag layer never shares this pinned stacking
-            context. */}
-        <div
-            className="sticky z-20 -mx-4 px-4 py-2 bg-brand-50/95 dark:bg-brand-900/95 backdrop-blur"
-            style={{ top: `${stickyTopOffset}px` }}
-        >
-            <div className="flex items-center gap-2">
+        {/* Quick restock — demoted from an always-on top strip to a collapsed
+            disclosure (rarely used; must not eat prime real estate). One tap
+            reveals the unchanged horizontally-scrollable chip row. Hidden
+            entirely when no quick-stock lists exist (zero footprint). */}
+        {quickStockLists && quickStockLists.length > 0 && (
+            <div>
+                <button
+                    onClick={() => setRestockOpen((o) => !o)}
+                    aria-expanded={restockOpen}
+                    className="flex items-center gap-1.5 px-1 text-xxs font-bold uppercase tracking-wider text-brand-400 hover:text-brand-600 dark:text-brand-500 dark:hover:text-brand-300 transition-colors"
+                >
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-(--duration-fast) ease-(--ease-standard) ${restockOpen ? '' : '-rotate-90'}`} />
+                    Quick restock
+                </button>
+                {restockOpen && (
+                    <div className="mt-2">
+                        <QuickRestockRow showHeader={false} />
+                    </div>
+                )}
+            </div>
+        )}
+
+        {/* Clear Checked */}
+        {hasPurchasedItems && (
+            <div className="flex justify-end">
+                <Button
+                    variant="subtle"
+                    size="sm"
+                    leftIcon={<RotateCcw className="w-3 h-3" />}
+                    onClick={() => setIsClearCheckedConfirmOpen(true)}
+                    className="rounded-full"
+                >
+                    Clear checked
+                </Button>
+            </div>
+        )}
+
+        {/* Main List — the add bar + store filter are now the first row INSIDE
+            this same rounded surface (owner request: the add field should be
+            row one of the list, not a detached floating band above it). The
+            row scrolls with the card (no longer sticky/pinned) — the global
+            Capture FAB covers add-while-scrolled. Reorder.Group (the drag
+            layer) is nested as a plain sibling below the add row inside one
+            shared rounded container, so it never owns the outer radius/border
+            itself — only the item rows drag. */}
+        <div className="surface-section overflow-hidden [&>*:first-child]:border-t-0">
+            <div className="flex items-center gap-2 hairline-divider">
                 <QuickAddBar
+                    attached
                     onSubmit={handleSmartAdd}
                     inputRef={addInputRef}
                     value={newItemText}
@@ -568,7 +589,7 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
                     menu) because its active store scope must stay glanceable. A
                     quiet icon at rest; an accent pill with the store name + inline
                     clear when active (replacing the old "Clear filter: X" row). */}
-                <div className="relative flex-none">
+                <div className="relative flex-none mr-2">
                     {filterStore ? (
                         <div className="flex items-center bg-accent-50 text-accent-700 dark:bg-accent-900/30 dark:text-accent-200 rounded-btn">
                             <button
@@ -611,76 +632,31 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
                     )}
                 </div>
             </div>
-        </div>
 
-        {/* Quick restock — demoted from an always-on top strip to a collapsed
-            disclosure (rarely used; must not eat prime real estate). One tap
-            reveals the unchanged horizontally-scrollable chip row. Hidden
-            entirely when no quick-stock lists exist (zero footprint). */}
-        {quickStockLists && quickStockLists.length > 0 && (
-            <div>
-                <button
-                    onClick={() => setRestockOpen((o) => !o)}
-                    aria-expanded={restockOpen}
-                    className="flex items-center gap-1.5 px-1 text-xxs font-bold uppercase tracking-wider text-brand-400 hover:text-brand-600 dark:text-brand-500 dark:hover:text-brand-300 transition-colors"
-                >
-                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-(--duration-fast) ease-(--ease-standard) ${restockOpen ? '' : '-rotate-90'}`} />
-                    Quick restock
-                </button>
-                {restockOpen && (
-                    <div className="mt-2">
-                        <QuickRestockRow showHeader={false} />
-                    </div>
-                )}
-            </div>
-        )}
-
-        {/* Clear Checked */}
-        {hasPurchasedItems && (
-            <div className="flex justify-end">
-                <Button
-                    variant="subtle"
-                    size="sm"
-                    leftIcon={<RotateCcw className="w-3 h-3" />}
-                    onClick={() => setIsClearCheckedConfirmOpen(true)}
-                    className="rounded-full"
-                >
-                    Clear checked
-                </Button>
-            </div>
-        )}
-
-        {/* Main List */}
-        {isLoading ? (
-            <div className="surface-section overflow-hidden">
-                {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} className="flex items-center gap-3 px-3 py-2.5 border-t border-brand-200 dark:border-brand-700 first:border-t-0">
+            {isLoading ? (
+                Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-3 px-3 py-2.5 hairline-divider">
                         <Skeleton className="w-3 h-5 shrink-0" />
                         <Skeleton className="w-5 h-5 rounded-full shrink-0" />
                         <Skeleton className="h-5 flex-1" />
                     </div>
-                ))}
-            </div>
-        ) : items.length === 0 ? (
-             <EmptyState
-                variant="surface"
-                size="compact"
-                icon={<ShoppingCart className="w-7 h-7" />}
-                title={filterStore ? `Nothing for ${filterStore}` : 'Your list is empty'}
-                description={filterStore ? 'No items match this store filter.' : 'Add items above to start your shopping list.'}
-                action={filterStore ? (
-                    <Button variant="secondary" onClick={() => setFilterStore(null)}>
-                        Clear Filter
-                    </Button>
-                ) : (
-                    <Button variant="primary" leftIcon={<Plus size={16} />} onClick={() => addInputRef.current?.focus()}>
-                        Add Item
-                    </Button>
-                )}
-            />
-        ) : filterStore ? (
-             <div className="surface-section overflow-hidden [&>*:first-child]:border-t-0">
-                {items.map(item => (
+                ))
+            ) : items.length === 0 ? (
+                <div className="hairline-divider">
+                    <EmptyState
+                        size="compact"
+                        icon={<ShoppingCart className="w-7 h-7" />}
+                        title={filterStore ? `Nothing for ${filterStore}` : 'Your list is empty'}
+                        description={filterStore ? 'No items match this store filter.' : 'Add an item above to start your shopping list.'}
+                        action={filterStore ? (
+                            <Button variant="secondary" onClick={() => setFilterStore(null)}>
+                                Clear Filter
+                            </Button>
+                        ) : undefined}
+                    />
+                </div>
+            ) : filterStore ? (
+                items.map(item => (
                     <ShoppingItemRow
                         key={item.id}
                         item={item}
@@ -691,25 +667,25 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
                         onEdit={setEditingItem}
                         isReorderable={false}
                     />
-                ))}
-            </div>
-        ) : (
-            <Reorder.Group axis="y" values={items} onReorder={handleReorder} className="surface-section overflow-hidden [&>*:first-child]:border-t-0">
-                {items.map(item => (
-                    <ShoppingItemRow
-                        key={item.id}
-                        item={item}
-                        stores={stores}
-                        activeQuickList={itemQuickListMap.get(item.name.toLowerCase())}
-                        onCheck={handleCheck}
-                        onDelete={handleDelete}
-                        onEdit={setEditingItem}
-                        onReorderDragStart={handleReorderDragStart}
-                        onReorderDragEnd={handleReorderDragEnd}
-                    />
-                ))}
-            </Reorder.Group>
-        )}
+                ))
+            ) : (
+                <Reorder.Group axis="y" values={items} onReorder={handleReorder} as="div">
+                    {items.map(item => (
+                        <ShoppingItemRow
+                            key={item.id}
+                            item={item}
+                            stores={stores}
+                            activeQuickList={itemQuickListMap.get(item.name.toLowerCase())}
+                            onCheck={handleCheck}
+                            onDelete={handleDelete}
+                            onEdit={setEditingItem}
+                            onReorderDragStart={handleReorderDragStart}
+                            onReorderDragEnd={handleReorderDragEnd}
+                        />
+                    ))}
+                </Reorder.Group>
+            )}
+        </div>
 
         {/* Modals */}
         <GroceryCatalogModal

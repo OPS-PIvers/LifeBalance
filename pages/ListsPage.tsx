@@ -63,10 +63,8 @@ const ListsPage: React.FC = () => {
     }
   }, [selectedTab]);
 
-  // The sticky tab strip is only rendered when there's more than one tab; the
-  // sub-tabs offset their pinned add-bars to sit just under it (0 when hidden).
+  // The sticky tab strip is only rendered when there's more than one tab.
   const showTabStrip = enabledTabs.length > 1;
-  const stickyTopOffset = showTabStrip ? 72 : 0;
 
   return (
     <div className="flex flex-col h-full">
@@ -87,10 +85,7 @@ const ListsPage: React.FC = () => {
 
       <div className="flex-1">
         {activeTab === 'todos' ? (
-          // Offset the to-do quick-add bar so it pins just under this page's
-          // sticky tab strip (measured ~73px: px-4 pt-4 pb-2 + TabsList) — same
-          // value the shopping tab uses. 0 when the strip is hidden.
-          <ToDosPage stickyTopOffset={stickyTopOffset} />
+          <ToDosPage />
         ) : activeTab === 'meals' ? (
           // Shared content column width/top padding across all three tabs
           // (matches ToDosPage's own `max-w-2xl px-4` wrapper) so switching
@@ -100,9 +95,7 @@ const ListsPage: React.FC = () => {
           </div>
         ) : (
           <div className="max-w-2xl mx-auto px-4 pb-nav-safe pt-4">
-            {/* Offset the shopping add bar so it pins just under this page's
-                sticky tab strip (measured ~73px: px-4 pt-4 pb-2 + TabsList). */}
-            <ShoppingListTab stickyTopOffset={stickyTopOffset} />
+            <ShoppingListTab />
           </div>
         )}
       </div>
