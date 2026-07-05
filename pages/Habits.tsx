@@ -18,6 +18,7 @@ import SmartHabitReorderModal from '@/components/modals/SmartHabitReorderModal';
 import { HabitCoach } from '@/components/habits/HabitCoach';
 import HabitHistoryCalendar from '@/components/habits/HabitHistoryCalendar';
 import HabitsHeaderMenu from '@/components/habits/HabitsHeaderMenu';
+import PageHeader from '@/components/ui/PageHeader';
 import HabitsRewardsTab from '@/components/habits/HabitsRewardsTab';
 import HabitsChallengesTab from '@/components/habits/HabitsChallengesTab';
 import HabitsInsightsTab from '@/components/habits/HabitsInsightsTab';
@@ -281,19 +282,15 @@ const Habits: React.FC = () => {
   const hasNoHabits = habits.length === 0;
 
   return (
-    <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe pt-6">
+    <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe">
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        {/* Editorial title + single overflow menu (collapses Export/Adjust/Reorder/Manage) */}
-        <div className="px-4 mb-6 flex flex-col gap-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h1 className="font-display text-3xl font-semibold tracking-tight text-brand-900 dark:text-brand-50">
-                Habits
-              </h1>
-              <p className="mt-1 text-sm text-brand-500 dark:text-brand-400 font-medium">
-                Build your streak, earn rewards.
-              </p>
-            </div>
+        {/* Compact PageHeader (title+subtitle) with the overflow menu as its
+            actions slot, replacing the hand-rolled pt-8/text-3xl header — see
+            UX content audit Batch 4. */}
+        <PageHeader
+          title="Habits"
+          subtitle="Build your streak, earn rewards."
+          actions={
             <HabitsHeaderMenu
               onExport={handleExport}
               onAdjust={() => setIsSmartAdjustOpen(true)}
@@ -301,10 +298,14 @@ const Habits: React.FC = () => {
               onManage={() => setIsWizardOpen(true)}
               actionsDisabled={hasNoHabits}
             />
-          </div>
+          }
+        />
 
-          {/* Tab Switcher — unified ui/Tabs */}
-          <TabsList>
+        {/* Tab Switcher — sm size: this is a secondary in-page filter, not
+            primary bottom-nav-adjacent navigation (only "Track" is the
+            daily-use default). */}
+        <div className="px-4 mb-4">
+          <TabsList size="sm">
             <TabsTrigger value="track">
               <LayoutList size={16} />
               Track
@@ -332,34 +333,35 @@ const Habits: React.FC = () => {
           </TabsList>
         </div>
 
-        {/* Migration Banner — solid warm surface (gradient/glass killed) */}
-        {habitsNeedingMigration.length > 0 && (
-          <div className="px-4 mb-6">
-            <button
-              onClick={() => navigate('/migrate-submissions')}
-              className="w-full bg-warm-500 hover:bg-warm-600 text-white rounded-lg p-4 shadow-raised transition-[background-color,transform] duration-(--duration-fast) ease-(--ease-standard) active:scale-[0.99] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="bg-white/15 p-2 rounded-card">
-                    <Database size={24} />
-                  </div>
-                  <div className="text-left">
-                    <h3 className="font-display font-semibold text-base">Backfill historical data</h3>
-                    <p className="text-xs text-white/90 mt-0.5">
-                      {habitsNeedingMigration.length} habit{habitsNeedingMigration.length !== 1 ? 's' : ''} ready to migrate
-                    </p>
-                  </div>
-                </div>
-                <ArrowRight size={20} />
-              </div>
-            </button>
-          </div>
-        )}
-
         {/* Main Content */}
         <div className="px-4 pb-6">
           <TabsContent value="track" className="space-y-6">
+            {/* Migration Banner — scoped to the Track tab only (the tab it's
+                relevant to), rather than showing on every tab regardless of
+                relevance (Rewards/Insights/etc.) — see UX content audit
+                Batch 4. Solid warm surface (gradient/glass killed). */}
+            {habitsNeedingMigration.length > 0 && (
+              <button
+                onClick={() => navigate('/migrate-submissions')}
+                className="w-full bg-warm-500 hover:bg-warm-600 text-white rounded-lg p-4 shadow-raised transition-[background-color,transform] duration-(--duration-fast) ease-(--ease-standard) active:scale-[0.99] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-white/15 p-2 rounded-card">
+                      <Database size={24} />
+                    </div>
+                    <div className="text-left">
+                      <h3 className="font-display font-semibold text-base">Backfill historical data</h3>
+                      <p className="text-xs text-white/90 mt-0.5">
+                        {habitsNeedingMigration.length} habit{habitsNeedingMigration.length !== 1 ? 's' : ''} ready to migrate
+                      </p>
+                    </div>
+                  </div>
+                  <ArrowRight size={20} />
+                </div>
+              </button>
+            )}
+
             {categories.length === 0 && (
               <EmptyState
                 variant="dashed"
@@ -387,6 +389,26 @@ const Habits: React.FC = () => {
                 <HabitCategoryList category={category} habits={groupedHabits[category] ?? []} />
               </div>
             ))}
+
+            {/* Kids chores — read-only parent overview (Plan 080c-4). Scoped to
+                the Track tab (rather than rendering below every tab's content
+                regardless of which is active) since it's part of the daily
+                tracking view — see UX content audit Batch 4. Gated on Kid Mode
+                + at least one managed kid with at least one chore, so it stays
+                fully dormant in a normal household. */}
+            {kidModeEnabled && kidsWithChores.length > 0 && (
+              <section aria-label="Kids chores">
+                <Eyebrow as="h2" tone="warm" className="flex items-center gap-2 mb-2 px-1">
+                  <Star size={14} className="fill-current" />
+                  Kids&apos; chores
+                </Eyebrow>
+                <div className="space-y-6">
+                  {kidsWithChores.map(({ kid, chores }) => (
+                    <KidChoresGroup key={kid.uid} kid={kid} chores={chores} />
+                  ))}
+                </div>
+              </section>
+            )}
           </TabsContent>
 
           <TabsContent value="history">
@@ -410,23 +432,6 @@ const Habits: React.FC = () => {
           </TabsContent>
         </div>
       </Tabs>
-
-      {/* Kids chores — read-only parent overview (Plan 080c-4).
-          Gated on Kid Mode + at least one managed kid with at least one chore,
-          so it stays fully dormant in a normal household. */}
-      {kidModeEnabled && kidsWithChores.length > 0 && (
-        <section className="px-4 pb-6" aria-label="Kids chores">
-          <Eyebrow as="h2" tone="warm" className="flex items-center gap-2 mb-2 px-1">
-            <Star size={14} className="fill-current" />
-            Kids&apos; chores
-          </Eyebrow>
-          <div className="space-y-6">
-            {kidsWithChores.map(({ kid, chores }) => (
-              <KidChoresGroup key={kid.uid} kid={kid} chores={chores} />
-            ))}
-          </div>
-        </section>
-      )}
 
       <HabitCreatorWizard isOpen={isWizardOpen} onClose={() => setIsWizardOpen(false)} />
       <SmartHabitAdjustModal isOpen={isSmartAdjustOpen} onClose={() => setIsSmartAdjustOpen(false)} />

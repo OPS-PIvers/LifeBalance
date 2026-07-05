@@ -7,6 +7,7 @@ import { CreateChallengePayload, Insight, InsightAction } from '@/types/schema';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 import Eyebrow from '@/components/ui/Eyebrow';
+import { Section } from '@/components/ui/Section';
 
 interface InsightWidgetProps {
   onOpenArchive: () => void;
@@ -83,76 +84,79 @@ export const InsightWidget: React.FC<InsightWidgetProps> = React.memo(({ onOpenA
   };
 
   return (
-    <div className="surface-section p-5">
-      <div className="flex items-start gap-4">
-        <div className="p-2.5 rounded-card bg-warm-100 text-warm-600 dark:bg-warm-900/40 dark:text-warm-300 shrink-0">
-          <Sparkles size={20} />
+    <Section
+      title={<Eyebrow as="span" tone="warm">AI Insight</Eyebrow>}
+      action={
+        <div className="flex items-center gap-3">
+          {/* Demoted to a quiet text link so "Get Insight" is the sole
+              primary header action; min-h-11 preserves the tap target. */}
+          <Button
+            variant="link"
+            size="sm"
+            className="min-h-11 text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-200"
+            onClick={onOpenArchive}
+          >
+            History
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            className="min-h-11"
+            onClick={refreshInsight}
+            disabled={isGeneratingInsight}
+            leftIcon={<Wand2 size={12} />}
+          >
+            {isGeneratingInsight ? 'Generating…' : 'Get Insight'}
+          </Button>
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <Eyebrow as="h3" tone="warm">AI Insight</Eyebrow>
-            <div className="flex items-center gap-3">
-              {/* Demoted to a quiet text link so "Get Insight" is the sole
-                  primary header action; min-h-11 preserves the tap target. */}
-              <Button
-                variant="link"
-                size="sm"
-                className="min-h-11 text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-200"
-                onClick={onOpenArchive}
-              >
-                History
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                className="min-h-11"
-                onClick={refreshInsight}
-                disabled={isGeneratingInsight}
-                leftIcon={<Wand2 size={12} />}
-              >
-                {isGeneratingInsight ? 'Generating…' : 'Get Insight'}
-              </Button>
-            </div>
+      }
+    >
+      <div className="surface-section p-4">
+        <div className="flex items-start gap-4">
+          <div className="p-2.5 rounded-card bg-warm-100 text-warm-600 dark:bg-warm-900/40 dark:text-warm-300 shrink-0">
+            <Sparkles size={20} />
           </div>
-          {isGeneratingInsight ? (
-            <div className="mb-1 space-y-2" aria-live="polite" aria-busy="true">
-              <span className="sr-only">Generating insight…</span>
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-11/12" />
-              <Skeleton className="h-4 w-2/3" />
-            </div>
-          ) : (
-            <p className="font-display text-brand-800 dark:text-brand-100 leading-relaxed mb-3">
-              &ldquo;{insight}&rdquo;
-            </p>
-          )}
+          <div className="flex-1 min-w-0">
+            {isGeneratingInsight ? (
+              <div className="mb-1 space-y-2" aria-live="polite" aria-busy="true">
+                <span className="sr-only">Generating insight…</span>
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-11/12" />
+                <Skeleton className="h-4 w-2/3" />
+              </div>
+            ) : (
+              <p className="font-display text-brand-800 dark:text-brand-100 leading-relaxed mb-3">
+                &ldquo;{insight}&rdquo;
+              </p>
+            )}
 
-          {/* Action Pills */}
-          {!isGeneratingInsight && insightActions && insightActions.length > 0 && (
-            <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-top-2 duration-(--duration-base)">
-              {insightActions.map((action, idx) => (
-                <Button
-                  key={idx}
-                  variant="secondary"
-                  size="sm"
-                  className="py-2 text-accent-700 hover:text-accent-700 hover:bg-accent-50 dark:text-accent-200 dark:hover:text-accent-200 dark:hover:bg-brand-700"
-                  onClick={() => {
-                    if (action.type === 'create_challenge' && onCreateChallenge) {
-                      onCreateChallenge(action.payload);
-                    } else {
-                      handleAction(action);
-                    }
-                  }}
-                  leftIcon={getActionIcon(action.type)}
-                >
-                  {action.label}
-                </Button>
-              ))}
-            </div>
-          )}
+            {/* Action Pills */}
+            {!isGeneratingInsight && insightActions && insightActions.length > 0 && (
+              <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-top-2 duration-(--duration-base)">
+                {insightActions.map((action, idx) => (
+                  <Button
+                    key={idx}
+                    variant="secondary"
+                    size="sm"
+                    className="py-2 text-accent-700 hover:text-accent-700 hover:bg-accent-50 dark:text-accent-200 dark:hover:text-accent-200 dark:hover:bg-brand-700"
+                    onClick={() => {
+                      if (action.type === 'create_challenge' && onCreateChallenge) {
+                        onCreateChallenge(action.payload);
+                      } else {
+                        handleAction(action);
+                      }
+                    }}
+                    leftIcon={getActionIcon(action.type)}
+                  >
+                    {action.label}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </Section>
   );
 });
 

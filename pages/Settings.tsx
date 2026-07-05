@@ -26,6 +26,7 @@ import {
   Terminal,
   Sparkles,
   Baby,
+  Star,
 } from 'lucide-react';
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
 import MemberModal from '@/components/modals/MemberModal';
@@ -38,7 +39,8 @@ import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
-import { Section, SurfaceList, Row, DisclosureRow, StatGroup, Stat } from '@/components/ui/Section';
+import { Section, SurfaceList, Row, DisclosureRow } from '@/components/ui/Section';
+import PageHeader from '@/components/ui/PageHeader';
 import { Drawer } from '@/components/ui/Drawer';
 import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -92,12 +94,7 @@ const Settings: React.FC = () => {
     setKidModePin,
     apiKeys,
   } = useHouseholdCore();
-  const {
-    dailyPoints,
-    weeklyPoints,
-    totalPoints,
-    habits,
-  } = useGamification();
+  const { habits } = useGamification();
   const {
     transactions,
     buckets,
@@ -419,12 +416,9 @@ const Settings: React.FC = () => {
   });
 
   return (
-    <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe px-4 pt-6">
-      <div className="max-w-2xl mx-auto space-y-8">
-
-        <h1 className="font-display text-3xl font-semibold tracking-tight text-brand-900 dark:text-brand-50 px-1">
-          Settings
-        </h1>
+    <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe">
+      <PageHeader title="Settings" />
+      <div className="max-w-2xl mx-auto px-4 space-y-6">
 
         {isGlobalAdmin && (
           <SurfaceList>
@@ -439,40 +433,35 @@ const Settings: React.FC = () => {
 
         {/* Profile & Preferences */}
         <Section title="Profile">
-          <div className="space-y-4">
-            {/* Identity */}
-            <div className="flex items-center gap-4 px-1">
+          <div className="space-y-3">
+            {/* Identity — compact row, not a decorative hero: the avatar/name/
+                email/role are already visible in the app chrome (TopToolbar/
+                ProfileMenu), so this is just enough to confirm "who am I
+                signed in as" — see UX content audit Batch 4. */}
+            <div className="flex items-center gap-3 px-1">
               {user?.photoURL ? (
                 <img
                   src={user.photoURL}
                   alt={user.displayName || 'User'}
-                  className="w-16 h-16 rounded-full ring-1 ring-brand-200 dark:ring-brand-700"
+                  className="w-10 h-10 rounded-full ring-1 ring-brand-200 dark:ring-brand-700"
                 />
               ) : (
-                <div className="w-16 h-16 rounded-full bg-brand-100 dark:bg-brand-700 flex items-center justify-center">
-                  <User className="w-8 h-8 text-brand-400 dark:text-brand-500" />
+                <div className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-700 flex items-center justify-center">
+                  <User className="w-5 h-5 text-brand-400 dark:text-brand-500" />
                 </div>
               )}
               <div className="flex-1 min-w-0">
-                <h2 className="font-display text-xl font-semibold text-brand-900 dark:text-brand-50 tracking-tight truncate">
-                  {user?.displayName || 'User'}
-                </h2>
-                <p className="text-sm text-brand-500 dark:text-brand-400 font-medium truncate">{user?.email}</p>
-                {currentUser && (
-                  <div className="flex items-center gap-2 mt-2">
-                    {currentUser.role === 'admin' ? (
-                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-warm-700 bg-warm-50 border border-warm-200 px-2.5 py-0.5 rounded-full dark:bg-warm-500/15 dark:text-warm-300 dark:border-warm-500/30">
-                        <Crown size={12} />
-                        Admin
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-accent-700 bg-accent-50 border border-accent-200 px-2.5 py-0.5 rounded-full dark:bg-accent-500/15 dark:text-accent-300 dark:border-accent-500/30">
-                        <Shield size={12} />
-                        Member
-                      </span>
-                    )}
-                  </div>
-                )}
+                <div className="flex items-center gap-1.5">
+                  <p className="font-semibold text-brand-900 dark:text-brand-50 tracking-tight truncate text-sm">
+                    {user?.displayName || 'User'}
+                  </p>
+                  {currentUser && (currentUser.role === 'admin' ? (
+                    <Crown size={12} className="text-warm-500 shrink-0" aria-label="Admin" />
+                  ) : (
+                    <Shield size={12} className="text-accent-600 dark:text-accent-400 shrink-0" aria-label="Member" />
+                  ))}
+                </div>
+                <p className="text-xs text-brand-500 dark:text-brand-400 truncate">{user?.email}</p>
               </div>
             </div>
 
@@ -604,17 +593,19 @@ const Settings: React.FC = () => {
 
         {/* Household */}
         <Section title="Household">
-          <div className="space-y-5">
-            {/* Household identity */}
-            <div className="flex items-center gap-4 px-1">
-              <div className="w-14 h-14 bg-brand-100 dark:bg-brand-700 rounded-card flex items-center justify-center shrink-0">
-                <Users className="w-7 h-7 text-brand-500 dark:text-brand-400" />
+          <div className="space-y-4">
+            {/* Household identity — compact row (the icon-tile hero repeated
+                Profile's pattern for info already visible elsewhere in the app
+                chrome) — see UX content audit Batch 4. */}
+            <div className="flex items-center gap-3 px-1">
+              <div className="w-10 h-10 bg-brand-100 dark:bg-brand-700 rounded-card flex items-center justify-center shrink-0">
+                <Users className="w-5 h-5 text-brand-500 dark:text-brand-400" />
               </div>
               <div className="min-w-0">
-                <h3 className="font-display text-xl font-semibold text-brand-900 dark:text-brand-50 tracking-tight truncate">
+                <p className="font-semibold text-brand-900 dark:text-brand-50 tracking-tight truncate text-sm">
                   {householdSettings.name}
-                </h3>
-                <p className="text-sm text-brand-500 dark:text-brand-400 font-medium">
+                </p>
+                <p className="text-xs text-brand-500 dark:text-brand-400">
                   {members.length} {members.length === 1 ? 'member' : 'members'}
                 </p>
               </div>
@@ -623,38 +614,18 @@ const Settings: React.FC = () => {
             {/* Invite Code */}
             <HouseholdInviteCard inviteCode={householdSettings.inviteCode} />
 
-            {/* Shared Household Points — typography, not a tinted box */}
-            <div className="space-y-3">
-              <p className="text-xs text-brand-500 dark:text-brand-400 px-1">
-                Shared points earned by all members from habits. Tap any total for a detailed breakdown.
-              </p>
-              <StatGroup className="px-1">
-                <button
-                  type="button"
-                  onClick={() => setActivePointsView('daily')}
-                  className="text-left rounded-btn transition-opacity hover:opacity-70 active:scale-[0.98]"
-                  aria-label="View daily points breakdown"
-                >
-                  <Stat label="Daily" value={dailyPoints} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActivePointsView('weekly')}
-                  className="text-left rounded-btn transition-opacity hover:opacity-70 active:scale-[0.98]"
-                  aria-label="View weekly points breakdown"
-                >
-                  <Stat label="Weekly" value={weeklyPoints} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActivePointsView('total')}
-                  className="text-left rounded-btn transition-opacity hover:opacity-70 active:scale-[0.98]"
-                  aria-label="View total points breakdown"
-                >
-                  <Stat label="Total" value={totalPoints.toLocaleString()} />
-                </button>
-              </StatGroup>
-            </div>
+            {/* Shared Household Points — TopToolbar already shows the current
+                daily/weekly totals persistently, so this collapses to a single
+                link into the same breakdown modal rather than re-displaying
+                all three totals here (see UX content audit Batch 4). */}
+            <SurfaceList>
+              <DisclosureRow
+                icon={<Star className="w-5 h-5" />}
+                title="Points breakdown"
+                subtitle="Daily, weekly, and total household points"
+                onClick={() => setActivePointsView('total')}
+              />
+            </SurfaceList>
 
             {/* Members */}
             <div className="space-y-2">
