@@ -122,31 +122,20 @@ export const plaidsynctransactions = onSchedule(
         try {
           let nextCursor = cursor ?? undefined;
           let hasMore = true;
+          // Balance sync (plan 04, section B): Plaid returns the SAME current
+          // balances on every page, so remember the last page's `accounts`
+          // array and stamp the mapped LifeBalance accounts ONCE after the
+          // cursor walk — per-page writes would be redundant Firestore writes
+          // and needless client listener churn on multi-page initial syncs.
+          let latestAccounts: Awaited<
+            ReturnType<typeof plaid.transactionsSync>
+          >["data"]["accounts"] = [];
           while (hasMore) {
             const resp = await plaid.transactionsSync({
               access_token: accessToken,
               cursor: nextCursor,
             });
-
-            // Balance sync (plan 04, section B): stamp each mapped LifeBalance
-            // account with the advisory Plaid balance from THIS page's
-            // `accounts` array. Cheap to repeat per page (small array, no
-            // extra API call) and keeps the value fresh even mid-cursor-walk.
-            for (const plaidAccount of resp.data.accounts ?? []) {
-              const lifeBalanceAccountId = accountMap?.[plaidAccount.account_id];
-              if (!lifeBalanceAccountId) continue; // unmapped — nothing to stamp
-              const balances = plaidAccount.balances;
-              // `current`/`available` are nullable per the Plaid SDK; skip a
-              // reading entirely rather than writing `null` into a `number`-typed
-              // client field. `current` is the primary signal for the affordance
-              // (utils/plaidBalance.ts) so without it there is nothing to stamp.
-              if (balances.current == null) continue;
-              await hhRef.collection("accounts").doc(lifeBalanceAccountId).update({
-                plaidBalanceCurrent: balances.current,
-                ...(balances.available != null ? { plaidBalanceAvailable: balances.available } : {}),
-                plaidBalanceUpdatedAt: new Date().toISOString(),
-              });
-            }
+            if (resp.data.accounts?.length) latestAccounts = resp.data.accounts;
 
             const added = resp.data.added ?? [];
             for (const p of added) {
@@ -217,13 +206,22 @@ export const plaidsynctransactions = onSchedule(
                 },
               );
               if (decision.action === "overwrite") {
-                await ref.update({
-                  amount: decision.fields.amount,
-                  merchant: decision.fields.merchant,
-                  category: decision.fields.category,
-                  date: decision.fields.date,
-                });
-              } else {
+                // Skip a no-op write (a `modified` event can carry changes to
+                // fields we don't track).
+                const changed =
+                  decision.fields.amount !== existingData.amount ||
+                  decision.fields.merchant !== existingData.merchant ||
+                  decision.fields.category !== existingData.category ||
+                  decision.fields.date !== existingData.date;
+                if (changed) {
+                  await ref.update({
+                    amount: decision.fields.amount,
+                    merchant: decision.fields.merchant,
+                    category: decision.fields.category,
+                    date: decision.fields.date,
+                  });
+                }
+              } else if (Object.keys(decision.revision).length > 0) {
                 await ref.update({
                   plaidRevision: { ...decision.revision, revisedAt: new Date().toISOString() },
                 });
@@ -258,6 +256,23 @@ export const plaidsynctransactions = onSchedule(
             await itemDoc.ref.update({
               cursor: nextCursor,
               lastSyncedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          }
+
+          // Advisory balance stamp — once per item per run (see note above).
+          for (const plaidAccount of latestAccounts) {
+            const lifeBalanceAccountId = accountMap?.[plaidAccount.account_id];
+            if (!lifeBalanceAccountId) continue; // unmapped — nothing to stamp
+            const balances = plaidAccount.balances;
+            // `current`/`available` are nullable per the Plaid SDK; skip a
+            // reading entirely rather than writing `null` into a `number`-typed
+            // client field. `current` is the primary signal for the affordance
+            // (utils/plaidBalance.ts) so without it there is nothing to stamp.
+            if (balances.current == null) continue;
+            await hhRef.collection("accounts").doc(lifeBalanceAccountId).update({
+              plaidBalanceCurrent: balances.current,
+              ...(balances.available != null ? { plaidBalanceAvailable: balances.available } : {}),
+              plaidBalanceUpdatedAt: new Date().toISOString(),
             });
           }
         } catch (err) {

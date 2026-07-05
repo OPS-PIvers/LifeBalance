@@ -5,7 +5,7 @@ import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { Pencil, Check, Plus, Target, Star, GripVertical, Trash2, MoreVertical, Landmark, CreditCard, Banknote } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Account } from '@/types/schema';
-import { sumMoney, subtractMoney } from '@/utils/money';
+import { sumMoney, subtractMoney, roundMoney } from '@/utils/money';
 import { shouldOfferBalanceAdoption } from '@/utils/plaidBalance';
 import { track } from '@/services/analytics';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -176,7 +176,7 @@ const BudgetAccounts: React.FC = () => {
   // field remains authoritative; this just syncs it to match the bank.
   const handleAdoptPlaidBalance = (account: Account) => {
     if (typeof account.plaidBalanceCurrent !== 'number') return;
-    updateAccountBalance(account.id, account.plaidBalanceCurrent);
+    updateAccountBalance(account.id, roundMoney(account.plaidBalanceCurrent));
     track('plaid_balance_adopted');
   };
 

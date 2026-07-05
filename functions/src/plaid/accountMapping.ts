@@ -44,21 +44,31 @@ export function resolveAccountMap(
   lifeBalanceAccounts: readonly LifeBalanceAccountInput[],
 ): Record<string, string> {
   const map: Record<string, string> = {};
+  // Each LifeBalance account may be claimed by at most ONE Plaid account —
+  // two Plaid accounts mapped to the same target would overwrite each other's
+  // balance stamps non-deterministically during sync.
+  const claimed = new Set<string>();
 
   for (const plaidAccount of plaidAccounts) {
     const byMask = plaidAccount.mask
-      ? lifeBalanceAccounts.find((a) => a.cardLast4 === plaidAccount.mask)
+      ? lifeBalanceAccounts.find(
+          (a) => !claimed.has(a.id) && a.cardLast4 === plaidAccount.mask,
+        )
       : undefined;
     if (byMask) {
       map[plaidAccount.account_id] = byMask.id;
+      claimed.add(byMask.id);
       continue;
     }
 
     const byName = lifeBalanceAccounts.find(
-      (a) => a.name.trim().toLowerCase() === plaidAccount.name.trim().toLowerCase(),
+      (a) =>
+        !claimed.has(a.id) &&
+        a.name.trim().toLowerCase() === plaidAccount.name.trim().toLowerCase(),
     );
     if (byName) {
       map[plaidAccount.account_id] = byName.id;
+      claimed.add(byName.id);
     }
     // No confident match: leave unmapped rather than guessing.
   }
