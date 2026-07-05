@@ -728,7 +728,12 @@ export const deletehousehold = onCall(
  * (not `defineSecret`) matches how this kind of non-sensitive per-deploy
  * config is expressed via Cloud Functions params.
  */
-const adminUid = defineString("ADMIN_UID");
+// Default "" so CI's non-interactive `firebase deploy` never prompts/fails on
+// an unset param (the same trap as unbound secrets — see the Stripe note
+// above). While unset, the callable's empty-value check below rejects every
+// caller, which is the safe direction; the operator sets ADMIN_UID in the
+// functions env (or via the console) to activate the backfill.
+const adminUid = defineString("ADMIN_UID", { default: "" });
 
 /**
  * Callable function: one-off backfill of the denormalized
