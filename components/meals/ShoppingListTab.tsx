@@ -24,6 +24,7 @@ import { useAutoFocus } from '@/hooks/useAutoFocus';
 import { haptic } from '@/utils/haptics';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { formatShoppingListForShare } from '@/utils/shoppingListFormatter';
+import { suggestItemDefaults } from '@/utils/grocerySmartDefaults';
 import toast from 'react-hot-toast';
 
 interface FilterDropdownProps {
@@ -98,27 +99,32 @@ const ShoppingListTab: React.FC = () => {
       : [...GROCERY_CATEGORIES];
   }, [groceryCategories]);
 
-  // Pre-calculate active quick list for each item name to avoid expensive find in each row
+  // Pre-calculate ALL quick-list memberships for each item name to avoid
+  // expensive finds in each row. Maps lowercased name -> every QuickStockList
+  // the item belongs to, in quickStockLists order.
   const itemQuickListMap = useMemo(() => {
-    const map = new Map<string, QuickStockList>();
+    const map = new Map<string, QuickStockList[]>();
     if (!quickStockLists || !groceryCatalog) return map;
 
-    // 1. Map Catalog ID -> QuickStockList
-    const idToListMap = new Map<string, QuickStockList>();
+    // 1. Map Catalog ID -> QuickStockList[] (a catalog item can be in multiple lists)
+    const idToListsMap = new Map<string, QuickStockList[]>();
     for (const list of quickStockLists) {
       if (!list.items) continue;
       for (const itemId of list.items) {
-        if (!idToListMap.has(itemId)) {
-          idToListMap.set(itemId, list);
+        const existing = idToListsMap.get(itemId);
+        if (existing) {
+          existing.push(list);
+        } else {
+          idToListsMap.set(itemId, [list]);
         }
       }
     }
 
-    // 2. Map Name -> QuickStockList
+    // 2. Map Name -> QuickStockList[]
     for (const item of groceryCatalog) {
-      const list = idToListMap.get(item.id);
-      if (list) {
-        map.set(item.name.toLowerCase(), list);
+      const lists = idToListsMap.get(item.id);
+      if (lists) {
+        map.set(item.name.toLowerCase(), lists);
       }
     }
     return map;
@@ -225,6 +231,14 @@ const ShoppingListTab: React.FC = () => {
         category = match.category;
         store = match.defaultStore;
         quantity = match.defaultQuantity;
+    } else {
+        // No exact history hit — fall back to partial-history/preset smart defaults.
+        const suggestion = suggestItemDefaults(rawName, groceryCatalog);
+        if (suggestion) {
+            category = suggestion.category || 'Uncategorized';
+            store = suggestion.store;
+            quantity = suggestion.quantity;
+        }
     }
 
     // 2. Add Item
@@ -286,6 +300,12 @@ const ShoppingListTab: React.FC = () => {
   const handleReorderDragEnd = useCallback(() => {
     isDraggingRef.current = false;
   }, []);
+
+    // Smart-default suggestion for the item currently open in the edit drawer.
+    const editingItemSuggestion = useMemo(
+        () => (editingItem ? suggestItemDefaults(editingItem.name, groceryCatalog) : null),
+        [editingItem, groceryCatalog]
+    );
 
     const handleSaveEdit = async () => {
         if (!editingItem) return;
@@ -390,7 +410,10 @@ const ShoppingListTab: React.FC = () => {
         deleteShoppingItem(item.id);
     }, [deleteShoppingItem]);
 
-    const handleQuickListChange = useCallback(async (item: ShoppingItem, newListId: string) => {
+    // Toggles a single list's membership for an item, leaving every OTHER
+    // list untouched (the old handler forced exclusive single-list membership;
+    // the redesigned drawer supports belonging to multiple quick lists at once).
+    const handleQuickListToggle = useCallback(async (item: ShoppingItem, listId: string, member: boolean) => {
         if (!householdId) return;
 
         try {
@@ -410,28 +433,21 @@ const ShoppingListTab: React.FC = () => {
                 catalogItemId = await addGroceryCatalogItem(newItem);
             }
 
-            // 2. Update Membership in ONE pass, then persist the whole array in a
-            //    SINGLE write. Building both the add (to the target) and the
-            //    remove (from every other list) into one in-memory copy avoids
-            //    two sequential context writes that would each start from the
-            //    same stale snapshot and clobber each other (data loss).
+            // 2. Update ONLY the target list's membership, in a SINGLE write.
             const newLists = quickStockLists.map(list => {
+                if (list.id !== listId) return list;
                 const items = list.items || [];
                 const hasItem = items.includes(catalogItemId);
 
-                if (list.id === newListId) {
-                    // Target list: add it if missing (dedup), otherwise leave as-is.
+                if (member) {
                     return hasItem ? list : { ...list, items: [...items, catalogItemId] };
                 }
-                // Any other list: remove it if present.
                 return hasItem ? { ...list, items: items.filter(id => id !== catalogItemId) } : list;
             });
-            // Note: If newListId is empty string, no list matches the target so the
-            // item is simply removed from all lists.
 
             await updateQuickStockLists(newLists);
 
-            toast.success(newListId ? 'List updated' : 'Removed from list');
+            toast.success(member ? 'List updated' : 'Removed from list');
         } catch (error) {
             console.error('Failed to update quick list:', error);
             toast.error('Failed to update list');
@@ -667,7 +683,7 @@ const ShoppingListTab: React.FC = () => {
                         key={item.id}
                         item={item}
                         stores={stores}
-                        activeQuickList={itemQuickListMap.get(item.name.toLowerCase())}
+                        activeQuickList={itemQuickListMap.get(item.name.toLowerCase())?.[0]}
                         onCheck={handleCheck}
                         onDelete={handleDelete}
                         onEdit={setEditingItem}
@@ -682,7 +698,7 @@ const ShoppingListTab: React.FC = () => {
                             key={item.id}
                             item={item}
                             stores={stores}
-                            activeQuickList={itemQuickListMap.get(item.name.toLowerCase())}
+                            activeQuickList={itemQuickListMap.get(item.name.toLowerCase())?.[0]}
                             onCheck={handleCheck}
                             onDelete={handleDelete}
                             onEdit={setEditingItem}
@@ -726,8 +742,9 @@ const ShoppingListTab: React.FC = () => {
               stores={stores}
               categories={categories}
               quickStockLists={quickStockLists}
-              activeQuickList={itemQuickListMap.get(editingItem.name.toLowerCase())}
-              onQuickListChange={handleQuickListChange}
+              activeQuickLists={itemQuickListMap.get(editingItem.name.toLowerCase())}
+              onQuickListToggle={handleQuickListToggle}
+              suggestion={editingItemSuggestion}
             />
           </Drawer>
         )}
