@@ -197,6 +197,45 @@
   }
 }
 
+/*
+  Native date/time input normalization.
+
+  iOS Safari renders <input type="date"> (and the other native pickers) with
+  platform control chrome: an inflated intrinsic height plus an internal
+  ::-webkit-date-and-time-value top margin that top-aligns the value. A <select>
+  is already normalized (Select adds `appearance-none`), so next to one — e.g.
+  the Date / Account grid in the transaction review form — the two fields
+  rendered at different heights with a vertically misaligned value.
+
+  Stripping the native chrome and the internal margin makes date/time inputs
+  share the exact same box model (padding-driven height + centered value) as
+  text inputs and selects, all governed by FIELD_BASE. See
+  components/ui/fieldStyles.ts.
+*/
+@layer base {
+  input[type='date'],
+  input[type='datetime-local'],
+  input[type='time'],
+  input[type='month'],
+  input[type='week'] {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  ::-webkit-date-and-time-value {
+    margin: 0;
+    /* `inherit` (not `left`) so a `text-center`/`text-right` utility on the
+       input still governs the value, matching Tailwind v4's preflight default;
+       text inputs are start-aligned, so the default rendering is unchanged. */
+    text-align: inherit;
+    /* Keep the value's line box at one text line so the control can't collapse
+       shorter than a sibling text input / select. */
+    min-height: 1.5em;
+  }
+  ::-webkit-datetime-edit {
+    padding: 0;
+  }
+}
+
 @utility no-scrollbar {
   /* Hide scrollbar for clean UI in chips */
   &::-webkit-scrollbar {
