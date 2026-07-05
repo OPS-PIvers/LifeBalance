@@ -536,11 +536,19 @@ describe("sendstreakwarnings", () => {
       ref: householdDocRef,
     };
 
-    const insightSetSpy = vi.fn();
-    const householdUpdateSpy = vi.fn((patch: Record<string, unknown>) => {
+    // Written deterministic ids — lets the idempotency test observe that a
+    // second run with the same `streak_rescue_<habitId>_<today>` id is skipped.
+    const existingInsightIds = new Set<string>();
+    const insightSetSpy = vi.fn((ref: { id?: string } | undefined) => {
+      if (ref?.id) existingInsightIds.add(ref.id);
+    });
+    const householdUpdateSpy = vi.fn((_ref: unknown, patch: Record<string, unknown>) => {
       currentHouseholdData = { ...currentHouseholdData, ...patch };
     });
-    const insightDocSpy = vi.fn(() => ({ get: () => Promise.resolve({ exists: false }) }));
+    const insightDocSpy = vi.fn((id?: string) => ({
+      id,
+      get: () => Promise.resolve({ exists: id !== undefined && existingInsightIds.has(id) }),
+    }));
 
     adminMock.db.collection.mockImplementation((path: string) => {
       if (path === "households") {
@@ -653,18 +661,18 @@ describe("sendstreakwarnings", () => {
     });
   });
 
-  it("is idempotent-safe for repeat calls in the same hour (auto-id insight, cap still tracked)", async () => {
-    const { insightSetSpy } = configureStreakWarningHousehold([
+  it("is idempotent across repeat runs on the same local day (deterministic id skips the second write)", async () => {
+    const { insightSetSpy, insightDocSpy } = configureStreakWarningHousehold([
       { id: "h1", data: { period: "daily", title: "Read", streakDays: 9, completedDates: [] } },
     ]);
 
     await runStreakWarnings();
     await runStreakWarnings();
 
-    // Each run independently evaluates the (now-updated) cap state; the second
-    // run sees count=1 for the same week and is still allowed (cap is 2), so
-    // two insights get written across the two runs — this asserts the cap
-    // state threading works across calls rather than silently no-op'ing.
-    expect(insightSetSpy).toHaveBeenCalledTimes(2);
+    // The rescue insight is keyed streak_rescue_<habitId>_<localDay>, so the
+    // hourly job re-firing on the same day (or the member loop iterating) can
+    // never write it twice or burn a second slot of the weekly cap.
+    expect(insightDocSpy).toHaveBeenCalledWith("streak_rescue_h1_2026-07-06");
+    expect(insightSetSpy).toHaveBeenCalledTimes(1);
   });
 });
