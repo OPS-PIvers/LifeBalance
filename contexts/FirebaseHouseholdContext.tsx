@@ -10,7 +10,6 @@ import {
   deleteField,
   serverTimestamp,
   type FieldValue,
-  Timestamp,
   writeBatch,
   getDoc,
   getDocs,
@@ -36,16 +35,11 @@ import {
   yearlyGoalConverter,
   rewardItemConverter,
   householdMemberConverter,
-  mealConverter,
-  shoppingItemConverter,
-  groceryCatalogItemConverter,
-  mealPlanItemConverter,
   pendingItemConverter,
   householdApiKeyConverter,
   insightConverter,
   weeklyRecapConverter,
   transactionConverter,
-  todoConverter,
 } from '@/utils/firestoreConverters';
 import { db, getFunctionsInstance } from '@/firebase.config';
 import { useAuth } from '@/contexts/AuthContext';
@@ -79,7 +73,6 @@ import {
   WeeklyRecap
 } from '@/types/schema';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
-import { normalizeToKey } from '@/utils/stringNormalizer';
 import { calculateSafeToSpendBreakdownFromExpanded, resolveBucketForCalendarItem } from '@/utils/safeToSpendCalculator';
 import { effectiveAccountImpact, resolveTargetAccount } from '@/utils/accountImpact';
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
@@ -104,24 +97,26 @@ import {
   INSIGHTS_LIMIT,
   RECAPS_LIMIT,
   TRANSACTION_PAGE_SIZE,
-  TODO_COMPLETED_PAGE_SIZE,
   getTransactionWindowStart,
   getMealPlanWindow,
-  getWeekRange,
-  getCompletedTodoWindowStart,
 } from '@/utils/listenerWindows';
 import { ParsedShoppingList, ParsedTodoList, ParsedExpense } from '@/services/geminiService.types';
 import { newKidMemberId, buildKidMemberDoc } from '@/utils/kidProfile';
 import { getBillingEnabled } from '@/services/appConfig';
 import { kidProfileLimitReached } from '@/utils/entitlements';
-import { computeTodoCompletionCredit } from '@/utils/todoPoints';
 import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { track } from '@/services/analytics';
 import { shouldTrackFirstTime, FIRST_TRANSACTION_FLAG } from '@/utils/firstTimeFlags';
 import toast from 'react-hot-toast';
 import { isSameDay, isSameWeek, parseISO, format, subDays, startOfWeek, addDays, startOfToday, isAfter, isValid, addMonths } from 'date-fns';
-import { mergeById, mapTransactionDoc, mapTodoDoc } from '@/contexts/household/selectors';
+import { mergeById, mapTransactionDoc } from '@/contexts/household/selectors';
+import { attachTodoListeners } from '@/contexts/household/listeners/todoListeners';
+import { attachMealListeners } from '@/contexts/household/listeners/mealListeners';
+import { attachShoppingListeners } from '@/contexts/household/listeners/shoppingListeners';
+import { makeTodoMutations } from '@/contexts/household/mutations/todoMutations';
+import { makeMealMutations } from '@/contexts/household/mutations/mealMutations';
+import { makeShoppingMutations } from '@/contexts/household/mutations/shoppingMutations';
 import type {
   MutationOpts,
   HouseholdContextType,
@@ -825,81 +820,31 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       })
     );
 
-    // Meals listener
-    const mealsQuery = query(collection(db, `households/${householdId}/meals`).withConverter(mealConverter));
-    unsubscribers.push(
-      onSnapshot(mealsQuery, (snapshot) => {
-        setMeals(snapshot.docs.map(doc => doc.data()));
-      }, (error) => {
-        console.error('[meals] listener failed:', error);
-      })
-    );
+    // Meals + Meal Plan listeners (contexts/household/listeners/mealListeners.ts)
+    unsubscribers.push(...attachMealListeners({
+      db,
+      householdId,
+      mealPlanRange: mealPlanWindowRef.current,
+      setMeals: (data) => setMeals(data),
+      setMealPlanWindow: (data) => setMealPlanWindow(data),
+    }));
 
-    // Shopping List listener
-    const shoppingListQuery = query(collection(db, `households/${householdId}/shoppingList`).withConverter(shoppingItemConverter));
-    unsubscribers.push(
-      onSnapshot(shoppingListQuery, (snapshot) => {
-        setShoppingList(snapshot.docs.map(doc => doc.data()));
-      }, (error) => {
-        console.error('[shoppingList] listener failed:', error);
-      })
-    );
+    // Shopping List + Grocery Catalog listeners (contexts/household/listeners/shoppingListeners.ts)
+    unsubscribers.push(...attachShoppingListeners({
+      db,
+      householdId,
+      setShoppingList: (data) => setShoppingList(data),
+      setGroceryCatalog: (data) => setGroceryCatalog(data),
+    }));
 
-    // Grocery Catalog listener
-    const groceryCatalogQuery = query(collection(db, `households/${householdId}/groceryCatalog`).withConverter(groceryCatalogItemConverter));
-    unsubscribers.push(
-      onSnapshot(groceryCatalogQuery, (snapshot) => {
-        setGroceryCatalog(snapshot.docs.map(doc => doc.data()));
-      }, (error) => {
-        console.error('[groceryCatalog] listener failed:', error);
-      })
-    );
-
-    // Meal Plan listener — live window of the current week ± 1. Weeks the user
-    // navigates to outside this range are fetched on demand via ensureMealPlanWeek().
-    const mealPlanRange = mealPlanWindowRef.current;
-    const mealPlanQuery = query(
-      collection(db, `households/${householdId}/mealPlan`).withConverter(mealPlanItemConverter),
-      where('date', '>=', mealPlanRange.start),
-      where('date', '<=', mealPlanRange.end)
-    );
-    unsubscribers.push(
-      onSnapshot(mealPlanQuery, (snapshot) => {
-        setMealPlanWindow(snapshot.docs.map(doc => doc.data()));
-      }, (error) => {
-        console.error('Error listening to mealPlan:', error);
-      })
-    );
-
-    // To-Do listeners — all active items are live; completed items are limited to
-    // the last 30 days (older completions load on demand via loadOlderCompletedTodos()).
-    const activeTodosQuery = query(
-      collection(db, `households/${householdId}/todos`).withConverter(todoConverter),
-      where('isCompleted', '==', false)
-    );
-    unsubscribers.push(
-      onSnapshot(activeTodosQuery, (snapshot) => {
-        setActiveTodos(snapshot.docs.map(mapTodoDoc));
-      }, (error) => {
-        console.error('Error listening to active todos:', error);
-      })
-    );
-
-    const completedWindowStart = getCompletedTodoWindowStart();
-    completedTodoWindowStartRef.current = completedWindowStart;
-    const completedTodosQuery = query(
-      collection(db, `households/${householdId}/todos`).withConverter(todoConverter),
-      where('isCompleted', '==', true),
-      where('completedAt', '>=', Timestamp.fromDate(completedWindowStart)),
-      orderBy('completedAt', 'desc')
-    );
-    unsubscribers.push(
-      onSnapshot(completedTodosQuery, (snapshot) => {
-        setCompletedTodos(snapshot.docs.map(mapTodoDoc));
-      }, (error) => {
-        console.error('Error listening to completed todos:', error);
-      })
-    );
+    // To-Do listeners (contexts/household/listeners/todoListeners.ts)
+    unsubscribers.push(...attachTodoListeners({
+      db,
+      householdId,
+      completedTodoWindowStartRef,
+      setActiveTodos: (data) => setActiveTodos(data),
+      setCompletedTodos: (data) => setCompletedTodos(data),
+    }));
 
     // Pending Items listener (for natural language voice commands)
     const pendingItemsQuery = query(
@@ -1291,59 +1236,26 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }, [householdId]);
 
   const loadOlderCompletedTodos = useCallback(async () => {
-    const windowStart = completedTodoWindowStartRef.current;
-    if (!householdId || !windowStart) return;
-    setIsLoadingOlderTodos(true);
-    try {
-      const todosCol = collection(db, `households/${householdId}/todos`).withConverter(todoConverter);
-      const cursor = completedTodoCursorRef.current;
-      const olderQuery = cursor
-        ? query(todosCol, where('isCompleted', '==', true), orderBy('completedAt', 'desc'), startAfter(cursor), limit(TODO_COMPLETED_PAGE_SIZE))
-        : query(todosCol, where('isCompleted', '==', true), where('completedAt', '<', Timestamp.fromDate(windowStart)), orderBy('completedAt', 'desc'), limit(TODO_COMPLETED_PAGE_SIZE));
-      const snap = await getDocs(olderQuery);
-      if (snap.docs.length > 0) {
-        completedTodoCursorRef.current = snap.docs[snap.docs.length - 1] ?? null;
-        const page = snap.docs.map(mapTodoDoc);
-        setOlderCompletedTodos(prev => mergeById(prev, page));
-      }
-      setHasMoreCompletedTodos(snap.docs.length === TODO_COMPLETED_PAGE_SIZE);
-    } catch (error) {
-      console.error('[loadOlderCompletedTodos] Failed:', error);
-      toast.error('Failed to load older completed tasks');
-    } finally {
-      setIsLoadingOlderTodos(false);
-    }
+    await makeTodoMutations({
+      db, householdId, user, membersRef,
+      completedTodoWindowStartRef, completedTodoCursorRef,
+      setIsLoadingOlderTodos, setOlderCompletedTodos, setHasMoreCompletedTodos,
+    }).loadOlderCompletedTodos();
   }, [householdId]);
 
   // Fetch a single week of meal-plan entries that falls outside the live window,
   // replacing any previously-loaded entries for that week (so edits stay correct).
   const refreshMealPlanWeek = useCallback(async (date: Date) => {
-    if (!householdId) return;
-    const { start, end } = getWeekRange(date);
-    const live = mealPlanWindowRef.current;
-    // Inside the live window — the real-time listener already covers it.
-    if (start >= live.start && end <= live.end) return;
-    try {
-      const snap = await getDocs(query(
-        collection(db, `households/${householdId}/mealPlan`).withConverter(mealPlanItemConverter),
-        where('date', '>=', start),
-        where('date', '<=', end)
-      ));
-      const page = snap.docs.map(doc => doc.data());
-      loadedMealPlanWeeksRef.current.add(start);
-      setMealPlanExtra(prev => [...prev.filter(i => i.date < start || i.date > end), ...page]);
-    } catch (error) {
-      console.error('[refreshMealPlanWeek] Failed:', error);
-    }
+    await makeMealMutations({
+      db, householdId, user, mealPlanRef, loadedMealPlanWeeksRef, mealPlanWindowRef, setMealPlanExtra,
+    }).refreshMealPlanWeek(date);
   }, [householdId]);
 
   // Public helper: load a navigated-to week once (no-op if already loaded/live).
   const ensureMealPlanWeek = useCallback(async (date: Date) => {
-    const { start, end } = getWeekRange(date);
-    const live = mealPlanWindowRef.current;
-    if (start >= live.start && end <= live.end) return;
-    if (loadedMealPlanWeeksRef.current.has(start)) return;
-    await refreshMealPlanWeek(date);
+    await makeMealMutations({
+      db, householdId, user, mealPlanRef, loadedMealPlanWeeksRef, mealPlanWindowRef, setMealPlanExtra,
+    }).ensureMealPlanWeek(date);
   }, [refreshMealPlanWeek]);
 
   // Memoize habit reset data to avoid unnecessary callback re-creation
@@ -3764,333 +3676,77 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // --- ACTIONS: MEALS ---
 
   const addMeal = useCallback(async (meal: Omit<Meal, 'id'>, options?: { suppressToast?: boolean }): Promise<string> => {
-    if (!householdId || !user) throw new Error("Not authenticated");
-    try {
-      const sanitizedMeal = sanitizeFirestoreData(meal);
-      const docRef = await addDoc(collection(db, `households/${householdId}/meals`), {
-        ...sanitizedMeal,
-        createdBy: user.uid,
-        createdAt: serverTimestamp(),
-      });
-      if (!options?.suppressToast) toast.success('Meal added');
-      return docRef.id;
-    } catch (error) {
-      console.error('[addMeal] Failed:', error);
-      toast.error('Failed to add meal');
-      throw error;
-    }
+    return makeMealMutations({
+      db, householdId, user, mealPlanRef, loadedMealPlanWeeksRef, mealPlanWindowRef, setMealPlanExtra,
+    }).addMeal(meal, options);
   }, [householdId, user]);
 
   const updateMeal = useCallback(async (meal: Meal) => {
-    if (!householdId) return;
-    try {
-      const { id, ...mealData } = meal;
-      const sanitizedData = sanitizeFirestoreData(mealData);
-      await updateDoc(doc(db, `households/${householdId}/meals`, id), {
-        ...sanitizedData,
-        updatedAt: serverTimestamp(),
-      });
-      toast.success('Meal updated');
-    } catch (error) {
-      console.error('[updateMeal] Failed:', error);
-      toast.error('Failed to update meal');
-    }
+    await makeMealMutations({
+      db, householdId, user, mealPlanRef, loadedMealPlanWeeksRef, mealPlanWindowRef, setMealPlanExtra,
+    }).updateMeal(meal);
   }, [householdId]);
 
   const deleteMeal = useCallback(async (id: string) => {
-    if (!householdId) return;
-    try {
-      await deleteDoc(doc(db, `households/${householdId}/meals`, id));
-      toast.success('Meal deleted');
-    } catch (error) {
-      console.error('[deleteMeal] Failed:', error);
-      toast.error('Failed to delete meal');
-    }
+    await makeMealMutations({
+      db, householdId, user, mealPlanRef, loadedMealPlanWeeksRef, mealPlanWindowRef, setMealPlanExtra,
+    }).deleteMeal(id);
   }, [householdId]);
 
   // --- ACTIONS: SHOPPING LIST ---
 
   const addShoppingItem = useCallback(async (item: Omit<ShoppingItem, 'id'>) => {
-    if (!householdId) return;
-    try {
-      const sanitizedItem = sanitizeFirestoreData(item);
-      await addDoc(collection(db, `households/${householdId}/shoppingList`), {
-        ...sanitizedItem,
-        createdAt: serverTimestamp(),
-      });
-      toast.success('Added to shopping list');
-    } catch (error) {
-      console.error('[addShoppingItem] Failed:', error);
-      toast.error('Failed to add item');
-    }
+    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).addShoppingItem(item);
   }, [householdId]);
 
   const addShoppingItems = useCallback(async (items: Omit<ShoppingItem, 'id'>[]) => {
-    if (!householdId) return;
-    try {
-      const batch = writeBatch(db);
-      const collectionRef = collection(db, `households/${householdId}/shoppingList`);
-
-      items.forEach(item => {
-        const docRef = doc(collectionRef); // Generate new ID
-        const sanitizedItem = sanitizeFirestoreData(item);
-        batch.set(docRef, {
-          ...sanitizedItem,
-          createdAt: serverTimestamp(),
-        });
-      });
-
-      await batch.commit();
-      // Toast handled by caller or generic success
-    } catch (error) {
-      console.error('[addShoppingItems] Failed:', error);
-      toast.error('Failed to add items');
-      throw error;
-    }
+    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).addShoppingItems(items);
   }, [householdId]);
 
   const updateShoppingItem = useCallback(async (item: ShoppingItem) => {
-    if (!householdId) return;
-    try {
-      const { id, ...itemData } = item;
-      const sanitizedData = sanitizeFirestoreData(itemData);
-      await updateDoc(doc(db, `households/${householdId}/shoppingList`, id), {
-        ...sanitizedData,
-        updatedAt: serverTimestamp(),
-      });
-    } catch (error) {
-      console.error('[updateShoppingItem] Failed:', error);
-      toast.error('Failed to update item');
-    }
+    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).updateShoppingItem(item);
   }, [householdId]);
 
   const reorderShoppingItems = useCallback(async (items: ShoppingItem[]) => {
-    if (!householdId) return;
-    try {
-      const batch = writeBatch(db);
-      items.forEach((item, index) => {
-        const ref = doc(db, `households/${householdId}/shoppingList`, item.id);
-        batch.update(ref, { order: index });
-      });
-      await batch.commit();
-    } catch (error) {
-      console.error('[reorderShoppingItems] Failed:', error);
-      toast.error('Failed to reorder items');
-    }
+    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).reorderShoppingItems(items);
   }, [householdId]);
 
   const deleteShoppingItem = useCallback(async (id: string) => {
-    if (!householdId) return;
-    try {
-      await deleteDoc(doc(db, `households/${householdId}/shoppingList`, id));
-      toast.success('Removed from shopping list');
-    } catch (error) {
-      console.error('[deleteShoppingItem] Failed:', error);
-      toast.error('Failed to remove item');
-    }
+    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).deleteShoppingItem(id);
   }, [householdId]);
 
   const toggleShoppingItemPurchased = useCallback(async (id: string) => {
-    if (!householdId) return;
-
-    try {
-      const item = shoppingList.find(i => i.id === id);
-      if (!item) return;
-
-      if (!item.isPurchased) {
-        // Mark as purchased
-        await updateDoc(doc(db, `households/${householdId}/shoppingList`, id), {
-          isPurchased: true,
-        });
-
-        const normalizedItemName = normalizeToKey(item.name);
-
-        // 1. Add to Grocery Catalog (History)
-        // Check if item exists in catalog by normalized NAME only — every other
-        // catalog lookup (smart add, templates, quick lists, ingredient confirm)
-        // keys by name alone. Also matching on category would fork a second
-        // "Milk" row the moment the user recategorizes the item, fragmenting
-        // purchase history across duplicates; instead the category is refreshed
-        // on the existing row below.
-        const existingCatalogItem = groceryCatalog.find(c =>
-          normalizeToKey(c.name) === normalizedItemName
-        );
-
-        if (existingCatalogItem) {
-          // Update existing catalog item
-          await updateDoc(doc(db, `households/${householdId}/groceryCatalog`, existingCatalogItem.id), {
-            lastPurchased: new Date().toISOString(),
-            purchaseCount: increment(1),
-            // Refresh the category to the item's latest categorization
-            category: item.category,
-            // Update default store if current item has one
-            ...(item.store ? { defaultStore: item.store } : {}),
-            // Update default quantity if current item has one
-            ...(item.quantity ? { defaultQuantity: item.quantity } : {})
-          });
-        } else {
-          // Add new catalog item
-          const newCatalogItem = {
-            name: item.name,
-            category: item.category,
-            defaultQuantity: item.quantity,
-            defaultStore: item.store,
-            lastPurchased: new Date().toISOString(),
-            purchaseCount: 1
-          };
-          await addDoc(collection(db, `households/${householdId}/groceryCatalog`), sanitizeFirestoreData(newCatalogItem));
-        }
-
-        track('shopping_item_checked');
-        toast.success('Marked as purchased');
-
-      } else {
-        // Unmark (undo)
-        await updateDoc(doc(db, `households/${householdId}/shoppingList`, id), {
-          isPurchased: false,
-        });
-        toast('Marked as not purchased', { icon: 'ℹ️' });
-      }
-
-    } catch (error) {
-      console.error('[toggleShoppingItemPurchased] Failed:', error);
-      toast.error('Failed to update status');
-    }
+    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).toggleShoppingItemPurchased(id);
   }, [householdId, shoppingList, groceryCatalog]);
 
   const clearPurchasedShoppingItems = useCallback(async () => {
-    if (!householdId) return;
-
-    try {
-      const batch = writeBatch(db);
-      const purchasedItems = shoppingList.filter(item => item.isPurchased);
-
-      if (purchasedItems.length === 0) return;
-
-      purchasedItems.forEach(item => {
-        const itemRef = doc(db, `households/${householdId}/shoppingList`, item.id);
-        batch.delete(itemRef);
-      });
-
-      await batch.commit();
-      toast.success(`Cleared ${purchasedItems.length} items`);
-    } catch (error) {
-      console.error('[clearPurchasedShoppingItems] Failed:', error);
-      toast.error('Failed to clear items');
-    }
+    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).clearPurchasedShoppingItems();
   }, [householdId, shoppingList]);
 
   // --- ACTIONS: SHOPPING SETTINGS ---
 
   const addStore = useCallback(async (store: Omit<Store, 'id'>) => {
-    if (!householdId) return;
-    try {
-      const newStore = { ...store, id: crypto.randomUUID() };
-      await updateDoc(doc(db, `households/${householdId}`), {
-        stores: arrayUnion(newStore)
-      });
-      toast.success('Store added');
-    } catch (error) {
-      console.error('[addStore] Failed:', error);
-      toast.error('Failed to add store');
-    }
+    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).addStore(store);
   }, [householdId]);
 
   const updateStore = useCallback(async (updatedStore: Store) => {
-    if (!householdId || !householdSettings) return;
-    try {
-      // We need to replace the object in the array
-      const currentStores = householdSettings.stores || [];
-      const newStores = currentStores.map(s => s.id === updatedStore.id ? updatedStore : s);
-
-      await updateDoc(doc(db, `households/${householdId}`), {
-        stores: newStores
-      });
-      toast.success('Store updated');
-    } catch (error) {
-      console.error('[updateStore] Failed:', error);
-      toast.error('Failed to update store');
-    }
+    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).updateStore(updatedStore);
   }, [householdId, householdSettings]);
 
   const deleteStore = useCallback(async (id: string) => {
-    if (!householdId || !householdSettings) return;
-    try {
-      const storeToDelete = householdSettings.stores?.find(s => s.id === id);
-      const storeName = storeToDelete?.name;
-
-      const batch = writeBatch(db);
-      const householdRef = doc(db, `households/${householdId}`);
-
-      // 1. Remove store from household settings
-      const currentStores = householdSettings.stores || [];
-      const newStores = currentStores.filter(s => s.id !== id);
-      batch.update(householdRef, { stores: newStores });
-
-      // 2. Remove store tag from shopping list items
-      // Note: This relies on matching by name string as per current schema
-      if (storeName) {
-        const itemsToUpdate = shoppingList.filter(item => item.store === storeName);
-        itemsToUpdate.forEach(item => {
-          const itemRef = doc(db, `households/${householdId}/shoppingList`, item.id);
-          // Use deleteField() to remove the field entirely or set to null/undefined
-          // Since schema defines it as optional string, we update it to delete the field
-          // We can just update with { store: deleteField() } but we need to import deleteField
-          // Alternatively, just update with store: null or similar if the sanitizer handles it.
-          // The sanitizer `sanitizeFirestoreData` removes undefined, converts "" to null.
-          batch.update(itemRef, { store: deleteField() });
-        });
-      }
-
-      await batch.commit();
-      toast.success('Store deleted');
-    } catch (error) {
-      console.error('[deleteStore] Failed:', error);
-      toast.error('Failed to delete store');
-    }
+    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).deleteStore(id);
   }, [householdId, householdSettings, shoppingList]);
 
   const updateGroceryCategories = useCallback(async (categories: string[]) => {
-    if (!householdId) return;
-    try {
-      await updateDoc(doc(db, `households/${householdId}`), {
-        groceryCategories: categories
-      });
-      toast.success('Categories updated');
-    } catch (error) {
-      console.error('[updateGroceryCategories] Failed:', error);
-      toast.error('Failed to update categories');
-    }
+    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).updateGroceryCategories(categories);
   }, [householdId]);
 
   const addQuickStockList = useCallback(async (list: Omit<QuickStockList, 'id'>) => {
-    if (!householdId) return;
-    try {
-      const newList = { ...list, id: crypto.randomUUID() };
-      await updateDoc(doc(db, `households/${householdId}`), {
-        quickStockLists: arrayUnion(newList)
-      });
-      toast.success('Template created');
-    } catch (error) {
-      console.error('[addQuickStockList] Failed:', error);
-      toast.error('Failed to create template');
-    }
+    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).addQuickStockList(list);
   }, [householdId]);
 
   const updateQuickStockList = useCallback(async (updatedList: QuickStockList) => {
-    if (!householdId || !householdSettings) return;
-    try {
-      const currentLists = householdSettings.quickStockLists || [];
-      const newLists = currentLists.map(l => l.id === updatedList.id ? updatedList : l);
-
-      await updateDoc(doc(db, `households/${householdId}`), {
-        quickStockLists: newLists
-      });
-      toast.success('Template updated');
-    } catch (error) {
-      console.error('[updateQuickStockList] Failed:', error);
-      toast.error('Failed to update template');
-    }
+    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).updateQuickStockList(updatedList);
   }, [householdId, householdSettings]);
 
   // Replace the WHOLE quickStockLists array in one write. Callers that touch
@@ -4100,248 +3756,113 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // those would start from the same stale `householdSettings` snapshot and the
   // second write would clobber the first.
   const updateQuickStockLists = useCallback(async (lists: QuickStockList[]) => {
-    if (!householdId) return;
-    try {
-      await updateDoc(doc(db, `households/${householdId}`), {
-        quickStockLists: lists
-      });
-    } catch (error) {
-      // Rethrow rather than swallow: the sole caller (handleQuickListChange)
-      // shows its own "Failed to update list" toast and skips the success toast
-      // on throw. Swallowing here would let the caller report success on a failed
-      // write (and double-toast the error).
-      console.error('[updateQuickStockLists] Failed:', error);
-      throw error;
-    }
+    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).updateQuickStockLists(lists);
   }, [householdId]);
 
   const deleteQuickStockList = useCallback(async (id: string) => {
-    if (!householdId || !householdSettings) return;
-    try {
-      const currentLists = householdSettings.quickStockLists || [];
-      const newLists = currentLists.filter(l => l.id !== id);
-
-      await updateDoc(doc(db, `households/${householdId}`), {
-        quickStockLists: newLists
-      });
-      toast.success('Template deleted');
-    } catch (error) {
-      console.error('[deleteQuickStockList] Failed:', error);
-      toast.error('Failed to delete template');
-    }
+    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).deleteQuickStockList(id);
   }, [householdId, householdSettings]);
 
   // --- ACTIONS: GROCERY CATALOG ---
 
   const addGroceryCatalogItem = useCallback(async (item: Omit<GroceryCatalogItem, 'id'>): Promise<string> => {
-    if (!householdId) throw new Error("Household ID missing");
-    try {
-      const docRef = await addDoc(collection(db, `households/${householdId}/groceryCatalog`), item);
-      return docRef.id;
-    } catch (error) {
-      console.error('[addGroceryCatalogItem] Failed:', error);
-      toast.error('Failed to add to history');
-      throw error;
-    }
+    return makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).addGroceryCatalogItem(item);
   }, [householdId]);
 
   const updateGroceryCatalogItem = useCallback(async (id: string, updates: Partial<GroceryCatalogItem>) => {
-    if (!householdId) return;
-    try {
-      await updateDoc(doc(db, `households/${householdId}/groceryCatalog`, id), updates);
-      toast.success('Item updated');
-    } catch (error) {
-      console.error('[updateGroceryCatalogItem] Failed:', error);
-      toast.error('Failed to update item');
-    }
+    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).updateGroceryCatalogItem(id, updates);
   }, [householdId]);
 
   const deleteGroceryCatalogItem = useCallback(async (id: string) => {
-    if (!householdId) return;
-    try {
-      await deleteDoc(doc(db, `households/${householdId}/groceryCatalog`, id));
-      toast.success('Removed from history');
-    } catch (error) {
-      console.error('[deleteGroceryCatalogItem] Failed:', error);
-      toast.error('Failed to remove item');
-    }
+    await makeShoppingMutations({ db, householdId, householdSettings, shoppingList, groceryCatalog }).deleteGroceryCatalogItem(id);
   }, [householdId]);
 
   // --- ACTIONS: MEAL PLAN ---
 
   const addMealPlanItem = useCallback(async (item: Omit<MealPlanItem, 'id'>, options?: { suppressToast?: boolean, throwOnError?: boolean }) => {
-    if (!householdId || !user) return;
-    try {
-      await addDoc(collection(db, `households/${householdId}/mealPlan`), {
-        ...item,
-        createdAt: serverTimestamp(),
-      });
-      track('meal_planned');
-      // Keep non-live weeks in sync (the live listener only covers current week ± 1).
-      await refreshMealPlanWeek(parseISO(item.date));
-      if (!options?.suppressToast) {
-        toast.success('Added to plan');
-      }
-    } catch (error) {
-      console.error('[addMealPlanItem] Failed:', error);
-      if (!options?.suppressToast) {
-        toast.error('Failed to add to plan');
-      }
-      if (options?.throwOnError) {
-        throw error;
-      }
-    }
+    await makeMealMutations({
+      db, householdId, user, mealPlanRef, loadedMealPlanWeeksRef, mealPlanWindowRef, setMealPlanExtra,
+    }).addMealPlanItem(item, options);
   }, [householdId, user, refreshMealPlanWeek]);
 
   const updateMealPlanItem = useCallback(async (id: string, updates: Partial<MealPlanItem>) => {
-    if (!householdId) return;
-    try {
-      const previous = mealPlanRef.current.find(i => i.id === id);
-      await updateDoc(doc(db, `households/${householdId}/mealPlan`, id), {
-        ...updates,
-      });
-      // Refresh both the old and new week if either lies outside the live window.
-      if (previous?.date) await refreshMealPlanWeek(parseISO(previous.date));
-      if (updates.date && updates.date !== previous?.date) await refreshMealPlanWeek(parseISO(updates.date));
-      toast.success('Plan updated');
-    } catch (error) {
-      console.error('[updateMealPlanItem] Failed:', error);
-      toast.error('Failed to update plan');
-    }
+    await makeMealMutations({
+      db, householdId, user, mealPlanRef, loadedMealPlanWeeksRef, mealPlanWindowRef, setMealPlanExtra,
+    }).updateMealPlanItem(id, updates);
   }, [householdId, refreshMealPlanWeek]);
 
   const deleteMealPlanItem = useCallback(async (id: string) => {
-    if (!householdId) return;
-    try {
-      const previous = mealPlanRef.current.find(i => i.id === id);
-      await deleteDoc(doc(db, `households/${householdId}/mealPlan`, id));
-      if (previous?.date) await refreshMealPlanWeek(parseISO(previous.date));
-      toast.success('Removed from plan');
-    } catch (error) {
-      console.error('[deleteMealPlanItem] Failed:', error);
-      toast.error('Failed to remove from plan');
-    }
+    await makeMealMutations({
+      db, householdId, user, mealPlanRef, loadedMealPlanWeeksRef, mealPlanWindowRef, setMealPlanExtra,
+    }).deleteMealPlanItem(id);
   }, [householdId, refreshMealPlanWeek]);
 
   // --- ACTIONS: TO-DOS ---
 
   /**
    * Adds a new to-do item.
-   * 
+   *
    * Toast Behavior: Toast notifications are omitted from this function to allow UI-specific messaging.
    * Callers (e.g., ToDosPage, Dashboard) should display appropriate success/error toasts based on their context.
    * This maintains consistency with updateToDo and deleteToDo, which also delegate toast messaging to their callers.
-   * 
+   *
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
   const addToDo = useCallback(async (todo: Omit<ToDo, 'id' | 'createdAt' | 'createdBy'>) => {
-    if (!householdId || !user) {
-      throw new Error('User not authenticated or household not selected');
-    }
-    try {
-      const sanitizedToDo = sanitizeFirestoreData(todo);
-      await addDoc(collection(db, `households/${householdId}/todos`), {
-        ...sanitizedToDo,
-        createdAt: serverTimestamp(),
-        createdBy: user.uid
-      });
-      // Note: Toast removed to allow UI-specific messaging (consistent with updateToDo/deleteToDo)
-    } catch (error) {
-      console.error('[addToDo] Failed:', error);
-      throw error; // Re-throw so callers can handle the error with contextual messaging
-    }
+    await makeTodoMutations({
+      db, householdId, user, membersRef,
+      completedTodoWindowStartRef, completedTodoCursorRef,
+      setIsLoadingOlderTodos, setOlderCompletedTodos, setHasMoreCompletedTodos,
+    }).addToDo(todo);
   }, [householdId, user]);
 
   /**
    * Updates an existing to-do item.
-   * 
+   *
    * Toast Behavior: Toast notifications are omitted from this function to allow UI-specific messaging.
    * Callers should display appropriate success/error toasts based on their context.
-   * 
+   *
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
   const updateToDo = useCallback(async (id: string, updates: Partial<ToDo>) => {
-    if (!householdId) {
-      throw new Error('Household not selected');
-    }
-    try {
-      const sanitizedUpdates = sanitizeFirestoreData(updates);
-      await updateDoc(doc(db, `households/${householdId}/todos`, id), sanitizedUpdates);
-    } catch (error) {
-      console.error('[updateToDo] Failed:', error);
-      throw error; // Re-throw so callers can handle the error with contextual messaging
-    }
+    await makeTodoMutations({
+      db, householdId, user, membersRef,
+      completedTodoWindowStartRef, completedTodoCursorRef,
+      setIsLoadingOlderTodos, setOlderCompletedTodos, setHasMoreCompletedTodos,
+    }).updateToDo(id, updates);
   }, [householdId]);
 
   /**
    * Deletes a to-do item.
-   * 
+   *
    * Toast Behavior: Toast notifications are omitted from this function to allow UI-specific messaging.
    * Callers should display appropriate success/error toasts based on their context.
-   * 
+   *
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
   const deleteToDo = useCallback(async (id: string) => {
-    if (!householdId) {
-      throw new Error('Household not selected');
-    }
-    try {
-      await deleteDoc(doc(db, `households/${householdId}/todos`, id));
-    } catch (error) {
-      console.error('[deleteToDo] Failed:', error);
-      throw error; // Re-throw so callers can handle the error with contextual messaging
-    }
+    await makeTodoMutations({
+      db, householdId, user, membersRef,
+      completedTodoWindowStartRef, completedTodoCursorRef,
+      setIsLoadingOlderTodos, setOlderCompletedTodos, setHasMoreCompletedTodos,
+    }).deleteToDo(id);
   }, [householdId]);
 
   /**
    * Marks a to-do item as completed.
-   * 
+   *
    * Toast Behavior: Toast notifications are omitted from this function to allow UI-specific messaging.
    * Callers should display appropriate success/error toasts based on their context, maintaining
    * consistency with addToDo, updateToDo, and deleteToDo.
-   * 
+   *
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
   const completeToDo = useCallback(async (id: string) => {
-    if (!householdId) {
-      throw new Error('Household not selected');
-    }
-    try {
-      // Plan 080c-5: completing a to-do assigned to a MANAGED KID credits that
-      // kid's own member.points (allowance-style). For every other assignee the
-      // dormancy gate (computeTodoCompletionCredit) returns null, so the only
-      // write is the todo update — byte-for-byte the prior behaviour for normal
-      // households with no managed-kid members.
-      const todoRef = doc(db, `households/${householdId}/todos`, id);
-      const snap = await getDoc(todoRef);
-      const todo = snap.data() as ToDo | undefined;
-      if (!todo) {
-        throw new Error('To-Do not found');
-      }
-      if (todo.isCompleted) {
-        return; // already completed — idempotent, no duplicate points
-      }
-      const credit = computeTodoCompletionCredit(todo, membersRef.current);
-
-      const batch = writeBatch(db);
-      batch.update(todoRef, {
-        isCompleted: true,
-        completedAt: serverTimestamp(),
-      });
-      if (credit) {
-        // Atomic points credit on the kid member doc (Firestore increment()).
-        batch.update(doc(db, `households/${householdId}/members`, credit.memberUid), {
-          'points.daily': increment(credit.points),
-          'points.weekly': increment(credit.points),
-          'points.total': increment(credit.points),
-        });
-      }
-      await batch.commit();
-      // Note: Toast removed to allow UI-specific messaging (consistent with other CRUD operations)
-    } catch (error) {
-      console.error('[completeToDo] Failed:', error);
-      throw error; // Re-throw so callers can handle the error with contextual messaging
-    }
+    await makeTodoMutations({
+      db, householdId, user, membersRef,
+      completedTodoWindowStartRef, completedTodoCursorRef,
+      setIsLoadingOlderTodos, setOlderCompletedTodos, setHasMoreCompletedTodos,
+    }).completeToDo(id);
   }, [householdId]);
 
 
