@@ -175,7 +175,7 @@ export function parseQuantity(q: string | undefined): ParsedQuantity {
   const trimmed = q.trim();
   if (!trimmed) return { count: 1, unit: '' };
 
-  const match = trimmed.match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
+  const match = trimmed.match(/^(\d*\.?\d+)\s*(.*)$/);
   if (!match) {
     // Non-numeric-leading text (e.g. "dozen") — keep as the unit, count 1.
     return { count: 1, unit: trimmed };
