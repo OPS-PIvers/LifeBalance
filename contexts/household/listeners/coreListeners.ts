@@ -61,10 +61,13 @@ export function attachCoreListeners({
 }): Unsubscribe[] {
   const unsubscribers: Unsubscribe[] = [];
 
-  // Household settings listener (for pay period tracking and freeze bank)
+  // Household settings listener (for pay period tracking and freeze bank).
+  // The snapshot callback is async (it awaits a migration write below), so a
+  // teardown mid-await (household switch, sign-out, unmount) must not let the
+  // resumed callback call setters that now belong to a stale household/provider.
+  let cancelled = false;
   const householdDocRef = doc(db, `households/${householdId}`);
-  unsubscribers.push(
-    onSnapshot(householdDocRef, async (snapshot) => {
+  const householdDocUnsubscribe = onSnapshot(householdDocRef, async (snapshot) => {
       const data = snapshot.data() as Household | undefined;
       // Include the document ID in householdSettings
       setHouseholdSettings(data ? { ...data, id: snapshot.id } : null);
@@ -83,6 +86,7 @@ export function attachCoreListeners({
             );
             // Migration will trigger a new snapshot with updated data
           } catch (error) {
+            if (cancelled) return;
             console.error('[FreezeBank] Migration failed:', error);
             // Fall back to a default freeze bank
             setFreezeBank({
@@ -103,8 +107,11 @@ export function attachCoreListeners({
       // can recover and surface whatever data is available.
       console.error('[Household] Failed to listen to household document:', error);
       setLoadedHouseholdId(householdId);
-    })
-  );
+    });
+  unsubscribers.push(() => {
+    cancelled = true;
+    householdDocUnsubscribe();
+  });
 
   // Weekly recaps listener (Plan 02) — bounded live window of the most recent
   // few weeks. Docs are keyed by ISO week ('2026-Www'), which sorts
