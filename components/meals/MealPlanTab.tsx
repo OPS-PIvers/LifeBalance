@@ -637,27 +637,35 @@ const MealPlanTab: React.FC = () => {
   }, [selectedDateStr, scrollStripTo]);
 
   // Month label above the strip follows the center of the viewport as the user
-  // scrolls (identical-string setState bails out, so this is cheap per event).
+  // scrolls. Reads are batched into one rAF per frame so rapid scroll events
+  // don't thrash layout (identical-string setState bails out, so it's cheap).
   const [visibleMonth, setVisibleMonth] = useState(() => format(new Date(), 'MMMM yyyy'));
+  const scrollRafRef = useRef(0);
   const handleStripScroll = useCallback(() => {
-    const container = stripRef.current;
-    if (!container) return;
-    const first = container.children[0] as HTMLElement | undefined;
-    const second = container.children[1] as HTMLElement | undefined;
-    if (!first || !second) return;
-    const stride = second.offsetLeft - first.offsetLeft;
-    if (stride <= 0) return;
-    const rawIdx = Math.round((container.scrollLeft + container.clientWidth / 2 - first.offsetLeft) / stride);
-    const day = stripDays[Math.min(stripDays.length - 1, Math.max(0, rawIdx))];
-    if (day) setVisibleMonth(format(day.date, 'MMMM yyyy'));
+    if (scrollRafRef.current) return;
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = 0;
+      const container = stripRef.current;
+      if (!container) return;
+      const first = container.children[0] as HTMLElement | undefined;
+      const second = container.children[1] as HTMLElement | undefined;
+      if (!first || !second) return;
+      const stride = second.offsetLeft - first.offsetLeft;
+      if (stride <= 0) return;
+      const rawIdx = Math.round((container.scrollLeft + container.clientWidth / 2 - first.offsetLeft) / stride);
+      const day = stripDays[Math.min(stripDays.length - 1, Math.max(0, rawIdx))];
+      if (day) setVisibleMonth(format(day.date, 'MMMM yyyy'));
+    });
   }, [stripDays]);
+  useEffect(() => () => cancelAnimationFrame(scrollRafRef.current), []);
 
   const handleJumpToToday = useCallback(() => {
-    setSelectedDate(new Date());
-    // Re-center even when today is already selected (the effect above won't
-    // re-run because selectedDateStr is unchanged).
-    scrollStripTo(format(new Date(), 'yyyy-MM-dd'));
-  }, [scrollStripTo]);
+    const todayDateStr = format(new Date(), 'yyyy-MM-dd');
+    if (selectedDateStr !== todayDateStr) setSelectedDate(new Date());
+    // Re-center explicitly — when today is already selected the centering
+    // effect won't re-run because selectedDateStr is unchanged.
+    scrollStripTo(todayDateStr);
+  }, [scrollStripTo, selectedDateStr]);
 
   // Filtered + sorted meals for the selected day.
   const dayMeals = useMemo(
@@ -759,7 +767,7 @@ const MealPlanTab: React.FC = () => {
         <div
             ref={stripRef}
             onScroll={handleStripScroll}
-            className="relative flex gap-1 overflow-x-auto no-scrollbar snap-x scroll-px-1"
+            className="relative flex gap-1 overflow-x-auto no-scrollbar snap-x"
         >
             {stripDays.map(day => {
                 const { dateStr } = day;
@@ -775,7 +783,7 @@ const MealPlanTab: React.FC = () => {
                         aria-label={`${day.ariaLabel}${count > 0 ? `, ${count} meals planned` : ''}`}
                         aria-pressed={isSelected}
                         className={clsx(
-                            "w-12 shrink-0 snap-start flex flex-col items-center gap-0.5 py-1.5 rounded-btn transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95",
+                            "w-12 shrink-0 snap-center flex flex-col items-center gap-0.5 py-1.5 rounded-btn transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95",
                             isSelected
                                 ? "bg-accent-600"
                                 : "hover:bg-brand-100 dark:hover:bg-brand-700/50"
