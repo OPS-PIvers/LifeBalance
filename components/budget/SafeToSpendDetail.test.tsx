@@ -62,12 +62,14 @@ describe('SafeToSpendDetail', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('always shows the headline amount, with breakdown rows hidden by default', () => {
+  it('shows no headline amount (toolbar owns the figure), with breakdown rows hidden by default', () => {
     setBreakdown();
     render(<SafeToSpendDetail />);
 
-    expect(screen.getByText('Available to spend')).toBeInTheDocument();
-    expect(screen.getByText('$750.00')).toBeInTheDocument();
+    // The always-visible headline row was removed (UX audit Batch 3): the
+    // figure lives in TopToolbar, so this surface is only the disclosure.
+    expect(screen.queryByText('Available to spend')).not.toBeInTheDocument();
+    expect(screen.queryByText('$750.00')).not.toBeInTheDocument();
 
     // Breakdown rows and disclaimer are collapsed by default.
     expect(screen.queryByText('Checking balance')).not.toBeInTheDocument();

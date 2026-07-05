@@ -7,7 +7,7 @@ import { cn } from '@/utils/cn';
  *
  * The header is a real `<button>` (aria-expanded / aria-controls) styled like a
  * `Section` title with a trailing chevron that rotates when open — the same
- * affordance `SafeToSpendDetail` uses for its breakdown. Content is simply
+ * affordance used for "show the work" style breakdowns. Content is simply
  * conditionally mounted (no height animation) with the standard
  * `animate-in fade-in slide-in-from-top-2` entrance.
  *

@@ -40,14 +40,12 @@ test.describe('Safe to Spend (Test Mode)', () => {
     // Headline dropped by exactly the pending amount.
     await expect(safeToSpendButton(page)).toContainText(usd(SEED_CHECKING - EXPENSE));
 
-    // The Money → Overview breakdown shows the work: full checking balance,
-    // minus a "Pending transactions" line for exactly the expense.
+    // The Money → Overview tab no longer hosts a Safe-to-Spend breakdown card
+    // (UX audit Batch 3 — deleted as redundant with the toolbar figure above);
+    // confirm the pending expense is still visible from the Overview tab via
+    // the Money Pulse / bills widgets instead.
     await moneyNavWithPending(page, 1).click();
-    await page.getByRole('button', { name: 'How is this calculated?' }).click();
-    await expect(page.getByText('Checking balance')).toBeVisible();
-    await expect(page.getByText(usd(SEED_CHECKING), { exact: true })).toBeVisible();
-    await expect(page.getByText('Pending transactions')).toBeVisible();
-    await expect(page.getByText(`- ${usd(EXPENSE)}`, { exact: true })).toBeVisible();
+    await expect(page.getByText('E2E Cafe').first()).toBeVisible();
   });
 
   test('verifying the pending expense moves the checking balance, not the headline', async ({ page }) => {
@@ -69,14 +67,11 @@ test.describe('Safe to Spend (Test Mode)', () => {
     await expect(drawer).not.toBeVisible();
 
     // Verified-only balance model: the headline stays at seed − expense (the
-    // debit simply moved from the pending term to the checking balance)...
+    // debit simply moved from the pending term to the checking balance). The
+    // Money → Overview breakdown card was removed (UX audit Batch 3); the
+    // moved balance is only surfaced via the toolbar figure now, and the
+    // pending-review badge is gone from the Money nav link.
     await expect(safeToSpendButton(page)).toContainText(usd(SEED_CHECKING - EXPENSE));
-
-    // ...and the breakdown shows the moved balance with NO pending line.
-    await bottomNav(page).getByRole('link', { name: 'Money', exact: true }).click();
-    await page.getByRole('button', { name: 'How is this calculated?' }).click();
-    await expect(page.getByText('Checking balance')).toBeVisible();
-    await expect(page.getByText(usd(SEED_CHECKING - EXPENSE), { exact: true }).first()).toBeVisible();
-    await expect(page.getByText('Pending transactions')).not.toBeVisible();
+    await expect(bottomNav(page).getByRole('link', { name: 'Money', exact: true })).toBeVisible();
   });
 });

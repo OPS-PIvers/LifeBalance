@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { enterTestMode, usd, bottomNav, moneyNavWithPending } from './helpers';
+import { enterTestMode, usd, bottomNav, moneyNavWithPending, safeToSpendButton } from './helpers';
 
 /**
  * Unified transaction review (advisor plan 07, spec 2) — the post-#792 review
@@ -52,12 +52,9 @@ test.describe('Transaction review drawer (Test Mode, stub seed)', () => {
     await expect(page.getByText('Pending', { exact: true })).not.toBeVisible();
 
     // Single-debit rule: the checking balance moved by exactly the ENTERED
-    // amount (not the stub's $0), visible in the Safe-to-Spend breakdown.
-    await page.getByRole('tab', { name: 'Overview' }).click();
-    await page.getByRole('button', { name: 'How is this calculated?' }).click();
-    await expect(page.getByText('Checking balance')).toBeVisible();
-    await expect(
-      page.getByText(usd(SEED_CHECKING - STUB_AMOUNT), { exact: true }).first()
-    ).toBeVisible();
+    // amount (not the stub's $0). The Safe-to-Spend breakdown card was removed
+    // from Money → Overview (UX audit Batch 3) — the toolbar figure is now the
+    // single place this number is surfaced, so assert there instead.
+    await expect(safeToSpendButton(page)).toContainText(usd(SEED_CHECKING - STUB_AMOUNT));
   });
 });

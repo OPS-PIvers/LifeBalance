@@ -81,6 +81,7 @@ vi.mock('@/components/modals/CaptureTransactionManual', () => ({
 vi.mock('lucide-react', () => ({
   Search: () => <div data-testid="search-icon" />,
   Filter: () => <div data-testid="filter-icon" />,
+  ChevronDown: () => <div data-testid="chevron-down-icon" />,
   X: () => <div data-testid="x-icon" />,
   Edit: () => <div data-testid="edit-icon" />,
   Trash2: () => <div data-testid="trash-icon" />,

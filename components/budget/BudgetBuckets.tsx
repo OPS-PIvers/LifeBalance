@@ -305,12 +305,13 @@ const BudgetBuckets: React.FC = () => {
         />
       )}
 
-      {/* Add Bucket Button */}
+      {/* Add Bucket Button — compact inline row, not a tall full-width dashed block */}
       <Button
         variant="dashed"
+        size="sm"
         onClick={handleAddBucket}
-        className="w-full py-4 rounded-card"
-        leftIcon={<Plus size={20} />}
+        className="w-full py-2.5 rounded-card"
+        leftIcon={<Plus size={16} />}
       >
         Add Bucket
       </Button>

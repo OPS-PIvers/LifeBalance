@@ -1,21 +1,22 @@
 import React, { useState } from 'react';
 import { ChevronDown, Wallet, Receipt, Clock } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
 import { cn } from '@/utils/cn';
 
 /**
- * Read-only Safe-to-Spend breakdown surfaced in the Money → Overview tab. It
- * "shows the work" behind the headline number (Checking − Unpaid bills −
- * Pending) using the memoized `safeToSpendBreakdown` the context already
- * exposes — no recomputation, no logic change. The Home hero stays the single
- * elevated surface; this is a calm grouped-flat companion in the domain.
+ * Read-only Safe-to-Spend breakdown surfaced at the BOTTOM of the Money →
+ * Overview tab. It "shows the work" behind the toolbar's headline number
+ * (Checking − Unpaid bills − Pending) using the memoized
+ * `safeToSpendBreakdown` the context already exposes — no recomputation, no
+ * logic change.
  *
- * The headline stays always visible; the itemized rows + disclaimer are
- * collapsed behind a "How is this calculated?" toggle by default — the app's
- * standard show-the-work interaction language for this content.
+ * UX audit Batch 3 (owner decision): the always-visible headline row was
+ * removed — the figure is permanently in `TopToolbar` and this tab is that
+ * figure's deep-link destination, so repeating it here was pure redundancy.
+ * Only the collapsed "How is this calculated?" disclosure remains; this is
+ * the app's ONLY breakdown UI for the metric, so don't delete it outright.
  */
 export const SafeToSpendDetail: React.FC = () => {
   const { safeToSpendBreakdown: breakdown } = useFinance();
@@ -24,30 +25,9 @@ export const SafeToSpendDetail: React.FC = () => {
 
   if (breakdown === undefined) return null;
 
-  const isPositive = breakdown.safeToSpend >= 0;
-
   return (
     <Section title="Safe to spend">
       <SurfaceList>
-        {/* Headline */}
-        <Row className="justify-between">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-brand-800 dark:text-brand-100">Available to spend</p>
-            <p className="text-xs text-brand-500 dark:text-brand-400 mt-0.5">
-              {breakdown.nextPaycheckDate
-                ? `Until your next paycheck on ${format(parseISO(breakdown.nextPaycheckDate), 'MMM d')}`
-                : 'Available from checking'}
-            </p>
-          </div>
-          <span
-            className={`font-mono text-xl font-bold tabular-nums shrink-0 ${
-              isPositive ? 'text-money-pos' : 'text-money-neg'
-            }`}
-          >
-            {fmt(breakdown.safeToSpend)}
-          </span>
-        </Row>
-
         {expanded && (
           <div
             id="sts-detail-breakdown"

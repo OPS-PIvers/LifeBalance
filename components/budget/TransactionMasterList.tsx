@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import EmptyState from '@/components/ui/EmptyState';
 import { StatGroup, Stat } from '@/components/ui/Section';
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import toast from 'react-hot-toast';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -371,51 +372,61 @@ const TransactionMasterList: React.FC = () => {
 
   return (
     <div className="space-y-4 animate-in fade-in duration-(--duration-base)">
-      {/* Search + Filters — flat on the page background, no wrapping card */}
+      {/* Search + Filters — flat on the page background, no wrapping card.
+          Search + the mobile filter/select toggle share one row (UX audit
+          Batch 3 — was 2 stacked blocks) instead of stacking. */}
       <div className="space-y-3">
-        {/* Search Bar */}
-        <div className="relative">
-          <Input
-            type="text"
-            icon={<Search size={18} />}
-            aria-label="Search transactions"
-            placeholder="Search merchant or amount..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pr-10"
-          />
-          {searchTerm && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setSearchTerm('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 h-auto p-0 hover:bg-transparent shadow-none"
+        <div className="flex items-center gap-2">
+          {/* Search Bar */}
+          <div className="relative flex-1 min-w-0">
+            <Input
+              type="text"
+              icon={<Search size={18} />}
+              aria-label="Search transactions"
+              placeholder="Search merchant or amount..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pr-10"
+            />
+            {searchTerm && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 h-auto p-0 hover:bg-transparent shadow-none"
+              >
+                <X size={16} />
+              </Button>
+            )}
+          </div>
+
+          {/* Mobile Filter & Select Toggle */}
+          <div className="flex md:hidden items-center gap-2 shrink-0">
+             <Button
+               variant="secondary"
+               size="icon"
+               onClick={() => setIsFilterDrawerOpen(true)}
+               aria-label="Filters"
+               className="h-11 relative"
+             >
+               <Filter size={16} />
+               {activeFilterCount > 0 && (
+                 <span className="absolute -top-1 -right-1 bg-accent-600 text-white px-1 rounded-full text-xxs leading-tight min-w-[16px] text-center">
+                   {activeFilterCount}
+                 </span>
+               )}
+             </Button>
+
+             <Button
+              onClick={() => setIsSelectionMode(!isSelectionMode)}
+              variant={isSelectionMode ? 'primary' : 'subtle'}
+              size="icon"
+              aria-label="Toggle selection mode"
+              className="h-11"
             >
-              <X size={16} />
+              <Layers size={16} />
             </Button>
-          )}
-        </div>
-
-        {/* Mobile Filter & Select Toggle */}
-        <div className="flex md:hidden items-center gap-2">
-           <Button
-             variant="secondary"
-             className="flex-1 justify-center"
-             onClick={() => setIsFilterDrawerOpen(true)}
-           >
-             <Filter size={16} className="mr-2" />
-             Filters {activeFilterCount > 0 && <span className="ml-1 bg-brand-100 dark:bg-brand-700 text-brand-700 dark:text-brand-200 px-1.5 py-0.5 rounded-full text-xs">{activeFilterCount}</span>}
-           </Button>
-
-           <Button
-            onClick={() => setIsSelectionMode(!isSelectionMode)}
-            variant={isSelectionMode ? 'primary' : 'subtle'}
-            size="icon"
-            aria-label="Toggle selection mode"
-            className="h-11"
-          >
-            <Layers size={16} />
-          </Button>
+          </div>
         </div>
 
         {/* Filter Chips / Dropdowns */}
@@ -476,8 +487,15 @@ const TransactionMasterList: React.FC = () => {
         />
       </div>
 
-      {/* Summary — typography stat row, no boxed tiles */}
-      <div className="px-1">
+      {/* Summary — collapsible (UX audit Batch 3): the Income/Expense/Net/Count
+          figures duplicate what's recoverable from the visible list, so this
+          is now a dismissible/collapsible block instead of a fixed section
+          (still open by default — it's useful at-a-glance context). */}
+      <CollapsibleSection
+        title="Summary"
+        summary={`${summary.count} txn${summary.count === 1 ? '' : 's'}`}
+        defaultOpen={true}
+      >
         <StatGroup>
           <Stat label="Income" value={`+${fmt(summary.income)}`} valueClassName="text-money-pos" />
           <Stat label="Expense" value={`-${fmt(summary.expense)}`} valueClassName="text-money-neg" />
@@ -488,7 +506,7 @@ const TransactionMasterList: React.FC = () => {
           />
           <Stat label="Count" value={summary.count} />
         </StatGroup>
-      </div>
+      </CollapsibleSection>
 
       {/* Select All Bar */}
       {isSelectionMode && (
