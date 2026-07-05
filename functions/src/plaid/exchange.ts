@@ -1,10 +1,12 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import * as logger from "firebase-functions/logger";
 import {
   PLAID_SECRETS,
   makePlaidClient,
   assertHouseholdMember,
 } from "./client";
+import { resolveAccountMap } from "./accountMapping";
 
 /**
  * Callable: exchange a Plaid public_token (from a completed Link flow) for a
@@ -40,6 +42,31 @@ export const plaidexchangepublictoken = onCall(
     const itemId = resp.data.item_id;
 
     const db = admin.firestore();
+
+    // Auto-map each Plaid account to an existing LifeBalance account (by
+    // cardLast4/mask, else exact name — see accountMapping.ts) so the balance
+    // sync (and a future transaction-routing wire-in) know which LifeBalance
+    // account doc a Plaid account corresponds to. Best-effort: if the
+    // accountsGet call fails for any reason, persist the item anyway with an
+    // empty map rather than failing the whole link flow — balance sync simply
+    // has nothing to update until a human maps it via a future settings UI.
+    let accountMap: Record<string, string> = {};
+    try {
+      const accountsResp = await plaid.accountsGet({ access_token: accessToken });
+      const lbAccountsSnap = await db.collection(`households/${householdId}/accounts`).get();
+      const lbAccounts = lbAccountsSnap.docs.map((d) => ({
+        id: d.id,
+        name: (d.data()?.name as string | undefined) ?? "",
+        cardLast4: d.data()?.cardLast4 as string | undefined,
+      }));
+      accountMap = resolveAccountMap(accountsResp.data.accounts, lbAccounts);
+    } catch (err) {
+      logger.warn(
+        `Plaid accountsGet failed while linking household ${householdId} item ${itemId} (leaving accountMap empty)`,
+        err,
+      );
+    }
+
     // SECURITY: access_token is server-only — this path is denied to all clients
     // (firestore.rules). Never echo it back in the response.
     await db.doc(`households/${householdId}/plaidItems/${itemId}`).set({
@@ -49,6 +76,7 @@ export const plaidexchangepublictoken = onCall(
       linkedBy: request.auth.uid,
       linkedAt: admin.firestore.FieldValue.serverTimestamp(),
       status: "active",
+      accountMap,
     });
 
     // Ops-only counter (count, never a token) for the Developer Console status line.

@@ -4,6 +4,7 @@ import { httpsCallable } from 'firebase/functions';
 import { Landmark } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getFunctionsInstance } from '@/firebase.config';
+import { track } from '@/services/analytics';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Section, SurfaceList, DisclosureRow } from '@/components/ui/Section';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -33,6 +34,7 @@ const ConnectBankCard: React.FC = () => {
         const functions = await getFunctionsInstance();
         const exchange = httpsCallable(functions, 'plaidexchangepublictoken');
         await exchange({ householdId, publicToken });
+        track('bank_linked');
         toast.success('Bank connected — new transactions will appear in your review queue.');
       } catch {
         toast.error('Could not finish connecting your bank.');

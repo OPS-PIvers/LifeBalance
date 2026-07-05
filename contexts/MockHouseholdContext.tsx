@@ -74,7 +74,18 @@ const MOCK_PAY_PERIOD_ID = '2024-01-01';
 
 // Seed data with realistic examples
 const SEED_ACCOUNTS: Account[] = [
-  { id: 'acc1', name: 'Main Checking', type: 'checking', balance: 5420.50, lastUpdated: new Date().toISOString() },
+  // Diverging Plaid balance (plan 04) so Test Mode shows the "Update to bank
+  // balance" advisory chip (utils/plaidBalance.ts) without needing a real link.
+  {
+    id: 'acc1',
+    name: 'Main Checking',
+    type: 'checking',
+    balance: 5420.50,
+    lastUpdated: new Date().toISOString(),
+    plaidBalanceCurrent: 5389.12,
+    plaidBalanceAvailable: 5350.00,
+    plaidBalanceUpdatedAt: new Date().toISOString(),
+  },
   { id: 'acc2', name: 'Savings Account', type: 'savings', balance: 12000, lastUpdated: new Date().toISOString() },
   { id: 'acc3', name: 'Credit Card', type: 'credit', balance: -850.25, lastUpdated: new Date().toISOString() },
 ];
