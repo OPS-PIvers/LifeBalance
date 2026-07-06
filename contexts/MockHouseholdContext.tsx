@@ -87,7 +87,9 @@ const SEED_ACCOUNTS: Account[] = [
     plaidBalanceUpdatedAt: new Date().toISOString(),
   },
   { id: 'acc2', name: 'Savings Account', type: 'savings', balance: 12000, lastUpdated: new Date().toISOString() },
-  { id: 'acc3', name: 'Credit Card', type: 'credit', balance: -850.25, lastUpdated: new Date().toISOString() },
+  // Credit debt is stored POSITIVE (see utils/accountImpact.ts) — a charge
+  // increments it, a payment decrements it.
+  { id: 'acc3', name: 'Credit Card', type: 'credit', balance: 850.25, lastUpdated: new Date().toISOString() },
 ];
 
 const SEED_BUCKETS: BudgetBucket[] = [
@@ -479,7 +481,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     category: string,
     relatedHabitIds?: string[],
     accountId?: string | null,
-    overrides?: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean },
+    overrides?: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean; creditPayment?: boolean },
   ) => {
     const clearAccount = accountId === null;
     // Balance parity (computed OUTSIDE the setState updaters — StrictMode
@@ -490,7 +492,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       const effectiveAccountId = clearAccount ? undefined : (accountId ?? existing.accountId);
       const target = resolveTargetAccount(effectiveAccountId, accounts);
       const balanceDelta = accountImpactOf(
-        { amount: overrides?.amount ?? existing.amount, category, creditPayment: existing.creditPayment },
+        { amount: overrides?.amount ?? existing.amount, category, creditPayment: overrides?.creditPayment ?? existing.creditPayment },
         target
       );
       if (balanceDelta !== 0 && target) {
@@ -514,6 +516,12 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       };
       // `null` explicitly clears a previously-tagged account.
       if (clearAccount) delete next.accountId;
+      // Persist-only-when-true parity with the Firestore mutation: an explicit
+      // false override removes a stored Charge/Payment flag.
+      if (overrides?.creditPayment !== undefined) {
+        if (overrides.creditPayment) next.creditPayment = true;
+        else delete next.creditPayment;
+      }
       return next;
     }));
     if (relatedHabitIds && relatedHabitIds.length > 0) {

@@ -207,7 +207,7 @@ export function makeUpdateTransactionCategory(deps: {
     category: string,
     relatedHabitIds?: string[],
     accountId?: string | null,
-    overrides?: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean },
+    overrides?: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean; creditPayment?: boolean },
   ) => {
     if (!householdId || !currentUser) return;
 
@@ -263,9 +263,14 @@ export function makeUpdateTransactionCategory(deps: {
     const editedAmount = overrides?.amount !== undefined ? roundMoney(overrides.amount) : undefined;
     const effectiveAmount = editedAmount ?? existingTx.amount;
 
+    // The review drawer can flip the Charge/Payment flag in the same verify —
+    // the OVERRIDE value (when present) must drive the applied impact so a
+    // credit-card payment pays the card down instead of raising its debt.
+    const effectiveCreditPayment = overrides?.creditPayment ?? existingTx.creditPayment;
+
     const reverseDelta = -effectiveAccountImpact(existingTx, oldTarget);
     const applyDelta = effectiveAccountImpact(
-      { amount: effectiveAmount, category, creditPayment: existingTx.creditPayment, status: 'verified' },
+      { amount: effectiveAmount, category, creditPayment: effectiveCreditPayment, status: 'verified' },
       newTarget
     );
     const deltasByAccountId = new Map<string, number>();
@@ -295,6 +300,11 @@ export function makeUpdateTransactionCategory(deps: {
       // truthy guard, editedPayPeriodId is only computed when a date is present.
       ...(overrides?.date ? { date: overrides.date, payPeriodId: editedPayPeriodId } : {}),
       ...(overrides?.clearNeedsAmount ? { needsAmount: false } : {}),
+      // Persist-only-when-true convention (matches addTransaction): an explicit
+      // false override removes a stored flag rather than writing `false`.
+      ...(overrides?.creditPayment !== undefined
+        ? (overrides.creditPayment ? { creditPayment: true } : { creditPayment: deleteField() })
+        : {}),
     });
 
     // 1b. Apply the account-balance impact of the status/category transition in

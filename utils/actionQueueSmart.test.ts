@@ -149,6 +149,21 @@ describe('suggestCategoryForTransaction', () => {
     expect(result).toBe('Gas');
   });
 
+  it('never suggests the Credit Card sentinel — from history or the transaction itself', () => {
+    const history = [
+      makeTx({ id: 't1', merchant: 'Costco', category: 'Credit Card', date: '2026-06-02' }),
+      makeTx({ id: 't2', merchant: 'Costco', category: 'Credit Card', date: '2026-05-25' }),
+      makeTx({ id: 't3', merchant: 'Costco', category: 'Groceries', date: '2026-05-20' }),
+    ];
+    expect(
+      suggestCategoryForTransaction({ merchant: 'Costco', category: 'Credit Card' }, buckets, history)
+    ).toBe('Groceries');
+    // With only sentinel history and a sentinel own-category, nothing usable remains.
+    expect(
+      suggestCategoryForTransaction({ merchant: 'Costco', category: 'Credit Card' }, buckets, history.slice(0, 2))
+    ).toBeUndefined();
+  });
+
   it('ignores Uncategorized rows in history', () => {
     const history = [
       makeTx({ id: 't1', merchant: 'Costco', category: 'Uncategorized', date: '2026-06-02' }),

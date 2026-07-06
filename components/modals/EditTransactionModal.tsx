@@ -1,7 +1,7 @@
 
 import React, { useId, useState } from 'react';
 import { Trash2, Loader2, Copy, X } from 'lucide-react';
-import { Transaction } from '@/types/schema';
+import { Transaction, CREDIT_CARD_CATEGORY } from '@/types/schema';
 import { useFinance, useShopping } from '@/contexts/FirebaseHouseholdContext';
 import { Drawer } from '@/components/ui/Drawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -111,7 +111,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
       return;
     }
 
-    if (!category) {
+    if (!category && !isSelectedAccountCredit) {
       toast.error('Please select a category');
       return;
     }
@@ -121,8 +121,9 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
       await updateTransaction(transaction.id, {
         amount: amountNum,
         merchant: merchant.trim(),
-        category,
-        subBucketId: subBucketId || undefined,
+        // Credit-tagged spend carries the sentinel, never a bucket category.
+        category: isSelectedAccountCredit ? CREDIT_CARD_CATEGORY : category,
+        subBucketId: isSelectedAccountCredit ? undefined : (subBucketId || undefined),
         store: resolveStore(merchant),
         accountId: accountId || undefined,
         // Always pass the key so toggling Payment off on a credit transaction
@@ -177,7 +178,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
       return;
     }
 
-    if (!category) {
+    if (!category && !isSelectedAccountCredit) {
       toast.error('Please select a category');
       return;
     }
@@ -189,15 +190,16 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
       await addTransaction({
         amount: amountNum,
         merchant: trimmedMerchant,
-        category,
+        category: isSelectedAccountCredit ? CREDIT_CARD_CATEGORY : category,
         date: getLocalDateString(), // Default to today (local) for the copy
         status: 'verified',
         isRecurring: false,
         source: 'manual',
         autoCategorized: transaction.autoCategorized ?? false,
-        subBucketId: subBucketId || undefined,
+        subBucketId: isSelectedAccountCredit ? undefined : (subBucketId || undefined),
         store: resolveStore(merchant),
-        accountId: accountId || undefined
+        accountId: accountId || undefined,
+        creditPayment: isSelectedAccountCredit && creditPayment ? true : undefined
         // Let addTransaction handle ID and timestamps
       });
 
@@ -275,6 +277,9 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
           </div>
         )}
 
+        {/* Category/sub-category don't apply to credit-tagged spend — the
+            Charge/Payment toggle below takes their place. */}
+        {!isSelectedAccountCredit && (
         <Select
           id="edit-category"
           label="Category"
@@ -285,14 +290,22 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
             setSubBucketId(undefined); // Reset sub-bucket when category changes
           }}
         >
+          {/* A credit transaction re-tagged to checking has no bucket category
+              yet — surface an explicit placeholder until one is picked. */}
+          {!dynamicCategories.includes(category) && (
+            <option value={category} disabled>
+              Select category...
+            </option>
+          )}
           {dynamicCategories.map((cat) => (
             <option key={cat} value={cat}>
               {cat}
             </option>
           ))}
         </Select>
+        )}
 
-        {subBuckets.length > 0 && (
+        {!isSelectedAccountCredit && subBuckets.length > 0 && (
           <Select
             id="edit-sub-bucket"
             label="Sub-Category"
@@ -314,7 +327,17 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
           label="Account"
           disabled={isSaving}
           value={accountId}
-          onChange={(e) => setAccountId(e.target.value)}
+          onChange={(e) => {
+            const nextId = e.target.value;
+            setAccountId(nextId);
+            // Re-tagging credit → asset: the sentinel is not a bucket category,
+            // so clear it and force an explicit pick (save blocks on '').
+            const nextIsCredit = accounts.find(a => a.id === nextId)?.type === 'credit';
+            if (!nextIsCredit && category === CREDIT_CARD_CATEGORY) {
+              setCategory('');
+              setSubBucketId(undefined);
+            }
+          }}
         >
           <option value="">(None)</option>
           {accounts.map((a) => (

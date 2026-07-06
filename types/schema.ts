@@ -10,6 +10,12 @@ export type ModuleKey = 'habits' | 'money' | 'plan' | 'todos' | 'meals' | 'shopp
 
 export const INCOME_CATEGORY = 'Income';
 
+// Sentinel category for transactions tagged to a CREDIT account. Credit spend
+// is tracked on the card itself (balance / CreditCardActivityWidget), never
+// against budget buckets, so credit-tagged transactions carry this instead of
+// a bucket name. Excluded from bucket spent-tracking and category suggestions.
+export const CREDIT_CARD_CATEGORY = 'Credit Card';
+
 export interface NotificationPreferences {
   // Habit reminders
   habitReminders: {

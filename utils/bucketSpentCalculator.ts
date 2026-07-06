@@ -1,4 +1,4 @@
-import { BudgetBucket, Transaction, INCOME_CATEGORY } from '@/types/schema';
+import { BudgetBucket, Transaction, CREDIT_CARD_CATEGORY, INCOME_CATEGORY } from '@/types/schema';
 import { sumMoney } from '@/utils/money';
 
 export interface BucketSpent {
@@ -55,6 +55,9 @@ export function calculateBucketSpent(
   relevantTransactions.forEach(tx => {
     if (!tx.category) return; // Skip uncategorized transactions
     if (tx.category === INCOME_CATEGORY) return; // Skip income transactions
+    // Credit-card spend never counts toward buckets — even if a bucket happens
+    // to be named "Credit Card" (the sentinel is not a bucket category).
+    if (tx.category === CREDIT_CARD_CATEGORY) return;
 
     const bucketIds = bucketIdsByName.get(tx.category.toLowerCase());
 

@@ -38,7 +38,7 @@ import { KidsChoresWidget } from '@/components/dashboard/KidsChoresWidget';
 import { ActivityFeedWidget } from '@/components/dashboard/ActivityFeedWidget';
 import { PulseStripWidget } from '@/components/dashboard/PulseStripWidget';
 import { WeeklyRecapCard } from '@/components/dashboard/WeeklyRecapCard';
-import { CreateChallengePayload } from '@/types/schema';
+import { CreateChallengePayload, CREDIT_CARD_CATEGORY } from '@/types/schema';
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
 import { CreditCardActivityWidget } from '@/components/dashboard/CreditCardActivityWidget';
 import { Section, SurfaceList } from '@/components/ui/Section';
@@ -160,14 +160,20 @@ const Dashboard: React.FC = () => {
         );
         return;
       }
-      const category = suggestCategoryForTransaction(item, buckets, transactions);
+      // A credit-tagged transaction (existing tag or the smart suggestion)
+      // carries the CREDIT_CARD_CATEGORY sentinel, not a bucket category —
+      // credit spend never counts toward buckets.
+      const accountId = suggestAccountIdForTransaction(item, accounts, transactions);
+      const isCredit = accounts.find(a => a.id === (accountId ?? item.accountId))?.type === 'credit';
+      const category = isCredit
+        ? CREDIT_CARD_CATEGORY
+        : suggestCategoryForTransaction(item, buckets, transactions);
       if (!category) {
         // The card's pre-check makes this unreachable in practice; expand as a
         // safe fallback rather than guessing a category.
         setExpandedId(item.id);
         return;
       }
-      const accountId = suggestAccountIdForTransaction(item, accounts, transactions);
       await updateTransactionCategory(item.id, category, item.relatedHabitIds ?? [], accountId);
       toast.success(`Approved · ${category}`);
     } catch (error) {
