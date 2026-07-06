@@ -17,7 +17,8 @@ import type { MutationOpts } from '@/contexts/household/types';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { resolveBucketForCalendarItem } from '@/utils/safeToSpendCalculator';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
-import { parseRecurringId, isRecurringId } from '@/utils/calendarRecurrence';
+import { parseRecurringId, isRecurringId, rollRecurringAnchorForward } from '@/utils/calendarRecurrence';
+import { getLocalDateString } from '@/utils/dateHelpers';
 import { roundMoney } from '@/utils/money';
 
 // Pure-ish factories for the CALENDAR-ITEM mutation family (add/update/delete/
@@ -66,22 +67,45 @@ export function makeAddCalendarItem(deps: {
 }
 
 /**
- * updateCalendarItem — original closure captured only `householdId`.
+ * updateCalendarItem — captures `householdId` and `calendarItems` (the latter
+ * to detect schedule changes on recurring templates).
  */
 export function makeUpdateCalendarItem(deps: {
   db: Firestore;
   householdId: string | null;
+  calendarItems: CalendarItem[];
 }) {
-  const { db, householdId } = deps;
+  const { db, householdId, calendarItems } = deps;
 
   const updateCalendarItem = async (item: CalendarItem) => {
     if (!householdId) return;
 
     try {
+      // Forward-only schedule edits: when a recurring template's date or
+      // frequency CHANGES, roll the anchor to the first occurrence on/after
+      // today. Re-anchoring a template into the past re-generates old
+      // occurrences on the new schedule, and the paid/deleted suppression
+      // records (keyed by the OLD occurrence dates) no longer match — already-
+      // paid bills resurrect as unpaid overdue items. When the schedule is
+      // untouched (e.g. a title or amount edit), the anchor is left alone so a
+      // genuinely overdue occurrence stays visible.
+      let effectiveDate = item.date;
+      if (item.isRecurring && item.frequency) {
+        const existing = calendarItems.find(i => i.id === item.id);
+        const scheduleChanged =
+          !existing ||
+          !existing.isRecurring ||
+          existing.date !== item.date ||
+          existing.frequency !== item.frequency;
+        if (scheduleChanged) {
+          effectiveDate = rollRecurringAnchorForward(item.date, item.frequency, getLocalDateString());
+        }
+      }
+
       const updates: Record<string, unknown> = {
         title: item.title,
         amount: item.amount,
-        date: item.date,
+        date: effectiveDate,
         type: item.type,
         isPaid: item.isPaid,
         isRecurring: item.isRecurring,

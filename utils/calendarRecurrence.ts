@@ -85,6 +85,48 @@ function calculateStartIndex(originalDate: Date, rangeStart: Date, frequency: st
 }
 
 /**
+ * Rolls a recurring template's anchor date forward to the first occurrence on
+ * or after `today`. Used when a recurring template's schedule (date/frequency)
+ * is EDITED: applying the new schedule to past months would re-generate old
+ * occurrences whose paid/deleted suppression records still carry the OLD
+ * dates, resurrecting already-paid bills as unpaid overdue items. Anchoring at
+ * the next on-or-after-today occurrence makes schedule edits forward-only.
+ *
+ * For monthly anchors on days 29–31, month-end-clamped occurrences (e.g.
+ * Jan 31 → Feb 28) are skipped as new anchors — writing a clamped date would
+ * permanently lose the intended day-of-month — so the anchor advances to the
+ * next month that actually contains that day.
+ *
+ * Returns the anchor unchanged if it is already on/after `today` or the
+ * frequency is unknown.
+ */
+export function rollRecurringAnchorForward(
+  anchor: string,
+  frequency: string,
+  today: string
+): string {
+  if (frequency !== 'weekly' && frequency !== 'bi-weekly' && frequency !== 'monthly') {
+    return anchor;
+  }
+  if (anchor >= today) return anchor;
+
+  const originalDate = startOfDay(parseISO(anchor));
+  const todayDate = startOfDay(parseISO(today));
+  const anchorDay = originalDate.getDate();
+
+  // calculateStartIndex may undershoot by one period; the loop corrects.
+  let n = calculateStartIndex(originalDate, todayDate, frequency);
+  for (let i = 0; i < MAX_ITERATIONS; i++, n++) {
+    const candidate = getOccurrenceDate(originalDate, n, frequency);
+    const notClamped = frequency !== 'monthly' || candidate.getDate() === anchorDay;
+    if (!isBefore(candidate, todayDate) && notClamped) {
+      return format(candidate, 'yyyy-MM-dd');
+    }
+  }
+  return anchor;
+}
+
+/**
  * Generates recurring instances of a calendar item within a date range.
  * If the item is not recurring, returns just the original item.
  *

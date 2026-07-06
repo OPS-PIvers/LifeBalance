@@ -2,6 +2,7 @@ import React, { useState, ReactNode, useCallback, useMemo, useRef } from 'react'
 import { format } from 'date-fns';
 import { HouseholdContextType, HouseholdSliceProviders } from './FirebaseHouseholdContext';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { rollRecurringAnchorForward } from '@/utils/calendarRecurrence';
 import { hashKidPin } from '@/utils/kidPin';
 import { computeTodoCompletionCredit } from '@/utils/todoPoints';
 import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
@@ -716,7 +717,16 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   }, []);
 
   const updateCalendarItem = useCallback(async (item: CalendarItem) => {
-    setCalendarItems(prev => prev.map(i => i.id === item.id ? item : i));
+    // Mirror Firestore behavior: schedule edits on recurring templates are
+    // forward-only (see makeUpdateCalendarItem in calendarMutations.ts).
+    setCalendarItems(prev => prev.map(i => {
+      if (i.id !== item.id) return i;
+      if (item.isRecurring && item.frequency &&
+          (!i.isRecurring || i.date !== item.date || i.frequency !== item.frequency)) {
+        return { ...item, date: rollRecurringAnchorForward(item.date, item.frequency, getLocalDateString()) };
+      }
+      return item;
+    }));
     toast.success('Mock: Calendar item updated');
   }, []);
 
