@@ -1456,8 +1456,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }, [householdId, user]);
 
   const updateCalendarItem = useCallback(async (item: CalendarItem) => {
-    await makeUpdateCalendarItem({ db, householdId }).updateCalendarItem(item);
-  }, [householdId]);
+    await makeUpdateCalendarItem({ db, householdId, calendarItems }).updateCalendarItem(item);
+  }, [householdId, calendarItems]);
 
   const deleteRecurringInstance = useCallback(async (syntheticId: string, opts?: MutationOpts) => {
     await makeCalendarDeleteMutations({ db, householdId, user, calendarItems }).deleteRecurringInstance(syntheticId, opts);

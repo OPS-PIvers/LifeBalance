@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseISO } from 'date-fns';
-import { generateRecurringInstances, expandCalendarItems, generateRecurringId, isRecurringId, parseRecurringId } from './calendarRecurrence';
+import { generateRecurringInstances, expandCalendarItems, generateRecurringId, isRecurringId, parseRecurringId, rollRecurringAnchorForward } from './calendarRecurrence';
 import { CalendarItem } from '@/types/schema';
 
 describe('calendarRecurrence', () => {
@@ -420,5 +420,37 @@ describe('calendarRecurrence', () => {
       const dates = result.map(i => i.date).sort();
       expect(dates).toEqual(['2024-01-01', '2024-01-15']);
     });
+  });
+});
+
+describe('rollRecurringAnchorForward', () => {
+  it('returns the anchor unchanged when already on/after today', () => {
+    expect(rollRecurringAnchorForward('2026-07-08', 'monthly', '2026-07-05')).toBe('2026-07-08');
+    expect(rollRecurringAnchorForward('2026-07-05', 'monthly', '2026-07-05')).toBe('2026-07-05');
+  });
+
+  it('rolls a past monthly anchor to the first occurrence on/after today', () => {
+    // The Jen-Car-Payment scenario: anchor edited to Jan 8, today Jul 5 → Jul 8
+    expect(rollRecurringAnchorForward('2026-01-08', 'monthly', '2026-07-05')).toBe('2026-07-08');
+    // Same day-of-month as today
+    expect(rollRecurringAnchorForward('2026-01-05', 'monthly', '2026-07-05')).toBe('2026-07-05');
+  });
+
+  it('rolls weekly and bi-weekly anchors preserving the weekday', () => {
+    // 2026-01-07 is a Wednesday; first Wednesday on/after Fri 2026-03-06 is 2026-03-11
+    expect(rollRecurringAnchorForward('2026-01-07', 'weekly', '2026-03-06')).toBe('2026-03-11');
+    // bi-weekly from 2026-01-07: ..., 2026-03-04, 2026-03-18
+    expect(rollRecurringAnchorForward('2026-01-07', 'bi-weekly', '2026-03-06')).toBe('2026-03-18');
+  });
+
+  it('skips month-end-clamped occurrences so a day-31 anchor stays on the 31st', () => {
+    // Anchor Jan 31, today Feb 10: Feb 28 is clamped → roll to Mar 31
+    expect(rollRecurringAnchorForward('2026-01-31', 'monthly', '2026-02-10')).toBe('2026-03-31');
+    // Anchor Jan 30, today Feb 1: Feb clamps to 28 → Mar 30
+    expect(rollRecurringAnchorForward('2026-01-30', 'monthly', '2026-02-01')).toBe('2026-03-30');
+  });
+
+  it('leaves unknown frequencies untouched', () => {
+    expect(rollRecurringAnchorForward('2026-01-08', 'yearly', '2026-07-05')).toBe('2026-01-08');
   });
 });
