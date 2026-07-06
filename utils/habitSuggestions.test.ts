@@ -205,6 +205,12 @@ describe('matchMerchantNames', () => {
     expect(matchMerchantNames('Target', 'Targeted Therapy LLC')).toBe('none');
   });
 
+  it('does not apply the plural fold to 2-character tokens ("ga" must not match "gas")', () => {
+    expect(matchMerchantNames('GA Tech', 'Gas Tech')).toBe('none');
+    // 3+ character bases still fold: "joe" ↔ "joes".
+    expect(matchMerchantNames('Joe Diner', 'Joes Diner')).toBe('exact');
+  });
+
   it('never matches an empty label', () => {
     expect(matchMerchantNames('', 'Starbucks')).toBe('none');
     expect(matchMerchantNames('', '')).toBe('none');

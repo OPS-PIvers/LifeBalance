@@ -397,6 +397,55 @@ describe('TransactionReviewForm', () => {
       expect(call[2]).toEqual(['h-other']);
     });
 
+    it('follows a merchant edit: typing a known merchant pre-selects its habit', async () => {
+      const user = userEvent.setup();
+      mockHabits.push(coffeeHabit);
+      mockTransactions.push(priorTagged('Starbucks'));
+
+      // 'Mystery' has no history → nothing pre-selected at mount.
+      render(
+        <TransactionReviewForm
+          transaction={{ ...baseTx, merchant: 'Mystery' }}
+          onDone={mockOnDone}
+        />
+      );
+      expect(screen.queryByText(/pre-selected from your history/i)).not.toBeInTheDocument();
+
+      // Correcting the merchant to the known one pre-selects its usual habit.
+      const merchantInput = screen.getByLabelText(/merchant/i);
+      await user.clear(merchantInput);
+      await user.type(merchantInput, 'Starbucks');
+      expect(screen.getByText(/pre-selected from your history/i)).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      const call = mockUpdateTransactionCategory.mock.calls[0]!;
+      expect(call[2]).toEqual(['h-coffee']);
+    });
+
+    it('stops following merchant edits once the user touches the habit chips', async () => {
+      const user = userEvent.setup();
+      mockHabits.push(coffeeHabit);
+      mockTransactions.push(priorTagged('Starbucks'));
+
+      render(
+        <TransactionReviewForm
+          transaction={{ ...baseTx, merchant: 'Starbucks' }}
+          onDone={mockOnDone}
+        />
+      );
+
+      // Deselect the pre-selected chip (touch), then re-trigger the auto-select
+      // edge by editing the merchant away and back — it must NOT re-select.
+      await user.click(screen.getByRole('button', { name: /coffee out/i }));
+      const merchantInput = screen.getByLabelText(/merchant/i);
+      await user.clear(merchantInput);
+      await user.type(merchantInput, 'Starbucks');
+
+      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      const call = mockUpdateTransactionCategory.mock.calls[0]!;
+      expect(call[2]).toEqual([]);
+    });
+
     it('does not pre-select when history is inconsistent for the merchant', () => {
       mockHabits.push(coffeeHabit);
       mockTransactions.push(

@@ -94,9 +94,16 @@ function merchantTokens(normalized: string): string[] {
   return normalized.split(' ').filter(t => t.length >= 2 && !/^\d+$/.test(t));
 }
 
-/** Token equality tolerant of a trailing possessive/plural "s" ("joe" ↔ "joes"). */
+/**
+ * Token equality tolerant of a trailing possessive/plural "s" ("joe" ↔ "joes").
+ * The plural fold only applies to base tokens of 3+ characters — a 2-char base
+ * carries too little signal for it ("ga" must not match "gas").
+ */
 function tokensEquivalent(a: string, b: string): boolean {
-  return a === b || `${a}s` === b || a === `${b}s`;
+  if (a === b) return true;
+  if (a.length >= 3 && `${a}s` === b) return true;
+  if (b.length >= 3 && a === `${b}s`) return true;
+  return false;
 }
 
 /**
