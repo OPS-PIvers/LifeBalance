@@ -316,20 +316,16 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
           tracked on the card, not against budget buckets. The Charge/Payment
           toggle takes its place (same treatment as manual capture / edit). */}
       {!isSelectedAccountCredit && (
-        <div className="space-y-2">
-          <Eyebrow as="p" className="text-xxs">Budget Category</Eyebrow>
-          <div className="flex flex-wrap gap-2">
-            {categoryOptions.map(cat => (
-              <SelectableChip
-                key={cat}
-                selected={selectedCategory === cat}
-                onClick={() => setSelectedCategory(cat)}
-              >
-                {cat}
-              </SelectableChip>
-            ))}
-          </div>
-        </div>
+        <Select
+          label="Budget Category"
+          value={selectedCategory}
+          onChange={e => setSelectedCategory(e.target.value)}
+        >
+          <option value="">Select category…</option>
+          {categoryOptions.map(cat => (
+            <option key={cat} value={cat}>{cat}</option>
+          ))}
+        </Select>
       )}
 
       {isSelectedAccountCredit && (
