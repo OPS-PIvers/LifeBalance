@@ -91,12 +91,16 @@ export function makeUpdateCalendarItem(deps: {
       // genuinely overdue occurrence stays visible.
       let effectiveDate = item.date;
       if (item.isRecurring && item.frequency) {
+        // If the existing doc can't be found in local state (e.g. listener
+        // not yet resolved), do NOT roll — silently rewriting the date on a
+        // possibly-unchanged schedule is worse than the (edit-UI-impossible)
+        // resurrect case, since edit surfaces always operate on loaded items.
         const existing = calendarItems.find(i => i.id === item.id);
         const scheduleChanged =
-          !existing ||
-          !existing.isRecurring ||
-          existing.date !== item.date ||
-          existing.frequency !== item.frequency;
+          !!existing &&
+          (!existing.isRecurring ||
+            existing.date !== item.date ||
+            existing.frequency !== item.frequency);
         if (scheduleChanged) {
           effectiveDate = rollRecurringAnchorForward(item.date, item.frequency, getLocalDateString());
         }
