@@ -3,7 +3,7 @@ import { Check, ChevronDown, Copy, Sparkles, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import { Transaction, CREDIT_CARD_CATEGORY, INCOME_CATEGORY } from '@/types/schema';
-import { suggestHabitsForTransaction } from '@/utils/habitSuggestions';
+import { getAutoSelectedHabitIds, suggestHabitsForTransaction } from '@/utils/habitSuggestions';
 import { suggestAccountIdForTransaction, suggestCategoryForTransaction } from '@/utils/actionQueueSmart';
 import { buildTransactionCategoryOptions } from '@/utils/categories';
 import { roundMoney } from '@/utils/money';
@@ -112,7 +112,20 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
     if (transaction.category && categoryOptions.includes(transaction.category)) return transaction.category;
     return suggestCategoryForTransaction(transaction, buckets, transactions) ?? '';
   });
-  const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>(() => transaction.relatedHabitIds ?? []);
+  // Habits: an explicit prior tag always wins; otherwise pre-select the habits
+  // this household consistently tags for this merchant (fuzzy history match) —
+  // automated pending imports (quickAdd email, Apple Pay stubs, Plaid) arrive
+  // untagged, so a recurring "Starbucks" charge opens with its usual habit
+  // already selected. Lazy initializer = computed once at mount; the user can
+  // still deselect any chip before approving.
+  const [autoSelectedIds] = useState<string[]>(() =>
+    (transaction.relatedHabitIds?.length ?? 0) > 0
+      ? []
+      : getAutoSelectedHabitIds(transaction.merchant, habits, transactions)
+  );
+  const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>(
+    () => transaction.relatedHabitIds?.length ? transaction.relatedHabitIds : autoSelectedIds
+  );
   const [showAllHabits, setShowAllHabits] = useState(false);
   const [creditPayment, setCreditPayment] = useState(() => transaction.creditPayment ?? false);
 
@@ -358,6 +371,11 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
         </div>
         {habits.length === 0 && (
           <p className="text-xs text-brand-400 dark:text-brand-450 italic">No habits found. Create some in Habits tab.</p>
+        )}
+        {autoSelectedIds.some(id => selectedHabitIds.includes(id)) && (
+          <p className="text-xs text-brand-400 dark:text-brand-450">
+            Pre-selected from your history with this merchant — tap a chip to remove.
+          </p>
         )}
 
         {habits.length > 0 && (

@@ -26,6 +26,8 @@ const {
 const mockTransactions: Transaction[] = [];
 // Accounts, mutable the same way (credit-account tests seed a card).
 const mockAccounts: { id: string; name: string; type: string }[] = [];
+// Habits, mutable the same way (habit pre-selection tests seed these).
+const mockHabits: { id: string; title: string; category: string; type: string }[] = [];
 
 // Mock the domain slices consumed by the form (same pattern as
 // EditTransactionModal.test.tsx).
@@ -42,7 +44,7 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
     mergeTransactions: mockMergeTransactions,
     keepBothTransactions: mockKeepBothTransactions,
   }),
-  useGamification: () => ({ habits: [] as unknown[] }),
+  useGamification: () => ({ habits: mockHabits }),
 }));
 
 vi.mock('react-hot-toast', () => ({ default: mockToast }));
@@ -75,6 +77,7 @@ describe('TransactionReviewForm', () => {
     vi.clearAllMocks();
     mockTransactions.length = 0;
     mockAccounts.length = 0;
+    mockHabits.length = 0;
   });
 
   it('pre-selects the Income option for an income transaction', () => {
@@ -317,6 +320,99 @@ describe('TransactionReviewForm', () => {
 
       expect(mockKeepBothTransactions).toHaveBeenCalledWith('tx1');
       expect(mockOnDone).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('habit pre-selection from merchant history', () => {
+    const coffeeHabit = { id: 'h-coffee', title: 'Coffee out', category: 'coffee', type: 'negative' };
+
+    // A verified prior transaction at (a bank-feed variant of) the same
+    // merchant, tagged with the coffee habit.
+    const priorTagged = (merchant: string): Transaction => ({
+      ...baseTx,
+      id: `prior-${merchant}`,
+      merchant,
+      status: 'verified',
+      relatedHabitIds: ['h-coffee'],
+    });
+
+    it('pre-selects the consistently-tagged habit for an untagged pending transaction and approves with it', async () => {
+      const user = userEvent.setup();
+      mockHabits.push(coffeeHabit);
+      mockTransactions.push(priorTagged('STARBUCKS #1234'));
+
+      render(
+        <TransactionReviewForm
+          transaction={{ ...baseTx, merchant: 'Starbucks' }}
+          onDone={mockOnDone}
+        />
+      );
+
+      // The pre-selection hint is visible, and approving without touching the
+      // chips carries the auto-selected habit through.
+      expect(screen.getByText(/pre-selected from your history/i)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+
+      const call = mockUpdateTransactionCategory.mock.calls[0]!;
+      expect(call[2]).toEqual(['h-coffee']);
+    });
+
+    it('deselecting a pre-selected chip removes it (and the hint) before approve', async () => {
+      const user = userEvent.setup();
+      mockHabits.push(coffeeHabit);
+      mockTransactions.push(priorTagged('Starbucks'));
+
+      render(
+        <TransactionReviewForm
+          transaction={{ ...baseTx, merchant: 'Starbucks' }}
+          onDone={mockOnDone}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /coffee out/i }));
+      expect(screen.queryByText(/pre-selected from your history/i)).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+
+      const call = mockUpdateTransactionCategory.mock.calls[0]!;
+      expect(call[2]).toEqual([]);
+    });
+
+    it('never overrides explicit relatedHabitIds already on the transaction', async () => {
+      const user = userEvent.setup();
+      const otherHabit = { id: 'h-other', title: 'Read a book', category: 'education', type: 'positive' };
+      mockHabits.push(coffeeHabit, otherHabit);
+      mockTransactions.push(priorTagged('Starbucks'));
+
+      render(
+        <TransactionReviewForm
+          transaction={{ ...baseTx, merchant: 'Starbucks', relatedHabitIds: ['h-other'] }}
+          onDone={mockOnDone}
+        />
+      );
+
+      expect(screen.queryByText(/pre-selected from your history/i)).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+
+      const call = mockUpdateTransactionCategory.mock.calls[0]!;
+      expect(call[2]).toEqual(['h-other']);
+    });
+
+    it('does not pre-select when history is inconsistent for the merchant', () => {
+      mockHabits.push(coffeeHabit);
+      mockTransactions.push(
+        priorTagged('Starbucks'),
+        { ...baseTx, id: 'prior-untagged-1', merchant: 'Starbucks', status: 'verified' },
+        { ...baseTx, id: 'prior-untagged-2', merchant: 'Starbucks', status: 'verified' },
+      );
+
+      render(
+        <TransactionReviewForm
+          transaction={{ ...baseTx, merchant: 'Starbucks' }}
+          onDone={mockOnDone}
+        />
+      );
+
+      expect(screen.queryByText(/pre-selected from your history/i)).not.toBeInTheDocument();
     });
   });
 });
