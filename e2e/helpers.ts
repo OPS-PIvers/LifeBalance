@@ -94,7 +94,7 @@ export async function addManualExpense(
   if (tx.date) {
     await manualDrawer.getByLabel('Date').fill(tx.date);
   }
-  await manualDrawer.getByRole('radio', { name: tx.category, exact: true }).click();
+  await manualDrawer.getByLabel('Category').selectOption({ label: tx.category });
   await manualDrawer.getByRole('button', { name: 'Save Transaction' }).click();
 }
 

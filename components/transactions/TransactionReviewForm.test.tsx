@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import TransactionReviewForm from './TransactionReviewForm';
@@ -77,7 +77,7 @@ describe('TransactionReviewForm', () => {
     mockAccounts.length = 0;
   });
 
-  it('shows a selected Income chip for an income transaction', () => {
+  it('pre-selects the Income option for an income transaction', () => {
     render(
       <TransactionReviewForm
         transaction={{ ...baseTx, category: 'Income', amount: 500 }}
@@ -85,11 +85,8 @@ describe('TransactionReviewForm', () => {
       />
     );
 
-    const incomeChip = screen.getByRole('button', { name: /income/i });
-    // The Income chip is prepended (not a bucket) and pre-selected — selected
-    // chips render the check icon and carry the accent-600 background.
-    expect(within(incomeChip).getByTestId('icon-check')).toBeInTheDocument();
-    expect(incomeChip.className).toContain('bg-accent-600');
+    // The Income option is prepended (not a bucket) and pre-selected.
+    expect(screen.getByLabelText(/budget category/i)).toHaveValue('Income');
   });
 
   it('approves an income transaction with the Income category (never an expense bucket)', async () => {
@@ -158,7 +155,7 @@ describe('TransactionReviewForm', () => {
       );
     };
 
-    it('hides the budget-category chips and shows the Charge/Payment toggle for a credit-tagged transaction', () => {
+    it('hides the budget-category dropdown and shows the Charge/Payment control for a credit-tagged transaction', () => {
       seedAccounts();
       render(
         <TransactionReviewForm
@@ -167,13 +164,12 @@ describe('TransactionReviewForm', () => {
         />
       );
 
-      expect(screen.queryByText(/budget category/i)).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Groceries' })).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/budget category/i)).not.toBeInTheDocument();
       expect(screen.getByRole('radio', { name: 'Charge' })).toBeInTheDocument();
       expect(screen.getByRole('radio', { name: 'Payment' })).toBeInTheDocument();
     });
 
-    it('shows the category chips (no toggle) when a checking account is selected', () => {
+    it('shows the category dropdown (no Charge/Payment control) when a checking account is selected', () => {
       seedAccounts();
       render(
         <TransactionReviewForm
@@ -182,7 +178,7 @@ describe('TransactionReviewForm', () => {
         />
       );
 
-      expect(screen.getByText(/budget category/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/budget category/i)).toBeInTheDocument();
       expect(screen.queryByRole('radio', { name: 'Charge' })).not.toBeInTheDocument();
     });
 
@@ -235,8 +231,8 @@ describe('TransactionReviewForm', () => {
       );
 
       await user.selectOptions(screen.getByLabelText(/account/i), 'chk');
-      // Category chips are back and required.
-      await user.click(screen.getByRole('button', { name: 'Gas' }));
+      // The category dropdown is back and required.
+      await user.selectOptions(screen.getByLabelText(/budget category/i), 'Gas');
       await user.click(screen.getByRole('button', { name: /approve transaction/i }));
 
       const call = mockUpdateTransactionCategory.mock.calls[0]!;

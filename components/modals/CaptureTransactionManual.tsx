@@ -255,31 +255,16 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
       {/* Category doesn't apply to credit-card charges — hidden when the
           (collapsed-section) account choice is a credit card. */}
       {!isSelectedAccountCredit && (
-      <div>
-        <label id="manual-category-label" className="block text-xs font-semibold text-brand-400 dark:text-brand-400 uppercase tracking-wider mb-2">Category</label>
-        <div
-          className="flex gap-2 overflow-x-auto overscroll-x-contain pb-2 no-scrollbar"
-          role="radiogroup"
-          aria-labelledby="manual-category-label"
+        <Select
+          label="Category"
+          value={category}
+          onChange={(e) => { setCategory(e.target.value); setSubBucketId(undefined); }}
         >
-          {dynamicCategories.length === 0 && <span className="text-sm text-brand-400 dark:text-brand-400">No buckets found.</span>}
+          {dynamicCategories.length === 0 && <option value="">No buckets found</option>}
           {dynamicCategories.map(cat => (
-            <button
-              key={cat}
-              role="radio"
-              aria-checked={category === cat}
-              onClick={() => { setCategory(cat); setSubBucketId(undefined); }}
-              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                category === cat
-                  ? 'bg-accent-600 dark:bg-accent-500 text-white'
-                  : 'bg-brand-50 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 border border-brand-200 dark:border-brand-700 hover:bg-brand-100 dark:hover:bg-brand-700/50'
-              }`}
-            >
-              {cat}
-            </button>
+            <option key={cat} value={cat}>{cat}</option>
           ))}
-        </div>
-      </div>
+        </Select>
       )}
 
       {/*
