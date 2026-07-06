@@ -3,7 +3,7 @@ import { Check, ChevronDown, Copy, Sparkles, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import { Transaction, CREDIT_CARD_CATEGORY, INCOME_CATEGORY } from '@/types/schema';
-import { suggestHabitsForTransaction } from '@/utils/habitSuggestions';
+import { getAutoSelectedHabitIds, suggestHabitsForTransaction } from '@/utils/habitSuggestions';
 import { suggestAccountIdForTransaction, suggestCategoryForTransaction } from '@/utils/actionQueueSmart';
 import { buildTransactionCategoryOptions } from '@/utils/categories';
 import { roundMoney } from '@/utils/money';
@@ -112,7 +112,29 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
     if (transaction.category && categoryOptions.includes(transaction.category)) return transaction.category;
     return suggestCategoryForTransaction(transaction, buckets, transactions) ?? '';
   });
-  const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>(() => transaction.relatedHabitIds ?? []);
+  // Habits: an explicit prior tag always wins; otherwise pre-select the habits
+  // this household consistently tags for this merchant (fuzzy history match) —
+  // automated pending imports (quickAdd email, Apple Pay stubs, Plaid) arrive
+  // untagged, so a recurring "Starbucks" charge opens with its usual habit
+  // already selected. The auto-select set follows the live merchant field, but
+  // NEVER overrides a manual chip choice: once the user touches the chips,
+  // pre-selection stops following. Applied during render on the
+  // set-change edge (same pattern as CaptureTransactionManual) — no effect.
+  const hasExplicitTags = (transaction.relatedHabitIds?.length ?? 0) > 0;
+  const autoSelectedIds = useMemo(
+    () => (hasExplicitTags ? [] : getAutoSelectedHabitIds(merchant, habits, transactions)),
+    [hasExplicitTags, merchant, habits, transactions]
+  );
+  const [habitsTouched, setHabitsTouched] = useState(false);
+  const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>(
+    () => (hasExplicitTags ? transaction.relatedHabitIds ?? [] : autoSelectedIds)
+  );
+  const autoSelectKey = autoSelectedIds.join('|');
+  const [prevAutoSelectKey, setPrevAutoSelectKey] = useState(autoSelectKey);
+  if (prevAutoSelectKey !== autoSelectKey) {
+    setPrevAutoSelectKey(autoSelectKey);
+    if (!habitsTouched && !hasExplicitTags) setSelectedHabitIds(autoSelectedIds);
+  }
   const [showAllHabits, setShowAllHabits] = useState(false);
   const [creditPayment, setCreditPayment] = useState(() => transaction.creditPayment ?? false);
 
@@ -359,6 +381,11 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
         {habits.length === 0 && (
           <p className="text-xs text-brand-400 dark:text-brand-450 italic">No habits found. Create some in Habits tab.</p>
         )}
+        {autoSelectedIds.some(id => selectedHabitIds.includes(id)) && (
+          <p className="text-xs text-brand-400 dark:text-brand-450">
+            Pre-selected from your history with this merchant — tap a chip to remove.
+          </p>
+        )}
 
         {habits.length > 0 && (
           <div className="flex flex-wrap gap-2">
@@ -373,6 +400,7 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
                     selected={isSelected}
                     showSuggestionDot={confidence === 'high'}
                     onClick={() => {
+                      setHabitsTouched(true);
                       setSelectedHabitIds(prev =>
                         isSelected ? prev.filter(id => id !== habit.id) : [...prev, habit.id]
                       );
@@ -390,7 +418,10 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
                 <SelectableChip
                   key={habit.id}
                   selected
-                  onClick={() => setSelectedHabitIds(prev => prev.filter(id => id !== habit.id))}
+                  onClick={() => {
+                    setHabitsTouched(true);
+                    setSelectedHabitIds(prev => prev.filter(id => id !== habit.id));
+                  }}
                 >
                   {habit.title}
                 </SelectableChip>
@@ -401,7 +432,10 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
               <SelectableChip
                 key={habit.id}
                 selected={false}
-                onClick={() => setSelectedHabitIds(prev => [...prev, habit.id])}
+                onClick={() => {
+                  setHabitsTouched(true);
+                  setSelectedHabitIds(prev => [...prev, habit.id]);
+                }}
               >
                 {habit.title}
               </SelectableChip>

@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { suggestHabitsForTransaction, getTopHabitSuggestions } from './habitSuggestions';
+import {
+  suggestHabitsForTransaction,
+  getTopHabitSuggestions,
+  getAutoSelectedHabitIds,
+  matchMerchantNames,
+} from './habitSuggestions';
 import { Habit, Transaction } from '@/types/schema';
 
 // Minimal Habit factory — only fields used by habitSuggestions
@@ -26,18 +31,21 @@ const habit = (
     weatherSensitive: false,
   } as Habit);
 
-// Minimal Transaction factory
+// Minimal Transaction factory (deterministic sequential ids — the suggestion
+// logic never reads `id`, but flaky-proof beats clever)
+let txSeq = 0;
 const tx = (
   merchant: string,
   relatedHabitIds: string[] = [],
+  status: Transaction['status'] = 'verified',
 ): Transaction =>
   ({
-    id: merchant,
+    id: `tx-${++txSeq}`,
     amount: 10,
     merchant,
     category: 'Groceries',
     date: '2024-01-01',
-    status: 'verified',
+    status,
     isRecurring: false,
     source: 'manual',
     autoCategorized: false,
@@ -177,5 +185,123 @@ describe('getTopHabitSuggestions', () => {
 
     const top = getTopHabitSuggestions('Planet Fitness', habits, [], 2);
     expect(top.length).toBeLessThanOrEqual(2);
+  });
+});
+
+describe('matchMerchantNames', () => {
+  it('matches identical labels ignoring case/whitespace as exact', () => {
+    expect(matchMerchantNames('Starbucks', '  STARBUCKS ')).toBe('exact');
+  });
+
+  it('matches bank-feed variants with store numbers and possessives as exact', () => {
+    // The store number and possessive are noise — same identity tokens.
+    expect(matchMerchantNames("TRADER JOE'S #619", 'Trader Joes')).toBe('exact');
+    expect(matchMerchantNames('STARBUCKS #1234', 'Starbucks')).toBe('exact');
+  });
+
+  it('matches processor-prefixed labels as similar', () => {
+    expect(matchMerchantNames('SQ *BLUE BOTTLE COFFEE', 'Blue Bottle')).toBe('similar');
+  });
+
+  it('does not match on shared substrings that are different tokens', () => {
+    expect(matchMerchantNames('Target', 'Targeted Therapy LLC')).toBe('none');
+  });
+
+  it('de-duplicates repeated tokens so they cannot downgrade an exact match', () => {
+    // Without de-dupe, ['costco','costco'] vs ['costco'] would compare as a
+    // strict subset ('similar') purely because of the repeated token.
+    expect(matchMerchantNames('COSTCO COSTCO #123', 'Costco')).toBe('exact');
+  });
+
+  it('does not apply the plural fold to 2-character tokens ("ga" must not match "gas")', () => {
+    expect(matchMerchantNames('GA Tech', 'Gas Tech')).toBe('none');
+    // 3+ character bases still fold: "joe" ↔ "joes".
+    expect(matchMerchantNames('Joe Diner', 'Joes Diner')).toBe('exact');
+  });
+
+  it('never matches an empty label', () => {
+    expect(matchMerchantNames('', 'Starbucks')).toBe('none');
+    expect(matchMerchantNames('', '')).toBe('none');
+  });
+});
+
+describe('fuzzy merchant history learning', () => {
+  it('learns from a differently-spelled bank-feed variant of the same merchant', () => {
+    const groceryHabit = habit('h-grocery', 'Meal prep shopping', 'errands');
+    const history = [
+      tx("TRADER JOE'S #619", ['h-grocery']),
+      tx("TRADER JOE'S #619", ['h-grocery']),
+    ];
+
+    const result = suggestHabitsForTransaction('Trader Joes', [groceryHabit], history);
+
+    expect(result[0]!.habit.id).toBe('h-grocery');
+    expect(result[0]!.confidence).toBe('high');
+    expect(result[0]!.reason).toBe('Previously used');
+  });
+});
+
+describe('auto-select (pre-selection) from history', () => {
+  const coffeeHabit = habit('h-coffee', 'Coffee out', 'coffee', 'negative');
+
+  it('auto-selects a habit consistently tagged for an exact-matching merchant', () => {
+    const history = [tx('Starbucks', ['h-coffee'])];
+    const ids = getAutoSelectedHabitIds('Starbucks', [coffeeHabit], history);
+    expect(ids).toEqual(['h-coffee']);
+  });
+
+  it('requires two tags when history only matches fuzzily', () => {
+    const oneFuzzy = [tx('SQ *BLUE BOTTLE COFFEE', ['h-coffee'])];
+    expect(getAutoSelectedHabitIds('Blue Bottle', [coffeeHabit], oneFuzzy)).toEqual([]);
+
+    const twoFuzzy = [
+      tx('SQ *BLUE BOTTLE COFFEE', ['h-coffee']),
+      tx('BLUE BOTTLE COFFEE #12', ['h-coffee']),
+    ];
+    expect(getAutoSelectedHabitIds('Blue Bottle', [coffeeHabit], twoFuzzy)).toEqual(['h-coffee']);
+  });
+
+  it('does not auto-select an inconsistently tagged habit (still suggests it)', () => {
+    // Tagged on only 1 of 3 reviewed Starbucks transactions → below the 60% bar.
+    const history = [
+      tx('Starbucks', ['h-coffee']),
+      tx('Starbucks', []),
+      tx('Starbucks', []),
+    ];
+    expect(getAutoSelectedHabitIds('Starbucks', [coffeeHabit], history)).toEqual([]);
+
+    const suggestion = suggestHabitsForTransaction('Starbucks', [coffeeHabit], history)[0]!;
+    expect(suggestion.confidence).toBe('high');
+    expect(suggestion.autoSelect).toBe(false);
+  });
+
+  it('ignores undecided (untagged pending) transactions when measuring consistency', () => {
+    // A queue of unreviewed automated imports must not dilute the signal.
+    const history = [
+      tx('Starbucks', ['h-coffee']),
+      tx('Starbucks', [], 'pending_review'),
+      tx('Starbucks', [], 'pending_review'),
+      tx('Starbucks', [], 'pending_review'),
+    ];
+    expect(getAutoSelectedHabitIds('Starbucks', [coffeeHabit], history)).toEqual(['h-coffee']);
+  });
+
+  it('counts a tagged pending transaction as a decision', () => {
+    // Manual capture can tag habits on a still-pending (future-dated) row.
+    const history = [
+      tx('Starbucks', ['h-coffee'], 'pending_review'),
+      tx('Starbucks', ['h-coffee'], 'pending_review'),
+    ];
+    expect(getAutoSelectedHabitIds('Starbucks', [coffeeHabit], history)).toEqual(['h-coffee']);
+  });
+
+  it('returns nothing for an empty merchant or empty habit list', () => {
+    expect(getAutoSelectedHabitIds('', [coffeeHabit], [tx('Starbucks', ['h-coffee'])])).toEqual([]);
+    expect(getAutoSelectedHabitIds('Starbucks', [], [tx('Starbucks', ['h-coffee'])])).toEqual([]);
+  });
+
+  it('keyword-only matches never auto-select', () => {
+    const result = suggestHabitsForTransaction('Starbucks', [coffeeHabit], []);
+    expect(result[0]!.autoSelect).toBe(false);
   });
 });

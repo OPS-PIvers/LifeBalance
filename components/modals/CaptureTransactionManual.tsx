@@ -111,6 +111,24 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
     return suggestHabitsForTransaction(merchant, habits, transactions, 5);
   }, [merchant, habits, transactions]);
 
+  // Pre-select the habits this household consistently tags for the typed
+  // merchant (fuzzy history match), but NEVER override a manual chip choice:
+  // once the user touches the habit chips, auto-selection stops following the
+  // merchant field. Applied during render on the auto-select-set-change edge
+  // (same pattern as prevDynamicCategories above) rather than in an effect.
+  const [habitsTouched, setHabitsTouched] = useState(false);
+  const autoSelectKey = useMemo(
+    () => suggestedHabits.filter(s => s.autoSelect).map(s => s.habit.id).join('|'),
+    [suggestedHabits]
+  );
+  const [prevAutoSelectKey, setPrevAutoSelectKey] = useState('');
+  if (prevAutoSelectKey !== autoSelectKey) {
+    setPrevAutoSelectKey(autoSelectKey);
+    if (!habitsTouched) {
+      setSelectedHabitIds(autoSelectKey === '' ? [] : autoSelectKey.split('|'));
+    }
+  }
+
   // Merchant now doubles as the Store field (a separate lower-cased "store"
   // dropdown was redundant with the free-text merchant name). A native
   // <datalist> on the Merchant input still offers known store names for
@@ -375,6 +393,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
                         key={habit.id}
                         type="button"
                         onClick={() => {
+                          setHabitsTouched(true);
                           setSelectedHabitIds(prev =>
                             isSelected
                               ? prev.filter(id => id !== habit.id)
@@ -406,6 +425,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
                       key={habit.id}
                       type="button"
                       onClick={() => {
+                        setHabitsTouched(true);
                         setSelectedHabitIds(prev => prev.filter(id => id !== habit.id));
                       }}
                       className="px-3 py-1.5 rounded-btn text-xs font-bold transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center gap-1 bg-money-pos text-white"
@@ -429,6 +449,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
                             key={habit.id}
                             type="button"
                             onClick={() => {
+                              setHabitsTouched(true);
                               setSelectedHabitIds(prev => [...prev, habit.id]);
                             }}
                             className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 text-brand-500 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-700/50"
