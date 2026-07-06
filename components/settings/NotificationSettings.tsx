@@ -210,7 +210,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
         return (
           <div className="flex items-start gap-3 px-1">
             <Info className={`w-5 h-5 shrink-0 mt-0.5 ${
-              isReady ? 'text-money-pos dark:text-money-posDark dark:text-accent-300' : 'text-warm-600 dark:text-warm-300'
+              isReady ? 'text-money-pos dark:text-accent-300' : 'text-warm-600 dark:text-warm-300'
             }`} />
             <div>
               <h4 className={`font-semibold text-sm ${

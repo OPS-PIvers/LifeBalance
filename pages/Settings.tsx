@@ -550,7 +550,7 @@ const Settings: React.FC = () => {
               >
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
                   notificationStatus === 'granted'
-                    ? 'bg-money-bgPos text-money-pos dark:text-money-posDark dark:bg-accent-500/15 dark:text-accent-300'
+                    ? 'bg-money-bgPos text-money-pos dark:bg-accent-500/15 dark:text-accent-300'
                     : 'bg-brand-100 text-brand-400 dark:bg-brand-700 dark:text-brand-450'
                 }`}>
                   <Bell size={18} />
@@ -857,7 +857,7 @@ const Settings: React.FC = () => {
                 aria-label="Export transaction history as CSV file"
               >
                 <div className="w-10 h-10 rounded-full bg-money-bgPos dark:bg-accent-500/15 flex items-center justify-center shrink-0">
-                  <FileSpreadsheet size={18} className="text-money-pos dark:text-money-posDark dark:text-accent-300" />
+                  <FileSpreadsheet size={18} className="text-money-pos dark:text-accent-300" />
                 </div>
                 <div className="flex-1 text-left">
                   <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">Export Transactions</p>
@@ -990,7 +990,7 @@ const Settings: React.FC = () => {
             <span
               className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full border ${
                 hasKidPin
-                  ? 'text-money-pos dark:text-money-posDark bg-money-bgPos border-accent-200 dark:bg-accent-500/15 dark:text-accent-300 dark:border-accent-500/30'
+                  ? 'text-money-pos bg-money-bgPos border-accent-200 dark:bg-accent-500/15 dark:text-accent-300 dark:border-accent-500/30'
                   : 'text-brand-600 bg-brand-100 border-brand-200 dark:bg-brand-700/50 dark:text-brand-300 dark:border-brand-600'
               }`}
             >
