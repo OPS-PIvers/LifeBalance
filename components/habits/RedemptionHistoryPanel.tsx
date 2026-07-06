@@ -62,7 +62,7 @@ const RedemptionHistoryPanel: React.FC<RedemptionHistoryPanelProps> = ({ history
                   {when ? ` · ${when}` : ''}
                 </p>
               </div>
-              <span className="shrink-0 font-mono text-xs font-bold tabular-nums text-money-neg">
+              <span className="shrink-0 font-mono text-xs font-bold tabular-nums text-money-neg dark:text-money-negDark">
                 −{rec.cost} pts
               </span>
             </Row>

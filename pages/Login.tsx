@@ -115,7 +115,7 @@ const Login: React.FC = () => {
               <div className="w-full border-t border-brand-200 dark:border-brand-700"></div>
             </div>
             <div className="relative flex justify-center text-xs uppercase tracking-wider">
-              <span className="bg-white dark:bg-brand-800 px-2 text-brand-400 dark:text-brand-500 font-medium">
+              <span className="bg-white dark:bg-brand-800 px-2 text-brand-400 dark:text-brand-450 font-medium">
                 {accessDeniedEmail ? 'Try a different account' : 'Sign in to continue'}
               </span>
             </div>
@@ -160,7 +160,7 @@ const Login: React.FC = () => {
           </Button>
 
           {/* Footer */}
-          <p className="text-center text-xs text-brand-400 dark:text-brand-500 pt-4">
+          <p className="text-center text-xs text-brand-400 dark:text-brand-450 pt-4">
             By continuing you agree to our{' '}
             <a
               href="#/terms"

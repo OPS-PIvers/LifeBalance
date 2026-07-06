@@ -68,12 +68,12 @@ export const MoneyPulseWidget: React.FC = () => {
         {recentTransactions.map(tx => (
           <Row key={tx.id} className="justify-between">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-card bg-brand-100 border border-brand-200 flex items-center justify-center text-brand-400 shrink-0 dark:bg-brand-700/50 dark:border-brand-700 dark:text-brand-500">
+              <div className="w-9 h-9 rounded-card bg-brand-100 border border-brand-200 flex items-center justify-center text-brand-400 shrink-0 dark:bg-brand-700/50 dark:border-brand-700 dark:text-brand-450">
                 <Receipt size={16} />
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-brand-800 dark:text-brand-100 truncate max-w-[150px]">{tx.merchant}</p>
-                <p className="text-xxs text-brand-400 dark:text-brand-500 font-medium">{tx.relativeDate}</p>
+                <p className="text-xxs text-brand-400 dark:text-brand-450 font-medium">{tx.relativeDate}</p>
               </div>
             </div>
             <span className="font-mono font-bold tabular-nums text-brand-900 dark:text-brand-50 text-sm shrink-0">

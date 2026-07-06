@@ -745,7 +745,7 @@ const MealPlanTab: React.FC = () => {
                         onClick={handleJumpToToday}
                         aria-label="Jump to today"
                         title="Today"
-                        className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50 shrink-0"
+                        className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-450 dark:hover:text-brand-300 dark:hover:bg-brand-700/50 shrink-0"
                     >
                         <CalendarDays className="w-4 h-4" />
                     </button>
@@ -764,7 +764,7 @@ const MealPlanTab: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => setIsWeekMenuOpen(v => !v)}
-                        className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
+                        className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-450 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
                         aria-label="More week actions"
                         aria-haspopup="menu"
                         aria-expanded={isWeekMenuOpen}
@@ -811,7 +811,7 @@ const MealPlanTab: React.FC = () => {
                     >
                         <span className={clsx(
                             "text-xxs font-bold uppercase tracking-wide",
-                            isSelected ? "text-white/80" : "text-brand-400 dark:text-brand-500"
+                            isSelected ? "text-white/80" : "text-brand-400 dark:text-brand-450"
                         )}>
                             {day.dayLetter}
                         </span>
@@ -929,7 +929,7 @@ const MealPlanTab: React.FC = () => {
                             {/* Single overflow action button (replaces 4 inline buttons) */}
                             <button
                                 onClick={(e) => { e.stopPropagation(); setActionSheetItem(planItem); }}
-                                className="self-start -mr-1 -mt-0.5 p-2 text-brand-400 hover:text-brand-700 hover:bg-brand-100 rounded-btn transition-colors active:scale-95 shrink-0 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
+                                className="self-start -mr-1 -mt-0.5 p-2 text-brand-400 hover:text-brand-700 hover:bg-brand-100 rounded-btn transition-colors active:scale-95 shrink-0 dark:text-brand-450 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
                                 aria-label={`Actions for ${mealName}`}
                             >
                                 <MoreVertical className="w-5 h-5" />
@@ -972,17 +972,17 @@ const MealPlanTab: React.FC = () => {
             <div className="space-y-1 pb-2">
               {hasRecipe && (
                 <button onClick={() => sheetView(item)} className={clsx(actionClass, "text-brand-700 hover:bg-brand-100 dark:text-brand-200 dark:hover:bg-brand-700/50")}>
-                  <Eye className="w-5 h-5 text-brand-400 dark:text-brand-500" /> View recipe
+                  <Eye className="w-5 h-5 text-brand-400 dark:text-brand-450" /> View recipe
                 </button>
               )}
               <button onClick={() => sheetMoveTomorrow(item)} className={clsx(actionClass, "text-brand-700 hover:bg-brand-100 dark:text-brand-200 dark:hover:bg-brand-700/50")}>
-                <ChevronRight className="w-5 h-5 text-brand-400 dark:text-brand-500" /> Move to tomorrow
+                <ChevronRight className="w-5 h-5 text-brand-400 dark:text-brand-450" /> Move to tomorrow
               </button>
               <button onClick={() => sheetDuplicate(item)} className={clsx(actionClass, "text-brand-700 hover:bg-brand-100 dark:text-brand-200 dark:hover:bg-brand-700/50")}>
-                <Copy className="w-5 h-5 text-brand-400 dark:text-brand-500" /> Duplicate
+                <Copy className="w-5 h-5 text-brand-400 dark:text-brand-450" /> Duplicate
               </button>
               <button onClick={() => sheetEdit(item)} className={clsx(actionClass, "text-brand-700 hover:bg-brand-100 dark:text-brand-200 dark:hover:bg-brand-700/50")}>
-                <Edit2 className="w-5 h-5 text-brand-400 dark:text-brand-500" /> Edit
+                <Edit2 className="w-5 h-5 text-brand-400 dark:text-brand-450" /> Edit
               </button>
               <button onClick={() => sheetDelete(item)} className={clsx(actionClass, "text-money-neg hover:bg-money-bgNeg dark:text-money-negDark dark:hover:bg-money-neg/15")}>
                 <Trash2 className="w-5 h-5" /> Delete

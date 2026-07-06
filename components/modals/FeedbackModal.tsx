@@ -63,7 +63,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
             id="feedback-message"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            className="w-full h-32 p-3 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 text-brand-900 dark:text-brand-100 placeholder:text-brand-400 dark:placeholder:text-brand-500 rounded-btn focus:ring-2 focus:ring-accent-500/30 focus:border-accent-500 outline-hidden transition-all duration-(--duration-fast) ease-(--ease-standard) resize-none"
+            className="w-full h-32 p-3 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 text-brand-900 dark:text-brand-100 placeholder:text-brand-400 dark:placeholder:text-brand-450 rounded-btn focus:ring-2 focus:ring-accent-500/30 focus:border-accent-500 outline-hidden transition-all duration-(--duration-fast) ease-(--ease-standard) resize-none"
             placeholder="I found a bug when..."
             required
           />

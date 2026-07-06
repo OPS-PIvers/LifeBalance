@@ -77,7 +77,7 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
           placeholder={placeholder}
           aria-label={ariaLabel || placeholder}
           aria-labelledby={ariaLabelledBy}
-          className="min-w-0 flex-1 pl-4 pr-2 py-3.5 bg-transparent border-0 outline-hidden focus:ring-0 placeholder:truncate placeholder:text-brand-400 dark:text-brand-50 dark:placeholder:text-brand-500 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
+          className="min-w-0 flex-1 pl-4 pr-2 py-3.5 bg-transparent border-0 outline-hidden focus:ring-0 placeholder:truncate placeholder:text-brand-400 dark:text-brand-50 dark:placeholder:text-brand-450 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
         />
         <button
           type="submit"
@@ -101,7 +101,7 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
         placeholder={placeholder}
         aria-label={ariaLabel || placeholder}
         aria-labelledby={ariaLabelledBy}
-        className="w-full pl-4 pr-12 py-3.5 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden placeholder:text-brand-400 dark:text-brand-50 dark:placeholder:text-brand-500 border border-brand-200 rounded-btn bg-white focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 dark:bg-brand-800 dark:border-brand-600"
+        className="w-full pl-4 pr-12 py-3.5 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden placeholder:text-brand-400 dark:text-brand-50 dark:placeholder:text-brand-450 border border-brand-200 rounded-btn bg-white focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 dark:bg-brand-800 dark:border-brand-600"
       />
       <Button
         type="submit"

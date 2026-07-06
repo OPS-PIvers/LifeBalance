@@ -53,7 +53,7 @@ const ChartCard: React.FC<{
 
 const EmptyChart: React.FC<{ message: string }> = ({ message }) => (
   <div className="h-full flex items-center justify-center text-center px-6">
-    <p className="text-sm text-brand-400 dark:text-brand-500 max-w-xs">{message}</p>
+    <p className="text-sm text-brand-400 dark:text-brand-450 max-w-xs">{message}</p>
   </div>
 );
 

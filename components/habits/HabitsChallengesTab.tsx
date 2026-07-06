@@ -163,12 +163,12 @@ const HabitsChallengesTab: React.FC<HabitsChallengesTabProps> = ({ onOpenChallen
                           ? 'bg-accent-600 text-white dark:bg-accent-500'
                           : isCurrentMonth
                             ? 'bg-brand-100 dark:bg-brand-700 text-brand-600 dark:text-brand-300 ring-2 ring-warm-400'
-                            : 'bg-brand-100 dark:bg-brand-700/50 text-brand-400 dark:text-brand-500'
+                            : 'bg-brand-100 dark:bg-brand-700/50 text-brand-400 dark:text-brand-450'
                       }`}
                     >
                       {isCompleted ? <Check size={16} strokeWidth={3} /> : monthIndex}
                     </div>
-                    <span className="text-xxs text-brand-400 dark:text-brand-500 mt-1 font-medium">
+                    <span className="text-xxs text-brand-400 dark:text-brand-450 mt-1 font-medium">
                       {format(parseISO(`${monthKey}-01`), 'MMM')}
                     </span>
                   </div>
@@ -204,7 +204,7 @@ const HabitsChallengesTab: React.FC<HabitsChallengesTabProps> = ({ onOpenChallen
                 }`}
                 aria-hidden="true"
               >
-                <Snowflake size={22} className={i < tokenCount ? 'text-habit-blue' : 'text-brand-400 dark:text-brand-500'} />
+                <Snowflake size={22} className={i < tokenCount ? 'text-habit-blue' : 'text-brand-400 dark:text-brand-450'} />
               </div>
             ))}
           </div>
@@ -215,7 +215,7 @@ const HabitsChallengesTab: React.FC<HabitsChallengesTabProps> = ({ onOpenChallen
           {/* Recent history */}
           {(freezeBank?.history?.length ?? 0) > 0 && (
             <div className="mt-5 pt-4 border-t border-brand-200 dark:border-brand-700">
-              <h4 className="text-xxs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wide mb-3">
+              <h4 className="text-xxs font-bold text-brand-400 dark:text-brand-450 uppercase tracking-wide mb-3">
                 Recent history
               </h4>
               <ul className="space-y-2">
@@ -229,12 +229,12 @@ const HabitsChallengesTab: React.FC<HabitsChallengesTabProps> = ({ onOpenChallen
                           {entry.type === 'used' ? 'Token used' : entry.type === 'earned' ? 'Token earned' : 'Rollover'}
                         </p>
                         {entry.notes && (
-                          <p className="text-xs text-brand-400 dark:text-brand-500 truncate">{entry.notes}</p>
+                          <p className="text-xs text-brand-400 dark:text-brand-450 truncate">{entry.notes}</p>
                         )}
                       </div>
                       <span
                         className={`font-mono font-bold tabular-nums shrink-0 ml-3 ${
-                          entry.amount > 0 ? 'text-money-pos' : 'text-brand-500 dark:text-brand-400'
+                          entry.amount > 0 ? 'text-money-pos dark:text-money-posDark' : 'text-brand-500 dark:text-brand-400'
                         }`}
                       >
                         {entry.amount > 0 ? '+' : ''}
@@ -249,7 +249,7 @@ const HabitsChallengesTab: React.FC<HabitsChallengesTabProps> = ({ onOpenChallen
       </Section>
 
       {/* Footer hint */}
-      <p className="flex items-center justify-center gap-1.5 text-xs text-brand-400 dark:text-brand-500">
+      <p className="flex items-center justify-center gap-1.5 text-xs text-brand-400 dark:text-brand-450">
         <Trophy size={12} />
         Monthly challenges automatically advance your yearly goal.
       </p>

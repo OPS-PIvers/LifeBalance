@@ -113,8 +113,8 @@ describe('DisclosureRow', () => {
         onClick={() => {}}
       />
     );
-    expect(screen.getByText('Delete household')).toHaveClass('text-money-neg');
-    expect(screen.getByTestId('icon').parentElement).toHaveClass('text-money-neg');
+    expect(screen.getByText('Delete household')).toHaveClass('text-money-neg dark:text-money-negDark');
+    expect(screen.getByTestId('icon').parentElement).toHaveClass('text-money-neg dark:text-money-negDark');
   });
 });
 
@@ -139,8 +139,8 @@ describe('StatGroup / Stat', () => {
   });
 
   it('allows overriding value styling via valueClassName', () => {
-    render(<Stat label="Net" value="-40" valueClassName="text-money-neg" />);
-    expect(screen.getByText('-40')).toHaveClass('text-money-neg');
+    render(<Stat label="Net" value="-40" valueClassName="text-money-neg dark:text-money-negDark" />);
+    expect(screen.getByText('-40')).toHaveClass('text-money-neg dark:text-money-negDark');
   });
 
   it('renders StatGroup with no background/border, just a flex row', () => {

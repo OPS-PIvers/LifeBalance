@@ -164,7 +164,7 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
                 <span className="text-sm font-medium text-brand-700 dark:text-brand-200">{sb.name}</span>
                 <button
                   onClick={() => handleRemoveSubBucket(sb.id)}
-                  className="p-3.5 -m-2.5 text-brand-400 dark:text-brand-400 hover:text-money-neg"
+                  className="p-3.5 -m-2.5 text-brand-400 dark:text-brand-400 hover:text-money-neg dark:hover:text-money-negDark"
                   aria-label={`Remove ${sb.name} sub-category`}
                 >
                   <X size={16} />

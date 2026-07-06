@@ -67,7 +67,7 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({ filterStore, stores, on
           </button>
         ))}
         {stores.length === 0 && (
-          <div className="px-4 py-2 text-xs text-brand-400 dark:text-brand-500 italic">No stores configured</div>
+          <div className="px-4 py-2 text-xs text-brand-400 dark:text-brand-450 italic">No stores configured</div>
         )}
       </div>
     </Popover>
@@ -610,7 +610,7 @@ const ShoppingListTab: React.FC = () => {
                     type="button"
                     onClick={() => setRestockOpen((o) => !o)}
                     aria-expanded={restockOpen}
-                    className="flex items-center gap-1.5 px-1 text-xxs font-bold uppercase tracking-wider text-brand-400 hover:text-brand-600 dark:text-brand-500 dark:hover:text-brand-300 transition-colors"
+                    className="flex items-center gap-1.5 px-1 text-xxs font-bold uppercase tracking-wider text-brand-400 hover:text-brand-600 dark:text-brand-450 dark:hover:text-brand-300 transition-colors"
                 >
                     <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-(--duration-fast) ease-(--ease-standard) ${restockOpen ? '' : '-rotate-90'}`} />
                     Quick restock

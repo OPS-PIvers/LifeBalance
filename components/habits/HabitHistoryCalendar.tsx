@@ -123,7 +123,7 @@ const HabitHistoryCalendar: React.FC = () => {
         {/* Grid */}
         <div className="grid grid-cols-7 mb-2">
           {weekDays.map((day, i) => (
-            <div key={`${day.full}-${i}`} className="text-center text-xs font-bold text-brand-300 dark:text-brand-500 py-2">
+            <div key={`${day.full}-${i}`} className="text-center text-xs font-bold text-brand-300 dark:text-brand-450 py-2">
               <abbr title={day.full} className="no-underline">{day.abbr}</abbr>
             </div>
           ))}
@@ -154,7 +154,7 @@ const HabitHistoryCalendar: React.FC = () => {
         </div>
 
         {/* Legend */}
-        <div className="mt-4 flex items-center justify-end gap-2 text-xxs font-bold text-brand-300 dark:text-brand-500 uppercase tracking-wide">
+        <div className="mt-4 flex items-center justify-end gap-2 text-xxs font-bold text-brand-300 dark:text-brand-450 uppercase tracking-wide">
           <span>Less</span>
           <div className="flex gap-1">
              <div className="w-3 h-3 rounded-sm bg-accent-200"></div>
@@ -178,7 +178,7 @@ const HabitHistoryCalendar: React.FC = () => {
         </div>
 
         {selectedDateHabits.length === 0 ? (
-          <div className="text-center py-10 bg-white dark:bg-brand-800 border border-dashed border-brand-200 dark:border-brand-700 rounded-2xl text-brand-400 dark:text-brand-500">
+          <div className="text-center py-10 bg-white dark:bg-brand-800 border border-dashed border-brand-200 dark:border-brand-700 rounded-2xl text-brand-400 dark:text-brand-450">
             <Calendar className="w-10 h-10 mx-auto mb-3 opacity-20" />
             <p className="font-medium text-sm">No habits completed on this day.</p>
           </div>
@@ -197,7 +197,7 @@ const HabitHistoryCalendar: React.FC = () => {
                     </div>
                     <div className="min-w-0">
                       <p className="font-semibold text-brand-800 dark:text-brand-100 text-sm truncate">{habit.title}</p>
-                      <p className="text-xs text-brand-400 dark:text-brand-500">{habit.category}</p>
+                      <p className="text-xs text-brand-400 dark:text-brand-450">{habit.category}</p>
                     </div>
                   </div>
 

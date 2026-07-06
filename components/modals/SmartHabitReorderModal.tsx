@@ -125,7 +125,7 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
             </p>
           </div>
         ) : error ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center text-money-neg">
+          <div className="flex flex-col items-center justify-center py-12 text-center text-money-neg dark:text-money-negDark">
             <AlertTriangle size={32} className="mb-3 opacity-50" />
             <p className="font-bold">{error}</p>
             <Button variant="ghost" onClick={onClose} className="mt-4">
@@ -147,7 +147,7 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
             <div className="space-y-4">
               {previewHabits.categories.map(category => (
                 <div key={category} className="space-y-2">
-                  <h3 className="text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider ml-2">{category}</h3>
+                  <h3 className="text-xs font-bold text-brand-400 dark:text-brand-450 uppercase tracking-wider ml-2">{category}</h3>
                   <SurfaceList>
                     {(previewHabits.grouped[category] ?? []).map(habit => (
                       <Row key={habit.id} className="justify-between hover:bg-brand-50 dark:hover:bg-brand-700/50 transition-colors">

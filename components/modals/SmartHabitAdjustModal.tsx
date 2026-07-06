@@ -112,7 +112,7 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
             </p>
           </div>
         ) : error ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center text-money-neg">
+          <div className="flex flex-col items-center justify-center py-12 text-center text-money-neg dark:text-money-negDark">
             <AlertTriangle size={32} className="mb-3 opacity-50" />
             <p className="font-bold">{error}</p>
             <Button variant="ghost" onClick={onClose} className="mt-4">
@@ -144,7 +144,7 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
                       <h3 className="font-bold text-brand-800 dark:text-brand-100 text-lg">{suggestion.habitTitle}</h3>
                       <div className="flex items-center gap-1.5">
                         <span className="text-sm font-bold text-brand-500 dark:text-brand-400">{suggestion.currentPoints}</span>
-                        <ArrowRight size={14} className="text-brand-300 dark:text-brand-600" />
+                        <ArrowRight size={14} className="text-brand-300 dark:text-brand-500" />
                         <span className="text-sm font-bold text-warm-700 dark:text-warm-300">{suggestion.suggestedPoints} pts</span>
                       </div>
                     </div>

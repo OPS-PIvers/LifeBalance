@@ -106,7 +106,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
                       )}>
                         {isChecked && <Check size={14} strokeWidth={3} />}
                       </div>
-                      <div className={clsx("text-sm min-w-0", isChecked && "line-through text-brand-400 dark:text-brand-500")}>
+                      <div className={clsx("text-sm min-w-0", isChecked && "line-through text-brand-400 dark:text-brand-450")}>
                         <span className="font-bold text-brand-700 dark:text-brand-200">{ing.name}</span>
                         {ing.quantity && <span className="text-brand-500 dark:text-brand-400 ml-1">({ing.quantity})</span>}
                       </div>
@@ -143,7 +143,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
                       )}>
                         {isChecked ? <Check size={14} strokeWidth={3} /> : idx + 1}
                       </div>
-                      <p className={clsx("text-sm leading-relaxed min-w-0", isChecked ? "line-through text-brand-400 dark:text-brand-500" : "text-brand-700 dark:text-brand-200")}>
+                      <p className={clsx("text-sm leading-relaxed min-w-0", isChecked ? "line-through text-brand-400 dark:text-brand-450" : "text-brand-700 dark:text-brand-200")}>
                         {step}
                       </p>
                     </button>

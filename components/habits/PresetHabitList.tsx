@@ -36,7 +36,7 @@ const PresetHabitList: React.FC<PresetHabitListProps> = ({
   return (
     <div>
       <div className="flex items-center gap-2 mb-3">
-        <Sparkles size={14} className="text-brand-400 dark:text-brand-500" />
+        <Sparkles size={14} className="text-brand-400 dark:text-brand-450" />
         <h3 className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase tracking-wider">
           Preset Habits
         </h3>
@@ -106,7 +106,7 @@ const PresetHabitList: React.FC<PresetHabitListProps> = ({
                             'font-medium text-sm truncate',
                             isEnabled
                               ? 'text-brand-800 dark:text-brand-100'
-                              : 'text-brand-600 dark:text-brand-500'
+                              : 'text-brand-600 dark:text-brand-450'
                           )}
                         >
                           {preset.title}

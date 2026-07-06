@@ -54,7 +54,7 @@ export const WeeklyRecapDrawer: React.FC<WeeklyRecapDrawerProps> = ({ recap, isO
               <span
                 className={cn(
                   'flex items-center gap-1 text-sm font-semibold',
-                  spentLess ? 'text-money-pos' : 'text-money-neg'
+                  spentLess ? 'text-money-pos dark:text-money-posDark' : 'text-money-neg dark:text-money-negDark'
                 )}
               >
                 <DiffIcon size={14} aria-hidden="true" />
@@ -86,7 +86,7 @@ export const WeeklyRecapDrawer: React.FC<WeeklyRecapDrawerProps> = ({ recap, isO
                         <span
                           className={cn(
                             'text-xs font-semibold',
-                            catDiff < 0 ? 'text-money-pos' : 'text-money-neg'
+                            catDiff < 0 ? 'text-money-pos dark:text-money-posDark' : 'text-money-neg dark:text-money-negDark'
                           )}
                         >
                           {catDiff < 0 ? '↓' : '↑'}

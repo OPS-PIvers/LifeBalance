@@ -69,7 +69,7 @@ export const QuickRestockRow: React.FC<QuickRestockRowProps> = ({ showHeader = t
     <div className="space-y-2 animate-in fade-in slide-in-from-top-4 duration-(--duration-slow)">
       {showHeader && (
         <div className="flex items-center gap-2 px-1">
-          <span className="text-xxs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider">Quick restock</span>
+          <span className="text-xxs font-bold text-brand-400 dark:text-brand-450 uppercase tracking-wider">Quick restock</span>
           <div className="h-px bg-brand-200 dark:bg-brand-700 flex-1"></div>
         </div>
       )}

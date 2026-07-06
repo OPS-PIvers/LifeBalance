@@ -455,14 +455,14 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
       </CollapsibleSection>
 
       <div className="flex items-center gap-2 p-3 bg-money-bgPos dark:bg-money-pos/15 rounded-xl border border-money-pos/30">
-        <CheckCircle2 size={16} className="text-money-pos shrink-0" />
-        <p className="text-xs text-money-pos">
+        <CheckCircle2 size={16} className="text-money-pos dark:text-money-posDark shrink-0" />
+        <p className="text-xs text-money-pos dark:text-money-posDark">
           Manual entries update your budget immediately without review.
         </p>
       </div>
 
       {formError && (
-        <p role="alert" aria-live="assertive" className="text-sm font-medium text-money-neg">
+        <p role="alert" aria-live="assertive" className="text-sm font-medium text-money-neg dark:text-money-negDark">
           {formError}
         </p>
       )}

@@ -131,7 +131,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 rounded-full hover:bg-brand-100 dark:hover:bg-brand-700/50"
+            className="p-2 text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300 rounded-full hover:bg-brand-100 dark:hover:bg-brand-700/50"
             aria-label="Close drawer"
           >
             <X size={20} />
@@ -139,7 +139,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
         </div>
       }
       footer={
-        <div className="p-4 bg-brand-50 dark:bg-brand-800 border-t border-brand-200 dark:border-brand-700 text-center text-xs text-brand-400 dark:text-brand-500">
+        <div className="p-4 bg-brand-50 dark:bg-brand-800 border-t border-brand-200 dark:border-brand-700 text-center text-xs text-brand-400 dark:text-brand-450">
           Changes made here affect all future generated events.
         </div>
       }
@@ -227,7 +227,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
                     <>
                       <div className="flex items-center gap-3">
                          <div className={`w-10 h-10 rounded-card flex items-center justify-center font-bold text-lg shrink-0 ${
-                            item.type === 'income' ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos' : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg'
+                            item.type === 'income' ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos dark:text-money-posDark' : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg dark:text-money-negDark'
                           }`}>
                             {item.type === 'income' ? '+' : '-'}
                           </div>
@@ -242,12 +242,12 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
                       <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
                           <div className="text-right">
                             <div className="font-mono tabular-nums font-bold text-brand-900 dark:text-brand-100">{fmt(item.amount)}</div>
-                            <div className="text-xxs text-brand-400 dark:text-brand-500">per instance</div>
+                            <div className="text-xxs text-brand-400 dark:text-brand-450">per instance</div>
                           </div>
 
                           <div className="flex items-center gap-1">
                              <Button variant="ghost" size="icon-sm" onClick={() => startEditing(item)} aria-label={`Edit ${item.title}`}>
-                               <Edit2 size={14} className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300" />
+                               <Edit2 size={14} className="text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300" />
                              </Button>
                              <Button variant="ghost-destructive" size="icon-sm" onClick={() => handleDelete(item.id)} aria-label={`Delete ${item.title}`}>
                                <Trash2 size={14} />

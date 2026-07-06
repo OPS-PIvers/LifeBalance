@@ -447,7 +447,7 @@ const Settings: React.FC = () => {
                 />
               ) : (
                 <div className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-700 flex items-center justify-center">
-                  <User className="w-5 h-5 text-brand-400 dark:text-brand-500" />
+                  <User className="w-5 h-5 text-brand-400 dark:text-brand-450" />
                 </div>
               )}
               <div className="flex-1 min-w-0">
@@ -550,8 +550,8 @@ const Settings: React.FC = () => {
               >
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
                   notificationStatus === 'granted'
-                    ? 'bg-money-bgPos text-money-pos dark:bg-accent-500/15 dark:text-accent-300'
-                    : 'bg-brand-100 text-brand-400 dark:bg-brand-700 dark:text-brand-500'
+                    ? 'bg-money-bgPos text-money-pos dark:text-money-posDark dark:bg-accent-500/15 dark:text-accent-300'
+                    : 'bg-brand-100 text-brand-400 dark:bg-brand-700 dark:text-brand-450'
                 }`}>
                   <Bell size={18} />
                 </div>
@@ -657,7 +657,7 @@ const Settings: React.FC = () => {
                       />
                     ) : (
                       <div className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-700 flex items-center justify-center">
-                        <User className="w-5 h-5 text-brand-400 dark:text-brand-500" />
+                        <User className="w-5 h-5 text-brand-400 dark:text-brand-450" />
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
@@ -665,7 +665,7 @@ const Settings: React.FC = () => {
                         <p className="font-semibold text-brand-900 dark:text-brand-100 truncate tracking-tight">
                           {member.displayName}
                           {member.uid === user?.uid && (
-                            <span className="text-brand-400 dark:text-brand-500 font-normal ml-1 text-sm">(You)</span>
+                            <span className="text-brand-400 dark:text-brand-450 font-normal ml-1 text-sm">(You)</span>
                           )}
                         </p>
                         {member.role === 'admin' && (
@@ -754,7 +754,7 @@ const Settings: React.FC = () => {
               {/* Plan sub-tabs — indented under Plan */}
               <Row className="pl-10">
                 <div className="flex-1 min-w-0">
-                  <p className={`font-medium text-sm ${planEnabled ? 'text-brand-700 dark:text-brand-300' : 'text-brand-400 dark:text-brand-500'}`}>To-Dos</p>
+                  <p className={`font-medium text-sm ${planEnabled ? 'text-brand-700 dark:text-brand-300' : 'text-brand-400 dark:text-brand-450'}`}>To-Dos</p>
                 </div>
                 <Switch
                   aria-label="Toggle To-Dos tab"
@@ -765,7 +765,7 @@ const Settings: React.FC = () => {
               </Row>
               <Row className="pl-10">
                 <div className="flex-1 min-w-0">
-                  <p className={`font-medium text-sm ${planEnabled ? 'text-brand-700 dark:text-brand-300' : 'text-brand-400 dark:text-brand-500'}`}>Meals</p>
+                  <p className={`font-medium text-sm ${planEnabled ? 'text-brand-700 dark:text-brand-300' : 'text-brand-400 dark:text-brand-450'}`}>Meals</p>
                 </div>
                 <Switch
                   aria-label="Toggle Meals tab"
@@ -776,7 +776,7 @@ const Settings: React.FC = () => {
               </Row>
               <Row className="pl-10">
                 <div className="flex-1 min-w-0">
-                  <p className={`font-medium text-sm ${planEnabled ? 'text-brand-700 dark:text-brand-300' : 'text-brand-400 dark:text-brand-500'}`}>Shopping</p>
+                  <p className={`font-medium text-sm ${planEnabled ? 'text-brand-700 dark:text-brand-300' : 'text-brand-400 dark:text-brand-450'}`}>Shopping</p>
                 </div>
                 <Switch
                   aria-label="Toggle Shopping tab"
@@ -838,7 +838,7 @@ const Settings: React.FC = () => {
                   <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">Export Full Backup</p>
                   <p className="text-xs text-brand-500 dark:text-brand-400">Download all data as JSON</p>
                 </div>
-                <Download size={16} className="text-brand-400 dark:text-brand-500 shrink-0" />
+                <Download size={16} className="text-brand-400 dark:text-brand-450 shrink-0" />
               </Row>
 
               <Row
@@ -857,13 +857,13 @@ const Settings: React.FC = () => {
                 aria-label="Export transaction history as CSV file"
               >
                 <div className="w-10 h-10 rounded-full bg-money-bgPos dark:bg-accent-500/15 flex items-center justify-center shrink-0">
-                  <FileSpreadsheet size={18} className="text-money-pos dark:text-accent-300" />
+                  <FileSpreadsheet size={18} className="text-money-pos dark:text-money-posDark dark:text-accent-300" />
                 </div>
                 <div className="flex-1 text-left">
                   <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">Export Transactions</p>
                   <p className="text-xs text-brand-500 dark:text-brand-400">Download for Excel/Sheets (CSV)</p>
                 </div>
-                <Download size={16} className="text-brand-400 dark:text-brand-500 shrink-0" />
+                <Download size={16} className="text-brand-400 dark:text-brand-450 shrink-0" />
               </Row>
             </SurfaceList>
           </div>
@@ -930,7 +930,7 @@ const Settings: React.FC = () => {
           </Section>
         )}
 
-        <p className="text-center text-xs text-brand-400 dark:text-brand-500 font-mono tabular-nums pt-2">
+        <p className="text-center text-xs text-brand-400 dark:text-brand-450 font-mono tabular-nums pt-2">
           LifeBalance v{APP_VERSION}
         </p>
 
@@ -990,7 +990,7 @@ const Settings: React.FC = () => {
             <span
               className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full border ${
                 hasKidPin
-                  ? 'text-money-pos bg-money-bgPos border-accent-200 dark:bg-accent-500/15 dark:text-accent-300 dark:border-accent-500/30'
+                  ? 'text-money-pos dark:text-money-posDark bg-money-bgPos border-accent-200 dark:bg-accent-500/15 dark:text-accent-300 dark:border-accent-500/30'
                   : 'text-brand-600 bg-brand-100 border-brand-200 dark:bg-brand-700/50 dark:text-brand-300 dark:border-brand-600'
               }`}
             >

@@ -45,7 +45,7 @@ export const ShowMoreRow: React.FC<ShowMoreRowProps> = ({
       aria-expanded={expanded}
       className={cn(
         'block min-h-11 w-full px-4 py-3 text-center hairline-divider',
-        'text-xs font-semibold text-brand-400 dark:text-brand-500 hover:text-accent-700 dark:hover:text-accent-300',
+        'text-xs font-semibold text-brand-400 dark:text-brand-450 hover:text-accent-700 dark:hover:text-accent-300',
         'transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-brand-50 dark:hover:bg-brand-700/40 cursor-pointer',
         'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-inset',
         className

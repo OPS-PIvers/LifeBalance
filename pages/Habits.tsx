@@ -135,7 +135,7 @@ const KidChoresGroup: React.FC<{ kid: HouseholdMember; chores: Habit[] }> = ({ k
                 className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
                   done
                     ? 'bg-warm-500 text-white'
-                    : 'bg-brand-100 text-brand-300 dark:bg-brand-700 dark:text-brand-500'
+                    : 'bg-brand-100 text-brand-300 dark:bg-brand-700 dark:text-brand-450'
                 }`}
                 aria-hidden="true"
               >
@@ -145,7 +145,7 @@ const KidChoresGroup: React.FC<{ kid: HouseholdMember; chores: Habit[] }> = ({ k
                 <p className={`text-sm font-semibold truncate ${done ? 'text-warm-800 dark:text-warm-200' : 'text-brand-700 dark:text-brand-200'}`}>
                   {h.title}
                 </p>
-                <div className="flex items-center gap-2 text-xxs font-medium text-brand-400 dark:text-brand-500">
+                <div className="flex items-center gap-2 text-xxs font-medium text-brand-400 dark:text-brand-450">
                   <span className="inline-flex items-center gap-0.5">
                     <Star size={10} className="fill-current text-habit-gold" aria-hidden="true" />
                     {h.basePoints} pts
@@ -159,7 +159,7 @@ const KidChoresGroup: React.FC<{ kid: HouseholdMember; chores: Habit[] }> = ({ k
                   )}
                 </div>
               </div>
-              <span className={`text-xxs font-bold uppercase tracking-wide ${done ? 'text-warm-600 dark:text-warm-300' : 'text-brand-400 dark:text-brand-500'}`}>
+              <span className={`text-xxs font-bold uppercase tracking-wide ${done ? 'text-warm-600 dark:text-warm-300' : 'text-brand-400 dark:text-brand-450'}`}>
                 {done ? 'Done' : 'To do'}
               </span>
             </li>

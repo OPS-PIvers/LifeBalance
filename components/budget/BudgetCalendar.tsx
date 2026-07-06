@@ -370,13 +370,13 @@ const BudgetCalendar: React.FC = () => {
               <Row key={item.id} className="justify-between group">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className={`w-10 h-10 rounded-card flex items-center justify-center font-bold text-lg shrink-0 ${
-                    item.type === 'income' ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos' : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg'
+                    item.type === 'income' ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos dark:text-money-posDark' : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg dark:text-money-negDark'
                   }`}>
                     {item.type === 'income' ? '+' : '-'}
                   </div>
                   <div className="min-w-0">
                     <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm truncate">{item.title}</p>
-                    <p className={`text-xs ${item.isPaid ? 'text-money-pos' : 'text-brand-500 dark:text-brand-400'}`}>
+                    <p className={`text-xs ${item.isPaid ? 'text-money-pos dark:text-money-posDark' : 'text-brand-500 dark:text-brand-400'}`}>
                       {item.isPaid ? 'Paid' : 'Unpaid'} {item.isRecurring && '• Recurring'}
                     </p>
                   </div>
@@ -396,7 +396,7 @@ const BudgetCalendar: React.FC = () => {
                           variant="ghost"
                           size="icon-sm"
                           onClick={() => openEditModal(item)}
-                          className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300"
+                          className="text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300"
                           aria-label={`Edit ${item.title}`}
                         >
                           <Edit2 size={14} />
@@ -406,7 +406,7 @@ const BudgetCalendar: React.FC = () => {
                         variant="ghost-destructive"
                         size="icon-sm"
                         onClick={() => deleteCalendarItem(item.id)}
-                        className="text-brand-400 dark:text-brand-500 hover:text-money-neg"
+                        className="text-brand-400 dark:text-brand-450 hover:text-money-neg dark:hover:text-money-negDark"
                         aria-label={`Delete ${item.title}`}
                       >
                         <Trash2 size={14} />
@@ -417,7 +417,7 @@ const BudgetCalendar: React.FC = () => {
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      className="md:hidden text-brand-400 dark:text-brand-500"
+                      className="md:hidden text-brand-400 dark:text-brand-450"
                       onClick={() => setActiveActionItem(item)}
                       aria-label={`More actions for ${item.title}`}
                     >
@@ -445,7 +445,7 @@ const BudgetCalendar: React.FC = () => {
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => setIsMenuOpen(v => !v)}
-                className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn"
+                className="text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn"
                 aria-label="More calendar actions"
                 aria-haspopup="menu"
                 aria-expanded={isMenuOpen}
@@ -467,7 +467,7 @@ const BudgetCalendar: React.FC = () => {
                   variant="ghost"
                   size="icon-sm"
                   onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-                  className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn"
+                  className="text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn"
                   aria-label="Previous month"
                 >
                   <ChevronLeft size={20} />
@@ -476,7 +476,7 @@ const BudgetCalendar: React.FC = () => {
                   variant="ghost"
                   size="icon-sm"
                   onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-                  className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn"
+                  className="text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn"
                   aria-label="Next month"
                 >
                   <ChevronRight size={20} />
@@ -489,7 +489,7 @@ const BudgetCalendar: React.FC = () => {
               onClick={toggleGridExpanded}
               aria-expanded={isGridExpanded}
               aria-controls={isGridExpanded ? 'budget-calendar-month-grid' : undefined}
-              className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn"
+              className="text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn"
               aria-label={isGridExpanded ? 'Collapse to week view' : 'Expand to month view'}
             >
               <ChevronDown
@@ -505,7 +505,7 @@ const BudgetCalendar: React.FC = () => {
             {/* Weekday labels */}
             <div className="grid grid-cols-7 mb-3" role="row">
               {weekDays.map((d, i) => (
-                <div key={`${d.full}-${i}`} role="columnheader" className="text-center text-xs font-semibold text-brand-400 dark:text-brand-500 py-2">
+                <div key={`${d.full}-${i}`} role="columnheader" className="text-center text-xs font-semibold text-brand-400 dark:text-brand-450 py-2">
                   <abbr title={d.full} className="no-underline">{d.abbr}</abbr>
                 </div>
               ))}
@@ -544,7 +544,7 @@ const BudgetCalendar: React.FC = () => {
                     }}
                     className={`
                       relative flex flex-col items-center justify-center h-10 w-10 mx-auto rounded-card text-sm font-medium cursor-pointer transition-[background-color,color,transform] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40
-                      ${!isSameMonth(day, monthStart) ? 'text-brand-300 dark:text-brand-600' : 'text-brand-600 dark:text-brand-300'}
+                      ${!isSameMonth(day, monthStart) ? 'text-brand-300 dark:text-brand-500' : 'text-brand-600 dark:text-brand-300'}
                       ${isSelected ? 'bg-accent-600 dark:bg-accent-600 text-white scale-105 ring-2 ring-accent-600 ring-offset-2 ring-offset-white dark:ring-offset-brand-800' : 'hover:bg-brand-100 dark:hover:bg-brand-700/50'}
                       ${isToday(day) && !isSelected ? 'text-accent-700 dark:text-accent-300 font-bold bg-brand-100 dark:bg-brand-700/50' : ''}
                     `}
@@ -670,8 +670,8 @@ const BudgetCalendar: React.FC = () => {
                onChange={(val) => setType(val as 'income' | 'expense')}
                name="Transaction Type"
                options={[
-                 { value: 'expense', label: 'Expense', activeClassName: 'text-money-neg' },
-                 { value: 'income', label: 'Income', activeClassName: 'text-money-pos' },
+                 { value: 'expense', label: 'Expense', activeClassName: 'text-money-neg dark:text-money-negDark' },
+                 { value: 'income', label: 'Income', activeClassName: 'text-money-pos dark:text-money-posDark' },
                ]}
                className="mb-4"
                showBorder={false}

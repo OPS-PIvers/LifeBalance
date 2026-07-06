@@ -417,7 +417,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
           <button
             onClick={() => setShowDeleteConfirm(true)}
             disabled={isSaving}
-            className="flex-1 py-3 bg-money-bgNeg text-money-neg font-semibold rounded-btn hover:bg-money-neg/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 py-3 bg-money-bgNeg text-money-neg dark:text-money-negDark font-semibold rounded-btn hover:bg-money-neg/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Trash2 size={16} />
             Delete

@@ -85,7 +85,7 @@ const PaywallModal: React.FC<PaywallModalProps> = ({ isOpen, onClose, householdI
               key={benefit}
               className="flex items-start gap-2.5 text-sm text-brand-700 dark:text-brand-200"
             >
-              <Check className="w-4 h-4 mt-0.5 text-money-pos shrink-0" aria-hidden="true" />
+              <Check className="w-4 h-4 mt-0.5 text-money-pos dark:text-money-posDark shrink-0" aria-hidden="true" />
               <span>{benefit}</span>
             </li>
           ))}

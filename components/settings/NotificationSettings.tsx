@@ -210,7 +210,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
         return (
           <div className="flex items-start gap-3 px-1">
             <Info className={`w-5 h-5 shrink-0 mt-0.5 ${
-              isReady ? 'text-money-pos dark:text-accent-300' : 'text-warm-600 dark:text-warm-300'
+              isReady ? 'text-money-pos dark:text-money-posDark dark:text-accent-300' : 'text-warm-600 dark:text-warm-300'
             }`} />
             <div>
               <h4 className={`font-semibold text-sm ${
@@ -323,7 +323,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
         {/* Budget Alerts */}
         <Row className="items-start">
           <div className="w-10 h-10 bg-money-bgNeg dark:bg-money-neg/15 rounded-btn flex items-center justify-center shrink-0">
-            <DollarSign className="w-5 h-5 text-money-neg" />
+            <DollarSign className="w-5 h-5 text-money-neg dark:text-money-negDark" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-3">

@@ -33,7 +33,7 @@ export const UpcomingBillsWidget: React.FC<UpcomingBillsWidgetProps> = ({ onPay 
 
         if (isSameDay(date, today)) {
           dateLabel = 'Today';
-          urgencyClass = 'text-money-neg font-bold';
+          urgencyClass = 'text-money-neg dark:text-money-negDark font-bold';
         } else if (isTomorrow(date)) {
           dateLabel = 'Tomorrow';
           urgencyClass = 'text-warm-600 dark:text-warm-400 font-bold';
@@ -75,7 +75,7 @@ export const UpcomingBillsWidget: React.FC<UpcomingBillsWidgetProps> = ({ onPay 
               </span>
               <button
                 onClick={() => onPay(bill.id)}
-                className="p-2 text-money-pos bg-money-bgPos hover:brightness-95 dark:bg-money-pos/15 dark:hover:bg-money-pos/25 rounded-btn transition-[filter,colors] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+                className="p-2 text-money-pos dark:text-money-posDark bg-money-bgPos hover:brightness-95 dark:bg-money-pos/15 dark:hover:bg-money-pos/25 rounded-btn transition-[filter,colors] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
                 title="Pay Bill"
                 aria-label={`Pay ${bill.title}`}
               >

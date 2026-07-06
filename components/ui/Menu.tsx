@@ -46,7 +46,7 @@ const TONE_LABEL: Record<MenuItemTone, string> = {
 };
 
 const TONE_ICON: Record<MenuItemTone, string> = {
-  default: 'text-brand-400 dark:text-brand-500',
+  default: 'text-brand-400 dark:text-brand-450',
   primary: 'text-accent-600 dark:text-accent-300',
   danger: '', // inherits the (red) label color
   info: '', // inherits the (blue) label color

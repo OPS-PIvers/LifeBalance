@@ -167,20 +167,20 @@ const BudgetHistory: React.FC = () => {
                   <h3 className="font-semibold text-brand-900 dark:text-brand-100 text-base truncate">
                     {format(parseISO(group.startDate), 'MMM d')} – {format(parseISO(group.endDate), 'MMM d, yyyy')}
                   </h3>
-                  <p className="text-xs text-brand-400 dark:text-brand-500 font-medium mt-0.5">
+                  <p className="text-xs text-brand-400 dark:text-brand-450 font-medium mt-0.5">
                     {group.transactionCount} transactions
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <div className="text-right">
-                    <div className={`font-mono text-base font-bold tabular-nums ${savings >= 0 ? 'text-money-pos' : 'text-money-neg'}`}>
+                    <div className={`font-mono text-base font-bold tabular-nums ${savings >= 0 ? 'text-money-pos dark:text-money-posDark' : 'text-money-neg dark:text-money-negDark'}`}>
                       {savings >= 0 ? '+' : ''}{fmt(savings)}
                     </div>
-                    <p className="text-xxs text-brand-400 dark:text-brand-500">
+                    <p className="text-xxs text-brand-400 dark:text-brand-450">
                       {savings >= 0 ? 'saved' : 'overspent'}
                     </p>
                   </div>
-                  <ChevronRight size={18} className="text-brand-300 dark:text-brand-600" aria-hidden="true" />
+                  <ChevronRight size={18} className="text-brand-300 dark:text-brand-500" aria-hidden="true" />
                 </div>
               </button>
 
@@ -240,8 +240,8 @@ const BudgetHistory: React.FC = () => {
                   <Row key={bucket.id} className="flex-col items-stretch gap-1.5">
                     <div className="flex justify-between items-center">
                       <span className="text-sm font-semibold text-brand-700 dark:text-brand-200">{bucket.bucketName}</span>
-                      <span className={`text-sm font-mono tabular-nums font-bold ${bucketSavings >= 0 ? 'text-money-pos' : 'text-money-neg'}`}>
-                        {fmt(bucket.totalSpent)} <span className="text-brand-300 dark:text-brand-500 font-normal">/ {fmt(bucket.limit)}</span>
+                      <span className={`text-sm font-mono tabular-nums font-bold ${bucketSavings >= 0 ? 'text-money-pos dark:text-money-posDark' : 'text-money-neg dark:text-money-negDark'}`}>
+                        {fmt(bucket.totalSpent)} <span className="text-brand-300 dark:text-brand-450 font-normal">/ {fmt(bucket.limit)}</span>
                       </span>
                     </div>
                     <ProgressBar

@@ -46,11 +46,11 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                 className="text-xs font-semibold text-brand-500 dark:text-brand-400 uppercase tracking-wider block"
               >
                 {label}
-                {props.required && <span className="text-money-neg ml-1" aria-hidden="true">*</span>}
+                {props.required && <span className="text-money-neg dark:text-money-negDark ml-1" aria-hidden="true">*</span>}
               </label>
             ) : <span />}
             {showCount && props.maxLength && (
-              <span className="text-xs text-brand-400 dark:text-brand-500 font-medium leading-none mb-0.5">
+              <span className="text-xs text-brand-400 dark:text-brand-450 font-medium leading-none mb-0.5">
                 {length}/{props.maxLength}
               </span>
             )}
@@ -58,7 +58,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         )}
         <div className="relative">
           {icon && (
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-400 dark:text-brand-500 pointer-events-none">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-400 dark:text-brand-450 pointer-events-none">
               {icon}
             </div>
           )}
@@ -78,7 +78,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           />
         </div>
         {error && (
-          <p id={errorId} className="mt-1 text-sm text-money-neg font-medium">{error}</p>
+          <p id={errorId} className="mt-1 text-sm text-money-neg dark:text-money-negDark font-medium">{error}</p>
         )}
       </div>
     );

@@ -62,7 +62,7 @@ export const SafeToSpendDetail: React.FC = () => {
             )}
 
             <div className="px-4 pt-3 pb-3.5 hairline-divider">
-              <p className="text-xxs text-brand-400 dark:text-brand-500 leading-relaxed">
+              <p className="text-xxs text-brand-400 dark:text-brand-450 leading-relaxed">
                 Your available cash after bills due before your next paycheck and pending
                 (un-cleared) transactions. Bucket limits are not subtracted from this number.
               </p>
@@ -106,12 +106,12 @@ const DetailRow: React.FC<{
       </span>
       <div className="min-w-0">
         <p className="text-sm font-semibold text-brand-800 dark:text-brand-100 truncate">{label}</p>
-        <p className="text-xxs text-brand-400 dark:text-brand-500">{sub}</p>
+        <p className="text-xxs text-brand-400 dark:text-brand-450">{sub}</p>
       </div>
     </div>
     <span
       className={`font-mono text-sm font-bold tabular-nums shrink-0 ${
-        negative ? 'text-money-neg' : 'text-brand-900 dark:text-brand-50'
+        negative ? 'text-money-neg dark:text-money-negDark' : 'text-brand-900 dark:text-brand-50'
       }`}
     >
       {value}

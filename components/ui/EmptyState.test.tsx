@@ -63,6 +63,6 @@ describe('EmptyState', () => {
     const { container } = render(
       <EmptyState title="Failed" tone="danger" icon={<svg data-testid="icon" />} />
     );
-    expect(container.querySelector('.rounded-full')).toHaveClass('text-money-neg');
+    expect(container.querySelector('.rounded-full')).toHaveClass('text-money-neg dark:text-money-negDark');
   });
 });

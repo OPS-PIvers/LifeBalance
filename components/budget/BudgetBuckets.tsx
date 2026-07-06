@@ -392,7 +392,7 @@ const BudgetBuckets: React.FC = () => {
           {reallocateModal?.sourceId && (
             <div className="text-xs flex justify-between items-center text-brand-500 dark:text-brand-400 px-1">
                 <span>Remaining in source:</span>
-                <span className={`font-mono tabular-nums font-bold ${remainingAfterTransfer < 0 ? 'text-money-neg' : 'text-brand-800 dark:text-brand-200'}`}>
+                <span className={`font-mono tabular-nums font-bold ${remainingAfterTransfer < 0 ? 'text-money-neg dark:text-money-negDark' : 'text-brand-800 dark:text-brand-200'}`}>
                   {fmt(remainingAfterTransfer)}
                 </span>
             </div>
@@ -434,7 +434,7 @@ const BudgetBuckets: React.FC = () => {
           />
         ) : (
           <>
-            <p className="px-1 mb-2 text-xs font-semibold text-brand-400 dark:text-brand-500 uppercase tracking-wider">
+            <p className="px-1 mb-2 text-xs font-semibold text-brand-400 dark:text-brand-450 uppercase tracking-wider">
               {expandedBucketTransactions.length} transaction{expandedBucketTransactions.length === 1 ? '' : 's'}
             </p>
             <SurfaceList>
@@ -451,7 +451,7 @@ const BudgetBuckets: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <span className={`font-mono tabular-nums font-bold text-sm mr-1 ${
-                      tx.status === 'pending_review' ? 'text-brand-400 dark:text-brand-500' : 'text-brand-900 dark:text-brand-100'
+                      tx.status === 'pending_review' ? 'text-brand-400 dark:text-brand-450' : 'text-brand-900 dark:text-brand-100'
                     }`}>
                       {fmt(tx.amount)}
                     </span>
@@ -459,7 +459,7 @@ const BudgetBuckets: React.FC = () => {
                       variant="ghost"
                       size="icon-sm"
                       onClick={() => handleEditTransactionFromSheet(tx)}
-                      className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300"
+                      className="text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300"
                       title="Edit transaction"
                       aria-label={`Edit transaction: ${tx.merchant || 'Unnamed'}`}
                     >
@@ -469,7 +469,7 @@ const BudgetBuckets: React.FC = () => {
                       variant="ghost-destructive"
                       size="icon-sm"
                       onClick={() => handleDeleteTransaction(tx.id)}
-                      className="text-brand-400 dark:text-brand-500 hover:text-money-neg"
+                      className="text-brand-400 dark:text-brand-450 hover:text-money-neg dark:hover:text-money-negDark"
                       title="Delete transaction"
                       aria-label={`Delete transaction: ${tx.merchant || 'Unnamed'}`}
                     >

@@ -280,7 +280,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
               <span className="flex-1 min-w-0 text-xs font-mono text-brand-600 dark:text-brand-300 truncate">
                 {getQuickAddEndpointUrl(endpoint)}
               </span>
-              <Copy className="w-3.5 h-3.5 text-brand-400 dark:text-brand-500 shrink-0" />
+              <Copy className="w-3.5 h-3.5 text-brand-400 dark:text-brand-450 shrink-0" />
             </Row>
           ))}
         </SurfaceList>
@@ -294,7 +294,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
             {revokedKeys.map((key) => (
               <Row key={key.id} className="opacity-60">
                 <div className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-700 flex items-center justify-center shrink-0">
-                  <Key className="w-4 h-4 text-brand-400 dark:text-brand-500" />
+                  <Key className="w-4 h-4 text-brand-400 dark:text-brand-450" />
                 </div>
                 <div className="flex-1 min-w-0 flex items-center gap-2">
                   <span className="font-semibold text-brand-600 dark:text-brand-300 line-through truncate">

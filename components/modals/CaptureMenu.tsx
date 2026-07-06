@@ -86,7 +86,7 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
             type="button"
             onClick={dismissPiiNotice}
             aria-label="Dismiss PII notice"
-            className="shrink-0 min-w-11 min-h-11 flex items-center justify-center text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-full"
+            className="shrink-0 min-w-11 min-h-11 flex items-center justify-center text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-full"
           >
             <X size={14} />
           </button>
@@ -136,7 +136,7 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
         onClick={onManual}
         className={BUTTON_CLASSES}
       >
-        <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-money-bgPos dark:bg-money-pos/15 text-money-pos">
+        <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-money-bgPos dark:bg-money-pos/15 text-money-pos dark:text-money-posDark">
           <Type size={24} />
         </div>
         <div className="text-left flex-1">

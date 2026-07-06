@@ -209,8 +209,8 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
       {mode === 'generate' && (
         <div className="space-y-4 pb-2">
           <div>
-            <label htmlFor="plan-note" className="block text-xs font-bold uppercase tracking-wider text-brand-400 dark:text-brand-500 mb-2">
-              Anything to use up? <span className="font-medium normal-case text-brand-300 dark:text-brand-500">(optional)</span>
+            <label htmlFor="plan-note" className="block text-xs font-bold uppercase tracking-wider text-brand-400 dark:text-brand-450 mb-2">
+              Anything to use up? <span className="font-medium normal-case text-brand-300 dark:text-brand-450">(optional)</span>
             </label>
             <textarea
               id="plan-note"
@@ -218,7 +218,7 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
               onChange={(e) => setNote(e.target.value)}
               rows={2}
               placeholder="e.g. use the ground beef in the freezer, keep it quick this week"
-              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl text-sm focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl text-sm focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-450"
             />
           </div>
           <div className="flex gap-3">
@@ -253,13 +253,13 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
           >
             Paste from clipboard
           </Button>
-          <div className="text-center text-xxs font-bold uppercase tracking-wider text-brand-300 dark:text-brand-500">or paste manually</div>
+          <div className="text-center text-xxs font-bold uppercase tracking-wider text-brand-300 dark:text-brand-450">or paste manually</div>
           <textarea
             value={importText}
             onChange={(e) => setImportText(e.target.value)}
             rows={6}
             placeholder='Paste week.json here…'
-            className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+            className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-450"
           />
           <div className="flex gap-3">
             <Button variant="secondary" size="lg" className="flex-1" onClick={() => setMode('choose')}>Back</Button>

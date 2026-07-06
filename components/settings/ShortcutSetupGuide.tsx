@@ -119,7 +119,7 @@ const CopyRow: React.FC<{ label: string; value: string; hint?: string; disabled?
     }`}
   >
     <div className="min-w-0 flex-1">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-brand-400 dark:text-brand-500">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-brand-400 dark:text-brand-450">
         {label}
       </p>
       <p className="font-mono text-sm text-brand-800 dark:text-brand-100 break-all">{value}</p>
@@ -201,7 +201,7 @@ const FieldRow: React.FC<{ field: FieldSpec }> = ({ field }) => {
           <p className="text-xs text-brand-500 dark:text-brand-400">{em(field.hint)}</p>
         )}
       </div>
-      <span className="shrink-0 mt-0.5 text-brand-400 dark:text-brand-500">
+      <span className="shrink-0 mt-0.5 text-brand-400 dark:text-brand-450">
         {field.mode === 'typeIn' ? (
           <Pencil className="w-3.5 h-3.5" />
         ) : (
@@ -682,7 +682,7 @@ const ShortcutSetupGuide: React.FC<ShortcutSetupGuideProps> = ({ apiKey }) => {
       {apiKey ? (
         <div className="space-y-2">
           <div className="flex items-start gap-2 px-1">
-            <CheckCircle2 className="w-4 h-4 text-money-pos shrink-0 mt-0.5" />
+            <CheckCircle2 className="w-4 h-4 text-money-pos dark:text-money-posDark shrink-0 mt-0.5" />
             <div>
               <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">
                 Your API key is ready

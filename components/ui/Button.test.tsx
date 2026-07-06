@@ -36,7 +36,7 @@ describe('Button', () => {
     render(<Button variant="danger">Danger</Button>);
     const button = screen.getByRole('button', { name: /danger/i });
     expect(button).toHaveClass('bg-money-bgNeg');
-    expect(button).toHaveClass('text-money-neg');
+    expect(button).toHaveClass('text-money-neg dark:text-money-negDark');
   });
 
   it('applies outline variant classes', () => {
@@ -58,7 +58,7 @@ describe('Button', () => {
     render(<Button variant="ghost-danger">Ghost Danger</Button>);
     const button = screen.getByRole('button', { name: /ghost danger/i });
     expect(button).toHaveClass('bg-transparent');
-    expect(button).toHaveClass('text-money-neg');
+    expect(button).toHaveClass('text-money-neg dark:text-money-negDark');
   });
 
   it('applies ghost-destructive variant classes', () => {

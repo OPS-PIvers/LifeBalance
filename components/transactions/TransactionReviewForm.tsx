@@ -357,7 +357,7 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
           )}
         </div>
         {habits.length === 0 && (
-          <p className="text-xs text-brand-400 dark:text-brand-500 italic">No habits found. Create some in Habits tab.</p>
+          <p className="text-xs text-brand-400 dark:text-brand-450 italic">No habits found. Create some in Habits tab.</p>
         )}
 
         {habits.length > 0 && (

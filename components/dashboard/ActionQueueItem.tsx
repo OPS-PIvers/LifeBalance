@@ -326,7 +326,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
         >
           <motion.div
             style={{ opacity: approveOpacity, scale: approveScale }}
-            className="flex items-center gap-2 font-bold text-money-pos"
+            className="flex items-center gap-2 font-bold text-money-pos dark:text-money-posDark"
           >
             <Check size={20} />
             <span>{approveLabel}</span>
@@ -402,7 +402,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                isTodoQueueItem(item) ? item.text :
                isTransactionQueueItem(item) ? item.merchant : ''}
             </p>
-            <div className="text-xs text-brand-400 dark:text-brand-500 flex items-center gap-1">
+            <div className="text-xs text-brand-400 dark:text-brand-450 flex items-center gap-1">
                {isCalendarQueueItem(item) ? 'Due: ' : isTodoQueueItem(item) ? 'Due: ' : 'Tx: '}
                {format(parseISO(item.date), 'MMM d, yyyy')}
                {isTodoQueueItem(item) && item.assignedTo && (
@@ -411,7 +411,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                  </div>
                )}
                {isTodoQueueItem(item) && isBefore(parseISO(item.date), startOfToday()) && (
-                 <span className="flex items-center gap-0.5 text-money-neg font-bold ml-1">
+                 <span className="flex items-center gap-0.5 text-money-neg dark:text-money-negDark font-bold ml-1">
                    <AlertCircle size={10} />
                    Overdue
                  </span>

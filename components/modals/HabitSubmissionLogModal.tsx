@@ -279,7 +279,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
               >
                 <div className="grid grid-cols-7 mb-2" role="row">
                   {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-                    <div key={i} className="text-center text-xs font-bold text-brand-300 dark:text-brand-500 py-2" role="columnheader">
+                    <div key={i} className="text-center text-xs font-bold text-brand-300 dark:text-brand-450 py-2" role="columnheader">
                       {day}
                     </div>
                   ))}
@@ -304,7 +304,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                           aspect-square rounded-lg flex items-center justify-center text-sm font-medium relative
                           ${!isCurrentMonth ? 'opacity-30' : ''}
                           ${isCompleted
-                            ? (habit.type === 'positive' ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos font-bold' : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg font-bold')
+                            ? (habit.type === 'positive' ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos dark:text-money-posDark font-bold' : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg dark:text-money-negDark font-bold')
                             : 'bg-brand-50 dark:bg-brand-700/50 text-brand-400 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-700/50'
                           }
                           ${isTodayDate && !isCompleted ? 'ring-2 ring-brand-400' : ''}
@@ -324,7 +324,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
 
             {/* Summary — typography line, no boxed card */}
             <div className="flex items-center gap-3 px-1">
-              <div className={`shrink-0 p-2 rounded-full ${habit.type === 'positive' ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos' : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg'}`}>
+              <div className={`shrink-0 p-2 rounded-full ${habit.type === 'positive' ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos dark:text-money-posDark' : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg dark:text-money-negDark'}`}>
                 <CheckCircle2 size={20} />
               </div>
               <div>
@@ -345,17 +345,17 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                 label={
                   <span className="flex flex-col gap-0.5">
                     <span className="flex items-center gap-1.5"><Award size={12} /> Total Points</span>
-                    <span className="text-brand-400 dark:text-brand-500">{analytics.averagePointsPerSubmission.toFixed(1)} avg/submission</span>
+                    <span className="text-brand-400 dark:text-brand-450">{analytics.averagePointsPerSubmission.toFixed(1)} avg/submission</span>
                   </span>
                 }
                 value={analytics.totalPoints.toLocaleString()}
-                valueClassName="text-2xl text-money-pos"
+                valueClassName="text-2xl text-money-pos dark:text-money-posDark"
               />
               <Stat
                 label={
                   <span className="flex flex-col gap-0.5">
                     <span className="flex items-center gap-1.5"><TrendingUp size={12} /> Submissions</span>
-                    <span className="text-brand-400 dark:text-brand-500">{analytics.totalCount} total actions</span>
+                    <span className="text-brand-400 dark:text-brand-450">{analytics.totalCount} total actions</span>
                   </span>
                 }
                 value={analytics.totalSubmissions}
@@ -365,7 +365,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                 label={
                   <span className="flex flex-col gap-0.5">
                     <span className="flex items-center gap-1.5"><Flame size={12} /> Current Streak</span>
-                    <span className="text-brand-400 dark:text-brand-500">{analytics.maxStreak} day max</span>
+                    <span className="text-brand-400 dark:text-brand-450">{analytics.maxStreak} day max</span>
                   </span>
                 }
                 value={analytics.currentStreak}
@@ -375,7 +375,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                 label={
                   <span className="flex flex-col gap-0.5">
                     <span className="flex items-center gap-1.5"><BarChart3 size={12} /> Multiplier</span>
-                    <span className="text-brand-400 dark:text-brand-500">Current bonus</span>
+                    <span className="text-brand-400 dark:text-brand-450">Current bonus</span>
                   </span>
                 }
                 value={analytics.currentStreak >= 7 ? '2.0x' : analytics.currentStreak >= 3 ? '1.5x' : '1.0x'}

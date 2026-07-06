@@ -170,7 +170,7 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
           {splits.map((split, index) => (
             <Row key={split.id} className="flex-col items-stretch gap-3 py-4">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-brand-400 dark:text-brand-500">
+                <span className="text-xs font-bold text-brand-400 dark:text-brand-450">
                   Split #{index + 1}
                 </span>
 
@@ -252,7 +252,7 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
 
       <div className="sticky bottom-0 bg-white dark:bg-brand-800 border-t border-brand-200 dark:border-brand-700 p-4 space-y-3">
         {/* Validation Status */}
-        <div className={`flex items-center justify-between text-sm font-bold px-1 ${isValidTotal ? 'text-money-pos' : 'text-money-neg'}`}>
+        <div className={`flex items-center justify-between text-sm font-bold px-1 ${isValidTotal ? 'text-money-pos dark:text-money-posDark' : 'text-money-neg dark:text-money-negDark'}`}>
           <div className="flex items-center gap-2">
             {!isValidTotal && <AlertCircle size={16} />}
             <span>{isValidTotal ? 'Total Matches' : 'Total Mismatch'}</span>

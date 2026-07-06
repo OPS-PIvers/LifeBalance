@@ -222,8 +222,8 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
               value={type}
               onChange={setType}
               options={[
-                { value: 'positive', label: 'Good', activeClassName: 'text-money-pos' },
-                { value: 'negative', label: 'Bad', activeClassName: 'text-money-neg' },
+                { value: 'positive', label: 'Good', activeClassName: 'text-money-pos dark:text-money-posDark' },
+                { value: 'negative', label: 'Bad', activeClassName: 'text-money-neg dark:text-money-negDark' },
               ]}
               className="mt-1"
             />

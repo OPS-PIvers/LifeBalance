@@ -59,7 +59,7 @@ const TopToolbar: React.FC = () => {
               onClick={() => navigate('/budget', { state: { tab: 'overview' } })}
             >
               <span
-                className={`text-2xl font-mono font-bold tracking-tight tabular-nums ${isPositive ? 'text-money-pos' : 'text-money-neg'}`}
+                className={`text-2xl font-mono font-bold tracking-tight tabular-nums ${isPositive ? 'text-money-pos dark:text-money-posDark' : 'text-money-neg dark:text-money-negDark'}`}
               >
                 {fmt(Math.abs(safeToSpend))}
               </span>

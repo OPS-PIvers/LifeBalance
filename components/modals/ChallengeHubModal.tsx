@@ -630,7 +630,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                                     ? 'bg-accent-600 text-white dark:bg-accent-500 scale-105'
                                     : isCurrentMonth
                                     ? 'bg-brand-100 dark:bg-brand-700 text-brand-600 dark:text-brand-300 ring-2 ring-warm-400'
-                                    : 'bg-brand-100 dark:bg-brand-700/50 text-brand-400 dark:text-brand-500'
+                                    : 'bg-brand-100 dark:bg-brand-700/50 text-brand-400 dark:text-brand-450'
                                 }`}
                               >
                                 {isCompleted ? (
@@ -700,7 +700,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                         className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
                           i < (freezeBank?.tokens || 0)
                             ? 'bg-habit-blue text-white shadow-raised scale-110'
-                            : 'bg-brand-100 dark:bg-brand-700/50 text-brand-300 dark:text-brand-500'
+                            : 'bg-brand-100 dark:bg-brand-700/50 text-brand-300 dark:text-brand-450'
                         }`}
                       >
                         <span className="text-2xl">❄️</span>
@@ -786,7 +786,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                                       {habit.title}
                                     </span>
                                     {alreadyCompleted && (
-                                      <span className="text-xs text-money-pos font-medium">
+                                      <span className="text-xs text-money-pos dark:text-money-posDark font-medium">
                                         Already completed
                                       </span>
                                     )}
@@ -829,7 +829,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                             </div>
                             <span
                               className={`shrink-0 text-sm font-bold ${
-                                entry.amount > 0 ? 'text-money-pos' : 'text-brand-600 dark:text-brand-300'
+                                entry.amount > 0 ? 'text-money-pos dark:text-money-posDark' : 'text-brand-600 dark:text-brand-300'
                               }`}
                             >
                               {entry.amount > 0 ? '+' : ''}
