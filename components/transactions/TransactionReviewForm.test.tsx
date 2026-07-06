@@ -169,8 +169,8 @@ describe('TransactionReviewForm', () => {
 
       expect(screen.queryByText(/budget category/i)).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Groceries' })).not.toBeInTheDocument();
-      expect(screen.getByText(/charge to card/i)).toBeInTheDocument();
-      expect(screen.getByRole('checkbox')).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'Charge' })).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'Payment' })).toBeInTheDocument();
     });
 
     it('shows the category chips (no toggle) when a checking account is selected', () => {
@@ -183,7 +183,7 @@ describe('TransactionReviewForm', () => {
       );
 
       expect(screen.getByText(/budget category/i)).toBeInTheDocument();
-      expect(screen.queryByText(/charge to card/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('radio', { name: 'Charge' })).not.toBeInTheDocument();
     });
 
     it('approves a credit charge under CREDIT_CARD_CATEGORY without requiring a category pick', async () => {
@@ -216,8 +216,8 @@ describe('TransactionReviewForm', () => {
         />
       );
 
-      await user.click(screen.getByRole('checkbox'));
-      expect(screen.getByText(/payment toward card/i)).toBeInTheDocument();
+      await user.click(screen.getByRole('radio', { name: 'Payment' }));
+      expect(screen.getByRole('radio', { name: 'Payment' })).toHaveAttribute('aria-checked', 'true');
       await user.click(screen.getByRole('button', { name: /approve transaction/i }));
 
       const call = mockUpdateTransactionCategory.mock.calls[0]!;
