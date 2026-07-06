@@ -144,7 +144,7 @@ export const PulseStripWidget: React.FC = React.memo(() => {
             {fmt(metrics.weekSpend, { decimals: 0 })}
           </span>
           {metrics.spendTrend === 'none' ? (
-            <span className="mt-1 text-xs font-medium text-brand-400 dark:text-brand-500">
+            <span className="mt-1 text-xs font-medium text-brand-400 dark:text-brand-450">
               this week
             </span>
           ) : (
@@ -152,10 +152,10 @@ export const PulseStripWidget: React.FC = React.memo(() => {
               className={cn(
                 'mt-1 flex items-center gap-1 text-xs font-semibold',
                 metrics.spendTrend === 'up'
-                  ? 'text-money-neg'
+                  ? 'text-money-neg dark:text-money-negDark'
                   : metrics.spendTrend === 'down'
-                    ? 'text-money-pos'
-                    : 'text-brand-400 dark:text-brand-500'
+                    ? 'text-money-pos dark:text-money-posDark'
+                    : 'text-brand-400 dark:text-brand-450'
               )}
             >
               <SpendTrendIcon size={12} aria-hidden="true" />
@@ -179,17 +179,17 @@ export const PulseStripWidget: React.FC = React.memo(() => {
               <span className="stat-num text-2xl font-bold text-habit-blue">
                 {metrics.consistencyPercent}%
               </span>
-              <span className="mt-1 flex items-center gap-1 text-xs font-medium text-brand-400 dark:text-brand-500">
+              <span className="mt-1 flex items-center gap-1 text-xs font-medium text-brand-400 dark:text-brand-450">
                 <Target size={12} aria-hidden="true" />
                 {metrics.consistencyDone}/{metrics.consistencyTotal} today
               </span>
             </>
           ) : (
             <>
-              <span className="font-mono text-2xl font-bold tabular-nums text-brand-300 dark:text-brand-600">
+              <span className="font-mono text-2xl font-bold tabular-nums text-brand-300 dark:text-brand-500">
                 —
               </span>
-              <span className="mt-1 text-xs font-medium text-brand-400 dark:text-brand-500">
+              <span className="mt-1 text-xs font-medium text-brand-400 dark:text-brand-450">
                 no habits
               </span>
             </>

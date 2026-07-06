@@ -127,7 +127,7 @@ export const MealGuide: React.FC<MealGuideProps> = ({ plan, hideMasthead }) => {
 
       {view === 'week' ? (
         <div className="space-y-3">
-          <div className="text-xxs font-bold uppercase tracking-widest text-brand-400 dark:text-brand-500 px-1">Cook in order</div>
+          <div className="text-xxs font-bold uppercase tracking-widest text-brand-400 dark:text-brand-450 px-1">Cook in order</div>
           {meals.map((meal, i) => {
             const sched = buildSchedule(meal, serveOverrides[mealKey(meal, i)]);
             return (
@@ -144,7 +144,7 @@ export const MealGuide: React.FC<MealGuideProps> = ({ plan, hideMasthead }) => {
                       RecipeView instead of being duplicated here. */}
                   <div className="font-bold text-brand-900 dark:text-brand-100 tracking-tight leading-snug text-balance">
                     {meal.cuisine && (
-                      <span className="text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-500">{meal.cuisine} · </span>
+                      <span className="text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-450">{meal.cuisine} · </span>
                     )}
                     {meal.name}
                   </div>
@@ -154,12 +154,12 @@ export const MealGuide: React.FC<MealGuideProps> = ({ plan, hideMasthead }) => {
                     <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" /> {fmtDur(sched.total)}</span>
                   </div>
                 </div>
-                <ChevronRight className="w-5 h-5 text-brand-300 dark:text-brand-600 shrink-0 mt-1" />
+                <ChevronRight className="w-5 h-5 text-brand-300 dark:text-brand-500 shrink-0 mt-1" />
               </button>
             );
           })}
           {meals.length === 0 && (
-            <p className="text-center text-sm text-brand-400 dark:text-brand-500 py-10">No meals in this plan.</p>
+            <p className="text-center text-sm text-brand-400 dark:text-brand-450 py-10">No meals in this plan.</p>
           )}
         </div>
       ) : (
@@ -209,7 +209,7 @@ const Tag: React.FC<{ children: React.ReactNode; icon?: React.ReactNode; tone?: 
 const StatCell: React.FC<{ label: string; value: string }> = ({ label, value }) => (
   <div className="flex-1 px-3 py-2 text-center">
     <div className="font-bold text-brand-900 dark:text-brand-100 tabular-nums">{value}</div>
-    <div className="text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-500 mt-0.5">{label}</div>
+    <div className="text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-450 mt-0.5">{label}</div>
   </div>
 );
 
@@ -234,7 +234,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({ meal, schedule, serveValue, onS
       Week
     </Button>
 
-    {meal.cuisine && <div className="text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-500">{meal.cuisine}</div>}
+    {meal.cuisine && <div className="text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-450">{meal.cuisine}</div>}
     <h2 className="text-2xl font-bold text-brand-900 dark:text-brand-100 tracking-tight text-balance">{meal.name}</h2>
     {meal.blurb && <p className="text-sm text-brand-500 dark:text-brand-400 italic mt-1 leading-relaxed">{meal.blurb}</p>}
 
@@ -248,7 +248,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({ meal, schedule, serveValue, onS
     {/* Scheduler */}
     <div className="rounded-2xl bg-brand-50 border border-brand-200 p-4 flex items-center justify-between gap-3 dark:bg-brand-700/40 dark:border-brand-700">
       <div>
-        <label htmlFor="serve-time" className="block text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-500 mb-1">Serve at</label>
+        <label htmlFor="serve-time" className="block text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-450 mb-1">Serve at</label>
         <input
           id="serve-time"
           type="time"
@@ -258,7 +258,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({ meal, schedule, serveValue, onS
         />
       </div>
       <div className="text-right">
-        <div className="text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-500">Start cooking</div>
+        <div className="text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-450">Start cooking</div>
         <div className="text-lg font-bold text-brand-700 dark:text-brand-300 tabular-nums">{fmtClock(schedule.start)}</div>
       </div>
     </div>
@@ -268,8 +268,8 @@ const RecipeView: React.FC<RecipeViewProps> = ({ meal, schedule, serveValue, onS
       <div className="flex flex-col gap-2 mt-4">
         {meal.uses?.map((u, k) => (
           <div key={`u${k}`} className="flex items-center gap-2 text-sm text-brand-600 bg-white border border-brand-200 rounded-xl px-3 py-2 dark:text-brand-300 dark:bg-brand-800 dark:border-brand-700">
-            <ArrowLeft className="w-4 h-4 text-brand-400 dark:text-brand-500 shrink-0" />
-            <span><span className="font-semibold">{u.item}</span>{u.from ? <span className="text-brand-400 dark:text-brand-500"> from {u.from}</span> : null}</span>
+            <ArrowLeft className="w-4 h-4 text-brand-400 dark:text-brand-450 shrink-0" />
+            <span><span className="font-semibold">{u.item}</span>{u.from ? <span className="text-brand-400 dark:text-brand-450"> from {u.from}</span> : null}</span>
           </div>
         ))}
         {meal.saves?.map((s, k) => (
@@ -284,7 +284,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({ meal, schedule, serveValue, onS
     {/* Ingredients */}
     {meal.ingredients?.length > 0 && (
       <section className="mt-6">
-        <h3 className="text-xs font-bold uppercase tracking-widest text-brand-400 dark:text-brand-500 mb-3">Mise en place</h3>
+        <h3 className="text-xs font-bold uppercase tracking-widest text-brand-400 dark:text-brand-450 mb-3">Mise en place</h3>
         <ul className="space-y-1.5">
           {meal.ingredients.map((ing, i) => (
             <li key={i} className="text-sm text-brand-700 dark:text-brand-300 flex items-baseline gap-2">
@@ -298,7 +298,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({ meal, schedule, serveValue, onS
 
     {/* Steps */}
     <section className="mt-6">
-      <h3 className="text-xs font-bold uppercase tracking-widest text-brand-400 dark:text-brand-500 mb-3">Cook in order</h3>
+      <h3 className="text-xs font-bold uppercase tracking-widest text-brand-400 dark:text-brand-450 mb-3">Cook in order</h3>
       <div className="space-y-3">
         {schedule.steps.map((s, i) => (
           <StepRow key={i} step={s} />
@@ -346,7 +346,7 @@ const StepRow: React.FC<{ step: ScheduledStep }> = ({ step }) => (
   <div className="flex gap-3">
     <div className="w-14 shrink-0 text-right">
       <div className="text-sm font-bold text-brand-700 dark:text-brand-300 tabular-nums leading-tight">{fmtClock(step.when)}</div>
-      <div className="text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-500 mt-0.5">{step.phase === 'prep' ? `Prep ${step.label}` : `Step ${step.label}`}</div>
+      <div className="text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-450 mt-0.5">{step.phase === 'prep' ? `Prep ${step.label}` : `Step ${step.label}`}</div>
     </div>
     <div className="flex-1 min-w-0 pb-3 border-b border-brand-100 dark:border-brand-700">
       <h4 className="font-bold text-brand-900 dark:text-brand-100 leading-snug">{step.t}</h4>
@@ -392,12 +392,12 @@ const ShoppingView: React.FC<ShoppingViewProps> = ({ plan, checkedItems, onToggl
       {/* Summary */}
       <div className="rounded-2xl bg-white border border-brand-200 p-4 mb-4 flex items-end justify-between dark:bg-brand-800 dark:border-brand-700">
         <div>
-          <div className="text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-500">Estimated total</div>
+          <div className="text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-450">Estimated total</div>
           <div className="text-3xl font-bold text-brand-900 dark:text-brand-100 tabular-nums">{fmt(total)}</div>
         </div>
         <div className="text-right">
           <div className="text-sm font-bold text-brand-700 dark:text-brand-200 tabular-nums">{itemsLeft} left</div>
-          <div className="text-xxs text-brand-400 dark:text-brand-500 tabular-nums">{fmt(remaining)} to buy</div>
+          <div className="text-xxs text-brand-400 dark:text-brand-450 tabular-nums">{fmt(remaining)} to buy</div>
         </div>
       </div>
 
@@ -415,13 +415,13 @@ const ShoppingView: React.FC<ShoppingViewProps> = ({ plan, checkedItems, onToggl
               <div className="flex items-baseline justify-between px-1 mb-2">
                 <div>
                   <div className="font-bold text-brand-900 dark:text-brand-100">{group.name}</div>
-                  {group.why && <div className="text-xxs text-brand-400 dark:text-brand-500">{group.why}</div>}
+                  {group.why && <div className="text-xxs text-brand-400 dark:text-brand-450">{group.why}</div>}
                 </div>
                 <div className="text-sm font-bold text-brand-500 dark:text-brand-400 tabular-nums">{fmt(groupSubtotal)}</div>
               </div>
               {sections.map(sec => (
                 <div key={sec} className="mb-2">
-                  <div className="text-xxs font-bold uppercase tracking-widest text-brand-300 dark:text-brand-500 px-1 mb-1">{sec}</div>
+                  <div className="text-xxs font-bold uppercase tracking-widest text-brand-300 dark:text-brand-450 px-1 mb-1">{sec}</div>
                   <div className="rounded-2xl bg-white border border-brand-200 divide-y divide-brand-100 overflow-hidden dark:bg-brand-800 dark:border-brand-700 dark:divide-brand-700">
                     {group.items.filter(it => (it.sec || 'other').toLowerCase() === sec).map(it => {
                       const i = indexOf.get(it) ?? 0;
@@ -439,14 +439,14 @@ const ShoppingView: React.FC<ShoppingViewProps> = ({ plan, checkedItems, onToggl
                           )}>
                             {checked && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
                           </span>
-                          <span className={clsx('flex-1 min-w-0', checked && 'line-through text-brand-400 dark:text-brand-500')}>
+                          <span className={clsx('flex-1 min-w-0', checked && 'line-through text-brand-400 dark:text-brand-450')}>
                             <span className="text-sm font-semibold text-brand-800 dark:text-brand-200">{it.n}</span>
-                            {it.q && <span className="text-xs text-brand-400 dark:text-brand-500 ml-1.5">{it.q}</span>}
-                            {it.staple && <span className="ml-1.5 text-xxs font-bold text-brand-400 dark:text-brand-500">staple</span>}
-                            {it.note && <span className="block text-xxs text-brand-400 dark:text-brand-500">{it.note}</span>}
+                            {it.q && <span className="text-xs text-brand-400 dark:text-brand-450 ml-1.5">{it.q}</span>}
+                            {it.staple && <span className="ml-1.5 text-xxs font-bold text-brand-400 dark:text-brand-450">staple</span>}
+                            {it.note && <span className="block text-xxs text-brand-400 dark:text-brand-450">{it.note}</span>}
                           </span>
                           {typeof it.p === 'number' && (
-                            <span className={clsx('text-sm font-bold tabular-nums shrink-0', checked ? 'text-brand-300 dark:text-brand-600' : 'text-brand-600 dark:text-brand-300')}>{fmt(it.p)}</span>
+                            <span className={clsx('text-sm font-bold tabular-nums shrink-0', checked ? 'text-brand-300 dark:text-brand-500' : 'text-brand-600 dark:text-brand-300')}>{fmt(it.p)}</span>
                           )}
                         </button>
                       );
@@ -458,7 +458,7 @@ const ShoppingView: React.FC<ShoppingViewProps> = ({ plan, checkedItems, onToggl
           );
         })}
         {allItems.length === 0 && (
-          <p className="text-center text-sm text-brand-400 dark:text-brand-500 py-10">No shopping items in this plan.</p>
+          <p className="text-center text-sm text-brand-400 dark:text-brand-450 py-10">No shopping items in this plan.</p>
         )}
       </div>
     </div>

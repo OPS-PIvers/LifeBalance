@@ -71,9 +71,9 @@ export const ActivityFeedWidget: React.FC = React.memo(() => {
                   {activity.title}
                 </p>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <p className="text-xxs font-medium text-brand-400 dark:text-brand-500 truncate max-w-[100px]">{activity.subtitle}</p>
+                  <p className="text-xxs font-medium text-brand-400 dark:text-brand-450 truncate max-w-[100px]">{activity.subtitle}</p>
                   <span className="w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
-                  <p className="text-xxs text-brand-400 dark:text-brand-500 font-medium">
+                  <p className="text-xxs text-brand-400 dark:text-brand-450 font-medium">
                     {formatDistanceToNow(activity.timestamp, { addSuffix: true })}
                   </p>
                 </div>

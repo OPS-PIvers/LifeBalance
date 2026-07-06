@@ -94,7 +94,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
 
   const buttonClasses = cn(
     "relative flex items-center justify-center w-14 h-14 rounded-card transition-colors duration-(--duration-fast) ease-(--ease-standard) z-10",
-    !isActive && "bg-brand-100 dark:bg-brand-700 border border-brand-200 dark:border-brand-600 text-brand-400 dark:text-brand-500 group-hover/card:border-brand-300 dark:group-hover/card:border-brand-500 group-hover/card:bg-brand-200/60 dark:group-hover/card:bg-brand-600",
+    !isActive && "bg-brand-100 dark:bg-brand-700 border border-brand-200 dark:border-brand-600 text-brand-400 dark:text-brand-450 group-hover/card:border-brand-300 dark:group-hover/card:border-brand-500 group-hover/card:bg-brand-200/60 dark:group-hover/card:bg-brand-600",
     isActive && isPositive && "bg-money-pos text-white border-0",
     isActive && !isPositive && "bg-money-neg text-white border-0",
     // Threshold visual overrides — in-progress positive threshold uses an evergreen tint
@@ -189,7 +189,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
                  e.stopPropagation();
                  resetHabit(habit.id);
               }}
-              className="absolute -top-2 -right-2 p-2 -m-2 bg-white dark:bg-brand-700 border border-brand-200 dark:border-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-brand-400 dark:text-brand-300 active:scale-90 hover:bg-money-bgNeg dark:hover:bg-money-neg/20 hover:text-money-neg hover:border-money-neg/30 transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-1 focus:ring-money-neg/50 pointer-events-auto"
+              className="absolute -top-2 -right-2 p-2 -m-2 bg-white dark:bg-brand-700 border border-brand-200 dark:border-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-brand-400 dark:text-brand-300 active:scale-90 hover:bg-money-bgNeg dark:hover:bg-money-neg/20 hover:text-money-neg dark:hover:text-money-negDark hover:border-money-neg/30 transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-1 focus:ring-money-neg/50 pointer-events-auto"
               aria-label="Reset habit progress"
               style={{ zIndex: 20 }}
             >
@@ -210,7 +210,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
             {/* Context Menu Trigger & Drag Handle */}
             <div className="flex items-center gap-1 -mr-2 relative" style={{ zIndex: 3 }}>
               {dragHandle && (
-                <div className="text-brand-300 dark:text-brand-500 hover:text-brand-500 dark:hover:text-brand-300 cursor-grab active:cursor-grabbing p-1 pointer-events-auto">
+                <div className="text-brand-300 dark:text-brand-450 hover:text-brand-500 dark:hover:text-brand-300 cursor-grab active:cursor-grabbing p-1 pointer-events-auto">
                   {dragHandle}
                 </div>
               )}
@@ -219,7 +219,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
                   e.stopPropagation();
                   setIsMenuOpen(!isMenuOpen);
                 }}
-                className="p-2 -m-1 text-brand-300 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 rounded-full hover:bg-brand-100 dark:hover:bg-brand-700/50 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 pointer-events-auto"
+                className="p-2 -m-1 text-brand-300 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300 rounded-full hover:bg-brand-100 dark:hover:bg-brand-700/50 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 pointer-events-auto"
                 aria-label="Habit options menu"
                 aria-haspopup="menu"
                 aria-expanded={isMenuOpen}

@@ -82,7 +82,7 @@ const HabitsInsightsCharts: React.FC = () => {
         <h3 className="font-display text-sm font-semibold text-brand-800 dark:text-brand-100 mb-1">
           Effort vs. spending
         </h3>
-        <p className="text-xs text-brand-400 dark:text-brand-500 mb-4">
+        <p className="text-xs text-brand-400 dark:text-brand-450 mb-4">
           Daily points earned against money spent, last 14 days.
         </p>
         <div className="h-64">
@@ -129,7 +129,7 @@ const HabitsInsightsCharts: React.FC = () => {
         <h3 className="font-display text-sm font-semibold text-brand-800 dark:text-brand-100 mb-1">
           This week vs. last
         </h3>
-        <p className="text-xs text-brand-400 dark:text-brand-500 mb-4">
+        <p className="text-xs text-brand-400 dark:text-brand-450 mb-4">
           Daily points compared to the same day last week.
         </p>
         <div className="h-64">
@@ -153,7 +153,7 @@ const HabitsInsightsCharts: React.FC = () => {
         <h3 className="font-display text-sm font-semibold text-brand-800 dark:text-brand-100 mb-2">
           Category balance
         </h3>
-        <p className="text-xs text-brand-400 dark:text-brand-500 mb-4">
+        <p className="text-xs text-brand-400 dark:text-brand-450 mb-4">
           Where your points came from over the last 90 days.
         </p>
         <div className="h-64">
@@ -186,7 +186,7 @@ const HabitsInsightsCharts: React.FC = () => {
         <h3 className="font-display text-sm font-semibold text-brand-800 dark:text-brand-100 mb-1">
           Consistency heatmap
         </h3>
-        <p className="text-xs text-brand-400 dark:text-brand-500 mb-5">
+        <p className="text-xs text-brand-400 dark:text-brand-450 mb-5">
           Last 90 days · {totalCompletions} completions.
         </p>
 
@@ -206,7 +206,7 @@ const HabitsInsightsCharts: React.FC = () => {
           ))}
         </div>
 
-        <div className="flex items-center justify-end gap-2 mt-4 text-xxs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wide">
+        <div className="flex items-center justify-end gap-2 mt-4 text-xxs font-bold text-brand-400 dark:text-brand-450 uppercase tracking-wide">
           <span>Less</span>
           <div className="flex gap-1">
             {HEATMAP_RAMP.map((color, i) => (

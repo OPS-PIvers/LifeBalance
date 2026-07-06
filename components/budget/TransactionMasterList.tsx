@@ -393,7 +393,7 @@ const TransactionMasterList: React.FC = () => {
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => setSearchTerm('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 h-auto p-0 hover:bg-transparent shadow-none"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300 h-auto p-0 hover:bg-transparent shadow-none"
               >
                 <X size={16} />
               </Button>
@@ -497,12 +497,12 @@ const TransactionMasterList: React.FC = () => {
         defaultOpen={true}
       >
         <StatGroup>
-          <Stat label="Income" value={`+${fmt(summary.income)}`} valueClassName="text-money-pos" />
-          <Stat label="Expense" value={`-${fmt(summary.expense)}`} valueClassName="text-money-neg" />
+          <Stat label="Income" value={`+${fmt(summary.income)}`} valueClassName="text-money-pos dark:text-money-posDark" />
+          <Stat label="Expense" value={`-${fmt(summary.expense)}`} valueClassName="text-money-neg dark:text-money-negDark" />
           <Stat
             label="Net"
             value={`${net >= 0 ? '+' : ''}${fmt(net)}`}
-            valueClassName={net >= 0 ? 'text-money-pos' : 'text-money-neg'}
+            valueClassName={net >= 0 ? 'text-money-pos dark:text-money-posDark' : 'text-money-neg dark:text-money-negDark'}
           />
           <Stat label="Count" value={summary.count} />
         </StatGroup>
@@ -516,7 +516,7 @@ const TransactionMasterList: React.FC = () => {
             onClick={handleSelectAll}
             className="flex items-center gap-2 font-bold hover:no-underline"
           >
-            <CheckSquare size={16} className={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0 ? 'text-brand-600 dark:text-brand-300' : 'text-brand-300 dark:text-brand-600'} />
+            <CheckSquare size={16} className={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0 ? 'text-brand-600 dark:text-brand-300' : 'text-brand-300 dark:text-brand-500'} />
             Select All ({filteredTransactions.length})
           </Button>
           <span className="text-xs">{selectedIds.size} selected</span>
@@ -675,7 +675,7 @@ const TransactionMasterList: React.FC = () => {
               variant="ghost-inverted"
               onClick={() => setShowBatchDeleteConfirm(true)}
               disabled={isBatchProcessing}
-              className="flex-col h-auto gap-0.5 text-money-negDark hover:text-money-neg hover:bg-white/10 rounded-btn"
+              className="flex-col h-auto gap-0.5 text-money-negDark hover:text-money-neg dark:hover:text-money-negDark hover:bg-white/10 rounded-btn"
             >
               <Trash2 size={18} />
               <span className="text-xxs font-medium">Delete</span>

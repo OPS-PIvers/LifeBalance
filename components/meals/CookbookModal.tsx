@@ -117,7 +117,7 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
+            className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors dark:text-brand-450 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
           >
             <X size={20} />
           </button>
@@ -158,10 +158,10 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
                         aria-controls="cookbook-tags-panel"
                         className={cn(FIELD_BASE, "flex items-center justify-between gap-2 text-left text-sm bg-white dark:bg-brand-700/50")}
                     >
-                        <span className={cn("truncate", selectedTags.length === 0 && "text-brand-400 dark:text-brand-500")}>
+                        <span className={cn("truncate", selectedTags.length === 0 && "text-brand-400 dark:text-brand-450")}>
                             {selectedTags.length > 0 ? `${selectedTags.length} tag${selectedTags.length === 1 ? '' : 's'}` : 'All tags'}
                         </span>
-                        <ChevronDown size={20} className={cn("shrink-0 text-brand-400 dark:text-brand-500 transition-transform", tagsOpen && "rotate-180")} />
+                        <ChevronDown size={20} className={cn("shrink-0 text-brand-400 dark:text-brand-450 transition-transform", tagsOpen && "rotate-180")} />
                     </button>
                 </div>
              )}
@@ -206,7 +206,7 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
         {/* List (single Drawer scroll container) */}
         <div className="p-4">
           {filteredMeals.length === 0 ? (
-            <div className="text-center py-12 text-brand-400 dark:text-brand-500">
+            <div className="text-center py-12 text-brand-400 dark:text-brand-450">
                 <p>No matching recipes found.</p>
                 {(searchTerm || selectedTags.length > 0) && (
                     <button
@@ -234,7 +234,7 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
                                     </div>
                                 ) : null}
                                 {meal.lastCooked && (
-                                    <div className="text-xs text-brand-400 dark:text-brand-500">
+                                    <div className="text-xs text-brand-400 dark:text-brand-450">
                                         Last: {format(parseISO(meal.lastCooked), 'MMM d, yyyy')}
                                     </div>
                                 )}
@@ -243,18 +243,18 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
                                         {meal.tags.slice(0, 2).map(t => (
                                             <Badge key={t} variant="neutral" size="sm">{t}</Badge>
                                         ))}
-                                        {meal.tags.length > 2 && <span className="text-xxs text-brand-400 dark:text-brand-500">+{meal.tags.length - 2}</span>}
+                                        {meal.tags.length > 2 && <span className="text-xxs text-brand-400 dark:text-brand-450">+{meal.tags.length - 2}</span>}
                                     </div>
                                 )}
                             </div>
                         </div>
-                        <ChevronRight className="w-5 h-5 shrink-0 text-brand-300 group-hover:text-brand-400 transition-colors dark:text-brand-600 dark:group-hover:text-brand-400" />
+                        <ChevronRight className="w-5 h-5 shrink-0 text-brand-300 group-hover:text-brand-400 transition-colors dark:text-brand-500 dark:group-hover:text-brand-400" />
                     </button>
                     <button
                         type="button"
                         aria-label="Clone as New Meal"
                         onClick={() => onClone(meal)}
-                        className="shrink-0 p-2.5 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
+                        className="shrink-0 p-2.5 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-450 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
                         title="Clone as New Meal"
                     >
                         <Copy className="w-5 h-5" />

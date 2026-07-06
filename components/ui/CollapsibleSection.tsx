@@ -93,7 +93,7 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
               size={16}
               aria-hidden="true"
               className={cn(
-                'shrink-0 text-brand-400 dark:text-brand-500 transition-transform duration-(--duration-base) ease-(--ease-standard)',
+                'shrink-0 text-brand-400 dark:text-brand-450 transition-transform duration-(--duration-base) ease-(--ease-standard)',
                 isOpen && 'rotate-180'
               )}
             />

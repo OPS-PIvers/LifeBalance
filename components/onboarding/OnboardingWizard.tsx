@@ -246,7 +246,7 @@ const OnboardingWizard: React.FC = () => {
         {step === 'balance' && (
           <div className="space-y-6">
             <div className="flex flex-col items-center text-center gap-3">
-              <div className="inline-flex items-center justify-center w-14 h-14 bg-money-pos/15 text-money-pos rounded-2xl">
+              <div className="inline-flex items-center justify-center w-14 h-14 bg-money-pos/15 text-money-pos dark:text-money-posDark rounded-2xl">
                 <Wallet className="w-7 h-7" aria-hidden="true" />
               </div>
               <p className="text-brand-600 dark:text-brand-300 text-sm">
@@ -324,7 +324,7 @@ const OnboardingWizard: React.FC = () => {
                       <span className="block font-medium text-sm text-brand-800 dark:text-brand-100 truncate">
                         {preset.title}
                       </span>
-                      <span className="block text-xxs text-brand-400 dark:text-brand-500">{preset.category} · {preset.period}</span>
+                      <span className="block text-xxs text-brand-400 dark:text-brand-450">{preset.category} · {preset.period}</span>
                     </span>
                   </label>
                 );
@@ -357,7 +357,7 @@ const OnboardingWizard: React.FC = () => {
             {inviteCode ? (
               <HouseholdInviteCard inviteCode={inviteCode} />
             ) : (
-              <p className="text-center text-sm text-brand-400 dark:text-brand-500">
+              <p className="text-center text-sm text-brand-400 dark:text-brand-450">
                 Your invite code will be available in Settings.
               </p>
             )}
@@ -399,7 +399,7 @@ const OnboardingWizard: React.FC = () => {
               type="button"
               onClick={finish}
               disabled={isSubmitting}
-              className="font-medium text-brand-400 dark:text-brand-500 hover:text-accent-600 dark:hover:text-accent-300 hover:no-underline"
+              className="font-medium text-brand-400 dark:text-brand-450 hover:text-accent-600 dark:hover:text-accent-300 hover:no-underline"
             >
               Skip setup
             </Button>

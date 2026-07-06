@@ -109,7 +109,7 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
       confirmVariant="destructive"
     />
     <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-brand-200 dark:border-brand-700 mt-2">
-      <div className="text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider flex items-center gap-1 mr-1">
+      <div className="text-xs font-bold text-brand-400 dark:text-brand-450 uppercase tracking-wider flex items-center gap-1 mr-1">
         <Bookmark size={12} />
         <span>Views</span>
       </div>
@@ -133,7 +133,7 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
           <button
              type="button"
              onClick={(e) => handleDeleteView(view.id, e)}
-             className="pr-2 pl-1 py-1 rounded-r-full text-brand-300 dark:text-brand-500 hover:text-money-neg dark:hover:text-money-negDark hover:bg-money-bgNeg dark:hover:bg-money-neg/15 transition-colors focus:outline-hidden focus:ring-2 focus:ring-money-neg focus:ring-offset-1"
+             className="pr-2 pl-1 py-1 rounded-r-full text-brand-300 dark:text-brand-450 hover:text-money-neg dark:hover:text-money-negDark hover:bg-money-bgNeg dark:hover:bg-money-neg/15 transition-colors focus:outline-hidden focus:ring-2 focus:ring-money-neg focus:ring-offset-1"
              aria-label={`Delete view ${view.name}`}
           >
             <X size={10} />
@@ -148,7 +148,7 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
             value={newViewName}
             onChange={(e) => setNewViewName(e.target.value)}
             placeholder="View Name..."
-            className="w-32 px-2 py-1 text-xs border border-brand-300 dark:border-brand-700 dark:bg-brand-800 dark:text-brand-100 dark:placeholder:text-brand-500 rounded-btn focus:outline-hidden focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500"
+            className="w-32 px-2 py-1 text-xs border border-brand-300 dark:border-brand-700 dark:bg-brand-800 dark:text-brand-100 dark:placeholder:text-brand-450 rounded-btn focus:outline-hidden focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500"
             autoFocus
             onBlur={() => !newViewName && setIsSaving(false)}
           />
@@ -163,7 +163,7 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
           <button
             type="button"
             onClick={() => setIsSaving(false)}
-            className="p-1 text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300"
+            className="p-1 text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300"
             aria-label="Cancel save view"
           >
             <X size={12} />

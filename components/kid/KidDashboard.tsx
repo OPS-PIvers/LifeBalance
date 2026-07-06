@@ -419,7 +419,7 @@ const KidDashboard: React.FC = () => {
                 aria-invalid={pinError}
               />
               {pinError && (
-                <p className="text-center text-sm font-semibold text-money-neg">
+                <p className="text-center text-sm font-semibold text-money-neg dark:text-money-negDark">
                   That PIN isn&apos;t right — try again.
                 </p>
               )}

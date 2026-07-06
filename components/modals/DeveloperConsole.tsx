@@ -307,7 +307,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                   </form>
 
                   {testers.length === 0 && (
-                    <div className="text-center py-12 text-brand-400 dark:text-brand-500">No beta testers yet.</div>
+                    <div className="text-center py-12 text-brand-400 dark:text-brand-450">No beta testers yet.</div>
                   )}
 
                   {/* Mobile: stacked cards (no cramped horizontal table). */}
@@ -330,7 +330,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                           </button>
                           <button
                             onClick={() => deleteTester(t.id)}
-                            className="flex h-11 w-11 items-center justify-center shrink-0 rounded-lg text-money-neg hover:bg-money-neg/10 active:scale-[0.98] transition"
+                            className="flex h-11 w-11 items-center justify-center shrink-0 rounded-lg text-money-neg dark:text-money-negDark hover:bg-money-neg/10 active:scale-[0.98] transition"
                             aria-label={`Delete tester ${t.email}`}
                           >
                             <Trash2 size={18} />
@@ -365,7 +365,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                               <button onClick={() => toggleTesterStatus(t.id, t.status)} className="text-habit-blue hover:underline text-xs font-bold">
                                 {t.status === 'active' ? 'REVOKE' : 'ACTIVATE'}
                               </button>
-                              <button onClick={() => deleteTester(t.id)} className="text-money-neg hover:bg-money-neg/10 p-1 rounded-sm ml-2" aria-label={`Delete tester ${t.email}`}>
+                              <button onClick={() => deleteTester(t.id)} className="text-money-neg dark:text-money-negDark hover:bg-money-neg/10 p-1 rounded-sm ml-2" aria-label={`Delete tester ${t.email}`}>
                                 <Trash2 size={16} />
                               </button>
                             </td>
@@ -398,7 +398,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                                     <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                                         <div className="min-w-0 sm:flex-1">
                                             <p className="font-bold text-brand-800 dark:text-brand-100 truncate">{h.name}</p>
-                                            <p className="text-xs text-brand-400 dark:text-brand-500 font-mono truncate">{h.id}</p>
+                                            <p className="text-xs text-brand-400 dark:text-brand-450 font-mono truncate">{h.id}</p>
                                             <p className="text-xs text-brand-500 dark:text-brand-400">Last Reset: {h.aiUsage?.lastResetDate || 'Never'}</p>
                                         </div>
                                         <div className="flex items-center gap-3 w-full sm:w-1/2 shrink-0">
@@ -408,7 +408,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                                                     style={{ width: `${percentage}%` }}
                                                 />
                                             </div>
-                                            <span className={`text-sm font-mono font-bold w-12 text-right shrink-0 ${percentage > 90 ? 'text-money-neg' : 'text-brand-600 dark:text-brand-300'}`}>
+                                            <span className={`text-sm font-mono font-bold w-12 text-right shrink-0 ${percentage > 90 ? 'text-money-neg dark:text-money-negDark' : 'text-brand-600 dark:text-brand-300'}`}>
                                                 {usage}/20
                                             </span>
                                         </div>
@@ -417,7 +417,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                             );
                         })}
                         {households.length === 0 && (
-                            <div className="text-center py-12 text-brand-400 dark:text-brand-500">No households found.</div>
+                            <div className="text-center py-12 text-brand-400 dark:text-brand-450">No households found.</div>
                         )}
                     </div>
                   </div>
@@ -431,7 +431,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                             <div className="flex justify-between items-start gap-2 mb-2">
                                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
                                     <span className="text-xs font-mono bg-brand-100/50 dark:bg-brand-700/30 px-2 py-1 rounded-sm text-brand-600 dark:text-brand-300 font-bold">{report.version}</span>
-                                    <span className="text-xs text-brand-400 dark:text-brand-500">{new Date(report.timestamp).toLocaleString()}</span>
+                                    <span className="text-xs text-brand-400 dark:text-brand-450">{new Date(report.timestamp).toLocaleString()}</span>
                                 </div>
                                 <button onClick={() => copyReport(report)} className="flex h-11 w-11 items-center justify-center shrink-0 -mr-1 -mt-1 text-brand-600 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-700/50 rounded-lg active:scale-[0.98] transition" title="Copy JSON" aria-label="Copy report as JSON">
                                     <Copy size={18} />
@@ -444,14 +444,14 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                                 <span className="break-all">HID: {report.householdId}</span>
                             </div>
                             {report.errorContext && (
-                                <div className="mt-2 bg-money-bgNeg dark:bg-money-neg/15 p-2 rounded-sm text-xs text-money-neg font-mono overflow-x-auto border border-money-neg/30">
+                                <div className="mt-2 bg-money-bgNeg dark:bg-money-neg/15 p-2 rounded-sm text-xs text-money-neg dark:text-money-negDark font-mono overflow-x-auto border border-money-neg/30">
                                     <strong>Error Context:</strong><br/>
                                     {report.errorContext}
                                 </div>
                             )}
                         </div>
                     ))}
-                    {reports.length === 0 && <div className="text-center py-12 text-brand-400 dark:text-brand-500">No feedback reports found.</div>}
+                    {reports.length === 0 && <div className="text-center py-12 text-brand-400 dark:text-brand-450">No feedback reports found.</div>}
                 </div>
               )}
 

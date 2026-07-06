@@ -96,7 +96,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, onSendFeedba
       {/* Profiles section — only visible when Kid Mode is enabled (Plan 080, dormant by default) */}
       {kidModeEnabled && (
         <div className="p-2 border-b border-brand-200 dark:border-brand-700">
-          <div className="px-3 py-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-brand-400 dark:text-brand-500">
+          <div className="px-3 py-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-brand-400 dark:text-brand-450">
             <Users className="w-3.5 h-3.5" />
             Profiles
           </div>

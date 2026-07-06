@@ -170,7 +170,7 @@ const RewardManagerPanel: React.FC<RewardManagerPanelProps> = ({ kids, kidModeEn
                   type="button"
                   onClick={() => setPendingDelete(reward)}
                   aria-label={`Delete ${reward.title}`}
-                  className="rounded-btn p-2 text-money-neg hover:bg-money-bgNeg dark:hover:bg-money-neg/15 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-money-neg/40"
+                  className="rounded-btn p-2 text-money-neg dark:text-money-negDark hover:bg-money-bgNeg dark:hover:bg-money-neg/15 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-money-neg/40"
                 >
                   <Trash2 size={16} />
                 </button>

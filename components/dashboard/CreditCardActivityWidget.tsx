@@ -68,7 +68,7 @@ export const CreditCardActivityWidget: React.FC<CreditCardActivityWidgetProps> =
     <Section
       title={
         <span className="flex items-center gap-2">
-          <CreditCard size={14} className="text-money-neg" aria-hidden="true" />
+          <CreditCard size={14} className="text-money-neg dark:text-money-negDark" aria-hidden="true" />
           Credit card activity
         </span>
       }
@@ -93,16 +93,16 @@ export const CreditCardActivityWidget: React.FC<CreditCardActivityWidgetProps> =
                     <span className="block truncate text-sm font-semibold text-brand-900 dark:text-brand-100">
                       {account.name}
                     </span>
-                    <span className="block text-xs text-brand-400 dark:text-brand-500">
+                    <span className="block text-xs text-brand-400 dark:text-brand-450">
                       Balance{' '}
-                      <span className="font-mono tabular-nums font-semibold text-money-neg">{fmt(balance)}</span>
+                      <span className="font-mono tabular-nums font-semibold text-money-neg dark:text-money-negDark">{fmt(balance)}</span>
                     </span>
                   </span>
                   <ChevronDown
                     size={16}
                     aria-hidden="true"
                     className={cn(
-                      'shrink-0 text-brand-400 dark:text-brand-500 transition-transform duration-(--duration-base) ease-(--ease-standard)',
+                      'shrink-0 text-brand-400 dark:text-brand-450 transition-transform duration-(--duration-base) ease-(--ease-standard)',
                       isExpanded && 'rotate-180'
                     )}
                   />
@@ -110,7 +110,7 @@ export const CreditCardActivityWidget: React.FC<CreditCardActivityWidgetProps> =
                 <button
                   type="button"
                   onClick={() => onPayDown(account.id)}
-                  className="shrink-0 inline-flex items-center gap-1 rounded-full bg-money-bgPos dark:bg-money-pos/15 px-3 py-1.5 text-xs font-semibold text-money-pos border border-money-pos/30 active:scale-95 transition-transform duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-money-pos/40"
+                  className="shrink-0 inline-flex items-center gap-1 rounded-full bg-money-bgPos dark:bg-money-pos/15 px-3 py-1.5 text-xs font-semibold text-money-pos dark:text-money-posDark border border-money-pos/30 active:scale-95 transition-transform duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-money-pos/40"
                 >
                   <ArrowDownCircle size={14} aria-hidden="true" />
                   Pay down
@@ -123,16 +123,16 @@ export const CreditCardActivityWidget: React.FC<CreditCardActivityWidgetProps> =
                   className="flex items-center justify-between gap-2 text-xs animate-in fade-in slide-in-from-top-2 duration-(--duration-base)"
                 >
                   <div className="flex items-center gap-1">
-                    <span className="text-brand-400 dark:text-brand-500">Charged</span>
-                    <span className="font-mono tabular-nums font-semibold text-money-neg">+{fmt(charges)}</span>
+                    <span className="text-brand-400 dark:text-brand-450">Charged</span>
+                    <span className="font-mono tabular-nums font-semibold text-money-neg dark:text-money-negDark">+{fmt(charges)}</span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <span className="text-brand-400 dark:text-brand-500">Paid</span>
-                    <span className="font-mono tabular-nums font-semibold text-money-pos">-{fmt(payments)}</span>
+                    <span className="text-brand-400 dark:text-brand-450">Paid</span>
+                    <span className="font-mono tabular-nums font-semibold text-money-pos dark:text-money-posDark">-{fmt(payments)}</span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <span className="text-brand-400 dark:text-brand-500">Net</span>
-                    <span className={`font-mono tabular-nums font-bold ${net > 0 ? 'text-money-neg' : net < 0 ? 'text-money-pos' : 'text-brand-500 dark:text-brand-400'}`}>
+                    <span className="text-brand-400 dark:text-brand-450">Net</span>
+                    <span className={`font-mono tabular-nums font-bold ${net > 0 ? 'text-money-neg dark:text-money-negDark' : net < 0 ? 'text-money-pos dark:text-money-posDark' : 'text-brand-500 dark:text-brand-400'}`}>
                       {net > 0 ? '+' : net < 0 ? '-' : ''}{fmt(Math.abs(net))}
                     </span>
                   </div>

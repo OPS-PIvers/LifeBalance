@@ -298,8 +298,8 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
                                 onClick={() => toggleDate(item, dateStr)}
                                 className={`flex flex-col items-center gap-1 p-2 rounded transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
                                     isCompleted
-                                        ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos'
-                                        : 'bg-brand-100 dark:bg-brand-700/50 text-brand-400 dark:text-brand-500 hover:bg-brand-200 dark:hover:bg-brand-700'
+                                        ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos dark:text-money-posDark'
+                                        : 'bg-brand-100 dark:bg-brand-700/50 text-brand-400 dark:text-brand-450 hover:bg-brand-200 dark:hover:bg-brand-700'
                                 }`}
                             >
                                 <span className="text-xs font-bold">{dayLabel}</span>
@@ -335,7 +335,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
                         <Plus size={16} />
                     </Button>
                 </div>
-                <p className="text-xs text-brand-400 dark:text-brand-500 mt-2">Adjusting this only affects lifetime stats, not points.</p>
+                <p className="text-xs text-brand-400 dark:text-brand-450 mt-2">Adjusting this only affects lifetime stats, not points.</p>
 
                 <p className="text-sm text-brand-600 dark:text-brand-300 mb-2 mt-4">Total Lifetime Completions:</p>
                 <div className="flex items-center gap-3">
@@ -343,7 +343,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
                    {item.totalCount}
                    </span>
                 </div>
-                <p className="text-xs text-brand-400 dark:text-brand-500 mt-2">
+                <p className="text-xs text-brand-400 dark:text-brand-450 mt-2">
                    This shows lifetime completion count. Points displayed above are estimates based on base value.
                 </p>
              </div>
@@ -384,14 +384,14 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
                         <div className="flex items-center gap-3 shrink-0">
                             <div className="text-right">
                                 <span className="block font-mono font-bold tabular-nums text-warm-600 dark:text-warm-300">+{item.calculatedPoints}</span>
-                                <span className="text-xxs text-brand-400 dark:text-brand-500">points</span>
+                                <span className="text-xxs text-brand-400 dark:text-brand-450">points</span>
                             </div>
                             <button
                                 onClick={() => handleEdit(item.id)}
                                 className={`p-2 rounded-full transition-colors ${
                                     isEditing
                                         ? 'bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300'
-                                        : 'text-brand-400 dark:text-brand-500 hover:bg-brand-100 dark:hover:bg-brand-700/50'
+                                        : 'text-brand-400 dark:text-brand-450 hover:bg-brand-100 dark:hover:bg-brand-700/50'
                                 }`}
                                 aria-label={`Edit ${item.title}`}
                             >
@@ -412,7 +412,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
           )}
       </div>
 
-      <div className="sticky bottom-0 p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-700/50 text-center text-xs text-brand-400 dark:text-brand-500">
+      <div className="sticky bottom-0 p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-700/50 text-center text-xs text-brand-400 dark:text-brand-450">
         {view === 'total' && "Total points are estimated from lifetime counts."}
         {view === 'weekly' && "Points are calculated based on completed days this week."}
         {view === 'daily' && "Points earned today."}

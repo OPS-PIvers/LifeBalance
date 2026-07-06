@@ -65,7 +65,7 @@ export const CaptureMagicAction: React.FC<CaptureMagicActionProps> = ({
           value={magicInput}
           onChange={(e) => setMagicInput(e.target.value)}
           placeholder="Spent $20 on Pizza..."
-          className="flex-1 bg-white dark:bg-brand-800 border border-warm-200 dark:border-warm-800/60 outline-hidden text-brand-800 dark:text-brand-100 placeholder:text-brand-400 dark:placeholder:text-brand-500 font-medium rounded-btn px-3 py-2 focus:border-warm-500 focus:ring-2 focus:ring-warm-500/30 transition-all duration-(--duration-fast) ease-(--ease-standard)"
+          className="flex-1 bg-white dark:bg-brand-800 border border-warm-200 dark:border-warm-800/60 outline-hidden text-brand-800 dark:text-brand-100 placeholder:text-brand-400 dark:placeholder:text-brand-450 font-medium rounded-btn px-3 py-2 focus:border-warm-500 focus:ring-2 focus:ring-warm-500/30 transition-all duration-(--duration-fast) ease-(--ease-standard)"
           disabled={magicLoading}
         />
         <button

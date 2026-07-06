@@ -102,7 +102,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
         className="absolute inset-0 flex items-center justify-between px-4 z-0"
         style={{ backgroundColor: bgColor }}
       >
-        <motion.div style={{ opacity: rightIconOpacity, scale: rightIconScale }} className="flex items-center gap-2 text-money-pos font-bold">
+        <motion.div style={{ opacity: rightIconOpacity, scale: rightIconScale }} className="flex items-center gap-2 text-money-pos dark:text-money-posDark font-bold">
            <Check size={20} />
            <span>Purchased</span>
         </motion.div>
@@ -113,7 +113,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                 <RotateCcw size={20} /> Uncheck
              </span>
            ) : (
-             <span className="flex items-center gap-2 text-money-neg">
+             <span className="flex items-center gap-2 text-money-neg dark:text-money-negDark">
                 <Trash2 size={20} /> Delete
              </span>
            )}
@@ -160,7 +160,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                         e.preventDefault();
                     }
                 }}
-                className="touch-none cursor-grab active:cursor-grabbing -ml-1 p-1 text-brand-300 hover:text-brand-600 dark:text-brand-600 dark:hover:text-brand-300 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-sm shrink-0"
+                className="touch-none cursor-grab active:cursor-grabbing -ml-1 p-1 text-brand-300 hover:text-brand-600 dark:text-brand-500 dark:hover:text-brand-300 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-sm shrink-0"
                 aria-label={`Drag to reorder ${item.name}`}
             >
                 <GripVertical size={16} />
@@ -232,7 +232,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
         {/* Edit Action */}
         <button
             onClick={() => onEdit(item)}
-            className="shrink-0 p-2 text-brand-300 hover:text-brand-600 rounded-full hover:bg-brand-100 transition-colors dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
+            className="shrink-0 p-2 text-brand-300 hover:text-brand-600 rounded-full hover:bg-brand-100 transition-colors dark:text-brand-450 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
             aria-label={`Edit ${item.name}`}
         >
             <Edit2 size={16} />

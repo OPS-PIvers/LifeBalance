@@ -50,7 +50,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       dashed: 'bg-transparent border border-dashed border-brand-300 text-brand-500 font-semibold hover:bg-brand-50 hover:border-brand-400 hover:text-brand-600 shadow-none dark:border-brand-600 dark:text-brand-400 dark:hover:bg-brand-700/50 dark:hover:border-brand-500 dark:hover:text-brand-300',
       subtle: 'bg-accent-50 text-accent-700 hover:bg-accent-100 border border-transparent hover:border-accent-200 dark:bg-accent-800/50 dark:text-accent-100 dark:hover:bg-accent-800/70 dark:hover:border-accent-700',
       'ghost-danger': 'bg-transparent text-money-neg hover:text-money-neg hover:bg-money-bgNeg dark:text-money-negDark dark:hover:text-money-negDark dark:hover:bg-money-neg/15',
-      'ghost-destructive': 'bg-transparent text-brand-400 hover:text-money-neg hover:bg-money-bgNeg dark:text-brand-500 dark:hover:text-money-negDark dark:hover:bg-money-neg/15',
+      'ghost-destructive': 'bg-transparent text-brand-400 hover:text-money-neg hover:bg-money-bgNeg dark:text-brand-450 dark:hover:text-money-negDark dark:hover:bg-money-neg/15',
       'ghost-brand': 'bg-transparent text-brand-400 hover:text-accent-600 active:text-accent-800 active:bg-accent-50 dark:text-brand-400 dark:hover:text-accent-300 dark:active:text-accent-200 dark:active:bg-accent-800/40',
       success: 'bg-money-pos text-white hover:brightness-95 shadow-btn-primary',
       warning: 'bg-warm-500 text-white hover:bg-warm-600 shadow-btn-primary',

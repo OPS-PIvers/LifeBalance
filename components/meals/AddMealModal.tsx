@@ -160,7 +160,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                 />
 
                 <div>
-                    <label id="meal-type-label" className="block text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider mb-2">Meal Type</label>
+                    <label id="meal-type-label" className="block text-xs font-bold text-brand-400 dark:text-brand-450 uppercase tracking-wider mb-2">Meal Type</label>
                     <SegmentedControl
                         name="Meal Type"
                         value={mealType}
@@ -185,19 +185,19 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                 >
                 <div className="space-y-5">
                 <div>
-                    <label htmlFor="meal-description" className="block text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider mb-2">Description</label>
+                    <label htmlFor="meal-description" className="block text-xs font-bold text-brand-400 dark:text-brand-450 uppercase tracking-wider mb-2">Description</label>
                     <textarea
                         id="meal-description"
                         value={currentMeal.description || ''}
                         onChange={e => setCurrentMeal({...currentMeal, description: e.target.value})}
-                        className="w-full p-3 bg-brand-50 rounded-xl focus:ring-2 focus:ring-accent-500/40 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden dark:bg-brand-700/40 dark:placeholder:text-brand-500 text-sm text-brand-700 dark:text-brand-200 leading-relaxed"
+                        className="w-full p-3 bg-brand-50 rounded-xl focus:ring-2 focus:ring-accent-500/40 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden dark:bg-brand-700/40 dark:placeholder:text-brand-450 text-sm text-brand-700 dark:text-brand-200 leading-relaxed"
                         rows={2}
                         placeholder="Add notes about preparation..."
                     />
                 </div>
 
                 <div>
-                    <label htmlFor="meal-instructions" className="block text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider mb-2">Instructions</label>
+                    <label htmlFor="meal-instructions" className="block text-xs font-bold text-brand-400 dark:text-brand-450 uppercase tracking-wider mb-2">Instructions</label>
                     <textarea
                         id="meal-instructions"
                         value={currentMeal.instructions?.join('\n') || ''}
@@ -210,7 +210,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                                     .filter(line => line.length > 0),
                             })
                         }
-                        className="w-full p-3 bg-brand-50 rounded-xl focus:ring-2 focus:ring-accent-500/40 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden dark:bg-brand-700/40 dark:placeholder:text-brand-500 text-sm font-mono text-brand-600 dark:text-brand-300"
+                        className="w-full p-3 bg-brand-50 rounded-xl focus:ring-2 focus:ring-accent-500/40 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden dark:bg-brand-700/40 dark:placeholder:text-brand-450 text-sm font-mono text-brand-600 dark:text-brand-300"
                         rows={4}
                         placeholder="Step 1...&#10;Step 2..."
                     />
@@ -226,7 +226,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
 
                 {/* Tags Section */}
                 <div>
-                    <label id="tags-label" className="block text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider mb-3">Tags</label>
+                    <label id="tags-label" className="block text-xs font-bold text-brand-400 dark:text-brand-450 uppercase tracking-wider mb-3">Tags</label>
 
                     {/* Common Tags */}
                     <div className="flex flex-wrap gap-2 mb-4" role="group" aria-labelledby="tags-label">
@@ -273,7 +273,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                                 onChange={e => setTagInput(e.target.value)}
                                 placeholder="Add custom tag..."
                                 aria-label="Add custom tag"
-                                className="w-full py-1.5 pl-3 pr-8 rounded-full bg-brand-50 border border-brand-200 text-base focus:border-accent-500 focus:ring-accent-500/40 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+                                className="w-full py-1.5 pl-3 pr-8 rounded-full bg-brand-50 border border-brand-200 text-base focus:border-accent-500 focus:ring-accent-500/40 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-450"
                                 onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
                             />
                             <button
@@ -292,7 +292,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
 
             {/* Ingredients Section */}
             <div>
-                  <label className="block text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider mb-3">Ingredients</label>
+                  <label className="block text-xs font-bold text-brand-400 dark:text-brand-450 uppercase tracking-wider mb-3">Ingredients</label>
 
                   {/* Current Ingredients List */}
                   {currentMeal.ingredients && currentMeal.ingredients.length > 0 && (
@@ -301,7 +301,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                               <Row key={`${ing.name}-${idx}`} dense className="justify-between">
                                   <div className="min-w-0 flex items-baseline gap-2">
                                       <span className="font-semibold text-brand-700 dark:text-brand-200 truncate">{ing.name}</span>
-                                      {ing.quantity && <span className="text-brand-400 dark:text-brand-500 text-xs shrink-0">{ing.quantity}</span>}
+                                      {ing.quantity && <span className="text-brand-400 dark:text-brand-450 text-xs shrink-0">{ing.quantity}</span>}
                                   </div>
                                   <Button
                                       variant="ghost-destructive"
@@ -323,13 +323,13 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
 
                   {/* Ingredient Entry — single lightly-tinted row, not a bordered card */}
                   <div className="bg-brand-50 dark:bg-brand-700/30 p-4 rounded-xl">
-                      <label htmlFor="ingredient-name" className="block text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider mb-2">Add Ingredient</label>
+                      <label htmlFor="ingredient-name" className="block text-xs font-bold text-brand-400 dark:text-brand-450 uppercase tracking-wider mb-2">Add Ingredient</label>
                       <div className="flex gap-2">
                           <input
                               id="ingredient-name"
                               type="text"
                               placeholder="Item name"
-                              className="flex-1 min-w-0 rounded-xl border-brand-200 bg-white text-base focus:border-accent-500 focus:ring-accent-500/40 outline-hidden p-2.5 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+                              className="flex-1 min-w-0 rounded-xl border-brand-200 bg-white text-base focus:border-accent-500 focus:ring-accent-500/40 outline-hidden p-2.5 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-450"
                               value={ingredientName}
                               onChange={(e) => setIngredientName(e.target.value)}
                               onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddIngredient())}
@@ -338,7 +338,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                               aria-label="Ingredient quantity"
                               type="text"
                               placeholder="Qty"
-                              className="w-20 rounded-xl border-brand-200 bg-white text-base focus:border-accent-500 focus:ring-accent-500/40 outline-hidden p-2.5 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+                              className="w-20 rounded-xl border-brand-200 bg-white text-base focus:border-accent-500 focus:ring-accent-500/40 outline-hidden p-2.5 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-450"
                               value={ingredientQty}
                               onChange={(e) => setIngredientQty(e.target.value)}
                               onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddIngredient())}
@@ -355,7 +355,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                           </Button>
                       </div>
                       {!currentMeal.ingredients?.length && (
-                          <p className="text-xxs text-brand-400 dark:text-brand-500 mt-2 pl-1">
+                          <p className="text-xxs text-brand-400 dark:text-brand-450 mt-2 pl-1">
                               Ingredients will be added to the shopping list when creating a new meal plan.
                           </p>
                       )}

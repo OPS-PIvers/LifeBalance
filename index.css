@@ -96,6 +96,11 @@
   --color-brand-200: #e3e0d8;
   --color-brand-300: #cbc7bb;
   --color-brand-400: #a8a399;
+  /* Dark-mode muted-text tier. brand-500 measures 3.56:1 on brand-800 cards
+     (fails WCAG AA 4.5:1), so dark muted/hint text uses this half-step instead:
+     4.95:1 on brand-800, 5.7:1 on brand-900, while staying visibly dimmer than
+     brand-400 secondary text. Dark-mode-only — light mode keeps brand-500. */
+  --color-brand-450: #94907f;
   --color-brand-500: #7c776c;
   --color-brand-600: #565249;
   --color-brand-700: #3a3731;

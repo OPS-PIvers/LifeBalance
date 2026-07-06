@@ -114,20 +114,20 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
           <span className={`w-3 h-3 rounded-full shrink-0 ${bucketColorClass(bucket.color)}`} aria-hidden="true" />
           <span className="font-semibold tracking-tight text-brand-900 dark:text-brand-100 text-base truncate">{bucket.name}</span>
           {transactionCount > 0 && (
-            <ChevronRight size={16} className="shrink-0 text-brand-300 dark:text-brand-600" aria-hidden="true" />
+            <ChevronRight size={16} className="shrink-0 text-brand-300 dark:text-brand-500" aria-hidden="true" />
           )}
         </button>
 
         <div className="flex items-center gap-2 shrink-0">
           <div className="text-sm font-medium flex flex-col items-end">
-            <div className={`flex items-center gap-1 ${isOverspent ? 'text-money-neg font-bold' : 'text-brand-700 dark:text-brand-200'}`}>
+            <div className={`flex items-center gap-1 ${isOverspent ? 'text-money-neg dark:text-money-negDark font-bold' : 'text-brand-700 dark:text-brand-200'}`}>
               <span className="font-mono tabular-nums tracking-tight font-bold" aria-label={`Verified spending: ${fmt(spent.verified)}`}>{fmt(spent.verified)}</span>
               {spent.pending > 0 && (
-                <span className="text-brand-400 dark:text-brand-500 font-mono text-xs">
+                <span className="text-brand-400 dark:text-brand-450 font-mono text-xs">
                   +{fmt(spent.pending)}
                 </span>
               )}
-              <span className="text-brand-300 dark:text-brand-600 font-light">/</span>
+              <span className="text-brand-300 dark:text-brand-500 font-light">/</span>
 
               {isEditingLimit ? (
                 <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
@@ -145,7 +145,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                     variant="ghost"
                     size="icon-sm"
                     onClick={handleSaveLimit}
-                    className="text-money-pos hover:bg-money-bgPos dark:hover:bg-money-pos/15"
+                    className="text-money-pos dark:text-money-posDark hover:bg-money-bgPos dark:hover:bg-money-pos/15"
                     aria-label="Save limit"
                   >
                     <Check size={14} />
@@ -166,7 +166,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                     }
                   }}
                   aria-label={`Edit limit for ${bucket.name}, currently ${fmt(bucket.limit, { decimals: 0 })}`}
-                  className="font-mono tabular-nums text-brand-400 dark:text-brand-500 border-b border-dashed border-brand-300 dark:border-brand-600 cursor-pointer hover:text-brand-600 dark:hover:text-brand-300 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-xs"
+                  className="font-mono tabular-nums text-brand-400 dark:text-brand-450 border-b border-dashed border-brand-300 dark:border-brand-600 cursor-pointer hover:text-brand-600 dark:hover:text-brand-300 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-xs"
                 >
                   {fmt(bucket.limit, { decimals: 0 })}
                 </button>
@@ -184,7 +184,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
             variant="ghost"
             size="icon-sm"
             onClick={() => onEditBucket(bucket)}
-            className="min-w-11 min-h-11 sm:min-w-0 sm:min-h-0 text-brand-300 dark:text-brand-600 hover:text-brand-600 dark:hover:text-brand-300"
+            className="min-w-11 min-h-11 sm:min-w-0 sm:min-h-0 text-brand-300 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300"
             aria-label={`Edit ${bucket.name} bucket`}
           >
             <Pencil size={14} />
@@ -203,7 +203,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
       {/* Overspend line — plain typography, no boxed alert */}
       {isOverspent && (
         <div className="flex items-center justify-between">
-          <span className="flex items-center gap-1.5 text-money-neg text-xs font-bold">
+          <span className="flex items-center gap-1.5 text-money-neg dark:text-money-negDark text-xs font-bold">
             <AlertTriangle size={14} />
             Over by {fmt(totalCommitted - bucket.limit)}
           </span>
@@ -211,7 +211,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
             variant="outline"
             size="sm"
             onClick={() => onReallocate(bucket.id)}
-            className="text-money-neg border-money-neg/30 dark:border-money-neg/30 hover:bg-money-bgNeg dark:hover:bg-money-neg/15 text-xs py-1 rounded-btn"
+            className="text-money-neg dark:text-money-negDark border-money-neg/30 dark:border-money-neg/30 hover:bg-money-bgNeg dark:hover:bg-money-neg/15 text-xs py-1 rounded-btn"
           >
             Fix
           </Button>

@@ -77,7 +77,7 @@ export const AccountPicker: React.FC<AccountPickerProps> = ({
           </button>
         ))}
         {payable.length === 0 && (
-          <div className="px-4 py-6 text-sm text-center text-brand-400 dark:text-brand-500">
+          <div className="px-4 py-6 text-sm text-center text-brand-400 dark:text-brand-450">
             No checking or savings accounts available.
           </div>
         )}

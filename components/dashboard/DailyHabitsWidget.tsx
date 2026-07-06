@@ -67,7 +67,7 @@ export const DailyHabitsWidget: React.FC = React.memo(() => {
                   'w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-(--duration-fast) ease-(--ease-standard)',
                   habit.isCompleted
                     ? 'bg-money-pos text-white group-hover/toggle:brightness-95'
-                    : 'bg-brand-100 text-brand-400 group-hover/toggle:bg-brand-200 group-hover/toggle:text-brand-500 dark:bg-brand-700 dark:text-brand-500 dark:group-hover/toggle:bg-brand-600 dark:group-hover/toggle:text-brand-300'
+                    : 'bg-brand-100 text-brand-400 group-hover/toggle:bg-brand-200 group-hover/toggle:text-brand-500 dark:bg-brand-700 dark:text-brand-450 dark:group-hover/toggle:bg-brand-600 dark:group-hover/toggle:text-brand-300'
                 )}>
                   {habit.isCompleted ? <Check size={16} strokeWidth={3} /> : <Plus size={16} strokeWidth={3} />}
                 </span>
@@ -77,21 +77,21 @@ export const DailyHabitsWidget: React.FC = React.memo(() => {
                 <p className={cn(
                   'text-sm font-semibold truncate',
                   habit.isCompleted
-                    ? 'text-brand-400 dark:text-brand-500 line-through decoration-brand-300'
+                    ? 'text-brand-400 dark:text-brand-450 line-through decoration-brand-300'
                     : 'text-brand-800 dark:text-brand-100'
                 )}>
                   {habit.title}
                 </p>
                 <div className="flex items-center gap-2 text-xxs font-medium mt-0.5">
                   {habit.targetCount > 1 && (
-                    <span className={habit.isCompleted ? 'text-money-pos' : 'text-brand-400 dark:text-brand-500'}>
+                    <span className={habit.isCompleted ? 'text-money-pos dark:text-money-posDark' : 'text-brand-400 dark:text-brand-450'}>
                       {habit.currentCount}/{habit.targetCount}
                     </span>
                   )}
                   {habit.streakDays > 0 && (
                     <span className={cn(
                       'flex items-center gap-0.5',
-                      habit.streakDays >= 3 ? 'text-habit-streak' : 'text-brand-400 dark:text-brand-500'
+                      habit.streakDays >= 3 ? 'text-habit-streak' : 'text-brand-400 dark:text-brand-450'
                     )}>
                       <Flame
                         aria-hidden="true"
@@ -115,7 +115,7 @@ export const DailyHabitsWidget: React.FC = React.memo(() => {
           <Row interactive className="justify-center p-0">
             <Link
               to="/habits"
-              className="block w-full text-center text-xs font-semibold text-brand-400 dark:text-brand-500 hover:text-accent-700 dark:hover:text-accent-300 py-3"
+              className="block w-full text-center text-xs font-semibold text-brand-400 dark:text-brand-450 hover:text-accent-700 dark:hover:text-accent-300 py-3"
             >
               + {remainingCount} more {remainingCount === 1 ? 'habit' : 'habits'}
             </Link>

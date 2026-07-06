@@ -61,7 +61,7 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
               >
                 {label}
                 {props.required && (
-                  <span className="text-money-neg ml-1" aria-hidden="true">
+                  <span className="text-money-neg dark:text-money-negDark ml-1" aria-hidden="true">
                     *
                   </span>
                 )}
@@ -70,7 +70,7 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
               <span />
             )}
             {showCount && props.maxLength && (
-              <span className="text-xs text-brand-400 dark:text-brand-500 font-medium leading-none mb-0.5">
+              <span className="text-xs text-brand-400 dark:text-brand-450 font-medium leading-none mb-0.5">
                 {length}/{props.maxLength}
               </span>
             )}
@@ -86,7 +86,7 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           {...props}
         />
         {error && (
-          <p id={errorId} className="mt-1 text-sm text-money-neg font-medium">
+          <p id={errorId} className="mt-1 text-sm text-money-neg dark:text-money-negDark font-medium">
             {error}
           </p>
         )}

@@ -22,7 +22,7 @@ const CustomHabitList: React.FC<CustomHabitListProps> = ({
   return (
     <div>
       <div className="flex items-center gap-2 mb-3">
-        <Settings size={14} className="text-brand-400 dark:text-brand-500" />
+        <Settings size={14} className="text-brand-400 dark:text-brand-450" />
         <h3 className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase tracking-wider">
           Your Custom Habits
         </h3>

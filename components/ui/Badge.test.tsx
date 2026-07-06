@@ -16,10 +16,10 @@ describe('Badge', () => {
 
   it('applies variant styles correctly', () => {
     const { rerender } = render(<Badge variant="success">Success</Badge>);
-    expect(screen.getByText('Success')).toHaveClass('bg-money-bgPos', 'text-money-pos');
+    expect(screen.getByText('Success')).toHaveClass('bg-money-bgPos', 'text-money-pos dark:text-money-posDark');
 
     rerender(<Badge variant="danger">Danger</Badge>);
-    expect(screen.getByText('Danger')).toHaveClass('bg-money-bgNeg', 'text-money-neg');
+    expect(screen.getByText('Danger')).toHaveClass('bg-money-bgNeg', 'text-money-neg dark:text-money-negDark');
 
     rerender(<Badge variant="warning">Warning</Badge>);
     expect(screen.getByText('Warning')).toHaveClass('bg-warm-50', 'text-warm-700');

@@ -140,7 +140,7 @@ export const WeeklyRecapCard: React.FC = () => {
         action={
           <button
             onClick={dismiss}
-            className="p-1 min-h-6 text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300"
+            className="p-1 min-h-6 text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300"
             aria-label="Dismiss weekly recap"
           >
             <X size={16} />
@@ -165,7 +165,7 @@ export const WeeklyRecapCard: React.FC = () => {
                 <span
                   className={cn(
                     'ml-2 text-xs font-semibold',
-                    spentLess ? 'text-money-pos' : 'text-money-neg'
+                    spentLess ? 'text-money-pos dark:text-money-posDark' : 'text-money-neg dark:text-money-negDark'
                   )}
                 >
                   {spentLess ? '↓' : '↑'} {fmt(Math.abs(diff), { decimals: 0 })} vs last week

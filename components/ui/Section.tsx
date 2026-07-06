@@ -173,7 +173,7 @@ export const DisclosureRow: React.FC<DisclosureRowProps> = ({
       <span
         className={cn(
           'shrink-0 text-brand-500 dark:text-brand-400',
-          destructive && 'text-money-neg dark:text-money-neg'
+          destructive && 'text-money-neg dark:text-money-negDark'
         )}
       >
         {icon}
@@ -183,7 +183,7 @@ export const DisclosureRow: React.FC<DisclosureRowProps> = ({
       <span
         className={cn(
           'block truncate text-sm font-medium text-brand-900 dark:text-brand-50',
-          destructive && 'text-money-neg dark:text-money-neg'
+          destructive && 'text-money-neg dark:text-money-negDark'
         )}
       >
         {title}
@@ -199,7 +199,7 @@ export const DisclosureRow: React.FC<DisclosureRowProps> = ({
     )}
     <ChevronRight
       size={18}
-      className="shrink-0 text-brand-300 dark:text-brand-600"
+      className="shrink-0 text-brand-300 dark:text-brand-500"
       aria-hidden="true"
     />
   </button>

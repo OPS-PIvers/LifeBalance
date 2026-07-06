@@ -338,7 +338,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                       value={newStoreName}
                       onChange={(e) => setNewStoreName(e.target.value)}
                       placeholder="Store Name (e.g. Costco)"
-                      className="flex-1 p-2.5 bg-white border border-brand-200 rounded-xl text-base focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-800 dark:border-brand-700 dark:text-brand-200 dark:placeholder:text-brand-500"
+                      className="flex-1 p-2.5 bg-white border border-brand-200 rounded-xl text-base focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-800 dark:border-brand-700 dark:text-brand-200 dark:placeholder:text-brand-450"
                     />
                     <Button
                       type="submit"
@@ -355,7 +355,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
               {/* Store List */}
               <Section title="My stores">
                 {stores.length === 0 ? (
-                  <p className="text-sm text-brand-400 dark:text-brand-500 italic pl-1">No stores added yet.</p>
+                  <p className="text-sm text-brand-400 dark:text-brand-450 italic pl-1">No stores added yet.</p>
                 ) : (
                   <SurfaceList>
                     {stores.map(store => (
@@ -405,7 +405,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                                       setEditStoreName(store.name);
                                       setEditStoreColor(store.color || DEFAULT_STORE_COLOR);
                                   }}
-                                  className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/30"
+                                  className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 dark:text-brand-450 dark:hover:text-brand-300 dark:hover:bg-brand-700/30"
                                   aria-label={`Edit store ${store.name}`}
                               >
                                   <Edit2 className="w-4 h-4" />
@@ -438,7 +438,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                             onChange={(e) => setNewCategoryName(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && addCategory()}
                             placeholder="Category Name"
-                            className="flex-1 p-2 bg-white border border-brand-200 rounded-lg text-base focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-800 dark:border-brand-700 dark:text-brand-200 dark:placeholder:text-brand-500"
+                            className="flex-1 p-2 bg-white border border-brand-200 rounded-lg text-base focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-800 dark:border-brand-700 dark:text-brand-200 dark:placeholder:text-brand-450"
                         />
                         <Button
                             variant="primary"
@@ -467,7 +467,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                                 <span className="text-brand-700 dark:text-brand-200 font-medium">{cat}</span>
                                 <button
                                     onClick={() => removeCategory(cat)}
-                                    className="p-1 text-brand-400 hover:text-money-neg hover:bg-money-bgNeg rounded-full transition-colors dark:text-brand-500 dark:hover:text-money-negDark dark:hover:bg-money-neg/15"
+                                    className="p-1 text-brand-400 hover:text-money-neg hover:bg-money-bgNeg rounded-full transition-colors dark:text-brand-450 dark:hover:text-money-negDark dark:hover:bg-money-neg/15"
                                     aria-label={`Remove category ${cat}`}
                                 >
                                     <X className="w-3 h-3" />
@@ -494,7 +494,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                   </Button>
 
                   {quickStockLists.length === 0 ? (
-                    <p className="text-center text-brand-400 dark:text-brand-500 text-sm py-4">No templates yet. Create one for &quot;Work Week&quot;, &quot;Camping&quot;, etc.</p>
+                    <p className="text-center text-brand-400 dark:text-brand-450 text-sm py-4">No templates yet. Create one for &quot;Work Week&quot;, &quot;Camping&quot;, etc.</p>
                   ) : (
                     <SurfaceList>
                       {quickStockLists.map(list => {
@@ -517,7 +517,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                                variant="ghost"
                                size="icon-sm"
                                onClick={() => setEditingTemplate(list)}
-                               className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/30"
+                               className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 dark:text-brand-450 dark:hover:text-brand-300 dark:hover:bg-brand-700/30"
                                aria-label={`Edit template ${list.name}`}
                              >
                                <Edit2 className="w-4 h-4" />
@@ -551,7 +551,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                 <div className="space-y-6">
                   <div className="flex items-center justify-between">
                      <h4 className="font-bold text-brand-800 dark:text-brand-200">{editingTemplate.id ? 'Edit Template' : 'New Template'}</h4>
-                     <Button variant="ghost" size="icon-sm" onClick={() => setEditingTemplate(null)} aria-label="Close"><X className="w-5 h-5 text-brand-400 dark:text-brand-500" /></Button>
+                     <Button variant="ghost" size="icon-sm" onClick={() => setEditingTemplate(null)} aria-label="Close"><X className="w-5 h-5 text-brand-400 dark:text-brand-450" /></Button>
                   </div>
 
                   <input
@@ -559,13 +559,13 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                     value={editingTemplate.name}
                     onChange={e => setEditingTemplate({...editingTemplate, name: e.target.value})}
                     placeholder="Template Name (e.g. Weekly Basics)"
-                    className="w-full p-2.5 bg-white border border-brand-200 rounded-lg text-base focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-800 dark:border-brand-700 dark:text-brand-200 dark:placeholder:text-brand-500"
+                    className="w-full p-2.5 bg-white border border-brand-200 rounded-lg text-base focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-800 dark:border-brand-700 dark:text-brand-200 dark:placeholder:text-brand-450"
                     autoFocus
                   />
 
                   {/* Icon & Color — flat, typography-labeled; no wrapping box */}
                   <div>
-                    <span className="text-xs font-bold text-brand-400 dark:text-brand-500 uppercase mb-2 block">Icon</span>
+                    <span className="text-xs font-bold text-brand-400 dark:text-brand-450 uppercase mb-2 block">Icon</span>
                     <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                         {TEMPLATE_ICONS.map(({ id, icon: Icon }) => (
                             <button
@@ -583,7 +583,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                     </div>
                   </div>
                   <div>
-                    <span className="text-xs font-bold text-brand-400 dark:text-brand-500 uppercase mb-2 block">Color</span>
+                    <span className="text-xs font-bold text-brand-400 dark:text-brand-450 uppercase mb-2 block">Color</span>
                     <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                         {Object.values(STORE_COLORS).map((color) => (
                             <button
@@ -601,13 +601,13 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
 
                   <div>
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-400 dark:text-brand-500" />
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-400 dark:text-brand-450" />
                       <input
                         type="text"
                         value={itemSearch}
                         onChange={e => setItemSearch(e.target.value)}
                         placeholder="Search or add new item..."
-                        className="w-full pl-9 p-2.5 bg-white border border-brand-200 rounded-lg text-base focus:ring-2 focus:ring-accent-500/40 outline-hidden dark:bg-brand-800 dark:border-brand-700 dark:text-brand-200 dark:placeholder:text-brand-500"
+                        className="w-full pl-9 p-2.5 bg-white border border-brand-200 rounded-lg text-base focus:ring-2 focus:ring-accent-500/40 outline-hidden dark:bg-brand-800 dark:border-brand-700 dark:text-brand-200 dark:placeholder:text-brand-450"
                       />
                     </div>
 

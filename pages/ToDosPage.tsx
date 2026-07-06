@@ -590,7 +590,7 @@ const ToDosPage: React.FC = () => {
               onClick={handleSelectAll}
               className="text-sm text-accent-600 dark:text-accent-300 font-medium flex items-center gap-1 hover:text-accent-700 dark:hover:text-accent-200"
             >
-              <CheckSquare size={14} aria-hidden="true" className={selectedIds.size === allActiveCount && allActiveCount > 0 ? 'text-accent-600 dark:text-accent-300' : 'text-brand-300 dark:text-brand-500'} />
+              <CheckSquare size={14} aria-hidden="true" className={selectedIds.size === allActiveCount && allActiveCount > 0 ? 'text-accent-600 dark:text-accent-300' : 'text-brand-300 dark:text-brand-450'} />
               {selectedIds.size === allActiveCount && allActiveCount > 0 ? 'Deselect all' : 'Select all'}
             </button>
             {/* While selecting, a visible Cancel (X) stays in the header so the
@@ -734,7 +734,7 @@ const ToDosPage: React.FC = () => {
                 active state anymore — this note only shows when there's
                 nothing beyond what the Immediate card already offers. */}
             {immediate.length === 0 && upcoming.length === 0 && radar.length === 0 && (
-                 <p className="px-1 text-sm text-brand-400 dark:text-brand-500 flex items-center gap-1.5">
+                 <p className="px-1 text-sm text-brand-400 dark:text-brand-450 flex items-center gap-1.5">
                      <ClipboardList size={14} aria-hidden="true" />
                      All caught up — add a task above to get started.
                  </p>
@@ -890,11 +890,11 @@ const ToDosPage: React.FC = () => {
           />
 
           <fieldset>
-            <legend className="block text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider mb-1">
+            <legend className="block text-xs font-bold text-brand-400 dark:text-brand-450 uppercase tracking-wider mb-1">
               Assign to
             </legend>
             {members.length === 0 ? (
-              <div className="flex items-center gap-2 text-sm text-brand-400 dark:text-brand-500 py-2">
+              <div className="flex items-center gap-2 text-sm text-brand-400 dark:text-brand-450 py-2">
                 <AlertCircle size={16} className="shrink-0" />
                 <span>No household members available to assign this task.</span>
               </div>
@@ -1088,7 +1088,7 @@ const TodoRow = React.memo(function TodoRow({
       <div className="flex items-start gap-3">
         {/* Complete Checkbox or Selection Box */}
         {isSelectionMode ? (
-          <div className={`mt-0.5 w-6 h-6 flex items-center justify-center shrink-0 transition-colors ${isSelected ? 'text-accent-600 dark:text-accent-300' : 'text-brand-300 dark:text-brand-600'}`}>
+          <div className={`mt-0.5 w-6 h-6 flex items-center justify-center shrink-0 transition-colors ${isSelected ? 'text-accent-600 dark:text-accent-300' : 'text-brand-300 dark:text-brand-500'}`}>
             {isSelected ? <CheckSquare aria-hidden="true" size={24} /> : <div className="w-5 h-5 border-2 border-current rounded-sm" />}
           </div>
         ) : (
@@ -1309,7 +1309,7 @@ const Section = React.memo(function Section({ title, subtitle, items, color, onC
           <div className={`w-2 h-2 rounded-full ${sectionDotColors[color]}`}></div>
           <h2 className="font-display text-base font-semibold text-brand-900 dark:text-brand-50 tracking-tight">{title}</h2>
         </div>
-        <span className="text-xs font-semibold text-brand-400 dark:text-brand-500 uppercase tracking-wider">{subtitle}</span>
+        <span className="text-xs font-semibold text-brand-400 dark:text-brand-450 uppercase tracking-wider">{subtitle}</span>
       </div>
 
       <SurfaceList className="[&>*:first-child]:border-t-0 [&>*:first-child_.hairline-divider]:border-t-0">
@@ -1451,7 +1451,7 @@ const CompletedSection = React.memo(function CompletedSection({ title, items, on
                             onClick={() => setExpanded(v => !v)}
                             aria-expanded={expanded}
                             aria-controls={contentId}
-                            className="flex min-h-11 items-center gap-1.5 text-xs font-semibold text-brand-400 dark:text-brand-500 uppercase tracking-wider hover:text-brand-600 dark:hover:text-brand-300 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-sm"
+                            className="flex min-h-11 items-center gap-1.5 text-xs font-semibold text-brand-400 dark:text-brand-450 uppercase tracking-wider hover:text-brand-600 dark:hover:text-brand-300 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-sm"
                         >
                             {title}
                             <span className="tabular-nums">({items.length})</span>
@@ -1466,7 +1466,7 @@ const CompletedSection = React.memo(function CompletedSection({ title, items, on
                         </button>
                     </h2>
                 ) : (
-                    <h2 className="text-xs font-semibold text-brand-400 dark:text-brand-500 uppercase tracking-wider">{title}</h2>
+                    <h2 className="text-xs font-semibold text-brand-400 dark:text-brand-450 uppercase tracking-wider">{title}</h2>
                 )}
                 <div className="h-px bg-brand-200 dark:bg-brand-700 flex-1"></div>
             </div>
@@ -1496,7 +1496,7 @@ const CompletedSection = React.memo(function CompletedSection({ title, items, on
 
                             <div className="flex-1 min-w-0">
                                 <p className="text-brand-500 dark:text-brand-400 line-through decoration-brand-300 dark:decoration-brand-600">{item.text}</p>
-                                <div className="flex items-center gap-3 mt-1 text-xs text-brand-400 dark:text-brand-500">
+                                <div className="flex items-center gap-3 mt-1 text-xs text-brand-400 dark:text-brand-450">
                                     {completedDate && (
                                         <span className="flex items-center gap-1">
                                             <Check size={10} />
@@ -1518,7 +1518,7 @@ const CompletedSection = React.memo(function CompletedSection({ title, items, on
                                     variant="ghost"
                                     size="icon-sm"
                                     onClick={() => onDuplicate(item)}
-                                    className="text-brand-400 hover:text-accent-600 hover:bg-accent-50 dark:text-brand-500 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
+                                    className="text-brand-400 hover:text-accent-600 hover:bg-accent-50 dark:text-brand-450 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
                                     title="Duplicate task"
                                     aria-label={`Duplicate task: ${item.text}`}
                                 >
@@ -1544,7 +1544,7 @@ const CompletedSection = React.memo(function CompletedSection({ title, items, on
                                  variant="ghost"
                                  size="icon"
                                  onClick={(e) => { e.stopPropagation(); onMore(item); }}
-                                 className="text-brand-300 hover:text-accent-600 active:text-accent-800 active:bg-accent-50 dark:text-brand-500 dark:hover:text-brand-300 dark:active:bg-brand-700/50"
+                                 className="text-brand-300 hover:text-accent-600 active:text-accent-800 active:bg-accent-50 dark:text-brand-450 dark:hover:text-brand-300 dark:active:bg-brand-700/50"
                                  aria-label={`More options for: ${item.text}`}
                                >
                                  <MoreVertical size={20} />

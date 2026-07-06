@@ -258,7 +258,7 @@ const BudgetAccounts: React.FC = () => {
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
             {/* Drag Handle */}
-            <div className="cursor-grab active:cursor-grabbing text-brand-300 dark:text-brand-600 hover:text-brand-500 dark:hover:text-brand-400 touch-none shrink-0">
+            <div className="cursor-grab active:cursor-grabbing text-brand-300 dark:text-brand-500 hover:text-brand-500 dark:hover:text-brand-400 touch-none shrink-0">
               <GripVertical size={18} />
             </div>
             <div className="min-w-0">
@@ -294,7 +294,7 @@ const BudgetAccounts: React.FC = () => {
               variant="ghost-destructive"
               size="icon-sm"
               onClick={() => setDeletingId(account.id)}
-              className="text-brand-300 dark:text-brand-600 hidden sm:flex"
+              className="text-brand-300 dark:text-brand-500 hidden sm:flex"
               aria-label={`Delete ${account.name} account`}
             >
               <Trash2 size={14} />
@@ -306,7 +306,7 @@ const BudgetAccounts: React.FC = () => {
                 variant="ghost"
                 size="icon"
                 onClick={() => setActionAccount(account)}
-                className="text-brand-300 dark:text-brand-500"
+                className="text-brand-300 dark:text-brand-450"
                 aria-label={`Options for ${account.name}`}
               >
                 <MoreVertical size={20} />
@@ -339,10 +339,10 @@ const BudgetAccounts: React.FC = () => {
                 className="group cursor-pointer text-right focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-800 rounded-btn"
                 aria-label={`Edit balance for ${account.name}`}
               >
-                <p className={`font-mono tabular-nums font-bold text-lg ${isLiability ? 'text-money-neg' : 'text-money-pos'}`}>
+                <p className={`font-mono tabular-nums font-bold text-lg ${isLiability ? 'text-money-neg dark:text-money-negDark' : 'text-money-pos dark:text-money-posDark'}`}>
                   {fmt(account.balance)}
                 </p>
-                <p className="text-xxs text-brand-300 dark:text-brand-500 group-hover:text-brand-500 dark:group-hover:text-brand-400 flex justify-end items-center gap-1 transition-colors">
+                <p className="text-xxs text-brand-300 dark:text-brand-450 group-hover:text-brand-500 dark:group-hover:text-brand-400 flex justify-end items-center gap-1 transition-colors">
                   Tap to edit <Pencil size={8} />
                 </p>
               </button>
@@ -353,7 +353,7 @@ const BudgetAccounts: React.FC = () => {
         {/* Savings Goal Bar */}
         {isSavings && account.monthlyGoal && (
           <div className="ml-7">
-            <div className="flex justify-between text-xxs text-brand-400 dark:text-brand-500 mb-1">
+            <div className="flex justify-between text-xxs text-brand-400 dark:text-brand-450 mb-1">
               <span className="flex items-center gap-1">{hitGoal && <Star size={10} className="fill-habit-gold text-habit-gold"/>} {Math.round(progress)}% to goal</span>
               <span>Target: {fmt(account.monthlyGoal)}</span>
             </div>
@@ -402,7 +402,7 @@ const BudgetAccounts: React.FC = () => {
           <div className="flex items-center gap-2 px-1">
             <h3 className="font-display text-sm font-semibold text-brand-700 dark:text-brand-200 uppercase tracking-wide">Assets</h3>
             <div className="flex-1 h-px bg-brand-200 dark:bg-brand-700"></div>
-            <span className="text-sm font-mono tabular-nums text-money-pos">{fmt(assets)}</span>
+            <span className="text-sm font-mono tabular-nums text-money-pos dark:text-money-posDark">{fmt(assets)}</span>
           </div>
           <SurfaceList>
             {assetAccounts.map(account => renderAccountRow(account, false))}
@@ -416,7 +416,7 @@ const BudgetAccounts: React.FC = () => {
           <div className="flex items-center gap-2 px-1">
             <h3 className="font-display text-sm font-semibold text-brand-700 dark:text-brand-200 uppercase tracking-wide">Liabilities</h3>
             <div className="flex-1 h-px bg-brand-200 dark:bg-brand-700"></div>
-            <span className="text-sm font-mono tabular-nums text-money-neg">{fmt(debts)}</span>
+            <span className="text-sm font-mono tabular-nums text-money-neg dark:text-money-negDark">{fmt(debts)}</span>
           </div>
           <SurfaceList>
             {liabilityAccounts.map(account => renderAccountRow(account, true))}

@@ -81,7 +81,7 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
       <div>
             {ingredients.length === 0 ? (
                 <div className="text-center py-8 text-brand-500 dark:text-brand-400">
-                    <AlertCircle className="w-8 h-8 mx-auto mb-2 text-brand-300 dark:text-brand-600" />
+                    <AlertCircle className="w-8 h-8 mx-auto mb-2 text-brand-300 dark:text-brand-500" />
                     <p>No ingredients found for this meal.</p>
                 </div>
             ) : (

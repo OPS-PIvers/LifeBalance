@@ -323,7 +323,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
         {/* Budget Alerts */}
         <Row className="items-start">
           <div className="w-10 h-10 bg-money-bgNeg dark:bg-money-neg/15 rounded-btn flex items-center justify-center shrink-0">
-            <DollarSign className="w-5 h-5 text-money-neg" />
+            <DollarSign className="w-5 h-5 text-money-neg dark:text-money-negDark" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-3">

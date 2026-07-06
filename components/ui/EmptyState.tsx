@@ -19,7 +19,7 @@ const WRAPPERS: Record<EmptyStateVariant, string> = {
 
 /** Icon-badge color by tone. `danger` styles this as an error / empty-error state. */
 const ICON_BADGE_TONES: Record<EmptyStateTone, string> = {
-  default: 'bg-brand-100 dark:bg-brand-700/50 text-brand-400 dark:text-brand-500',
+  default: 'bg-brand-100 dark:bg-brand-700/50 text-brand-400 dark:text-brand-450',
   danger: 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg dark:text-money-negDark',
 };
 

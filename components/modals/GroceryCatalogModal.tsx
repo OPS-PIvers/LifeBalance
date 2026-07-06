@@ -151,7 +151,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
               type="button"
               onClick={handleClose}
               aria-label="Close"
-              className="p-2.5 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
+              className="p-2.5 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors dark:text-brand-450 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
             >
               <X className="w-5 h-5" />
             </button>
@@ -170,7 +170,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                 type="button"
                 onClick={handleClose}
                 aria-label="Close"
-                className="p-2.5 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
+                className="p-2.5 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors dark:text-brand-450 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -266,9 +266,9 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                       <div className="font-medium text-brand-900 dark:text-brand-100 truncate">{item.name}</div>
                       <div className="text-xs text-brand-500 dark:text-brand-400 flex items-center gap-2 mt-0.5">
                         <span className="bg-brand-100 dark:bg-brand-700/50 px-2 py-0.5 rounded-full text-brand-600 dark:text-brand-300 font-medium">{item.category}</span>
-                        {item.defaultStore && <span className="truncate max-w-[80px] text-brand-400 dark:text-brand-500">• {item.defaultStore}</span>}
+                        {item.defaultStore && <span className="truncate max-w-[80px] text-brand-400 dark:text-brand-450">• {item.defaultStore}</span>}
                         {item.lastPurchased && (
-                          <span className="text-brand-300 dark:text-brand-600">• {formatDistanceToNow(new Date(item.lastPurchased))} ago</span>
+                          <span className="text-brand-300 dark:text-brand-500">• {formatDistanceToNow(new Date(item.lastPurchased))} ago</span>
                         )}
                       </div>
                     </button>
@@ -277,14 +277,14 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         onClick={() => setEditingItem(item)}
-                        className="p-2 text-brand-300 dark:text-brand-600 hover:text-brand-600 dark:hover:text-brand-300 hover:bg-brand-100 dark:hover:bg-brand-700/50 rounded-full transition-colors"
+                        className="p-2 text-brand-300 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 hover:bg-brand-100 dark:hover:bg-brand-700/50 rounded-full transition-colors"
                         aria-label={`Edit ${item.name}`}
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDeleteItem(item.id)}
-                        className="p-2 text-brand-300 dark:text-brand-600 hover:text-money-neg hover:bg-money-neg/10 rounded-full transition-colors"
+                        className="p-2 text-brand-300 dark:text-brand-500 hover:text-money-neg dark:hover:text-money-negDark hover:bg-money-neg/10 rounded-full transition-colors"
                         aria-label={`Delete ${item.name} from history`}
                       >
                         <Trash2 className="w-4 h-4" />

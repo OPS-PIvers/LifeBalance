@@ -80,7 +80,7 @@ const BottomNav: React.FC = () => {
     `relative flex flex-col items-center justify-center w-full h-16 gap-1 transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
       isActive
         ? 'text-accent-600 dark:text-accent-300'
-        : 'text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300'
+        : 'text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300'
     }`;
 
   const iconClass = (isActive: boolean) =>
