@@ -33,7 +33,7 @@ test.describe('Transaction review drawer (Test Mode, stub seed)', () => {
 
     // Enter the settled amount and categorize into a bucket.
     await amount.fill(String(STUB_AMOUNT));
-    await drawer.getByRole('button', { name: 'Entertainment' }).click();
+    await drawer.getByLabel('Budget Category').selectOption({ label: 'Entertainment' });
     await drawer.getByRole('button', { name: /Approve Transaction|Add amount & approve/ }).click();
     await expect(drawer).not.toBeVisible();
 
