@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import TopToolbar from './TopToolbar';
 import BottomNav from './BottomNav';
@@ -57,14 +57,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   // while backgrounded (e.g. a spouse's iOS-Shortcut purchase) auto-surface for
   // every household member. Skipped while the drawer is already open: the user
   // is mid-review, and re-snapshotting would reshuffle the cycle under them.
-  const reviewDrawerOpenRef = useRef(reviewDrawerOpen);
-  useEffect(() => {
-    reviewDrawerOpenRef.current = reviewDrawerOpen;
-  }, [reviewDrawerOpen]);
+  // (useAppReopen tracks the latest callback in a ref, so a changed dep here
+  // never re-subscribes the document listener.)
   useAppReopen(
     useCallback(() => {
-      if (!reviewDrawerOpenRef.current) setHasAutoOpenedReview(false);
-    }, []),
+      if (!reviewDrawerOpen) setHasAutoOpenedReview(false);
+    }, [reviewDrawerOpen]),
   );
 
   // Active managed kid → Kid Mode. Validated against the live members list so a
