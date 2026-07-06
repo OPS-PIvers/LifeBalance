@@ -13,7 +13,7 @@ import { cn } from '@/utils/cn';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
-import { Switch } from '@/components/ui/Switch';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import Eyebrow from '@/components/ui/Eyebrow';
 
 interface SelectableChipProps {
@@ -333,22 +333,22 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
       )}
 
       {isSelectedAccountCredit && (
-        <div className="flex items-center justify-between gap-3 p-4 bg-brand-50 dark:bg-brand-700/50 rounded-xl border border-brand-100 dark:border-brand-700">
-          <div>
-            <span id="review-credit-payment-label" className="text-sm font-medium text-brand-700 dark:text-brand-200">
-              {creditPayment ? 'Payment toward card' : 'Charge to card'}
-            </span>
-            <p className="text-xs text-brand-400 dark:text-brand-400 mt-0.5">
-              {creditPayment
-                ? 'Lowers this card’s balance (paying it down).'
-                : 'Raises this card’s balance; never affects Safe-to-Spend.'}
-            </p>
-          </div>
-          <Switch
-            checked={creditPayment}
-            onCheckedChange={setCreditPayment}
-            aria-labelledby="review-credit-payment-label"
+        <div className="p-4 bg-brand-50 dark:bg-brand-700/50 rounded-xl border border-brand-100 dark:border-brand-700 space-y-2">
+          <SegmentedControl
+            options={[
+              { value: 'charge', label: 'Charge' },
+              { value: 'payment', label: 'Payment' },
+            ]}
+            value={creditPayment ? 'payment' : 'charge'}
+            onChange={(v) => setCreditPayment(v === 'payment')}
+            name="Credit card transaction type"
+            size="sm"
           />
+          <p className="text-xs text-brand-400 dark:text-brand-400">
+            {creditPayment
+              ? 'Lowers this card’s balance (paying it down).'
+              : 'Raises this card’s balance; never affects Safe-to-Spend.'}
+          </p>
         </div>
       )}
 
