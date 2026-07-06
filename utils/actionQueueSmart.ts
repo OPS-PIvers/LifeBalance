@@ -13,7 +13,7 @@
  */
 import { addDays, format, isAfter, isValid, parseISO, startOfToday } from 'date-fns';
 
-import type { Account, BudgetBucket, CalendarItem, Transaction } from '@/types/schema';
+import { CREDIT_CARD_CATEGORY, type Account, type BudgetBucket, type CalendarItem, type Transaction } from '@/types/schema';
 import { normalizeStoreName } from '@/utils/storeMatch';
 
 /** Fallback category assigned by AI scans / shortcut stubs when nothing matched. */
@@ -118,7 +118,9 @@ export function suggestCategoryForTransaction(
     let best: string | undefined;
     let bestCount = 0;
     for (const past of history) {
-      if (!past.category || past.category === UNCATEGORIZED) continue;
+      // CREDIT_CARD_CATEGORY is an account-routing sentinel, not a budget
+      // choice — never let credit history suggest it for a new transaction.
+      if (!past.category || past.category === UNCATEGORIZED || past.category === CREDIT_CARD_CATEGORY) continue;
       const count = (counts.get(past.category) ?? 0) + 1;
       counts.set(past.category, count);
       if (count > bestCount) {
@@ -129,7 +131,7 @@ export function suggestCategoryForTransaction(
     if (best) return best;
   }
 
-  if (tx.category && tx.category !== UNCATEGORIZED) return tx.category;
+  if (tx.category && tx.category !== UNCATEGORIZED && tx.category !== CREDIT_CARD_CATEGORY) return tx.category;
 
   const merchant = (tx.merchant || '').toLowerCase();
   const matchedBucket = merchant

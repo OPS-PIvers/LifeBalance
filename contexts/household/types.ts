@@ -161,13 +161,16 @@ export interface HouseholdContextType {
    *  (amount/merchant/date, plus clearing the `needsAmount` stub flag) in the
    *  SAME atomic batch, so verify + edit + account + habits + points can never
    *  diverge; `overrides.amount` (not the possibly-stale stored amount) drives
-   *  the checking-balance delta. */
+   *  the checking-balance delta. `overrides.creditPayment` co-commits the
+   *  credit Charge/Payment flag (false clears a stored flag) and drives the
+   *  verify-time balance delta, so a credit-card payment approved in review
+   *  pays the card DOWN instead of raising its debt. */
   updateTransactionCategory: (
     id: string,
     category: string,
     relatedHabitIds?: string[],
     accountId?: string | null,
-    overrides?: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean },
+    overrides?: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean; creditPayment?: boolean },
   ) => Promise<void>;
   updateTransaction: (id: string, updates: Partial<Transaction>, opts?: MutationOpts) => Promise<void>;
   deleteTransaction: (id: string, opts?: MutationOpts) => Promise<void>;

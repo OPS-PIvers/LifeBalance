@@ -1491,7 +1491,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     category: string,
     relatedHabitIds?: string[],
     accountId?: string | null,
-    overrides?: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean },
+    overrides?: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean; creditPayment?: boolean },
   ) => {
     await makeUpdateTransactionCategory({
       db, householdId, currentUser, habits, transactions, accounts, householdSettings,

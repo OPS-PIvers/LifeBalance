@@ -56,6 +56,17 @@ describe('calculateBucketSpent', () => {
     expect(map.get('b1')!.verified).toBe(12);
   });
 
+  it('never counts CREDIT_CARD_CATEGORY spend — even against a bucket named "Credit Card"', () => {
+    const buckets = [bucket('b1', 'Credit Card')];
+    const transactions = [
+      tx('Credit Card', 50, 'verified'),
+      tx('Credit Card', 20, 'pending_review'),
+    ];
+
+    const map = calculateBucketSpent(buckets, transactions, '');
+    expect(map.get('b1')).toEqual({ verified: 0, pending: 0 });
+  });
+
   it('credits all buckets sharing a (case-insensitive) name so a duplicate is not silently $0', () => {
     // Transactions link to buckets only by category name; with two buckets named
     // "Groceries" we cannot disambiguate, so both are credited rather than the

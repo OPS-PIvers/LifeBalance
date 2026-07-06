@@ -24,12 +24,14 @@ const {
 // Transactions the form's `useFinance().transactions` should resolve
 // `possibleDuplicateOf` against — mutable per-test via `mockTransactions.length = 0; mockTransactions.push(...)`.
 const mockTransactions: Transaction[] = [];
+// Accounts, mutable the same way (credit-account tests seed a card).
+const mockAccounts: { id: string; name: string; type: string }[] = [];
 
 // Mock the domain slices consumed by the form (same pattern as
 // EditTransactionModal.test.tsx).
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useFinance: () => ({
-    accounts: [] as unknown[],
+    accounts: mockAccounts,
     buckets: [
       { id: '1', name: 'Groceries' },
       { id: '2', name: 'Gas' },
@@ -72,6 +74,7 @@ describe('TransactionReviewForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockTransactions.length = 0;
+    mockAccounts.length = 0;
   });
 
   it('shows a selected Income chip for an income transaction', () => {
@@ -145,6 +148,101 @@ describe('TransactionReviewForm', () => {
 
     const call = mockUpdateTransactionCategory.mock.calls[0]!;
     expect(call[4]).toMatchObject({ amount: 12.5, clearNeedsAmount: true });
+  });
+
+  describe('credit-account handling', () => {
+    const seedAccounts = () => {
+      mockAccounts.push(
+        { id: 'chk', name: 'Checking', type: 'checking' },
+        { id: 'cc', name: 'Paul Visa', type: 'credit' },
+      );
+    };
+
+    it('hides the budget-category chips and shows the Charge/Payment toggle for a credit-tagged transaction', () => {
+      seedAccounts();
+      render(
+        <TransactionReviewForm
+          transaction={{ ...baseTx, accountId: 'cc' }}
+          onDone={mockOnDone}
+        />
+      );
+
+      expect(screen.queryByText(/budget category/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Groceries' })).not.toBeInTheDocument();
+      expect(screen.getByText(/charge to card/i)).toBeInTheDocument();
+      expect(screen.getByRole('checkbox')).toBeInTheDocument();
+    });
+
+    it('shows the category chips (no toggle) when a checking account is selected', () => {
+      seedAccounts();
+      render(
+        <TransactionReviewForm
+          transaction={{ ...baseTx, accountId: 'chk' }}
+          onDone={mockOnDone}
+        />
+      );
+
+      expect(screen.getByText(/budget category/i)).toBeInTheDocument();
+      expect(screen.queryByText(/charge to card/i)).not.toBeInTheDocument();
+    });
+
+    it('approves a credit charge under CREDIT_CARD_CATEGORY without requiring a category pick', async () => {
+      const user = userEvent.setup();
+      seedAccounts();
+      render(
+        <TransactionReviewForm
+          transaction={{ ...baseTx, accountId: 'cc', category: '' }}
+          onDone={mockOnDone}
+        />
+      );
+
+      const approve = screen.getByRole('button', { name: /approve transaction/i });
+      expect(approve).toBeEnabled();
+      await user.click(approve);
+
+      const call = mockUpdateTransactionCategory.mock.calls[0]!;
+      expect(call[1]).toBe('Credit Card');
+      // A plain charge sends no creditPayment override (nothing changed).
+      expect((call[4] as { creditPayment?: boolean } | undefined)?.creditPayment).toBeUndefined();
+    });
+
+    it('flipping the toggle to Payment sends a creditPayment override', async () => {
+      const user = userEvent.setup();
+      seedAccounts();
+      render(
+        <TransactionReviewForm
+          transaction={{ ...baseTx, accountId: 'cc', category: '' }}
+          onDone={mockOnDone}
+        />
+      );
+
+      await user.click(screen.getByRole('checkbox'));
+      expect(screen.getByText(/payment toward card/i)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+
+      const call = mockUpdateTransactionCategory.mock.calls[0]!;
+      expect(call[4]).toMatchObject({ creditPayment: true });
+    });
+
+    it('re-tagging to checking sends creditPayment:false to clear a stored flag', async () => {
+      const user = userEvent.setup();
+      seedAccounts();
+      render(
+        <TransactionReviewForm
+          transaction={{ ...baseTx, accountId: 'cc', creditPayment: true }}
+          onDone={mockOnDone}
+        />
+      );
+
+      await user.selectOptions(screen.getByLabelText(/account/i), 'chk');
+      // Category chips are back and required.
+      await user.click(screen.getByRole('button', { name: 'Gas' }));
+      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+
+      const call = mockUpdateTransactionCategory.mock.calls[0]!;
+      expect(call[1]).toBe('Gas');
+      expect(call[4]).toMatchObject({ creditPayment: false });
+    });
   });
 
   describe('possible-duplicate notice (plan 03 PR-3)', () => {

@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { useFinance, useGamification, useHouseholdCore, useShopping, useTodos } from '@/contexts/FirebaseHouseholdContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import type { ReceiptData, MagicActionResponse } from '@/services/geminiService.types';
-import { Transaction } from '@/types/schema';
+import { Transaction, CREDIT_CARD_CATEGORY } from '@/types/schema';
 import { ParsedTransaction } from '@/types/ui';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { useStoreResolver } from '@/hooks/useStoreResolver';
@@ -491,18 +491,22 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
     const results = await Promise.allSettled(
       selectedTx.map(tx => {
         const resolvedStore = tx.store ? (storeMap.get(normalizeStoreName(tx.store)) ?? tx.store) : tx.store;
+        // Credit-tagged rows carry the sentinel instead of a bucket category
+        // (credit spend never counts toward buckets); the AI-parsed category is
+        // only used for asset-account rows.
+        const isCredit = accounts.find(a => a.id === tx.accountId)?.type === 'credit';
         const newTransaction: Transaction = {
           id: tx.id,
           amount: tx.amount,
           merchant: tx.merchant,
-          category: tx.category,
+          category: isCredit ? CREDIT_CARD_CATEGORY : tx.category,
           date: tx.date,
           status: 'pending_review',
           isRecurring: false,
           source: 'file-upload',
           autoCategorized: true,
           relatedHabitIds: tx.relatedHabitIds,
-          subBucketId: tx.subBucketId,
+          subBucketId: isCredit ? undefined : tx.subBucketId,
           store: resolvedStore,
           accountId: tx.accountId,
           creditPayment: tx.creditPayment

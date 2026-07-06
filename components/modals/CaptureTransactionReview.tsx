@@ -74,6 +74,10 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
                   </span>
                 </div>
                 <p className="text-xs text-brand-400 dark:text-brand-400 mb-2">{tx.date}</p>
+                {/* Category doesn't apply when the tagged account is a credit
+                    card — the submit path coerces it to CREDIT_CARD_CATEGORY.
+                    The parsed category is kept, so switching back restores it. */}
+                {accounts.find(a => a.id === tx.accountId)?.type !== 'credit' && (
                 <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Category selection">
                   {dynamicCategories.slice(0, 4).map((cat) => (
                     <button
@@ -100,10 +104,12 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
                     </select>
                   )}
                 </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-2 mt-2">
-                  {/* Sub-Bucket Select */}
+                  {/* Sub-Bucket Select (hidden for credit-tagged rows) */}
                   {(() => {
+                    if (accounts.find(a => a.id === tx.accountId)?.type === 'credit') return null;
                     const selectedBucket = buckets.find(b => b.name === tx.category);
                     if (selectedBucket?.subBuckets && selectedBucket.subBuckets.length > 0) {
                       return (

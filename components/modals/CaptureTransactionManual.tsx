@@ -2,7 +2,7 @@ import React, { useId, useState, useMemo } from 'react';
 import { Check, CheckCircle2, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getLocalDateString } from '@/utils/dateHelpers';
-import { Transaction, Habit, BudgetBucket, Store, Account } from '@/types/schema';
+import { Transaction, Habit, BudgetBucket, Store, Account, CREDIT_CARD_CATEGORY } from '@/types/schema';
 import { suggestHabitsForTransaction } from '@/utils/habitSuggestions';
 import { resolveStoreName } from '@/utils/stores';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
@@ -153,7 +153,10 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
     const today = getLocalDateString();
     const isFuture = transactionDate > today;
 
-    if (!category || !dynamicCategories.includes(category)) {
+    // A credit-tagged transaction carries the CREDIT_CARD_CATEGORY sentinel
+    // instead of a bucket category (credit spend never counts toward buckets).
+    const finalCategory = isSelectedAccountCredit ? CREDIT_CARD_CATEGORY : category;
+    if (!finalCategory || (!isSelectedAccountCredit && !dynamicCategories.includes(finalCategory))) {
       const msg = "Please select a valid category";
       setFormError(msg);
       toast.error(msg);
@@ -166,14 +169,14 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
       id: crypto.randomUUID(),
       amount: parsedAmount,
       merchant: trimmedMerchant,
-      category,
+      category: finalCategory,
       date: transactionDate,
       status: isFuture ? 'pending_review' : 'verified',
       isRecurring: isRecurring,
       source: 'manual',
       autoCategorized: false,
       relatedHabitIds: selectedHabitIds.length > 0 ? selectedHabitIds : undefined,
-      subBucketId: validatedSubBucketId,
+      subBucketId: isSelectedAccountCredit ? undefined : validatedSubBucketId,
       store: resolveStoreName(stores, merchant),
       accountId: accountId || undefined,
       // Only meaningful for a credit account; a charge (false) raises the card's
@@ -248,6 +251,9 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
         onChange={(e) => setTransactionDate(e.target.value)}
       />
 
+      {/* Category doesn't apply to credit-card charges — hidden when the
+          (collapsed-section) account choice is a credit card. */}
+      {!isSelectedAccountCredit && (
       <div>
         <label id="manual-category-label" className="block text-xs font-semibold text-brand-400 dark:text-brand-400 uppercase tracking-wider mb-2">Category</label>
         <div
@@ -273,6 +279,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
           ))}
         </div>
       </div>
+      )}
 
       {/*
         Everything below is secondary to the quick-entry path (Amount/Merchant/
@@ -318,8 +325,8 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
             </div>
           )}
 
-          {/* Sub-Bucket Selection */}
-          {availableSubBuckets.length > 0 && (
+          {/* Sub-Bucket Selection (never applies to credit-tagged spend) */}
+          {!isSelectedAccountCredit && availableSubBuckets.length > 0 && (
             <div>
               <label id="manual-subbucket-label" className="block text-xs font-semibold text-brand-400 dark:text-brand-400 uppercase tracking-wider mb-2">
                 Sub-Category (Optional)

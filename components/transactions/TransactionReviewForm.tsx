@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Check, ChevronDown, Copy, Sparkles, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
-import { Transaction, INCOME_CATEGORY } from '@/types/schema';
+import { Transaction, CREDIT_CARD_CATEGORY, INCOME_CATEGORY } from '@/types/schema';
 import { suggestHabitsForTransaction } from '@/utils/habitSuggestions';
 import { suggestAccountIdForTransaction, suggestCategoryForTransaction } from '@/utils/actionQueueSmart';
 import { buildTransactionCategoryOptions } from '@/utils/categories';
@@ -13,6 +13,7 @@ import { cn } from '@/utils/cn';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
+import { Switch } from '@/components/ui/Switch';
 import Eyebrow from '@/components/ui/Eyebrow';
 
 interface SelectableChipProps {
@@ -113,6 +114,15 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
   });
   const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>(() => transaction.relatedHabitIds ?? []);
   const [showAllHabits, setShowAllHabits] = useState(false);
+  const [creditPayment, setCreditPayment] = useState(() => transaction.creditPayment ?? false);
+
+  // Credit-tagged transactions carry no budget category (credit spend is
+  // tracked on the card, not against buckets), so the category chips hide and
+  // the Charge/Payment toggle shows instead.
+  const isSelectedAccountCredit = useMemo(
+    () => accounts.find(a => a.id === accountId)?.type === 'credit',
+    [accounts, accountId]
+  );
 
   // Smart habit suggestions follow the live merchant field (so editing the
   // merchant re-scores suggestions, matching the manual-capture path).
@@ -127,7 +137,7 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
   // can't slip past the approve gate and verify an effectively-$0 transaction.
   // roundMoney(NaN) is NaN, so a blank/invalid field keeps canApprove false.
   const parsedAmount = roundMoney(parseFloat(amount));
-  const canApprove = parsedAmount > 0 && merchant.trim() !== '' && selectedCategory !== '';
+  const canApprove = parsedAmount > 0 && merchant.trim() !== '' && (isSelectedAccountCredit || selectedCategory !== '');
   const approveLabel = transaction.needsAmount && !amount.trim() ? 'Add amount & approve' : 'Approve Transaction';
 
   const handleApprove = async () => {
@@ -140,7 +150,7 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
       toast.error('Merchant name is required');
       return;
     }
-    if (!selectedCategory) {
+    if (!isSelectedAccountCredit && !selectedCategory) {
       toast.error('Please select a category');
       return;
     }
@@ -148,7 +158,7 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
     // Only send the fields that actually changed. Passing `overrides.amount`
     // makes the context use it (not the stale local amount, which is 0 for a
     // stub) for the checking-balance delta, so the entered amount debits once.
-    const overrides: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean } = {};
+    const overrides: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean; creditPayment?: boolean } = {};
     if (transaction.needsAmount || parsedAmount !== transaction.amount) overrides.amount = parsedAmount;
     if (trimmedMerchant !== transaction.merchant) overrides.merchant = trimmedMerchant;
     // Only send a date override for a real, non-empty change — an emptied date
@@ -156,6 +166,11 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
     // writing an undefined payPeriodId for a blank date).
     if (date && date !== transaction.date) overrides.date = date;
     if (transaction.needsAmount) overrides.clearNeedsAmount = true;
+    // Charge/Payment only applies on a credit account (re-tagging to a
+    // checking account clears any stored flag). Sent only on a real change so
+    // the common case stays a minimal write.
+    const desiredCreditPayment = isSelectedAccountCredit && creditPayment;
+    if (desiredCreditPayment !== (transaction.creditPayment ?? false)) overrides.creditPayment = desiredCreditPayment;
     const hasOverrides = Object.keys(overrides).length > 0;
 
     // Selecting "No account" on a previously-tagged transaction is an EXPLICIT
@@ -165,7 +180,7 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
     try {
       await updateTransactionCategory(
         transaction.id,
-        selectedCategory,
+        isSelectedAccountCredit ? CREDIT_CARD_CATEGORY : selectedCategory,
         selectedHabitIds,
         accountIdArg,
         hasOverrides ? overrides : undefined
@@ -297,21 +312,45 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
         </Select>
       </div>
 
-      {/* Budget category */}
-      <div className="space-y-2">
-        <Eyebrow as="p" className="text-xxs">Budget Category</Eyebrow>
-        <div className="flex flex-wrap gap-2">
-          {categoryOptions.map(cat => (
-            <SelectableChip
-              key={cat}
-              selected={selectedCategory === cat}
-              onClick={() => setSelectedCategory(cat)}
-            >
-              {cat}
-            </SelectableChip>
-          ))}
+      {/* Budget category — hidden for a credit account: credit spend is
+          tracked on the card, not against budget buckets. The Charge/Payment
+          toggle takes its place (same treatment as manual capture / edit). */}
+      {!isSelectedAccountCredit && (
+        <div className="space-y-2">
+          <Eyebrow as="p" className="text-xxs">Budget Category</Eyebrow>
+          <div className="flex flex-wrap gap-2">
+            {categoryOptions.map(cat => (
+              <SelectableChip
+                key={cat}
+                selected={selectedCategory === cat}
+                onClick={() => setSelectedCategory(cat)}
+              >
+                {cat}
+              </SelectableChip>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
+
+      {isSelectedAccountCredit && (
+        <div className="flex items-center justify-between gap-3 p-4 bg-brand-50 dark:bg-brand-700/50 rounded-xl border border-brand-100 dark:border-brand-700">
+          <div>
+            <span id="review-credit-payment-label" className="text-sm font-medium text-brand-700 dark:text-brand-200">
+              {creditPayment ? 'Payment toward card' : 'Charge to card'}
+            </span>
+            <p className="text-xs text-brand-400 dark:text-brand-400 mt-0.5">
+              {creditPayment
+                ? 'Lowers this card’s balance (paying it down).'
+                : 'Raises this card’s balance; never affects Safe-to-Spend.'}
+            </p>
+          </div>
+          <Switch
+            checked={creditPayment}
+            onCheckedChange={setCreditPayment}
+            aria-labelledby="review-credit-payment-label"
+          />
+        </div>
+      )}
 
       {/* Connect habits — smart suggestions */}
       <div className="space-y-2">
