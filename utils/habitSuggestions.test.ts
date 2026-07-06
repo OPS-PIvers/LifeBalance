@@ -31,14 +31,16 @@ const habit = (
     weatherSensitive: false,
   } as Habit);
 
-// Minimal Transaction factory
+// Minimal Transaction factory (deterministic sequential ids — the suggestion
+// logic never reads `id`, but flaky-proof beats clever)
+let txSeq = 0;
 const tx = (
   merchant: string,
   relatedHabitIds: string[] = [],
   status: Transaction['status'] = 'verified',
 ): Transaction =>
   ({
-    id: `${merchant}-${status}-${relatedHabitIds.join(',')}-${Math.random()}`,
+    id: `tx-${++txSeq}`,
     amount: 10,
     merchant,
     category: 'Groceries',
@@ -203,6 +205,12 @@ describe('matchMerchantNames', () => {
 
   it('does not match on shared substrings that are different tokens', () => {
     expect(matchMerchantNames('Target', 'Targeted Therapy LLC')).toBe('none');
+  });
+
+  it('de-duplicates repeated tokens so they cannot downgrade an exact match', () => {
+    // Without de-dupe, ['costco','costco'] vs ['costco'] would compare as a
+    // strict subset ('similar') purely because of the repeated token.
+    expect(matchMerchantNames('COSTCO COSTCO #123', 'Costco')).toBe('exact');
   });
 
   it('does not apply the plural fold to 2-character tokens ("ga" must not match "gas")', () => {

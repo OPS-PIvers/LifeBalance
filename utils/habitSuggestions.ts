@@ -85,13 +85,14 @@ function normalizeMerchant(name: string): string {
 }
 
 /**
- * Identity-bearing tokens of a normalized merchant label. Single characters
- * (apostrophe shrapnel like the "s" of "joe s") and pure-digit tokens (store
- * numbers, register ids) are dropped — they only ever match via the
- * exact-equality path.
+ * Identity-bearing token SET of a normalized merchant label (de-duplicated —
+ * a repeated token adds no identity, and would skew the size comparison in
+ * {@link matchMerchantNames}). Single characters (apostrophe shrapnel like the
+ * "s" of "joe s") and pure-digit tokens (store numbers, register ids) are
+ * dropped — they only ever match via the exact-equality path.
  */
 function merchantTokens(normalized: string): string[] {
-  return normalized.split(' ').filter(t => t.length >= 2 && !/^\d+$/.test(t));
+  return Array.from(new Set(normalized.split(' ').filter(t => t.length >= 2 && !/^\d+$/.test(t))));
 }
 
 /**
