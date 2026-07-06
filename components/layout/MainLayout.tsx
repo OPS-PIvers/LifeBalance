@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import TopToolbar from './TopToolbar';
 import BottomNav from './BottomNav';
@@ -7,6 +7,7 @@ import { LazyMount } from '@/components/ui/LazyMount';
 import { preloadOnIdle } from '@/utils/preloadOnIdle';
 import { useHouseholdCore, useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { isReviewSnoozed } from '@/hooks/useActionQueue';
+import { useAppReopen } from '@/hooks/useAppReopen';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 
@@ -48,6 +49,23 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const [reviewSnapshot, setReviewSnapshot] = useState<typeof transactions>([]);
 
   useEffect(() => preloadOnIdle(loadReviewPendingDrawer), []);
+
+  // On an installed PWA, "opening the app" is usually re-foregrounding a page
+  // that has been alive for days — no remount, so the mount-time latch above
+  // would fire only on a genuine page load. Re-arm it when the app returns to
+  // the foreground after a real absence, so pending transactions that synced in
+  // while backgrounded (e.g. a spouse's iOS-Shortcut purchase) auto-surface for
+  // every household member. Skipped while the drawer is already open: the user
+  // is mid-review, and re-snapshotting would reshuffle the cycle under them.
+  const reviewDrawerOpenRef = useRef(reviewDrawerOpen);
+  useEffect(() => {
+    reviewDrawerOpenRef.current = reviewDrawerOpen;
+  }, [reviewDrawerOpen]);
+  useAppReopen(
+    useCallback(() => {
+      if (!reviewDrawerOpenRef.current) setHasAutoOpenedReview(false);
+    }, []),
+  );
 
   // Active managed kid → Kid Mode. Validated against the live members list so a
   // stale sessionStorage value (e.g. a removed kid, or the flag turned off) falls
