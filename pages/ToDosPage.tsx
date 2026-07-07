@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef, useId } from 'react';
 import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import { useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, LayoutGrid, List } from 'lucide-react';
+import { Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Rows3, Grid2x2, List, Smartphone } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { quadrantForTodo, QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhower';
@@ -10,6 +10,7 @@ import { DEFAULT_TODO_POINTS } from '@/utils/todoPoints';
 import toast from 'react-hot-toast';
 import { haptic } from '@/utils/haptics';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useIsLandscape } from '@/hooks/useOrientation';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import { generateCsvExport } from '@/utils/exportUtils';
@@ -30,8 +31,29 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 // matrix arrangement adds (accent/neutral). Existing DESIGN.md token families only.
 type SectionColor = 'rose' | 'amber' | 'blue' | 'accent' | 'neutral';
 
-// localStorage key for the per-device list⇄matrix arrangement choice.
+// localStorage key for the per-device arrangement choice.
 const ARRANGEMENT_KEY = 'lifebalance:todos-view';
+
+// Active-view arrangements: chronological list, stacked Eisenhower sections
+// ("prioritized list"), or the true 2×2 Eisenhower grid (landscape-only).
+type Arrangement = 'list' | 'matrix' | 'grid';
+
+const isArrangement = (value: string | null): value is Arrangement =>
+  value === 'list' || value === 'matrix' || value === 'grid';
+
+// The single toggle button cycles list → matrix → grid → list. The icon always
+// previews the NEXT view (what tapping will switch to), not the current one.
+const ARRANGEMENT_CYCLE: Record<Arrangement, Arrangement> = {
+  list: 'matrix',
+  matrix: 'grid',
+  grid: 'list',
+};
+
+const ARRANGEMENT_TOGGLE: Record<Arrangement, { icon: React.ReactNode; label: string; title: string }> = {
+  list: { icon: <Rows3 size={18} />, label: 'Switch to prioritized list', title: 'Prioritized list (Eisenhower)' },
+  matrix: { icon: <Grid2x2 size={18} />, label: 'Switch to matrix grid', title: 'Matrix grid (2×2, landscape)' },
+  grid: { icon: <List size={18} />, label: 'Switch to standard list', title: 'Standard list' },
+};
 
 // Quadrant display config for the Eisenhower arrangement, in QUADRANT_ORDER.
 const QUADRANT_SECTIONS: Record<Quadrant, { title: string; subtitle: string; color: SectionColor }> = {
@@ -65,16 +87,17 @@ const ToDosPage: React.FC = () => {
   // View Mode State
   const [viewMode, setViewMode] = useState<'active' | 'completed'>('active');
 
-  // Active-view arrangement: chronological list vs Eisenhower matrix.
+  // Active-view arrangement: chronological list, Eisenhower sections, or 2×2 grid.
   // Persisted per-device — this is a personal lens on shared data.
-  const [arrangement, setArrangement] = useState<'list' | 'matrix'>(() => {
+  const [arrangement, setArrangement] = useState<Arrangement>(() => {
     try {
-      return localStorage.getItem(ARRANGEMENT_KEY) === 'matrix' ? 'matrix' : 'list';
+      const stored = localStorage.getItem(ARRANGEMENT_KEY);
+      return isArrangement(stored) ? stored : 'list';
     } catch {
       return 'list'; // storage unavailable (private browsing) — default lens
     }
   });
-  const setArrangementPersisted = useCallback((next: 'list' | 'matrix') => {
+  const setArrangementPersisted = useCallback((next: Arrangement) => {
     setArrangement(next);
     try {
       localStorage.setItem(ARRANGEMENT_KEY, next);
@@ -82,6 +105,9 @@ const ToDosPage: React.FC = () => {
       // non-fatal: the toggle still works for this session
     }
   }, []);
+
+  // The 2×2 grid needs landscape; hook-driven so rotating re-renders instantly.
+  const isLandscape = useIsLandscape();
 
   // Track current date to trigger re-categorization at midnight
   const [currentDate, setCurrentDate] = useState(() => startOfToday());
@@ -662,6 +688,12 @@ const ToDosPage: React.FC = () => {
     </div>
   ) : undefined;
 
+  // The 2×2 grid's compact chips have no selection affordance, so batch
+  // selection falls back to the stacked quadrant sections — same buckets,
+  // selectable rows. The stored preference is untouched.
+  const effectiveArrangement: Arrangement =
+    isSelectionMode && arrangement === 'grid' ? 'matrix' : arrangement;
+
   return (
     <div className={cn("px-4 max-w-2xl mx-auto space-y-4 min-h-screen", isSelectionMode ? "pb-40" : "pb-nav-safe")}>
 
@@ -681,18 +713,19 @@ const ToDosPage: React.FC = () => {
                   <TabsTrigger value="completed">{completedBadge}</TabsTrigger>
                 </TabsList>
               </Tabs>
-              {/* List⇄matrix arrangement toggle for the Active view. Stays
-                  visible on the Completed tab (it flips what Active will show
-                  on return) — simpler than conditionally hiding it. */}
+              {/* Arrangement toggle for the Active view — cycles list →
+                  prioritized (matrix) → 2×2 grid → list; the icon previews the
+                  NEXT view. Stays visible on the Completed tab (it flips what
+                  Active will show on return) — simpler than hiding it. */}
               <Button
                 variant="ghost-brand"
                 size="icon"
-                onClick={() => setArrangementPersisted(arrangement === 'list' ? 'matrix' : 'list')}
-                aria-label={arrangement === 'list' ? 'Switch to matrix view' : 'Switch to list view'}
-                title={arrangement === 'list' ? 'Matrix view (Eisenhower)' : 'List view'}
+                onClick={() => setArrangementPersisted(ARRANGEMENT_CYCLE[arrangement])}
+                aria-label={ARRANGEMENT_TOGGLE[arrangement].label}
+                title={ARRANGEMENT_TOGGLE[arrangement].title}
                 className="shrink-0"
               >
-                {arrangement === 'list' ? <LayoutGrid size={18} /> : <List size={18} />}
+                {ARRANGEMENT_TOGGLE[arrangement].icon}
               </Button>
             </>
           )}
@@ -751,7 +784,7 @@ const ToDosPage: React.FC = () => {
 
       {viewMode === 'active' ? (
           <>
-            {arrangement === 'list' ? (
+            {effectiveArrangement === 'list' ? (
             <>
             {/* Immediate Section — quick-add lives INSIDE this section's list
                 surface as its first row (owner request: the add field should be
@@ -819,7 +852,7 @@ const ToDosPage: React.FC = () => {
                 onToggleSelection={toggleSelection}
             />
             </>
-            ) : (
+            ) : effectiveArrangement === 'matrix' ? (
             /* Eisenhower matrix arrangement — same tasks, partitioned by
                urgency (derived from due date, same window as Immediate) ×
                importance (the star). Stacked sections in actionability order;
@@ -846,13 +879,49 @@ const ToDosPage: React.FC = () => {
                 addRow={idx === 0 ? quickAddRow : undefined}
               />
             ))
+            ) : isLandscape ? (
+            /* True 2×2 Eisenhower grid — urgency columns × importance rows,
+               each quadrant an independently scrolling cell of compact chips.
+               Landscape-only: four side-by-side columns don't fit portrait. */
+            <div className="space-y-1.5">
+              <div className="grid grid-cols-2 gap-2 px-1" aria-hidden="true">
+                <span className="text-xxs font-semibold uppercase tracking-wider text-brand-400 dark:text-brand-450 text-center">Urgent</span>
+                <span className="text-xxs font-semibold uppercase tracking-wider text-brand-400 dark:text-brand-450 text-center">Not urgent</span>
+              </div>
+              {/* Height = viewport minus everything stacked around the grid:
+                  page top padding + header row + axis labels (~170px) and the
+                  fixed bottom nav (~65px + safe area). The min-h floor keeps
+                  cells usable on very short landscape viewports (cells scroll). */}
+              <div className="grid grid-cols-2 grid-rows-2 gap-2 h-[calc(100dvh-14.75rem)] min-h-[8.5rem]">
+                {QUADRANT_ORDER.map(q => (
+                  <GridCell
+                    key={q}
+                    quadrant={q}
+                    items={quadrants[q]}
+                    onComplete={completeToDo}
+                    onEdit={openEditModal}
+                    onToggleImportant={handleToggleImportant}
+                  />
+                ))}
+              </div>
+            </div>
+            ) : (
+            /* Grid arrangement in portrait: friendly rotate prompt. The
+               orientation hook re-renders the instant the device rotates. */
+            <EmptyState
+              variant="surface"
+              icon={<Smartphone size={28} className="rotate-90" aria-hidden="true" />}
+              title="Rotate your phone"
+              description="The Eisenhower grid needs landscape to show all four quadrants side by side."
+            />
             )}
 
             {/* The Immediate section's add row is always visible in Active view
                 (rendered even with zero items), so there's no truly "empty"
                 active state anymore — this note only shows when there's
-                nothing beyond what the Immediate card already offers. */}
-            {immediate.length === 0 && upcoming.length === 0 && radar.length === 0 && (
+                nothing beyond what the Immediate card already offers. The grid
+                arrangement has no quick-add row, so the note would mislead. */}
+            {effectiveArrangement !== 'grid' && immediate.length === 0 && upcoming.length === 0 && radar.length === 0 && (
                  <p className="px-1 text-sm text-brand-400 dark:text-brand-450 flex items-center gap-1.5">
                      <ClipboardList size={14} aria-hidden="true" />
                      All caught up — add a task above to get started.
@@ -1190,6 +1259,16 @@ const dateColorMap = {
   neutral: 'text-brand-500 dark:text-brand-400',
 } as const;
 
+// Section-header accent dot color per section color (shared by the stacked
+// sections and the 2×2 grid cells so the two Eisenhower views match).
+const sectionDotColors: Record<SectionColor, string> = {
+  rose: 'bg-money-neg',
+  amber: 'bg-warm-500',
+  blue: 'bg-habit-blue',
+  accent: 'bg-accent-600',
+  neutral: 'bg-brand-400',
+};
+
 // Memoized row for a single active to-do.
 // Uses a field-by-field comparator so toggling selection in one row does not
 // re-render sibling rows that haven't changed their selected state.
@@ -1411,6 +1490,121 @@ const TodoRow = React.memo(function TodoRow({
   );
 });
 
+interface GridCellProps {
+  quadrant: Quadrant;
+  items: ToDo[];
+  onComplete: (id: string) => void;
+  onEdit: (todo: ToDo) => void;
+  onToggleImportant: (todo: ToDo) => void;
+}
+
+// One quadrant cell of the landscape 2×2 Eisenhower grid: a fixed header
+// (dot + title + count) above an independently scrolling list of compact
+// chips. Empty cells still render so the 2×2 shape stays stable.
+const GridCell = React.memo(function GridCell({ quadrant, items, onComplete, onEdit, onToggleImportant }: GridCellProps) {
+  const meta = QUADRANT_SECTIONS[quadrant];
+  return (
+    <section
+      aria-label={`${meta.title} — ${meta.subtitle}`}
+      data-testid={`grid-cell-${quadrant}`}
+      className="flex flex-col min-h-0 overflow-hidden rounded-card border border-brand-200 bg-white dark:border-brand-700 dark:bg-brand-800"
+    >
+      <header className="flex items-center gap-1.5 px-2.5 py-1.5 border-b border-brand-100 dark:border-brand-700 shrink-0" title={meta.subtitle}>
+        <span className={cn('w-2 h-2 rounded-full shrink-0', sectionDotColors[meta.color])} aria-hidden="true" />
+        <h3 className="font-display text-sm font-semibold tracking-tight text-brand-900 dark:text-brand-50 truncate">{meta.title}</h3>
+        <span className="ml-auto text-xs tabular-nums text-brand-400 dark:text-brand-450">{items.length}</span>
+      </header>
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {items.length === 0 ? (
+          <p className="px-2.5 py-3 text-xs text-brand-400 dark:text-brand-450">Nothing here</p>
+        ) : (
+          items.map(item => (
+            <GridChip
+              key={item.id}
+              item={item}
+              color={meta.color}
+              onComplete={onComplete}
+              onEdit={onEdit}
+              onToggleImportant={onToggleImportant}
+            />
+          ))
+        )}
+      </div>
+    </section>
+  );
+});
+
+// Compact task chip inside a grid cell: complete-toggle, truncated title with
+// due date (same color logic as list rows), star toggle. Tapping the body
+// opens the existing edit drawer — no drag-and-drop between quadrants.
+const GridChip = React.memo(function GridChip({ item, color, onComplete, onEdit, onToggleImportant }: {
+  item: ToDo;
+  color: SectionColor;
+  onComplete: (id: string) => void;
+  onEdit: (todo: ToDo) => void;
+  onToggleImportant: (todo: ToDo) => void;
+}) {
+  const dueDate = parseISO(item.completeByDate);
+  const isOverdue = isBefore(dueDate, startOfToday());
+
+  return (
+    <div className="flex items-center gap-1.5 px-2 py-1.5 hairline-divider first:border-t-0">
+      <button
+        type="button"
+        onClick={async () => {
+          try {
+            haptic('light');
+            await onComplete(item.id);
+            toast.success('To-Do completed! 🎉');
+          } catch (error) {
+            console.error('Failed to complete task:', error);
+            toast.error('Failed to complete to-do');
+          }
+        }}
+        className="group p-1.5 -m-1 shrink-0"
+        aria-label={`Complete task: ${item.text}`}
+      >
+        <span className="w-4.5 h-4.5 rounded-full border-2 flex items-center justify-center transition-colors border-brand-300 group-hover:border-accent-500 group-hover:bg-accent-50 dark:border-brand-600 dark:group-hover:border-accent-400 dark:group-hover:bg-accent-900/30">
+          <Check size={10} className="text-transparent group-hover:text-current group-active:text-current transition-colors" />
+        </span>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => onEdit(item)}
+        className="flex-1 min-w-0 text-left"
+        aria-label={`Edit task: ${item.text}`}
+      >
+        <span className="block text-sm font-medium leading-snug text-brand-900 dark:text-brand-50 truncate">{item.text}</span>
+        {isOverdue ? (
+          <span className="block text-xxs font-semibold text-money-neg dark:text-money-negDark">
+            Overdue ({format(dueDate, 'MMM d')})
+          </span>
+        ) : (
+          <span className={cn('block text-xxs font-semibold', dateColorMap[color])}>
+            {isToday(dueDate) ? 'Today' : isTomorrow(dueDate) ? 'Tomorrow' : format(dueDate, 'MMM d')}
+          </span>
+        )}
+      </button>
+
+      <Button
+        variant="ghost-brand"
+        size="icon-sm"
+        onClick={(e) => { e.stopPropagation(); onToggleImportant(item); }}
+        aria-label={item.isImportant ? `Unmark important: ${item.text}` : `Mark important: ${item.text}`}
+        aria-pressed={item.isImportant === true}
+        title={item.isImportant ? 'Unmark important' : 'Mark important'}
+        className="shrink-0"
+      >
+        <Star
+          size={14}
+          className={item.isImportant ? 'text-warm-500 fill-warm-500' : 'text-brand-300 dark:text-brand-500'}
+        />
+      </Button>
+    </div>
+  );
+});
+
 interface SectionProps {
   title: string;
   subtitle: string;
@@ -1455,14 +1649,6 @@ const Section = React.memo(function Section({ title, subtitle, items, color, onC
   // Without an add row, an empty section renders nothing (unchanged). With an
   // add row, the section always renders — the add row is the whole point.
   if (items.length === 0 && !addRow) return null;
-
-  const sectionDotColors = {
-    rose: 'bg-money-neg',
-    amber: 'bg-warm-500',
-    blue: 'bg-habit-blue',
-    accent: 'bg-accent-600',
-    neutral: 'bg-brand-400',
-  };
 
   // In selection mode the full list always renders so select-all / batch
   // actions operate on everything the user expects — the cap is purely a

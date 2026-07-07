@@ -55,6 +55,9 @@ vi.mock('lucide-react', () => ({
   Star: () => <div data-testid="star-icon" />,
   LayoutGrid: () => <div data-testid="layout-grid-icon" />,
   List: () => <div data-testid="list-icon" />,
+  Rows3: () => <div data-testid="rows3-icon" />,
+  Grid2x2: () => <div data-testid="grid2x2-icon" />,
+  Smartphone: () => <div data-testid="smartphone-icon" />,
 }));
 
 describe('ToDosPage Reschedule Features', () => {

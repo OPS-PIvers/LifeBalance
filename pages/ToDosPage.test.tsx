@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import ToDosPage from './ToDosPage';
 import { useTodos, useHouseholdCore, type TodosContextValue, type HouseholdCoreContextValue } from '@/contexts/FirebaseHouseholdContext';
 import { generateCsvExport } from '@/utils/exportUtils';
@@ -57,6 +57,9 @@ vi.mock('lucide-react', () => ({
   Star: () => <div data-testid="star-icon" />,
   LayoutGrid: () => <div data-testid="layout-grid-icon" />,
   List: () => <div data-testid="list-icon" />,
+  Rows3: () => <div data-testid="rows3-icon" />,
+  Grid2x2: () => <div data-testid="grid2x2-icon" />,
+  Smartphone: () => <div data-testid="smartphone-icon" />,
 }));
 
 describe('ToDosPage', () => {
@@ -529,6 +532,118 @@ describe('ToDosPage', () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+  });
+
+  describe('Arrangement views (list / matrix / grid)', () => {
+    const ARRANGEMENT_KEY = 'lifebalance:todos-view';
+    const originalMatchMedia = window.matchMedia;
+
+    // jsdom has no matchMedia; useIsLandscape guards its absence (→ portrait).
+    // Installing this stub lets tests choose the orientation.
+    const setOrientation = (landscape: boolean) => {
+      Object.defineProperty(window, 'matchMedia', {
+        writable: true,
+        configurable: true,
+        value: vi.fn().mockImplementation((query: string) => ({
+          matches: query === '(orientation: landscape)' ? landscape : false,
+          media: query,
+          onchange: null,
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+          dispatchEvent: vi.fn(),
+        })),
+      });
+    };
+
+    beforeEach(() => {
+      localStorage.clear();
+    });
+
+    afterEach(() => {
+      localStorage.clear();
+      Object.defineProperty(window, 'matchMedia', {
+        writable: true,
+        configurable: true,
+        value: originalMatchMedia,
+      });
+    });
+
+    // Quadrant fixture: one task per Eisenhower quadrant. Urgent = overdue /
+    // today / tomorrow; important = the isImportant star.
+    const farOut = format(addDays(startOfToday(), 7), 'yyyy-MM-dd');
+    const quadrantTodos = [
+      { id: 'q1', text: 'Do First Task', completeByDate: today, assignedTo: 'user1', isCompleted: false, isImportant: true, createdBy: 'user1', createdAt: new Date().toISOString() },
+      { id: 'q2', text: 'Schedule Task', completeByDate: farOut, assignedTo: 'user1', isCompleted: false, isImportant: true, createdBy: 'user1', createdAt: new Date().toISOString() },
+      { id: 'q3', text: 'Delegate Task', completeByDate: yesterday, assignedTo: 'user1', isCompleted: false, createdBy: 'user1', createdAt: new Date().toISOString() },
+      { id: 'q4', text: 'Later Task', completeByDate: farOut, assignedTo: 'user2', isCompleted: false, createdBy: 'user1', createdAt: new Date().toISOString() },
+    ];
+
+    it('cycles list → matrix → grid → list and persists each step to localStorage', () => {
+      setOrientation(true);
+      setup();
+
+      // Default: list arrangement — the toggle offers the prioritized list next.
+      fireEvent.click(screen.getByRole('button', { name: 'Switch to prioritized list' }));
+      expect(localStorage.getItem(ARRANGEMENT_KEY)).toBe('matrix');
+      expect(screen.getByText('Do First')).toBeInTheDocument(); // stacked quadrant sections
+
+      fireEvent.click(screen.getByRole('button', { name: 'Switch to matrix grid' }));
+      expect(localStorage.getItem(ARRANGEMENT_KEY)).toBe('grid');
+      expect(screen.getByTestId('grid-cell-do')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Switch to standard list' }));
+      expect(localStorage.getItem(ARRANGEMENT_KEY)).toBe('list');
+      expect(screen.getByText('Immediate')).toBeInTheDocument();
+    });
+
+    it('falls back to the list arrangement when the stored value is invalid', () => {
+      localStorage.setItem(ARRANGEMENT_KEY, 'bogus');
+      setup();
+      expect(screen.getByRole('button', { name: 'Switch to prioritized list' })).toBeInTheDocument();
+      expect(screen.getByText('Immediate')).toBeInTheDocument();
+    });
+
+    it('shows a rotate prompt in grid arrangement while portrait', () => {
+      localStorage.setItem(ARRANGEMENT_KEY, 'grid');
+      setOrientation(false);
+      setup();
+
+      expect(screen.getByText('Rotate your phone')).toBeInTheDocument();
+      expect(screen.queryByTestId('grid-cell-do')).not.toBeInTheDocument();
+    });
+
+    it('renders all four quadrant cells with correct task placement in landscape', () => {
+      localStorage.setItem(ARRANGEMENT_KEY, 'grid');
+      setOrientation(true);
+      setup(quadrantTodos);
+
+      expect(within(screen.getByTestId('grid-cell-do')).getByText('Do First Task')).toBeInTheDocument();
+      expect(within(screen.getByTestId('grid-cell-schedule')).getByText('Schedule Task')).toBeInTheDocument();
+      expect(within(screen.getByTestId('grid-cell-delegate')).getByText('Delegate Task')).toBeInTheDocument();
+      expect(within(screen.getByTestId('grid-cell-later')).getByText('Later Task')).toBeInTheDocument();
+    });
+
+    it('keeps an empty cell rendered with a placeholder so the 2×2 shape stays stable', () => {
+      localStorage.setItem(ARRANGEMENT_KEY, 'grid');
+      setOrientation(true);
+      // Only one quadrant populated — the other three stay as empty cells.
+      setup([quadrantTodos[0]!]);
+
+      expect(screen.getByTestId('grid-cell-later')).toBeInTheDocument();
+      expect(screen.getAllByText('Nothing here')).toHaveLength(3);
+    });
+
+    it('opens the edit drawer when a grid chip body is tapped', () => {
+      localStorage.setItem(ARRANGEMENT_KEY, 'grid');
+      setOrientation(true);
+      setup(quadrantTodos);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Edit task: Do First Task' }));
+      expect(screen.getByText('Edit task')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('Do First Task')).toBeInTheDocument();
     });
   });
 });
