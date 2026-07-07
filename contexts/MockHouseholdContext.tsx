@@ -1,5 +1,5 @@
 import React, { useState, ReactNode, useCallback, useMemo, useRef } from 'react';
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { HouseholdContextType, HouseholdSliceProviders } from './FirebaseHouseholdContext';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { rollRecurringAnchorForward } from '@/utils/calendarRecurrence';
@@ -295,6 +295,40 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       assignedTo: 'kid_leo',
       isCompleted: false,
       points: 5,
+      createdBy: 'test-user-id',
+      createdAt: new Date().toISOString(),
+    },
+    // Eisenhower matrix seeds: one per non-empty quadrant so the matrix
+    // arrangement is walkable in Test Mode (todo_kid_1 above lands in
+    // Delegate: urgent, not important).
+    {
+      id: 'todo_important_1',
+      text: 'Renew car insurance',
+      completeByDate: getLocalDateString(), // urgent + important → Do First
+      assignedTo: 'test-user-id',
+      isCompleted: false,
+      isImportant: true,
+      createdBy: 'test-user-id',
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: 'todo_schedule_1',
+      text: 'Plan summer vacation',
+      // ~3 weeks out: not urgent + important → Schedule
+      completeByDate: format(addDays(new Date(), 21), 'yyyy-MM-dd'),
+      assignedTo: 'test-user-id',
+      isCompleted: false,
+      isImportant: true,
+      createdBy: 'test-user-id',
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: 'todo_later_1',
+      text: 'Organize the garage',
+      // ~2 weeks out, unstarred: not urgent + not important → Later
+      completeByDate: format(addDays(new Date(), 14), 'yyyy-MM-dd'),
+      assignedTo: 'test-user-id',
+      isCompleted: false,
       createdBy: 'test-user-id',
       createdAt: new Date().toISOString(),
     },

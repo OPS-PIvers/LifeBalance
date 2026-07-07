@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef, useId } from 'react';
 import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import { useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown } from 'lucide-react';
+import { Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, LayoutGrid, List } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { quadrantForTodo, QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhower';
 import { ToDo, HouseholdMember } from '@/types/schema';
 import { DEFAULT_TODO_POINTS } from '@/utils/todoPoints';
 import toast from 'react-hot-toast';
@@ -24,6 +25,21 @@ import { cn } from '@/utils/cn';
 import Input from '@/components/ui/Input';
 import BatchRescheduleModal from '@/components/modals/BatchRescheduleModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+
+// Section accent palette — the three list-view urgency colors plus the two the
+// matrix arrangement adds (accent/neutral). Existing DESIGN.md token families only.
+type SectionColor = 'rose' | 'amber' | 'blue' | 'accent' | 'neutral';
+
+// localStorage key for the per-device list⇄matrix arrangement choice.
+const ARRANGEMENT_KEY = 'lifebalance:todos-view';
+
+// Quadrant display config for the Eisenhower arrangement, in QUADRANT_ORDER.
+const QUADRANT_SECTIONS: Record<Quadrant, { title: string; subtitle: string; color: SectionColor }> = {
+  do: { title: 'Do First', subtitle: 'Urgent & Important', color: 'rose' },
+  schedule: { title: 'Schedule', subtitle: 'Important, Not Urgent', color: 'accent' },
+  delegate: { title: 'Delegate', subtitle: 'Urgent, Not Important', color: 'amber' },
+  later: { title: 'Later', subtitle: 'Not Urgent, Not Important', color: 'neutral' },
+};
 
 const ToDosPage: React.FC = () => {
   const {
@@ -48,6 +64,24 @@ const ToDosPage: React.FC = () => {
 
   // View Mode State
   const [viewMode, setViewMode] = useState<'active' | 'completed'>('active');
+
+  // Active-view arrangement: chronological list vs Eisenhower matrix.
+  // Persisted per-device — this is a personal lens on shared data.
+  const [arrangement, setArrangement] = useState<'list' | 'matrix'>(() => {
+    try {
+      return localStorage.getItem(ARRANGEMENT_KEY) === 'matrix' ? 'matrix' : 'list';
+    } catch {
+      return 'list'; // storage unavailable (private browsing) — default lens
+    }
+  });
+  const setArrangementPersisted = useCallback((next: 'list' | 'matrix') => {
+    setArrangement(next);
+    try {
+      localStorage.setItem(ARRANGEMENT_KEY, next);
+    } catch {
+      // non-fatal: the toggle still works for this session
+    }
+  }, []);
 
   // Track current date to trigger re-categorization at midnight
   const [currentDate, setCurrentDate] = useState(() => startOfToday());
@@ -115,6 +149,7 @@ const ToDosPage: React.FC = () => {
   const [text, setText] = useState('');
   const [completeByDate, setCompleteByDate] = useState(getLocalDateString());
   const [assignedTo, setAssignedTo] = useState('');
+  const [isImportant, setIsImportant] = useState(false);
 
   // Sticky quick-add bar state — mirrors the shopping list's inline add. The
   // input is desktop-only autofocused (useAutoFocus skips touch so it doesn't
@@ -169,6 +204,20 @@ const ToDosPage: React.FC = () => {
       allActiveCount: active.length,
       allActiveIds: active.map(t => t.id)
     };
+  }, [todos, currentDate]);
+
+  // Eisenhower buckets — computed unconditionally (hooks rule) but only
+  // rendered in the matrix arrangement. Urgency uses the same midnight-
+  // refreshed currentDate as the list sections, so the views always agree.
+  const quadrants = useMemo(() => {
+    const buckets: Record<Quadrant, ToDo[]> = { do: [], schedule: [], delegate: [], later: [] };
+    todos.forEach(todo => {
+      if (todo.isCompleted) return;
+      buckets[quadrantForTodo(todo, currentDate)].push(todo);
+    });
+    const byDueDate = (a: ToDo, b: ToDo) => a.completeByDate.localeCompare(b.completeByDate);
+    QUADRANT_ORDER.forEach(q => buckets[q].sort(byDueDate));
+    return buckets;
   }, [todos, currentDate]);
 
   // Categorize To-Dos (Completed)
@@ -235,6 +284,7 @@ const ToDosPage: React.FC = () => {
     setCompleteByDate(getLocalDateString());
     const defaultAssignee = currentUser?.uid ?? (members.length > 0 ? members[0]!.uid : ''); // members[0] is defined: guarded by members.length > 0
     setAssignedTo(defaultAssignee);
+    setIsImportant(false);
     setEditingId(null);
     setIsAddModalOpen(true);
   }, [quickText, currentUser, members]);
@@ -276,6 +326,7 @@ const ToDosPage: React.FC = () => {
     setText(todo.text);
     setCompleteByDate(todo.completeByDate);
     setAssignedTo(todo.assignedTo);
+    setIsImportant(todo.isImportant === true);
     setEditingId(todo.id);
     setIsAddModalOpen(true);
   }, []);
@@ -319,6 +370,19 @@ const ToDosPage: React.FC = () => {
       } catch (error) {
           console.error('Failed to move task:', error);
           toast.error('Failed to move task');
+      }
+  }, [updateToDo]);
+
+  // One-tap importance triage from any row (both arrangements) — the fast way
+  // to walk the list with a partner without opening the edit drawer per task.
+  const handleToggleImportant = useCallback(async (todo: ToDo) => {
+      const next = todo.isImportant !== true;
+      try {
+          await updateToDo(todo.id, { isImportant: next });
+          haptic('light');
+      } catch (error) {
+          console.error('Failed to update importance:', error);
+          toast.error('Failed to update importance');
       }
   }, [updateToDo]);
 
@@ -435,7 +499,8 @@ const ToDosPage: React.FC = () => {
         await updateToDo(editingId, {
           text: trimmedText,
           completeByDate,
-          assignedTo
+          assignedTo,
+          isImportant
         });
         toast.success('Task updated');
       } else {
@@ -443,7 +508,8 @@ const ToDosPage: React.FC = () => {
           text: trimmedText,
           completeByDate,
           assignedTo,
-          isCompleted: false
+          isCompleted: false,
+          isImportant
         });
         haptic('success');
         toast.success('Task added');
@@ -564,6 +630,38 @@ const ToDosPage: React.FC = () => {
     },
   ];
 
+  // Quick-add row shared by both arrangements — always the first row of the
+  // first section (Immediate in list, Do First in matrix). Hidden in
+  // selection mode, where adding has no context.
+  const quickAddRow = !isSelectionMode ? (
+    <div className="flex items-center gap-2">
+      <QuickAddBar
+        attached
+        onSubmit={handleQuickAdd}
+        inputRef={quickAddRef}
+        value={quickText}
+        onChange={setQuickText}
+        placeholder="Add a task..."
+        aria-label="Quick add task"
+        disabled={!quickText.trim()}
+        submitLabel="Add task"
+      />
+
+      {/* Details — opens the full form to set a custom due date / assignee /
+          importance. Retains aria-label "Add new task" so it is the page's
+          full-add entry point. */}
+      <button
+        type="button"
+        onClick={openAddModal}
+        aria-label="Add new task"
+        title="Add with date & assignee"
+        className="flex-none flex items-center justify-center p-3 mr-2 rounded-btn text-brand-600 hover:text-brand-900 hover:bg-brand-100 dark:text-brand-300 dark:hover:text-brand-50 dark:hover:bg-brand-700/50 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
+      >
+        <SlidersHorizontal className="w-5 h-5" />
+      </button>
+    </div>
+  ) : undefined;
+
   return (
     <div className={cn("px-4 max-w-2xl mx-auto space-y-4 min-h-screen", isSelectionMode ? "pb-40" : "pb-nav-safe")}>
 
@@ -576,12 +674,27 @@ const ToDosPage: React.FC = () => {
             {isSelectionMode ? 'Select tasks' : 'To-dos'}
           </h1>
           {!isSelectionMode && (
-            <Tabs value={viewMode} onValueChange={(val) => setViewMode(val as 'active' | 'completed')}>
-              <TabsList size="sm" className="w-auto inline-flex">
-                <TabsTrigger value="active">Active</TabsTrigger>
-                <TabsTrigger value="completed">{completedBadge}</TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <>
+              <Tabs value={viewMode} onValueChange={(val) => setViewMode(val as 'active' | 'completed')}>
+                <TabsList size="sm" className="w-auto inline-flex">
+                  <TabsTrigger value="active">Active</TabsTrigger>
+                  <TabsTrigger value="completed">{completedBadge}</TabsTrigger>
+                </TabsList>
+              </Tabs>
+              {/* List⇄matrix arrangement toggle for the Active view. Stays
+                  visible on the Completed tab (it flips what Active will show
+                  on return) — simpler than conditionally hiding it. */}
+              <Button
+                variant="ghost-brand"
+                size="icon"
+                onClick={() => setArrangementPersisted(arrangement === 'list' ? 'matrix' : 'list')}
+                aria-label={arrangement === 'list' ? 'Switch to matrix view' : 'Switch to list view'}
+                title={arrangement === 'list' ? 'Matrix view (Eisenhower)' : 'List view'}
+                className="shrink-0"
+              >
+                {arrangement === 'list' ? <LayoutGrid size={18} /> : <List size={18} />}
+              </Button>
+            </>
           )}
         </div>
         {isSelectionMode ? (
@@ -638,14 +751,15 @@ const ToDosPage: React.FC = () => {
 
       {viewMode === 'active' ? (
           <>
+            {arrangement === 'list' ? (
+            <>
             {/* Immediate Section — quick-add lives INSIDE this section's list
                 surface as its first row (owner request: the add field should be
                 row one of the list, not a detached floating band). Quick-add
                 defaults to due-today / current user, which is exactly this
                 section's scope, so it's the natural home. The row scrolls with
                 the card (no longer sticky) — the global Capture FAB covers
-                add-while-scrolled. Hidden in selection mode and the completed
-                view, where adding has no context. */}
+                add-while-scrolled. */}
             <Section
                 title="Immediate"
                 subtitle="Overdue, Today & Tomorrow"
@@ -656,39 +770,13 @@ const ToDosPage: React.FC = () => {
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
                 onMoveToTomorrow={handleMoveToTomorrow}
+                onToggleImportant={handleToggleImportant}
                 onMore={setActionTodo}
                 memberMap={memberMap}
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
                 onToggleSelection={toggleSelection}
-                addRow={!isSelectionMode ? (
-                  <div className="flex items-center gap-2">
-                    <QuickAddBar
-                      attached
-                      onSubmit={handleQuickAdd}
-                      inputRef={quickAddRef}
-                      value={quickText}
-                      onChange={setQuickText}
-                      placeholder="Add a task..."
-                      aria-label="Quick add task"
-                      disabled={!quickText.trim()}
-                      submitLabel="Add task"
-                    />
-
-                    {/* Details — opens the full form to set a custom due date /
-                        assignee. Retains aria-label "Add new task" so it is the
-                        page's full-add entry point. */}
-                    <button
-                      type="button"
-                      onClick={openAddModal}
-                      aria-label="Add new task"
-                      title="Add with date & assignee"
-                      className="flex-none flex items-center justify-center p-3 mr-2 rounded-btn text-brand-600 hover:text-brand-900 hover:bg-brand-100 dark:text-brand-300 dark:hover:text-brand-50 dark:hover:bg-brand-700/50 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
-                    >
-                      <SlidersHorizontal className="w-5 h-5" />
-                    </button>
-                  </div>
-                ) : undefined}
+                addRow={quickAddRow}
             />
 
             {/* Upcoming Section */}
@@ -703,6 +791,7 @@ const ToDosPage: React.FC = () => {
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
                 onMoveToTomorrow={handleMoveToTomorrow}
+                onToggleImportant={handleToggleImportant}
                 onMore={setActionTodo}
                 memberMap={memberMap}
                 isSelectionMode={isSelectionMode}
@@ -722,12 +811,42 @@ const ToDosPage: React.FC = () => {
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
                 onMoveToTomorrow={handleMoveToTomorrow}
+                onToggleImportant={handleToggleImportant}
                 onMore={setActionTodo}
                 memberMap={memberMap}
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
                 onToggleSelection={toggleSelection}
             />
+            </>
+            ) : (
+            /* Eisenhower matrix arrangement — same tasks, partitioned by
+               urgency (derived from due date, same window as Immediate) ×
+               importance (the star). Stacked sections in actionability order;
+               quick-add stays row one of the first section. */
+            QUADRANT_ORDER.map((q, idx) => (
+              <Section
+                key={q}
+                title={QUADRANT_SECTIONS[q].title}
+                subtitle={QUADRANT_SECTIONS[q].subtitle}
+                items={quadrants[q]}
+                color={QUADRANT_SECTIONS[q].color}
+                maxVisible={q === 'later' ? 5 : undefined}
+                onComplete={completeToDo}
+                onEdit={openEditModal}
+                onDelete={deleteToDo}
+                onDuplicate={handleDuplicate}
+                onMoveToTomorrow={handleMoveToTomorrow}
+                onToggleImportant={handleToggleImportant}
+                onMore={setActionTodo}
+                memberMap={memberMap}
+                isSelectionMode={isSelectionMode}
+                selectedIds={selectedIds}
+                onToggleSelection={toggleSelection}
+                addRow={idx === 0 ? quickAddRow : undefined}
+              />
+            ))
+            )}
 
             {/* The Immediate section's add row is always visible in Active view
                 (rendered even with zero items), so there's no truly "empty"
@@ -889,6 +1008,34 @@ const ToDosPage: React.FC = () => {
             className="appearance-none"
           />
 
+          {/* Eisenhower importance — a household judgment call, deliberately a
+              yes/no (not low/med/high) to match the matrix's two-state axis. */}
+          <button
+            type="button"
+            onClick={() => setIsImportant(v => !v)}
+            aria-pressed={isImportant}
+            className={cn(
+              'w-full flex items-center gap-3 px-3 py-3 rounded-btn border text-left transition-colors duration-(--duration-fast) ease-(--ease-standard)',
+              isImportant
+                ? 'bg-warm-100 border-warm-500/40 dark:bg-warm-500/15 dark:border-warm-500/40'
+                : 'bg-white border-brand-200 hover:bg-brand-50 dark:bg-brand-700/50 dark:border-brand-600 dark:hover:bg-brand-700'
+            )}
+          >
+            <Star
+              size={20}
+              aria-hidden="true"
+              className={isImportant ? 'text-warm-500 fill-warm-500' : 'text-brand-300 dark:text-brand-500'}
+            />
+            <span className="flex-1 min-w-0">
+              <span className={cn('block text-sm font-medium', isImportant ? 'text-warm-700 dark:text-warm-300' : 'text-brand-900 dark:text-brand-50')}>
+                Important
+              </span>
+              <span className="block text-xs text-brand-400 dark:text-brand-450">
+                Matters to the family — big consequences if skipped
+              </span>
+            </span>
+          </button>
+
           <fieldset>
             <legend className="block text-xs font-bold text-brand-400 dark:text-brand-450 uppercase tracking-wider mb-1">
               Assign to
@@ -1019,7 +1166,7 @@ const ToDosPage: React.FC = () => {
 
 interface TodoRowProps {
   item: ToDo;
-  color: 'rose' | 'amber' | 'blue';
+  color: SectionColor;
   assignee: HouseholdMember | undefined;
   isSelected: boolean;
   isSelectionMode: boolean;
@@ -1028,6 +1175,7 @@ interface TodoRowProps {
   onDelete: (id: string) => void;
   onDuplicate: (todo: ToDo) => void;
   onMoveToTomorrow: (todo: ToDo) => void;
+  onToggleImportant: (todo: ToDo) => void;
   onMore: (todo: ToDo) => void;
   onToggleSelection: (id: string) => void;
 }
@@ -1038,6 +1186,8 @@ const dateColorMap = {
   rose: 'text-money-neg dark:text-money-negDark',
   amber: 'text-warm-700 dark:text-warm-300',
   blue: 'text-habit-blue dark:text-habit-blue',
+  accent: 'text-accent-600 dark:text-accent-300',
+  neutral: 'text-brand-500 dark:text-brand-400',
 } as const;
 
 // Memoized row for a single active to-do.
@@ -1054,6 +1204,7 @@ const TodoRow = React.memo(function TodoRow({
   onDelete,
   onDuplicate,
   onMoveToTomorrow,
+  onToggleImportant,
   onMore,
   onToggleSelection,
 }: TodoRowProps) {
@@ -1162,6 +1313,22 @@ const TodoRow = React.memo(function TodoRow({
         {/* Actions */}
         {!isSelectionMode && (
           <>
+            {/* Importance star — always visible at every width (not hover-
+                gated): one-tap family triage is the core Eisenhower workflow. */}
+            <Button
+              variant="ghost-brand"
+              size="icon"
+              onClick={(e) => { e.stopPropagation(); onToggleImportant(item); }}
+              aria-label={item.isImportant ? `Unmark important: ${item.text}` : `Mark important: ${item.text}`}
+              aria-pressed={item.isImportant === true}
+              title={item.isImportant ? 'Unmark important' : 'Mark important'}
+              className="self-center"
+            >
+              <Star
+                size={18}
+                className={item.isImportant ? 'text-warm-500 fill-warm-500' : 'text-brand-300 dark:text-brand-500'}
+              />
+            </Button>
             {/* Desktop Actions */}
             <div className="hidden sm:flex items-center gap-1 pl-2">
               <Button
@@ -1248,12 +1415,13 @@ interface SectionProps {
   title: string;
   subtitle: string;
   items: ToDo[];
-  color: 'rose' | 'amber' | 'blue';
+  color: SectionColor;
   onComplete: (id: string) => void;
   onEdit: (todo: ToDo) => void;
   onDelete: (id: string) => void;
   onDuplicate: (todo: ToDo) => void;
   onMoveToTomorrow: (todo: ToDo) => void;
+  onToggleImportant: (todo: ToDo) => void;
   onMore: (todo: ToDo) => void;
   /** Pre-built member lookup map from page level — avoids rebuilding per-section. */
   memberMap: ReadonlyMap<string, HouseholdMember>;
@@ -1280,7 +1448,7 @@ interface SectionProps {
 // Uses a custom memo comparator: when `selectedIds` changes, re-render is skipped unless
 // at least one of this section's own items changed its selected/deselected state.
 // This prevents toggling an item in one section from re-rendering the other two sections.
-const Section = React.memo(function Section({ title, subtitle, items, color, onComplete, onEdit, onDelete, onDuplicate, onMoveToTomorrow, onMore, memberMap, isSelectionMode, selectedIds, onToggleSelection, maxVisible, addRow }: SectionProps) {
+const Section = React.memo(function Section({ title, subtitle, items, color, onComplete, onEdit, onDelete, onDuplicate, onMoveToTomorrow, onToggleImportant, onMore, memberMap, isSelectionMode, selectedIds, onToggleSelection, maxVisible, addRow }: SectionProps) {
   // Show-more state for capped lists (hooks must run before the empty early-return).
   const [expanded, setExpanded] = useState(false);
 
@@ -1292,6 +1460,8 @@ const Section = React.memo(function Section({ title, subtitle, items, color, onC
     rose: 'bg-money-neg',
     amber: 'bg-warm-500',
     blue: 'bg-habit-blue',
+    accent: 'bg-accent-600',
+    neutral: 'bg-brand-400',
   };
 
   // In selection mode the full list always renders so select-all / batch
@@ -1327,6 +1497,7 @@ const Section = React.memo(function Section({ title, subtitle, items, color, onC
             onDelete={onDelete}
             onDuplicate={onDuplicate}
             onMoveToTomorrow={onMoveToTomorrow}
+            onToggleImportant={onToggleImportant}
             onMore={onMore}
             onToggleSelection={onToggleSelection}
           />
@@ -1358,6 +1529,7 @@ const Section = React.memo(function Section({ title, subtitle, items, color, onC
     prev.onDelete === next.onDelete &&
     prev.onDuplicate === next.onDuplicate &&
     prev.onMoveToTomorrow === next.onMoveToTomorrow &&
+    prev.onToggleImportant === next.onToggleImportant &&
     prev.onMore === next.onMore &&
     prev.onToggleSelection === next.onToggleSelection &&
     prev.addRow === next.addRow;

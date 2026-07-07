@@ -643,6 +643,11 @@ export interface ToDo {
   // existing todo. Dormant for normal households: a non-managed assignee earns
   // nothing, so this field is inert unless the assignee is a managed kid.
   points?: number;
+
+  // Eisenhower matrix: human judgment of importance, set via the star toggle.
+  // Absent/false = not important — no migration needed. Urgency is NOT stored;
+  // it is derived from completeByDate (utils/eisenhower.ts).
+  isImportant?: boolean;
 }
 
 export interface UpdateBucketPayload {

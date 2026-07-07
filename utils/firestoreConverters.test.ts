@@ -860,4 +860,16 @@ describe('todoConverter', () => {
     const partial = { text: 'Walk dog', completeByDate: '2024-01-01', assignedTo: 'u1', isCompleted: false, createdBy: 'u1', createdAt: '2024-01-01' };
     expect(() => todoConverter.fromFirestore(fakeSnap('todo-5', partial))).not.toThrow();
   });
+
+  it('(a) isImportant round-trips through both directions', () => {
+    const fromDb = todoConverter.fromFirestore(fakeSnap('todo-6', { ...wellFormed, isImportant: true }));
+    expect(fromDb.isImportant).toBe(true);
+    const out = callToFirestore(todoConverter, { ...wellFormed, id: 'todo-6', isImportant: true });
+    expect(out['isImportant']).toBe(true);
+  });
+
+  it('(b) isImportant stays undefined when absent (legacy docs)', () => {
+    const result = todoConverter.fromFirestore(fakeSnap('todo-7', wellFormed));
+    expect(result.isImportant).toBeUndefined();
+  });
 });
