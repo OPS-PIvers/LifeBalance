@@ -443,11 +443,13 @@ const ToDosPage: React.FC = () => {
   // 'hidden' forever on close). The latch engages when the overlay appears and
   // releases only when BOTH the overlay and any drawer above it are closed.
   // It deliberately never engages from a plain drawer open (Drawer owns its
-  // own lock), so this effect always captures the true pre-lock body style —
-  // never a value the Drawer already set in the same commit. On release,
-  // Drawer's cleanup (child effect, destroyed first) restores its captured
-  // 'hidden', then this cleanup (parent, destroyed after) restores the real
-  // original — the last write is the correct one.
+  // own lock). On release we CLEAR the inline override rather than restoring a
+  // captured value: the latch can engage while a Drawer already holds the lock
+  // (drawer opened in portrait, then rotated to landscape), so any value
+  // captured at engage time may be the drawer's 'hidden' — restoring it would
+  // pin the page unscrollable. Clearing falls back to the stylesheet default,
+  // and on release Drawer's cleanup (child effect, destroyed first) runs
+  // before this one, so the clear is the final, correct write.
   // Latch state uses the render-phase-setState edge pattern (see
   // wasSelectionMode above) instead of an effect cascade.
   const [scrollLockHeld, setScrollLockHeld] = useState(false);
@@ -458,11 +460,9 @@ const ToDosPage: React.FC = () => {
   }
   useEffect(() => {
     if (!scrollLockHeld) return;
-    // Same mechanism as Drawer (Drawer.tsx): capture, override, restore.
-    const originalStyle = window.getComputedStyle(document.body).overflow;
     document.body.style.overflow = 'hidden';
     return () => {
-      document.body.style.overflow = originalStyle;
+      document.body.style.overflow = '';
     };
   }, [scrollLockHeld]);
 

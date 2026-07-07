@@ -545,7 +545,8 @@ describe('ToDosPage', () => {
     // 'change' listeners so useMediaQuery/useSyncExternalStore re-reads — the
     // same signal a real device rotation produces.
     const orientation = { landscape: false };
-    const changeListeners = new Set<() => void>();
+    type MqlChangeListener = (e: { matches: boolean; media: string }) => void;
+    const changeListeners = new Set<MqlChangeListener>();
     const setOrientation = (landscape: boolean) => {
       orientation.landscape = landscape;
       changeListeners.clear();
@@ -560,8 +561,8 @@ describe('ToDosPage', () => {
           onchange: null,
           addListener: vi.fn(),
           removeListener: vi.fn(),
-          addEventListener: (_type: string, cb: () => void) => { changeListeners.add(cb); },
-          removeEventListener: (_type: string, cb: () => void) => { changeListeners.delete(cb); },
+          addEventListener: (_type: string, cb: MqlChangeListener) => { changeListeners.add(cb); },
+          removeEventListener: (_type: string, cb: MqlChangeListener) => { changeListeners.delete(cb); },
           dispatchEvent: vi.fn(),
         })),
       });
@@ -572,7 +573,8 @@ describe('ToDosPage', () => {
     const rotateTo = (landscape: boolean) => {
       orientation.landscape = landscape;
       act(() => {
-        changeListeners.forEach(cb => cb());
+        // Real MediaQueryList listeners receive a MediaQueryListEvent.
+        changeListeners.forEach(cb => cb({ matches: landscape, media: '(orientation: landscape)' }));
       });
     };
 
@@ -735,6 +737,30 @@ describe('ToDosPage', () => {
 
       // Close the drawer: now everything is closed — lock fully released.
       fireEvent.click(screen.getByLabelText('Close drawer'));
+      expect(document.body.style.overflow).not.toBe('hidden');
+    });
+
+    it('releases body scroll even when the latch engaged while a drawer already held the lock', () => {
+      // The inverse race: the overlay appears while a Drawer has already set
+      // body overflow to 'hidden'. If the latch captured-and-restored that
+      // value, release would re-pin 'hidden' forever; it must clear instead.
+      localStorage.setItem(ARRANGEMENT_KEY, 'list');
+      setOrientation(true);
+      setup(quadrantTodos);
+
+      // Open the action drawer from the list view — Drawer locks body scroll.
+      fireEvent.click(screen.getByRole('button', { name: 'More options for: Do First Task' }));
+      expect(document.body.style.overflow).toBe('hidden');
+
+      // Cycle list → matrix → grid while the drawer is open: the overlay
+      // mounts and the latch engages on top of the drawer's existing lock.
+      fireEvent.click(screen.getByRole('button', { name: 'Switch to prioritized list' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Switch to matrix grid' }));
+      expect(screen.getByTestId('grid-overlay')).toBeInTheDocument();
+
+      // Close the drawer, then exit the grid — nothing holds a lock anymore.
+      fireEvent.click(screen.getByLabelText('Close drawer'));
+      fireEvent.click(screen.getByRole('button', { name: 'Exit matrix view' }));
       expect(document.body.style.overflow).not.toBe('hidden');
     });
 
