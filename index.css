@@ -263,6 +263,17 @@
   padding-bottom: calc(7rem + var(--spacing-safe, 0px));
 }
 
+@utility p-screen-safe {
+  /* All-edge device safe-area padding for full-screen fixed overlays (e.g. the
+     immersive Eisenhower grid). Landscape phones put the notch on the LEFT or
+     RIGHT edge, so unlike pb-nav-safe this covers all four insets. Content
+     padding stays with the consumer — this is only the hardware clearance. */
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+}
+
 @utility stat-num {
   /* Display-number treatment for metrics and money: monospaced, tabular
      figures, tight tracking. Size / weight / color stay with the consumer.

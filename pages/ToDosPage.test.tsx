@@ -540,21 +540,39 @@ describe('ToDosPage', () => {
     const originalMatchMedia = window.matchMedia;
 
     // jsdom has no matchMedia; useIsLandscape guards its absence (→ portrait).
-    // Installing this stub lets tests choose the orientation.
+    // Installing this stub lets tests choose the orientation. It's stateful:
+    // `rotateTo` flips the stored orientation and fires the registered mql
+    // 'change' listeners so useMediaQuery/useSyncExternalStore re-reads — the
+    // same signal a real device rotation produces.
+    const orientation = { landscape: false };
+    const changeListeners = new Set<() => void>();
     const setOrientation = (landscape: boolean) => {
+      orientation.landscape = landscape;
+      changeListeners.clear();
       Object.defineProperty(window, 'matchMedia', {
         writable: true,
         configurable: true,
         value: vi.fn().mockImplementation((query: string) => ({
-          matches: query === '(orientation: landscape)' ? landscape : false,
+          get matches() {
+            return query === '(orientation: landscape)' ? orientation.landscape : false;
+          },
           media: query,
           onchange: null,
           addListener: vi.fn(),
           removeListener: vi.fn(),
-          addEventListener: vi.fn(),
-          removeEventListener: vi.fn(),
+          addEventListener: (_type: string, cb: () => void) => { changeListeners.add(cb); },
+          removeEventListener: (_type: string, cb: () => void) => { changeListeners.delete(cb); },
           dispatchEvent: vi.fn(),
         })),
+      });
+    };
+    // Simulate a device rotation AFTER render (setOrientation only sets the
+    // initial state — components subscribed via addEventListener need the
+    // change event to notice).
+    const rotateTo = (landscape: boolean) => {
+      orientation.landscape = landscape;
+      act(() => {
+        changeListeners.forEach(cb => cb());
       });
     };
 
@@ -634,6 +652,98 @@ describe('ToDosPage', () => {
 
       expect(screen.getByTestId('grid-cell-later')).toBeInTheDocument();
       expect(screen.getAllByText('Nothing here')).toHaveLength(3);
+    });
+
+    it('renders the grid as an immersive full-screen overlay in landscape', () => {
+      localStorage.setItem(ARRANGEMENT_KEY, 'grid');
+      setOrientation(true);
+      setup(quadrantTodos);
+
+      const overlay = screen.getByRole('region', { name: 'Eisenhower matrix' });
+      expect(overlay).toHaveAttribute('data-testid', 'grid-overlay');
+      // All four quadrant cells live inside the overlay.
+      ['do', 'schedule', 'delegate', 'later'].forEach(q => {
+        expect(within(overlay).getByTestId(`grid-cell-${q}`)).toBeInTheDocument();
+      });
+      expect(within(overlay).getByRole('button', { name: 'Exit matrix view' })).toBeInTheDocument();
+    });
+
+    it('exits to the list arrangement (persisted) when ✕ is clicked', () => {
+      localStorage.setItem(ARRANGEMENT_KEY, 'grid');
+      setOrientation(true);
+      setup(quadrantTodos);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Exit matrix view' }));
+
+      expect(screen.queryByTestId('grid-overlay')).not.toBeInTheDocument();
+      expect(localStorage.getItem(ARRANGEMENT_KEY)).toBe('list');
+      expect(screen.getByText('Immediate')).toBeInTheDocument();
+    });
+
+    it('exits the overlay on Escape', () => {
+      localStorage.setItem(ARRANGEMENT_KEY, 'grid');
+      setOrientation(true);
+      setup(quadrantTodos);
+
+      expect(screen.getByTestId('grid-overlay')).toBeInTheDocument();
+      fireEvent.keyDown(window, { key: 'Escape' });
+
+      expect(screen.queryByTestId('grid-overlay')).not.toBeInTheDocument();
+      expect(localStorage.getItem(ARRANGEMENT_KEY)).toBe('list');
+    });
+
+    it('does NOT exit on Escape while the edit drawer is open above the grid', () => {
+      localStorage.setItem(ARRANGEMENT_KEY, 'grid');
+      setOrientation(true);
+      setup(quadrantTodos);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Edit task: Do First Task' }));
+      expect(screen.getByText('Edit task')).toBeInTheDocument();
+
+      // Escape here belongs to the drawer — the grid overlay must stay put.
+      fireEvent.keyDown(window, { key: 'Escape' });
+      expect(screen.getByTestId('grid-overlay')).toBeInTheDocument();
+      expect(localStorage.getItem(ARRANGEMENT_KEY)).toBe('grid');
+    });
+
+    it('locks body scroll while the overlay is shown and restores it on exit', () => {
+      localStorage.setItem(ARRANGEMENT_KEY, 'grid');
+      setOrientation(true);
+      setup(quadrantTodos);
+
+      expect(document.body.style.overflow).toBe('hidden');
+      fireEvent.click(screen.getByRole('button', { name: 'Exit matrix view' }));
+      expect(document.body.style.overflow).not.toBe('hidden');
+    });
+
+    it('keeps body scroll locked when rotating to portrait while the edit drawer is open, and restores it when the drawer closes', () => {
+      localStorage.setItem(ARRANGEMENT_KEY, 'grid');
+      setOrientation(true);
+      setup(quadrantTodos);
+
+      // Overlay locks; drawer opens above it (Drawer adds its own lock).
+      expect(document.body.style.overflow).toBe('hidden');
+      fireEvent.click(screen.getByRole('button', { name: 'Edit task: Do First Task' }));
+      expect(screen.getByText('Edit task')).toBeInTheDocument();
+
+      // Rotate to portrait: the overlay unmounts (rotate prompt shows) but the
+      // drawer is still open — the page-level latch must HOLD the lock.
+      rotateTo(false);
+      expect(screen.queryByTestId('grid-overlay')).not.toBeInTheDocument();
+      expect(screen.getByText('Rotate your phone')).toBeInTheDocument();
+      expect(document.body.style.overflow).toBe('hidden');
+
+      // Close the drawer: now everything is closed — lock fully released.
+      fireEvent.click(screen.getByLabelText('Close drawer'));
+      expect(document.body.style.overflow).not.toBe('hidden');
+    });
+
+    it('focuses the exit button when the overlay mounts', () => {
+      localStorage.setItem(ARRANGEMENT_KEY, 'grid');
+      setOrientation(true);
+      setup(quadrantTodos);
+
+      expect(screen.getByRole('button', { name: 'Exit matrix view' })).toHaveFocus();
     });
 
     it('opens the edit drawer when a grid chip body is tapped', () => {

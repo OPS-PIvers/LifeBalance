@@ -424,6 +424,48 @@ const ToDosPage: React.FC = () => {
     });
   }, []);
 
+  // The 2×2 grid's compact chips have no selection affordance, so batch
+  // selection falls back to the stacked quadrant sections — same buckets,
+  // selectable rows. The stored preference is untouched.
+  const effectiveArrangement: Arrangement =
+    isSelectionMode && arrangement === 'grid' ? 'matrix' : arrangement;
+
+  const gridOverlayVisible =
+    viewMode === 'active' && effectiveArrangement === 'grid' && isLandscape;
+  const drawerOpen = isAddModalOpen || !!actionTodo;
+
+  // Body-scroll lock for the immersive grid overlay, held at PAGE level as a
+  // latch rather than inside GridOverlay. Why: if the user rotates to portrait
+  // WHILE the edit/action drawer is open, the overlay unmounts but the drawer
+  // still needs the lock — an overlay-local cleanup would restore body scroll
+  // behind the open drawer (and the Drawer, having captured 'hidden' as its
+  // "original" when it opened over the locked overlay, would then re-pin
+  // 'hidden' forever on close). The latch engages when the overlay appears and
+  // releases only when BOTH the overlay and any drawer above it are closed.
+  // It deliberately never engages from a plain drawer open (Drawer owns its
+  // own lock), so this effect always captures the true pre-lock body style —
+  // never a value the Drawer already set in the same commit. On release,
+  // Drawer's cleanup (child effect, destroyed first) restores its captured
+  // 'hidden', then this cleanup (parent, destroyed after) restores the real
+  // original — the last write is the correct one.
+  // Latch state uses the render-phase-setState edge pattern (see
+  // wasSelectionMode above) instead of an effect cascade.
+  const [scrollLockHeld, setScrollLockHeld] = useState(false);
+  if (gridOverlayVisible && !scrollLockHeld) {
+    setScrollLockHeld(true);
+  } else if (scrollLockHeld && !gridOverlayVisible && !drawerOpen) {
+    setScrollLockHeld(false);
+  }
+  useEffect(() => {
+    if (!scrollLockHeld) return;
+    // Same mechanism as Drawer (Drawer.tsx): capture, override, restore.
+    const originalStyle = window.getComputedStyle(document.body).overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalStyle;
+    };
+  }, [scrollLockHeld]);
+
   // Ensure user is authenticated (should be guaranteed by ProtectedRoute, but defensive check)
   if (!currentUser) {
     return (
@@ -688,12 +730,6 @@ const ToDosPage: React.FC = () => {
     </div>
   ) : undefined;
 
-  // The 2×2 grid's compact chips have no selection affordance, so batch
-  // selection falls back to the stacked quadrant sections — same buckets,
-  // selectable rows. The stored preference is untouched.
-  const effectiveArrangement: Arrangement =
-    isSelectionMode && arrangement === 'grid' ? 'matrix' : arrangement;
-
   return (
     <div className={cn("px-4 max-w-2xl mx-auto space-y-4 min-h-screen", isSelectionMode ? "pb-40" : "pb-nav-safe")}>
 
@@ -880,31 +916,18 @@ const ToDosPage: React.FC = () => {
               />
             ))
             ) : isLandscape ? (
-            /* True 2×2 Eisenhower grid — urgency columns × importance rows,
-               each quadrant an independently scrolling cell of compact chips.
-               Landscape-only: four side-by-side columns don't fit portrait. */
-            <div className="space-y-1.5">
-              <div className="grid grid-cols-2 gap-2 px-1" aria-hidden="true">
-                <span className="text-xxs font-semibold uppercase tracking-wider text-brand-400 dark:text-brand-450 text-center">Urgent</span>
-                <span className="text-xxs font-semibold uppercase tracking-wider text-brand-400 dark:text-brand-450 text-center">Not urgent</span>
-              </div>
-              {/* Height = viewport minus everything stacked around the grid:
-                  page top padding + header row + axis labels (~170px) and the
-                  fixed bottom nav (~65px + safe area). The min-h floor keeps
-                  cells usable on very short landscape viewports (cells scroll). */}
-              <div className="grid grid-cols-2 grid-rows-2 gap-2 h-[calc(100dvh-14.75rem)] min-h-[8.5rem]">
-                {QUADRANT_ORDER.map(q => (
-                  <GridCell
-                    key={q}
-                    quadrant={q}
-                    items={quadrants[q]}
-                    onComplete={completeToDo}
-                    onEdit={openEditModal}
-                    onToggleImportant={handleToggleImportant}
-                  />
-                ))}
-              </div>
-            </div>
+            /* True 2×2 Eisenhower grid — auto-immersive full-screen overlay.
+               In landscape (~375px tall) the toolbar + tabs + bottom nav left
+               the in-page grid an unusable sliver, so the grid takes the whole
+               viewport instead; ✕ (or Escape / rotating away) leaves it. */
+            <GridOverlay
+              quadrants={quadrants}
+              onComplete={completeToDo}
+              onEdit={openEditModal}
+              onToggleImportant={handleToggleImportant}
+              onExit={() => setArrangementPersisted('list')}
+              escapeDisabled={isAddModalOpen || !!actionTodo}
+            />
             ) : (
             /* Grid arrangement in portrait: friendly rotate prompt. The
                orientation hook re-renders the instant the device rotates. */
@@ -1490,6 +1513,99 @@ const TodoRow = React.memo(function TodoRow({
   );
 });
 
+interface GridOverlayProps {
+  quadrants: Record<Quadrant, ToDo[]>;
+  onComplete: (id: string) => void;
+  onEdit: (todo: ToDo) => void;
+  onToggleImportant: (todo: ToDo) => void;
+  /** Exit the immersive grid: persists arrangement back to 'list'. */
+  onExit: () => void;
+  /**
+   * Suppress the Escape shortcut while a layer is open ABOVE the grid (edit
+   * drawer / task-options drawer). Those layers own Escape — without this
+   * gate one keypress would close the drawer AND exit the grid.
+   */
+  escapeDisabled: boolean;
+}
+
+// Immersive full-screen 2×2 Eisenhower grid. Fixed overlay at z-banner (55):
+// above the BottomNav wrapper (z-sticky, 40) and TopToolbar (z-dropdown, 50),
+// below the Drawer/modal layer (z-modal, 60) so the edit drawer still opens on
+// top. Deliberately NON-modal (role="region", no aria-modal, no focus trap):
+// the edit drawer portals to document.body — outside this container — with its
+// own document-level focus trap, and a second competing trap here would fight
+// it for focus. The close button gets initial focus and Escape exits instead.
+const GridOverlay: React.FC<GridOverlayProps> = ({ quadrants, onComplete, onEdit, onToggleImportant, onExit, escapeDisabled }) => {
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  // Focus the exit control on mount so keyboard users land inside the overlay.
+  useEffect(() => {
+    closeRef.current?.focus();
+  }, []);
+
+  // NOTE: the body-scroll lock for this overlay lives in ToDosPage (page-level
+  // latch), NOT here — an overlay-local lock would unlock body scroll behind a
+  // still-open drawer when rotating to portrait unmounts this component. See
+  // the scrollLockHeld comment in ToDosPage.
+
+  // Escape exits (same as ✕) unless a drawer above the grid owns the key.
+  useEffect(() => {
+    if (escapeDisabled) return;
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onExit();
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [escapeDisabled, onExit]);
+
+  return (
+    <div
+      role="region"
+      aria-label="Eisenhower matrix"
+      data-testid="grid-overlay"
+      className="fixed inset-0 z-banner bg-brand-50 dark:bg-brand-900 p-screen-safe"
+    >
+      {/* Inner flex column: slim header, axis labels, then the grid taking
+          every remaining pixel (flex-1 min-h-0; cells scroll internally —
+          the matrix itself never scrolls as a unit). */}
+      <div className="flex flex-col h-full px-3 pt-1.5 pb-2 gap-1">
+        <div className="flex items-center justify-between gap-2 shrink-0">
+          <h2 className="text-xxs font-semibold uppercase tracking-wider text-brand-400 dark:text-brand-450">
+            Eisenhower matrix
+          </h2>
+          <Button
+            ref={closeRef}
+            variant="ghost-brand"
+            size="icon"
+            onClick={onExit}
+            aria-label="Exit matrix view"
+            title="Exit matrix view"
+            className="shrink-0"
+          >
+            <X size={18} />
+          </Button>
+        </div>
+        <div className="grid grid-cols-2 gap-2 px-1 shrink-0" aria-hidden="true">
+          <span className="text-xxs font-semibold uppercase tracking-wider text-brand-400 dark:text-brand-450 text-center">Urgent</span>
+          <span className="text-xxs font-semibold uppercase tracking-wider text-brand-400 dark:text-brand-450 text-center">Not urgent</span>
+        </div>
+        <div className="grid grid-cols-2 grid-rows-2 gap-2 flex-1 min-h-0">
+          {QUADRANT_ORDER.map(q => (
+            <GridCell
+              key={q}
+              quadrant={q}
+              items={quadrants[q]}
+              onComplete={onComplete}
+              onEdit={onEdit}
+              onToggleImportant={onToggleImportant}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 interface GridCellProps {
   quadrant: Quadrant;
   items: ToDo[];
@@ -1548,7 +1664,9 @@ const GridChip = React.memo(function GridChip({ item, color, onComplete, onEdit,
   const isOverdue = isBefore(dueDate, startOfToday());
 
   return (
-    <div className="flex items-center gap-1.5 px-2 py-1.5 hairline-divider first:border-t-0">
+    // min-h-11 (44px) row + generous complete-toggle hit area: the immersive
+    // overlay gives the chips room to meet touch-target size without a redesign.
+    <div className="flex items-center gap-1.5 px-2 py-1.5 min-h-11 hairline-divider first:border-t-0">
       <button
         type="button"
         onClick={async () => {
@@ -1561,7 +1679,7 @@ const GridChip = React.memo(function GridChip({ item, color, onComplete, onEdit,
             toast.error('Failed to complete to-do');
           }
         }}
-        className="group p-1.5 -m-1 shrink-0"
+        className="group p-2.5 -m-1.5 shrink-0"
         aria-label={`Complete task: ${item.text}`}
       >
         <span className="w-4.5 h-4.5 rounded-full border-2 flex items-center justify-center transition-colors border-brand-300 group-hover:border-accent-500 group-hover:bg-accent-50 dark:border-brand-600 dark:group-hover:border-accent-400 dark:group-hover:bg-accent-900/30">
