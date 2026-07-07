@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import EmptyState from '@/components/ui/EmptyState';
+import { SurfaceList, Row } from '@/components/ui/Section';
 import { Sparkles } from 'lucide-react';
 import { haptic } from '@/utils/haptics';
 import clsx from 'clsx';
@@ -869,7 +870,7 @@ const MealPlanTab: React.FC = () => {
                 ))}
             </div>
         ) : dayMeals.length > 0 ? (
-            <div className="space-y-2.5">
+            <SurfaceList>
                 {dayMeals.map((planItem) => {
                     const linkedMeal = planItem.mealId ? mealsById.get(planItem.mealId) : null;
                     const mealName = planItem.mealName || linkedMeal?.name || 'Untitled meal';
@@ -877,15 +878,16 @@ const MealPlanTab: React.FC = () => {
                     const typeMeta = MEAL_TYPE_META[planItem.type] ?? MEAL_TYPE_META['dinner']!; // 'dinner' is a known key
 
                     return (
-                        <div
+                        <Row
                             key={planItem.id}
+                            interactive={!!linkedMeal}
                             onClick={() => { if (linkedMeal) setViewingMeal({ meal: linkedMeal, planItem }); }}
                             className={clsx(
-                                "group flex items-stretch gap-3 rounded-card border p-3.5 transition-colors duration-(--duration-fast) ease-(--ease-standard) relative",
-                                linkedMeal && "cursor-pointer hover:border-brand-300 dark:hover:border-brand-600",
-                                isCooked
-                                    ? "bg-money-bgPos border-money-pos/30 dark:bg-money-pos/10 dark:border-money-pos/20"
-                                    : "bg-white border-brand-200 dark:bg-brand-800 dark:border-brand-700"
+                                "group items-stretch",
+                                isCooked && "bg-money-bgPos/60 dark:bg-money-pos/10",
+                                // Keep the green "Cooked" cue visible on hover — Row's
+                                // generic hover:bg-brand-50 would otherwise wash it out.
+                                isCooked && linkedMeal && "hover:bg-money-bgPos/80 dark:hover:bg-money-pos/15"
                             )}
                         >
                             {/* Meal-type accent bar */}
@@ -934,10 +936,10 @@ const MealPlanTab: React.FC = () => {
                             >
                                 <MoreVertical className="w-5 h-5" />
                             </button>
-                        </div>
+                        </Row>
                     );
                 })}
-            </div>
+            </SurfaceList>
         ) : (
             <EmptyState
                 variant="dashed"
