@@ -614,20 +614,9 @@ const Settings: React.FC = () => {
             {/* Invite Code */}
             <HouseholdInviteCard inviteCode={householdSettings.inviteCode} />
 
-            {/* Shared Household Points — TopToolbar already shows the current
-                daily/weekly totals persistently, so this collapses to a single
-                link into the same breakdown modal rather than re-displaying
-                all three totals here (see UX content audit Batch 4). */}
-            <SurfaceList>
-              <DisclosureRow
-                icon={<Star className="w-5 h-5" />}
-                title="Points breakdown"
-                subtitle="Daily, weekly, and total household points"
-                onClick={() => setActivePointsView('total')}
-              />
-            </SurfaceList>
-
-            {/* Members */}
+            {/* Members — the shared household points breakdown is folded in as
+                the first row of this surface so the Household group stays to a
+                single members box (fewer bordered panels). */}
             <div className="space-y-2">
               <div className="flex items-center justify-between px-1">
                 <p className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">
@@ -647,6 +636,16 @@ const Settings: React.FC = () => {
                 )}
               </div>
               <SurfaceList>
+                {/* Shared Household Points — TopToolbar already shows the current
+                    daily/weekly totals persistently, so this collapses to a single
+                    link into the same breakdown modal rather than re-displaying
+                    all three totals here (see UX content audit Batch 4). */}
+                <DisclosureRow
+                  icon={<Star className="w-5 h-5" />}
+                  title="Points breakdown"
+                  subtitle="Daily, weekly, and total household points"
+                  onClick={() => setActivePointsView('total')}
+                />
                 {sortedMembers.map((member) => (
                   <Row key={member.uid}>
                     {member.photoURL ? (
@@ -900,25 +899,17 @@ const Settings: React.FC = () => {
           </div>
         </Section>
 
-        {/* Account */}
+        {/* Account — sign out for everyone plus the admins-only destructive
+            household delete, sharing one grouped surface (no separate red box).
+            The delete row keeps its exact admin-only guard. */}
         <Section title="Account">
           <SurfaceList>
             <DisclosureRow
-              icon={
-                <div className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-700 flex items-center justify-center shrink-0">
-                  <LogOut size={18} className="text-brand-500 dark:text-brand-400" />
-                </div>
-              }
+              icon={<LogOut className="w-5 h-5" />}
               title="Sign Out"
               onClick={handleSignOut}
             />
-          </SurfaceList>
-        </Section>
-
-        {/* Danger Zone — admins only; a single destructive drill-in, no red box. */}
-        {currentUser?.role === 'admin' && (
-          <Section title="Danger Zone">
-            <SurfaceList>
+            {currentUser?.role === 'admin' && (
               <DisclosureRow
                 destructive
                 icon={<Trash2 className="w-5 h-5" />}
@@ -926,9 +917,9 @@ const Settings: React.FC = () => {
                 subtitle="Permanently delete this household and all of its data for every member"
                 onClick={() => setIsDeleteHouseholdOpen(true)}
               />
-            </SurfaceList>
-          </Section>
-        )}
+            )}
+          </SurfaceList>
+        </Section>
 
         <p className="text-center text-xs text-brand-400 dark:text-brand-450 font-mono tabular-nums pt-2">
           LifeBalance v{APP_VERSION}

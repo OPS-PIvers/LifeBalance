@@ -111,49 +111,53 @@ export const InsightWidget: React.FC<InsightWidgetProps> = React.memo(({ onOpenA
         </div>
       }
     >
-      <div className="surface-section p-4">
-        <div className="flex items-start gap-4">
-          <div className="p-2.5 rounded-card bg-warm-100 text-warm-600 dark:bg-warm-900/40 dark:text-warm-300 shrink-0">
-            <Sparkles size={20} />
-          </div>
-          <div className="flex-1 min-w-0">
-            {isGeneratingInsight ? (
-              <div className="mb-1 space-y-2" aria-live="polite" aria-busy="true">
-                <span className="sr-only">Generating insight…</span>
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-11/12" />
-                <Skeleton className="h-4 w-2/3" />
-              </div>
-            ) : (
-              <p className="font-display text-brand-800 dark:text-brand-100 leading-relaxed mb-3">
-                &ldquo;{insight}&rdquo;
-              </p>
-            )}
+      {/* A hairline-edged BAND on the canvas — mirrors PulseStripWidget's
+          "distinct but not boxed" treatment (border-y, no side border, no
+          rounded panel, no background) instead of a full `surface-section`.
+          The warm icon chip + "AI Insight" eyebrow above already anchor this
+          as the AI insight, so the band is enough to keep it from blending
+          into the surrounding canvas without adding another bordered card. */}
+      <div className="flex items-start gap-4 border-y border-brand-200 dark:border-brand-700 px-1 py-4">
+        <div className="p-2.5 rounded-card bg-warm-100 text-warm-600 dark:bg-warm-900/40 dark:text-warm-300 shrink-0">
+          <Sparkles size={20} />
+        </div>
+        <div className="flex-1 min-w-0">
+          {isGeneratingInsight ? (
+            <div className="mb-1 space-y-2" aria-live="polite" aria-busy="true">
+              <span className="sr-only">Generating insight…</span>
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-11/12" />
+              <Skeleton className="h-4 w-2/3" />
+            </div>
+          ) : (
+            <p className="font-display text-brand-800 dark:text-brand-100 leading-relaxed mb-3">
+              &ldquo;{insight}&rdquo;
+            </p>
+          )}
 
-            {/* Action Pills */}
-            {!isGeneratingInsight && insightActions && insightActions.length > 0 && (
-              <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-top-2 duration-(--duration-base)">
-                {insightActions.map((action, idx) => (
-                  <Button
-                    key={idx}
-                    variant="secondary"
-                    size="sm"
-                    className="py-2 text-accent-700 hover:text-accent-700 hover:bg-accent-50 dark:text-accent-200 dark:hover:text-accent-200 dark:hover:bg-brand-700"
-                    onClick={() => {
-                      if (action.type === 'create_challenge' && onCreateChallenge) {
-                        onCreateChallenge(action.payload);
-                      } else {
-                        handleAction(action);
-                      }
-                    }}
-                    leftIcon={getActionIcon(action.type)}
-                  >
-                    {action.label}
-                  </Button>
-                ))}
-              </div>
-            )}
-          </div>
+          {/* Action Pills */}
+          {!isGeneratingInsight && insightActions && insightActions.length > 0 && (
+            <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-top-2 duration-(--duration-base)">
+              {insightActions.map((action, idx) => (
+                <Button
+                  key={idx}
+                  variant="secondary"
+                  size="sm"
+                  className="py-2 text-accent-700 hover:text-accent-700 hover:bg-accent-50 dark:text-accent-200 dark:hover:text-accent-200 dark:hover:bg-brand-700"
+                  onClick={() => {
+                    if (action.type === 'create_challenge' && onCreateChallenge) {
+                      onCreateChallenge(action.payload);
+                    } else {
+                      handleAction(action);
+                    }
+                  }}
+                  leftIcon={getActionIcon(action.type)}
+                >
+                  {action.label}
+                </Button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </Section>
