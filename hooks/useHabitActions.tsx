@@ -34,6 +34,14 @@ import { addDays, format, parseISO, startOfWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { track } from '@/services/analytics';
 import { shouldTrackFirstTime, FIRST_HABIT_FLAG } from '@/utils/firstTimeFlags';
+import { accumulate, ToastAccumulatorState } from '@/utils/toastAccumulator';
+
+/**
+ * Window for folding rapid same-habit toggles into a single cumulative toast
+ * instead of stacking one per tap. Matches the toast's own `duration: 1500`
+ * below so the accumulation window and the toast's visible lifetime agree.
+ */
+const POINTS_TOAST_WINDOW_MS = 1500;
 
 /**
  * Plan 080c: the doc that receives a habit's points. An assigned (per-member /
@@ -61,6 +69,12 @@ export const useHabitActions = (
 
   const householdSettingsRef = useRef<Household | null>(householdSettings);
   useEffect(() => { householdSettingsRef.current = householdSettings; }, [householdSettings]);
+
+  // Per-habit running total for the points toast (keyed by habit id). Lives
+  // in a ref (not module scope, which would leak across tests/users, and not
+  // component state, which would re-render on every toggle) — see
+  // toastAccumulator.ts for the pure math this drives.
+  const pointsToastAccumulatorRef = useRef<ToastAccumulatorState>(new Map());
 
   const addHabit = useCallback(async (habit: Habit): Promise<string> => {
     if (!householdId || !currentUser) throw new Error("Not authenticated");
@@ -224,24 +238,45 @@ export const useHabitActions = (
     track('habit_toggled', { positive: habit.type === 'positive', direction });
     if (shouldTrackFirstTime(FIRST_HABIT_FLAG, wasFirstCompletion)) track('first_habit_completed');
 
-    // Toast feedback after the batch commits successfully
+    // Toast feedback after the batch commits successfully. Rapid toggles of
+    // the SAME habit fold into one running total (accumulate()) so the toast
+    // updates in place — via the stable `habit-points-${id}` id, react-hot-toast
+    // upserts rather than stacks — instead of piling up a toast per tap.
     if (result.pointsChange !== 0) {
-      const sign = result.pointsChange > 0 ? '+' : '';
-      toast(
-        <div className="flex items-center gap-2">
-          <span className="font-bold">{sign}{result.pointsChange} pts</span>
-          <span className="text-sm opacity-80">({result.multiplier}x)</span>
-        </div>,
-        {
-          duration: 1500,
-          icon: result.pointsChange > 0 ? '🌟' : '📉',
-          style: {
-            background: result.pointsChange > 0 ? '#ECFDF5' : '#FFF1F2',
-            color: result.pointsChange > 0 ? '#065F46' : '#9F1239',
-            border: result.pointsChange > 0 ? '1px solid #A7F3D0' : '1px solid #FECDD3',
-          },
-        }
+      const { net, count } = accumulate(
+        pointsToastAccumulatorRef.current,
+        id,
+        result.pointsChange,
+        Date.now(),
+        POINTS_TOAST_WINDOW_MS
       );
+      const toastId = `habit-points-${id}`;
+
+      if (net === 0) {
+        // Up-then-down (or vice versa) within the window cancelled out —
+        // nothing left to show, so drop the in-flight toast entirely.
+        toast.dismiss(toastId);
+      } else {
+        const sign = net > 0 ? '+' : '';
+        toast(
+          <div className="flex items-center gap-2">
+            <span className="font-bold">{sign}{net} pts</span>
+            <span className="text-sm opacity-80">
+              {count === 1 ? `(${result.multiplier}x)` : `(${count} changes)`}
+            </span>
+          </div>,
+          {
+            id: toastId,
+            duration: POINTS_TOAST_WINDOW_MS,
+            icon: net > 0 ? '🌟' : '📉',
+            style: {
+              background: net > 0 ? '#ECFDF5' : '#FFF1F2',
+              color: net > 0 ? '#065F46' : '#9F1239',
+              border: net > 0 ? '1px solid #A7F3D0' : '1px solid #FECDD3',
+            },
+          }
+        );
+      }
     }
   }, [householdId, currentUser]);
 

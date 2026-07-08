@@ -64,7 +64,6 @@ const MealPlanTab: React.FC = () => {
     ensureMealPlanWeek,
   } = useMealPlan();
   const {
-    addShoppingItem,
     addShoppingItems,
     shoppingList,
     groceryCatalog,
@@ -222,26 +221,25 @@ const MealPlanTab: React.FC = () => {
           return;
       }
 
-      const results = await Promise.allSettled(ingredientsToAdd.map(ing =>
-          addShoppingItem({
-              name: ing.name,
-              category: 'Uncategorized',
-              quantity: ing.quantity || '',
-              isPurchased: false
-          })
-      ));
+      // Base new orders on the max existing order (not list length) — orders are
+      // never renumbered on delete, so length can be lower than the highest order.
+      const maxOrder = shoppingList.length > 0 ? Math.max(...shoppingList.map(i => i.order || 0)) : 0;
 
-      const successCount = results.filter(r => r.status === 'fulfilled').length;
-      const failedResults = results.filter(r => r.status === 'rejected');
+      const itemsToAdd = ingredientsToAdd.map((ing, index) => ({
+          name: ing.name,
+          category: 'Uncategorized',
+          quantity: ing.quantity || '',
+          isPurchased: false,
+          // Increment order for each new item to maintain sequence
+          order: maxOrder + 1 + index
+      }));
 
-      if (failedResults.length > 0) {
-          console.error('Failed to add ingredients:', failedResults);
-      }
-
-      if (successCount > 0) {
-          toast.success(`Added ${successCount} items to shopping list`);
-      } else if (failedResults.length > 0) {
-          toast.error('Failed to add ingredients');
+      try {
+        await addShoppingItems(itemsToAdd);
+        toast.success(`Added ${itemsToAdd.length} item${itemsToAdd.length === 1 ? '' : 's'} to shopping list`);
+      } catch (error) {
+        console.error('Failed to add ingredients:', error);
+        toast.error('Failed to add items');
       }
   };
 

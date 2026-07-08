@@ -18,9 +18,10 @@ vi.mock('./contexts/FirebaseHouseholdContext', () => ({
   useHouseholdCore: () => ({ householdSettings: {} }),
 }));
 
-// Mock react-hot-toast
+// Mock react-hot-toast (useToasterStore feeds the always-mounted ToastLimiter)
 vi.mock('react-hot-toast', () => ({
   Toaster: () => <div data-testid="toaster" />,
+  useToasterStore: () => ({ toasts: [] }),
   toast: { error: vi.fn(), success: vi.fn() },
   default: { error: vi.fn(), success: vi.fn() },
 }));
