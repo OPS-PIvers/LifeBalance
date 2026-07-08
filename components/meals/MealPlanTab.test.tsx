@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   mealPlan: [] as unknown[],
   shoppingList: [] as unknown[],
   groceryCatalog: [] as unknown[],
+  addShoppingItem: vi.fn(),
   addShoppingItems: vi.fn(),
 }));
 
@@ -24,7 +25,7 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
     ensureMealPlanWeek: vi.fn(),
   }),
   useShopping: () => ({
-    addShoppingItem: vi.fn(),
+    addShoppingItem: mocks.addShoppingItem,
     addShoppingItems: mocks.addShoppingItems,
     shoppingList: mocks.shoppingList,
     groceryCatalog: mocks.groceryCatalog,
@@ -145,6 +146,52 @@ describe('MealPlanTab', () => {
     expect(mocks.addShoppingItems).toHaveBeenCalledTimes(1);
     const added = mocks.addShoppingItems.mock.calls[0]?.[0] as { name: string; order: number }[];
     expect(added.map(item => item.order)).toEqual([4, 5]);
+  });
+
+  it('adds a meal\'s ingredients to the shopping list in a single batch call, skipping duplicates', () => {
+    // Wednesday, Oct 25, 2023 — Monday-start week is Oct 23 - Oct 29.
+    vi.setSystemTime(new Date(2023, 9, 25));
+
+    mocks.meals = [
+      {
+        id: 'meal-1',
+        name: 'Tacos',
+        ingredients: [
+          { name: 'Tortillas', quantity: '1 pack' },
+          { name: 'Beef', quantity: '1 lb' },
+          { name: 'Milk', quantity: '1 gallon' }, // already unpurchased on the list
+        ],
+        tags: [],
+      },
+    ];
+    mocks.mealPlan = [
+      { id: 'plan-this-week', date: '2023-10-25', mealId: 'meal-1', mealName: 'Tacos', type: 'dinner', isCooked: false },
+    ];
+    // Length 1 but max order 3: an order-2 item was deleted, so new orders must
+    // be based on max order, not list length.
+    mocks.shoppingList = [
+      { id: 's1', name: 'Milk', category: 'Dairy', isPurchased: false, order: 3 },
+    ];
+    // Beef exists in purchase history — its category resolves from the
+    // catalog; Tortillas is unknown and falls back to Uncategorized.
+    mocks.groceryCatalog = [
+      { id: 'c1', name: 'Beef', category: 'Meat' },
+    ];
+
+    render(<MealPlanTab />);
+
+    fireEvent.click(screen.getByLabelText('More week actions'));
+    fireEvent.click(screen.getByText('Shop for this week'));
+    fireEvent.click(screen.getByText('Add Ingredients'));
+
+    // Single batched call with all non-duplicate ingredients — no per-item calls.
+    expect(mocks.addShoppingItems).toHaveBeenCalledTimes(1);
+    expect(mocks.addShoppingItem).not.toHaveBeenCalled();
+
+    const added = mocks.addShoppingItems.mock.calls[0]?.[0] as { name: string; order: number; category: string }[];
+    expect(added.map(item => item.name)).toEqual(['Tortillas', 'Beef']);
+    expect(added.map(item => item.order)).toEqual([4, 5]);
+    expect(added.map(item => item.category)).toEqual(['Uncategorized', 'Meat']);
   });
 
   it('exposes Copy last week / Shop for this week behind the week-actions overflow menu', () => {
