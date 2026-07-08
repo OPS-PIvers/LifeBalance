@@ -225,9 +225,14 @@ const MealPlanTab: React.FC = () => {
       // never renumbered on delete, so length can be lower than the highest order.
       const maxOrder = shoppingList.length > 0 ? Math.max(...shoppingList.map(i => i.order || 0)) : 0;
 
+      // Resolve categories from the grocery catalog (purchase history) like
+      // handleConfirmIngredients does, so known items land in their aisle
+      // grouping instead of all piling into "Uncategorized".
+      const catalogMap = new Map(groceryCatalog.map(item => [normalizeToKey(item.name), item]));
+
       const itemsToAdd = ingredientsToAdd.map((ing, index) => ({
           name: ing.name,
-          category: 'Uncategorized',
+          category: catalogMap.get(normalizeToKey(ing.name))?.category || 'Uncategorized',
           quantity: ing.quantity || '',
           isPurchased: false,
           // Increment order for each new item to maintain sequence

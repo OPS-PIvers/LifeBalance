@@ -172,6 +172,11 @@ describe('MealPlanTab', () => {
     mocks.shoppingList = [
       { id: 's1', name: 'Milk', category: 'Dairy', isPurchased: false, order: 3 },
     ];
+    // Beef exists in purchase history — its category resolves from the
+    // catalog; Tortillas is unknown and falls back to Uncategorized.
+    mocks.groceryCatalog = [
+      { id: 'c1', name: 'Beef', category: 'Meat' },
+    ];
 
     render(<MealPlanTab />);
 
@@ -183,9 +188,10 @@ describe('MealPlanTab', () => {
     expect(mocks.addShoppingItems).toHaveBeenCalledTimes(1);
     expect(mocks.addShoppingItem).not.toHaveBeenCalled();
 
-    const added = mocks.addShoppingItems.mock.calls[0]?.[0] as { name: string; order: number }[];
+    const added = mocks.addShoppingItems.mock.calls[0]?.[0] as { name: string; order: number; category: string }[];
     expect(added.map(item => item.name)).toEqual(['Tortillas', 'Beef']);
     expect(added.map(item => item.order)).toEqual([4, 5]);
+    expect(added.map(item => item.category)).toEqual(['Uncategorized', 'Meat']);
   });
 
   it('exposes Copy last week / Shop for this week behind the week-actions overflow menu', () => {

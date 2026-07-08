@@ -254,8 +254,12 @@ export const useHabitActions = (
 
       if (net === 0) {
         // Up-then-down (or vice versa) within the window cancelled out —
-        // nothing left to show, so drop the in-flight toast entirely.
+        // nothing left to show, so drop the in-flight toast entirely. Also
+        // clear the accumulator entry so the next toggle starts a fresh
+        // story ("+10 pts (1.5x)") instead of inheriting the cancelled
+        // sequence's count ("(3 changes)").
         toast.dismiss(toastId);
+        pointsToastAccumulatorRef.current.delete(id);
       } else {
         const sign = net > 0 ? '+' : '';
         toast(
