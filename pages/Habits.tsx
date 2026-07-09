@@ -1,11 +1,10 @@
 import React, { useState, useMemo, Suspense } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Habit, HouseholdMember } from '@/types/schema';
 import { Skeleton } from '@/components/ui/Skeleton';
 import HabitCategoryList from '@/components/habits/HabitCategoryList';
 import {
-  Database, ArrowRight, Sparkles, LayoutList, GraduationCap, Calendar,
+  Sparkles, LayoutList, GraduationCap, Calendar,
   ListChecks, Check, Flame, Star, BarChart2, Gift, Trophy,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -171,7 +170,6 @@ const KidChoresGroup: React.FC<{ kid: HouseholdMember; chores: Habit[] }> = ({ k
 };
 
 const Habits: React.FC = () => {
-  const navigate = useNavigate();
   const { habits } = useGamification();
   const { isLoading, members } = useHouseholdCore();
   const kidModeEnabled = useKidModeEnabled();
@@ -181,14 +179,6 @@ const Habits: React.FC = () => {
   const [isChallengeHubOpen, setIsChallengeHubOpen] = useState(false);
   // Controlled so the toolbar points glance can deep-link straight to Rewards.
   const [activeTab, setActiveTab] = useDeepLinkTab('track', HABIT_TABS);
-
-  // Memoize derived collections so they don't recompute on unrelated re-renders.
-  const habitsNeedingMigration = useMemo(
-    () => habits.filter(
-      h => !h.hasSubmissionTracking && h.completedDates && h.completedDates.length > 0
-    ),
-    [habits]
-  );
 
   // Group Habits by Category (with Sorting)
   // Sort habits by order first. Exclude kid chores (assignedTo set) up front so the
@@ -336,32 +326,6 @@ const Habits: React.FC = () => {
         {/* Main Content */}
         <div className="px-4 pb-6">
           <TabsContent value="track" className="space-y-6">
-            {/* Migration Banner — scoped to the Track tab only (the tab it's
-                relevant to), rather than showing on every tab regardless of
-                relevance (Rewards/Insights/etc.) — see UX content audit
-                Batch 4. Solid warm surface (gradient/glass killed). */}
-            {habitsNeedingMigration.length > 0 && (
-              <button
-                onClick={() => navigate('/migrate-submissions')}
-                className="w-full bg-warm-500 hover:bg-warm-600 text-white rounded-lg p-4 shadow-raised transition-[background-color,transform] duration-(--duration-fast) ease-(--ease-standard) active:scale-[0.99] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-white/15 p-2 rounded-card">
-                      <Database size={24} />
-                    </div>
-                    <div className="text-left">
-                      <h3 className="font-display font-semibold text-base">Backfill historical data</h3>
-                      <p className="text-xs text-white/90 mt-0.5">
-                        {habitsNeedingMigration.length} habit{habitsNeedingMigration.length !== 1 ? 's' : ''} ready to migrate
-                      </p>
-                    </div>
-                  </div>
-                  <ArrowRight size={20} />
-                </div>
-              </button>
-            )}
-
             {categories.length === 0 && (
               <EmptyState
                 variant="dashed"
