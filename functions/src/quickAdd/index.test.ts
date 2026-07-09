@@ -72,7 +72,6 @@ import {
   quickAddExpense,
   quickAddShoppingItem,
   quickAddNaturalLanguage,
-  quickAddReceipt,
 } from "./index";
 
 // ---------------------------------------------------------------------------
@@ -1177,39 +1176,5 @@ describe("quickAddNaturalLanguage", () => {
     );
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatchObject({ success: true, data: { type: "shopping" } });
-  });
-});
-
-// ===========================================================================
-// quickAddReceipt
-// ===========================================================================
-
-describe("quickAddReceipt", () => {
-  it("without receiptScanning permission returns 403", async () => {
-    configureValidKey({ ...ALL_PERMS, receiptScanning: false });
-    const res = makeRes();
-    await asHandler(quickAddReceipt)(
-      makeReq({ body: { image: "abc" } }),
-      res
-    );
-    expect(res.statusCode).toBe(403);
-    expect(res.body).toMatchObject({ error: { code: "FORBIDDEN" } });
-  });
-
-  it("no image returns 400", async () => {
-    const res = makeRes();
-    await asHandler(quickAddReceipt)(makeReq({ body: {} }), res);
-    expect(res.statusCode).toBe(400);
-    expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
-  });
-
-  it("valid image returns 501 NOT_IMPLEMENTED (placeholder endpoint)", async () => {
-    const res = makeRes();
-    await asHandler(quickAddReceipt)(
-      makeReq({ body: { image: "small-base64-string" } }),
-      res
-    );
-    expect(res.statusCode).toBe(501);
-    expect(res.body).toMatchObject({ error: { code: "NOT_IMPLEMENTED" } });
   });
 });

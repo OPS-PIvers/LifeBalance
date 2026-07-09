@@ -161,7 +161,6 @@ describe('apiKeyService', () => {
       expect(getQuickAddEndpointUrl('habit')).toMatch(/\/quickAddHabit$/);
       expect(getQuickAddEndpointUrl('expense')).toMatch(/\/quickAddExpense$/);
       expect(getQuickAddEndpointUrl('shopping')).toMatch(/\/quickAddShoppingItem$/);
-      expect(getQuickAddEndpointUrl('receipt')).toMatch(/\/quickAddReceipt$/);
       expect(getQuickAddEndpointUrl('naturalLanguage')).toMatch(/\/quickAddNaturalLanguage$/);
     });
   });
