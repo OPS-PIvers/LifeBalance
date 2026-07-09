@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { convertToCSV } from './exportUtils';
+import type { HouseholdMember } from '@/types/schema';
+import { convertToCSV, buildExportPayload, type ExportPayloadInput } from './exportUtils';
 
 describe('exportUtils', () => {
   describe('convertToCSV', () => {
@@ -68,6 +69,88 @@ describe('exportUtils', () => {
       expect(csv).toContain('"' + "'@" + '"');
       expect(csv).toContain('"' + "'|" + '"');
       expect(csv).toContain('"' + "'   @" + '"');
+    });
+  });
+
+  describe('buildExportPayload', () => {
+    const member = (overrides: Partial<HouseholdMember> = {}): HouseholdMember => ({
+      uid: 'member-1',
+      displayName: 'Test Member',
+      role: 'admin',
+      points: { daily: 0, weekly: 0, total: 0 },
+      email: 'member@example.com',
+      fcmTokens: ['token-1', 'token-2'],
+      ...overrides,
+    });
+
+    const baseInput: ExportPayloadInput = {
+      householdId: 'household-1',
+      exportedBy: 'uid-1',
+      household: null,
+      members: [member()],
+      habits: [],
+      transactions: [],
+      buckets: [],
+      calendarItems: [],
+      meals: [],
+      shoppingList: [],
+      todos: [],
+      mealPlan: [],
+      challenges: [],
+      rewards: [],
+      stores: [],
+    };
+
+    it('includes all expected top-level keys', () => {
+      const payload = buildExportPayload(baseInput);
+
+      expect(Object.keys(payload).sort()).toEqual(
+        [
+          'meta',
+          'household',
+          'members',
+          'habits',
+          'transactions',
+          'buckets',
+          'calendarItems',
+          'meals',
+          'shoppingList',
+          'todos',
+          'mealPlan',
+          'challenges',
+          'rewards',
+          'stores',
+        ].sort()
+      );
+    });
+
+    it('strips fcmTokens and email from members', () => {
+      const payload = buildExportPayload(baseInput);
+      const [exportedMember] = payload.members;
+
+      expect(exportedMember).toBeDefined();
+      expect(exportedMember).not.toHaveProperty('fcmTokens');
+      expect(exportedMember).not.toHaveProperty('email');
+      expect(exportedMember?.uid).toBe('member-1');
+      expect(exportedMember?.displayName).toBe('Test Member');
+    });
+
+    it('passes empty collections through as empty arrays, not undefined', () => {
+      const payload = buildExportPayload(baseInput);
+
+      expect(payload.todos).toEqual([]);
+      expect(payload.mealPlan).toEqual([]);
+      expect(payload.challenges).toEqual([]);
+      expect(payload.rewards).toEqual([]);
+      expect(payload.stores).toEqual([]);
+    });
+
+    it('populates meta from the given householdId/exportedBy', () => {
+      const payload = buildExportPayload(baseInput);
+
+      expect(payload.meta.householdId).toBe('household-1');
+      expect(payload.meta.exportedBy).toBe('uid-1');
+      expect(typeof payload.meta.exportedAt).toBe('string');
     });
   });
 });
