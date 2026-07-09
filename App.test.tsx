@@ -67,10 +67,6 @@ vi.mock('./pages/Settings', () => ({
   default: () => <div data-testid="settings-page">Settings Page</div>
 }));
 
-vi.mock('./pages/MigrateSubmissions', () => ({
-  default: () => <div data-testid="migrate-page">Migrate Page</div>
-}));
-
 // Mock Layout
 vi.mock('./components/layout/MainLayout', () => ({
   default: ({ children }: { children: React.ReactNode }) => <div data-testid="main-layout">{children}</div>,
@@ -172,13 +168,6 @@ describe('App Routing', () => {
     window.location.hash = '#/settings';
     render(<App />);
     await waitFor(() => expect(screen.getByTestId('settings-page')).toBeInTheDocument());
-  });
-
-  it('renders Migrate page at /migrate-submissions', async () => {
-    vi.mocked(AuthContext.useAuth).mockReturnValue(mockAuthenticatedUser);
-    window.location.hash = '#/migrate-submissions';
-    render(<App />);
-    await waitFor(() => expect(screen.getByTestId('migrate-page')).toBeInTheDocument());
   });
 
   it('redirects unknown routes to Dashboard', async () => {

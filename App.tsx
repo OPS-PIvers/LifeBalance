@@ -22,7 +22,6 @@ const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const Budget = React.lazy(() => import('./pages/Budget'));
 const Habits = React.lazy(() => import('./pages/Habits'));
 const Settings = React.lazy(() => import('./pages/Settings'));
-const MigrateSubmissions = React.lazy(() => import('./pages/MigrateSubmissions'));
 const OnboardingWizard = React.lazy(() => import('./components/onboarding/OnboardingWizard'));
 const MealsPage = React.lazy(() => import('./pages/MealsPage'));
 const ShoppingPage = React.lazy(() => import('./pages/ShoppingPage'));
@@ -257,15 +256,6 @@ const App: React.FC = () => {
                     </ProtectedRoute>
                   }
                 />
-                <Route
-                  path="/migrate-submissions"
-                  element={
-                    <ProtectedRoute>
-                      <MigrateSubmissions />
-                    </ProtectedRoute>
-                  }
-                />
-
                 {/* Catch all - redirect to home */}
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
