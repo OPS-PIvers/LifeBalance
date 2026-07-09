@@ -121,11 +121,9 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       completedDates: editingHabit ? editingHabit.completedDates : [],
       streakDays: editingHabit ? editingHabit.streakDays : 0,
       lastUpdated: new Date().toISOString(),
-      weatherSensitive: editingHabit ? editingHabit.weatherSensitive : false,
       // Preserve ownership fields when editing
       isShared: editingHabit?.isShared,
       ownerId: editingHabit?.ownerId,
-      telegramAlias: editingHabit?.telegramAlias,
     };
 
     setIsSaving(true);

@@ -323,7 +323,7 @@ const Settings: React.FC = () => {
       // Filter out sensitive data from members
       const safeMembers = members.map(m => {
         // Destructure to remove sensitive fields (prefixed with _ to suppress unused-var warnings)
-        const { fcmTokens: _fcmTokens, email: _email, telegramChatId: _telegramChatId, ...safeMember } = m;
+        const { fcmTokens: _fcmTokens, email: _email, ...safeMember } = m;
         return safeMember;
       });
 

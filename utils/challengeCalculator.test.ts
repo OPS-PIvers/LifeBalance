@@ -31,7 +31,6 @@ const habit = (overrides: Partial<Habit> = {}): Habit =>
     streakDays: 0,
     lastUpdated: new Date().toISOString(),
     createdBy: 'u1',
-    weatherSensitive: false,
     ...overrides,
   } as Habit);
 

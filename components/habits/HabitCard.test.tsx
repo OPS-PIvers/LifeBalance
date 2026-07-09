@@ -90,7 +90,6 @@ const mockHabit: Habit = {
   completedDates: [],
   lastUpdated: '2023-01-01',
   scoringType: 'threshold',
-  weatherSensitive: false,
   totalCount: 0
 };
 
@@ -171,7 +170,6 @@ describe('HabitCard - Streak Repair', () => {
     completedDates: ['2024-02-07'], // Older completion, not yesterday
     streakDays: 0,
     lastUpdated: '2024-02-10T00:00:00Z',
-    weatherSensitive: false,
   };
 
   it('shows Repair Streak option when eligible (desktop)', async () => {
@@ -312,7 +310,6 @@ describe('HabitCard - period-aware multiplier display', () => {
     completedDates: [],
     lastUpdated: '2024-02-10T00:00:00Z',
     scoringType: 'threshold',
-    weatherSensitive: false,
     totalCount: 0,
   };
 
@@ -408,7 +405,6 @@ describe('HabitCard - React.memo', () => {
       completedDates: ['2024-02-09'],
       lastUpdated: '2024-02-10T00:00:00Z',
       scoringType: 'threshold',
-      weatherSensitive: false,
       totalCount: 1,
     };
 

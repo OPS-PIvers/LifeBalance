@@ -46,7 +46,6 @@ const makeChore = (overrides: Partial<Habit> = {}): Habit => ({
   completedDates: [],
   streakDays: 0,
   lastUpdated: `${TODAY}T00:00:00.000Z`,
-  weatherSensitive: false,
   assignedTo: 'kid_1',
   ...overrides,
 });

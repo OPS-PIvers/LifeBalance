@@ -65,7 +65,6 @@ export interface HouseholdMember {
   email?: string;
   photoURL?: string;
   role: Role;
-  telegramChatId?: string;
   points: { daily: number; weekly: number; total: number };
   // Tracking when points were last reset (YYYY-MM-DD format)
   lastDailyPointsReset?: string;
@@ -166,7 +165,7 @@ export interface Transaction {
   date: string;
   status: 'verified' | 'pending_review';
   isRecurring: boolean;
-  source: 'manual' | 'camera-scan' | 'file-upload' | 'telegram' | 'recurring' | 'shortcut' | 'plaid';
+  source: 'manual' | 'camera-scan' | 'file-upload' | 'recurring' | 'shortcut' | 'plaid';
   autoCategorized: boolean;
   payPeriodId?: string; // Pay period ID (YYYY-MM-DD of period start), empty string if no period tracking
   relatedHabitIds?: string[];
@@ -282,10 +281,6 @@ export interface Habit {
   isCustom?: boolean; // true = user-created, false/undefined = from preset
   effortLevel?: EffortLevel; // Effort level for the habit
   order?: number; // Display order for sorting
-
-  // Legacy/Optional
-  weatherSensitive: boolean;
-  telegramAlias?: string;
 
   // Submission Tracking
   hasSubmissionTracking?: boolean; // true = uses submissions subcollection
@@ -752,7 +747,7 @@ export interface ApiKeyPermissions {
   habits: boolean;
   expenses: boolean;
   shoppingList: boolean;
-  receiptScanning: boolean;  // Not yet implemented - see RECEIPT_SCANNING_IMPLEMENTATION.md
+  receiptScanning: boolean;  // Unused — receipt endpoint removed; kept for stored-doc shape
 }
 
 export interface HouseholdApiKey {

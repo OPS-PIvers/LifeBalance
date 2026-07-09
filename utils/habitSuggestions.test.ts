@@ -28,7 +28,6 @@ const habit = (
     completedDates: [],
     streakDays: 0,
     lastUpdated: '2024-01-01',
-    weatherSensitive: false,
   } as Habit);
 
 // Minimal Transaction factory (deterministic sequential ids — the suggestion

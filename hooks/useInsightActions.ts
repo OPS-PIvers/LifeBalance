@@ -59,8 +59,7 @@ export const useInsightActions = () => {
           totalCount: 0,
           completedDates: [],
           streakDays: 0,
-          lastUpdated: new Date().toISOString(),
-          weatherSensitive: false // Set default to false as required by schema
+          lastUpdated: new Date().toISOString()
         });
         track('insight_action_executed', { type: action.type });
         // Toast handled by context

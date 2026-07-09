@@ -31,7 +31,6 @@ describe('needsHabitMigration', () => {
     completedDates: [],
     streakDays: 0,
     lastUpdated: new Date().toISOString(),
-    weatherSensitive: false,
     ...overrides
   } as Habit);
 
