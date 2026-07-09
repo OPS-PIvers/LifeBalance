@@ -161,8 +161,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                 totalCount: 0,
                 completedDates: [],
                 streakDays: 0,
-                lastUpdated: new Date().toISOString(),
-                weatherSensitive: false
+                lastUpdated: new Date().toISOString()
             });
 
             if (newHabitId && typeof newHabitId === 'string') {

@@ -122,8 +122,6 @@ Habits support two scoring modes:
 
 **Dates:** Calendar dates are stored as `yyyy-MM-dd` strings in the user's **local** timezone. Use `getLocalDateString()` from [utils/dateHelpers.ts](utils/dateHelpers.ts) to derive "today" — never `new Date().toISOString().split('T')[0]` (that returns the UTC day, which is wrong in the evening for western timezones). Also avoid `format(new Date(), 'yyyy-MM-dd')`; the app's call sites have all been migrated to `getLocalDateString()` so there is a single source of truth for "today".
 
-**Note:** The `Habit.weatherSensitive` field exists in the schema and is carried through the habit forms, but **no business logic reads it** — the weather-bonus feature was never built. [WEATHER_IMPLEMENTATION.md](WEATHER_IMPLEMENTATION.md) is a historical design doc; the feature-bloat audit ([plans/audit/07-feature-bloat-and-direction.md](plans/audit/07-feature-bloat-and-direction.md)) recommends removing the dead field, but that decision hasn't been executed. Don't build on this field without checking the current backlog ([advisor-plans/README.md](advisor-plans/README.md)).
-
 Habits auto-reset based on their `period` (daily/weekly).
 
 ### Routing

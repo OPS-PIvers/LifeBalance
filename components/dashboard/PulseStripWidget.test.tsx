@@ -51,7 +51,6 @@ const makeHabit = (overrides: Partial<Habit> = {}): Habit =>
     completedDates: [],
     streakDays: 0,
     lastUpdated: '2026-06-16T00:00:00.000Z',
-    weatherSensitive: false,
     ...overrides,
   } as unknown as Habit);
 

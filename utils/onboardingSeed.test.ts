@@ -11,7 +11,6 @@ const positivePreset: PresetHabit = {
   scoringType: 'threshold',
   period: 'daily',
   targetCount: 1,
-  weatherSensitive: false,
   description: 'Start the day with a tidy bed',
 };
 
@@ -24,7 +23,6 @@ const negativePreset: PresetHabit = {
   scoringType: 'incremental',
   period: 'daily',
   targetCount: 1,
-  weatherSensitive: false,
 };
 
 describe('presetToHabit', () => {
@@ -52,7 +50,6 @@ describe('presetToHabit', () => {
       completedDates: [],
       streakDays: 0,
       lastUpdated: '2026-06-07',
-      weatherSensitive: false,
       presetId: 'preset_make_bed',
       isCustom: false,
       effortLevel: 'easy',

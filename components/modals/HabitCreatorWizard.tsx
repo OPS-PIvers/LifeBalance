@@ -116,7 +116,6 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
           completedDates: [],
           streakDays: 0,
           lastUpdated: new Date().toISOString(),
-          weatherSensitive: preset.weatherSensitive,
           presetId: preset.id,
           isCustom: false,
           effortLevel: preset.effortLevel,
@@ -186,14 +185,12 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
       completedDates: editingHabit ? editingHabit.completedDates : [],
       streakDays: editingHabit ? editingHabit.streakDays : 0,
       lastUpdated: new Date().toISOString(),
-      weatherSensitive: editingHabit?.weatherSensitive ?? false,
       isCustom: true,
       effortLevel: formData.effortLevel,
       // Only include ownership fields when editing (avoid undefined for new habits)
       ...(editingHabit && {
         isShared: editingHabit.isShared,
         ownerId: editingHabit.ownerId,
-        telegramAlias: editingHabit.telegramAlias,
       }),
       // Custom habits should not have presetId (contradicts isCustom: true)
     };

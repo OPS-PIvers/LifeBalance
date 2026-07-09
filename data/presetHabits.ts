@@ -69,7 +69,6 @@ export interface PresetHabit {
   scoringType: 'incremental' | 'threshold';
   period: 'daily' | 'weekly';
   targetCount: number;
-  weatherSensitive: boolean;
   description?: string;
 }
 
@@ -84,7 +83,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'weekly',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Complete a full week with no restaurant meals',
   },
   {
@@ -96,7 +94,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'weekly',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Spend nothing on Saturday and Sunday',
   },
   {
@@ -108,7 +105,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'weekly',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Hit your monthly savings target',
   },
 
@@ -122,7 +118,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Cut unnecessary recurring expenses',
   },
   {
@@ -134,7 +129,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Evaluate if a subscription is worth keeping',
   },
   {
@@ -146,7 +140,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'No spending for the entire day',
   },
   {
@@ -158,7 +151,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'weekly',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Review spending against budget',
   },
 
@@ -172,7 +164,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Read a book or educational content',
   },
   {
@@ -184,7 +175,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Keep screen time below your average',
   },
   {
@@ -196,7 +186,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 7,
-    weatherSensitive: false,
     description: 'Stay hydrated throughout the week',
   },
   {
@@ -208,7 +197,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Have a healthy salad',
   },
   {
@@ -220,7 +208,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'weekly',
     targetCount: 3,
-    weatherSensitive: false,
     description: 'Get at least 30 min of physical activity',
   },
   {
@@ -232,7 +219,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Get a full night of quality sleep',
   },
   {
@@ -244,7 +230,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Get up and stretch during the day',
   },
   {
@@ -256,7 +241,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: true,
     description: 'Take the dog for a walk',
   },
   {
@@ -268,7 +252,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Practice mindfulness or meditation',
   },
 
@@ -282,7 +265,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'weekly',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Thorough bathroom cleaning',
   },
   {
@@ -294,7 +276,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'weekly',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Remove water spots and soap scum',
   },
   {
@@ -306,7 +287,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'weekly',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Deep clean the kitchen',
   },
   {
@@ -318,7 +298,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'weekly',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Remove old food, wipe shelves',
   },
   {
@@ -330,7 +309,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'weekly',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Thorough bathroom cleaning',
   },
   {
@@ -342,7 +320,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Organize and remove clutter from one space',
   },
   {
@@ -354,7 +331,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'weekly',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Dust furniture and surfaces',
   },
   {
@@ -366,7 +342,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Complete the laundry cycle',
   },
   {
@@ -378,7 +353,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'weekly',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Vacuum floors and rugs',
   },
   {
@@ -390,7 +364,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'weekly',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Mop the kitchen floor',
   },
   {
@@ -402,7 +375,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'weekly',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Clean all windows and mirrors',
   },
   {
@@ -414,7 +386,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'weekly',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Dust and wipe baseboards',
   },
   {
@@ -426,7 +397,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'weekly',
     targetCount: 1,
-    weatherSensitive: true,
     description: 'General outdoor maintenance',
   },
   {
@@ -438,7 +408,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Start the day with a tidy bed',
   },
   {
@@ -450,7 +419,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Keep the sink empty',
   },
 
@@ -464,7 +432,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Use healthy cooking oil',
   },
   {
@@ -476,7 +443,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Reduce waste by eating leftovers',
   },
   {
@@ -488,7 +454,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Include veggies with your evening meal',
   },
   {
@@ -500,7 +465,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Go vegetarian for a day',
   },
   {
@@ -512,7 +476,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Cook dinner at home',
   },
   {
@@ -524,7 +487,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Prepare tomorrow\'s lunch tonight',
   },
   {
@@ -536,7 +498,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'weekly',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Prepare meals for the week',
   },
 
@@ -550,7 +511,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Get to bed at a reasonable hour',
   },
   {
@@ -562,7 +522,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Review and set priorities for tomorrow',
   },
   {
@@ -574,7 +533,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'threshold',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Avoid phone for first hour after waking',
   },
 
@@ -588,7 +546,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Too many consecutive busy evenings',
   },
   {
@@ -600,7 +557,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Having more than 2 drinks',
   },
   {
@@ -612,7 +568,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Eating fast food or donuts',
   },
   {
@@ -624,7 +579,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Entering the danger zone',
   },
   {
@@ -636,7 +590,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Eating dinner at a restaurant',
   },
   {
@@ -648,7 +601,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Trip to buy alcohol',
   },
   {
@@ -660,7 +612,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Paying for grocery delivery fees',
   },
   {
@@ -672,7 +623,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Hitting the snooze button',
   },
   {
@@ -684,7 +634,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Unplanned, unnecessary purchases',
   },
   {
@@ -696,7 +645,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Staying up too late',
   },
   {
@@ -708,7 +656,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'The most expensive way to eat',
   },
   {
@@ -720,7 +667,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Online shopping temptation',
   },
   {
@@ -732,7 +678,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Buying coffee or quick snacks out',
   },
   {
@@ -744,7 +689,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Big unplanned purchases',
   },
   {
@@ -756,7 +700,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Eating after 9 PM',
   },
   {
@@ -768,7 +711,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Spending too much time scrolling',
   },
   {
@@ -780,7 +722,6 @@ export const PRESET_HABITS: PresetHabit[] = [
     scoringType: 'incremental',
     period: 'daily',
     targetCount: 1,
-    weatherSensitive: false,
     description: 'Skipping a workout you had planned',
   },
 ];

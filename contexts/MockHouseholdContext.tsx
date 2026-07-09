@@ -136,13 +136,13 @@ const SEED_HABITS: Habit[] = [
     id: 'h1', title: 'Drink 8 Glasses of Water', category: 'Health', type: 'positive',
     basePoints: 10, scoringType: 'threshold', period: 'daily', targetCount: 8,
     totalCount: 0, count: 0, completedDates: [], streakDays: 0,
-    createdBy: 'test-user-id', lastUpdated: new Date().toISOString(), weatherSensitive: false
+    createdBy: 'test-user-id', lastUpdated: new Date().toISOString()
   },
   {
     id: 'h2', title: 'Exercise 30min', category: 'Fitness', type: 'positive',
     basePoints: 20, scoringType: 'threshold', period: 'daily', targetCount: 1,
     totalCount: 0, count: 0, completedDates: [], streakDays: 0,
-    createdBy: 'test-user-id', lastUpdated: new Date().toISOString(), weatherSensitive: false
+    createdBy: 'test-user-id', lastUpdated: new Date().toISOString()
   },
   // Plan 080c-3 Test-Mode harness: one kid-assigned chore so the kid dashboard
   // chore list and the parent read-only KidChoresGroup both render live data.
@@ -153,7 +153,7 @@ const SEED_HABITS: Habit[] = [
     basePoints: 5, scoringType: 'threshold', period: 'daily', targetCount: 1,
     totalCount: 0, count: 0, completedDates: [], streakDays: 0,
     assignedTo: 'kid_leo', isShared: false,
-    createdBy: 'test-user-id', lastUpdated: new Date().toISOString(), weatherSensitive: false
+    createdBy: 'test-user-id', lastUpdated: new Date().toISOString()
   },
 ];
 

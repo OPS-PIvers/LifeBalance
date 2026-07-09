@@ -241,7 +241,6 @@ describe('habitConverter', () => {
     completedDates: [],
     streakDays: 0,
     lastUpdated: '2024-01-15T10:00:00.000Z',
-    weatherSensitive: false,
   };
 
   it('(a) fromFirestore injects id and preserves scoringType', () => {
@@ -270,7 +269,7 @@ describe('habitConverter', () => {
   });
 
   it('(b) partial doc does not throw', () => {
-    const partial = { title: 'Read', category: 'Learning', type: 'positive', basePoints: 5, period: 'daily', targetCount: 1, count: 0, totalCount: 0, completedDates: [], streakDays: 0, lastUpdated: '2024-01-01', weatherSensitive: false };
+    const partial = { title: 'Read', category: 'Learning', type: 'positive', basePoints: 5, period: 'daily', targetCount: 1, count: 0, totalCount: 0, completedDates: [], streakDays: 0, lastUpdated: '2024-01-01' };
     expect(() => habitConverter.fromFirestore(fakeSnap('habit-4', partial))).not.toThrow();
   });
 });

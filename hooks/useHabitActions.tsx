@@ -111,8 +111,6 @@ export const useHabitActions = (
           period: habit.period,
           targetCount: habit.targetCount,
           totalCount: habit.totalCount,
-          weatherSensitive: habit.weatherSensitive ?? false,
-          telegramAlias: habit.telegramAlias,
           isShared: habit.isShared,
           ownerId: habit.ownerId,
           isCustom: habit.isCustom,

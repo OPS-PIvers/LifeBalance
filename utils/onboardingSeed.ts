@@ -62,7 +62,6 @@ export const presetToHabit = (
   completedDates: [],
   streakDays: 0,
   lastUpdated: getLocalDateString(),
-  weatherSensitive: preset.weatherSensitive,
   presetId: preset.id,
   isCustom: false,
   effortLevel: preset.effortLevel,

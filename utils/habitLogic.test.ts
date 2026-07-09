@@ -158,7 +158,6 @@ describe('habitLogic', () => {
       streakDays: 0,
       lastUpdated: new Date().toISOString(),
       createdBy: 'u1',
-      weatherSensitive: false
     };
 
     describe('Incremental Scoring', () => {
@@ -417,7 +416,6 @@ describe('habitLogic', () => {
     streakDays: 0,
     lastUpdated: new Date().toISOString(),
     createdBy: 'u1',
-    weatherSensitive: false,
   };
 
   describe('calculatePointsForDateRange — per-date streak reconstruction', () => {

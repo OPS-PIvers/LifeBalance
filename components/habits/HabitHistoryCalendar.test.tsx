@@ -49,7 +49,6 @@ describe('HabitHistoryCalendar', () => {
       count: 0,
       totalCount: 0,
       lastUpdated: '2024-01-15T12:00:00Z',
-      weatherSensitive: false,
       createdBy: 'user-1',
     },
     {
@@ -66,7 +65,6 @@ describe('HabitHistoryCalendar', () => {
       count: 0,
       totalCount: 0,
       lastUpdated: '2024-01-15T12:00:00Z',
-      weatherSensitive: false,
       createdBy: 'user-1',
     },
   ];
