@@ -747,7 +747,7 @@ export interface ApiKeyPermissions {
   habits: boolean;
   expenses: boolean;
   shoppingList: boolean;
-  receiptScanning: boolean;  // Not yet implemented - see RECEIPT_SCANNING_IMPLEMENTATION.md
+  receiptScanning: boolean;  // Unused — receipt endpoint removed; kept for stored-doc shape
 }
 
 export interface HouseholdApiKey {
