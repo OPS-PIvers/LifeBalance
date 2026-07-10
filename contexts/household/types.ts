@@ -22,7 +22,8 @@ import {
   QuickStockList,
   HouseholdApiKey,
   ModuleKey,
-  WeeklyRecap
+  WeeklyRecap,
+  TransactionComment
 } from '@/types/schema';
 import { type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { type BucketSpent } from '@/utils/bucketSpentCalculator';
@@ -187,6 +188,20 @@ export interface HouseholdContextType {
    *  needed — nothing else changes). */
   keepBothTransactions: (txnId: string) => Promise<void>;
 
+  // Transaction Comment Actions (Plan 23) — ON-DEMAND fetch (no standing
+  // listener). NOTE: the `comments` subcollection has no firestore.rules
+  // entry yet; calls reject with permission-denied until that separate,
+  // human-watched rules PR ships (see advisor-plans/23-transaction-comments-spike.md).
+  /** One-shot fetch of a transaction's comment thread, oldest-first. Call on
+   *  detail-view open — never wire this to a listener. */
+  getTransactionComments: (transactionId: string) => Promise<TransactionComment[]>;
+  /** Adds a comment (≤500 chars) and bumps `Transaction.commentCount` in the
+   *  SAME writeBatch. */
+  addTransactionComment: (transactionId: string, text: string) => Promise<void>;
+  /** Deletes a comment and decrements `Transaction.commentCount` in the SAME
+   *  writeBatch. Author-only in the (future) rules; not enforced client-side. */
+  deleteTransactionComment: (transactionId: string, commentId: string) => Promise<void>;
+
   // Habit Actions
   addHabit: (habit: Habit) => Promise<string>;
   updateHabit: (habit: Habit) => Promise<void>;
@@ -336,6 +351,7 @@ export type FinanceContextValue = Pick<HouseholdContextType,
   | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
   | 'addTransaction' | 'updateTransactionCategory' | 'updateTransaction' | 'deleteTransaction' | 'splitTransaction'
   | 'mergeTransactions' | 'keepBothTransactions'
+  | 'getTransactionComments' | 'addTransactionComment' | 'deleteTransactionComment'
 >;
 
 export type GamificationContextValue = Pick<HouseholdContextType,
