@@ -48,7 +48,8 @@ import {
   HouseholdApiKey,
   PendingItem,
   ModuleKey,
-  WeeklyRecap
+  WeeklyRecap,
+  SavingsGoal
 } from '@/types/schema';
 import { calculateSafeToSpendBreakdownFromExpanded } from '@/utils/safeToSpendCalculator';
 import { calculatePointsForDate, calculatePointsForDateRange, computeManagedMemberPointsReset, isHabitStale, getHabitResetUpdate } from '@/utils/habitLogic';
@@ -87,6 +88,7 @@ import {
   makeTransactionLoaders,
   makeLoadAllBucketHistory,
 } from '@/contexts/household/mutations/financeMutations';
+import { makeSavingsGoalMutations } from '@/contexts/household/mutations/savingsGoalMutations';
 import {
   makeAddCalendarItem,
   makeUpdateCalendarItem,
@@ -369,6 +371,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // Real-time state from Firestore
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [buckets, setBuckets] = useState<BudgetBucket[]>([]);
+  const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
   const bucketsRef = useRef(buckets); // Ref to access latest buckets in listeners
 
   useEffect(() => {
@@ -587,6 +590,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional cross-household state teardown; see comment above
     setAccounts([]);
     setBuckets([]);
+    setSavingsGoals([]);
     setRecentTransactions([]);
     setOlderTransactions([]);
     recentTransactionsRef.current = [];
@@ -652,6 +656,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       setHasMoreBucketHistory: (data) => setHasMoreBucketHistory(data),
       bucketHistoryLoadedAllRef,
       setCalendarItems: (data) => setCalendarItems(data),
+      setSavingsGoals: (data) => setSavingsGoals(data),
     }));
 
     // (Transactions are handled by their own effect below so the window can
@@ -1411,6 +1416,25 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeAccountMutations({ db, householdId, user }).reorderAccounts(orderedIds);
   }, [householdId, user]);
 
+  // --- ACTIONS: SAVINGS GOALS (Plan 24) ---
+  // (contexts/household/mutations/savingsGoalMutations.ts)
+
+  const addSavingsGoal = useCallback(async (goal: Omit<SavingsGoal, 'id' | 'createdAt' | 'completedAt'>) => {
+    await makeSavingsGoalMutations({ db, householdId }).addSavingsGoal(goal);
+  }, [householdId]);
+
+  const updateSavingsGoal = useCallback(async (id: string, updates: Partial<Pick<SavingsGoal, 'name' | 'targetAmount' | 'dueDate' | 'ownerId' | 'color'>>) => {
+    await makeSavingsGoalMutations({ db, householdId }).updateSavingsGoal(id, updates);
+  }, [householdId]);
+
+  const deleteSavingsGoal = useCallback(async (id: string) => {
+    await makeSavingsGoalMutations({ db, householdId }).deleteSavingsGoal(id);
+  }, [householdId]);
+
+  const contributeToGoal = useCallback(async (id: string, amount: number) => {
+    await makeSavingsGoalMutations({ db, householdId }).contributeToGoal(id, amount);
+  }, [householdId]);
+
   // --- ACTIONS: BUCKETS ---
   // (contexts/household/mutations/financeMutations.ts)
 
@@ -1916,6 +1940,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     safeToSpendBreakdown,
     accounts,
     buckets,
+    savingsGoals,
     calendarItems,
     transactions,
     currentPeriodId,
@@ -1936,6 +1961,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     deleteAccount,
     updateAccountOrder,
     reorderAccounts,
+    addSavingsGoal,
+    updateSavingsGoal,
+    deleteSavingsGoal,
+    contributeToGoal,
     addBucket,
     updateBucket,
     deleteBucket,
@@ -1957,10 +1986,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addTransactionComment,
     deleteTransactionComment,
   }), [
-    safeToSpend, safeToSpendBreakdown, accounts, buckets, calendarItems, transactions, currentPeriodId, bucketSpentMap, bucketHistory,
+    safeToSpend, safeToSpendBreakdown, accounts, buckets, savingsGoals, calendarItems, transactions, currentPeriodId, bucketSpentMap, bucketHistory,
     transactionWindowStart, isLoadingOlderTransactions, hasMoreTransactions, loadOlderTransactions, loadAllTransactions,
     isLoadingOlderBucketHistory, hasMoreBucketHistory, loadAllBucketHistory,
     addAccount, updateAccountBalance, setAccountGoal, setAccountCardLast4, deleteAccount, updateAccountOrder, reorderAccounts,
+    addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, contributeToGoal,
     addBucket, updateBucket, deleteBucket, updateBucketLimit, reallocateBucket,
     addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem,
     addTransaction, updateTransactionCategory, updateTransaction, deleteTransaction, splitTransaction,

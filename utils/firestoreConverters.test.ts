@@ -33,6 +33,7 @@ import {
   transactionConverter,
   transactionCommentConverter,
   todoConverter,
+  savingsGoalConverter,
 } from './firestoreConverters';
 
 /** Minimal fake QueryDocumentSnapshot for converter tests. */
@@ -904,5 +905,54 @@ describe('todoConverter', () => {
   it('(b) isImportant stays undefined when absent (legacy docs)', () => {
     const result = todoConverter.fromFirestore(fakeSnap('todo-7', wellFormed));
     expect(result.isImportant).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SavingsGoal (Plan 24) — preserves Timestamp→ISO normalisation for
+// createdAt/completedAt.
+// ---------------------------------------------------------------------------
+describe('savingsGoalConverter', () => {
+  const wellFormed = {
+    name: 'Christmas',
+    targetAmount: 1200,
+    savedAmount: 300,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  it('(a) well-formed doc: fromFirestore injects id and preserves fields', () => {
+    const result = savingsGoalConverter.fromFirestore(fakeSnap('goal-1', wellFormed));
+    expect(result.id).toBe('goal-1');
+    expect(result.name).toBe('Christmas');
+    expect(result.targetAmount).toBe(1200);
+    expect(result.savedAmount).toBe(300);
+  });
+
+  it('(a) well-formed doc: toFirestore strips id', () => {
+    const goal = { ...wellFormed, id: 'goal-1' };
+    const out = callToFirestore(savingsGoalConverter, goal);
+    expect('id' in out).toBe(false);
+    expect(out['name']).toBe('Christmas');
+  });
+
+  it('(a) Timestamp createdAt is converted to ISO string', () => {
+    const ts = Timestamp.fromDate(new Date('2026-02-01T12:00:00.000Z'));
+    const result = savingsGoalConverter.fromFirestore(fakeSnap('goal-2', { ...wellFormed, createdAt: ts }));
+    expect(result.createdAt).toBe('2026-02-01T12:00:00.000Z');
+  });
+
+  it('(a) Timestamp completedAt is converted to ISO string when present', () => {
+    const ts = Timestamp.fromDate(new Date('2026-03-01T12:00:00.000Z'));
+    const result = savingsGoalConverter.fromFirestore(fakeSnap('goal-3', { ...wellFormed, completedAt: ts }));
+    expect(result.completedAt).toBe('2026-03-01T12:00:00.000Z');
+  });
+
+  it('(b) partial doc without optional fields does not throw', () => {
+    const partial = { name: 'Vacation', targetAmount: 500, savedAmount: 0, createdAt: '2026-01-01' };
+    expect(() => savingsGoalConverter.fromFirestore(fakeSnap('goal-4', partial))).not.toThrow();
+    const result = savingsGoalConverter.fromFirestore(fakeSnap('goal-4', partial));
+    expect(result.id).toBe('goal-4');
+    expect(result.ownerId).toBeUndefined();
+    expect(result.completedAt).toBeUndefined();
   });
 });

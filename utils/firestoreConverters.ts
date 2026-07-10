@@ -57,6 +57,7 @@ import type {
   TransactionComment,
   ToDo,
   WeeklyRecap,
+  SavingsGoal,
 } from '@/types/schema';
 
 // ---------------------------------------------------------------------------
@@ -335,6 +336,31 @@ export const weeklyRecapConverter: FirestoreDataConverter<WeeklyRecap> = {
           ? d['generatedAt'].toDate().toISOString()
           : d['generatedAt'],
     } as WeeklyRecap;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// SavingsGoal (Plan 24) — preserves Timestamp→ISO normalisation for
+// createdAt/completedAt (mirrors the Account.lastUpdated pattern).
+// ---------------------------------------------------------------------------
+export const savingsGoalConverter: FirestoreDataConverter<SavingsGoal> = {
+  toFirestore(goal: SavingsGoal): DocumentData {
+    return omitKey(goal, 'id');
+  },
+  fromFirestore(snapshot: QueryDocumentSnapshot): SavingsGoal {
+    const d = snapshot.data();
+    return {
+      ...d,
+      id: snapshot.id,
+      createdAt:
+        d['createdAt'] instanceof Timestamp
+          ? d['createdAt'].toDate().toISOString()
+          : d['createdAt'],
+      completedAt:
+        d['completedAt'] instanceof Timestamp
+          ? d['completedAt'].toDate().toISOString()
+          : d['completedAt'],
+    } as SavingsGoal;
   },
 };
 

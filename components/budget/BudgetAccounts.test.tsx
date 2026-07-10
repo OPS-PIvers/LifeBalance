@@ -51,13 +51,23 @@ const mockAccounts: Account[] = [
 vi.mock('@/contexts/FirebaseHouseholdContext', () => {
   // BudgetAccounts reads useFinance; alias every hook to the same value so the
   // mock data resolves regardless of which slice hook the component uses.
+  // Also covers the nested SavingsGoals section (Plan 24), which reads
+  // savingsGoals/its mutations off useFinance and `members` off useHouseholdCore.
   const value = () => ({
     accounts: mockAccounts,
     updateAccountBalance: updateAccountBalanceMock,
     addAccount: addAccountMock,
     setAccountGoal: setAccountGoalMock,
+    setAccountCardLast4: vi.fn(),
     deleteAccount: deleteAccountMock,
+    updateAccountOrder: vi.fn(),
     reorderAccounts: reorderAccountsMock,
+    savingsGoals: [],
+    addSavingsGoal: vi.fn(),
+    updateSavingsGoal: vi.fn(),
+    deleteSavingsGoal: vi.fn(),
+    contributeToGoal: vi.fn(),
+    members: [],
   });
   return {
     useHousehold: value,
@@ -82,6 +92,7 @@ vi.mock('lucide-react', () => ({
   Loader2: () => <span data-testid="loader-icon" />,
   ChevronDown: () => <span data-testid="chevron-down-icon" />,
   MoreVertical: () => <span data-testid="more-vertical-icon" />,
+  PiggyBank: () => <span data-testid="piggy-bank-icon" />,
 }));
 
 // Mock Modal to avoid portal/fixed positioning issues in tests
