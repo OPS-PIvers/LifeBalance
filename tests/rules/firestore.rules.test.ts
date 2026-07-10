@@ -395,6 +395,17 @@ describe('member cap (Plan 051 — server-side, billing-gated, grandfathered)', 
     );
   });
 
+  it('billing live + subscription explicitly null: treated as free (no rule error)', async () => {
+    // Guards the null-parent path: get(['subscription','plan']) must resolve to the
+    // free cap rather than erroring on a null `subscription` map.
+    await seedDaveMember();
+    await setBilling(true);
+    await setHouseholdSubscription(null as unknown as object);
+    await assertFails(
+      updateDoc(doc(dbFor(DAVE), 'households', H1), { memberUids: [ALICE, BOB, DAVE] }),
+    );
+  });
+
   it('billing live + free plan: a non-growth update (rename) still succeeds', async () => {
     await setBilling(true);
     await assertSucceeds(

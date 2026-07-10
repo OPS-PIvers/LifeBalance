@@ -108,8 +108,10 @@ service cloud.firestore {
       // this same doc and is immutable via the rule below, so the plan resolves with no
       // extra get() of another document.
       function planMaxMembers(data) {
-        return (data.get('subscription', {}).get('plan', '') == 'premium' &&
-                data.get('subscription', {}).get('status', '') in ['active', 'trialing', 'past_due'])
+        // Nested-path form of get() so an explicitly-null `subscription` (not just an
+        // absent one) resolves to the default instead of erroring on a null parent map.
+        return (data.get(['subscription', 'plan'], '') == 'premium' &&
+                data.get(['subscription', 'status'], '') in ['active', 'trialing', 'past_due'])
           ? 20 : 2;
       }
       // Whether billing is live. Read directly from app_config/global (get()/exists()
