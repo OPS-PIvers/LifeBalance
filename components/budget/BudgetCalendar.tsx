@@ -574,12 +574,12 @@ const BudgetCalendar: React.FC = () => {
             {format(selectedDate, 'MMMM d')}
           </h3>
           <Button
-            variant="subtle"
+            variant="primary"
             size="sm"
             onClick={openAddModal}
-            className="text-xs py-1.5 rounded-btn bg-brand-100 dark:bg-brand-700/50 hover:bg-brand-200 dark:hover:bg-brand-700 text-brand-700 dark:text-brand-200"
+            leftIcon={<Plus size={16} />}
           >
-            Add Event <Plus size={14} />
+            Add Event
           </Button>
         </div>
 
@@ -592,10 +592,10 @@ const BudgetCalendar: React.FC = () => {
             description="No events or tasks on this day."
             action={
               <Button
-                variant="secondary"
+                variant="primary"
                 size="sm"
                 onClick={openAddModal}
-                leftIcon={<Plus size={14} />}
+                leftIcon={<Plus size={16} />}
               >
                 Create Event
               </Button>
