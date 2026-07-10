@@ -1,5 +1,25 @@
 # Advisor Plans
 
+## ✅ Execution record (2026-07-09 → 07-10)
+
+All 18 plans (10–27) were executed via an orchestrated multi-agent run (executor
+per plan in an isolated worktree → independent dual-lens review → orchestrator
+sign-off → PR → CI + gemini review → merge), landing as PRs **#845–#862** on
+`main`. Merge order followed the recommended sequence below. Highlights:
+server-side AI quota (with an alternation-bypass fix caught in adversarial
+review), Sentry error tracking, dead-surface/sub-bucket removal, the
+`powerToolsEnabled` gate, routing consolidation, recipe-URL import (SSRF-hardened
+across two review rounds), subscription detection, freeze-bank auto-apply
+(client/functions streak parity), global search, ToDos view extraction, CSV
+import, the ICS calendar feed, transaction comments, and savings goals.
+
+**Two follow-ups remain for a human:** (1) the `firestore.rules` changes for
+plans 23 & 24 ship as one human-watched rules PR — see
+[RULES-HANDOFF-23-24.md](./RULES-HANDOFF-23-24.md) (plan 23 comments are gated on
+it; plan 24 goals already work via the household catch-all and this only hardens
+validation); (2) plan 11 Sentry needs the `VITE_SENTRY_DSN` GitHub secret +
+`deploy.yml` env wiring before it captures anything.
+
 ## Pass 2 — "Next Steps" direction audit (2026-07-09, commit `fce26e4`)
 
 Pass 1 (below) is fully executed except Plan 09's human flips. This pass audited
@@ -12,11 +32,11 @@ default. Execute in numeric order unless noted; 10 and 11 are the P1s.
 
 | # | Plan | Priority | Effort | Risk | Depends on | Status |
 |---|------|----------|--------|------|------------|--------|
-| 10 | [Server-side AI quota in `geminiproxy`](./10-server-side-ai-quota.md) — the proxy checks auth only; the entire daily cap is client-side and bypassable. Hard prerequisite to billing; cost exposure at open signup | P1 | M | MED | — | TODO |
-| 11 | [Client error tracking (Sentry)](./11-client-error-tracking.md) — ErrorBoundary only console.errors; the last unshipped "stop flying blind" roadmap item | P1 | S | LOW | — | TODO |
-| 12 | [Data-export completeness](./12-export-completeness.md) — "Download my data" omits todos, meal plan, challenges, rewards, stores | P2 | S | LOW | — | TODO |
-| 13 | [Retire `/migrate-submissions`](./13-retire-migrate-submissions.md) — one-off migration page still routed to every signed-in user; CLI twin remains | P2 | S | LOW | — | TODO |
-| 14 | [Global search spike + v1](./14-global-search-spike.md) — roadmap Tier-1 "expected consumer baseline"; all entities already in memory, no data layer needed | P2 | M | LOW | — | TODO |
+| 10 | [Server-side AI quota in `geminiproxy`](./10-server-side-ai-quota.md) — the proxy checks auth only; the entire daily cap is client-side and bypassable. Hard prerequisite to billing; cost exposure at open signup | P1 | M | MED | — | ✅ SHIPPED |
+| 11 | [Client error tracking (Sentry)](./11-client-error-tracking.md) — ErrorBoundary only console.errors; the last unshipped "stop flying blind" roadmap item | P1 | S | LOW | — | ✅ SHIPPED |
+| 12 | [Data-export completeness](./12-export-completeness.md) — "Download my data" omits todos, meal plan, challenges, rewards, stores | P2 | S | LOW | — | ✅ SHIPPED |
+| 13 | [Retire `/migrate-submissions`](./13-retire-migrate-submissions.md) — one-off migration page still routed to every signed-in user; CLI twin remains | P2 | S | LOW | — | ✅ SHIPPED |
+| 14 | [Global search spike + v1](./14-global-search-spike.md) — roadmap Tier-1 "expected consumer baseline"; all entities already in memory, no data layer needed | P2 | M | LOW | — | ✅ SHIPPED |
 
 **Corrections to Pass 1 records:** Plan 09 §B's precondition ("premium features must
 exist first — Plan 02") is now MET — `sendweeklyrecap` is shipped and exported, and the
@@ -35,16 +55,16 @@ changes ALWAYS ship as their own human-watched PR in this repo.
 
 | # | Plan | Priority | Effort | Risk | Depends on | Status |
 |---|------|----------|--------|------|------------|--------|
-| 15 | [Dead-surface cleanup](./15-dead-surface-cleanup.md) — `weatherSensitive`, Telegram phantom, `quickAddReceipt` 501 stub, backfill un-export | P1 | S–M | LOW | — | TODO |
-| 16 | [Remove sub-buckets](./16-remove-sub-buckets.md) — write-only feature spanning schema, 2 AI prompts, merge logic, forms | P2 | M | LOW-MED | best after 15 | TODO |
-| 17 | [Flag-gate power tools](./17-flag-gate-power-tools.md) — `powerToolsEnabled` fail-open gate over the 5 June "pause" surfaces | P2 | S–M | LOW | — | TODO |
-| 18 | [PWA manifest shortcuts](./18-pwa-manifest-shortcuts.md) — long-press quick actions, navigation-only v1 | P2 | S | LOW | — | TODO |
-| 19 | [Recipe URL import](./19-recipe-url-import.md) — `fetchrecipepage` callable (SSRF-guarded) + URL field in the import modal | P2 | M | MED | — | TODO |
-| 20 | [Subscription detection](./20-subscription-detection.md) — pure detector over existing transactions + panel in RecurringBillsModal | P2 | M | LOW | — | TODO |
-| 21 | [CSV transaction import](./21-csv-import.md) — investigation-gated; reuses the statement-scan commit path + identity dedup; pending-review only | P2 | M | MED | — | TODO |
-| 22 | [Calendar ICS feed](./22-calendar-ics-feed.md) — spike-gated; tokened read-only feed, Admin-SDK token write (no rules change) | P3 | M | MED | — | TODO |
-| 23 | [Transaction comments](./23-transaction-comments-spike.md) — spike + build; rules diff DRAFTED only, ships as human-watched rules PR | P3 | M | MED | rules PR first | TODO |
-| 24 | [Savings goals](./24-savings-goals-spike.md) — spike + build; StS-decoupled by design; rules PR separate | P3 | M–L | MED | rules PR first | TODO |
+| 15 | [Dead-surface cleanup](./15-dead-surface-cleanup.md) — `weatherSensitive`, Telegram phantom, `quickAddReceipt` 501 stub, backfill un-export | P1 | S–M | LOW | — | ✅ SHIPPED |
+| 16 | [Remove sub-buckets](./16-remove-sub-buckets.md) — write-only feature spanning schema, 2 AI prompts, merge logic, forms | P2 | M | LOW-MED | best after 15 | ✅ SHIPPED |
+| 17 | [Flag-gate power tools](./17-flag-gate-power-tools.md) — `powerToolsEnabled` fail-open gate over the 5 June "pause" surfaces | P2 | S–M | LOW | — | ✅ SHIPPED |
+| 18 | [PWA manifest shortcuts](./18-pwa-manifest-shortcuts.md) — long-press quick actions, navigation-only v1 | P2 | S | LOW | — | ✅ SHIPPED |
+| 19 | [Recipe URL import](./19-recipe-url-import.md) — `fetchrecipepage` callable (SSRF-guarded) + URL field in the import modal | P2 | M | MED | — | ✅ SHIPPED |
+| 20 | [Subscription detection](./20-subscription-detection.md) — pure detector over existing transactions + panel in RecurringBillsModal | P2 | M | LOW | — | ✅ SHIPPED |
+| 21 | [CSV transaction import](./21-csv-import.md) — investigation-gated; reuses the statement-scan commit path + identity dedup; pending-review only | P2 | M | MED | — | ✅ SHIPPED |
+| 22 | [Calendar ICS feed](./22-calendar-ics-feed.md) — spike-gated; tokened read-only feed, Admin-SDK token write (no rules change) | P3 | M | MED | — | ✅ SHIPPED |
+| 23 | [Transaction comments](./23-transaction-comments-spike.md) — spike + build; rules diff DRAFTED only, ships as human-watched rules PR | P3 | M | MED | rules PR first | ✅ SHIPPED |
+| 24 | [Savings goals](./24-savings-goals-spike.md) — spike + build; StS-decoupled by design; rules PR separate | P3 | M–L | MED | rules PR first | ✅ SHIPPED |
 
 **Owner decisions (recorded 2026-07-09 via Q&A):** Freeze Bank → auto-applied,
 max-2 stock, economy deleted (→ Plan 25). YearlyGoal → parked behind the
@@ -57,9 +77,9 @@ the hourly-cron merge (B12 — fold into the next functions-touching PR).
 
 | # | Plan | Priority | Effort | Risk | Depends on | Status |
 |---|------|----------|--------|------|------------|--------|
-| 25 | [Freeze Bank → auto-applied](./25-freeze-bank-simplification.md) — `frozenDates` streak continuity (zero points), refill-to-2, manual patch UI removed; client+functions parity | P2 | M–L | MED-HIGH | not concurrent with other habit-logic work | TODO |
-| 26 | [Routing consolidation](./26-routing-consolidation.md) — `/lists` wins; redirects seed the tab preference; wrappers deleted | P2 | S–M | LOW-MED | sequence with 27, either order | TODO |
-| 27 | [ToDos view extraction](./27-todos-view-extraction.md) — move-only; matrix/grid into `components/todos/`; zero behavior change | P3 | M | LOW-MED | sequence with 26 | TODO |
+| 25 | [Freeze Bank → auto-applied](./25-freeze-bank-simplification.md) — `frozenDates` streak continuity (zero points), refill-to-2, manual patch UI removed; client+functions parity | P2 | M–L | MED-HIGH | not concurrent with other habit-logic work | ✅ SHIPPED |
+| 26 | [Routing consolidation](./26-routing-consolidation.md) — `/lists` wins; redirects seed the tab preference; wrappers deleted | P2 | S–M | LOW-MED | sequence with 27, either order | ✅ SHIPPED |
+| 27 | [ToDos view extraction](./27-todos-view-extraction.md) — move-only; matrix/grid into `components/todos/`; zero behavior change | P3 | M | LOW-MED | sequence with 26 | ✅ SHIPPED |
 
 **Recommended execution order (all passes):** 15 → 13 → 12 → 10 → 11 → 17 (now incl.
 YearlyGoal parking) → 16 → 26 → 18 → 19 → 20 → 25 → 14 → 27 → 21 → 22 → 23 → 24.
