@@ -7,6 +7,7 @@ import { FirebaseHouseholdProvider } from './contexts/FirebaseHouseholdContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import ModuleRoute from './components/auth/ModuleRoute';
+import PlanTabRedirect from './components/auth/PlanTabRedirect';
 import MainLayout from './components/layout/MainLayout';
 import OfflineBanner from './components/layout/OfflineBanner';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -23,9 +24,6 @@ const Budget = React.lazy(() => import('./pages/Budget'));
 const Habits = React.lazy(() => import('./pages/Habits'));
 const Settings = React.lazy(() => import('./pages/Settings'));
 const OnboardingWizard = React.lazy(() => import('./components/onboarding/OnboardingWizard'));
-const MealsPage = React.lazy(() => import('./pages/MealsPage'));
-const ShoppingPage = React.lazy(() => import('./pages/ShoppingPage'));
-const ToDosPage = React.lazy(() => import('./pages/ToDosPage'));
 const ListsPage = React.lazy(() => import('./pages/ListsPage'));
 
 const LoadingFallback = () => (
@@ -210,15 +208,14 @@ const App: React.FC = () => {
                     </ProtectedRoute>
                   }
                 />
+                {/* Legacy standalone routes — redirect into the corresponding /lists
+                    tab (Plan 26). /lists' own ModuleRoute/ListsPage gating takes
+                    over, so these skip the per-module ModuleRoute wrapper. */}
                 <Route
                   path="/meals"
                   element={
                     <ProtectedRoute>
-                      <MainLayout>
-                        <ModuleRoute module="meals">
-                          <MealsPage />
-                        </ModuleRoute>
-                      </MainLayout>
+                      <PlanTabRedirect tab="meals" />
                     </ProtectedRoute>
                   }
                 />
@@ -226,11 +223,7 @@ const App: React.FC = () => {
                   path="/shopping"
                   element={
                     <ProtectedRoute>
-                      <MainLayout>
-                        <ModuleRoute module="shopping">
-                          <ShoppingPage />
-                        </ModuleRoute>
-                      </MainLayout>
+                      <PlanTabRedirect tab="shopping" />
                     </ProtectedRoute>
                   }
                 />
@@ -238,11 +231,7 @@ const App: React.FC = () => {
                   path="/todos"
                   element={
                     <ProtectedRoute>
-                      <MainLayout>
-                        <ModuleRoute module="todos">
-                          <ToDosPage />
-                        </ModuleRoute>
-                      </MainLayout>
+                      <PlanTabRedirect tab="todos" />
                     </ProtectedRoute>
                   }
                 />

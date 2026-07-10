@@ -47,18 +47,6 @@ vi.mock('./pages/Habits', () => ({
   default: () => <div data-testid="habits-page">Habits Page</div>
 }));
 
-vi.mock('./pages/MealsPage', () => ({
-  default: () => <div data-testid="meals-page">Meals Page</div>
-}));
-
-vi.mock('./pages/ShoppingPage', () => ({
-  default: () => <div data-testid="shopping-page">Shopping Page</div>
-}));
-
-vi.mock('./pages/ToDosPage', () => ({
-  default: () => <div data-testid="todos-page">ToDos Page</div>
-}));
-
 vi.mock('./pages/ListsPage', () => ({
   default: () => <div data-testid="lists-page">Lists Page</div>
 }));
@@ -135,25 +123,25 @@ describe('App Routing', () => {
     await waitFor(() => expect(screen.getByTestId('habits-page')).toBeInTheDocument());
   });
 
-  it('renders Meals page at /meals', async () => {
+  it('redirects legacy /meals route to Lists page', async () => {
     vi.mocked(AuthContext.useAuth).mockReturnValue(mockAuthenticatedUser);
     window.location.hash = '#/meals';
     render(<App />);
-    await waitFor(() => expect(screen.getByTestId('meals-page')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('lists-page')).toBeInTheDocument());
   });
 
-  it('renders Shopping page at /shopping', async () => {
+  it('redirects legacy /shopping route to Lists page', async () => {
     vi.mocked(AuthContext.useAuth).mockReturnValue(mockAuthenticatedUser);
     window.location.hash = '#/shopping';
     render(<App />);
-    await waitFor(() => expect(screen.getByTestId('shopping-page')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('lists-page')).toBeInTheDocument());
   });
 
-  it('renders ToDos page at /todos', async () => {
+  it('redirects legacy /todos route to Lists page', async () => {
     vi.mocked(AuthContext.useAuth).mockReturnValue(mockAuthenticatedUser);
     window.location.hash = '#/todos';
     render(<App />);
-    await waitFor(() => expect(screen.getByTestId('todos-page')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('lists-page')).toBeInTheDocument());
   });
 
   it('renders Lists page at /lists', async () => {
