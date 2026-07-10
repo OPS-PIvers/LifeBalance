@@ -4,6 +4,7 @@ import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
+import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
@@ -130,14 +131,15 @@ const RewardManagerPanel: React.FC<RewardManagerPanelProps> = ({ kids, kidModeEn
         defaultOpen={false}
         action={
           !formOpen ? (
-            <button
+            <Button
               type="button"
+              variant="warning"
+              size="sm"
               onClick={beginCreate}
-              className="flex items-center gap-1 rounded-btn bg-warm-500 hover:bg-warm-600 px-3 py-1.5 text-xs font-bold text-white transition-[transform,background-color] duration-(--duration-fast) ease-(--ease-standard) active:scale-95 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
+              leftIcon={<Plus size={16} />}
             >
-              <Plus size={14} />
               Add reward
-            </button>
+            </Button>
           ) : null
         }
       >

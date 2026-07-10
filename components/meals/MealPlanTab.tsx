@@ -858,12 +858,14 @@ const MealPlanTab: React.FC = () => {
                     {selectedDateStr === todayStr && <span className="text-accent-600 dark:text-accent-300 font-bold"> · Today</span>}
                 </p>
             </div>
-            <button
+            <Button
+                variant="primary"
+                size="sm"
                 onClick={() => handleAddMealToDate(selectedDate)}
-                className="flex items-center gap-1.5 text-sm font-bold text-white bg-accent-600 hover:bg-accent-700 px-4 py-2 rounded-full transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95"
+                leftIcon={<Plus className="w-4 h-4" />}
             >
-                <Plus className="w-4 h-4" /> Add meal
-            </button>
+                Add meal
+            </Button>
         </div>
 
         {isLoading ? (
@@ -952,7 +954,8 @@ const MealPlanTab: React.FC = () => {
                 description="Nothing planned for this day yet."
                 action={
                     <Button
-                        variant="secondary"
+                        variant="primary"
+                        size="sm"
                         leftIcon={<Plus className="w-4 h-4" />}
                         onClick={() => handleAddMealToDate(selectedDate)}
                     >
