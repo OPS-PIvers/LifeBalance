@@ -128,7 +128,8 @@ Habits auto-reset based on their `period` (daily/weekly).
 
 Uses **HashRouter** (not BrowserRouter) to support deployment without server-side routing configuration. Routes are defined in [App.tsx](App.tsx); pages are `React.lazy`-loaded for code-splitting. Current routes:
 - **Public:** `/login`, `/privacy`, `/terms`, `/setup`
-- **Protected** (via `ProtectedRoute`): `/onboarding` (full-page first-run wizard, `components/onboarding/OnboardingWizard.tsx`, rendered *without* `MainLayout`), then inside `MainLayout`: `/` (Dashboard), `/lists`, `/budget`, `/habits`, `/meals`, `/shopping`, `/todos`, `/settings`. A catch-all `*` redirects to `/`.
+- **Protected** (via `ProtectedRoute`): `/onboarding` (full-page first-run wizard, `components/onboarding/OnboardingWizard.tsx`, rendered *without* `MainLayout`), then inside `MainLayout`: `/` (Dashboard), `/lists` (tab container for To-Dos/Meals/Shopping — see below), `/budget`, `/habits`, `/settings`. A catch-all `*` redirects to `/`.
+- **Legacy redirects:** `/todos`, `/meals`, `/shopping` are no longer standalone pages — `PlanTabRedirect` (`components/auth/PlanTabRedirect.tsx`) seeds `ListsPage`'s `'lists-active-tab'` localStorage preference with the requested tab and navigates to `/lists`, so old deep links (including the PWA manifest shortcuts, Plan 18) land on the right tab instead of a dedicated route.
 
 Each protected route is wrapped in its own `ErrorBoundary` keyed on pathname, so a crash on one page doesn't take down the whole app. `ProtectedRoute` checks auth only (no household → `/setup`); per-module page gating is done by the `ModuleRoute` wrapper ([components/auth/ModuleRoute.tsx](components/auth/ModuleRoute.tsx)) — see "Feature Flags, Modules & Monetization" below. When Kid Mode is active, `MainLayout` swaps the entire shell (toolbar + routed page + bottom nav) for the kid surface — see the Kid Mode entry in that same section.
 
@@ -199,7 +200,7 @@ Systems agents will touch; one paragraph each, with pointers to deeper docs.
 ```
 components/
   ├── analytics/    # Charts/analytics widgets (recharts; lazy-loaded)
-  ├── auth/         # ProtectedRoute, ModuleRoute, HouseholdInviteCard
+  ├── auth/         # ProtectedRoute, ModuleRoute, PlanTabRedirect, HouseholdInviteCard
   ├── budget/       # Budget-specific UI components (TransactionMasterList is windowed with @tanstack/react-virtual)
   ├── dashboard/    # Dashboard widgets (PulseStripWidget, action queue, etc.)
   ├── habits/       # Habit tracking UI components
@@ -216,10 +217,8 @@ pages/              # Route-level page components (lazy-loaded in App.tsx)
   ├── Dashboard.tsx        # Main overview with AI insights
   ├── Budget.tsx           # Finance management
   ├── Habits.tsx           # Habit tracker
-  ├── MealsPage.tsx        # Meal planning
-  ├── ShoppingPage.tsx     # Shopping list
-  ├── ToDosPage.tsx        # Shared household to-dos
-  ├── ListsPage.tsx        # Generic lists
+  ├── ToDosPage.tsx        # Shared household to-dos (rendered via /lists' To-Dos tab; no standalone route)
+  ├── ListsPage.tsx        # Tab container for To-Dos / Meals / Shopping (route: /lists)
   ├── Settings.tsx         # App settings and preferences
   ├── Login.tsx            # Authentication
   ├── HouseholdSetup.tsx   # Household creation/joining
@@ -284,7 +283,7 @@ All TypeScript interfaces defined in [types/schema.ts](types/schema.ts):
 
 ## Meals Feature
 
-The Meals page ([pages/MealsPage.tsx](pages/MealsPage.tsx)) provides comprehensive meal planning and grocery management:
+The Meals tab (`MealPlanTab`, rendered by [pages/ListsPage.tsx](pages/ListsPage.tsx) at `/lists`) provides comprehensive meal planning and grocery management:
 
 ### Meal Planning
 - Weekly calendar view for meal planning
