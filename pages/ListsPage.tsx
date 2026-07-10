@@ -72,7 +72,7 @@ const ListsPage: React.FC = () => {
       {showTabStrip && (
         <div className="flex-none px-4 pt-4 pb-2 sticky top-0 z-30 bg-brand-50 dark:bg-brand-900 border-b border-brand-200 dark:border-brand-800">
           <Tabs value={activeTab} onValueChange={(value) => setSelectedTab(value as PlanTab)}>
-            <TabsList>
+            <TabsList size="sm">
               {enabledTabs.map((tab) => (
                 <TabsTrigger key={tab} value={tab} className="flex-1">
                   {TAB_LABELS[tab]}
