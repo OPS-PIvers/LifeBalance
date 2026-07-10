@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { format, isSameMonth, isToday, addMonths, subMonths } from 'date-fns';
-import { ChevronLeft, ChevronRight, CheckCircle2, Flame, Calendar } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Flame, Calendar, Snowflake } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useCalendarGrid } from '@/hooks/useCalendarGrid';
@@ -26,10 +26,12 @@ interface CalendarDayProps {
   isCurrentMonth: boolean;
   intensityClass: string;
   isToday: boolean;
+  /** Plan 25: an auto-applied freeze protected at least one streak this day. */
+  isFrozen: boolean;
   onSelect: (date: Date) => void;
 }
 
-const CalendarDay = React.memo(({ day, count, isSelected, isCurrentMonth, intensityClass, isToday, onSelect }: CalendarDayProps) => {
+const CalendarDay = React.memo(({ day, count, isSelected, isCurrentMonth, intensityClass, isToday, isFrozen, onSelect }: CalendarDayProps) => {
   return (
     <button
       onClick={() => onSelect(day)}
@@ -39,11 +41,15 @@ const CalendarDay = React.memo(({ day, count, isSelected, isCurrentMonth, intens
         isSelected
           ? "ring-2 ring-warm-500 dark:ring-warm-400 scale-105 z-10"
           : "hover:scale-105 hover:bg-brand-100 dark:hover:bg-brand-700/50",
-        !intensityClass && !isSelected && "text-brand-400 dark:text-brand-400 bg-brand-50 dark:bg-brand-700/30",
+        !intensityClass && !isSelected && !isFrozen && "text-brand-400 dark:text-brand-400 bg-brand-50 dark:bg-brand-700/30",
         intensityClass,
-        isToday && !isSelected && !intensityClass && "text-brand-900 dark:text-brand-50 font-bold bg-brand-200 dark:bg-brand-700"
+        // Frozen day with no completions: distinct habit-blue marker (a frozen
+        // day is NOT a completion, so it never gets the green intensity ramp).
+        isFrozen && !intensityClass && "bg-habit-blue/15 text-habit-blue dark:bg-habit-blue/20",
+        isFrozen && !isSelected && "ring-1 ring-habit-blue/40",
+        isToday && !isSelected && !intensityClass && !isFrozen && "text-brand-900 dark:text-brand-50 font-bold bg-brand-200 dark:bg-brand-700"
       )}
-      aria-label={`${format(day, 'MMM d')}: ${count} habits completed`}
+      aria-label={`${format(day, 'MMM d')}: ${count} habits completed${isFrozen ? ', streak protected by a freeze' : ''}`}
     >
       {format(day, 'd')}
     </button>
@@ -70,7 +76,7 @@ const HabitHistoryCalendar: React.FC = () => {
 
   // Map: DateString -> Completed Habits & Max Count. Memoized on `habits` so it
   // only rebuilds when the habits array changes (i.e. on a Firestore snapshot).
-  const { dailyCompletions, maxDailyCompletions } = useMemo(() => {
+  const { dailyCompletions, maxDailyCompletions, frozenByDate } = useMemo(() => {
     const map = new Map<string, Habit[]>();
     let max = 0;
 
@@ -83,7 +89,17 @@ const HabitHistoryCalendar: React.FC = () => {
       });
     });
 
-    return { dailyCompletions: map, maxDailyCompletions: max || 1 };
+    // Plan 25: days where an auto-applied freeze protected a streak. Frozen
+    // days are NOT completions — they get their own marker, never intensity.
+    const frozen = new Map<string, Habit[]>();
+    habits.forEach(habit => {
+      (habit.frozenDates ?? []).forEach(date => {
+        if (!frozen.has(date)) frozen.set(date, []);
+        frozen.get(date)!.push(habit);
+      });
+    });
+
+    return { dailyCompletions: map, maxDailyCompletions: max || 1, frozenByDate: frozen };
   }, [habits]);
 
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
@@ -147,6 +163,7 @@ const HabitHistoryCalendar: React.FC = () => {
                 isCurrentMonth={isCurrentMonth}
                 intensityClass={intensityClass}
                 isToday={isToday(day)}
+                isFrozen={frozenByDate.has(dateStr)}
                 onSelect={setSelectedDate}
               />
             );
@@ -155,6 +172,9 @@ const HabitHistoryCalendar: React.FC = () => {
 
         {/* Legend */}
         <div className="mt-4 flex items-center justify-end gap-2 text-xxs font-bold text-brand-300 dark:text-brand-450 uppercase tracking-wide">
+          <span className="flex items-center gap-1 mr-2 normal-case">
+            <Snowflake size={10} className="text-habit-blue" /> Frozen
+          </span>
           <span>Less</span>
           <div className="flex gap-1">
              <div className="w-3 h-3 rounded-sm bg-accent-200"></div>
@@ -176,6 +196,18 @@ const HabitHistoryCalendar: React.FC = () => {
             {selectedDateHabits.length} completed
           </Badge>
         </div>
+
+        {/* Plan 25: a freeze protected streak(s) on the selected day */}
+        {(frozenByDate.get(selectedDateStr)?.length ?? 0) > 0 && (
+          <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-habit-blue/10 dark:bg-habit-blue/15 text-sm text-brand-700 dark:text-brand-200">
+            <Snowflake size={16} className="text-habit-blue shrink-0" />
+            <span>
+              A freeze protected{' '}
+              {frozenByDate.get(selectedDateStr)!.map(h => h.title).join(', ')} on this day —
+              streak kept, no points earned.
+            </span>
+          </div>
+        )}
 
         {selectedDateHabits.length === 0 ? (
           <div className="text-center py-10 bg-white dark:bg-brand-800 border border-dashed border-brand-200 dark:border-brand-700 rounded-2xl text-brand-400 dark:text-brand-450">
