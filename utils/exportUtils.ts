@@ -2,6 +2,21 @@
  * Utility functions for exporting data to files (JSON, CSV)
  */
 import { getLocalDateString } from './dateHelpers';
+import type {
+  Household,
+  HouseholdMember,
+  Habit,
+  Transaction,
+  BudgetBucket,
+  CalendarItem,
+  Meal,
+  ShoppingItem,
+  ToDo,
+  MealPlanItem,
+  Challenge,
+  RewardItem,
+  Store
+} from '@/types/schema';
 
 /**
  * Triggers a browser download for a given content string
@@ -20,6 +35,58 @@ const downloadFile = (content: string, filename: string, mimeType: string) => {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   }, 100);
+};
+
+export interface ExportPayloadInput {
+  householdId: string | null | undefined;
+  exportedBy: string | undefined;
+  household: Household | null | undefined;
+  members: HouseholdMember[];
+  habits: Habit[];
+  transactions: Transaction[];
+  buckets: BudgetBucket[];
+  calendarItems: CalendarItem[];
+  meals: Meal[];
+  shoppingList: ShoppingItem[];
+  todos: ToDo[];
+  mealPlan: MealPlanItem[];
+  challenges: Challenge[];
+  rewards: RewardItem[];
+  stores: Store[];
+}
+
+/**
+ * Builds the full "Download my data" JSON backup payload. Pure function so
+ * it can be unit-tested independently of the Settings page. Strips
+ * sensitive/internal fields (fcmTokens, email) from members before export.
+ */
+export const buildExportPayload = (input: ExportPayloadInput) => {
+  const safeMembers = input.members.map(m => {
+    // Destructure to remove sensitive fields (prefixed with _ to suppress unused-var warnings)
+    const { fcmTokens: _fcmTokens, email: _email, ...safeMember } = m;
+    return safeMember;
+  });
+
+  return {
+    meta: {
+      exportedAt: new Date().toISOString(),
+      householdId: input.householdId,
+      exportedBy: input.exportedBy
+    },
+    household: input.household,
+    members: safeMembers,
+    habits: input.habits,
+    transactions: input.transactions,
+    buckets: input.buckets,
+    calendarItems: input.calendarItems,
+    meals: input.meals,
+    shoppingList: input.shoppingList,
+    todos: input.todos,
+    mealPlan: input.mealPlan,
+    challenges: input.challenges,
+    rewards: input.rewards,
+    stores: input.stores
+  };
 };
 
 /**

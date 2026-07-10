@@ -6,6 +6,7 @@ import {
   useFinance,
   useMealPlan,
   useShopping,
+  useTodos,
 } from '@/contexts/FirebaseHouseholdContext';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/firebase.config';
@@ -48,7 +49,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { isModuleEnabled } from '@/utils/moduleVisibility';
 import type { ModuleKey } from '@/types/schema';
 import { requestNotificationPermission, setupForegroundNotificationListener } from '@/services/notificationService';
-import { generateJsonBackup, generateCsvExport } from '@/utils/exportUtils';
+import { generateJsonBackup, generateCsvExport, buildExportPayload } from '@/utils/exportUtils';
 import { HouseholdMember, NotificationPreferences, Transaction } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -94,7 +95,7 @@ const Settings: React.FC = () => {
     setKidModePin,
     apiKeys,
   } = useHouseholdCore();
-  const { habits } = useGamification();
+  const { habits, challenges, rewardsInventory } = useGamification();
   const {
     transactions,
     buckets,
@@ -103,8 +104,9 @@ const Settings: React.FC = () => {
     isLoadingOlderTransactions,
     loadAllTransactions,
   } = useFinance();
-  const { meals } = useMealPlan();
-  const { shoppingList } = useShopping();
+  const { meals, mealPlan } = useMealPlan();
+  const { shoppingList, stores } = useShopping();
+  const { todos } = useTodos();
   const navigate = useNavigate();
 
   // Modal state
@@ -320,28 +322,23 @@ const Settings: React.FC = () => {
 
   const doExportJson = (txList: Transaction[]) => {
     try {
-      // Filter out sensitive data from members
-      const safeMembers = members.map(m => {
-        // Destructure to remove sensitive fields (prefixed with _ to suppress unused-var warnings)
-        const { fcmTokens: _fcmTokens, email: _email, ...safeMember } = m;
-        return safeMember;
-      });
-
-      const exportData = {
-        meta: {
-          exportedAt: new Date().toISOString(),
-          householdId,
-          exportedBy: user?.uid
-        },
+      const exportData = buildExportPayload({
+        householdId,
+        exportedBy: user?.uid,
         household: householdSettings,
-        members: safeMembers,
+        members,
         habits,
         transactions: txList,
         buckets,
         calendarItems,
         meals,
-        shoppingList
-      };
+        shoppingList,
+        todos,
+        mealPlan,
+        challenges,
+        rewards: rewardsInventory,
+        stores
+      });
 
       generateJsonBackup(exportData);
       toast.success('Backup downloaded');
