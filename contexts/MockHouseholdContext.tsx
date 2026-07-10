@@ -1,5 +1,5 @@
 import React, { useState, ReactNode, useCallback, useMemo, useRef } from 'react';
-import { format, addDays } from 'date-fns';
+import { format, addDays, subDays } from 'date-fns';
 import { HouseholdContextType, HouseholdSliceProviders } from './FirebaseHouseholdContext';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { rollRecurringAnchorForward } from '@/utils/calendarRecurrence';
@@ -9,6 +9,7 @@ import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redempt
 import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { processToggleHabit, calculateResetPoints, streakForHabit } from '@/utils/habitLogic';
+import { selectAutoFreezeCandidates } from '@/utils/freezeBank';
 import { accountImpactOf, effectiveAccountImpact, resolveTargetAccount } from '@/utils/accountImpact';
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
 import { roundMoney } from '@/utils/money';
@@ -1106,14 +1107,23 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const activeYearlyGoals: YearlyGoal[] = [];
   const primaryYearlyGoal: YearlyGoal | null = null;
   const rewardsInventory = rewards;
-  const freezeBank: FreezeBank | null = null;
+  // Plan 25: live in-memory freeze bank (2/2) so Test Mode can walk the
+  // auto-apply flow (seed a habit with a missed yesterday, call
+  // autoApplyFreezes, watch the streak survive with zero points granted).
+  const [freezeBank, setFreezeBank] = useState<FreezeBank>({
+    tokens: 2,
+    maxTokens: 2,
+    lastRolloverDate: getLocalDateString(),
+    lastRolloverMonth: format(new Date(), 'yyyy-MM'),
+    history: [],
+  });
   const isGeneratingInsight = false;
   const householdSettings = {
     id: 'test-household-id',
     name: 'Test Household',
     inviteCode: 'TEST-1234',
     members: members,
-    freezeBank: { tokens: 3, maxTokens: 3, lastRolloverDate: '2024-01-01', lastRolloverMonth: '2024-01', history: [] },
+    freezeBank,
     accounts: accounts,
     rewardsInventory: rewards,
     coreTemplates: { expenses: [], buckets: [] },
@@ -1305,7 +1315,44 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateYearlyGoal: noOp,
     updateYearlyGoalProgress: noOp,
     deleteYearlyGoal: noOp,
-    useFreezeBankToken: noOp,
+    // Plan 25: in-memory auto-apply mirroring the real mutation — consumes one
+    // token per protected habit (highest streak first), records yesterday in
+    // frozenDates, recomputes the frozen-aware streak, and NEVER credits points.
+    autoApplyFreezes: useCallback(async () => {
+      if (freezeBank.tokens <= 0) return;
+      const today = getLocalDateString();
+      const yesterday = getLocalDateString(subDays(new Date(), 1));
+      const toApply = selectAutoFreezeCandidates(habits, today).slice(0, freezeBank.tokens);
+      if (toApply.length === 0) return;
+      const idSet = new Set(toApply.map(c => c.habit.id));
+      setHabits(prev => prev.map(h => {
+        if (!idSet.has(h.id)) return h;
+        const frozenDates = [...(h.frozenDates ?? []), yesterday].sort();
+        return {
+          ...h,
+          frozenDates,
+          streakDays: streakForHabit({ period: h.period, completedDates: h.completedDates, frozenDates }),
+        };
+      }));
+      setFreezeBank(prev => ({
+        ...prev,
+        tokens: Math.max(0, prev.tokens - toApply.length),
+        history: [
+          ...prev.history,
+          ...toApply.map(c => ({
+            id: generateId(),
+            type: 'used' as const,
+            amount: -1,
+            date: today,
+            habitId: c.habit.id,
+            habitDate: yesterday,
+            notes: `Freeze auto-applied: protected the ${c.protectedStreak}-day streak on ${c.habit.title} (${yesterday})`,
+            createdAt: new Date().toISOString(),
+          })),
+        ],
+      }));
+      toast.success(`Mock: ${toApply.length} freeze(s) auto-applied`);
+    }, [habits, freezeBank.tokens]),
     rolloverFreezeBankTokens: noOp,
     addMember: noOp,
     updateMember: noOp,

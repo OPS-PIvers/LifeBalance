@@ -816,7 +816,7 @@ describe("sendstreakwarnings", () => {
     });
   });
 
-  it("mentions the freeze bank when the household has tokens available", async () => {
+  it("mentions the automatic freeze protection when the household has tokens available", async () => {
     const { insightSetSpy } = configureStreakWarningHousehold(
       [{ id: "h1", data: { period: "daily", title: "Read", streakDays: 9, completedDates: [] } }],
       { freezeBank: { tokens: 2 } }
@@ -826,7 +826,9 @@ describe("sendstreakwarnings", () => {
 
     expect(insightSetSpy).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ text: expect.stringContaining("freeze bank token") })
+      expect.objectContaining({
+        text: expect.stringContaining("a freeze will protect it automatically"),
+      })
     );
   });
 

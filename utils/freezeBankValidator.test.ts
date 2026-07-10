@@ -1,12 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { format, subDays } from 'date-fns';
-import {
-  getMissedHabitDates,
-  wouldBenefitFromFreezeToken,
-  suggestFreezeBankDate,
-  canUseFreezeBankToken,
-} from './freezeBankValidator';
+import { getMissedHabitDates } from './freezeBankValidator';
 import { Habit } from '@/types/schema';
+
+// Plan 25: the manual patch validator (canUseFreezeBankToken /
+// wouldBenefitFromFreezeToken / suggestFreezeBankDate) was deleted with the
+// auto-applied freeze design — its tests went with it. getMissedHabitDates
+// survives as the "was yesterday missed" input to the auto-apply candidate
+// selection (utils/freezeBank.ts).
 
 const habit = (overrides: Partial<Habit> = {}): Habit =>
   ({
@@ -78,144 +79,13 @@ describe('getMissedHabitDates', () => {
     expect(missed).not.toContain(daysAgo(2));
     expect(missed).not.toContain(daysAgo(5));
   });
-});
 
-describe('wouldBenefitFromFreezeToken', () => {
-  it('is false for a habit first completed recently with no missable pre-existence days', () => {
-    // Completed yesterday only → floor is yesterday → no missable days before it.
-    const h = habit({ completedDates: [daysAgo(1)] });
-    expect(wouldBenefitFromFreezeToken(h)).toBe(false);
-  });
+  it('anchors on an injected `today` for deterministic results (Plan 25 auto-apply)', () => {
+    // Fixed calendar: today 2026-07-09; completed 07-05..07-07; 07-08 missed.
+    const h = habit({ completedDates: ['2026-07-05', '2026-07-06', '2026-07-07'] });
 
-  it('is true when there is a real missed day inside the valid window', () => {
-    const h = habit({ completedDates: [daysAgo(3), daysAgo(1)] });
-    expect(wouldBenefitFromFreezeToken(h)).toBe(true);
-  });
-
-  it('is false with no completion history', () => {
-    expect(wouldBenefitFromFreezeToken(habit({ completedDates: [] }))).toBe(false);
-  });
-});
-
-describe('suggestFreezeBankDate', () => {
-  it('returns null when no dates are missable', () => {
-    expect(suggestFreezeBankDate(habit({ completedDates: [daysAgo(1)] }))).toBeNull();
-  });
-
-  it('suggests the most recent missed date', () => {
-    const h = habit({ completedDates: [daysAgo(4), daysAgo(1)] });
-    expect(suggestFreezeBankDate(h)).toBe(daysAgo(2));
-  });
-});
-
-describe('canUseFreezeBankToken — deterministic window boundaries', () => {
-  // canUseFreezeBankToken derives "today" / the 30-day & 1-day windows from
-  // `new Date()`, so the boundary cases (EXACTLY 30 days, EXACTLY 1 day) flip
-  // across midnight or in a non-local TZ if asserted against the real clock.
-  // Pin the clock to a fixed local midnight so the differenceInDays() math is
-  // exact and reproducible. parseISO() of a "yyyy-MM-dd" string yields local
-  // midnight, matching todayStart, so whole-day diffs are unambiguous.
-  const FIXED_NOW = new Date(2026, 5, 15, 0, 0, 0, 0); // 2026-06-15 local midnight
-
-  // A positive habit with no completion on the dates under test, so only the
-  // date-window checks (4 & 5) decide the outcome.
-  const freezable = (): Habit => habit({ type: 'positive', completedDates: [] });
-
-  // n days before FIXED_NOW, as a yyyy-MM-dd string in local time.
-  const before = (n: number): string => format(subDays(FIXED_NOW, n), 'yyyy-MM-dd');
-
-  beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(FIXED_NOW);
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('rejects when there are no tokens (regardless of date)', () => {
-    const res = canUseFreezeBankToken(freezable(), before(2), 0);
-    expect(res.allowed).toBe(false);
-    expect(res.reason).toMatch(/no freeze tokens/i);
-  });
-
-  it('rejects a non-positive habit even with tokens and a valid past date', () => {
-    const h = habit({ type: 'negative', completedDates: [] });
-    const res = canUseFreezeBankToken(h, before(2), 3);
-    expect(res.allowed).toBe(false);
-    expect(res.reason).toMatch(/positive habits/i);
-  });
-
-  it('rejects a date the habit is already completed on', () => {
-    const target = before(2);
-    const h = habit({ type: 'positive', completedDates: [target] });
-    const res = canUseFreezeBankToken(h, target, 3);
-    expect(res.allowed).toBe(false);
-    expect(res.reason).toMatch(/already completed/i);
-  });
-
-  it('rejects today (not strictly in the past)', () => {
-    const res = canUseFreezeBankToken(freezable(), before(0), 3);
-    expect(res.allowed).toBe(false);
-    expect(res.reason).toMatch(/past dates/i);
-  });
-
-  it('rejects a future date', () => {
-    const future = format(subDays(FIXED_NOW, -1), 'yyyy-MM-dd'); // tomorrow
-    const res = canUseFreezeBankToken(freezable(), future, 3);
-    expect(res.allowed).toBe(false);
-    expect(res.reason).toMatch(/past dates/i);
-  });
-
-  it('ALLOWS exactly 1 day in the past (lower boundary, inclusive)', () => {
-    // daysDiff === 1 → passes the "< 1" check; this is the earliest allowed day.
-    const res = canUseFreezeBankToken(freezable(), before(1), 3);
-    expect(res.allowed).toBe(true);
-    expect(res.reason).toBeUndefined();
-  });
-
-  it('ALLOWS exactly 30 days in the past (upper boundary, inclusive)', () => {
-    // daysDiff === 30 → passes the "> 30" check; this is the oldest allowed day.
-    const res = canUseFreezeBankToken(freezable(), before(30), 3);
-    expect(res.allowed).toBe(true);
-    expect(res.reason).toBeUndefined();
-  });
-
-  it('REJECTS exactly 31 days in the past (just past the 30-day window)', () => {
-    const res = canUseFreezeBankToken(freezable(), before(31), 3);
-    expect(res.allowed).toBe(false);
-    expect(res.reason).toMatch(/within the last 30 days/i);
-  });
-
-  it('allows a date comfortably inside the window (15 days past)', () => {
-    const res = canUseFreezeBankToken(freezable(), before(15), 3);
-    expect(res.allowed).toBe(true);
-  });
-
-  // An unparseable date is rejected: parseISO returns an Invalid Date (NaN time)
-  // rather than throwing, so canUseFreezeBankToken guards it explicitly (a NaN
-  // check) and returns { allowed: false } with the "Invalid date format" reason.
-  it('rejects an unparseable date', () => {
-    const res = canUseFreezeBankToken(freezable(), 'not-a-date', 3);
-    expect(res.allowed).toBe(false);
-    expect(res.reason).toMatch(/invalid date/i);
-  });
-
-  // parseISO is lenient (accepts '2026', '2026-06', and full ISO timestamps); a
-  // timestamp would also bypass the completedDates check (which stores plain
-  // YYYY-MM-DD). The strict format guard rejects all non-canonical forms.
-  it('rejects partial dates and full ISO timestamps (non-YYYY-MM-DD)', () => {
-    for (const bad of ['2026', '2026-06', '2026-06-15T12:00:00Z', '2026/06/15']) {
-      const res = canUseFreezeBankToken(freezable(), bad, 3);
-      expect(res.allowed).toBe(false);
-      expect(res.reason).toMatch(/invalid date/i);
-    }
-  });
-
-  // Well-formed shape but not a real calendar date — caught by the NaN guard.
-  it('rejects a well-formed but non-calendar date', () => {
-    const res = canUseFreezeBankToken(freezable(), '2026-02-30', 3);
-    expect(res.allowed).toBe(false);
-    expect(res.reason).toMatch(/invalid date/i);
+    expect(getMissedHabitDates(h, 1, undefined, '2026-07-09')).toEqual(['2026-07-08']);
+    // A completed yesterday is not missed.
+    expect(getMissedHabitDates(h, 1, undefined, '2026-07-08')).toEqual([]);
   });
 });

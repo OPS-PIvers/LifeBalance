@@ -234,8 +234,9 @@ export interface HouseholdContextType {
   updateYearlyGoalProgress: (goalId: string, month: string, success: boolean) => Promise<void>;
   deleteYearlyGoal: (goalId: string) => Promise<void>;
 
-  // Freeze Bank Actions
-  useFreezeBankToken: (habitId: string, targetDate: string) => Promise<void>;
+  // Freeze Bank Actions (Plan 25: freezes are AUTO-applied; the manual
+  // patch-a-date flow was removed)
+  autoApplyFreezes: () => Promise<void>;
   rolloverFreezeBankTokens: () => Promise<void>;
 
   // Member Management Actions
@@ -348,7 +349,7 @@ export type GamificationContextValue = Pick<HouseholdContextType,
   | 'addReward' | 'updateReward' | 'deleteReward'
   | 'requestRedemption' | 'approveRedemption' | 'denyRedemption'
   | 'createYearlyGoal' | 'updateYearlyGoal' | 'updateYearlyGoalProgress' | 'deleteYearlyGoal'
-  | 'useFreezeBankToken' | 'rolloverFreezeBankTokens'
+  | 'autoApplyFreezes' | 'rolloverFreezeBankTokens'
 >;
 
 export type MealPlanContextValue = Pick<HouseholdContextType,

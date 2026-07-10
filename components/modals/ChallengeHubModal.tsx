@@ -6,7 +6,8 @@ import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { usePowerToolsEnabled } from '@/hooks/usePowerToolsEnabled';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
-import { format, parseISO, subDays } from 'date-fns';
+import { format, parseISO } from 'date-fns';
+import { FREEZE_MAX_TOKENS } from '@/utils/freezeBank';
 import YearlyGoalFormModal from './YearlyGoalFormModal';
 import { Drawer } from '@/components/ui/Drawer';
 import { Badge } from '@/components/ui/Badge';
@@ -41,7 +42,6 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
     yearlyGoals,
     activeYearlyGoals,
     freezeBank,
-    useFreezeBankToken: consumeFreezeBankToken,
   } = useGamification();
 
   // Plan 080e — the "New family challenge" creation affordance below is DORMANT:
@@ -74,10 +74,6 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
 
   // New state for implicit habit creation
   const [suggestedHabit, setSuggestedHabit] = useState<CreateChallengePayload['suggestedHabit'] | null>(null);
-
-  // Freeze Bank Tab State
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [selectedHabitForFreeze, setSelectedHabitForFreeze] = useState<string | null>(null);
 
   // Populate the challenge form from initial data, the active challenge, or
   // reset to blanks. Done during render on the change edge of those inputs
@@ -237,17 +233,6 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
     } finally {
       setSavingFamily(false);
     }
-  };
-
-  const handleUseFreeze = async () => {
-    if (!selectedDate || !selectedHabitForFreeze) return;
-
-    const dateStr = format(selectedDate, 'yyyy-MM-dd');
-    await consumeFreezeBankToken(selectedHabitForFreeze, dateStr);
-
-    // Reset selections
-    setSelectedDate(null);
-    setSelectedHabitForFreeze(null);
   };
 
   if (!isOpen) return null;
@@ -691,15 +676,15 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
               </TabsContent>
               )}
 
-              {/* Freeze Bank Tab */}
+              {/* Freeze Bank Tab (Plan 25: freezes are auto-applied) */}
               <TabsContent value="freeze" className="space-y-6">
                 {/* Token Display */}
                 <div className="bg-habit-blue/10 dark:bg-habit-blue/15 p-6 rounded-2xl border border-habit-blue/30">
                   <h3 className="text-sm font-bold text-brand-400 dark:text-brand-400 uppercase mb-3">
-                    Available Tokens
+                    Available Freezes
                   </h3>
                   <div className="flex items-center justify-center gap-3 mb-4">
-                    {Array.from({ length: 3 }, (_, i) => (
+                    {Array.from({ length: freezeBank?.maxTokens ?? FREEZE_MAX_TOKENS }, (_, i) => (
                       <div
                         key={i}
                         className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
@@ -713,107 +698,15 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                     ))}
                   </div>
                   <p className="text-center text-sm text-brand-600 dark:text-brand-300">
-                    {freezeBank?.tokens || 0} / 3 tokens available
+                    {freezeBank?.tokens || 0} / {freezeBank?.maxTokens ?? FREEZE_MAX_TOKENS} freezes available
+                  </p>
+                  <p className="mt-2 text-center text-xs text-brand-500 dark:text-brand-400">
+                    Freezes apply automatically: when a daily streak of 3+ days would
+                    break, one is used overnight to protect it. Frozen days keep your
+                    streak alive but never earn points. Your stock refills to{' '}
+                    {FREEZE_MAX_TOKENS} on the 1st of each month.
                   </p>
                 </div>
-
-                {/* Use Token Flow */}
-                {(freezeBank?.tokens || 0) > 0 && (
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-bold text-brand-700 dark:text-brand-200">Use a Freeze Token</h3>
-
-                    {/* Date Picker */}
-                    <div>
-                      <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase mb-2 block">
-                        Select Missed Date
-                      </label>
-                      <div className="grid grid-cols-7 gap-2">
-                        {Array.from({ length: 7 }, (_, i) => {
-                          const date = subDays(new Date(), 6 - i);
-                          const dateStr = format(date, 'yyyy-MM-dd');
-                          const isSelected =
-                            selectedDate && format(selectedDate, 'yyyy-MM-dd') === dateStr;
-
-                          return (
-                            <button
-                              key={dateStr}
-                              onClick={() => setSelectedDate(date)}
-                              aria-pressed={!!isSelected}
-                              className={`flex flex-col items-center gap-0.5 py-2.5 rounded-full transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
-                                isSelected
-                                  ? 'bg-habit-blue text-white'
-                                  : 'bg-brand-100 dark:bg-brand-700/50 text-brand-500 dark:text-brand-400 hover:bg-brand-200 dark:hover:bg-brand-700'
-                              }`}
-                            >
-                              <span className="text-xxs font-medium opacity-80">
-                                {format(date, 'EEE')}
-                              </span>
-                              <span className="text-sm font-bold">
-                                {format(date, 'd')}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Habit Picker */}
-                    {selectedDate && (
-                      <div>
-                        <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase mb-2 block">
-                          Select Habit to Patch
-                        </label>
-                        <div className="max-h-48 overflow-y-auto scroll-contain-y">
-                          <SurfaceList>
-                            {habits
-                              .filter((h) => h.type === 'positive')
-                              .map((habit) => {
-                                const dateStr = format(selectedDate, 'yyyy-MM-dd');
-                                const alreadyCompleted = habit.completedDates.includes(dateStr);
-                                const isSelected = selectedHabitForFreeze === habit.id;
-
-                                return (
-                                  <button
-                                    key={habit.id}
-                                    type="button"
-                                    onClick={() => setSelectedHabitForFreeze(habit.id)}
-                                    disabled={alreadyCompleted}
-                                    aria-pressed={isSelected}
-                                    className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left hairline-divider transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
-                                      isSelected
-                                        ? 'bg-habit-blue/10 dark:bg-habit-blue/15'
-                                        : alreadyCompleted
-                                        ? 'opacity-50 cursor-not-allowed'
-                                        : 'hover:bg-brand-50 dark:hover:bg-brand-700/40'
-                                    }`}
-                                  >
-                                    <span className="font-bold text-brand-700 dark:text-brand-200 text-sm">
-                                      {habit.title}
-                                    </span>
-                                    {alreadyCompleted && (
-                                      <span className="text-xs text-money-pos dark:text-money-posDark font-medium">
-                                        Already completed
-                                      </span>
-                                    )}
-                                  </button>
-                                );
-                              })}
-                          </SurfaceList>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Use Token Button */}
-                    {selectedDate && selectedHabitForFreeze && (
-                      <button
-                        onClick={handleUseFreeze}
-                        className="w-full py-3 bg-habit-blue hover:brightness-95 text-white font-bold rounded-btn shadow-raised active:scale-95 transition-[transform,filter] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-habit-blue/40"
-                      >
-                        Use Freeze Token ❄️
-                      </button>
-                    )}
-                  </div>
-                )}
 
                 {/* History Log */}
                 <Section title="Recent History">

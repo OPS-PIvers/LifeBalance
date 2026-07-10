@@ -3,6 +3,7 @@ import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { calculateChallengeProgress, type ChallengeProgress } from '@/utils/challengeCalculator';
 import { getEffectiveTargetValue } from '@/utils/migrations/challengeMigration';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { FREEZE_MAX_TOKENS } from '@/utils/freezeBank';
 import { format, parseISO } from 'date-fns';
 import { Check, Pencil, Plus, Trophy, Target, Snowflake } from 'lucide-react';
 import { Section } from '@/components/ui/Section';
@@ -96,7 +97,7 @@ const HabitsChallengesTab: React.FC<HabitsChallengesTabProps> = ({ onOpenChallen
   const todayDayOfMonth = useMemo(() => parseInt(getLocalDateString().slice(8, 10), 10), []);
 
   const tokenCount = freezeBank?.tokens ?? 0;
-  const maxTokens = freezeBank?.maxTokens ?? 3;
+  const maxTokens = freezeBank?.maxTokens ?? FREEZE_MAX_TOKENS;
 
   return (
     <div className="space-y-6">
@@ -182,7 +183,8 @@ const HabitsChallengesTab: React.FC<HabitsChallengesTabProps> = ({ onOpenChallen
         </Section>
       )}
 
-      {/* Freeze bank */}
+      {/* Freeze bank (Plan 25: freezes are auto-applied; "Details" opens the
+          hub's freeze tab for the explainer + history) */}
       <Section
         title="Freeze bank"
         action={
@@ -191,7 +193,7 @@ const HabitsChallengesTab: React.FC<HabitsChallengesTabProps> = ({ onOpenChallen
             onClick={onOpenChallengeHub}
             className="text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-warm-600 dark:hover:text-warm-300 flex items-center gap-1 transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 rounded-sm"
           >
-            Use a token
+            Details
           </button>
         }
       >
@@ -212,7 +214,10 @@ const HabitsChallengesTab: React.FC<HabitsChallengesTabProps> = ({ onOpenChallen
             ))}
           </div>
           <p className="text-center text-sm font-medium text-brand-600 dark:text-brand-300 tabular-nums">
-            {tokenCount} / {maxTokens} tokens available
+            {tokenCount} / {maxTokens} freezes available
+          </p>
+          <p className="mt-1 text-center text-xs text-brand-400 dark:text-brand-450">
+            Applied automatically when a streak would break
           </p>
 
           {/* Recent history */}

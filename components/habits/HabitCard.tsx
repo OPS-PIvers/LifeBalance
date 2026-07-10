@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Habit } from '@/types/schema';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
-import { X, MoreVertical, Edit2, Trash2, Target, Calendar, Wrench } from 'lucide-react';
+import { X, MoreVertical, Edit2, Trash2, Target, Calendar, Snowflake } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import HabitFormModal from '@/components/modals/HabitFormModal';
 import HabitSubmissionLogModal from '@/components/modals/HabitSubmissionLogModal';
@@ -25,7 +25,7 @@ interface HabitCardProps {
 }
 
 const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) => {
-  const { toggleHabit, deleteHabit, resetHabit, activeChallenge, freezeBank, useFreezeBankToken: consumeFreezeBankToken } = useGamification();
+  const { toggleHabit, deleteHabit, resetHabit, activeChallenge } = useGamification();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
@@ -68,18 +68,14 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
     return null;
   })();
 
-  // Streak Repair Eligibility
-  // Recomputed on every render (a cheap string format): card instances are
-  // long-lived (React.memo keyed list, sessions span midnight via
-  // useMidnightScheduler), so memoizing this per mount would leave the repair
-  // target pointing at the pre-rollover day and patch the wrong date.
+  // Plan 25: freezes are AUTO-applied at midnight/login — the manual "Repair
+  // Streak" affordance is gone. Show a quiet indicator when yesterday's miss
+  // was absorbed by a freeze. Recomputed on every render (a cheap string
+  // format): card instances are long-lived (React.memo keyed list, sessions
+  // span midnight via useMidnightScheduler), so memoizing per mount would
+  // leave this pointing at the pre-rollover day.
   const yesterday = getLocalDateString(subDays(new Date(), 1));
-  const isEligibleForRepair =
-    isPositive &&
-    habit.period === 'daily' &&
-    habit.streakDays === 0 &&
-    !habit.completedDates.includes(yesterday) &&
-    (freezeBank?.tokens || 0) > 0;
+  const isProtectedByFreeze = (habit.frozenDates ?? []).includes(yesterday);
 
   // Grouped-flat ROW: borderless and hairline-separated by the parent
   // SurfaceList (HabitCategoryList) — never a floating, individually-bordered
@@ -129,20 +125,6 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
   const menuItems: MenuItem[] = [
     { key: 'edit', label: 'Edit', icon: <Edit2 size={14} />, onSelect: handleEdit },
     { key: 'log', label: 'View Log', icon: <Calendar size={14} />, onSelect: handleViewLog },
-    ...(isEligibleForRepair
-      ? [
-          {
-            key: 'repair',
-            label: `Repair Streak (${freezeBank?.tokens})`,
-            icon: <Wrench size={14} />,
-            tone: 'info' as const,
-            onSelect: () => {
-              consumeFreezeBankToken(habit.id, yesterday);
-              setIsMenuOpen(false);
-            },
-          },
-        ]
-      : []),
     { key: 'delete', label: 'Delete', icon: <Trash2 size={14} />, tone: 'danger', onSelect: handleDelete },
   ];
 
@@ -251,6 +233,13 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
               </Badge>
             )}
 
+            {/* Plan 25: yesterday's miss was absorbed by an auto-applied freeze */}
+            {isProtectedByFreeze && (
+              <Badge variant="default" size="sm" className="gap-1 text-habit-blue">
+                <Snowflake size={10} /> Protected
+              </Badge>
+            )}
+
             {/* Multiplier nudge: one period short of the next tier. Period-aware
                 in both threshold and unit — daily fires at 2d (→1.5x) / 6d (→2x),
                 weekly at 1w (→1.5x) / 3w (→2x), matching getMultiplier's ladders. */}
@@ -304,19 +293,6 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
           >
             View History Log
           </Button>
-          {isEligibleForRepair && (
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-lg py-4 text-habit-blue dark:text-habit-blue hover:text-habit-blue dark:hover:text-habit-blue hover:bg-habit-blue/10 dark:hover:bg-habit-blue/15"
-              leftIcon={<Wrench className="text-habit-blue" />}
-              onClick={() => {
-                consumeFreezeBankToken(habit.id, yesterday);
-                setIsMenuOpen(false);
-              }}
-            >
-              Repair Streak ({freezeBank?.tokens})
-            </Button>
-          )}
           <div className="h-px bg-brand-200 dark:bg-brand-700 my-2" />
           <Button
             variant="ghost-destructive"
@@ -358,7 +334,10 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
   prev.habit.scoringType === next.habit.scoringType &&
   prev.habit.period === next.habit.period &&
   prev.habit.basePoints === next.habit.basePoints &&
-  prev.habit.targetCount === next.habit.targetCount
+  prev.habit.targetCount === next.habit.targetCount &&
+  // Content compare (the provider rebuilds arrays each snapshot): drives the
+  // "Protected" freeze badge.
+  (prev.habit.frozenDates ?? []).join(',') === (next.habit.frozenDates ?? []).join(',')
 );
 
 HabitCard.displayName = 'HabitCard';

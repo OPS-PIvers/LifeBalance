@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { render, act } from '@testing-library/react';
-import { format, startOfWeek, subDays } from 'date-fns';
+import { format, subDays } from 'date-fns';
 import type {
   Account,
   BudgetBucket,
@@ -19,7 +19,7 @@ import type {
  * FirebaseHouseholdContext (the §2 "context batch-write atomicity" target):
  *   - updateTransactionCategory (transaction + related habits + points)
  *   - payCalendarItem           (calendar item + account balance + transaction)
- *   - useFreezeBankToken        (habit + token balance + patched-day points)
+ *   - autoApplyFreezes          (habit frozenDates + token balance; NO points)
  *
  * The habit+points toggle/submission paths run through useHabitActions and are
  * already covered by hooks/useHabitActions.test.tsx; these tests lock the
@@ -838,88 +838,168 @@ describe('FirebaseHouseholdContext — payCalendarItem atomicity', () => {
   });
 });
 
-describe('FirebaseHouseholdContext — useFreezeBankToken atomicity', () => {
-  it('patches the habit, spends a token, and credits points in ONE batch', async () => {
+describe('FirebaseHouseholdContext — autoApplyFreezes (Plan 25)', () => {
+  const d = (n: number) => format(subDays(new Date(), n), 'yyyy-MM-dd');
+
+  const bank = (tokens: number): FreezeBank => ({
+    tokens,
+    maxTokens: 2,
+    lastRolloverDate: format(new Date(), 'yyyy-MM-dd'),
+    lastRolloverMonth: format(new Date(), 'yyyy-MM'),
+    history: [],
+  });
+
+  // A positive daily habit with a 3-day completed streak ending the day
+  // before yesterday and yesterday missed → an auto-apply candidate.
+  const protectable = (id: string, extra: Partial<Habit> = {}) =>
+    docSnap(
+      id,
+      baseHabit({
+        id,
+        type: 'positive',
+        scoringType: 'threshold',
+        completedDates: [d(2), d(3), d(4)],
+        streakDays: 0,
+        ...extra,
+      })
+    );
+
+  it('freezes yesterday + spends a token in ONE batch, with ZERO points writes', async () => {
     renderProvider();
-
-    // Seed a positive daily habit and a freeze bank with a token, then patch a
-    // PAST day (freeze tokens only apply to missed past days).
-    const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
-    emitCollection(`${householdPath}/habits`, [
-      docSnap('hb1', baseHabit({ id: 'hb1', type: 'positive', completedDates: [] })),
-    ]);
-
-    const freezeBank: FreezeBank = {
-      tokens: 2,
-      maxTokens: 3,
-      lastRolloverDate: format(new Date(), 'yyyy-MM-dd'),
-      lastRolloverMonth: format(new Date(), 'yyyy-MM'),
-      history: [],
-    };
-    // Household doc listener seeds householdSettings + freezeBank.
+    emitCollection(`${householdPath}/habits`, [protectable('hb1')]);
     emitDoc(householdPath, HOUSEHOLD_ID, {
       memberUids: ['user1'],
       points: { daily: 0, weekly: 0, total: 0 },
-      freezeBank,
+      freezeBank: bank(2),
     });
 
     await act(async () => {
-      await captured.value!.gamification.useFreezeBankToken('hb1', yesterday);
+      await captured.value!.gamification.autoApplyFreezes();
     });
 
     expect(batches).toHaveLength(1);
     const batch = batches[0]!;
     expect(batch.committed).toBe(true);
 
-    // 1) habit gets the patched completion + recomputed streak
+    // 1) the habit records the frozen date and keeps its bridged streak —
+    //    completedDates is NEVER touched (a frozen day is not a completion).
     const habitOps = opsForPath(batch, `${householdPath}/habits/hb1`);
     expect(habitOps).toHaveLength(1);
-    expect(habitOps[0]!.data!['completedDates']).toEqual([yesterday]);
+    expect(habitOps[0]!.data!['frozenDates']).toEqual([d(1)]);
+    expect(habitOps[0]!.data!['streakDays']).toBe(3);
+    expect(habitOps[0]!.data!['completedDates']).toBeUndefined();
 
-    // 2) the SAME batch decrements the token (freezeBank.tokens -> 1) and credits
-    //    the patched day's points. Both live on the household doc op.
+    // 2) the SAME batch spends the token and logs the history entry.
     const hhOps = opsForPath(batch, householdPath);
     expect(hhOps).toHaveLength(1);
     const hhData = hhOps[0]!.data!;
     const writtenBank = hhData['freezeBank'] as FreezeBank;
     expect(writtenBank.tokens).toBe(1);
     expect(writtenBank.history).toHaveLength(1);
-    // total points always credited; never points.daily for a past day.
-    expect(hhData['points.total']).toEqual({ __increment: 10 });
-    expect(hhData['points.daily']).toBeUndefined();
-    // weekly is credited iff yesterday falls within the current ISO week (Mon-anchored).
-    const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-    if (yesterday >= weekStart) {
-      expect(hhData['points.weekly']).toEqual({ __increment: 10 });
-    } else {
-      expect(hhData['points.weekly']).toBeUndefined();
+    expect(writtenBank.history[0]).toMatchObject({
+      type: 'used',
+      amount: -1,
+      habitId: 'hb1',
+      habitDate: d(1),
+    });
+
+    // 3) ZERO-POINTS INVARIANT: no points field anywhere in the batch, and no
+    //    increment() sentinel was ever created.
+    for (const op of batch.ops) {
+      for (const key of Object.keys(op.data ?? {})) {
+        expect(key.startsWith('points')).toBe(false);
+      }
     }
+    expect(incrementMock).not.toHaveBeenCalled();
   });
 
-  it('does nothing (no batch) when there are no freeze tokens', async () => {
+  it('is IDEMPOTENT: a habit already frozen yesterday produces no batch on a re-run', async () => {
     renderProvider();
-    const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
     emitCollection(`${householdPath}/habits`, [
-      docSnap('hb1', baseHabit({ id: 'hb1', type: 'positive', completedDates: [] })),
+      protectable('hb1', { frozenDates: [d(1)] }),
     ]);
     emitDoc(householdPath, HOUSEHOLD_ID, {
       memberUids: ['user1'],
       points: { daily: 0, weekly: 0, total: 0 },
-      freezeBank: {
-        tokens: 0,
-        maxTokens: 3,
-        lastRolloverDate: format(new Date(), 'yyyy-MM-dd'),
-        lastRolloverMonth: format(new Date(), 'yyyy-MM'),
-        history: [],
-      } satisfies FreezeBank,
+      freezeBank: bank(2),
     });
 
     await act(async () => {
-      await captured.value!.gamification.useFreezeBankToken('hb1', yesterday);
+      await captured.value!.gamification.autoApplyFreezes();
     });
 
-    // No token => the mutation bails before opening a batch.
+    // Second run (same device, or another device after the write synced) is a
+    // no-op — tokens cannot be double-consumed.
     expect(batches).toHaveLength(0);
+  });
+
+  it('does nothing (no batch) when there are no freeze tokens', async () => {
+    renderProvider();
+    emitCollection(`${householdPath}/habits`, [protectable('hb1')]);
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+      freezeBank: bank(0),
+    });
+
+    await act(async () => {
+      await captured.value!.gamification.autoApplyFreezes();
+    });
+
+    expect(batches).toHaveLength(0);
+  });
+
+  it('caps applications at the token balance, highest protected streak first', async () => {
+    renderProvider();
+    emitCollection(`${householdPath}/habits`, [
+      protectable('hb-low'),
+      protectable('hb-high', { completedDates: [d(2), d(3), d(4), d(5), d(6)] }),
+    ]);
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+      freezeBank: bank(1),
+    });
+
+    await act(async () => {
+      await captured.value!.gamification.autoApplyFreezes();
+    });
+
+    // Only ONE application (the single token), deterministically the habit
+    // with the higher protected streak.
+    expect(batches).toHaveLength(1);
+    const batch = batches[0]!;
+    expect(opsForPath(batch, `${householdPath}/habits/hb-high`)).toHaveLength(1);
+    expect(opsForPath(batch, `${householdPath}/habits/hb-low`)).toHaveLength(0);
+    const writtenBank = opsForPath(batch, householdPath)[0]!.data!['freezeBank'] as FreezeBank;
+    expect(writtenBank.tokens).toBe(0);
+  });
+
+  it('a rejected commit propagates; nothing is written outside the failed batch', async () => {
+    renderProvider();
+    emitCollection(`${householdPath}/habits`, [protectable('hb1')]);
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+      freezeBank: bank(2),
+    });
+
+    // Seeding the household doc fires the unrelated once-per-login points sync
+    // (an updateDoc write); clear it so the assertion below scopes to the
+    // mutation under test.
+    updateDocMock.mockClear();
+
+    commitController.failNextCommit = true;
+    await act(async () => {
+      await expect(captured.value!.gamification.autoApplyFreezes()).rejects.toThrow(
+        'commit rejected'
+      );
+    });
+
+    // The only batch is the uncommitted one; no single-doc writes leaked.
+    expect(batches).toHaveLength(1);
+    expect(batches[0]!.committed).toBe(false);
+    expect(updateDocMock).not.toHaveBeenCalled();
   });
 });
 
@@ -1290,7 +1370,7 @@ describe('FirebaseHouseholdContext — cross-mutation invariant', () => {
 // (failed) batch. The only write path for each of these mutations is the batch
 // itself, so a rejected commit means nothing landed. We assert:
 //   (a) the mutation's promise rejects (or swallows-and-returns, per its
-//       contract — toggleHabit/useFreezeBankToken/updateTransactionCategory
+//       contract — toggleHabit/updateTransactionCategory
 //       re-throw; payCalendarItem/addMember re-throw after a toast),
 //   (b) the batch was NOT marked committed, and
 //   (c) NO single-doc write API (updateDoc/setDoc/addDoc/deleteDoc) was called —
@@ -1358,34 +1438,6 @@ describe('FirebaseHouseholdContext — batch commit REJECTION (atomic rollback)'
     // The one expense pay-batch failed; calendar item is NOT marked paid, the
     // account balance is NOT moved, and the transaction is NOT created, because
     // all three writes only existed inside the failed batch.
-    expect(batches).toHaveLength(1);
-    expectNoPartialWrite();
-  });
-
-  it('useFreezeBankToken: a rejected commit propagates; no token spent / day patched outside the batch', async () => {
-    renderProvider();
-    const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
-    emitCollection(`${householdPath}/habits`, [
-      docSnap('hb1', baseHabit({ id: 'hb1', type: 'positive', completedDates: [] })),
-    ]);
-    emitDoc(householdPath, HOUSEHOLD_ID, {
-      memberUids: ['user1'],
-      points: { daily: 0, weekly: 0, total: 0 },
-      freezeBank: {
-        tokens: 2, maxTokens: 3,
-        lastRolloverDate: format(new Date(), 'yyyy-MM-dd'),
-        lastRolloverMonth: format(new Date(), 'yyyy-MM'),
-        history: [],
-      } satisfies FreezeBank,
-    });
-
-    commitController.failNextCommit = true;
-    await act(async () => {
-      await expect(
-        captured.value!.gamification.useFreezeBankToken('hb1', yesterday),
-      ).rejects.toThrow('commit rejected');
-    });
-
     expect(batches).toHaveLength(1);
     expectNoPartialWrite();
   });
@@ -1709,93 +1761,6 @@ describe('FirebaseHouseholdContext — reallocateBucket', () => {
   });
 });
 
-// ===========================================================================
-// §7 — useFreezeBankToken weekly boundary: when targetDate is in a PRIOR week,
-// the patched day's points credit points.total but NOT points.weekly (and never
-// points.daily for a past day). Clock is pinned so "this week" and the 30-day
-// validity window are deterministic.
-// ===========================================================================
-describe('FirebaseHouseholdContext — useFreezeBankToken weekly boundary', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    // Wednesday 2026-06-17 (local). This week's Monday is 2026-06-15.
-    vi.setSystemTime(new Date(2026, 5, 17, 12, 0, 0, 0));
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('credits points.total but NOT points.weekly when the patched day is in a prior week', async () => {
-    renderProvider();
-    // 2026-06-10 (Wed of the PRIOR week): in the past, within 30 days, before
-    // this week's Monday (2026-06-15).
-    const priorWeekDate = '2026-06-10';
-    emitCollection(`${householdPath}/habits`, [
-      docSnap('hb1', baseHabit({ id: 'hb1', type: 'positive', basePoints: 10, completedDates: [] })),
-    ]);
-    emitDoc(householdPath, HOUSEHOLD_ID, {
-      memberUids: ['user1'],
-      points: { daily: 0, weekly: 0, total: 0 },
-      freezeBank: {
-        tokens: 2, maxTokens: 3,
-        lastRolloverDate: '2026-06-01',
-        lastRolloverMonth: '2026-06',
-        history: [],
-      } satisfies FreezeBank,
-    });
-
-    await act(async () => {
-      await captured.value!.gamification.useFreezeBankToken('hb1', priorWeekDate);
-    });
-
-    expect(batches).toHaveLength(1);
-    const batch = batches[0]!;
-    expect(batch.committed).toBe(true);
-
-    const hhOps = opsForPath(batch, householdPath);
-    expect(hhOps).toHaveLength(1);
-    const hhData = hhOps[0]!.data!;
-    // Lifetime total is always credited.
-    expect(hhData['points.total']).toEqual({ __increment: 10 });
-    // Prior week => weekly NOT credited; daily never for a past day.
-    expect(hhData['points.weekly']).toBeUndefined();
-    expect(hhData['points.daily']).toBeUndefined();
-    // Token still spent + history recorded in the same batch.
-    const writtenBank = hhData['freezeBank'] as FreezeBank;
-    expect(writtenBank.tokens).toBe(1);
-    expect(writtenBank.history).toHaveLength(1);
-  });
-
-  it('credits points.weekly when the patched day IS in the current week (control)', async () => {
-    renderProvider();
-    // 2026-06-16 (Tue of THIS week): past, within the current Mon-anchored week.
-    const thisWeekDate = '2026-06-16';
-    emitCollection(`${householdPath}/habits`, [
-      docSnap('hb1', baseHabit({ id: 'hb1', type: 'positive', basePoints: 10, completedDates: [] })),
-    ]);
-    emitDoc(householdPath, HOUSEHOLD_ID, {
-      memberUids: ['user1'],
-      points: { daily: 0, weekly: 0, total: 0 },
-      freezeBank: {
-        tokens: 2, maxTokens: 3,
-        lastRolloverDate: '2026-06-01',
-        lastRolloverMonth: '2026-06',
-        history: [],
-      } satisfies FreezeBank,
-    });
-
-    await act(async () => {
-      await captured.value!.gamification.useFreezeBankToken('hb1', thisWeekDate);
-    });
-
-    const hhData = opsForPath(batches[0]!, householdPath)[0]!.data!;
-    expect(hhData['points.total']).toEqual({ __increment: 10 });
-    expect(hhData['points.weekly']).toEqual({ __increment: 10 });
-    expect(hhData['points.daily']).toBeUndefined();
-  });
-});
-
 // --- Quick-stock-list move: stale-snapshot lost-update fix ----------------
 //
 // Reassigning a catalog item between quick-stock lists used to fire TWO
@@ -1929,149 +1894,6 @@ describe('FirebaseHouseholdContext — updateQuickStockLists (bulk single-write)
     await expect(
       captured.value!.shopping.updateQuickStockLists([{ ...listA, items: ['cat1'] }, listB]),
     ).rejects.toThrow('firestore down');
-  });
-});
-
-// ===========================================================================
-// useFreezeBankToken — points TARGET routing. An assigned (kid) habit's points
-// must land on members/{assignedTo}.points, mirroring habitPointsTargetRef in
-// useHabitActions: the corrective recompute EXCLUDES assigned habits from the
-// household pool, so crediting the household doc here would leave its total
-// permanently inflated while the assignee is never paid for the patched day.
-// ===========================================================================
-describe('FirebaseHouseholdContext — useFreezeBankToken assigned-habit points routing', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    // Wednesday 2026-06-17 (local); this week's Monday is 2026-06-15.
-    vi.setSystemTime(new Date(2026, 5, 17, 12, 0, 0, 0));
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  function seedFreezeBank(habit: Habit) {
-    emitCollection(`${householdPath}/habits`, [docSnap(habit.id, habit)]);
-    emitDoc(householdPath, HOUSEHOLD_ID, {
-      memberUids: ['user1'],
-      points: { daily: 0, weekly: 0, total: 0 },
-      freezeBank: {
-        tokens: 2, maxTokens: 3,
-        lastRolloverDate: '2026-06-01',
-        lastRolloverMonth: '2026-06',
-        history: [],
-      } satisfies FreezeBank,
-    });
-  }
-
-  it('credits the ASSIGNED member doc (not the household pool) for an assigned habit', async () => {
-    renderProvider();
-    seedFreezeBank(baseHabit({ id: 'hb1', type: 'positive', basePoints: 10, completedDates: [], assignedTo: 'kid_leo' }));
-
-    // 2026-06-16 (Tue of THIS week): past + within the current week, so both
-    // total and weekly are credited — to the assignee.
-    await act(async () => {
-      await captured.value!.gamification.useFreezeBankToken('hb1', '2026-06-16');
-    });
-
-    expect(batches).toHaveLength(1);
-    const batch = batches[0]!;
-    expect(batch.committed).toBe(true);
-
-    // Points land on the assignee's member doc...
-    const memberOps = opsForPath(batch, `${householdPath}/members/kid_leo`);
-    expect(memberOps).toHaveLength(1);
-    expect(memberOps[0]!.data!['points.total']).toEqual({ __increment: 10 });
-    expect(memberOps[0]!.data!['points.weekly']).toEqual({ __increment: 10 });
-
-    // ...while the household op (same batch) spends the token but gets NO points.
-    const hhOps = opsForPath(batch, householdPath);
-    expect(hhOps).toHaveLength(1);
-    const hhData = hhOps[0]!.data!;
-    expect((hhData['freezeBank'] as FreezeBank).tokens).toBe(1);
-    expect(hhData['points.total']).toBeUndefined();
-    expect(hhData['points.weekly']).toBeUndefined();
-  });
-
-  it('still credits the household pool for an UNASSIGNED habit (control)', async () => {
-    renderProvider();
-    seedFreezeBank(baseHabit({ id: 'hb1', type: 'positive', basePoints: 10, completedDates: [] }));
-
-    await act(async () => {
-      await captured.value!.gamification.useFreezeBankToken('hb1', '2026-06-16');
-    });
-
-    const batch = batches[0]!;
-    const hhData = opsForPath(batch, householdPath)[0]!.data!;
-    expect(hhData['points.total']).toEqual({ __increment: 10 });
-    // No member doc was touched.
-    expect(batch.ops.some(o => o.path.startsWith(`${householdPath}/members/`))).toBe(false);
-  });
-});
-
-// ===========================================================================
-// useFreezeBankToken — weekly cadence guard. A weekly habit earns its points at
-// most once per ISO week, so a week that already contains a completion was
-// never "missed": patching another day in it must be rejected (no token spent,
-// no double-credit) even though the day-based validator allows it.
-// ===========================================================================
-describe('FirebaseHouseholdContext — useFreezeBankToken weekly already-completed-week guard', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    // Wednesday 2026-06-17 (local). Prior ISO week: Mon 2026-06-08 → Sun 2026-06-14.
-    vi.setSystemTime(new Date(2026, 5, 17, 12, 0, 0, 0));
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  function seedWeekly(completedDates: string[]) {
-    emitCollection(`${householdPath}/habits`, [
-      docSnap('hb1', baseHabit({
-        id: 'hb1', type: 'positive', period: 'weekly', basePoints: 20, completedDates,
-      })),
-    ]);
-    emitDoc(householdPath, HOUSEHOLD_ID, {
-      memberUids: ['user1'],
-      points: { daily: 0, weekly: 0, total: 0 },
-      freezeBank: {
-        tokens: 2, maxTokens: 3,
-        lastRolloverDate: '2026-06-01',
-        lastRolloverMonth: '2026-06',
-        history: [],
-      } satisfies FreezeBank,
-    });
-  }
-
-  it('rejects patching a day whose ISO week already contains a completion (no batch, no token spent)', async () => {
-    renderProvider();
-    // Completed Tue 2026-06-09; patch target Wed 2026-06-10 — SAME ISO week,
-    // already scored, streak never broken.
-    seedWeekly(['2026-06-09']);
-
-    await act(async () => {
-      await captured.value!.gamification.useFreezeBankToken('hb1', '2026-06-10');
-    });
-
-    // The mutation bails before opening a batch: no token spent, no points credit.
-    expect(batches).toHaveLength(0);
-  });
-
-  it('allows patching a day in a week with NO completion (control)', async () => {
-    renderProvider();
-    // Completed in the 2026-06-08 week; patch 2026-06-03 (prior week, empty).
-    seedWeekly(['2026-06-09']);
-
-    await act(async () => {
-      await captured.value!.gamification.useFreezeBankToken('hb1', '2026-06-03');
-    });
-
-    expect(batches).toHaveLength(1);
-    const batch = batches[0]!;
-    expect(batch.committed).toBe(true);
-    expect(opsForPath(batch, `${householdPath}/habits/hb1`)).toHaveLength(1);
-    expect((opsForPath(batch, householdPath)[0]!.data!['freezeBank'] as FreezeBank).tokens).toBe(1);
   });
 });
 

@@ -13,7 +13,7 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
-import { isSameWeek, parseISO, format, startOfWeek } from 'date-fns';
+import { parseISO, format, subDays } from 'date-fns';
 import {
   Challenge,
   RewardItem,
@@ -26,8 +26,8 @@ import {
   Habit,
 } from '@/types/schema';
 import { calculateChallengeProgress } from '@/utils/challengeCalculator';
-import { canUseFreezeBankToken } from '@/utils/freezeBankValidator';
-import { streakForHabit, streakEndingOnForHabit, getMultiplier } from '@/utils/habitLogic';
+import { FREEZE_MAX_TOKENS, selectAutoFreezeCandidates } from '@/utils/freezeBank';
+import { calculateStreak } from '@/utils/habitLogic';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
 import { track } from '@/services/analytics';
@@ -662,10 +662,27 @@ export function makeRedemptionResolutionMutations(deps: {
 }
 
 /**
- * useFreezeBankToken — original closure captured `householdId`, `freezeBank`,
- * `habits`.
+ * autoApplyFreezes — Plan 25. Duolingo-style auto-applied streak protection:
+ * for each positive DAILY habit whose streak (>= 3 completed days) would break
+ * because yesterday was missed, consume one freeze token and record yesterday
+ * in the habit's `frozenDates`.
+ *
+ * Central invariant: a frozen date preserves streak CONTINUITY but earns ZERO
+ * points — this path never touches any points field, never writes to
+ * completedDates, and never counts the day for challenges (frozen dates live
+ * outside completedDates, which every points/challenge path scores from).
+ *
+ * Atomicity: ONE writeBatch per application (habit doc + freeze bank), so a
+ * date can never be frozen without a token being consumed or vice versa.
+ *
+ * Idempotency: a habit whose `frozenDates` already contains yesterday is not
+ * a candidate, so re-running (same device, or a second device after the write
+ * syncs) is a no-op. Residual multi-device race: two devices whose snapshots
+ * both predate each other's commits can each apply a freeze computed from the
+ * same starting balance; the absolute `tokens` write converges last-writer-
+ * wins and is floored at 0 via Math.max — it can never go negative.
  */
-export function makeUseFreezeBankToken(deps: {
+export function makeAutoApplyFreezes(deps: {
   db: Firestore;
   householdId: string | null;
   freezeBank: FreezeBank | null;
@@ -673,128 +690,73 @@ export function makeUseFreezeBankToken(deps: {
 }) {
   const { db, householdId, freezeBank, habits } = deps;
 
-  const useFreezeBankToken = async (habitId: string, targetDate: string) => {
-    if (!householdId || !freezeBank || freezeBank.tokens <= 0) {
-      toast.error('No freeze tokens available');
-      return;
+  const autoApplyFreezes = async () => {
+    if (!householdId || !freezeBank || freezeBank.tokens <= 0) return;
+
+    const today = getLocalDateString();
+    const yesterday = format(subDays(parseISO(today), 1), 'yyyy-MM-dd');
+
+    // Deterministic candidate order (highest protected streak first, then id)
+    // so two devices racing at midnight converge on the same applications.
+    const candidates = selectAutoFreezeCandidates(habits, today);
+    if (candidates.length === 0) return;
+
+    let tokens = freezeBank.tokens;
+    let history = freezeBank.history;
+    let applied = 0;
+
+    for (const { habit, protectedStreak } of candidates) {
+      if (tokens <= 0) break;
+
+      const frozenDates = [...(habit.frozenDates ?? []), yesterday].sort();
+      // Frozen-aware streak: yesterday's freeze bridges the chain, so the
+      // streak the user sees survives the miss (without counting the frozen day).
+      const streakDays = calculateStreak(habit.completedDates, today, frozenDates);
+
+      const historyEntry: FreezeBankHistoryEntry = {
+        id: crypto.randomUUID(),
+        type: 'used',
+        amount: -1,
+        date: today,
+        habitId: habit.id,
+        habitDate: yesterday,
+        notes: `Freeze auto-applied: protected the ${protectedStreak}-day streak on ${habit.title} (${yesterday})`,
+        createdAt: new Date().toISOString(),
+      };
+
+      tokens = Math.max(0, tokens - 1);
+      history = [...history, historyEntry];
+
+      // ONE batch per application: the habit's frozen date + the token spend
+      // commit together or not at all. NO points writes — frozen days earn 0.
+      const batch = writeBatch(db);
+      batch.update(doc(db, `households/${householdId}/habits`, habit.id), {
+        frozenDates,
+        streakDays,
+      });
+      batch.update(doc(db, `households/${householdId}`), {
+        freezeBank: { ...freezeBank, tokens, history },
+      });
+      await batch.commit();
+      applied++;
     }
 
-    const habit = habits.find(h => h.id === habitId);
-    if (!habit) return;
-
-    // Validate token usage
-    const validation = canUseFreezeBankToken(habit, targetDate, freezeBank.tokens);
-    if (!validation.allowed) {
-      toast.error(validation.reason || 'Cannot use freeze token');
-      return;
+    if (applied > 0) {
+      toast(`Streak protected — ${applied} freeze${applied === 1 ? '' : 's'} auto-applied`, { icon: '❄️' });
     }
-
-    // A weekly habit earns its points at most once per ISO week, so a week that
-    // already contains a completion was never "missed": patching another day in
-    // it would burn a token on an intact streak and double-credit the week.
-    // canUseFreezeBankToken is day-based and cannot see this, so guard here.
-    if (
-      habit.period === 'weekly' &&
-      habit.completedDates.some(d => isSameWeek(parseISO(d), parseISO(targetDate), { weekStartsOn: 1 }))
-    ) {
-      toast.error(`${habit.title} was already completed during that week — no token needed.`);
-      return;
-    }
-
-    // Add the date to completedDates if not already present
-    const updatedCompletedDates = [...habit.completedDates];
-    if (!updatedCompletedDates.includes(targetDate)) {
-      updatedCompletedDates.push(targetDate);
-      updatedCompletedDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-    }
-
-    // Recalculate streak with patched date (period-aware: weekly habits count weeks)
-    const newStreak = streakForHabit({ period: habit.period, completedDates: updatedCompletedDates });
-
-    // Compute the points the patched day itself earns, using the per-date model
-    // (utils/habitLogic): the multiplier is driven by the streak that ends on the
-    // patched day within the now-patched completion history, mirroring how
-    // calculatePointsForDateRange scores a past completed day (one completion,
-    // period-aware multiplier). Freeze tokens only apply to positive habits on a
-    // PAST day, so this never touches points.daily (today) — it credits
-    // points.total always and points.weekly when the patched day is in the
-    // current week. Without this the patched day's points were silently dropped.
-    const patchedDayStreak = streakEndingOnForHabit(
-      { period: habit.period, completedDates: updatedCompletedDates },
-      targetDate
-    );
-    const patchedMultiplier = getMultiplier(patchedDayStreak, true, habit.period);
-    const patchedDayPoints = Math.floor(habit.basePoints * patchedMultiplier);
-
-    // Create history entry
-    const historyEntry: FreezeBankHistoryEntry = {
-      id: crypto.randomUUID(),
-      type: 'used',
-      amount: -1,
-      date: getLocalDateString(),
-      habitId,
-      habitDate: targetDate,
-      notes: `Used token to patch ${habit.title} on ${targetDate}`,
-      createdAt: new Date().toISOString(),
-    };
-
-    // Update freezeBank balance and history
-    const updatedFreezeBank: FreezeBank = {
-      ...freezeBank,
-      tokens: freezeBank.tokens - 1,
-      history: [...freezeBank.history, historyEntry],
-    };
-
-    // Patch the habit and decrement the token in a SINGLE batch so a date can
-    // never be patched into the habit without a token being consumed (or vice
-    // versa) if one of the two writes were to fail.
-    const batch = writeBatch(db);
-    batch.update(doc(db, `households/${householdId}/habits`, habitId), {
-      completedDates: updatedCompletedDates,
-      streakDays: newStreak,
-    });
-
-    // Credit the patched day's points in the SAME batch as the token spend +
-    // habit patch, so points can never diverge from the patched completion.
-    const householdUpdates: Record<string, FieldValue | FreezeBank> = {
-      freezeBank: updatedFreezeBank,
-    };
-    const pointsUpdates: Record<string, FieldValue> = {};
-    if (patchedDayPoints !== 0) {
-      const todayStr = getLocalDateString();
-      const weekStartStr = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-      // Lifetime total always gets the patched day's points.
-      pointsUpdates['points.total'] = increment(patchedDayPoints);
-      // Weekly only when the patched (past) day falls within the current week.
-      // Daily is never touched: the validator guarantees targetDate is in the past.
-      if (targetDate >= weekStartStr && targetDate <= todayStr) {
-        pointsUpdates['points.weekly'] = increment(patchedDayPoints);
-      }
-    }
-    // Points route to the same target as every other points-writing path (see
-    // habitPointsTargetRef in hooks/useHabitActions.tsx): an assigned (kid)
-    // habit credits members/{assignedTo}.points, an unassigned habit credits
-    // the shared household pool. The corrective recompute EXCLUDES assigned
-    // habits from the household pool, so crediting it here would leave the
-    // household total permanently inflated while the assignee never gets paid.
-    // The freezeBank spend always stays on the household doc, in the same batch.
-    if (habit.assignedTo && Object.keys(pointsUpdates).length > 0) {
-      batch.update(doc(db, `households/${householdId}/members`, habit.assignedTo), pointsUpdates);
-    } else {
-      Object.assign(householdUpdates, pointsUpdates);
-    }
-    batch.update(doc(db, `households/${householdId}`), householdUpdates);
-    await batch.commit();
-
-    toast.success(`❄️ Freeze token used! ${habit.title} patched for ${targetDate}`);
   };
 
-  return { useFreezeBankToken };
+  return { autoApplyFreezes };
 }
 
 /**
  * rolloverFreezeBankTokens — original closure captured `householdId`,
  * `freezeBank`.
+ *
+ * Plan 25: the monthly rollover is now a simple REFILL to the fixed max
+ * (FREEZE_MAX_TOKENS = 2). The old 2-new + 1-carryover math, expiry, and
+ * carryover concepts are gone. A legacy 3-token bank is clamped down to the
+ * new max on its first rollover; maxTokens is rewritten to 2 at the same time.
  */
 export function makeRolloverFreezeBankTokens(deps: {
   db: Firestore;
@@ -812,49 +774,41 @@ export function makeRolloverFreezeBankTokens(deps: {
     // Only rollover if we're in a new month
     if (freezeBank.lastRolloverMonth === currentMonth) return;
 
-    // Calculate new balance: min(current, 1) + 2, max 3
-    const rolloverAmount = Math.min(freezeBank.tokens, 1);
-    const newBalance = Math.min(rolloverAmount + 2, 3);
+    const newBalance = FREEZE_MAX_TOKENS;
+    // Negative when clamping a legacy 3-token bank down to the new max.
     const tokensAdded = newBalance - freezeBank.tokens;
 
-    // Bank already full this month: no tokens to add. Still record the month
-    // guard (so we don't re-check every call) but skip the history entry and the
-    // misleading "0 tokens added!" toast.
+    const refilled: FreezeBank = {
+      ...freezeBank,
+      tokens: newBalance,
+      maxTokens: FREEZE_MAX_TOKENS,
+      lastRolloverDate: getLocalDateString(),
+      lastRolloverMonth: currentMonth,
+    };
+
+    // Bank already at the max: just record the month guard — no history entry,
+    // no toast.
     if (tokensAdded === 0) {
-      await updateDoc(doc(db, `households/${householdId}`), {
-        freezeBank: {
-          ...freezeBank,
-          lastRolloverDate: format(now, 'yyyy-MM-dd'),
-          lastRolloverMonth: currentMonth,
-        },
-      });
+      await updateDoc(doc(db, `households/${householdId}`), { freezeBank: refilled });
       return;
     }
 
-    // Create history entry
     const historyEntry: FreezeBankHistoryEntry = {
       id: crypto.randomUUID(),
       type: 'rollover',
       amount: tokensAdded,
-      date: format(now, 'yyyy-MM-dd'),
-      notes: `Monthly rollover: ${rolloverAmount} carried + 2 new = ${newBalance} total`,
+      date: getLocalDateString(),
+      notes: `Monthly refill to ${newBalance} freezes`,
       createdAt: new Date().toISOString(),
     };
 
-    // Update freezeBank
-    const updatedFreezeBank: FreezeBank = {
-      ...freezeBank,
-      tokens: newBalance,
-      lastRolloverDate: format(now, 'yyyy-MM-dd'),
-      lastRolloverMonth: currentMonth,
-      history: [...freezeBank.history, historyEntry],
-    };
-
     await updateDoc(doc(db, `households/${householdId}`), {
-      freezeBank: updatedFreezeBank,
+      freezeBank: { ...refilled, history: [...freezeBank.history, historyEntry] },
     });
 
-    toast.success(`❄️ Freeze Bank rollover: ${tokensAdded} tokens added!`);
+    if (tokensAdded > 0) {
+      toast.success(`❄️ Freeze bank refilled: ${newBalance} freezes ready`);
+    }
   };
 
   return { rolloverFreezeBankTokens };
