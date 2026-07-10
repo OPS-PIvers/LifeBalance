@@ -68,15 +68,16 @@ const SavingsGoals: React.FC = () => {
   };
 
   const handleSave = async () => {
+    const trimmedName = name.trim();
     const parsedTarget = parseFloat(targetAmount);
-    if (!name || !Number.isFinite(parsedTarget) || parsedTarget <= 0) {
+    if (!trimmedName || !Number.isFinite(parsedTarget) || parsedTarget <= 0) {
       toast.error('Enter a name and a target amount greater than zero.');
       return;
     }
     try {
       if (editingGoal) {
         await updateSavingsGoal(editingGoal.id, {
-          name,
+          name: trimmedName,
           targetAmount: parsedTarget,
           dueDate: dueDate || '',
           ownerId: ownerId || '',
@@ -84,7 +85,7 @@ const SavingsGoals: React.FC = () => {
         setEditingGoal(null);
       } else {
         await addSavingsGoal({
-          name,
+          name: trimmedName,
           targetAmount: parsedTarget,
           savedAmount: 0,
           ...(dueDate ? { dueDate } : {}),

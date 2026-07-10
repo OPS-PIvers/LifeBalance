@@ -128,11 +128,22 @@ describe('makeSavingsGoalMutations.contributeToGoal', () => {
     expect(toast.error).toHaveBeenCalledTimes(2);
   });
 
-  it('errors (without writing) when the goal no longer exists', async () => {
+  it('toasts (without writing or rethrowing) when the goal no longer exists', async () => {
+    // A genuinely-missing goal is a handled, user-facing case — it must NOT
+    // reject (nothing for the caller to recover from).
     currentGoal = null;
     const { contributeToGoal } = makeSavingsGoalMutations({ db, householdId });
-    await contributeToGoal('goal-1', 5);
+    await expect(contributeToGoal('goal-1', 5)).resolves.toBeUndefined();
     expect(updateMock).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+  });
+
+  it('rethrows a genuine write failure so the caller can keep the form open', async () => {
+    updateMock.mockImplementationOnce(() => {
+      throw new Error('permission-denied');
+    });
+    const { contributeToGoal } = makeSavingsGoalMutations({ db, householdId });
+    await expect(contributeToGoal('goal-1', 5)).rejects.toThrow('permission-denied');
     expect(toast.error).toHaveBeenCalledTimes(1);
   });
 

@@ -94,8 +94,17 @@ export function makeSavingsGoalMutations(deps: {
         txn.update(ref, patch);
       });
       toast.success('Contribution added');
-    } catch {
-      toast.error('Could not find that savings goal.');
+    } catch (error) {
+      // A genuinely-missing goal is a handled, user-facing case; any other
+      // failure (e.g. a denied write) is a real error — surface a distinct
+      // message and RETHROW so the caller keeps the contribution form open
+      // instead of silently clearing it as if the write succeeded.
+      if (error instanceof Error && error.message === 'missing-goal') {
+        toast.error('Could not find that savings goal.');
+        return;
+      }
+      toast.error('Could not add your contribution. Please try again.');
+      throw error;
     }
   };
 
