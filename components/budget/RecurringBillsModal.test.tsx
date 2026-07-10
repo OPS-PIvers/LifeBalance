@@ -35,11 +35,14 @@ vi.mock('lucide-react', () => ({
   TrendingDown: () => <div data-testid="trending-down-icon" />,
   ChevronDown: () => <div data-testid="chevron-down" />,
   MoreVertical: () => <div data-testid="more-vertical-icon" />,
+  Sparkles: () => <div data-testid="sparkles-icon" />,
+  Plus: () => <div data-testid="plus-icon" />,
 }));
 
 describe('RecurringBillsModal', () => {
   const mockUpdateCalendarItem = vi.fn();
   const mockDeleteCalendarItem = vi.fn();
+  const mockAddCalendarItem = vi.fn();
   const onClose = vi.fn();
 
   const recurringItems = [
@@ -71,10 +74,13 @@ describe('RecurringBillsModal', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
     (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       calendarItems: recurringItems,
+      transactions: [],
       updateCalendarItem: mockUpdateCalendarItem,
       deleteCalendarItem: mockDeleteCalendarItem,
+      addCalendarItem: mockAddCalendarItem,
     });
   });
 
@@ -134,8 +140,10 @@ describe('RecurringBillsModal', () => {
 
     (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       calendarItems: mixedItems,
+      transactions: [],
       updateCalendarItem: mockUpdateCalendarItem,
       deleteCalendarItem: mockDeleteCalendarItem,
+      addCalendarItem: mockAddCalendarItem,
     });
 
     render(<RecurringBillsModal isOpen={true} onClose={onClose} />);
@@ -213,6 +221,84 @@ describe('RecurringBillsModal', () => {
 
     await waitFor(() => {
       expect(mockDeleteCalendarItem).toHaveBeenCalledWith('item-1');
+    });
+  });
+
+  describe('detected subscriptions', () => {
+    const detectableTransactions = [
+      { id: 't1', merchant: 'Hulu', amount: 12.99, date: '2026-04-15', category: 'Subscriptions' },
+      { id: 't2', merchant: 'Hulu', amount: 12.99, date: '2026-05-15', category: 'Subscriptions' },
+      { id: 't3', merchant: 'Hulu', amount: 12.99, date: '2026-06-14', category: 'Subscriptions' },
+    ];
+
+    it('renders a detected subscription row', () => {
+      (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+        calendarItems: recurringItems,
+        transactions: detectableTransactions,
+        updateCalendarItem: mockUpdateCalendarItem,
+        deleteCalendarItem: mockDeleteCalendarItem,
+        addCalendarItem: mockAddCalendarItem,
+      });
+
+      render(<RecurringBillsModal isOpen={true} onClose={onClose} />);
+
+      expect(screen.getByText('Detected subscriptions')).toBeInTheDocument();
+      expect(screen.getByText('Hulu')).toBeInTheDocument();
+    });
+
+    it('calls addCalendarItem when "Add as bill" is clicked', async () => {
+      (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+        calendarItems: recurringItems,
+        transactions: detectableTransactions,
+        updateCalendarItem: mockUpdateCalendarItem,
+        deleteCalendarItem: mockDeleteCalendarItem,
+        addCalendarItem: mockAddCalendarItem,
+      });
+
+      render(<RecurringBillsModal isOpen={true} onClose={onClose} />);
+
+      const addButton = screen.getByLabelText('Add Hulu as a bill');
+      fireEvent.click(addButton);
+
+      await waitFor(() => {
+        expect(mockAddCalendarItem).toHaveBeenCalledWith(
+          expect.objectContaining({
+            title: 'Hulu',
+            amount: 12.99,
+            type: 'expense',
+            isRecurring: true,
+            frequency: 'monthly',
+          })
+        );
+      });
+    });
+
+    it('hides a dismissed detection and keeps it hidden on re-render', () => {
+      (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+        calendarItems: recurringItems,
+        transactions: detectableTransactions,
+        updateCalendarItem: mockUpdateCalendarItem,
+        deleteCalendarItem: mockDeleteCalendarItem,
+        addCalendarItem: mockAddCalendarItem,
+      });
+
+      const { unmount } = render(<RecurringBillsModal isOpen={true} onClose={onClose} />);
+      expect(screen.getByText('Hulu')).toBeInTheDocument();
+
+      const dismissButton = screen.getByLabelText('Dismiss Hulu detection');
+      fireEvent.click(dismissButton);
+
+      expect(screen.queryByText('Detected subscriptions')).not.toBeInTheDocument();
+      unmount();
+
+      // Re-render (fresh mount) — the localStorage dismissal persists.
+      render(<RecurringBillsModal isOpen={true} onClose={onClose} />);
+      expect(screen.queryByText('Detected subscriptions')).not.toBeInTheDocument();
+    });
+
+    it('does not render the section when there are no detections', () => {
+      render(<RecurringBillsModal isOpen={true} onClose={onClose} />);
+      expect(screen.queryByText('Detected subscriptions')).not.toBeInTheDocument();
     });
   });
 });
