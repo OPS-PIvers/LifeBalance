@@ -336,7 +336,7 @@ export const invalidateAppConfigCaches = (): void => {
   kidModeEnabledPromise = null;
   kidModeEnabledFetchedAt = 0;
   plaidEnabledPromise = null;
+  plaidEnabledFetchedAt = 0;
   powerToolsEnabledPromise = null;
   powerToolsEnabledFetchedAt = 0;
-  plaidEnabledFetchedAt = 0;
 };
