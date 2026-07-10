@@ -62,10 +62,10 @@
 
 ## Done criteria
 
-- [ ] Spike notes + draft rules diff appended
-- [ ] Converter/mutations/UI + tests green; Mock parity done
-- [ ] Sequencing decision recorded (rules PR first, human-watched)
-- [ ] `advisor-plans/README.md` row updated
+- [x] Spike notes + draft rules diff appended
+- [x] Converter/mutations/UI + tests green; Mock parity done
+- [x] Sequencing decision recorded (ship UI dark — see Spike notes §5)
+- [ ] `advisor-plans/README.md` row updated — SKIPPED per operator amendment (orchestrator will handle)
 
 ## STOP conditions
 
@@ -77,3 +77,56 @@
 
 - v2 candidates, in order: comment push notification (piggyback existing FCM prefs with a new preference key), per-user unread tracking, todo comments.
 - Reviewer scrutiny: the batch (comment + count) — count drift would show phantom badges; and the length cap enforced BOTH client-side and in the rules draft.
+
+## Spike notes (executor, 2026-07-10, commit `advisor/23-transaction-comments`)
+
+**Drift check**: `git diff --stat fce26e4..HEAD -- types/schema.ts firestore.rules utils/firestoreConverters.ts contexts/household/listeners contexts/household/mutations` shows only an unrelated `subBucketId` removal in `transactionMutations.ts` (8 lines) and an unrelated `gamificationMutations.ts`/`schema.ts` reshuffle (freeze-bank Plan 25 work). Nothing touches the transaction/comment surface area described in "Current state". Proceeding.
+
+### 1. Rules diff (DRAFT — NOT applied; ships as its own human-watched PR)
+
+Mirrors the existing `transactions/{transactionId}` block style (`firestore.rules:341-371`) and nests one level deeper. Author-only create; no update (v1 has no edit — simpler, per the plan's own suggestion); author-only delete. `isValidString`/`isValidOptionalString`/`isMemberOf` helpers already exist (`firestore.rules:11-14,32-39`) and are reused as-is.
+
+```
+      // Transaction comments (Plan 23) — nested one level under a transaction.
+      // Read: any household member. Create: author-only, 500-char cap. No
+      // update in v1 (simpler than partial-edit rules). Delete: author-only.
+      match /transactions/{transactionId}/comments/{commentId} {
+        allow read: if isMemberOf(householdId);
+        allow create: if isMemberOf(householdId) &&
+                      request.resource.data.authorUid == request.auth.uid &&
+                      isValidString(request.resource.data.text, 500) &&
+                      isValidString(request.resource.data.createdAt, 30);
+        allow delete: if isMemberOf(householdId) &&
+                      resource.data.authorUid == request.auth.uid;
+      }
+```
+
+Also required in the SAME rules PR: the parent `transactions/{transactionId}` `allow create, update` validator (`firestore.rules:344-368`) must accept the new optional `commentCount` field, e.g. add
+`isValidOptionalNumber(request.resource.data.get('commentCount', null)) &&`
+to its condition list — otherwise the batched `commentCount` increment on the transaction doc is rejected by the existing SENTINEL validator once rules deploy. (Today, with NO rule for the subcollection, `allow create` on the parent still runs but Firestore rejects the whole batch if we ever add a real rules check on `commentCount`'s type — noted for the rules-PR author.)
+
+### 2. Detail surfaces (Step A.2)
+
+Only **one** stable, revisitable detail view exists for a transaction: `components/modals/EditTransactionModal.tsx` (opened by clicking a row's Edit affordance in `TransactionMasterList` → `TransactionItem`, `components/budget/TransactionItem.tsx:125`). It renders inside a `Drawer` and stays keyed to a single `transaction` prop across opens — a legitimate "detail" surface.
+
+`components/transactions/TransactionReviewForm.tsx` (rendered inside `ReviewPendingDrawer`) is NOT a comparable detail surface — it's a one-shot approve/categorize flow for `pending_review` rows (`onDone`/`onDeleted` callbacks that close and advance to the next pending item; `components/transactions/TransactionReviewForm.tsx:53-60`). A user doesn't return to it to re-read a conversation. **Decision: comment thread ships in `EditTransactionModal` only for v1**; `TransactionReviewForm` is out of scope (noted as a v2 candidate below, not in the original list — added).
+
+Both surfaces consume `useFinance()` (`updateTransaction`, `buckets`, `accounts`) — the new fetch/add/delete comment methods are added to the same slice.
+
+### 3. CountBadge (Step A.3)
+
+`components/ui/CountBadge.tsx` exists but is purpose-built as an **absolute-positioned overlay** on top of an icon (`absolute -top-1.5 -right-2 ... ring-2`, `aria-hidden`), used today only by `BottomNav`/`TopToolbar` nav icons. It is NOT a fit for an inline row indicator next to merchant/date/category text — reusing it would require a `relative` wrapper and its ring/pill styling reads as a notification dot, not a content count. **Decision: do not reuse `CountBadge`; add a small inline `MessageSquare` icon + number, styled like the existing inline date/category/store metadata row** (`components/budget/TransactionItem.tsx:89-99`, the `·`-separated secondary line), rendered only when `commentCount > 0`. This is more consistent with how the row already surfaces secondary metadata (recurring icon, store chip) than bolting on a notification-style badge.
+
+### 4. Composer + empty state (Step A.4)
+
+Composer is a plain inline `Input` + `Button` (send), NOT `QuickAddBar` — `QuickAddBar` (`components/ui/QuickAddBar.tsx`) is shopping-list-specific (multi-quick-list dropdown target) and has no analog need here; a transaction has exactly one comment thread. Empty-state copy: **"No comments yet. Add one if you want to flag or explain this transaction."** Composer disabled while `isSaving`/posting, matching `EditTransactionModal`'s existing `isSaving` gating pattern.
+
+### 5. Sequencing decision (Step B note)
+
+**Ship the UI dark**, not gated behind the rules PR landing first: the comment thread section always renders inside `EditTransactionModal` (list + composer), but until the rules PR deploys, any `getDocs`/`addDoc`/`deleteDoc` call against `transactions/{id}/comments` will reject with `permission-denied` (no rule = default deny) — expected per the operator amendment, NOT a UI hide. Rationale: hiding the composer behind a flag would need its own flag/env plumbing that has to be un-done again the moment rules ship, for a code path that fails safely (caught, toasted, no data corruption) in the interim. Test Mode (`MockHouseholdContext`) fully implements comments in-memory so the orchestrator can visually verify the whole feature NOW, independent of prod rules. `commentCount` badge itself is read-only display and un-gated (reads `Transaction.commentCount`, which is `undefined`/0 until the first comment is ever written — harmless pre-rules).
+
+### STOP conditions — none triggered
+
+- Did not touch `firestore.rules`.
+- `EditTransactionModal` is a stable, non-virtualized detail view — no STOP.
+- No standing listener added — `getTransactionComments`/`addTransactionComment`/`deleteTransactionComment` are `getDocs`/`addDoc`(via batch)/`deleteDoc`(via batch) one-shot calls, mirroring `getHabitSubmissions` (`hooks/useHabitActions.tsx:494-524`).

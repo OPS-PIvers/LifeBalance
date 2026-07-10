@@ -11,6 +11,7 @@ import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { buildTransactionCategoryOptions } from '@/utils/categories';
 import { resolveStoreName } from '@/utils/stores';
+import { TransactionCommentThread } from '@/components/transactions/TransactionCommentThread';
 import toast from 'react-hot-toast';
 
 interface EditTransactionModalProps {
@@ -347,6 +348,10 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
           value={date}
           onChange={(e) => setDate(e.target.value)}
         />
+
+        <div className="pt-2 border-t border-brand-100 dark:border-brand-700">
+          <TransactionCommentThread transactionId={transaction.id} isOpen={isOpen} />
+        </div>
       </div>
 
       {/* Actions */}

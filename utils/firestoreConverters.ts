@@ -54,6 +54,7 @@ import type {
   HouseholdApiKey,
   Insight,
   Transaction,
+  TransactionComment,
   ToDo,
   WeeklyRecap,
   SavingsGoal,
@@ -380,6 +381,19 @@ export const transactionConverter: FirestoreDataConverter<Transaction> = {
           ? d['createdAt'].toDate().toISOString()
           : d['createdAt'],
     } as Transaction;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// TransactionComment (Plan 23) — subcollection under a transaction; no
+// Timestamp fields (createdAt is always written as an ISO string client-side).
+// ---------------------------------------------------------------------------
+export const transactionCommentConverter: FirestoreDataConverter<TransactionComment> = {
+  toFirestore(comment: TransactionComment): DocumentData {
+    return omitKey(comment, 'id');
+  },
+  fromFirestore(snapshot: QueryDocumentSnapshot): TransactionComment {
+    return { ...snapshot.data(), id: snapshot.id } as TransactionComment;
   },
 };
 

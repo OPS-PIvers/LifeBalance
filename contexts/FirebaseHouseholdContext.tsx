@@ -107,6 +107,11 @@ import {
   makeSplitTransaction,
 } from '@/contexts/household/mutations/transactionMutations';
 import {
+  makeGetTransactionComments,
+  makeAddTransactionComment,
+  makeDeleteTransactionComment,
+} from '@/contexts/household/mutations/commentMutations';
+import {
   makeAddToDo,
   makeTodoCrudMutations,
   makeCompleteToDo,
@@ -1546,6 +1551,22 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }).splitTransaction(originalTransactionId, newTransactions);
   }, [householdId, user, transactions, householdSettings, accounts]);
 
+  // Plan 23 — transaction comments. ON-DEMAND fetch (no listener); the
+  // households/{id}/transactions/{txnId}/comments subcollection has no
+  // firestore.rules entry yet (separate human-watched PR) so these reject
+  // with permission-denied until it deploys — see the spike doc.
+  const getTransactionComments = useCallback(async (transactionId: string) => {
+    return makeGetTransactionComments({ db, householdId }).getTransactionComments(transactionId);
+  }, [householdId]);
+
+  const addTransactionComment = useCallback(async (transactionId: string, text: string) => {
+    await makeAddTransactionComment({ db, householdId, user }).addTransactionComment(transactionId, text);
+  }, [householdId, user]);
+
+  const deleteTransactionComment = useCallback(async (transactionId: string, commentId: string) => {
+    await makeDeleteTransactionComment({ db, householdId }).deleteTransactionComment(transactionId, commentId);
+  }, [householdId]);
+
 
   // --- ACTIONS: YEARLY GOALS, CHALLENGES, REWARDS, FREEZE BANK ---
   // (contexts/household/mutations/gamificationMutations.ts)
@@ -1961,6 +1982,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     splitTransaction,
     mergeTransactions,
     keepBothTransactions,
+    getTransactionComments,
+    addTransactionComment,
+    deleteTransactionComment,
   }), [
     safeToSpend, safeToSpendBreakdown, accounts, buckets, savingsGoals, calendarItems, transactions, currentPeriodId, bucketSpentMap, bucketHistory,
     transactionWindowStart, isLoadingOlderTransactions, hasMoreTransactions, loadOlderTransactions, loadAllTransactions,
@@ -1970,7 +1994,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addBucket, updateBucket, deleteBucket, updateBucketLimit, reallocateBucket,
     addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem,
     addTransaction, updateTransactionCategory, updateTransaction, deleteTransaction, splitTransaction,
-    mergeTransactions, keepBothTransactions,
+    mergeTransactions, keepBothTransactions, getTransactionComments, addTransactionComment, deleteTransactionComment,
   ]);
 
   const gamificationValue = useMemo<GamificationContextValue>(() => ({
