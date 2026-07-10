@@ -80,20 +80,23 @@ function useTabIds(tabValue: string, idPrefix: string) {
   return { triggerId, panelId };
 }
 
-export const TabsList: React.FC<{
-  children: React.ReactNode;
-  className?: string;
-  /**
-   * `md` (default) reserves the full 44px (`min-h-11`) primary-nav touch
-   * target. `sm` shrinks triggers to `min-h-9`/tighter padding for secondary
-   * in-page tab strips (e.g. a day picker) — reserve `md` for primary
-   * bottom-nav-adjacent navigation.
-   */
-  size?: 'md' | 'sm';
-}> = ({
+export const TabsList: React.FC<
+  {
+    children: React.ReactNode;
+    className?: string;
+    /**
+     * `md` (default) reserves the full 44px (`min-h-11`) primary-nav touch
+     * target. `sm` shrinks triggers to `min-h-9`/tighter padding for secondary
+     * in-page tab strips (e.g. a day picker) — reserve `md` for primary
+     * bottom-nav-adjacent navigation.
+     */
+    size?: 'md' | 'sm';
+  } & Omit<React.ComponentPropsWithoutRef<'div'>, 'role' | 'onKeyDown'>
+> = ({
   children,
   className,
   size = 'md',
+  ...rest
 }) => {
   const context = React.useContext(TabsContext);
   if (!context) throw new Error('TabsList must be used within Tabs');
@@ -138,6 +141,7 @@ export const TabsList: React.FC<{
         )}
         role="tablist"
         onKeyDown={handleKeyDown}
+        {...rest}
       >
         {children}
       </div>

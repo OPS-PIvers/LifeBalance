@@ -264,7 +264,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
             so all four fit without wrapping. */}
         <div className="shrink-0 px-3 py-2 sm:px-4 border-b border-brand-200 dark:border-brand-700/60 bg-brand-50/50 dark:bg-brand-700/30">
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as Tab)}>
-            <TabsList size="sm">
+            <TabsList size="sm" aria-label="Developer Console sections">
               {TABS.map(tab => (
                 <TabsTrigger key={tab.id} value={tab.id} className="whitespace-nowrap">
                   {tab.label}
