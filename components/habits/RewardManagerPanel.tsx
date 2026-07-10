@@ -136,7 +136,7 @@ const RewardManagerPanel: React.FC<RewardManagerPanelProps> = ({ kids, kidModeEn
               variant="warning"
               size="sm"
               onClick={beginCreate}
-              leftIcon={<Plus size={14} />}
+              leftIcon={<Plus size={16} />}
             >
               Add reward
             </Button>
