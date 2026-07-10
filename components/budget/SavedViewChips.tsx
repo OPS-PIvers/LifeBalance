@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Bookmark, Plus, X } from 'lucide-react';
+import { Bookmark, Plus, X, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { Button } from '@/components/ui/Button';
+import { Popover } from '@/components/ui/Popover';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 interface SavedView {
@@ -23,6 +25,14 @@ interface SavedViewChipsProps {
   onApply: (filters: { searchTerm: string; categoryFilter: string; sourceFilter: string }) => void;
 }
 
+/**
+ * Saved-view control for the transactions filter row. Renders a compact
+ * bookmark icon (sized to sit beside the Filter / Select icons) that opens a
+ * dropdown of saved filter presets — tap to apply, ✕ to delete, plus a
+ * "Save current view" action. Nothing renders below the filter row, so an empty
+ * preset list costs zero vertical space (previously a permanent "Save View" row
+ * sat under the filters even with no saved views).
+ */
 const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFilters, onApply }) => {
   // Use lazy initialization to load from localStorage
   const [views, setViews] = useState<SavedView[]>(() => {
@@ -39,6 +49,7 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
     return [];
   });
 
+  const [isOpen, setIsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [newViewName, setNewViewName] = useState('');
   const [viewToDelete, setViewToDelete] = useState<string | null>(null);
@@ -49,6 +60,12 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
     const key = `transaction_views_${householdId}`;
     localStorage.setItem(key, JSON.stringify(views));
   }, [views, householdId]);
+
+  const closeMenu = () => {
+    setIsOpen(false);
+    setIsSaving(false);
+    setNewViewName('');
+  };
 
   const handleSaveView = (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,8 +83,9 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
     toast.success('View saved');
   };
 
-  const handleDeleteView = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDeleteView = (id: string) => {
+    // Close the menu first so its focus trap doesn't fight the confirm dialog's.
+    setIsOpen(false);
     setViewToDelete(id);
   };
 
@@ -80,105 +98,123 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
 
   if (!householdId) return null;
 
-  // Zero saved views and not mid-save: skip the bordered "Views" row chrome
-  // entirely and surface only the unobtrusive "Save View" text button so the
-  // permanent affordance doesn't sit empty for users who never save a view.
-  if (views.length === 0 && !isSaving) {
-    return (
-      <div className="pt-2 mt-2">
-        <button
-          onClick={() => setIsSaving(true)}
-          className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-brand-500 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-200 hover:bg-brand-50 dark:hover:bg-brand-700/50 rounded-md transition-colors"
-        >
-          <Plus size={12} />
-          <span>Save View</span>
-        </button>
-      </div>
-    );
-  }
-
   return (
     <>
-    <ConfirmDialog
-      isOpen={viewToDelete !== null}
-      onClose={() => setViewToDelete(null)}
-      onConfirm={confirmDeleteView}
-      title="Delete Saved View"
-      message="Delete this saved view?"
-      confirmLabel="Delete"
-      confirmVariant="destructive"
-    />
-    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-brand-200 dark:border-brand-700 mt-2">
-      <div className="text-xs font-bold text-brand-400 dark:text-brand-450 uppercase tracking-wider flex items-center gap-1 mr-1">
-        <Bookmark size={12} />
-        <span>Views</span>
+      <ConfirmDialog
+        isOpen={viewToDelete !== null}
+        onClose={() => setViewToDelete(null)}
+        onConfirm={confirmDeleteView}
+        title="Delete Saved View"
+        message="Delete this saved view?"
+        confirmLabel="Delete"
+        confirmVariant="destructive"
+      />
+
+      <div className="relative shrink-0">
+        <Button
+          variant="secondary"
+          size="icon"
+          onClick={() => (isOpen ? closeMenu() : setIsOpen(true))}
+          aria-label="Saved views"
+          aria-haspopup="dialog"
+          aria-expanded={isOpen}
+          className="h-11 relative"
+        >
+          <Bookmark size={16} />
+          {views.length > 0 && (
+            <span className="absolute -top-1 -right-1 bg-accent-600 text-white px-1 rounded-full text-xxs leading-tight min-w-[16px] text-center">
+              {views.length}
+            </span>
+          )}
+        </Button>
+
+        <Popover
+          isOpen={isOpen}
+          onClose={closeMenu}
+          role="dialog"
+          ariaLabel="Saved views"
+          className="w-64 p-2"
+        >
+          <p className="px-2 pt-1 pb-2 text-xxs font-bold uppercase tracking-wider text-brand-400 dark:text-brand-450">
+            Saved views
+          </p>
+
+          {views.length > 0 ? (
+            <ul className="space-y-0.5">
+              {views.map(view => (
+                <li key={view.id} className="group flex items-center gap-1">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      onApply(view.filters);
+                      toast.success(`Applied "${view.name}"`);
+                      closeMenu();
+                    }}
+                    className="min-w-0 flex-1 truncate rounded-btn px-2 py-2 text-left text-sm font-medium text-brand-700 dark:text-brand-200 hover:bg-brand-50 dark:hover:bg-brand-700/40 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+                    title={`Apply ${view.name}`}
+                  >
+                    {view.name}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteView(view.id)}
+                    aria-label={`Delete view ${view.name}`}
+                    className="shrink-0 rounded-btn p-2 text-brand-300 dark:text-brand-450 hover:text-money-neg dark:hover:text-money-negDark hover:bg-money-bgNeg dark:hover:bg-money-neg/15 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-money-neg/40"
+                  >
+                    <X size={14} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="px-2 py-2 text-xs text-brand-400 dark:text-brand-450">
+              No saved views yet.
+            </p>
+          )}
+
+          <div className="my-1.5 h-px bg-brand-200 dark:bg-brand-700" />
+
+          {isSaving ? (
+            <form onSubmit={handleSaveView} className="flex items-center gap-1 px-1 pb-1">
+              <input
+                type="text"
+                value={newViewName}
+                onChange={(e) => setNewViewName(e.target.value)}
+                placeholder="View name…"
+                className="min-w-0 flex-1 rounded-btn border border-brand-300 px-2 py-1.5 text-sm dark:border-brand-700 dark:bg-brand-800 dark:text-brand-100 dark:placeholder:text-brand-450 focus:outline-hidden focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500"
+                autoFocus
+              />
+              <button
+                type="submit"
+                disabled={!newViewName.trim()}
+                className="shrink-0 rounded-btn bg-accent-600 p-2 text-white disabled:opacity-50 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+                aria-label="Confirm save view"
+              >
+                <Check size={14} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsSaving(false)}
+                className="shrink-0 rounded-btn p-2 text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-400/40"
+                aria-label="Cancel save view"
+              >
+                <X size={14} />
+              </button>
+            </form>
+          ) : (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => setIsSaving(true)}
+              className="flex w-full items-center gap-2 rounded-btn px-2 py-2 text-sm font-semibold text-accent-700 dark:text-accent-300 hover:bg-brand-50 dark:hover:bg-brand-700/40 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+            >
+              <Plus size={14} />
+              Save current view
+            </button>
+          )}
+        </Popover>
       </div>
-
-      {views.map(view => (
-        <div
-          key={view.id}
-          className="group inline-flex items-center bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-full text-xs font-medium text-brand-700 dark:text-brand-200 hover:bg-brand-50 dark:hover:bg-brand-700/50 hover:border-brand-300 dark:hover:border-brand-600 transition-all"
-        >
-          <button
-            onClick={() => {
-              onApply(view.filters);
-              toast.success(`Applied "${view.name}"`);
-            }}
-            className="pl-3 pr-1 py-1 rounded-l-full hover:text-brand-900 dark:hover:text-brand-100 transition-colors focus:outline-hidden focus:ring-2 focus:ring-accent-500 focus:ring-offset-1"
-            title={`Apply ${view.name}`}
-          >
-            {view.name}
-          </button>
-          <div className="w-px h-3 bg-brand-200 dark:bg-brand-700 mx-0.5" />
-          <button
-             type="button"
-             onClick={(e) => handleDeleteView(view.id, e)}
-             className="pr-2 pl-1 py-1 rounded-r-full text-brand-300 dark:text-brand-450 hover:text-money-neg dark:hover:text-money-negDark hover:bg-money-bgNeg dark:hover:bg-money-neg/15 transition-colors focus:outline-hidden focus:ring-2 focus:ring-money-neg focus:ring-offset-1"
-             aria-label={`Delete view ${view.name}`}
-          >
-            <X size={10} />
-          </button>
-        </div>
-      ))}
-
-      {isSaving ? (
-        <form onSubmit={handleSaveView} className="flex items-center gap-1 animate-in fade-in zoom-in duration-200">
-          <input
-            type="text"
-            value={newViewName}
-            onChange={(e) => setNewViewName(e.target.value)}
-            placeholder="View Name..."
-            className="w-32 px-2 py-1 text-xs border border-brand-300 dark:border-brand-700 dark:bg-brand-800 dark:text-brand-100 dark:placeholder:text-brand-450 rounded-btn focus:outline-hidden focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500"
-            autoFocus
-            onBlur={() => !newViewName && setIsSaving(false)}
-          />
-          <button
-            type="submit"
-            disabled={!newViewName.trim()}
-            className="p-1 bg-brand-600 text-white rounded-md disabled:opacity-50"
-            aria-label="Confirm save view"
-          >
-            <Plus size={12} />
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsSaving(false)}
-            className="p-1 text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300"
-            aria-label="Cancel save view"
-          >
-            <X size={12} />
-          </button>
-        </form>
-      ) : (
-        <button
-          onClick={() => setIsSaving(true)}
-          className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-brand-500 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-200 hover:bg-brand-50 dark:hover:bg-brand-700/50 rounded-md transition-colors"
-        >
-          <Plus size={12} />
-          <span>Save View</span>
-        </button>
-      )}
-    </div>
     </>
   );
 };

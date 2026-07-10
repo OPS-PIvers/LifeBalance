@@ -380,7 +380,7 @@ const TransactionMasterList: React.FC = () => {
           reclaim the space. */}
       <CollapsibleSection
         title="Summary"
-        summary={`${summary.count} txn${summary.count === 1 ? '' : 's'}`}
+        summary={`${summary.count} transaction${summary.count === 1 ? '' : 's'}`}
         defaultOpen={true}
       >
         <StatGroup>
@@ -450,6 +450,22 @@ const TransactionMasterList: React.FC = () => {
               <Layers size={16} />
             </Button>
           </div>
+
+          {/* Saved views (power tools) — a compact bookmark popover beside the
+              filter/select icons, so saved presets never occupy a row of their
+              own below the filters (previously a permanent "Save View" row). */}
+          {powerToolsEnabled && (
+            <SavedViewChips
+              key={householdId}
+              householdId={householdId}
+              currentFilters={{ searchTerm, categoryFilter, sourceFilter }}
+              onApply={(filters) => {
+                setSearchTerm(filters.searchTerm);
+                setCategoryFilter(filters.categoryFilter);
+                setSourceFilter(filters.sourceFilter);
+              }}
+            />
+          )}
         </div>
 
         {/* Filter Chips / Dropdowns */}
@@ -493,23 +509,6 @@ const TransactionMasterList: React.FC = () => {
             <span className="hidden sm:inline">Export</span>
           </Button>
         </div>
-
-        {powerToolsEnabled && (
-          <SavedViewChips
-            key={householdId}
-            householdId={householdId}
-            currentFilters={{
-              searchTerm,
-              categoryFilter,
-              sourceFilter
-            }}
-            onApply={(filters) => {
-              setSearchTerm(filters.searchTerm);
-              setCategoryFilter(filters.categoryFilter);
-              setSourceFilter(filters.sourceFilter);
-            }}
-          />
-        )}
       </div>
 
       {/* Select All Bar */}
