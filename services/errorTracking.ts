@@ -75,7 +75,10 @@ function initErrorTrackingInternal(): Promise<void> {
       mod.init({
         dsn,
         sendDefaultPii: false,
-        integrations: [],
+        // Default integrations stay ON (breadcrumbs feed scrubEvent; Dedupe
+        // collapses the overlap with the manual pre-init handlers in
+        // index.tsx). Performance tracing and session replay are opt-in
+        // integrations we deliberately never add — error events only.
         beforeSend: scrubEvent,
       });
       sentry = mod;
