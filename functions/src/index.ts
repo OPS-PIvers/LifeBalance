@@ -53,6 +53,10 @@ export { plaiddisconnectbank } from "./plaid/disconnect";
 // Weekly recap engine (Plan 02).
 export { sendweeklyrecap } from "./recap";
 
+// Household calendar ICS feed (Plan 22): token callable + public read-only
+// HTTP feed. No secrets — safe to export/deploy unconditionally.
+export { generatecalendarfeedtoken, calendarfeed } from "./calendarFeed";
+
 const db = admin.firestore();
 
 /**
