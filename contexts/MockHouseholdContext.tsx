@@ -39,7 +39,8 @@ import {
   Household,
   FreezeBank,
   ModuleKey,
-  WeeklyRecap
+  WeeklyRecap,
+  SavingsGoal
 } from '@/types/schema';
 import toast from 'react-hot-toast';
 
@@ -92,6 +93,30 @@ const SEED_ACCOUNTS: Account[] = [
   // Credit debt is stored POSITIVE (see utils/accountImpact.ts) — a charge
   // increments it, a payment decrements it.
   { id: 'acc3', name: 'Credit Card', type: 'credit', balance: 850.25, lastUpdated: new Date().toISOString() },
+];
+
+// Plan 24 (savings goals / sinking funds) Test-Mode harness: one shared
+// household goal (Money → Accounts tab) plus one kid-owned goal (ownerId:
+// 'kid_leo') so the KidDashboard jar renders live data without a real backend.
+const SEED_SAVINGS_GOALS: SavingsGoal[] = [
+  {
+    id: 'goal1',
+    name: 'Christmas',
+    targetAmount: 1200,
+    savedAmount: 300,
+    dueDate: '2026-12-01',
+    color: 'emerald',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'goal2',
+    name: 'New Bike',
+    targetAmount: 150,
+    savedAmount: 90,
+    ownerId: 'kid_leo',
+    color: 'purple',
+    createdAt: new Date().toISOString(),
+  },
 ];
 
 const SEED_BUCKETS: BudgetBucket[] = [
@@ -259,6 +284,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const isFresh = TEST_SEED_VARIANT === 'fresh';
   const [accounts, setAccounts] = useState<Account[]>(isFresh ? [] : SEED_ACCOUNTS);
   const [buckets, setBuckets] = useState<BudgetBucket[]>(isFresh ? [] : SEED_BUCKETS);
+  const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>(isFresh ? [] : SEED_SAVINGS_GOALS);
   const [transactions, setTransactions] = useState<Transaction[]>(
     isFresh ? [] : TEST_SEED_VARIANT === 'stub' ? [...SEED_TRANSACTIONS, STUB_TRANSACTION] : SEED_TRANSACTIONS
   );
@@ -394,6 +420,50 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const deleteAccount = useCallback(async (id: string) => {
     setAccounts(prev => prev.filter(a => a.id !== id));
     toast.success('Mock: Account deleted');
+  }, []);
+
+  // Savings goal operations (Plan 24) — v1 manual contributions only, mirrors
+  // savingsGoalMutations.ts's cents-safe math and completedAt transition.
+  const addSavingsGoal = useCallback(async (goal: Omit<SavingsGoal, 'id' | 'createdAt' | 'completedAt'>) => {
+    const newGoal: SavingsGoal = {
+      ...goal,
+      id: generateId(),
+      savedAmount: roundMoney(goal.savedAmount),
+      targetAmount: roundMoney(goal.targetAmount),
+      createdAt: new Date().toISOString(),
+    };
+    setSavingsGoals(prev => [...prev, newGoal]);
+    toast.success('Mock: Savings goal created');
+  }, []);
+
+  const updateSavingsGoal = useCallback(async (id: string, updates: Partial<Pick<SavingsGoal, 'name' | 'targetAmount' | 'dueDate' | 'ownerId' | 'color'>>) => {
+    setSavingsGoals(prev => prev.map(g => g.id === id
+      ? { ...g, ...updates, ...(typeof updates.targetAmount === 'number' ? { targetAmount: roundMoney(updates.targetAmount) } : {}) }
+      : g));
+    toast.success('Mock: Savings goal updated');
+  }, []);
+
+  const deleteSavingsGoal = useCallback(async (id: string) => {
+    setSavingsGoals(prev => prev.filter(g => g.id !== id));
+    toast.success('Mock: Savings goal deleted');
+  }, []);
+
+  const contributeToGoal = useCallback(async (id: string, amount: number) => {
+    const rounded = roundMoney(amount);
+    if (!Number.isFinite(rounded) || rounded <= 0) {
+      toast.error('Enter an amount greater than zero to contribute.');
+      return;
+    }
+    setSavingsGoals(prev => prev.map(g => {
+      if (g.id !== id) return g;
+      const newSaved = roundMoney(g.savedAmount + rounded);
+      return {
+        ...g,
+        savedAmount: newSaved,
+        ...(!g.completedAt && newSaved >= g.targetAmount ? { completedAt: new Date().toISOString() } : {}),
+      };
+    }));
+    toast.success('Mock: Contribution added');
   }, []);
 
   const deleteHousehold = useCallback(async () => {
@@ -1168,6 +1238,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     // Data
     accounts,
     buckets,
+    savingsGoals,
     transactions,
     calendarItems,
     habits,
@@ -1215,6 +1286,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     setAccountCardLast4: noOp,
     updateAccountOrder: noOp,
     reorderAccounts: noOp,
+    addSavingsGoal,
+    updateSavingsGoal,
+    deleteSavingsGoal,
+    contributeToGoal,
     addBucket,
     updateBucket,
     deleteBucket,

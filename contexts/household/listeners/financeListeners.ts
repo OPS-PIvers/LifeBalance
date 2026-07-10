@@ -14,8 +14,9 @@ import {
   bucketPeriodSnapshotConverter,
   calendarItemConverter,
   transactionConverter,
+  savingsGoalConverter,
 } from '@/utils/firestoreConverters';
-import { Account, BudgetBucket, BucketPeriodSnapshot, CalendarItem, Transaction } from '@/types/schema';
+import { Account, BudgetBucket, BucketPeriodSnapshot, CalendarItem, Transaction, SavingsGoal } from '@/types/schema';
 import { BUCKET_HISTORY_LIMIT } from '@/utils/listenerWindows';
 import { mapTransactionDoc } from '@/contexts/household/selectors';
 import toast from 'react-hot-toast';
@@ -40,6 +41,7 @@ export function attachFinanceListeners({
   setHasMoreBucketHistory,
   bucketHistoryLoadedAllRef,
   setCalendarItems,
+  setSavingsGoals,
 }: {
   db: Firestore;
   householdId: string;
@@ -49,6 +51,7 @@ export function attachFinanceListeners({
   setHasMoreBucketHistory: (hasMore: boolean) => void;
   bucketHistoryLoadedAllRef: { current: boolean };
   setCalendarItems: (items: CalendarItem[]) => void;
+  setSavingsGoals: (goals: SavingsGoal[]) => void;
 }): Unsubscribe[] {
   const unsubscribers: Unsubscribe[] = [];
 
@@ -108,6 +111,19 @@ export function attachFinanceListeners({
       // metric stale. Surface it like the accounts/buckets listeners do.
       console.error('[calendarItems] listener failed:', error);
       toast.error('Failed to sync calendar items. Some figures may be out of date.');
+    })
+  );
+
+  // Savings goals listener (Plan 24). Unbounded — a household holds at most a
+  // handful of goals (few tens at most), so a live `limit()` window isn't
+  // warranted the way it is for transactions/bucketHistory (see plans/040's
+  // listener-bounding rationale, which targets HIGH-cardinality collections).
+  const savingsGoalsQuery = query(collection(db, `households/${householdId}/savingsGoals`).withConverter(savingsGoalConverter));
+  unsubscribers.push(
+    onSnapshot(savingsGoalsQuery, (snapshot) => {
+      setSavingsGoals(snapshot.docs.map(doc => doc.data()));
+    }, (error) => {
+      console.error('[savingsGoals] listener failed:', error);
     })
   );
 

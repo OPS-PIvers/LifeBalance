@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Check, Flame, Gift, Lock, LogOut, PiggyBank, Sparkles, Star, Trophy } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useHouseholdCore, useGamification } from '@/contexts/FirebaseHouseholdContext';
+import { useHouseholdCore, useGamification, useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -34,10 +34,19 @@ const KidDashboard: React.FC = () => {
   const { members, activeMemberId, exitToParent, household } = useHouseholdCore();
   const { habits, toggleHabit, rewardsInventory, requestRedemption, activeChallenge } =
     useGamification();
+  const { savingsGoals } = useFinance();
 
   const activeKid = useMemo(
     () => members.find((m) => m.uid === activeMemberId),
     [members, activeMemberId],
+  );
+
+  // Plan 24 — savings goals owned by this kid render as progress "jars" over
+  // the allowance IOU above. Manual contributions only; NEVER touches balances
+  // or Safe-to-Spend (see CLAUDE.md hard invariant).
+  const myJars = useMemo(
+    () => (activeKid ? savingsGoals.filter((g) => g.ownerId === activeKid.uid) : []),
+    [savingsGoals, activeKid],
   );
 
   const today = useMemo(() => getLocalDateString(), []);
@@ -209,6 +218,44 @@ const KidDashboard: React.FC = () => {
             <p className="text-xs font-semibold text-accent-50/90">your allowance</p>
           </div>
         </section>
+
+        {/* Savings jars (Plan 24) — only when this kid owns at least one goal */}
+        {myJars.length > 0 && (
+          <section>
+            <h2 className="font-display mb-3 flex items-center gap-2 text-lg font-semibold text-brand-900 dark:text-white">
+              <PiggyBank className="w-5 h-5 text-warm-500" />
+              My saving jars
+            </h2>
+            <ul className="space-y-3">
+              {myJars.map((g) => {
+                const pct = g.targetAmount > 0 ? Math.min(100, (g.savedAmount / g.targetAmount) * 100) : 0;
+                const isDone = Boolean(g.completedAt) || g.savedAmount >= g.targetAmount;
+                return (
+                  <li
+                    key={g.id}
+                    className="rounded-2xl bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 p-4"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="truncate text-base font-bold text-brand-900 dark:text-white flex items-center gap-1.5">
+                        {isDone && <Star className="h-4 w-4 fill-habit-gold text-habit-gold shrink-0" />}
+                        {g.name}
+                      </p>
+                      <p className="text-sm font-mono font-bold tabular-nums text-warm-600 dark:text-warm-300 shrink-0">
+                        {formatCurrency(g.savedAmount, { currency: household?.currency })} / {formatCurrency(g.targetAmount, { currency: household?.currency })}
+                      </p>
+                    </div>
+                    <ProgressBar
+                      value={pct}
+                      barClassName={isDone ? 'bg-habit-gold' : 'bg-warm-500'}
+                      ariaLabel={`${Math.round(pct)}% saved toward ${g.name}`}
+                      className="mt-2 h-2.5 bg-brand-100 dark:bg-brand-700"
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
 
         {/* Family Challenge (Plan 080e) — only when one is active */}
         {activeChallenge && challengeProgress && (

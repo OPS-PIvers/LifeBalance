@@ -125,6 +125,36 @@ export interface Account {
   plaidBalanceUpdatedAt?: string;
 }
 
+/**
+ * Plan 24 (savings goals / sinking funds): a tracked "save toward" intention,
+ * deliberately DECOUPLED from account balances and transactions. Buckets cap
+ * what you spend; goals track what you're saving toward.
+ *
+ * v1 = manual contributions only — `contributeToGoal` does a single doc
+ * `savedAmount += x` update. No account linkage, no automatic transfers, no
+ * transaction coupling. HARD INVARIANT: nothing about goals feeds
+ * `utils/safeToSpendCalculator.ts`.
+ *
+ * Amounts are decimal dollars (repo storage convention); math is done in
+ * integer cents via `utils/money.ts`.
+ *
+ * `ownerId`, when set to a managed (kid) member's uid, renders this goal as a
+ * progress "jar" over that kid's allowance IOU on `components/kid/KidDashboard.tsx`.
+ */
+export interface SavingsGoal {
+  id: string;
+  name: string;
+  targetAmount: number;
+  savedAmount: number;
+  dueDate?: string; // yyyy-MM-dd
+  /** Member uid this goal belongs to (enables kid jars). Undefined = shared household goal. */
+  ownerId?: string;
+  color?: string;
+  createdAt: string; // ISO timestamp
+  /** ISO timestamp set when savedAmount first reaches targetAmount. */
+  completedAt?: string;
+}
+
 export interface BudgetBucket {
   id: string;
   name: string;

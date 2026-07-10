@@ -10,6 +10,7 @@ import {
   HouseholdMember,
   Household,
   BucketPeriodSnapshot,
+  SavingsGoal,
   YearlyGoal,
   FreezeBank,
   Meal,
@@ -53,6 +54,9 @@ export interface HouseholdContextType {
   members: HouseholdMember[];
   accounts: Account[];
   buckets: BudgetBucket[];
+  /** Plan 24 — savings goals / sinking funds. Manual-contribution only; NEVER
+   *  feeds `safeToSpend` (see CLAUDE.md hard invariant). */
+  savingsGoals: SavingsGoal[];
   calendarItems: CalendarItem[];
   transactions: Transaction[];
   habits: Habit[];
@@ -136,6 +140,13 @@ export interface HouseholdContextType {
   deleteAccount: (id: string) => Promise<void>;
   updateAccountOrder: (accountId: string, newOrder: number) => Promise<void>;
   reorderAccounts: (orderedIds: string[]) => Promise<void>;
+
+  // Savings Goal Actions (Plan 24) — v1 manual contributions only.
+  addSavingsGoal: (goal: Omit<SavingsGoal, 'id' | 'createdAt' | 'completedAt'>) => Promise<void>;
+  updateSavingsGoal: (id: string, updates: Partial<Pick<SavingsGoal, 'name' | 'targetAmount' | 'dueDate' | 'ownerId' | 'color'>>) => Promise<void>;
+  deleteSavingsGoal: (id: string) => Promise<void>;
+  /** Manual "Add to goal" contribution: adds `amount` to `savedAmount` (cents-safe) and stamps `completedAt` on first reaching target. */
+  contributeToGoal: (id: string, amount: number) => Promise<void>;
 
   // Bucket Actions
   addBucket: (bucket: BudgetBucket) => Promise<void>;
@@ -325,13 +336,14 @@ export interface HouseholdContextType {
 // shape automatically — there is a single source of truth for every field.
 
 export type FinanceContextValue = Pick<HouseholdContextType,
-  | 'safeToSpend' | 'safeToSpendBreakdown' | 'accounts' | 'buckets' | 'calendarItems' | 'transactions'
+  | 'safeToSpend' | 'safeToSpendBreakdown' | 'accounts' | 'buckets' | 'savingsGoals' | 'calendarItems' | 'transactions'
   | 'currentPeriodId' | 'bucketSpentMap' | 'bucketHistory'
   | 'transactionWindowStart' | 'isLoadingOlderTransactions' | 'hasMoreTransactions'
   | 'loadOlderTransactions' | 'loadAllTransactions'
   | 'isLoadingOlderBucketHistory' | 'hasMoreBucketHistory' | 'loadAllBucketHistory'
   | 'addAccount' | 'updateAccountBalance' | 'setAccountGoal' | 'setAccountCardLast4' | 'deleteAccount'
   | 'updateAccountOrder' | 'reorderAccounts'
+  | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal'
   | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'reallocateBucket'
   | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
   | 'addTransaction' | 'updateTransactionCategory' | 'updateTransaction' | 'deleteTransaction' | 'splitTransaction'

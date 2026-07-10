@@ -17,6 +17,7 @@ import ProgressBar from '@/components/ui/ProgressBar';
 import Select from '@/components/ui/Select';
 import EmptyState from '@/components/ui/EmptyState';
 import { SurfaceList, Row } from '@/components/ui/Section';
+import SavingsGoals from '@/components/budget/SavingsGoals';
 
 const BudgetAccounts: React.FC = () => {
   const { accounts, updateAccountBalance, addAccount, setAccountGoal, setAccountCardLast4, deleteAccount, reorderAccounts } = useFinance();
@@ -423,6 +424,10 @@ const BudgetAccounts: React.FC = () => {
           </SurfaceList>
         </div>
       )}
+
+      {/* Savings Goals (Plan 24) — near the existing per-account monthlyGoal
+          affordance above, per the design spike. */}
+      <SavingsGoals />
 
       {/* Empty State */}
       {accounts.length === 0 && (
