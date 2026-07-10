@@ -234,6 +234,16 @@ describe("geminiproxy", () => {
     expect(generateContentMock).not.toHaveBeenCalled();
   });
 
+  it("rejects a householdId containing a path separator with invalid-argument", async () => {
+    await expect(
+      asCallable(geminiproxy)({
+        auth: AUTH,
+        data: { ...VALID_DATA, householdId: "hh1/apiKeys/sneaky" },
+      })
+    ).rejects.toMatchObject({ code: "invalid-argument" });
+    expect(generateContentMock).not.toHaveBeenCalled();
+  });
+
   it("rejects a missing household with not-found", async () => {
     setHousehold(undefined);
 

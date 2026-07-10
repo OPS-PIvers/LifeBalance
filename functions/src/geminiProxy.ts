@@ -131,21 +131,9 @@ async function enforceAiQuota(
   // same convention as plaid/stripe/recap.
   const db = admin.firestore();
 
-  // 1. Membership: only a member of the household may spend its quota.
   const householdRef = db.doc(`households/${householdId}`);
-  const householdSnap = await householdRef.get();
-  if (!householdSnap.exists) {
-    throw new HttpsError("not-found", "Household not found.");
-  }
-  const memberUids = householdSnap.data()?.memberUids;
-  if (!Array.isArray(memberUids) || !memberUids.includes(uid)) {
-    throw new HttpsError(
-      "permission-denied",
-      "You are not a member of this household."
-    );
-  }
 
-  // 2. Operator flags: aiEnabled kill-switch (fail-open on missing doc/field or
+  // 1. Operator flags: aiEnabled kill-switch (fail-open on missing doc/field or
   // read error, matching the client) and billingEnabled (fail-closed).
   let billingEnabled = false;
   try {
@@ -164,7 +152,10 @@ async function enforceAiQuota(
     logger.warn("geminiproxy: app_config read failed; proceeding fail-open:", error);
   }
 
-  // 3. Atomic check-and-increment on the household's aiUsage counter.
+  // 2. Membership + atomic check-and-increment in ONE transaction — a single
+  // billed household read covers both (review follow-up: the membership check
+  // previously did its own get() outside the transaction, doubling the read
+  // cost of every proxy call).
   await db.runTransaction(async (txn) => {
     const snap = await txn.get(householdRef);
     if (!snap.exists) {
@@ -172,7 +163,16 @@ async function enforceAiQuota(
     }
     const data = (snap.data() ?? {}) as HouseholdEntitlementData & {
       aiUsage?: AiUsage;
+      memberUids?: unknown;
     };
+
+    // Only a member of the household may spend its quota.
+    if (!Array.isArray(data.memberUids) || !data.memberUids.includes(uid)) {
+      throw new HttpsError(
+        "permission-denied",
+        "You are not a member of this household."
+      );
+    }
 
     const cap = getAiDailyCap(data, billingEnabled);
 
@@ -242,7 +242,9 @@ export const geminiproxy = onCall(
         "The function must be called with 'contents'."
       );
     }
-    if (typeof householdId !== "string" || !householdId) {
+    if (typeof householdId !== "string" || !householdId || householdId.includes("/")) {
+      // The slash check keeps a crafted id from escaping the households/
+      // collection path (it would otherwise throw an opaque path error).
       throw new HttpsError(
         "invalid-argument",
         "The function must be called with a non-empty 'householdId' string."
