@@ -132,7 +132,7 @@ describe('TransactionMasterList Summary Widget', () => {
 
   it('updates summary when filtered by search', () => {
     render(<TransactionMasterList />);
-    const searchInput = screen.getByPlaceholderText('Search merchant or amount...');
+    const searchInput = screen.getByPlaceholderText('Search transactions');
 
     // Filter to only 'Rent'
     fireEvent.change(searchInput, { target: { value: 'Rent' } });
