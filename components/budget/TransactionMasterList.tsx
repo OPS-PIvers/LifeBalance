@@ -374,6 +374,27 @@ const TransactionMasterList: React.FC = () => {
 
   return (
     <div className="space-y-4 animate-in fade-in duration-(--duration-base)">
+      {/* Summary — hero content: the Income/Expense/Net/Count figures lead the
+          tab so the at-a-glance totals sit above the search/filter controls and
+          the list. Still collapsible (open by default) so power users can
+          reclaim the space. */}
+      <CollapsibleSection
+        title="Summary"
+        summary={`${summary.count} txn${summary.count === 1 ? '' : 's'}`}
+        defaultOpen={true}
+      >
+        <StatGroup>
+          <Stat label="Income" value={`+${fmt(summary.income)}`} valueClassName="text-money-pos dark:text-money-posDark" />
+          <Stat label="Expense" value={`-${fmt(summary.expense)}`} valueClassName="text-money-neg dark:text-money-negDark" />
+          <Stat
+            label="Net"
+            value={`${net >= 0 ? '+' : ''}${fmt(net)}`}
+            valueClassName={net >= 0 ? 'text-money-pos dark:text-money-posDark' : 'text-money-neg dark:text-money-negDark'}
+          />
+          <Stat label="Count" value={summary.count} />
+        </StatGroup>
+      </CollapsibleSection>
+
       {/* Search + Filters — flat on the page background, no wrapping card.
           Search + the mobile filter/select toggle share one row (UX audit
           Batch 3 — was 2 stacked blocks) instead of stacking. */}
@@ -385,10 +406,10 @@ const TransactionMasterList: React.FC = () => {
               type="text"
               icon={<Search size={18} />}
               aria-label="Search transactions"
-              placeholder="Search merchant or amount..."
+              placeholder="Search transactions"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pr-10"
+              className="pr-10 truncate"
             />
             {searchTerm && (
               <Button
@@ -490,27 +511,6 @@ const TransactionMasterList: React.FC = () => {
           />
         )}
       </div>
-
-      {/* Summary — collapsible (UX audit Batch 3): the Income/Expense/Net/Count
-          figures duplicate what's recoverable from the visible list, so this
-          is now a dismissible/collapsible block instead of a fixed section
-          (still open by default — it's useful at-a-glance context). */}
-      <CollapsibleSection
-        title="Summary"
-        summary={`${summary.count} txn${summary.count === 1 ? '' : 's'}`}
-        defaultOpen={true}
-      >
-        <StatGroup>
-          <Stat label="Income" value={`+${fmt(summary.income)}`} valueClassName="text-money-pos dark:text-money-posDark" />
-          <Stat label="Expense" value={`-${fmt(summary.expense)}`} valueClassName="text-money-neg dark:text-money-negDark" />
-          <Stat
-            label="Net"
-            value={`${net >= 0 ? '+' : ''}${fmt(net)}`}
-            valueClassName={net >= 0 ? 'text-money-pos dark:text-money-posDark' : 'text-money-neg dark:text-money-negDark'}
-          />
-          <Stat label="Count" value={summary.count} />
-        </StatGroup>
-      </CollapsibleSection>
 
       {/* Select All Bar */}
       {isSelectionMode && (
