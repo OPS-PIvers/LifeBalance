@@ -258,6 +258,14 @@ export interface Habit {
   streakDays: number;
   lastUpdated: string; // To handle resets
 
+  // Plan 25 (auto-applied freeze protection): dates whose miss was absorbed by
+  // a freeze token (YYYY-MM-DD). A frozen date preserves streak CONTINUITY but
+  // is NOT a completion — it never appears in completedDates, never credits
+  // points, and never counts for challenges or points recalculation. Written
+  // only by the midnight/login auto-apply path. Mirrored in
+  // functions/src/quickAdd/habitProcessor.ts.
+  frozenDates?: string[];
+
   // Ownership (for Firebase multi-user support)
   isShared?: boolean; // true = household-wide, false/undefined = personal
   ownerId?: string; // uid if personal habit
@@ -411,8 +419,8 @@ export interface FreezeBankHistoryEntry {
 }
 
 export interface FreezeBank {
-  tokens: number; // Current balance (0-3)
-  maxTokens: number; // Always 3
+  tokens: number; // Current balance (0-2 after the Plan 25 refill-to-2 rollover)
+  maxTokens: number; // 2 (legacy docs may hold 3 until their first rollover)
   lastRolloverDate: string; // YYYY-MM-DD
   lastRolloverMonth: string; // YYYY-MM for tracking
   history: FreezeBankHistoryEntry[]; // Audit trail

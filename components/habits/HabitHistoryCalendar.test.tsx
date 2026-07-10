@@ -12,6 +12,7 @@ vi.mock('lucide-react', () => ({
   Flame: () => <span data-testid="icon-flame" />,
   Calendar: () => <span data-testid="icon-calendar" />,
   Loader2: () => <span data-testid="icon-loader" />,
+  Snowflake: () => <span data-testid="icon-snowflake" />,
 }));
 
 // Mock the context
@@ -185,5 +186,34 @@ describe('HabitHistoryCalendar', () => {
 
     expect(day15).toHaveClass('bg-accent-600');
     expect(day16).toHaveClass('bg-accent-500');
+  });
+
+  describe('frozen-day marker (Plan 25)', () => {
+    it('marks a frozen day distinctly (habit-blue, not the completion ramp) and labels it', async () => {
+      mockContextValue.habits = [
+        { ...mockHabits[0]!, frozenDates: ['2024-01-12'] },
+        mockHabits[1]!,
+      ];
+      const user = userEvent.setup();
+      render(<HabitHistoryCalendar />);
+
+      const frozenDay = screen.getByRole('button', {
+        name: /Jan 12: 0 habits completed, streak protected by a freeze/i,
+      });
+      expect(frozenDay).toHaveClass('bg-habit-blue/15');
+      // A frozen day is NOT a completion: no intensity class.
+      expect(frozenDay.className).not.toMatch(/bg-accent-/);
+
+      // Selecting it shows the freeze note (streak kept, zero points).
+      await user.click(frozenDay);
+      expect(screen.getByText('0 completed')).toBeInTheDocument();
+      expect(screen.getByText(/A freeze protected/)).toBeInTheDocument();
+      expect(screen.getByText(/streak kept, no points earned/)).toBeInTheDocument();
+    });
+
+    it('shows no freeze note on days without frozen dates', () => {
+      render(<HabitHistoryCalendar />);
+      expect(screen.queryByText(/A freeze protected/)).not.toBeInTheDocument();
+    });
   });
 });

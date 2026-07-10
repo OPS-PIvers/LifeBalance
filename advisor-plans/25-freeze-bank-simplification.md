@@ -90,3 +90,42 @@ HabitCard/history show the frozen marker per spike note 2; freeze-bank status di
 - v2 (recorded, not built): earn-by-consistency refill (+1 freeze per 14-day all-habit streak, cap 2) replacing the monthly refill.
 - The old manual-patch code (incl. `freezeBankPatchPoints.test.ts`) documents the points-crediting behavior being retired — delete its tests WITH the code, don't leave them skipped.
 - Reviewer scrutiny: client/functions parity diff-by-eye; the idempotency guard on auto-apply.
+
+## Spike notes (executor, 2026-07-09)
+
+### 1. `completedDates` read-sites — streak vs points classification
+
+**Needs frozen-awareness (streak chain-walkers):**
+- `utils/habitLogic.ts` — `calculateStreak` (:87), `streakEndingOn` (:124), `calculateWeeklyStreak` (:152), `streakEndingOnWeek` (:201): the four primitives; gain an optional trailing `frozenDates` param. Dispatchers `streakForHabit` (:241) / `streakEndingOnForHabit` (:255): Pick widened to include optional `frozenDates`, passed through. `processToggleHabit`'s inner `streakFor` (:368), `calculateResetPoints` (:454/:470), `getHabitResetUpdate` (:521): pass `habit.frozenDates`.
+- `hooks/useHabitActions.tsx` :320 (resetHabit), :406 (addHabitSubmission prospective streak), :460, :573 (deleteHabitSubmission) — all construct `{ period, completedDates }` literals; each now carries `frozenDates`.
+- `contexts/MockHouseholdContext.tsx` :738 (mock toggle) — same.
+- `functions/src/quickAdd/streakLogic.ts` (`calculateStreak`/`calculateWeeklyStreak`/`streakForPeriod`) + `habitProcessor.ts` :208/:281/:318 — mirrored identically; server `Habit` interface gains `frozenDates?: string[]` (read from the Firestore doc, NOT the request body — the iOS Shortcut API contract is unchanged, so that STOP condition does not fire).
+- `scripts/migrateHabitSubmissions.ts` :107 — historical backfill tool predating frozenDates; dates it scores predate the feature, left as-is (omitted param = no frozen dates).
+
+**Must ignore frozen (points / completion semantics) — all already correct because frozen dates never enter `completedDates`:**
+- `calculatePointsForDate` (:551 `completedDates.includes(targetDate)` guard) and `calculatePointsForDateRange` (:644 range filter) — a frozen day is filtered out before any scoring, so it earns 0; test-asserted. Later days' multipliers get frozen continuity via `streakEndingOnForHabit` (full habit passed).
+- `utils/challengeCalculator.ts`, recap `dataAssembly`, `analyticsHelper`, gemini prompts, dashboard widgets (`PulseStripWidget`, `DailyHabitsWidget`, `KidDashboard`), `isHabitCompletedInCurrentPeriod` — completions only; frozen days correctly do not count.
+
+**Streak-count semantics chosen:** a frozen date BRIDGES the chain without incrementing the count ("preserves the streak" — Duolingo semantics; a frozen day is not a completion, so it also isn't a streak unit). Both codebases implement the same walk: completed → count+1, frozen → bridge, gap → break. With `frozenDates` empty/omitted, behavior is byte-identical to before.
+
+### 2. Streak displays / frozen visual
+- `HabitCard` streak badge reads `habit.streakDays` (now written frozen-aware) — no change needed; a quiet "❄ Protected" badge is added when yesterday is in `frozenDates`. The manual "Repair Streak" affordances are removed.
+- `HabitHistoryCalendar` gets a distinct frozen marker (habit-blue ring + snowflake-tinted cell) for days present in any habit's `frozenDates` (they never appear as completions).
+- `PointsBreakdownModal` — points-edit surface, no streak reconstruction; untouched.
+
+### 3. Auto-apply idempotency / multi-device story
+- One `writeBatch` per application: habit doc (`frozenDates` + recomputed `streakDays`) + household doc (`freezeBank` with decremented `tokens` and appended history entry).
+- Idempotency guard: a habit is only a candidate when `!frozenDates.includes(yesterday)` — a second run (same device or another device seeing the committed write) is a no-op.
+- Deterministic order: candidates sorted by protected streak DESC, then habit id ASC, so racing devices pick the same habits.
+- Residual race (accepted per plan): two devices whose snapshots both predate each other's commits can each apply a freeze computed from the same starting `tokens`; the absolute `tokens` write converges last-writer-wins and is floored at 0 via `Math.max(0, tokens - 1)` — never negative.
+- Eligibility (`streakDays >= 3` in the plan) is computed from data — the PROSPECTIVE streak if yesterday were frozen (`calculateStreak(completedDates, today, [...frozenDates, yesterday]) >= 3`) — not the stored `streakDays` field, because the midnight habit-reset may have already recomputed `streakDays` to 0 before this callback runs (ordering between the two schedulers is not guaranteed). This also makes consecutive-night freezes work (night 2 bridges night 1's frozen day). `getMissedHabitDates(habit, 1)` supplies the "yesterday was missed" check (the surviving validator helper, per plan).
+
+### 4. Signature decision
+Primitives gain an optional trailing `frozenDates: string[] = []`; the period-dispatching helpers pass `habit.frozenDates` internally. Verified every streak computation site goes through the dispatchers or has the habit in scope — **no bypassing call sites found; the parity STOP condition does not fire.** The four `{ period, completedDates }` literal sites (useHabitActions ×4, MockHouseholdContext ×1, habitLogic internal ×3) are updated to carry `frozenDates` in the same change.
+
+### Other spike findings
+- `firestore.rules` habits create/update has NO `hasOnly` allowlist (title/category string checks only) — `frozenDates` is writable without a rules change. Household-doc update is field-permissive — `freezeBank` writes unchanged.
+- `habitConverter` spreads the doc — optional `frozenDates` passes through untouched.
+- `useMidnightScheduler` is ref-backed (`callbackRef`), so extending `checkFreezeBankRollover` to also auto-apply needs no scheduler change.
+- `functions/src/index.ts` :282-284 streak-rescue insight copy updated ("a freeze will protect it automatically"); `index.test.ts` :819-830 asserts the old copy and is updated in lockstep.
+- The 6 `useFreezeBankToken` describe blocks in `FirebaseHouseholdContext.test.tsx` document the retired points-crediting patch; they are DELETED with the code (per Maintenance notes) and replaced by auto-apply atomicity/idempotency/zero-points tests through the same harness. `contexts/freezeBankPatchPoints.test.ts` is deleted.

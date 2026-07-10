@@ -283,8 +283,10 @@ export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
                 const tokens = freezeBank?.tokens ?? freezeBank?.current;
                 const hasFreezeToken = typeof tokens === "number" && tokens > 0;
 
+                // Plan 25: freezes are auto-applied — the copy reassures rather
+                // than instructing a manual patch.
                 const suggestion = hasFreezeToken
-                  ? ` If you can't get to it today, use a freeze bank token to protect it.`
+                  ? " If you can't get to it today, a freeze will protect it automatically."
                   : "";
                 const insightText = `"${habit.title ?? "A habit"}" has a ${streakDays}-day streak that's about to break today.${suggestion}`;
 

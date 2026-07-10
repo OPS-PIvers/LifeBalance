@@ -137,7 +137,7 @@ import {
   makeRewardCrudMutations,
   makeRequestRedemption,
   makeRedemptionResolutionMutations,
-  makeUseFreezeBankToken,
+  makeAutoApplyFreezes,
   makeRolloverFreezeBankTokens,
 } from '@/contexts/household/mutations/gamificationMutations';
 import {
@@ -1588,8 +1588,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeRedemptionResolutionMutations({ db, householdId }).denyRedemption(redemptionId);
   }, [householdId]);
 
-  const useFreezeBankToken = useCallback(async (habitId: string, targetDate: string) => {
-    await makeUseFreezeBankToken({ db, householdId, freezeBank, habits }).useFreezeBankToken(habitId, targetDate);
+  // Plan 25: auto-applied freeze protection (replaces the manual patch flow).
+  const autoApplyFreezes = useCallback(async () => {
+    await makeAutoApplyFreezes({ db, householdId, freezeBank, habits }).autoApplyFreezes();
   }, [householdId, freezeBank, habits]);
 
   const rolloverFreezeBankTokens = useCallback(async () => {
@@ -1856,7 +1857,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }).refreshInsight();
   }, [householdId, isGeneratingInsight, transactions, habits, insightsHistory]);
 
-  // Check for freeze bank rollover on 1st of month (or first login)
+  // Freeze-bank maintenance at midnight / first login (Plan 25): refill to the
+  // fixed max on a new month, otherwise auto-apply freezes to yesterday's
+  // missed streaks.
   const checkFreezeBankRollover = useCallback(async () => {
     if (!householdId || !freezeBank) return;
 
@@ -1865,8 +1868,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // Check if we're in a new month
     if (freezeBank.lastRolloverMonth !== currentMonth) {
       await rolloverFreezeBankTokens();
+      // Skip auto-apply on this pass: it would consume from the STALE token
+      // balance captured in this closure (the refill hasn't round-tripped
+      // through the listener yet). The scheduler re-invokes within its 5-minute
+      // interval with the refreshed freezeBank and applies then.
+      return;
     }
-  }, [householdId, freezeBank, rolloverFreezeBankTokens]);
+
+    await autoApplyFreezes();
+  }, [householdId, freezeBank, rolloverFreezeBankTokens, autoApplyFreezes]);
 
   // Use midnight scheduler to check for rollover with a delay to avoid conflicts
   useMidnightScheduler(checkFreezeBankRollover, !!(householdId && freezeBank), { initialDelayMs: 500 });
@@ -1960,7 +1970,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateYearlyGoal,
     updateYearlyGoalProgress,
     deleteYearlyGoal,
-    useFreezeBankToken,
+    autoApplyFreezes,
     rolloverFreezeBankTokens,
   }), [
     dailyPoints, weeklyPoints, totalPoints, habits, activeChallenge, challenges, yearlyGoals, activeYearlyGoals,
@@ -1969,7 +1979,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addReward, updateReward, deleteReward,
     requestRedemption, approveRedemption, denyRedemption,
     createYearlyGoal, updateYearlyGoal, updateYearlyGoalProgress, deleteYearlyGoal,
-    useFreezeBankToken, rolloverFreezeBankTokens,
+    autoApplyFreezes, rolloverFreezeBankTokens,
   ]);
 
   const mealPlanValue = useMemo<MealPlanContextValue>(() => ({

@@ -12,8 +12,6 @@ const { mockHouseholdContext } = vi.hoisted(() => ({
     deleteHabit: vi.fn(),
     resetHabit: vi.fn(),
     activeChallenge: null as unknown,
-    freezeBank: { tokens: 3 },
-    useFreezeBankToken: vi.fn(),
   }
 }));
 
@@ -58,7 +56,6 @@ vi.mock('lucide-react', () => ({
   Trash2: () => <span data-testid="icon-trash" />,
   Target: () => <span data-testid="icon-target" />,
   Calendar: () => <span data-testid="icon-calendar" />,
-  Wrench: () => <span data-testid="icon-wrench" />,
   Snowflake: () => <span data-testid="icon-snowflake" />,
 }));
 
@@ -146,13 +143,12 @@ describe('HabitCard', () => {
   });
 });
 
-describe('HabitCard - Streak Repair', () => {
+describe('HabitCard - auto-applied freeze protection (Plan 25)', () => {
   const yesterdayStr = '2024-02-09';
 
   beforeEach(() => {
     vi.clearAllMocks();
     setupMatchMedia(true); // Desktop for easier testing
-    mockHouseholdContext.freezeBank = { tokens: 3 };
     mockedYesterday.current = new Date('2024-02-09T12:00:00');
   });
 
@@ -167,126 +163,45 @@ describe('HabitCard - Streak Repair', () => {
     targetCount: 1,
     count: 0,
     totalCount: 0,
-    completedDates: ['2024-02-07'], // Older completion, not yesterday
-    streakDays: 0,
+    completedDates: ['2024-02-07', '2024-02-08'],
+    streakDays: 2,
     lastUpdated: '2024-02-10T00:00:00Z',
   };
 
-  it('shows Repair Streak option when eligible (desktop)', async () => {
-    const user = userEvent.setup();
-    render(<HabitCard habit={baseHabit} />);
+  it('shows the Protected badge when yesterday is frozen', () => {
+    render(<HabitCard habit={{ ...baseHabit, frozenDates: [yesterdayStr] }} />);
 
-    await user.click(screen.getByLabelText('Habit options menu'));
-
-    expect(screen.getByText(/Repair Streak \(3\)/)).toBeInTheDocument();
+    expect(screen.getByText('Protected')).toBeInTheDocument();
+    expect(screen.getByTestId('icon-snowflake')).toBeInTheDocument();
   });
 
-  it('shows Repair Streak option when eligible (mobile)', async () => {
-    setupMatchMedia(false);
-    const user = userEvent.setup();
+  it('does NOT show the Protected badge without a frozen yesterday', () => {
     render(<HabitCard habit={baseHabit} />);
-
-    await user.click(screen.getByLabelText('Habit options menu'));
-
-    expect(screen.getByText(/Repair Streak \(3\)/)).toBeInTheDocument();
+    expect(screen.queryByText('Protected')).not.toBeInTheDocument();
   });
 
-  it('calls useFreezeBankToken when Repair Streak is clicked (desktop)', async () => {
-    const user = userEvent.setup();
-    render(<HabitCard habit={baseHabit} />);
-
-    await user.click(screen.getByLabelText('Habit options menu'));
-    await user.click(screen.getByText(/Repair Streak/));
-
-    expect(mockHouseholdContext.useFreezeBankToken).toHaveBeenCalledWith('h1', yesterdayStr);
+  it('does NOT show the Protected badge for an older frozen date', () => {
+    render(<HabitCard habit={{ ...baseHabit, frozenDates: ['2024-02-05'] }} />);
+    expect(screen.queryByText('Protected')).not.toBeInTheDocument();
   });
 
-  it('calls useFreezeBankToken when Repair Streak is clicked (mobile)', async () => {
-    setupMatchMedia(false);
-    const user = userEvent.setup();
-    render(<HabitCard habit={baseHabit} />);
-
-    await user.click(screen.getByLabelText('Habit options menu'));
-    await user.click(screen.getByText(/Repair Streak/));
-
-    expect(mockHouseholdContext.useFreezeBankToken).toHaveBeenCalledWith('h1', yesterdayStr);
-  });
-
-  it('repairs the current "yesterday" after a midnight rollover, not the mount-time one', async () => {
-    const user = userEvent.setup();
-    const { rerender } = render(<HabitCard habit={baseHabit} />);
-
-    await user.click(screen.getByLabelText('Habit options menu'));
-    await user.click(screen.getByText(/Repair Streak/));
-    expect(mockHouseholdContext.useFreezeBankToken).toHaveBeenLastCalledWith('h1', '2024-02-09');
+  it('tracks the current "yesterday" after a midnight rollover, not the mount-time one', () => {
+    const frozen = { ...baseHabit, frozenDates: [yesterdayStr] };
+    const { rerender } = render(<HabitCard habit={frozen} />);
+    expect(screen.getByText('Protected')).toBeInTheDocument();
 
     // The local day rolls over while the card stays mounted; a Firestore-driven
-    // habit update (changed lastUpdated) re-renders the same instance.
+    // habit update (changed lastUpdated) re-renders the same instance. The badge
+    // must follow the NEW yesterday (2024-02-10, not frozen) and disappear.
     mockedYesterday.current = new Date('2024-02-10T12:00:00');
-    rerender(<HabitCard habit={{ ...baseHabit, lastUpdated: '2024-02-11T00:00:00Z' }} />);
+    rerender(<HabitCard habit={{ ...frozen, lastUpdated: '2024-02-11T00:00:00Z' }} />);
 
-    await user.click(screen.getByLabelText('Habit options menu'));
-    await user.click(screen.getByText(/Repair Streak/));
-    expect(mockHouseholdContext.useFreezeBankToken).toHaveBeenLastCalledWith('h1', '2024-02-10');
+    expect(screen.queryByText('Protected')).not.toBeInTheDocument();
   });
 
-  it('does NOT show Repair Streak if user has 0 tokens', async () => {
-    mockHouseholdContext.freezeBank = { tokens: 0 };
+  it('the manual "Repair Streak" affordance is gone from the menu', async () => {
     const user = userEvent.setup();
     render(<HabitCard habit={baseHabit} />);
-
-    await user.click(screen.getByLabelText('Habit options menu'));
-
-    expect(screen.queryByText(/Repair Streak/)).not.toBeInTheDocument();
-  });
-
-  it('does NOT show Repair Streak if habit was completed yesterday', async () => {
-    const habitCompletedYesterday = {
-      ...baseHabit,
-      completedDates: [yesterdayStr],
-    };
-    const user = userEvent.setup();
-    render(<HabitCard habit={habitCompletedYesterday} />);
-
-    await user.click(screen.getByLabelText('Habit options menu'));
-
-    expect(screen.queryByText(/Repair Streak/)).not.toBeInTheDocument();
-  });
-
-  it('does NOT show Repair Streak for negative habits', async () => {
-    const negativeHabit: Habit = {
-      ...baseHabit,
-      type: 'negative',
-    };
-    const user = userEvent.setup();
-    render(<HabitCard habit={negativeHabit} />);
-
-    await user.click(screen.getByLabelText('Habit options menu'));
-
-    expect(screen.queryByText(/Repair Streak/)).not.toBeInTheDocument();
-  });
-
-  it('does NOT show Repair Streak for weekly habits', async () => {
-    const weeklyHabit: Habit = {
-      ...baseHabit,
-      period: 'weekly',
-    };
-    const user = userEvent.setup();
-    render(<HabitCard habit={weeklyHabit} />);
-
-    await user.click(screen.getByLabelText('Habit options menu'));
-
-    expect(screen.queryByText(/Repair Streak/)).not.toBeInTheDocument();
-  });
-
-  it('does NOT show Repair Streak if habit has an active streak', async () => {
-    const habitWithStreak: Habit = {
-      ...baseHabit,
-      streakDays: 5,
-      completedDates: ['2024-02-08', '2024-02-09'], // Has recent completions
-    };
-    const user = userEvent.setup();
-    render(<HabitCard habit={habitWithStreak} />);
 
     await user.click(screen.getByLabelText('Habit options menu'));
 

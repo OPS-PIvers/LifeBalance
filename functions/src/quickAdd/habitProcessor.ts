@@ -29,6 +29,13 @@ export interface Habit {
   lastUpdated: string | Date | { seconds: number; nanoseconds: number };
   isShared?: boolean;
   ownerId?: string;
+  /**
+   * Plan 25: dates protected by an auto-applied streak freeze (YYYY-MM-DD).
+   * Read from the Firestore habit doc (never from the request body). A frozen
+   * date preserves streak continuity but is NOT a completion and earns no
+   * points. Mirrors `Habit.frozenDates` in types/schema.ts.
+   */
+  frozenDates?: string[];
 }
 
 export interface ToggleHabitResult {
@@ -205,7 +212,7 @@ export function processToggleHabit(
   let wasCompletedBefore = false;
 
   const streakFor = (dates: string[]): number =>
-    streakForPeriod(dates, habit.period, today);
+    streakForPeriod(dates, habit.period, today, habit.frozenDates ?? []);
 
   if (habit.scoringType === "incremental") {
     const target = habit.targetCount > 0 ? habit.targetCount : 1;
@@ -278,7 +285,7 @@ export function processToggleHabit(
       count: newCount,
       totalCount: newTotalCount,
       completedDates: newCompletedDates,
-      streakDays: streakForPeriod(newCompletedDates, habit.period, today),
+      streakDays: streakForPeriod(newCompletedDates, habit.period, today, habit.frozenDates ?? []),
       lastUpdated: new Date().toISOString(),
     },
     pointsChange,
@@ -315,7 +322,7 @@ export function resetStaleHabit(habit: Habit, today?: string): Partial<Habit> {
       completedDates,
       // Period-aware: daily → day-based streak, weekly → ISO-week-based streak
       // (so a weekly habit isn't collapsed to ~0 on reset).
-      streakDays: streakForPeriod(completedDates, habit.period, today),
+      streakDays: streakForPeriod(completedDates, habit.period, today, habit.frozenDates ?? []),
       lastUpdated: new Date().toISOString(),
     };
   }

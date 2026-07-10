@@ -317,7 +317,7 @@ export const useHabitActions = (
     resetBatch.update(doc(db, `households/${householdId}/habits`, id), {
       count: 0,
       completedDates: newCompletedDates,
-      streakDays: streakForHabit({ period: habit.period, completedDates: newCompletedDates }),
+      streakDays: streakForHabit({ period: habit.period, completedDates: newCompletedDates, frozenDates: habit.frozenDates }),
       lastUpdated: serverTimestamp(),
     });
 
@@ -404,7 +404,7 @@ export const useHabitActions = (
       }
 
       const prospectiveStreak = streakEndingOnForHabit(
-        { period: habit.period, completedDates: updatedCompletedDates },
+        { period: habit.period, completedDates: updatedCompletedDates, frozenDates: habit.frozenDates },
         submissionDate
       );
       const multiplier = getMultiplier(prospectiveStreak, habit.type === 'positive', habit.period);
@@ -457,7 +457,7 @@ export const useHabitActions = (
         count: isCurrentPeriod ? liveCount + count : liveCount,
         totalCount: habit.totalCount + count,
         completedDates: updatedCompletedDates,
-        streakDays: streakForHabit({ period: habit.period, completedDates: updatedCompletedDates }),
+        streakDays: streakForHabit({ period: habit.period, completedDates: updatedCompletedDates, frozenDates: habit.frozenDates }),
         hasSubmissionTracking: true,
         lastUpdated: serverTimestamp(),
       });
@@ -570,7 +570,7 @@ export const useHabitActions = (
 
       if (isLastForDate) {
         habitUpdates['completedDates'] = updatedCompletedDates;
-        habitUpdates['streakDays'] = streakForHabit({ period: habit.period, completedDates: updatedCompletedDates });
+        habitUpdates['streakDays'] = streakForHabit({ period: habit.period, completedDates: updatedCompletedDates, frozenDates: habit.frozenDates });
       }
 
       deleteBatch.update(doc(db, `households/${householdId}/habits`, habitId), habitUpdates);
