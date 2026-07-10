@@ -40,6 +40,7 @@ vi.mock('lucide-react', () => ({
   CheckSquare: () => <div data-testid="check-square" />,
   Download: () => <div data-testid="download" />,
   ChevronDown: () => <div data-testid="chevron-down" />,
+  CalendarDays: () => <div data-testid="calendar-days" />,
   MoreVertical: () => <div data-testid="more-vertical" />,
   MoreHorizontal: () => <div data-testid="more-horizontal" />,
   Repeat: () => <div data-testid="repeat" />,
@@ -74,8 +75,8 @@ describe('BudgetCalendar', () => {
     vi.setSystemTime(new Date('2024-01-15'));
 
     vi.clearAllMocks();
-    // The month grid expand/collapse choice persists in localStorage — clear it
-    // so each test starts in the default collapsed (week-strip) state.
+    // The Day/Month view choice persists in localStorage — clear it so each
+    // test starts in the default Month view.
     window.localStorage.clear();
     (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       calendarItems: [],
@@ -318,12 +319,9 @@ describe('BudgetCalendar', () => {
     try {
       render(<BudgetCalendar />);
 
-      // Current date is mocked to 2024-01-15, so month is January 2024
+      // Current date is mocked to 2024-01-15; Month view is the default, so the
+      // header shows "January 2024" and month nav arrows are present.
       expect(screen.getByText('January 2024')).toBeInTheDocument();
-
-      // Month navigation only shows in the expanded month view (week strip is
-      // the collapsed default — UX audit Batch 3).
-      fireEvent.click(screen.getByLabelText('Expand to month view'));
 
       // Click Next
       fireEvent.click(screen.getByLabelText('Next month'));
@@ -454,9 +452,8 @@ describe('BudgetCalendar', () => {
   it('day cells have role=button, tabIndex, and aria-label for keyboard access', () => {
     render(<BudgetCalendar />);
 
-    // The full month grid (with its div[role=button] day cells) only renders
-    // when expanded; the collapsed default is the compact week strip.
-    fireEvent.click(screen.getByLabelText('Expand to month view'));
+    // Month view is the default, so the full month grid (with its
+    // div[role=button] day cells) renders immediately.
 
     // All day cells should be keyboard-accessible buttons
     const dayButtons = screen.getAllByRole('button').filter(el => el.getAttribute('aria-label')?.match(/\w+ \d+, \d{4}/));
@@ -477,6 +474,44 @@ describe('BudgetCalendar', () => {
 
     // After pressing Space, the selected day should show "January 15" as the detail heading
     expect(screen.getByText('January 15')).toBeInTheDocument();
+  });
+
+  it('defaults to Month view and switches to Day view via the toggle', () => {
+    render(<BudgetCalendar />);
+
+    // Month view is the default: the full grid renders, so month-numbered day
+    // cells (aria-label includes the year) are present.
+    const gridCells = screen.getAllByRole('button').filter(el =>
+      el.getAttribute('aria-label')?.match(/January \d+, 2024/)
+    );
+    expect(gridCells.length).toBeGreaterThan(0);
+
+    // Switch to Day view.
+    fireEvent.click(screen.getByRole('radio', { name: 'Day' }));
+
+    // The month grid is gone; the day strip (chips whose aria-label has no year)
+    // takes over.
+    expect(
+      screen.queryAllByRole('button').filter(el =>
+        el.getAttribute('aria-label')?.match(/January \d+, 2024/)
+      ).length
+    ).toBe(0);
+    expect(window.localStorage.getItem('lifebalance:budgetCalendar:viewMode')).toBe('day');
+  });
+
+  it('restores the remembered Day view from localStorage', () => {
+    window.localStorage.setItem('lifebalance:budgetCalendar:viewMode', 'day');
+    render(<BudgetCalendar />);
+
+    // No month-grid day cells because Day view was restored.
+    expect(
+      screen.queryAllByRole('button').filter(el =>
+        el.getAttribute('aria-label')?.match(/January \d+, 2024/)
+      ).length
+    ).toBe(0);
+
+    // The Day segment is the checked radio.
+    expect(screen.getByRole('radio', { name: 'Day' })).toHaveAttribute('aria-checked', 'true');
   });
 
   it('opens recurring manager modal via the overflow menu', () => {
