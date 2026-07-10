@@ -121,10 +121,11 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
         setReports(snap.docs.map(d => ({ ...d.data(), id: d.id } as FeedbackReport & { id: string })));
       } else if (activeTab === 'ai_meter') {
         const q = query(collection(db, 'households'), limit(50)); // Limit to 50 for safety
-        const snap = await getDocs(q);
+        // Independent reads — run in parallel so the meter tab loads faster.
+        const [snap, billingEnabledVal] = await Promise.all([getDocs(q), getBillingEnabled()]);
         setHouseholds(snap.docs.map(d => ({ ...d.data(), id: d.id } as Household & { id: string })));
         // So the meter denominator matches the actually-enforced cap (see below).
-        setBillingEnabled(await getBillingEnabled());
+        setBillingEnabled(billingEnabledVal);
       } else if (activeTab === 'flags') {
         setFlags(await readAppConfigFlags());
         // Server-maintained count (incremented by plaidexchangepublictoken); a
