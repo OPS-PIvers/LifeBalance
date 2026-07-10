@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { MessageSquare, Send, Trash2, Loader2 } from 'lucide-react';
 import { formatDistanceToNowStrict, parseISO, isValid } from 'date-fns';
 import type { TransactionComment } from '@/types/schema';
@@ -40,14 +40,22 @@ export const TransactionCommentThread: React.FC<TransactionCommentThreadProps> =
   const [isPosting, setIsPosting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // Monotonic request id: EditTransactionModal stays mounted and swaps its
+  // `transaction` prop, so a slow fetch for transaction A could resolve after
+  // the user has switched to B. Each load claims a new id and only the latest
+  // is allowed to write state — stale responses are dropped.
+  const latestRequestRef = useRef(0);
+
   const load = useCallback(async () => {
+    const requestId = ++latestRequestRef.current;
     setIsLoading(true);
     setComments([]);
     try {
       const fetched = await getTransactionComments(transactionId);
+      if (latestRequestRef.current !== requestId) return;
       setComments(fetched);
     } finally {
-      setIsLoading(false);
+      if (latestRequestRef.current === requestId) setIsLoading(false);
     }
   }, [getTransactionComments, transactionId]);
 
