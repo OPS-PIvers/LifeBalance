@@ -735,7 +735,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
           ...h,
           count: 0,
           completedDates: newCompletedDates,
-          streakDays: streakForHabit({ period: h.period, completedDates: newCompletedDates }),
+          streakDays: streakForHabit({ period: h.period, completedDates: newCompletedDates, frozenDates: h.frozenDates }),
           lastUpdated: new Date().toISOString(),
         }
       : h));

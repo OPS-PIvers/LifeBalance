@@ -1391,3 +1391,188 @@ describe('habitLogic', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Plan 25 — frozen-date streak semantics.
+//
+// The "shared parity table" describe block below MUST stay IDENTICAL (same
+// inputs, same expectations) to the one in
+// functions/src/quickAdd/habitProcessor.test.ts — the client and Cloud
+// Functions streak primitives are deliberately kept in lockstep.
+//
+// Fixed calendar facts: 2026-07-06 is a Monday; "today" is 2026-07-09 (Thu).
+// Mondays used by the weekly cases: 2026-06-15, 2026-06-22, 2026-06-29,
+// 2026-07-06.
+// ---------------------------------------------------------------------------
+
+describe('Plan 25 — frozen dates: shared client/functions parity table', () => {
+  const T = '2026-07-09';
+
+  describe('calculateStreak with frozenDates', () => {
+    it('frozen yesterday bridges a 3-day streak (streak survives, frozen day NOT counted)', () => {
+      expect(calculateStreak(['2026-07-05', '2026-07-06', '2026-07-07'], T, ['2026-07-08'])).toBe(3);
+    });
+
+    it('completing today after a frozen yesterday extends the bridged streak', () => {
+      expect(
+        calculateStreak(['2026-07-05', '2026-07-06', '2026-07-07', '2026-07-09'], T, ['2026-07-08'])
+      ).toBe(4);
+    });
+
+    it('two consecutive frozen days both bridge', () => {
+      expect(
+        calculateStreak(['2026-07-04', '2026-07-05', '2026-07-06'], T, ['2026-07-07', '2026-07-08'])
+      ).toBe(3);
+    });
+
+    it('without the frozen date the streak breaks (regression anchor)', () => {
+      expect(calculateStreak(['2026-07-05', '2026-07-06', '2026-07-07'], T)).toBe(0);
+      expect(calculateStreak(['2026-07-05', '2026-07-06', '2026-07-07', '2026-07-09'], T)).toBe(1);
+    });
+
+    it('frozen dates alone never create a streak (no completions)', () => {
+      expect(calculateStreak([], T, ['2026-07-08'])).toBe(0);
+    });
+
+    it('a frozen date deep in the past does not resurrect a dead streak', () => {
+      expect(calculateStreak(['2026-07-01'], T, ['2026-07-02'])).toBe(0);
+    });
+  });
+
+  describe('calculateWeeklyStreak with frozenDates', () => {
+    it('a frozen day bridges an otherwise-empty ISO week', () => {
+      // Weeks 06-15 and 06-22 completed; week 06-29 has only a frozen day
+      // (bridge, not counted); week 07-06 completed → 3 completed weeks.
+      expect(
+        calculateWeeklyStreak(['2026-06-16', '2026-06-22', '2026-07-07'], T, ['2026-06-30'])
+      ).toBe(3);
+    });
+
+    it('without the frozen day the weekly streak resets at the gap week', () => {
+      expect(calculateWeeklyStreak(['2026-06-16', '2026-06-22', '2026-07-07'], T)).toBe(1);
+    });
+
+    it('a frozen current week keeps the chain anchored on a completed prior week', () => {
+      expect(calculateWeeklyStreak(['2026-06-29'], T, ['2026-07-08'])).toBe(1);
+    });
+  });
+
+  describe('getMultiplier continuity across a frozen bridge', () => {
+    it('daily: the bridged 4-completion streak earns the 1.5x tier', () => {
+      const streak = calculateStreak(
+        ['2026-07-05', '2026-07-06', '2026-07-07', '2026-07-09'],
+        T,
+        ['2026-07-08']
+      );
+      expect(getMultiplier(streak, true, 'daily')).toBe(1.5);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Plan 25 — client-only frozen-date invariants (points + reset + historical
+// reconstruction). Central invariant: a frozen date preserves streak
+// CONTINUITY but earns ZERO points.
+// ---------------------------------------------------------------------------
+
+describe('Plan 25 — frozen days earn zero points (client points paths)', () => {
+  const localToday = format(new Date(), 'yyyy-MM-dd');
+  const d = (n: number) => format(subDays(new Date(), n), 'yyyy-MM-dd');
+
+  const frozenHabit = (overrides: Partial<Habit> = {}): Habit => ({
+    id: 'hf1',
+    title: 'Stretch',
+    category: 'Health',
+    type: 'positive',
+    basePoints: 10,
+    scoringType: 'threshold',
+    period: 'daily',
+    targetCount: 1,
+    count: 1,
+    totalCount: 5,
+    // Completed the 3 days before the frozen day, plus today; yesterday frozen.
+    completedDates: [localToday, d(2), d(3), d(4)],
+    frozenDates: [d(1)],
+    streakDays: 4,
+    lastUpdated: new Date().toISOString(),
+    ...overrides,
+  } as Habit);
+
+  it('calculatePointsForDate returns 0 for the frozen day itself', () => {
+    expect(calculatePointsForDate([frozenHabit()], d(1))).toBe(0);
+  });
+
+  it('calculatePointsForDateRange scores the frozen day as 0 (range covering only it)', () => {
+    expect(calculatePointsForDateRange([frozenHabit()], d(1), d(1))).toBe(0);
+  });
+
+  it("today's recalculated points get the bridged-streak multiplier (continuity)", () => {
+    // streakEndingOn(today) = 4 across the frozen bridge → 1.5x → 15 pts.
+    expect(calculatePointsForDate([frozenHabit()], localToday)).toBe(15);
+    // Without the freeze the same history is a 1-day streak → 1.0x → 10 pts.
+    expect(calculatePointsForDate([frozenHabit({ frozenDates: [] })], localToday)).toBe(10);
+  });
+
+  it('calculatePointsForDateRange sums per-day multipliers across the bridge, never scoring the frozen day', () => {
+    // d4:1 → 10, d3:2 → 10, d2:3 → 15, d1 frozen → 0, today:4 → 15.
+    expect(calculatePointsForDateRange([frozenHabit()], d(4), localToday)).toBe(50);
+  });
+
+  it('streakEndingOn returns 0 for a frozen (non-completed) date', () => {
+    expect(streakEndingOn([d(2), d(3), d(4)], d(1), [d(1)])).toBe(0);
+  });
+
+  it('streakEndingOnWeek bridges a frozen week without counting it', () => {
+    // Mondays: 2026-06-15, 2026-06-22 completed; 2026-06-29 frozen; 2026-07-06 completed.
+    expect(
+      streakEndingOnWeek(['2026-06-16', '2026-06-22', '2026-07-07'], '2026-07-07', ['2026-06-30'])
+    ).toBe(3);
+  });
+});
+
+describe('Plan 25 — frozen-aware streak persistence (reset + toggle)', () => {
+  const localToday = format(new Date(), 'yyyy-MM-dd');
+  const d = (n: number) => format(subDays(new Date(), n), 'yyyy-MM-dd');
+
+  it('getHabitResetUpdate keeps the bridged streak across the midnight reset', () => {
+    const update = getHabitResetUpdate(
+      { period: 'daily', completedDates: [d(2), d(3), d(4)], frozenDates: [d(1)] },
+      localToday
+    );
+    expect(update.streakDays).toBe(3);
+    // Without the freeze, the same reset collapses the streak.
+    expect(
+      getHabitResetUpdate({ period: 'daily', completedDates: [d(2), d(3), d(4)] }, localToday)
+        .streakDays
+    ).toBe(0);
+  });
+
+  it('processToggleHabit awards the bridged-streak multiplier and never completes the frozen day', () => {
+    const habit = {
+      id: 'hf2',
+      title: 'Read',
+      category: 'Health',
+      type: 'positive',
+      basePoints: 10,
+      scoringType: 'threshold',
+      period: 'daily',
+      targetCount: 1,
+      count: 0,
+      totalCount: 3,
+      completedDates: [d(2), d(3), d(4)],
+      frozenDates: [d(1)],
+      streakDays: 3,
+      lastUpdated: new Date().toISOString(),
+    } as Habit;
+
+    const result = processToggleHabit(habit, 'up');
+    expect(result).not.toBeNull();
+    // Prospective streak = 3 completions + today across the frozen bridge = 4 → 1.5x.
+    expect(result!.multiplier).toBe(1.5);
+    expect(result!.pointsChange).toBe(15);
+    expect(result!.updatedHabit.streakDays).toBe(4);
+    // The frozen day never enters completedDates.
+    expect(result!.updatedHabit.completedDates).not.toContain(d(1));
+    expect(result!.updatedHabit.completedDates).toContain(localToday);
+  });
+});

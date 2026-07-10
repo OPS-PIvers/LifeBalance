@@ -29,34 +29,44 @@ export type HabitPeriod = "daily" | "weekly";
  *
  * Mirrors `calculateStreak` in utils/habitLogic.ts exactly.
  *
+ * Frozen dates (Plan 25 auto-applied freeze protection) BRIDGE the chain
+ * without counting: a date in `frozenDates` keeps the streak alive across a
+ * missed day, but only completed dates increment the streak count. With
+ * `frozenDates` empty/omitted, behavior is identical to the pre-freeze
+ * implementation.
+ *
  * @param dates - Array of completion dates in YYYY-MM-DD format
- * @returns The current consecutive-day streak
+ * @param today - "Today" in YYYY-MM-DD (caller's local timezone)
+ * @param frozenDates - Dates protected by an auto-applied freeze (YYYY-MM-DD)
+ * @returns The current consecutive-day streak (completed days only)
  */
 export function calculateStreak(
   dates: string[],
-  today: string = format(new Date(), "yyyy-MM-dd")
+  today: string = format(new Date(), "yyyy-MM-dd"),
+  frozenDates: string[] = []
 ): number {
   if (dates.length === 0) return 0;
 
-  const uniqueDates = Array.from(new Set(dates));
-  const sortedDates = uniqueDates.sort(
-    (a, b) => new Date(b).getTime() - new Date(a).getTime()
-  );
-
+  const completedSet = new Set(dates);
+  const frozenSet = new Set(frozenDates);
   const yesterday = format(subDays(parseISO(today), 1), "yyyy-MM-dd");
 
-  if (sortedDates[0] !== today && sortedDates[0] !== yesterday) return 0;
+  // Anchor: the streak is alive only if today or yesterday is completed or
+  // frozen (completions are never future-dated, so this matches the previous
+  // "most recent completion must be today/yesterday" check).
+  let checkDate: string;
+  if (completedSet.has(today) || frozenSet.has(today)) {
+    checkDate = today;
+  } else if (completedSet.has(yesterday) || frozenSet.has(yesterday)) {
+    checkDate = yesterday;
+  } else {
+    return 0;
+  }
 
   let currentStreak = 0;
-  let checkDate = sortedDates[0] === today ? today : yesterday;
-
-  for (const dateStr of sortedDates) {
-    if (dateStr === checkDate) {
-      currentStreak++;
-      checkDate = format(subDays(parseISO(checkDate), 1), "yyyy-MM-dd");
-    } else {
-      break;
-    }
+  while (completedSet.has(checkDate) || frozenSet.has(checkDate)) {
+    if (completedSet.has(checkDate)) currentStreak++;
+    checkDate = format(subDays(parseISO(checkDate), 1), "yyyy-MM-dd");
   }
 
   return currentStreak;
@@ -71,26 +81,28 @@ export function calculateStreak(
  *
  * Mirrors `calculateWeeklyStreak` in utils/habitLogic.ts exactly.
  *
- * ISO weeks start on Monday.  A full week with zero completions resets the
- * streak.  The streak can only extend from the current or immediately prior
- * ISO week.
+ * ISO weeks start on Monday.  A full week with zero completions (and no frozen
+ * date) resets the streak.  The streak can only extend from the current or
+ * immediately prior ISO week.  Frozen dates bridge at WEEK granularity: an ISO
+ * week containing only a frozen date keeps the chain alive without counting as
+ * a completed week.
  *
  * @param dates - Array of completion dates in YYYY-MM-DD format
- * @returns The current consecutive-week streak
+ * @param today - "Today" in YYYY-MM-DD (caller's local timezone)
+ * @param frozenDates - Dates protected by an auto-applied freeze (YYYY-MM-DD)
+ * @returns The current consecutive-week streak (completed weeks only)
  */
 export function calculateWeeklyStreak(
   dates: string[],
-  today: string = format(new Date(), "yyyy-MM-dd")
+  today: string = format(new Date(), "yyyy-MM-dd"),
+  frozenDates: string[] = []
 ): number {
   if (dates.length === 0) return 0;
 
-  // Deduplicate, then collect the Monday of each completion's ISO week.
-  const uniqueDates = Array.from(new Set(dates));
-  const weekStarts = Array.from(
-    new Set(
-      uniqueDates.map((d) => format(startOfISOWeek(parseISO(d)), "yyyy-MM-dd"))
-    )
-  ).sort((a, b) => new Date(b).getTime() - new Date(a).getTime()); // newest first
+  const weekStartOf = (d: string): string =>
+    format(startOfISOWeek(parseISO(d)), "yyyy-MM-dd");
+  const completedWeeks = new Set(dates.map(weekStartOf));
+  const frozenWeeks = new Set(frozenDates.map(weekStartOf));
 
   // The streak can only extend from the current week or the immediately past week.
   const nowWeekStart = format(startOfISOWeek(parseISO(today)), "yyyy-MM-dd");
@@ -99,22 +111,26 @@ export function calculateWeeklyStreak(
     "yyyy-MM-dd"
   );
 
-  if (weekStarts[0] !== nowWeekStart && weekStarts[0] !== prevWeekStart) {
+  // Anchor: alive only if the current or previous ISO week is completed or
+  // frozen (completions are never future-dated, so this matches the previous
+  // "most recent completion week must be current/previous" check).
+  let checkWeek: string;
+  if (completedWeeks.has(nowWeekStart) || frozenWeeks.has(nowWeekStart)) {
+    checkWeek = nowWeekStart;
+  } else if (
+    completedWeeks.has(prevWeekStart) ||
+    frozenWeeks.has(prevWeekStart)
+  ) {
+    checkWeek = prevWeekStart;
+  } else {
     return 0;
   }
 
   let streak = 0;
-  let expectedWeek = weekStarts[0]!;
-  for (const weekStart of weekStarts) {
-    if (weekStart === expectedWeek) {
-      streak++;
-      expectedWeek = format(
-        subWeeks(parseISO(expectedWeek), 1),
-        "yyyy-MM-dd"
-      );
-    } else {
-      break;
-    }
+  // Walk backward one ISO week at a time: completed → count, frozen → bridge.
+  while (completedWeeks.has(checkWeek) || frozenWeeks.has(checkWeek)) {
+    if (completedWeeks.has(checkWeek)) streak++;
+    checkWeek = format(subWeeks(parseISO(checkWeek), 1), "yyyy-MM-dd");
   }
   return streak;
 }
@@ -127,15 +143,18 @@ export function calculateWeeklyStreak(
  * Return the current streak in the correct unit for the given period:
  * - daily  → consecutive days  (via `calculateStreak`)
  * - weekly → consecutive ISO weeks (via `calculateWeeklyStreak`)
+ *
+ * Frozen dates bridge the chain without counting (see the primitives).
  */
 export function streakForPeriod(
   dates: string[],
   period: HabitPeriod,
-  today: string = format(new Date(), "yyyy-MM-dd")
+  today: string = format(new Date(), "yyyy-MM-dd"),
+  frozenDates: string[] = []
 ): number {
   return period === "weekly"
-    ? calculateWeeklyStreak(dates, today)
-    : calculateStreak(dates, today);
+    ? calculateWeeklyStreak(dates, today, frozenDates)
+    : calculateStreak(dates, today, frozenDates);
 }
 
 // ---------------------------------------------------------------------------
