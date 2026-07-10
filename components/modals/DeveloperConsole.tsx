@@ -3,6 +3,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { Switch } from '@/components/ui/Switch';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { db } from '@/firebase.config';
 import { collection, query, getDocs, getDoc, addDoc, updateDoc, doc, deleteDoc, orderBy, limit } from 'firebase/firestore';
 import { readAppConfigFlags, setAppFlag, AI_ENABLED_FLAG_KEY, POWER_TOOLS_FLAG_KEY } from '@/services/appConfig';
@@ -258,31 +259,19 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
             </button>
         </div>
 
-        {/* Tabs — a single horizontally-scrollable pill row so all four fit on a phone
-            without wrapping or overflowing the sheet. Momentum scroll, hidden bar. */}
-        <div
-          role="tablist"
-          aria-label="Developer Console sections"
-          className="shrink-0 flex gap-1.5 overflow-x-auto no-scrollbar px-3 py-2 sm:px-4 border-b border-brand-200 dark:border-brand-700/60 bg-brand-50/50 dark:bg-brand-700/30 [scroll-snap-type:x_proximity]"
-        >
-          {TABS.map(tab => {
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex min-h-[44px] items-center whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-colors [scroll-snap-align:start] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 ${
-                  isActive
-                    ? 'bg-accent-600 text-white dark:bg-accent-500'
-                    : 'bg-white text-brand-600 border border-brand-200 hover:bg-brand-100/70 hover:text-brand-800 dark:bg-brand-800 dark:text-brand-400 dark:border-brand-700 dark:hover:bg-brand-700/50 dark:hover:text-brand-200'
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
+        {/* Tabs — shared Tabs primitive (pill-in-trough), matching the horizontal
+            page selectors on the core app pages. Scrolls horizontally on a phone
+            so all four fit without wrapping. */}
+        <div className="shrink-0 px-3 py-2 sm:px-4 border-b border-brand-200 dark:border-brand-700/60 bg-brand-50/50 dark:bg-brand-700/30">
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as Tab)}>
+            <TabsList size="sm">
+              {TABS.map(tab => (
+                <TabsTrigger key={tab.id} value={tab.id} className="whitespace-nowrap">
+                  {tab.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
         </div>
 
         {/* Content */}
