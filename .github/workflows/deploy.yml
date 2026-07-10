@@ -65,6 +65,11 @@ jobs:
           VITE_USE_GEMINI_PROXY: "true"
           VITE_FIREBASE_VAPID_KEY: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
           VITE_ADMIN_UID: ${{ secrets.VITE_ADMIN_UID }}
+          # Plan 11 — client error tracking (services/errorTracking.ts, wired at
+          # index.tsx boot). No-op until the VITE_SENTRY_DSN GitHub secret exists:
+          # a missing secret evaluates to an empty string, which initErrorTracking()
+          # treats as "disabled" (it only activates on PROD + a non-empty DSN).
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
 
       - id: 'auth'
         name: 'Authenticate to Google Cloud'
