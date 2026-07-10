@@ -103,6 +103,35 @@ service cloud.firestore {
         );
       }
 
+      // 🛡️ Plan 051: max members per plan, enforced server-side. KEEP IN SYNC with
+      // utils/entitlements.ts (free maxMembers=2, premium=20). `subscription` lives on
+      // this same doc and is immutable via the rule below, so the plan resolves with no
+      // extra get() of another document.
+      function planMaxMembers(data) {
+        return (data.get('subscription', {}).get('plan', '') == 'premium' &&
+                data.get('subscription', {}).get('status', '') in ['active', 'trialing', 'past_due'])
+          ? 20 : 2;
+      }
+      // Whether billing is live. Read directly from app_config/global (get()/exists()
+      // in rules bypass the target's read rules). Only ever evaluated on a write that
+      // GROWS memberUids (see withinMemberCap short-circuit), so the extra document read
+      // is not paid on the common no-growth household update.
+      function billingLive() {
+        return exists(/databases/$(database)/documents/app_config/global) &&
+               get(/databases/$(database)/documents/app_config/global).data.get('billingEnabled', false) == true;
+      }
+      function withinMemberCap() {
+        let newSize = request.resource.data.get('memberUids', []).size();
+        let oldSize = resource.data.get('memberUids', []).size();
+        // Allow if the write does not grow the roster (grandfathers households already
+        // at/over the cap — they can rename, shrink, or make unrelated updates), OR
+        // billing is dormant (no enforcement until it's live — matches the client and
+        // the createkidprofile function), OR the grown roster is within the plan cap.
+        return newSize <= oldSize ||
+               !billingLive() ||
+               newSize <= planMaxMembers(request.resource.data);
+      }
+
       // Allow update if member (but cannot modify immutable fields).
       // 🛡️ SECURITY FIX: Updates are ONLY allowed if isMemberOf(householdId) returns true.
       // This implicitly requires the user to have a valid member document in the members/ subcollection.
@@ -121,6 +150,9 @@ service cloud.firestore {
                         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['subscription']) &&
                         // 🛡️ SENTINEL FIX: Protect AI Usage Quota
                         isValidAiUsageUpdate() &&
+                        // 🛡️ Plan 051: enforce the per-plan member cap (billing-gated,
+                        // grandfathered). No-op while billing is dormant.
+                        withinMemberCap() &&
                         // 🛡️ SENTINEL FIX: Restrict memberUids modifications
                         // 1. Adding members: Only allow adding YOURSELF (request.auth.uid). Prevents adding unauthorized users.
                         (

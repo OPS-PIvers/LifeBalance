@@ -1,14 +1,13 @@
 import {
   doc,
-  setDoc,
   updateDoc,
   deleteDoc,
-  serverTimestamp,
   type Firestore,
 } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import toast from 'react-hot-toast';
 import { Household, HouseholdMember } from '@/types/schema';
-import { newKidMemberId, buildKidMemberDoc } from '@/utils/kidProfile';
+import { getFunctionsInstance } from '@/firebase.config';
 import { getBillingEnabled } from '@/services/appConfig';
 import { kidProfileLimitReached } from '@/utils/entitlements';
 import type { User } from 'firebase/auth';
@@ -28,13 +27,12 @@ import type { User } from 'firebase/auth';
  * `householdSettings`, and read `membersRef` (ref, not reactive) inside.
  */
 export function makeAddKidProfile(deps: {
-  db: Firestore;
   householdId: string | null;
   user: User | null;
   householdSettings: Household | null;
   membersRef: { current: HouseholdMember[] };
 }) {
-  const { db, householdId, user, householdSettings, membersRef } = deps;
+  const { householdId, user, householdSettings, membersRef } = deps;
 
   const addKidProfile = async (
     input: { displayName: string; avatarColor?: string; avatarEmoji?: string }
@@ -45,11 +43,10 @@ export function makeAddKidProfile(deps: {
 
     // Plan 080e — managed-kid-profile cap. Per Plan 080 Principle 6 we gate the
     // COUNT, never the mechanics: the cap is enforced ONLY while billing is live.
-    // While `billingEnabled` is off (current prod state) this whole block is
-    // skipped, so behavior is identical to before (ZERO change). getBillingEnabled
-    // is cheap/cached (60s TTL) and fails closed to `false`, keeping the gate
-    // dormant if config is unreachable. The cap is client-side PRODUCT logic for
-    // UX — never a security boundary (member creates for kids stay rules-allowed).
+    // This client check is a fast UX guard that avoids a round-trip when the cap is
+    // already reached; the AUTHORITATIVE boundary is the `createkidprofile` Cloud
+    // Function (Plan 051), which re-counts server-side where a client can't lie.
+    // While `billingEnabled` is off (current prod state) both are inert (ZERO change).
     if (await getBillingEnabled()) {
       const managedKidCount = membersRef.current.filter((m) => m.isManaged === true).length;
       if (householdSettings && kidProfileLimitReached(householdSettings, managedKidCount)) {
@@ -59,17 +56,27 @@ export function makeAddKidProfile(deps: {
     }
 
     try {
-      const uid = newKidMemberId();
-      // Single doc write to the members subcollection ONLY — no memberUids update
-      // (no credential). A kid's synthetic uid can never be used to authenticate.
-      await setDoc(doc(db, `households/${householdId}/members`, uid), {
-        ...buildKidMemberDoc(input, parentUid, uid),
-        joinedAt: serverTimestamp(),
+      // The function creates the members-subcollection doc via the Admin SDK (no
+      // memberUids update — a kid holds no credential) after enforcing the cap.
+      const functions = await getFunctionsInstance();
+      const createKidProfile = httpsCallable(functions, 'createkidprofile');
+      await createKidProfile({
+        householdId,
+        displayName: input.displayName,
+        ...(input.avatarColor ? { avatarColor: input.avatarColor } : {}),
+        ...(input.avatarEmoji ? { avatarEmoji: input.avatarEmoji } : {}),
       });
       toast.success('Kid profile added');
     } catch (error) {
-      console.error('[addKidProfile] Failed:', error);
-      toast.error('Failed to add kid profile');
+      // The function throws `resource-exhausted` when the cap is hit (billing live);
+      // surface the same upsell copy as the client pre-check for that case.
+      const code = (error as { code?: string } | null)?.code;
+      if (code === 'functions/resource-exhausted') {
+        toast.error('Kid profile limit reached. Upgrade to add more.');
+      } else {
+        console.error('[addKidProfile] Failed:', error);
+        toast.error('Failed to add kid profile');
+      }
       throw error;
     }
   };
