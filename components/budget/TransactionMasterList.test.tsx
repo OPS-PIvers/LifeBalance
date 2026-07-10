@@ -272,7 +272,7 @@ describe('TransactionMasterList', () => {
       render(<TransactionMasterList />);
       const searchInput = screen.getByRole('textbox', { name: /search transactions/i });
       expect(searchInput).toBeInTheDocument();
-      expect(searchInput).toHaveAttribute('placeholder', 'Search merchant or amount...');
+      expect(searchInput).toHaveAttribute('placeholder', 'Search transactions');
     });
   });
 
@@ -289,7 +289,7 @@ describe('TransactionMasterList', () => {
 
     it('renders empty state when no transactions match', () => {
       render(<TransactionMasterList />);
-      const searchInput = screen.getByPlaceholderText('Search merchant or amount...');
+      const searchInput = screen.getByPlaceholderText('Search transactions');
       fireEvent.change(searchInput, { target: { value: 'NonExistent' } });
 
       expect(screen.getByText('No transactions found')).toBeInTheDocument();
@@ -314,7 +314,7 @@ describe('TransactionMasterList', () => {
   describe('Filtering', () => {
     it('filters by search term (merchant)', () => {
       render(<TransactionMasterList />);
-      const searchInput = screen.getByPlaceholderText('Search merchant or amount...');
+      const searchInput = screen.getByPlaceholderText('Search transactions');
       fireEvent.change(searchInput, { target: { value: 'Netflix' } });
 
       expect(screen.getByText('Netflix')).toBeInTheDocument();
