@@ -32,9 +32,7 @@ export const DailyHabitsWidget: React.FC = React.memo(() => {
         const progress = Math.min(100, Math.round((currentCount / target) * 100));
         // Signal inputs for the smart ranking below. completedDates are
         // yyyy-MM-dd strings, so a lexical max is the most-recent completion.
-        const lastCompleted = habit.completedDates.length
-          ? habit.completedDates.reduce((max, d) => (d > max ? d : max), '')
-          : '';
+        const lastCompleted = habit.completedDates.reduce((max, d) => (d > max ? d : max), '');
         const frequency = habit.completedDates.length;
 
         return { ...habit, isCompleted, currentCount, progress, lastCompleted, frequency };
