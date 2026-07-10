@@ -873,6 +873,14 @@ describe('savings goals (Plan 24 — sinking funds, decoupled from Safe-to-Spend
     );
   });
 
+  it('rejects an update carrying an unknown field (storage abuse)', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'savingsGoals', GOAL), {
+        injected: 'x'.repeat(5000),
+      }),
+    );
+  });
+
   it('a member can delete a savings goal', async () => {
     await assertSucceeds(
       deleteDoc(doc(dbFor(BOB), 'households', H1, 'savingsGoals', GOAL)),

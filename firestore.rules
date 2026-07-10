@@ -857,6 +857,11 @@ service cloud.firestore {
                       isValidSavingsGoalCreate();
 
         allow update: if isMemberOf(householdId) &&
+                      // Strict field whitelist on update — a brand-new collection with no
+                      // legacy docs, so hasOnly is safe and blocks arbitrary field injection
+                      // (matches groceryCatalog/pendingItems). Legit client updates only ever
+                      // touch these keys; deleteField() removes keys, never adds.
+                      request.resource.data.keys().hasOnly(['name', 'targetAmount', 'savedAmount', 'dueDate', 'ownerId', 'color', 'createdAt', 'completedAt']) &&
                       isValidSavingsGoalUpdate();
 
         allow delete: if isMemberOf(householdId);
