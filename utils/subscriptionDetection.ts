@@ -59,12 +59,23 @@ function tokenize(text: string): string[] {
   return text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(t => t.length > 0);
 }
 
+/** Whether `needle`'s token sequence appears contiguously inside `haystack`. */
+function tokenSequenceIncluded(needle: string[], haystack: string[]): boolean {
+  if (needle.length === 0 || needle.length > haystack.length) return false;
+  for (let i = 0; i <= haystack.length - needle.length; i++) {
+    if (needle.every((t, j) => haystack[i + j] === t)) return true;
+  }
+  return false;
+}
+
 /**
  * Whether `merchant` matches one of the existing calendar-bill titles, using
- * whole-word token-window matching (merchant tokens found as a consecutive
- * phrase inside a bill title's tokens) — mirrors
- * `resolveBucketForCalendarItem`'s bucket↔bill approach documented in
- * CLAUDE.md's Safe-to-Spend section. Merchant names shorter than
+ * whole-word token-window matching — mirrors `resolveBucketForCalendarItem`'s
+ * bucket↔bill approach documented in CLAUDE.md's Safe-to-Spend section, but
+ * SYMMETRIC: a bill titled "Netflix" suppresses a detected "Netflix.com
+ * Monthly" just as a bill "Netflix Premium Plan" suppresses a detected
+ * "Netflix" (whichever token sequence is shorter is looked for inside the
+ * other). Merchant names shorter than
  * {@link MERCHANT_TOKEN_MIN_MATCH_LENGTH} chars are skipped (too short to
  * match reliably).
  */
@@ -77,12 +88,11 @@ function matchesExistingBill(merchant: string, existingBillTitles: string[]): bo
 
   return existingBillTitles.some(title => {
     const titleTokens = tokenize(title);
-    const windowSize = merchantTokens.length;
-    for (let i = 0; i <= titleTokens.length - windowSize; i++) {
-      const windowMatches = merchantTokens.every((mt, j) => titleTokens[i + j] === mt);
-      if (windowMatches) return true;
-    }
-    return false;
+    if (titleTokens.length === 0) return false;
+    return (
+      tokenSequenceIncluded(merchantTokens, titleTokens) ||
+      tokenSequenceIncluded(titleTokens, merchantTokens)
+    );
   });
 }
 

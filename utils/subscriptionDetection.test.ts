@@ -130,6 +130,17 @@ describe('detectSubscriptions', () => {
     expect(detectSubscriptions(txns, ['Netflix Subscription'])).toHaveLength(0);
   });
 
+  it('excludes a detected merchant LONGER than the existing bill title (symmetric match)', () => {
+    // Bill "Netflix" must suppress a detected "Netflix Monthly" — the shorter
+    // token sequence is looked for inside the longer one in both directions.
+    const txns = [
+      txn('t1', 'Netflix Monthly', 15.99, '2026-04-15'),
+      txn('t2', 'Netflix Monthly', 15.99, '2026-05-15'),
+      txn('t3', 'Netflix Monthly', 15.99, '2026-06-14'),
+    ];
+    expect(detectSubscriptions(txns, ['Netflix'])).toHaveLength(0);
+  });
+
   it('does not flag fewer than 3 occurrences', () => {
     const txns = [
       txn('t1', 'Netflix', 15.99, '2026-05-15'),
