@@ -111,6 +111,24 @@ describe('BudgetBuckets Unbudgeted Logic', () => {
       category: 'Income', // Should be excluded
       payPeriodId: 'p1',
       status: 'posted'
+    },
+    {
+      id: 't5',
+      date: '2023-10-05T12:00:00.000Z',
+      amount: 800,
+      merchant: 'Rent',
+      category: 'Budgeted in Calendar', // Calendar-budgeted → excluded from Unbudgeted
+      payPeriodId: 'p1',
+      status: 'verified'
+    },
+    {
+      id: 't6',
+      date: '2023-10-06T12:00:00.000Z',
+      amount: 60,
+      merchant: 'Electric Co',
+      category: 'Bills', // Legacy paid-bill tag → excluded from Unbudgeted
+      payPeriodId: 'p1',
+      status: 'verified'
     }
   ];
 
@@ -148,6 +166,15 @@ describe('BudgetBuckets Unbudgeted Logic', () => {
     expect(screen.getByText('$125.00')).toBeInTheDocument();
   });
 
+  it('excludes calendar-budgeted spend from the Unbudgeted bucket', () => {
+    render(<BudgetBuckets />);
+
+    // Unbudgeted total stays $125 (Skydiving 100 + Unknown 25); the $800 Rent
+    // ("Budgeted in Calendar") and $60 Electric ("Bills") are not lumped in.
+    expect(screen.getByText('$125.00')).toBeInTheDocument();
+    expect(screen.queryByText('$985.00')).not.toBeInTheDocument();
+  });
+
   it('allows expanding Unbudgeted bucket to see details', () => {
     render(<BudgetBuckets />);
 
@@ -157,6 +184,8 @@ describe('BudgetBuckets Unbudgeted Logic', () => {
     expect(screen.getByText('Mystery Skydiving')).toBeInTheDocument();
     expect(screen.getByText('Unknown Expense')).toBeInTheDocument();
     expect(screen.queryByText('My Job')).not.toBeInTheDocument(); // Income excluded
+    expect(screen.queryByText('Rent')).not.toBeInTheDocument(); // Budgeted in Calendar excluded
+    expect(screen.queryByText('Electric Co')).not.toBeInTheDocument(); // Legacy Bills excluded
   });
 
   it('shows error toast when clicking Fix on Unbudgeted bucket', async () => {
