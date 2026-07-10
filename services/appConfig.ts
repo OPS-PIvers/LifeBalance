@@ -208,20 +208,73 @@ export const getPlaidEnabled = (): Promise<boolean> => {
  */
 export const AI_ENABLED_FLAG_KEY = 'aiEnabled' as const;
 
+/** How long (ms) to reuse a cached power-tools-enabled value before re-fetching. */
+const POWER_TOOLS_ENABLED_CACHE_TTL_MS = 60_000;
+
+let powerToolsEnabledPromise: Promise<boolean> | null = null;
+let powerToolsEnabledFetchedAt = 0;
+
+/**
+ * The exact field name of the power-tools flag on `app_config/global` (Plan 17,
+ * June-2026 bloat audit §[4]). Like `aiEnabled` it is **fail-OPEN**: the gated
+ * surfaces stay ON unless this field is explicitly the boolean `false`.
+ */
+export const POWER_TOOLS_FLAG_KEY = 'powerToolsEnabled' as const;
+
+/**
+ * Returns the current `powerToolsEnabled` flag from the global app config.
+ *
+ * Gates a set of power-user/AI-heavy surfaces (HabitCoach, Smart Adjust/Reorder,
+ * grocery "Optimize with AI", BudgetHistory, SavedViewChips, YearlyGoal UI) that the
+ * June-2026 bloat audit recommended parking behind a kill-switch. It fails OPEN
+ * (returns `true`) when the doc is missing, the field is absent, or the read throws,
+ * so shipping this flag is behavior-neutral until an operator explicitly sets
+ * `powerToolsEnabled: false`. A human flips it WITHOUT a deploy in the Firestore
+ * console, or live via Settings → Developer Console → Feature Flags (effective
+ * within ~60 s).
+ */
+export const getPowerToolsEnabled = (): Promise<boolean> => {
+  const now = Date.now();
+  if (
+    powerToolsEnabledPromise !== null &&
+    now - powerToolsEnabledFetchedAt < POWER_TOOLS_ENABLED_CACHE_TTL_MS
+  ) {
+    return powerToolsEnabledPromise;
+  }
+
+  powerToolsEnabledFetchedAt = now;
+  powerToolsEnabledPromise = (async (): Promise<boolean> => {
+    try {
+      const globalConfigRef = doc(db, 'app_config', 'global');
+      const snap = await getDoc(globalConfigRef);
+      return snap.exists() ? snap.data()[POWER_TOOLS_FLAG_KEY] !== false : true;
+    } catch {
+      // Fail open: keep the power-tool surfaces visible if config is unreachable.
+      // Clear the cache so the next call retries rather than caching the fallback.
+      powerToolsEnabledPromise = null;
+      return true;
+    }
+  })();
+
+  return powerToolsEnabledPromise;
+};
+
 /**
  * Reads `app_config/global` ONCE (not through the cached single-flag getters) and
- * returns all four operator flags as their **effective** booleans — i.e. what the
+ * returns all operator flags as their **effective** booleans — i.e. what the
  * running app actually does right now:
  *
- *   - `openSignup`, `billingEnabled`, `kidModeEnabled` — fail-CLOSED: `true` only
- *     when the field is the boolean `true`; absent / non-boolean / missing-doc → `false`.
- *   - `aiEnabled` — fail-OPEN to match `geminiService.getAiEnabled()`: `true` unless
- *     the field is explicitly the boolean `false`. So an absent field or missing doc
- *     reads back as `true`, truthfully reflecting that AI is live by default.
+ *   - `openSignup`, `billingEnabled`, `kidModeEnabled`, `plaidEnabled` — fail-CLOSED:
+ *     `true` only when the field is the boolean `true`; absent / non-boolean /
+ *     missing-doc → `false`.
+ *   - `aiEnabled`, `powerToolsEnabled` — fail-OPEN to match `geminiService.getAiEnabled()`
+ *     / `getPowerToolsEnabled()`: `true` unless the field is explicitly the boolean
+ *     `false`. So an absent field or missing doc reads back as `true`, truthfully
+ *     reflecting that the surface is live by default.
  *
  * Used by the admin Feature Flags panel so the toggles show the real effective state.
- * On read error every flag falls back to its fail-safe default (the three access/
- * billing gates → `false`, the AI switch → `true`).
+ * On read error every flag falls back to its fail-safe default (the fail-closed
+ * gates → `false`, the fail-open switches → `true`).
  */
 export const readAppConfigFlags = async (): Promise<Record<string, boolean>> => {
   try {
@@ -233,8 +286,9 @@ export const readAppConfigFlags = async (): Promise<Record<string, boolean>> => 
       billingEnabled: data.billingEnabled === true,
       kidModeEnabled: data.kidModeEnabled === true,
       plaidEnabled: data.plaidEnabled === true,
-      // Fail-open: only an explicit boolean false disables AI.
+      // Fail-open: only an explicit boolean false disables AI / power tools.
       [AI_ENABLED_FLAG_KEY]: data[AI_ENABLED_FLAG_KEY] !== false,
+      [POWER_TOOLS_FLAG_KEY]: data[POWER_TOOLS_FLAG_KEY] !== false,
     };
   } catch {
     // Each flag falls back to its fail-safe default if the doc is unreachable.
@@ -244,6 +298,7 @@ export const readAppConfigFlags = async (): Promise<Record<string, boolean>> => 
       kidModeEnabled: false,
       plaidEnabled: false,
       [AI_ENABLED_FLAG_KEY]: true,
+      [POWER_TOOLS_FLAG_KEY]: true,
     };
   }
 };
@@ -264,10 +319,11 @@ export const setAppFlag = async (key: string, value: boolean): Promise<void> => 
 };
 
 /**
- * Resets the three module-level flag caches (promise → `null`, fetchedAt → `0`) so the
- * next `getOpenSignup` / `getBillingEnabled` / `getKidModeEnabled` performs a fresh
- * Firestore read instead of returning a stale cached promise. Called by `setAppFlag`
- * after a write so an operator sees their change take effect at once.
+ * Resets the module-level flag caches (promise → `null`, fetchedAt → `0`) so the
+ * next `getOpenSignup` / `getBillingEnabled` / `getKidModeEnabled` / `getPlaidEnabled`
+ * / `getPowerToolsEnabled` performs a fresh Firestore read instead of returning a
+ * stale cached promise. Called by `setAppFlag` after a write so an operator sees
+ * their change take effect at once.
  *
  * Does not touch `geminiService`'s kill-switch cache (that module owns the `aiEnabled`
  * read); reset it there via `resetAiEnabledCache()` to keep this module SDK-free.
@@ -280,5 +336,7 @@ export const invalidateAppConfigCaches = (): void => {
   kidModeEnabledPromise = null;
   kidModeEnabledFetchedAt = 0;
   plaidEnabledPromise = null;
+  powerToolsEnabledPromise = null;
+  powerToolsEnabledFetchedAt = 0;
   plaidEnabledFetchedAt = 0;
 };

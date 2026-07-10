@@ -22,6 +22,7 @@ import HabitsRewardsTab from '@/components/habits/HabitsRewardsTab';
 import HabitsChallengesTab from '@/components/habits/HabitsChallengesTab';
 import HabitsInsightsTab from '@/components/habits/HabitsInsightsTab';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
+import { usePowerToolsEnabled } from '@/hooks/usePowerToolsEnabled';
 import { useDeepLinkTab } from '@/hooks/useDeepLinkTab';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { isHabitCompletedInCurrentPeriod } from '@/utils/habitLogic';
@@ -173,6 +174,7 @@ const Habits: React.FC = () => {
   const { habits } = useGamification();
   const { isLoading, members } = useHouseholdCore();
   const kidModeEnabled = useKidModeEnabled();
+  const powerToolsEnabled = usePowerToolsEnabled();
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [isSmartAdjustOpen, setIsSmartAdjustOpen] = useState(false);
   const [isSmartReorderOpen, setIsSmartReorderOpen] = useState(false);
@@ -287,6 +289,7 @@ const Habits: React.FC = () => {
               onReorder={() => setIsSmartReorderOpen(true)}
               onManage={() => setIsWizardOpen(true)}
               actionsDisabled={hasNoHabits}
+              showSmartTools={powerToolsEnabled}
             />
           }
         />
@@ -304,10 +307,12 @@ const Habits: React.FC = () => {
               <Calendar size={16} />
               History
             </TabsTrigger>
-            <TabsTrigger value="coach">
-              <GraduationCap size={16} />
-              Coach
-            </TabsTrigger>
+            {powerToolsEnabled && (
+              <TabsTrigger value="coach">
+                <GraduationCap size={16} />
+                Coach
+              </TabsTrigger>
+            )}
             <TabsTrigger value="rewards">
               <Gift size={16} />
               Rewards
@@ -379,9 +384,11 @@ const Habits: React.FC = () => {
             <HabitHistoryCalendar />
           </TabsContent>
 
-          <TabsContent value="coach">
-            <HabitCoach />
-          </TabsContent>
+          {powerToolsEnabled && (
+            <TabsContent value="coach">
+              <HabitCoach />
+            </TabsContent>
+          )}
 
           <TabsContent value="rewards">
             <HabitsRewardsTab />
@@ -398,8 +405,12 @@ const Habits: React.FC = () => {
       </Tabs>
 
       <HabitCreatorWizard isOpen={isWizardOpen} onClose={() => setIsWizardOpen(false)} />
-      <SmartHabitAdjustModal isOpen={isSmartAdjustOpen} onClose={() => setIsSmartAdjustOpen(false)} />
-      <SmartHabitReorderModal isOpen={isSmartReorderOpen} onClose={() => setIsSmartReorderOpen(false)} />
+      {powerToolsEnabled && (
+        <>
+          <SmartHabitAdjustModal isOpen={isSmartAdjustOpen} onClose={() => setIsSmartAdjustOpen(false)} />
+          <SmartHabitReorderModal isOpen={isSmartReorderOpen} onClose={() => setIsSmartReorderOpen(false)} />
+        </>
+      )}
 
       {/* Heavy modals — lazy-mounted only once their tab CTA is used. The Challenge
           hub keeps its create/edit/freeze-token wiring here while the tabs own the

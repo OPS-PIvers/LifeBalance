@@ -154,6 +154,50 @@ describe('getPlaidEnabled', () => {
   });
 });
 
+describe('getPowerToolsEnabled', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const importFresh = async () => (await import('./appConfig')).getPowerToolsEnabled;
+
+  it('returns true when the doc has powerToolsEnabled: true', async () => {
+    vi.mocked(getDoc).mockResolvedValue(snapshot(true, { powerToolsEnabled: true }));
+    const getPowerToolsEnabled = await importFresh();
+    await expect(getPowerToolsEnabled()).resolves.toBe(true);
+  });
+
+  it('returns false when powerToolsEnabled is explicitly false', async () => {
+    vi.mocked(getDoc).mockResolvedValue(snapshot(true, { powerToolsEnabled: false }));
+    const getPowerToolsEnabled = await importFresh();
+    await expect(getPowerToolsEnabled()).resolves.toBe(false);
+  });
+
+  it('returns true (fail-open) when the powerToolsEnabled field is absent', async () => {
+    vi.mocked(getDoc).mockResolvedValue(snapshot(true, { openSignup: true }));
+    const getPowerToolsEnabled = await importFresh();
+    await expect(getPowerToolsEnabled()).resolves.toBe(true);
+  });
+
+  it('returns true (fail-open) when the config doc does not exist', async () => {
+    vi.mocked(getDoc).mockResolvedValue(snapshot(false));
+    const getPowerToolsEnabled = await importFresh();
+    await expect(getPowerToolsEnabled()).resolves.toBe(true);
+  });
+
+  it('fails open (returns true) when getDoc rejects', async () => {
+    vi.mocked(getDoc).mockRejectedValue(new Error('firestore unreachable'));
+    const getPowerToolsEnabled = await importFresh();
+    await expect(getPowerToolsEnabled()).resolves.toBe(true);
+  });
+});
+
 describe('setAppFlag', () => {
   beforeEach(() => {
     vi.clearAllMocks();

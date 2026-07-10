@@ -9,6 +9,7 @@ import { Section } from '@/components/ui/Section';
 import ProgressBar from '@/components/ui/ProgressBar';
 import { Button } from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
+import { usePowerToolsEnabled } from '@/hooks/usePowerToolsEnabled';
 import type { Challenge } from '@/types/schema';
 
 /** The active monthly challenge rendered as the one elevated "hero" surface. */
@@ -79,6 +80,7 @@ export interface HabitsChallengesTabProps {
 
 const HabitsChallengesTab: React.FC<HabitsChallengesTabProps> = ({ onOpenChallengeHub }) => {
   const { activeChallenge, habits, primaryYearlyGoal, freezeBank } = useGamification();
+  const powerToolsEnabled = usePowerToolsEnabled();
 
   const linkedHabits = useMemo(() => {
     if (!activeChallenge) return [];
@@ -132,8 +134,9 @@ const HabitsChallengesTab: React.FC<HabitsChallengesTabProps> = ({ onOpenChallen
         )}
       </Section>
 
-      {/* Yearly goal chain */}
-      {primaryYearlyGoal && (
+      {/* Yearly goal chain — gated behind powerToolsEnabled (Plan 17); data/
+          listeners stay intact, this is a render-only gate. */}
+      {powerToolsEnabled && primaryYearlyGoal && (
         <Section title="Yearly goal">
           <div className="surface-section p-5">
             <div className="flex items-start justify-between mb-1">

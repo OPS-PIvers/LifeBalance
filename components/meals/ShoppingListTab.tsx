@@ -21,6 +21,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import PageHeader from '@/components/ui/PageHeader';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
+import { usePowerToolsEnabled } from '@/hooks/usePowerToolsEnabled';
 import { haptic } from '@/utils/haptics';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { formatShoppingListForShare } from '@/utils/shoppingListFormatter';
@@ -75,6 +76,7 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({ filterStore, stores, on
 };
 
 const ShoppingListTab: React.FC = () => {
+  const powerToolsEnabled = usePowerToolsEnabled();
   const {
     shoppingList,
     addShoppingItem,
@@ -464,14 +466,21 @@ const ShoppingListTab: React.FC = () => {
   // stay out of here (they need a persistent / contextual visible state). Every
   // handler + disabled guard is reused verbatim — logic unchanged.
   const menuItems: MenuItem[] = [
-    {
-      key: 'optimize',
-      label: 'Optimize with AI',
-      icon: <Sparkles size={16} />,
-      tone: 'primary',
-      onSelect: handleOptimize,
-      disabled: isOptimizing || shoppingList.length === 0,
-    },
+    // Gated behind powerToolsEnabled (Plan 17) — the hook call above stays
+    // unconditional so hooks-order rules aren't affected; only the entry point
+    // to the AI optimize flow is hidden.
+    ...(powerToolsEnabled
+      ? [
+          {
+            key: 'optimize',
+            label: 'Optimize with AI',
+            icon: <Sparkles size={16} />,
+            tone: 'primary' as const,
+            onSelect: handleOptimize,
+            disabled: isOptimizing || shoppingList.length === 0,
+          },
+        ]
+      : []),
     {
       key: 'history',
       label: 'History',

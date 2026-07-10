@@ -15,6 +15,7 @@ import { CustomTooltip } from '@/components/analytics/CustomTooltip';
 import { calculateBurnDown } from '@/utils/analytics/financialMetrics';
 import { calculateCategoryTrend } from '@/utils/analytics/analyticsHelper';
 import { Section } from '@/components/ui/Section';
+import { usePowerToolsEnabled } from '@/hooks/usePowerToolsEnabled';
 import BudgetHistory from './BudgetHistory';
 
 /**
@@ -59,6 +60,7 @@ const EmptyChart: React.FC<{ message: string }> = ({ message }) => (
 
 const BudgetTrends: React.FC = () => {
   const { transactions, currentPeriodId, buckets, loadAllTransactions } = useFinance();
+  const powerToolsEnabled = usePowerToolsEnabled();
   const fmt = useFormatCurrency();
 
   // The trend charts span up to 6 months — load the full transaction history
@@ -186,7 +188,7 @@ const BudgetTrends: React.FC = () => {
       </Section>
 
       {/* Period (paycheck) history — the retrospective companion to the trends. */}
-      <BudgetHistory />
+      {powerToolsEnabled && <BudgetHistory />}
     </div>
   );
 };

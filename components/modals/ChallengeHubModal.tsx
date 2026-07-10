@@ -4,6 +4,7 @@ import { Check, Plus, Users } from 'lucide-react';
 import { Challenge, CreateChallengePayload } from '@/types/schema';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
+import { usePowerToolsEnabled } from '@/hooks/usePowerToolsEnabled';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { format, parseISO, subDays } from 'date-fns';
 import YearlyGoalFormModal from './YearlyGoalFormModal';
@@ -47,6 +48,9 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
   // it only renders while Kid Mode is on. With it off, this modal behaves exactly
   // as before (display/edit of the active challenge only).
   const kidModeEnabled = useKidModeEnabled();
+  // Plan 17 — gates the Yearly Goal tab/sections/create entry point only; goal
+  // data, listeners, and mutations stay wired regardless of the flag.
+  const powerToolsEnabled = usePowerToolsEnabled();
 
   const [activeTab, setActiveTab] = useState<TabType>('challenge');
   const [isYearlyGoalFormOpen, setIsYearlyGoalFormOpen] = useState(false);
@@ -264,7 +268,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
           <div className="px-4 pt-4 shrink-0">
             <TabsList>
               <TabsTrigger value="challenge">Challenge</TabsTrigger>
-              <TabsTrigger value="yearly">Yearly Goal</TabsTrigger>
+              {powerToolsEnabled && <TabsTrigger value="yearly">Yearly Goal</TabsTrigger>}
               <TabsTrigger value="freeze">Freeze Bank</TabsTrigger>
             </TabsList>
           </div>
@@ -578,7 +582,8 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                 </Section>
               </TabsContent>
 
-              {/* Yearly Goal Tab */}
+              {/* Yearly Goal Tab — gated behind powerToolsEnabled (Plan 17) */}
+              {powerToolsEnabled && (
               <TabsContent value="yearly" className="space-y-6">
                 {displayYearlyGoal ? (
                   <>
@@ -684,6 +689,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                   </div>
                 )}
               </TabsContent>
+              )}
 
               {/* Freeze Bank Tab */}
               <TabsContent value="freeze" className="space-y-6">
@@ -854,7 +860,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                 Save Challenge
               </Button>
             )}
-            {activeTab === 'yearly' && displayYearlyGoal && (
+            {powerToolsEnabled && activeTab === 'yearly' && displayYearlyGoal && (
               <div className="text-center">
                 <p className="text-xs text-brand-400 dark:text-brand-400">
                   Monthly challenges automatically update yearly progress
@@ -875,10 +881,12 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
         </Tabs>
       </Drawer>
 
-      <YearlyGoalFormModal
-        isOpen={isYearlyGoalFormOpen}
-        onClose={() => setIsYearlyGoalFormOpen(false)}
-      />
+      {powerToolsEnabled && (
+        <YearlyGoalFormModal
+          isOpen={isYearlyGoalFormOpen}
+          onClose={() => setIsYearlyGoalFormOpen(false)}
+        />
+      )}
     </>
   );
 };

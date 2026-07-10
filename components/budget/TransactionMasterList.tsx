@@ -19,6 +19,7 @@ import toast from 'react-hot-toast';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { roundMoney } from '@/utils/money';
+import { usePowerToolsEnabled } from '@/hooks/usePowerToolsEnabled';
 import { TransactionItem } from './TransactionItem';
 import SavedViewChips from './SavedViewChips';
 import FilterControls from './FilterControls';
@@ -43,6 +44,7 @@ const TransactionMasterList: React.FC = () => {
   const { stores } = useShopping();
   const { habits } = useGamification();
   const fmt = useFormatCurrency();
+  const powerToolsEnabled = usePowerToolsEnabled();
 
   // State
   const [searchTerm, setSearchTerm] = useState('');
@@ -471,20 +473,22 @@ const TransactionMasterList: React.FC = () => {
           </Button>
         </div>
 
-        <SavedViewChips
-          key={householdId}
-          householdId={householdId}
-          currentFilters={{
-            searchTerm,
-            categoryFilter,
-            sourceFilter
-          }}
-          onApply={(filters) => {
-            setSearchTerm(filters.searchTerm);
-            setCategoryFilter(filters.categoryFilter);
-            setSourceFilter(filters.sourceFilter);
-          }}
-        />
+        {powerToolsEnabled && (
+          <SavedViewChips
+            key={householdId}
+            householdId={householdId}
+            currentFilters={{
+              searchTerm,
+              categoryFilter,
+              sourceFilter
+            }}
+            onApply={(filters) => {
+              setSearchTerm(filters.searchTerm);
+              setCategoryFilter(filters.categoryFilter);
+              setSourceFilter(filters.sourceFilter);
+            }}
+          />
+        )}
       </div>
 
       {/* Summary — collapsible (UX audit Batch 3): the Income/Expense/Net/Count
