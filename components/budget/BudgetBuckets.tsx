@@ -6,6 +6,7 @@ import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { Plus, Edit, Trash2, Wallet } from 'lucide-react';
 import { sumMoney } from '@/utils/money';
 import { BudgetBucket, Transaction, INCOME_CATEGORY } from '@/types/schema';
+import { isCalendarBudgetedCategory } from '@/utils/categories';
 import BucketFormModal from '@/components/modals/BucketFormModal';
 import toast from 'react-hot-toast';
 import EditTransactionModal from '@/components/modals/EditTransactionModal';
@@ -65,8 +66,13 @@ const BudgetBuckets: React.FC = () => {
 
       let bucketId = tx.category ? nameToIdMap.get(tx.category.toLowerCase()) : undefined;
 
-      // If no valid bucket found, assign to Unbudgeted
+      // If no valid bucket found, the spend is either genuinely uncategorized
+      // (→ Unbudgeted) OR intentionally accounted for by the calendar. The
+      // latter (the "Budgeted in Calendar" sentinel and legacy paid-bill "Bills"
+      // tag) is NOT discretionary spend, so it must not be lumped into
+      // "Unbudgeted & Other" — skip it entirely, mirroring how income is dropped.
       if (!bucketId) {
+        if (isCalendarBudgetedCategory(tx.category)) return;
         bucketId = UNBUDGETED_BUCKET.id;
       }
 

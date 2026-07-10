@@ -16,6 +16,7 @@ import { Account, BudgetBucket, CalendarItem, Household } from '@/types/schema';
 import type { MutationOpts } from '@/contexts/household/types';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { resolveBucketForCalendarItem } from '@/utils/safeToSpendCalculator';
+import { BUDGETED_IN_CALENDAR } from '@/utils/categories';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { parseRecurringId, isRecurringId, rollRecurringAnchorForward } from '@/utils/calendarRecurrence';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -302,7 +303,10 @@ export function makePayCalendarItem(deps: {
 
       // Auto-categorize before building the batch, using the same bucket-matching
       // rules as safe-to-spend's bill exclusion (see resolveBucketForCalendarItem).
-      let category = 'Bills';
+      // An unmatched bill is already accounted for by the calendar, so tag it
+      // with the "Budgeted in Calendar" sentinel (not a discretionary bucket) —
+      // this keeps it out of the "Unbudgeted & Other" bucket on the Buckets tab.
+      let category: string = BUDGETED_IN_CALENDAR;
       if (item.type === 'expense') {
         const matchedBucket = resolveBucketForCalendarItem(item, buckets);
         if (matchedBucket) category = matchedBucket.name;

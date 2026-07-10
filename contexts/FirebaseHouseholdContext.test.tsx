@@ -2020,7 +2020,7 @@ describe('FirebaseHouseholdContext — payCalendarItem bucket auto-categorizatio
       await captured.value!.finance.payCalendarItem('cal1', 'acc1');
     });
 
-    expect(paidTxCategory()).toBe('Bills');
+    expect(paidTxCategory()).toBe('Budgeted in Calendar');
   });
 
   it('categorizes a whole-word match ("Gas Bill") under the "Gas" bucket', async () => {
