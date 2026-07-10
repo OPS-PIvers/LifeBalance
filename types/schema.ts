@@ -216,6 +216,31 @@ export interface Transaction {
    *  — the user's money already moved in-app — so this flags it for manual
    *  reconciliation instead. Absent on rows Plaid has not reported removed. */
   plaidRemoved?: boolean;
+  /** Plan 23: denormalized count of `TransactionComment` docs in the
+   *  `comments` subcollection, bumped in the SAME batch as each comment
+   *  add/delete so it can never drift. Absent/0 ⇒ no comments. Read-only
+   *  display field — never derived client-side from a fetched list, since
+   *  comments are loaded on demand (no standing listener). */
+  commentCount?: number;
+}
+
+/**
+ * TransactionComment — Plan 23. A single message in a transaction's comment
+ * thread, stored in the subcollection `households/{hid}/transactions/{txnId}/comments`.
+ * Loaded ON DEMAND (a `getDocs` fetch when the transaction's detail view
+ * opens) — never via a standing listener (this repo bounds listener count
+ * deliberately). No per-user read-tracking in v1; `Transaction.commentCount`
+ * is the only "how many" signal. Firestore rules (separate PR) enforce
+ * `authorUid == request.auth.uid` on create and delete; there is no update
+ * path in v1 (edits are out of scope — simpler rules).
+ */
+export interface TransactionComment {
+  id: string;
+  authorUid: string;
+  /** Free-text comment body, capped at 500 chars (enforced client-side here
+   *  and in the rules draft — see advisor-plans/23-transaction-comments-spike.md). */
+  text: string;
+  createdAt: string; // ISO timestamp
 }
 
 export interface CalendarItem {
