@@ -29,7 +29,7 @@ import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import * as logger from "firebase-functions/logger";
-import { formatCurrency } from "./utils/formatCurrency";
+import { formatCurrency, DEFAULT_CURRENCY } from "./utils/formatCurrency";
 
 /** Minimal subset of the Express/Firebase response object used below. */
 interface HttpResponse {
@@ -138,7 +138,10 @@ function toIcsDate(dateStr: string): string {
 export function buildIcs(
   items: FeedCalendarItem[],
   householdName: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  // The household's configured ISO-4217 currency so bill amounts render with
+  // the same symbol the rest of the app uses (defaults to USD when unset).
+  currency: string = DEFAULT_CURRENCY
 ): string {
   // Dates already covered by a paid/deleted instance doc, keyed by template id
   // — same grouping `findBillsDueOnDate` (functions/src/index.ts) uses to
@@ -176,7 +179,7 @@ export function buildIcs(
     // above), so the template itself is always emitted.
     if (!isRecurring && item.isPaid) continue;
 
-    const summary = `${item.title} (${formatCurrency(item.amount)})`;
+    const summary = `${item.title} (${formatCurrency(item.amount, { currency })})`;
     lines.push(
       "BEGIN:VEVENT",
       foldIcsLine(`UID:${item.id}@lifebalance.app`),
@@ -315,7 +318,11 @@ export const calendarfeed = onRequest(
 
     const householdName =
       typeof data.name === "string" && data.name ? data.name : "LifeBalance";
-    const ics = buildIcs(items, householdName);
+    const currency =
+      typeof data.currency === "string" && data.currency
+        ? data.currency
+        : DEFAULT_CURRENCY;
+    const ics = buildIcs(items, householdName, new Date(), currency);
 
     res.set("Content-Type", "text/calendar; charset=utf-8");
     res.status(200).send(ics);
@@ -328,6 +335,11 @@ export const calendarfeed = onRequest(
  * mismatch, since `crypto.timingSafeEqual` requires equal-length buffers.
  */
 function constantTimeEquals(a: string, b: string): boolean {
+  // Cheap length check on the strings FIRST, before allocating buffers — an
+  // attacker-supplied token is arbitrarily long, so this avoids materializing a
+  // large buffer just to reject it (token length is not secret; it's fixed at
+  // 32 hex chars). timingSafeEqual then guards the content comparison.
+  if (a.length !== b.length) return false;
   const bufA = Buffer.from(a, "utf8");
   const bufB = Buffer.from(b, "utf8");
   if (bufA.length !== bufB.length) return false;

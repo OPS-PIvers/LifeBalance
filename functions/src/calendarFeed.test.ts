@@ -113,6 +113,16 @@ describe("buildIcs", () => {
     expect(ics).not.toContain("RRULE:");
   });
 
+  it("formats the amount in the household's configured currency", () => {
+    // Comma-free amount so the ICS TEXT escaping of ',' doesn't confuse the
+    // assertion — the point here is the currency symbol, not the separator.
+    const usd = buildIcs([item({ amount: 50 })], "House", FIXED_NOW);
+    expect(usd).toContain("$50.00");
+    const eur = buildIcs([item({ amount: 50 })], "House", FIXED_NOW, "EUR");
+    expect(eur).toContain("€50.00");
+    expect(eur).not.toContain("$50.00");
+  });
+
   it("excludes a paid one-off item entirely", () => {
     const ics = buildIcs(
       [item({ id: "paidoneoff", isPaid: true })],
