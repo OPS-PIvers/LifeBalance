@@ -19,6 +19,12 @@ export interface HabitsHeaderMenuProps {
   onManage: () => void;
   /** Disable the actions that operate on existing habits (Export/Adjust/Reorder). */
   actionsDisabled?: boolean;
+  /**
+   * Show the "Smart adjust"/"Smart reorder" AI power-tool items. Defaults to
+   * `true`; pass `false` when `powerToolsEnabled` is off (Plan 17) so the menu
+   * only surfaces Manage/Export.
+   */
+  showSmartTools?: boolean;
 }
 
 const HabitsHeaderMenu: React.FC<HabitsHeaderMenuProps> = ({
@@ -27,13 +33,18 @@ const HabitsHeaderMenu: React.FC<HabitsHeaderMenuProps> = ({
   onReorder,
   onManage,
   actionsDisabled = false,
+  showSmartTools = true,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const items: MenuItem[] = [
     { key: 'manage', label: 'Manage habits', icon: <Settings size={16} />, onSelect: onManage, tone: 'primary' },
-    { key: 'adjust', label: 'Smart adjust', icon: <Sparkles size={16} />, onSelect: onAdjust, disabled: actionsDisabled },
-    { key: 'reorder', label: 'Smart reorder', icon: <ListOrdered size={16} />, onSelect: onReorder, disabled: actionsDisabled },
+    ...(showSmartTools
+      ? [
+          { key: 'adjust', label: 'Smart adjust', icon: <Sparkles size={16} />, onSelect: onAdjust, disabled: actionsDisabled },
+          { key: 'reorder', label: 'Smart reorder', icon: <ListOrdered size={16} />, onSelect: onReorder, disabled: actionsDisabled },
+        ]
+      : []),
     {
       key: 'export',
       label: 'Export to CSV',

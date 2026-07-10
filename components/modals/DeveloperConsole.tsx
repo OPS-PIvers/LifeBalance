@@ -5,7 +5,7 @@ import { Switch } from '@/components/ui/Switch';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { db } from '@/firebase.config';
 import { collection, query, getDocs, getDoc, addDoc, updateDoc, doc, deleteDoc, orderBy, limit } from 'firebase/firestore';
-import { readAppConfigFlags, setAppFlag, AI_ENABLED_FLAG_KEY } from '@/services/appConfig';
+import { readAppConfigFlags, setAppFlag, AI_ENABLED_FLAG_KEY, POWER_TOOLS_FLAG_KEY } from '@/services/appConfig';
 import { BetaTester, FeedbackReport, Household } from '@/types/schema';
 import { Loader2, Plus, Trash2, Copy, X, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -63,6 +63,13 @@ const FEATURE_FLAGS: readonly FeatureFlagDef[] = [
     label: 'Plaid Bank Link',
     description:
       "Gates the \"Connect a bank (Plaid)\" entry and all Plaid linking UI. Fails CLOSED: off unless explicitly enabled, so no bank-link UI shows while dormant. Requires the PLAID_* secrets in Secret Manager and the deployed plaidcreatelinktoken / plaidexchangepublictoken functions (see docs/PLAID_SETUP_RUNBOOK.md) BEFORE turning ON.",
+    danger: false,
+  },
+  {
+    key: POWER_TOOLS_FLAG_KEY,
+    label: 'Power Tools',
+    description:
+      'Gates power-user/AI-heavy surfaces: HabitCoach, Smart Adjust/Reorder, grocery "Optimize with AI", Budget History, Saved View chips, and Yearly Goal UI (Plan 17). Fails OPEN: these stay ON unless this is explicitly turned off. Turn OFF to simplify the app / reduce AI cost surface for all households.',
     danger: false,
   },
 ];
