@@ -31,6 +31,7 @@ import {
   insightConverter,
   weeklyRecapConverter,
   transactionConverter,
+  transactionCommentConverter,
   todoConverter,
 } from './firestoreConverters';
 
@@ -808,6 +809,39 @@ describe('transactionConverter', () => {
     expect(out['needsAmount']).toBe(true);
     expect(out['needsAmountPromptedAt']).toBe('2024-01-15T11:00:00.000Z');
     expect('id' in out).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TransactionComment (Plan 23)
+// ---------------------------------------------------------------------------
+describe('transactionCommentConverter', () => {
+  const wellFormed = {
+    authorUid: 'uid-1',
+    text: 'What was this for?',
+    createdAt: '2026-07-10T10:00:00.000Z',
+  };
+
+  it('(a) fromFirestore injects id and preserves all fields', () => {
+    const result = transactionCommentConverter.fromFirestore(fakeSnap('comment-1', wellFormed));
+    expect(result.id).toBe('comment-1');
+    expect(result.authorUid).toBe('uid-1');
+    expect(result.text).toBe('What was this for?');
+    expect(result.createdAt).toBe('2026-07-10T10:00:00.000Z');
+  });
+
+  it('(a) toFirestore strips id', () => {
+    const comment = { ...wellFormed, id: 'comment-1' };
+    const out = callToFirestore(transactionCommentConverter, comment);
+    expect('id' in out).toBe(false);
+    expect(out['text']).toBe('What was this for?');
+  });
+
+  it('(b) partial doc missing text does not throw', () => {
+    const { text: _dropped, ...partial } = wellFormed;
+    const result = transactionCommentConverter.fromFirestore(fakeSnap('comment-2', partial));
+    expect(result.id).toBe('comment-2');
+    expect(result.text).toBeUndefined();
   });
 });
 

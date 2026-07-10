@@ -12,6 +12,7 @@ import { processToggleHabit, calculateResetPoints, streakForHabit } from '@/util
 import { selectAutoFreezeCandidates } from '@/utils/freezeBank';
 import { accountImpactOf, effectiveAccountImpact, resolveTargetAccount } from '@/utils/accountImpact';
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
+import { MAX_COMMENT_LENGTH } from '@/contexts/household/mutations/commentMutations';
 import { roundMoney } from '@/utils/money';
 import { track } from '@/services/analytics';
 import {
@@ -39,7 +40,8 @@ import {
   Household,
   FreezeBank,
   ModuleKey,
-  WeeklyRecap
+  WeeklyRecap,
+  TransactionComment
 } from '@/types/schema';
 import toast from 'react-hot-toast';
 
@@ -106,7 +108,10 @@ const SEED_TRANSACTIONS: Transaction[] = [
     id: 'tx1', amount: 45.50, merchant: 'Safeway', category: 'Groceries',
     date: getLocalDateString(),
     status: 'verified', isRecurring: false, source: 'manual',
-    autoCategorized: false, payPeriodId: MOCK_PAY_PERIOD_ID
+    autoCategorized: false, payPeriodId: MOCK_PAY_PERIOD_ID,
+    // Plan 23: seeded with one comment (see SEED_TRANSACTION_COMMENTS below)
+    // so the thread + row count-badge are visible without any user action.
+    commentCount: 1,
   },
   {
     id: 'tx2', amount: 120.00, merchant: 'PG&E', category: 'Utilities',
@@ -130,6 +135,19 @@ const STUB_TRANSACTION: Transaction = {
   date: getLocalDateString(),
   status: 'pending_review', isRecurring: false, source: 'shortcut',
   autoCategorized: false, needsAmount: true, payPeriodId: MOCK_PAY_PERIOD_ID,
+};
+
+// Plan 23: seed thread for tx1 so the comment section renders content in
+// Test Mode without requiring any interaction first (visual verification).
+const SEED_TRANSACTION_COMMENTS: Record<string, TransactionComment[]> = {
+  tx1: [
+    {
+      id: 'comment-1',
+      authorUid: 'test-user-id',
+      text: 'Bigger than usual — stocked up for the week.',
+      createdAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    },
+  ],
 };
 
 const SEED_HABITS: Habit[] = [
@@ -261,6 +279,12 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [buckets, setBuckets] = useState<BudgetBucket[]>(isFresh ? [] : SEED_BUCKETS);
   const [transactions, setTransactions] = useState<Transaction[]>(
     isFresh ? [] : TEST_SEED_VARIANT === 'stub' ? [...SEED_TRANSACTIONS, STUB_TRANSACTION] : SEED_TRANSACTIONS
+  );
+  // Plan 23 — transaction comments, keyed by transaction id. Mirrors the real
+  // context's on-demand fetch model (no listener); the "fetch" here is just a
+  // synchronous in-memory read wrapped in a resolved Promise.
+  const [transactionComments, setTransactionComments] = useState<Record<string, TransactionComment[]>>(
+    isFresh ? {} : SEED_TRANSACTION_COMMENTS
   );
   const [habits, setHabits] = useState<Habit[]>(isFresh ? [] : SEED_HABITS);
   const [calendarItems, setCalendarItems] = useState<CalendarItem[]>([]);
@@ -638,6 +662,49 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       return [...filtered, ...newTxs];
     });
     toast.success('Mock: Transaction split');
+  }, []);
+
+  // Plan 23 — transaction comments (Test-Mode parity, in-memory). Unlike prod
+  // (where the comments subcollection has no firestore.rules entry yet), Test
+  // Mode never touches Firestore, so these work fully today — the orchestrator
+  // can visually verify the whole feature without the rules PR.
+  const getTransactionComments = useCallback(async (transactionId: string): Promise<TransactionComment[]> => {
+    return transactionComments[transactionId] ?? [];
+  }, [transactionComments]);
+
+  const addTransactionComment = useCallback(async (transactionId: string, text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      toast.error('Comment cannot be empty');
+      return;
+    }
+    if (trimmed.length > MAX_COMMENT_LENGTH) {
+      toast.error(`Comment must be ${MAX_COMMENT_LENGTH} characters or fewer`);
+      return;
+    }
+    const comment: TransactionComment = {
+      id: generateId(),
+      authorUid: 'test-user-id',
+      text: trimmed,
+      createdAt: new Date().toISOString(),
+    };
+    setTransactionComments(prev => ({
+      ...prev,
+      [transactionId]: [...(prev[transactionId] ?? []), comment],
+    }));
+    setTransactions(prev => prev.map(t => t.id === transactionId
+      ? { ...t, commentCount: (t.commentCount ?? 0) + 1 }
+      : t));
+  }, []);
+
+  const deleteTransactionComment = useCallback(async (transactionId: string, commentId: string) => {
+    setTransactionComments(prev => ({
+      ...prev,
+      [transactionId]: (prev[transactionId] ?? []).filter(c => c.id !== commentId),
+    }));
+    setTransactions(prev => prev.map(t => t.id === transactionId
+      ? { ...t, commentCount: Math.max(0, (t.commentCount ?? 0) - 1) }
+      : t));
   }, []);
 
   // Habit operations
@@ -1227,6 +1294,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     splitTransaction,
     mergeTransactions,
     keepBothTransactions,
+    getTransactionComments,
+    addTransactionComment,
+    deleteTransactionComment,
     addCalendarItem,
     updateCalendarItem,
     deleteCalendarItem,

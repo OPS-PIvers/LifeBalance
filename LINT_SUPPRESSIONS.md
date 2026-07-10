@@ -15,7 +15,7 @@ Suppressions should only exist for:
 
 ## Current Suppressions
 
-### Status: No blanket suppressions; 21 granular ones remain (re-audited 2026-07-04)
+### Status: No blanket suppressions; 22 granular ones remain (re-audited 2026-07-10, Plan 23)
 
 `pnpm lint` is green (0 errors, 0 warnings). There are **zero** blanket `/* eslint-disable */`
 files and **zero** `@ts-ignore`/`@ts-expect-error`/`@ts-nocheck`.
@@ -25,18 +25,19 @@ Refresh this audit with:
 grep -rn "eslint-disable" --include="*.ts" --include="*.tsx" . | grep -v node_modules
 ```
 
-#### Current granular `eslint-disable-next-line` inventory (21 total)
+#### Current granular `eslint-disable-next-line` inventory (22 total)
 
 **`react-refresh/only-export-components` — 12× (legitimate pattern per policy — keep):**
 context/hook exports in `contexts/AuthContext.tsx` (×2), `contexts/ThemeContext.tsx` (×1), and
 `contexts/FirebaseHouseholdContext.tsx` (×9, one per exported slice hook).
 
-**`react-hooks/set-state-in-effect` — 5× (each carries a justification comment — review when touched):**
+**`react-hooks/set-state-in-effect` — 6× (each carries a justification comment — review when touched):**
 - `components/modals/HabitSubmissionLogModal.tsx:65` — intentional load-on-open
 - `components/modals/BucketFormModal.tsx:37` — form state reset on open
 - `components/modals/DeveloperConsole.tsx:141` — intentional load-on-open
 - `contexts/FirebaseHouseholdContext.tsx:893` — intentional cross-household state teardown
 - `contexts/FirebaseHouseholdContext.tsx:1512` — intentional listener-window re-baseline
+- `components/transactions/TransactionCommentThread.tsx:64` (Plan 23) — intentional load-on-open, mirrors HabitSubmissionLogModal
 
 **`@typescript-eslint/no-explicit-any` — 4× (test-only — eliminate when next editing the file):**
 all in `pages/Habits.Export.test.tsx` (lines 132, 150, 173, 175).

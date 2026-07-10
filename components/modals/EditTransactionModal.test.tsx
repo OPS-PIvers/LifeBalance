@@ -11,7 +11,10 @@ const {
   mockDeleteTransaction,
   mockAddTransaction,
   mockOnClose,
-  mockToast
+  mockToast,
+  mockGetTransactionComments,
+  mockAddTransactionComment,
+  mockDeleteTransactionComment,
 } = vi.hoisted(() => ({
   mockUpdateTransaction: vi.fn(),
   mockDeleteTransaction: vi.fn(),
@@ -21,9 +24,18 @@ const {
     success: vi.fn(),
     error: vi.fn(),
   },
+  // Stable references (hoisted, defined once) — TransactionCommentThread's
+  // load-on-open effect depends on getTransactionComments' identity, so a
+  // fresh vi.fn() per render (e.g. one created inline inside the mocked
+  // useFinance() factory below) would loop forever.
+  mockGetTransactionComments: vi.fn().mockResolvedValue([]),
+  mockAddTransactionComment: vi.fn(),
+  mockDeleteTransactionComment: vi.fn(),
 }));
 
-// Mock slice hooks used by EditTransactionModal
+// Mock slice hooks used by EditTransactionModal (including the Plan 23
+// TransactionCommentThread it now renders, which reads useFinance's
+// comment methods and useHouseholdCore's members/currentUser).
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useFinance: () => ({
     updateTransaction: mockUpdateTransaction,
@@ -34,12 +46,19 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
       { id: '2', name: 'Utilities', limit: 200, color: 'blue', isVariable: false, isCore: true },
     ],
     accounts: [] as unknown[],
+    getTransactionComments: mockGetTransactionComments,
+    addTransactionComment: mockAddTransactionComment,
+    deleteTransactionComment: mockDeleteTransactionComment,
   }),
   useShopping: () => ({
     stores: [
       { id: 's1', name: 'Test Store' },
       { id: 's2', name: 'Costco' },
     ] as unknown[],
+  }),
+  useHouseholdCore: () => ({
+    members: [] as unknown[],
+    currentUser: null,
   }),
 }));
 
@@ -55,6 +74,8 @@ vi.mock('lucide-react', () => ({
   Loader2: () => <div data-testid="icon-loader" />,
   Copy: () => <div data-testid="icon-copy" />,
   ChevronDown: () => <div data-testid="icon-chevron-down" />,
+  MessageSquare: () => <div data-testid="icon-message-square" />,
+  Send: () => <div data-testid="icon-send" />,
 }));
 
 // Mock Modal component
