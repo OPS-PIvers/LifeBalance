@@ -30,11 +30,30 @@ export const DailyHabitsWidget: React.FC = React.memo(() => {
         const currentCount = isStale ? 0 : habit.count;
         const target = habit.targetCount || 1;
         const progress = Math.min(100, Math.round((currentCount / target) * 100));
+        // Signal inputs for the smart ranking below. completedDates are
+        // yyyy-MM-dd strings, so a lexical max is the most-recent completion.
+        const lastCompleted = habit.completedDates.reduce((max, d) => (d > max ? d : max), '');
+        const frequency = habit.completedDates.length;
 
-        return { ...habit, isCompleted, currentCount, progress };
+        return { ...habit, isCompleted, currentCount, progress, lastCompleted, frequency };
       })
+      // Smart ranking (replaces raw manual order): surface the highest-signal
+      // habits first so the widget leads with what's worth acting on today —
+      // not whatever happens to sit at the top of the manual list.
+      //   1. Incomplete before completed (completed sink to the bottom).
+      //   2. Active / at-risk streaks first, biggest streak first — an
+      //      unchecked habit with a live streak has the most to lose today.
+      //   3. Then most-recently completed (recency), then most-frequently
+      //      completed (frequency).
+      //   4. Manual `order` breaks any remaining ties.
       .sort((a, b) => {
         if (a.isCompleted !== b.isCompleted) return a.isCompleted ? 1 : -1;
+        const aHasStreak = a.streakDays > 0;
+        const bHasStreak = b.streakDays > 0;
+        if (aHasStreak !== bHasStreak) return aHasStreak ? -1 : 1;
+        if (a.streakDays !== b.streakDays) return b.streakDays - a.streakDays;
+        if (a.lastCompleted !== b.lastCompleted) return a.lastCompleted < b.lastCompleted ? 1 : -1;
+        if (a.frequency !== b.frequency) return b.frequency - a.frequency;
         return (a.order ?? DEFAULT_ORDER_FALLBACK) - (b.order ?? DEFAULT_ORDER_FALLBACK);
       });
   }, [habits, today]);

@@ -440,12 +440,17 @@ const Dashboard: React.FC = () => {
             "All caught up" state doesn't dominate the top of the page. */}
         {actionQueue.length > 0 && actionQueueSection}
 
+        {/* The Pulse strip — "This week" at a glance (money + habits balance,
+            the app's thesis metric). Leads the widgets, above credit + habits. */}
+        <PulseStripWidget />
+
+        {/* Today's Habits — smart-ranked compact tracker (habits domain — Plan
+            090). Kept high so active / at-risk streaks lead the page. */}
+        {isModuleEnabled('habits') && <DailyHabitsWidget />}
+
         {/* Credit card activity — charges vs. paydowns this period so balances
             don't balloon (money domain). Self-nulls without any credit cards. */}
         {isModuleEnabled('money') && <CreditCardActivityWidget onPayDown={handlePayDown} />}
-
-        {/* The Pulse strip — money + habits balance, the app's thesis metric */}
-        <PulseStripWidget />
 
         {/* Weekly recap (Plan 02) — fresh for a few days after the Sunday
             generation, dismissible; also hosts the recap detail drawer (which
@@ -477,9 +482,6 @@ const Dashboard: React.FC = () => {
         {/* Empty-queue case: the "All caught up" section stays in its original
             position below the widgets rather than leading the page. */}
         {actionQueue.length === 0 && actionQueueSection}
-
-        {/* Today's Habits — compact tracker (habits domain — Plan 090). */}
-        {isModuleEnabled('habits') && <DailyHabitsWidget />}
 
         {/* Kids' Chores (parent overview) — self-nulls unless Kid Mode is on and a
             managed kid has a chore, so this is dormant by default. */}
