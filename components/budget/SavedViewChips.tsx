@@ -145,7 +145,6 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
                 <li key={view.id} className="group flex items-center gap-1">
                   <button
                     type="button"
-                    role="menuitem"
                     onClick={() => {
                       onApply(view.filters);
                       toast.success(`Applied "${view.name}"`);
@@ -182,6 +181,7 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
                 value={newViewName}
                 onChange={(e) => setNewViewName(e.target.value)}
                 placeholder="View name…"
+                aria-label="View name"
                 className="min-w-0 flex-1 rounded-btn border border-brand-300 px-2 py-1.5 text-sm dark:border-brand-700 dark:bg-brand-800 dark:text-brand-100 dark:placeholder:text-brand-450 focus:outline-hidden focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500"
                 autoFocus
               />
@@ -205,7 +205,6 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
           ) : (
             <button
               type="button"
-              role="menuitem"
               onClick={() => setIsSaving(true)}
               className="flex w-full items-center gap-2 rounded-btn px-2 py-2 text-sm font-semibold text-accent-700 dark:text-accent-300 hover:bg-brand-50 dark:hover:bg-brand-700/40 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
             >
