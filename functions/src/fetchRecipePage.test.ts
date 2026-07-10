@@ -85,6 +85,24 @@ describe("assertFetchableUrl (SSRF guard)", () => {
     }
   });
 
+  it("rejects internal hostnames with a trailing FQDN dot (bypass regression)", () => {
+    // WHATWG URL preserves a trailing dot on DNS names ("localhost." stays
+    // "localhost."), which resolves identically to the dot-less name — the
+    // guard must strip it before comparing.
+    for (const bad of [
+      "http://localhost./",
+      "https://metadata.google.internal./computeMetadata/v1/",
+      "https://printer.local./",
+      "https://foo.localhost./",
+    ]) {
+      expect(codeOf(() => assertFetchableUrl(bad)), bad).toBe("invalid-argument");
+    }
+    // IPv4 with a trailing dot is normalized by URL itself and stays blocked.
+    expect(codeOf(() => assertFetchableUrl("http://127.0.0.1./"))).toBe(
+      "invalid-argument"
+    );
+  });
+
   it("rejects missing / non-string / unparseable input", () => {
     expect(codeOf(() => assertFetchableUrl(undefined))).toBe("invalid-argument");
     expect(codeOf(() => assertFetchableUrl(42))).toBe("invalid-argument");

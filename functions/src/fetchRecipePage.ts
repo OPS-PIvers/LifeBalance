@@ -11,8 +11,10 @@
  * SSRF guards (mandatory — this is a server-side fetch proxy): only http/https
  * URLs whose hostname is a public-looking DNS name are fetched. IP literals
  * (v4/v6), localhost, *.localhost, *.local and *.internal are rejected before
- * any network call. Known v1 limitation: redirects are followed without
- * re-validating the final URL, partially mitigated by the content-type
+ * any network call (trailing FQDN dots stripped first), and the FINAL URL
+ * after redirects is re-validated against the same guard before the body is
+ * read. Residual limitation: a public DNS name that RESOLVES to an internal
+ * address (DNS rebinding) is not detected — mitigated by the content-type
  * allowlist, the body-size cap, and the fact that no credentials are sent.
  */
 
@@ -68,8 +70,11 @@ export function assertFetchableUrl(raw: unknown): URL {
 
   // WHATWG URL lowercases hostnames and normalizes IPv4 forms (hex, decimal,
   // partial) to dotted-quad, so these string checks see canonical values.
-  // IPv6 literals keep their brackets in `hostname` ("[::1]").
-  const hostname = url.hostname;
+  // IPv6 literals keep their brackets in `hostname` ("[::1]"). One canonical
+  // form it does NOT normalize: a trailing dot on a DNS name ("localhost."
+  // resolves identically to "localhost" but keeps its dot) — strip it so the
+  // internal-name checks can't be bypassed with an FQDN dot.
+  const hostname = url.hostname.replace(/\.$/, "");
   const isIpLiteral =
     IPV4_RE.test(hostname) || hostname.startsWith("[") || hostname.includes(":");
   const isInternalName =
@@ -279,48 +284,79 @@ export const fetchrecipepage = onCall(
         headers: { "User-Agent": "LifeBalanceRecipeBot/1.0" },
       });
     } catch (error) {
+      clearTimeout(timer);
       logger.warn("fetchrecipepage: fetch failed", { url: url.href, error });
       throw new HttpsError(
         "unavailable",
         "Couldn't reach that site. Check the link or paste the recipe text instead."
       );
+    }
+
+    // Redirects are followed, so re-validate the FINAL url the fetch landed on
+    // — otherwise a public page that 302s to an internal host would bypass the
+    // pre-fetch SSRF checks. (response.url is empty for some mocked responses;
+    // an empty value means no redirect information, so nothing to re-check.)
+    try {
+      if (response.url) assertFetchableUrl(response.url);
+    } catch (error) {
+      clearTimeout(timer);
+      await response.body?.cancel().catch(() => undefined);
+      logger.warn("fetchrecipepage: redirect target rejected", {
+        url: url.href,
+        finalUrl: response.url,
+      });
+      throw error;
+    }
+
+    // The abort timer stays armed through the body read (not just the fetch),
+    // so a server that trickles bytes can't hold the invocation open past the
+    // deadline — the aborted stream makes readBodyCapped reject.
+    try {
+      if (!response.ok) {
+        throw new HttpsError(
+          "not-found",
+          `That page couldn't be loaded (HTTP ${response.status}).`
+        );
+      }
+
+      const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
+      const isAllowedType =
+        contentType.startsWith("text/html") ||
+        contentType.startsWith("text/plain") ||
+        contentType.startsWith("application/ld+json");
+      if (!isAllowedType) {
+        throw new HttpsError(
+          "failed-precondition",
+          "That link isn't a web page. Use a link to a recipe page."
+        );
+      }
+
+      let body: string;
+      try {
+        body = await readBodyCapped(response, MAX_BODY_BYTES);
+      } catch (error) {
+        logger.warn("fetchrecipepage: body read failed", { url: url.href, error });
+        throw new HttpsError(
+          "unavailable",
+          "Couldn't read that page in time. Try again or paste the recipe text instead."
+        );
+      }
+      const result = extractRecipeText(body);
+      if (!result.text) {
+        throw new HttpsError(
+          "not-found",
+          "No readable recipe content was found on that page."
+        );
+      }
+
+      logger.info("fetchrecipepage: extracted", {
+        url: url.href,
+        usedJsonLd: result.usedJsonLd,
+        chars: result.text.length,
+      });
+      return result;
     } finally {
       clearTimeout(timer);
     }
-
-    if (!response.ok) {
-      throw new HttpsError(
-        "not-found",
-        `That page couldn't be loaded (HTTP ${response.status}).`
-      );
-    }
-
-    const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
-    const isAllowedType =
-      contentType.startsWith("text/html") ||
-      contentType.startsWith("text/plain") ||
-      contentType.startsWith("application/ld+json");
-    if (!isAllowedType) {
-      throw new HttpsError(
-        "failed-precondition",
-        "That link isn't a web page. Use a link to a recipe page."
-      );
-    }
-
-    const body = await readBodyCapped(response, MAX_BODY_BYTES);
-    const result = extractRecipeText(body);
-    if (!result.text) {
-      throw new HttpsError(
-        "not-found",
-        "No readable recipe content was found on that page."
-      );
-    }
-
-    logger.info("fetchrecipepage: extracted", {
-      url: url.href,
-      usedJsonLd: result.usedJsonLd,
-      chars: result.text.length,
-    });
-    return result;
   }
 );
