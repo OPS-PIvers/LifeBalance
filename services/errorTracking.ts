@@ -53,7 +53,7 @@ function flushPendingErrors(): void {
   if (sentry) {
     for (const [error, context] of pendingErrors) {
       try {
-        sentry.captureException(error, context ? { tags: context } : undefined);
+        sentry.captureException(error, context ? { extra: context } : undefined);
       } catch {
         // Swallow — error tracking must never break product code.
       }
@@ -119,7 +119,7 @@ export function captureException(
     return;
   }
   try {
-    sentry.captureException(error, context ? { tags: context } : undefined);
+    sentry.captureException(error, context ? { extra: context } : undefined);
   } catch {
     // Swallow — error tracking must never break product code.
   }

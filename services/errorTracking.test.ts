@@ -113,7 +113,7 @@ describe('errorTracking init gating + queueing', () => {
     await flushMicrotasks();
 
     expect(sentryCaptureException).toHaveBeenCalledWith(err, {
-      tags: { componentStack: 'stack' },
+      extra: { componentStack: 'stack' },
     });
   });
 
