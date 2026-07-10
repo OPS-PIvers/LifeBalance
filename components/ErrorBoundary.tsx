@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { captureException } from '@/services/errorTracking';
 
 interface Props {
   children: React.ReactNode;
@@ -28,6 +29,7 @@ class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
+    captureException(error, { componentStack: errorInfo.componentStack ?? '' });
     console.error('Uncaught error:', error, errorInfo);
     this.setState({ errorInfo });
   }
