@@ -177,8 +177,18 @@ async function enforceAiQuota(
     const cap = getAiDailyCap(data, billingEnabled);
 
     const usage = data.aiUsage ?? { dailyCount: 0, lastResetDate: today };
-    // If the date rolled over, treat the count as 0 for the new day.
-    const currentCount = usage.lastResetDate === today ? usage.dailyCount : 0;
+    // Day-rollover semantics are MONOTONIC: the counter resets only when the
+    // resolved day is strictly LATER than the stored one (yyyy-MM-dd strings
+    // compare lexicographically = chronologically), and the stored key never
+    // moves backwards. A claimed day equal to or EARLIER than the stored day
+    // keeps counting against the stored day — without this, a caller could
+    // alternate `today` between two in-clamp dates (resolveQuotaDay allows
+    // ±1 day of server UTC) and force a reset on every call, bypassing the
+    // cap entirely. Worst case for an adversary is now one early rollover per
+    // real day (bounded at 2× cap/day), not unlimited.
+    const rolledOver = today > usage.lastResetDate;
+    const effectiveDay = rolledOver ? today : usage.lastResetDate;
+    const currentCount = rolledOver ? 0 : usage.dailyCount;
 
     if (currentCount >= cap) {
       // Message must contain "Daily AI quota exceeded" — the client's retry
@@ -191,7 +201,7 @@ async function enforceAiQuota(
     }
 
     txn.update(householdRef, {
-      aiUsage: { dailyCount: currentCount + 1, lastResetDate: today },
+      aiUsage: { dailyCount: currentCount + 1, lastResetDate: effectiveDay },
     });
   });
 }

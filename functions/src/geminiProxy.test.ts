@@ -381,6 +381,46 @@ describe("geminiproxy", () => {
     });
   });
 
+  it("never resets when the claimed day is EARLIER than the stored day (alternation attack)", async () => {
+    // Adversarial pattern: after calls counted against SERVER_TODAY, the caller
+    // claims yesterday (still within the ±1-day clamp) hoping the mismatch
+    // resets the counter. Rollover must be monotonic: an earlier claimed day
+    // keeps counting against the STORED day, and the stored key never moves
+    // backwards — otherwise alternating two in-clamp dates bypasses the cap.
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    setHousehold({
+      memberUids: ["user1"],
+      aiUsage: { dailyCount: 100, lastResetDate: SERVER_TODAY },
+    });
+
+    await expect(
+      asCallable(geminiproxy)({
+        auth: AUTH,
+        data: { ...VALID_DATA, today: yesterday },
+      })
+    ).rejects.toMatchObject({ code: "resource-exhausted" });
+    expect(generateContentMock).not.toHaveBeenCalled();
+    expect(adminMock.txnUpdate).not.toHaveBeenCalled();
+  });
+
+  it("counts an under-cap earlier-day claim against the stored day without moving it backwards", async () => {
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    setHousehold({
+      memberUids: ["user1"],
+      aiUsage: { dailyCount: 5, lastResetDate: SERVER_TODAY },
+    });
+
+    await asCallable(geminiproxy)({
+      auth: AUTH,
+      data: { ...VALID_DATA, today: yesterday },
+    });
+
+    // Increment continues on the stored (later) day; lastResetDate unchanged.
+    expect(adminMock.txnUpdate).toHaveBeenCalledWith(expect.anything(), {
+      aiUsage: { dailyCount: 6, lastResetDate: SERVER_TODAY },
+    });
+  });
+
   it("clamps a far-off claimed 'today' to the server date (no date-gaming)", async () => {
     setHousehold({
       memberUids: ["user1"],
