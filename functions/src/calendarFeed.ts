@@ -270,7 +270,16 @@ export const calendarfeed = onRequest(
 
     const hid = req.query.hid;
     const token = req.query.token;
-    if (typeof hid !== "string" || !hid || typeof token !== "string" || !token) {
+    // A `/` in `hid` would escape the households/ collection path and make
+    // `db.doc()` throw on an odd-segment path (unhandled 500) — reject it as a
+    // bare 404 so a malformed id is indistinguishable from a wrong one.
+    if (
+      typeof hid !== "string" ||
+      !hid ||
+      hid.includes("/") ||
+      typeof token !== "string" ||
+      !token
+    ) {
       res.status(404).send("Not found");
       return;
     }
@@ -296,6 +305,9 @@ export const calendarfeed = onRequest(
     const itemsSnap = await db
       .collection(`households/${hid}/calendarItems`)
       .where("type", "==", "expense")
+      // Defensive bound on a public endpoint: a household never has thousands
+      // of bills, so cap the read rather than emit an unbounded feed.
+      .limit(1000)
       .get();
     const items = itemsSnap.docs.map(
       (d) => ({ id: d.id, ...d.data() } as FeedCalendarItem)

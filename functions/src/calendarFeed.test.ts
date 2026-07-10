@@ -46,7 +46,10 @@ const adminMock = vi.hoisted(() => {
   const householdUpdate = vi.fn(() => Promise.resolve());
   const calendarItemsGet = vi.fn();
   const householdRef = { get: householdGet, update: householdUpdate };
-  const whereFn = vi.fn(() => ({ get: calendarItemsGet }));
+  // `.where(...)` is followed by `.limit(...).get()` in the handler; the mock
+  // returns a chainable object exposing both.
+  const whereResult = { limit: vi.fn(() => whereResult), get: calendarItemsGet };
+  const whereFn = vi.fn(() => whereResult);
   const db = {
     doc: vi.fn(() => householdRef),
     collection: vi.fn(() => ({ where: whereFn })),
@@ -371,6 +374,18 @@ describe("calendarfeed", () => {
     const res = makeRes();
     await asHttp(calendarfeed)(makeReq({ hid: "hh1" }), res);
     expect(res.statusCode).toBe(404);
+  });
+
+  it("404s (does not throw) on a hid containing a path separator", async () => {
+    // A `/` would escape the households/ path and make db.doc() throw on an
+    // odd-segment path — it must be rejected before the lookup.
+    const res = makeRes();
+    await asHttp(calendarfeed)(
+      makeReq({ hid: "hh1/calendarItems/x", token: VALID_TOKEN }),
+      res
+    );
+    expect(res.statusCode).toBe(404);
+    expect(adminMock.householdGet).not.toHaveBeenCalled();
   });
 
   it("404s for an unknown household", async () => {
