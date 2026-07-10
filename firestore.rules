@@ -358,6 +358,9 @@ service cloud.firestore {
                               isValidOptionalString(request.resource.data.get('plaidTransactionId', null), 100) && // Plaid dedup key (server writes via Admin SDK; this is defense-in-depth)
                               isValidOptionalString(request.resource.data.get('possibleDuplicateOf', null), 100) && // Plan 03: doc id of a suspected duplicate row (cleared by Merge/Keep-both)
                               request.resource.data.get('possibleDuplicateOf', null) != transactionId && // a row can never be its own duplicate
+                              // Plan 23: denormalized comment counter, bumped via increment() in the same
+                              // writeBatch as each comment doc write/delete (see commentMutations.ts).
+                              isValidOptionalNumber(request.resource.data.get('commentCount', null)) &&
                               // Booleans
                               (request.resource.data.get('isRecurring', null) == null || isValidBoolean(request.resource.data.isRecurring)) &&
                               (request.resource.data.get('autoCategorized', null) == null || isValidBoolean(request.resource.data.autoCategorized)) &&
@@ -368,6 +371,24 @@ service cloud.firestore {
                               (request.resource.data.get('status', null) == null || request.resource.data.status in ['verified', 'pending_review']);
 
         allow delete: if isMemberOf(householdId);
+
+        // 🛡️ Plan 23: Transaction comments — a lightweight per-transaction thread,
+        // nested one level under a transaction. Read: any household member.
+        // Create: author-only (authorUid must be the caller), 500-char text cap,
+        // exactly {authorUid, text, createdAt} to prevent storage abuse. No update
+        // path in v1 (comments are immutable — edits are out of scope). Delete:
+        // author-only. The client mirrors these caps but rules are the source of
+        // truth (see contexts/household/mutations/commentMutations.ts).
+        match /comments/{commentId} {
+          allow read: if isMemberOf(householdId);
+          allow create: if isMemberOf(householdId) &&
+                        request.resource.data.keys().hasOnly(['authorUid', 'text', 'createdAt']) &&
+                        request.resource.data.authorUid == request.auth.uid &&
+                        isValidString(request.resource.data.text, 500) &&
+                        isValidString(request.resource.data.createdAt, 30); // ISO timestamp
+          allow delete: if isMemberOf(householdId) &&
+                        resource.data.authorUid == request.auth.uid;
+        }
       }
 
       // Accounts subcollection
@@ -417,15 +438,15 @@ service cloud.firestore {
         // Helper to validate bucket fields for CREATE operations
         function isValidBucketCreate() {
           let data = request.resource.data;
-          return (!data.keys().has('name') || isValidString(data.name, 50)) &&
-                 (!data.keys().has('limit') || isValidNumber(data.limit)) &&
-                 (!data.keys().has('color') || isValidString(data.color, 20)) &&
-                 (!data.keys().has('isVariable') || isValidBoolean(data.isVariable)) &&
-                 (!data.keys().has('isCore') || isValidBoolean(data.isCore)) &&
-                 (!data.keys().has('currentPeriodId') || isValidOptionalString(data.currentPeriodId, 10)) &&
-                 (!data.keys().has('lastResetDate') || isValidOptionalString(data.lastResetDate, 10)) &&
-                 (!data.keys().has('subBuckets') || data.subBuckets is list) &&
-                 (!data.keys().has('createdBy') || data.createdBy is string);
+          return (!data.keys().hasAny(['name']) || isValidString(data.name, 50)) &&
+                 (!data.keys().hasAny(['limit']) || isValidNumber(data.limit)) &&
+                 (!data.keys().hasAny(['color']) || isValidString(data.color, 20)) &&
+                 (!data.keys().hasAny(['isVariable']) || isValidBoolean(data.isVariable)) &&
+                 (!data.keys().hasAny(['isCore']) || isValidBoolean(data.isCore)) &&
+                 (!data.keys().hasAny(['currentPeriodId']) || isValidOptionalString(data.currentPeriodId, 10)) &&
+                 (!data.keys().hasAny(['lastResetDate']) || isValidOptionalString(data.lastResetDate, 10)) &&
+                 (!data.keys().hasAny(['subBuckets']) || data.subBuckets is list) &&
+                 (!data.keys().hasAny(['createdBy']) || data.createdBy is string);
         }
 
         // Helper to validate ONLY changed fields during UPDATE operations
@@ -790,6 +811,57 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // 🛡️ Plan 24: Explicit rules for Savings Goals (sinking funds).
+      // Manual-contribution-only entity, deliberately decoupled from Account
+      // balances and Transactions — see CLAUDE.md's Safe-to-Spend section for
+      // the hard invariant this schema validation exists to protect: nothing
+      // here can ever legitimately reference an account or transaction id.
+      // NOTE: 'savingsGoals' is added to the catch-all write-exclusion list
+      // below so this validated block is the ONLY write path (the catch-all
+      // already grants unvalidated member read/write today — this constrains it).
+      match /savingsGoals/{goalId} {
+        allow read: if isMemberOf(householdId);
+
+        function isValidSavingsGoalCreate() {
+          let data = request.resource.data;
+          return isValidString(data.name, 100) &&
+                 isValidNumber(data.targetAmount) && data.targetAmount >= 0 &&
+                 isValidNumber(data.savedAmount) && data.savedAmount >= 0 &&
+                 isValidOptionalString(data.get('dueDate', null), 10) &&
+                 isValidOptionalString(data.get('ownerId', null), 128) &&
+                 isValidOptionalString(data.get('color', null), 20) &&
+                 (data.createdAt is timestamp || (data.createdAt is string && isValidString(data.createdAt, 50))) &&
+                 (!data.keys().hasAny(['completedAt']) ||
+                   data.completedAt is timestamp ||
+                   (data.completedAt is string && isValidString(data.completedAt, 50)));
+        }
+
+        function isValidSavingsGoalUpdate() {
+          let changed = request.resource.data.diff(resource.data).affectedKeys();
+          return (!changed.hasAny(['name']) || isValidString(request.resource.data.name, 100)) &&
+                 (!changed.hasAny(['targetAmount']) || (isValidNumber(request.resource.data.targetAmount) && request.resource.data.targetAmount >= 0)) &&
+                 (!changed.hasAny(['savedAmount']) || (isValidNumber(request.resource.data.savedAmount) && request.resource.data.savedAmount >= 0)) &&
+                 (!changed.hasAny(['dueDate']) || isValidOptionalString(request.resource.data.get('dueDate', null), 10)) &&
+                 (!changed.hasAny(['ownerId']) || isValidOptionalString(request.resource.data.get('ownerId', null), 128)) &&
+                 (!changed.hasAny(['color']) || isValidOptionalString(request.resource.data.get('color', null), 20)) &&
+                 (!changed.hasAny(['completedAt']) ||
+                   request.resource.data.completedAt is timestamp ||
+                   (request.resource.data.completedAt is string && isValidString(request.resource.data.completedAt, 50))) &&
+                 // createdAt is immutable once written.
+                 !changed.hasAny(['createdAt']);
+        }
+
+        allow create: if isMemberOf(householdId) &&
+                      request.resource.data.keys().hasAll(['name', 'targetAmount', 'savedAmount', 'createdAt']) &&
+                      request.resource.data.keys().hasOnly(['name', 'targetAmount', 'savedAmount', 'dueDate', 'ownerId', 'color', 'createdAt', 'completedAt']) &&
+                      isValidSavingsGoalCreate();
+
+        allow update: if isMemberOf(householdId) &&
+                      isValidSavingsGoalUpdate();
+
+        allow delete: if isMemberOf(householdId);
+      }
+
       // All other subcollections that do not have explicit match blocks
       // Proper multi-household isolation using member document checks
       // Specific collections with custom rules are excluded via the conditions below
@@ -816,6 +888,7 @@ service cloud.firestore {
                      subcollection != 'challenges' &&
                      subcollection != 'yearlyGoals' &&
                      subcollection != 'rewards' &&
+                     subcollection != 'savingsGoals' &&
                      subcollection != 'recaps';
       }
     }
