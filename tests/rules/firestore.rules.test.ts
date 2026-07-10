@@ -800,3 +800,197 @@ describe('recaps (weekly recap docs — written only by Cloud Functions)', () =>
     );
   });
 });
+
+describe('savings goals (Plan 24 — sinking funds, decoupled from Safe-to-Spend)', () => {
+  const GOAL = 'goal-seed';
+  const ISO = '2026-06-22T00:00:00.000Z';
+
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = asFirestore(ctx.firestore());
+      await setDoc(doc(db, 'households', H1, 'savingsGoals', GOAL), {
+        name: 'Vacation',
+        targetAmount: 1000,
+        savedAmount: 100,
+        createdAt: ISO,
+      });
+    });
+  });
+
+  it('a member can read a savings goal', async () => {
+    await assertSucceeds(
+      getDoc(doc(dbFor(BOB), 'households', H1, 'savingsGoals', GOAL)),
+    );
+  });
+
+  it('a member can create a well-formed savings goal', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'savingsGoals', 'goal-new'), {
+        name: 'New Car',
+        targetAmount: 5000,
+        savedAmount: 0,
+        createdAt: ISO,
+      }),
+    );
+  });
+
+  it('rejects a create with a negative targetAmount', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'savingsGoals', 'goal-bad'), {
+        name: 'Bad Goal',
+        targetAmount: -5,
+        savedAmount: 0,
+        createdAt: ISO,
+      }),
+    );
+  });
+
+  it('rejects a create carrying an unknown field (storage abuse)', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'savingsGoals', 'goal-extra'), {
+        name: 'Sneaky',
+        targetAmount: 100,
+        savedAmount: 0,
+        createdAt: ISO,
+        injected: 'x'.repeat(5000),
+      }),
+    );
+  });
+
+  it('a member can contribute (update savedAmount)', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'savingsGoals', GOAL), {
+        savedAmount: 250,
+      }),
+    );
+  });
+
+  it('rejects mutating the immutable createdAt', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'savingsGoals', GOAL), {
+        createdAt: '2020-01-01T00:00:00.000Z',
+      }),
+    );
+  });
+
+  it('rejects an update carrying an unknown field (storage abuse)', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'savingsGoals', GOAL), {
+        injected: 'x'.repeat(5000),
+      }),
+    );
+  });
+
+  it('a member can delete a savings goal', async () => {
+    await assertSucceeds(
+      deleteDoc(doc(dbFor(BOB), 'households', H1, 'savingsGoals', GOAL)),
+    );
+  });
+
+  it('a non-member cannot read a savings goal in another household', async () => {
+    await assertFails(
+      getDoc(doc(dbFor(CAROL), 'households', H1, 'savingsGoals', GOAL)),
+    );
+  });
+
+  it('a non-member cannot write a savings goal in another household', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(CAROL), 'households', H1, 'savingsGoals', GOAL), {
+        savedAmount: 999,
+      }),
+    );
+  });
+});
+
+describe('transaction comments (Plan 23 — author-only, nested under a transaction)', () => {
+  const TXN = 'txn-seed'; // seeded by seed()
+  const COMMENT = 'comment-seed';
+  const ISO = '2026-06-22T00:00:00.000Z';
+
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = asFirestore(ctx.firestore());
+      await setDoc(
+        doc(db, 'households', H1, 'transactions', TXN, 'comments', COMMENT),
+        { authorUid: BOB, text: 'Seeded comment', createdAt: ISO },
+      );
+    });
+  });
+
+  it('a member can read comments on a transaction', async () => {
+    await assertSucceeds(
+      getDocs(
+        collection(dbFor(ALICE), 'households', H1, 'transactions', TXN, 'comments'),
+      ),
+    );
+  });
+
+  it('a member can post a comment authored by themselves', async () => {
+    await assertSucceeds(
+      setDoc(
+        doc(dbFor(ALICE), 'households', H1, 'transactions', TXN, 'comments', 'c-new'),
+        { authorUid: ALICE, text: 'Looks right to me', createdAt: ISO },
+      ),
+    );
+  });
+
+  it('rejects posting a comment attributed to someone else', async () => {
+    await assertFails(
+      setDoc(
+        doc(dbFor(BOB), 'households', H1, 'transactions', TXN, 'comments', 'c-spoof'),
+        { authorUid: ALICE, text: 'Not really Alice', createdAt: ISO },
+      ),
+    );
+  });
+
+  it('rejects a comment whose text exceeds 500 chars', async () => {
+    await assertFails(
+      setDoc(
+        doc(dbFor(BOB), 'households', H1, 'transactions', TXN, 'comments', 'c-long'),
+        { authorUid: BOB, text: 'x'.repeat(501), createdAt: ISO },
+      ),
+    );
+  });
+
+  it('rejects a comment carrying an unknown field (storage abuse)', async () => {
+    await assertFails(
+      setDoc(
+        doc(dbFor(BOB), 'households', H1, 'transactions', TXN, 'comments', 'c-extra'),
+        { authorUid: BOB, text: 'hi', createdAt: ISO, injected: 'y'.repeat(5000) },
+      ),
+    );
+  });
+
+  it('comments are immutable — no update path', async () => {
+    await assertFails(
+      updateDoc(
+        doc(dbFor(BOB), 'households', H1, 'transactions', TXN, 'comments', COMMENT),
+        { text: 'edited' },
+      ),
+    );
+  });
+
+  it('the author can delete their own comment', async () => {
+    await assertSucceeds(
+      deleteDoc(
+        doc(dbFor(BOB), 'households', H1, 'transactions', TXN, 'comments', COMMENT),
+      ),
+    );
+  });
+
+  it('a non-author member cannot delete the comment', async () => {
+    await assertFails(
+      deleteDoc(
+        doc(dbFor(ALICE), 'households', H1, 'transactions', TXN, 'comments', COMMENT),
+      ),
+    );
+  });
+
+  it('a non-member cannot read comments in another household', async () => {
+    await assertFails(
+      getDocs(
+        collection(dbFor(CAROL), 'households', H1, 'transactions', TXN, 'comments'),
+      ),
+    );
+  });
+});
