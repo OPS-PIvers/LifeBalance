@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { History, FileText, ArrowUpRight, ArrowDownLeft, Edit, Trash2, CheckSquare, Copy, Scissors, MoreVertical } from 'lucide-react';
+import { History, FileText, ArrowUpRight, ArrowDownLeft, Edit, Trash2, CheckSquare, Copy, Scissors, MoreVertical, MessageSquare } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { Transaction, INCOME_CATEGORY } from '@/types/schema';
 import { Button } from '@/components/ui/Button';
@@ -94,6 +94,20 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
               <>
                 <span className="w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
                 <span className="font-medium text-brand-600 dark:text-brand-300">{tx.store}</span>
+              </>
+            )}
+            {/* Plan 23: denormalized comment count, read-only — bumped by
+                addTransactionComment/deleteTransactionComment. */}
+            {!!tx.commentCount && tx.commentCount > 0 && (
+              <>
+                <span className="w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
+                <span
+                  className="inline-flex items-center gap-0.5 font-medium text-brand-600 dark:text-brand-300"
+                  aria-label={`${tx.commentCount} comment${tx.commentCount === 1 ? '' : 's'}`}
+                >
+                  <MessageSquare size={11} />
+                  {tx.commentCount}
+                </span>
               </>
             )}
           </p>
@@ -191,6 +205,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
     p.source === n.source &&
     p.isRecurring === n.isRecurring &&
     p.store === n.store &&
+    p.commentCount === n.commentCount &&
     // Ignored props: payPeriodId, autoCategorized, relatedHabitIds
     // These fields do not affect the rendering of this component.
     // Excluding them prevents unnecessary re-renders when backend-only fields change
