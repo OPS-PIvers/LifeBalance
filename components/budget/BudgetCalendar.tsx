@@ -1,9 +1,9 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useFinance, useTodos } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { format, isSameMonth, isSameDay, isToday, addMonths, subMonths, startOfWeek, addDays } from 'date-fns';
-import { ChevronLeft, ChevronRight, ChevronDown, Plus, Trash2, Edit2, Copy, CheckSquare, Download, MoreVertical, MoreHorizontal, Repeat, CalendarPlus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, Copy, CheckSquare, Download, MoreVertical, MoreHorizontal, Repeat, CalendarPlus, CalendarDays } from 'lucide-react';
 import { CalendarItem } from '@/types/schema';
 import { useCalendarGrid } from '@/hooks/useCalendarGrid';
 import { expandCalendarItems, parseRecurringId, isRecurringId } from '@/utils/calendarRecurrence';
@@ -21,8 +21,15 @@ import { cn } from '@/utils/cn';
 import toast from 'react-hot-toast';
 import RecurringBillsModal from './RecurringBillsModal';
 
-/** localStorage key remembering the user's month-grid expand/collapse choice. */
-const GRID_EXPANDED_KEY = 'lifebalance:budgetCalendar:gridExpanded';
+/** localStorage key remembering the user's Day/Month view choice (per-device). */
+const VIEW_MODE_KEY = 'lifebalance:budgetCalendar:viewMode';
+type CalendarViewMode = 'day' | 'month';
+
+// Scrollable day-strip range, in weeks either side of the current week (matches
+// the Meals day strip). The strip is one continuous run of days — navigation is
+// a free horizontal scroll; these bounds just cap how far it extends.
+const STRIP_WEEKS_BACK = 8;
+const STRIP_WEEKS_FORWARD = 12;
 
 const BudgetCalendar: React.FC = () => {
   const { calendarItems, addCalendarItem, updateCalendarItem, deleteCalendarItem, accounts } = useFinance();
@@ -31,33 +38,27 @@ const BudgetCalendar: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
 
-  // Selecting a day anchors BOTH states: without this, picking an
-  // adjacent-month day in the expanded grid (or collapsing/re-expanding after
-  // strip navigation) leaves the month header/grid on the old `currentDate`
-  // while the agenda shows the new selection.
+  // Selecting a day anchors BOTH states: the agenda follows `selectedDate`, and
+  // `currentDate` (which month grid is shown) tracks it so switching Day→Month
+  // lands on the month you were browsing.
   const handleSelectDate = (day: Date) => {
     setSelectedDate(day);
     setCurrentDate(day);
   };
 
-  // Month grid is collapsed to a compact week strip by default (UX audit
-  // Batch 3 — the day's agenda is the actionable content and should render
-  // first without scrolling; the full month grid is secondary/occasional).
-  // Choice is remembered across visits via localStorage.
-  const [isGridExpanded, setIsGridExpanded] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.localStorage.getItem(GRID_EXPANDED_KEY) === 'true';
+  // Day/Month view toggle. Defaults to MONTH (the full grid is the landing);
+  // the choice is remembered across visits via localStorage.
+  const [viewMode, setViewMode] = useState<CalendarViewMode>(() => {
+    if (typeof window === 'undefined') return 'month';
+    return window.localStorage.getItem(VIEW_MODE_KEY) === 'day' ? 'day' : 'month';
   });
-  const toggleGridExpanded = () => {
-    setIsGridExpanded(v => {
-      const next = !v;
-      try {
-        window.localStorage.setItem(GRID_EXPANDED_KEY, String(next));
-      } catch {
-        // localStorage unavailable (private browsing) — in-memory state still works
-      }
-      return next;
-    });
+  const changeViewMode = (mode: CalendarViewMode) => {
+    setViewMode(mode);
+    try {
+      window.localStorage.setItem(VIEW_MODE_KEY, mode);
+    } catch {
+      // localStorage unavailable (private browsing) — in-memory state still works
+    }
   };
 
   // Modals
@@ -78,13 +79,6 @@ const BudgetCalendar: React.FC = () => {
 
   const { monthStart, startDate, endDate, days } = useCalendarGrid(currentDate);
 
-  // Compact week strip (matches the Meals day-strip pattern): the 7 days
-  // containing `selectedDate`, always anchored to the week it falls in.
-  const weekStripDays = useMemo(() => {
-    const wStart = startOfWeek(selectedDate);
-    return Array.from({ length: 7 }, (_, i) => addDays(wStart, i));
-  }, [selectedDate]);
-
   const weekDays: { abbr: string; full: string }[] = [
     { abbr: 'S', full: 'Sunday' },
     { abbr: 'M', full: 'Monday' },
@@ -95,10 +89,37 @@ const BudgetCalendar: React.FC = () => {
     { abbr: 'S', full: 'Saturday' },
   ];
 
-  // Expand recurring calendar items for the visible date range
+  // Continuous day strip (Day view) — one pre-formatted run of days anchored to
+  // the current week. The strip render never calls `format`.
+  const stripDays = useMemo(() => {
+    const rangeStart = addDays(startOfWeek(new Date()), -7 * STRIP_WEEKS_BACK);
+    return Array.from({ length: 7 * (STRIP_WEEKS_BACK + STRIP_WEEKS_FORWARD + 1) }, (_, i) => {
+      const day = addDays(rangeStart, i);
+      return {
+        date: day,
+        dateStr: format(day, 'yyyy-MM-dd'),
+        dayLetter: format(day, 'EEEEE'),
+        dayNumber: format(day, 'd'),
+        ariaLabel: format(day, 'EEEE, MMMM d'),
+      };
+    });
+  }, []);
+
+  // Expand recurring items over a range covering BOTH the day strip and the
+  // visible month grid, so dots/agenda are populated in either view. The strip
+  // bounds are fixed; the grid bounds move with `currentDate` (month nav).
+  const { expandStart, expandEnd } = useMemo(() => {
+    const stripStart = stripDays[0]?.date ?? startDate;
+    const stripEnd = stripDays[stripDays.length - 1]?.date ?? endDate;
+    return {
+      expandStart: stripStart.getTime() < startDate.getTime() ? stripStart : startDate,
+      expandEnd: stripEnd.getTime() > endDate.getTime() ? stripEnd : endDate,
+    };
+  }, [stripDays, startDate, endDate]);
+
   const expandedCalendarItems = useMemo(
-    () => expandCalendarItems(calendarItems, startDate, endDate),
-    [calendarItems, startDate, endDate]
+    () => expandCalendarItems(calendarItems, expandStart, expandEnd),
+    [calendarItems, expandStart, expandEnd]
   );
 
   // Pre-group calendar items by date string for O(1) day-cell lookup
@@ -132,6 +153,8 @@ const BudgetCalendar: React.FC = () => {
     return map;
   }, [todos]);
 
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+
   // Filter items for the selected date (O(1) lookup)
   const selectedDateKey = format(selectedDate, 'yyyy-MM-dd');
   const selectedItems = useMemo(
@@ -144,6 +167,58 @@ const BudgetCalendar: React.FC = () => {
     () => pendingTodosByDate.get(selectedDateKey) ?? [],
     [pendingTodosByDate, selectedDateKey]
   );
+
+  // --- Day-strip scroll mechanics (mirrors MealPlanTab) ---------------------
+  const stripRef = useRef<HTMLDivElement>(null);
+  const didInitialScrollRef = useRef(false);
+
+  const scrollStripTo = useCallback((dateStr: string) => {
+    const container = stripRef.current;
+    const chip = container?.querySelector<HTMLElement>(`[data-date="${dateStr}"]`);
+    if (!container || !chip) return;
+    const left = chip.offsetLeft - (container.clientWidth - chip.offsetWidth) / 2;
+    if (typeof container.scrollTo === 'function') {
+      container.scrollTo({ left, behavior: didInitialScrollRef.current ? 'smooth' : 'auto' });
+    } else {
+      // jsdom (tests) has no Element.scrollTo
+      container.scrollLeft = left;
+    }
+    didInitialScrollRef.current = true;
+  }, []);
+
+  // Center the selected chip whenever it changes or we (re-)enter Day view.
+  useEffect(() => {
+    if (viewMode === 'day') scrollStripTo(selectedDateKey);
+  }, [viewMode, selectedDateKey, scrollStripTo]);
+
+  // Month label above the strip follows the center of the viewport as the user
+  // scrolls. Reads are batched into one rAF per frame.
+  const [visibleMonth, setVisibleMonth] = useState(() => format(new Date(), 'MMMM yyyy'));
+  const scrollRafRef = useRef(0);
+  const handleStripScroll = useCallback(() => {
+    if (scrollRafRef.current) return;
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = 0;
+      const container = stripRef.current;
+      if (!container) return;
+      const first = container.children[0] as HTMLElement | undefined;
+      const second = container.children[1] as HTMLElement | undefined;
+      if (!first || !second) return;
+      const stride = second.offsetLeft - first.offsetLeft;
+      if (stride <= 0) return;
+      const rawIdx = Math.round((container.scrollLeft + container.clientWidth / 2 - first.offsetLeft) / stride);
+      const day = stripDays[Math.min(stripDays.length - 1, Math.max(0, rawIdx))];
+      if (day) setVisibleMonth(format(day.date, 'MMMM yyyy'));
+    });
+  }, [stripDays]);
+  useEffect(() => () => cancelAnimationFrame(scrollRafRef.current), []);
+
+  const handleJumpToToday = useCallback(() => {
+    if (selectedDateKey !== todayStr) handleSelectDate(new Date());
+    // Re-center explicitly — when today is already selected the centering
+    // effect won't re-run because selectedDateKey is unchanged.
+    scrollStripTo(todayStr);
+  }, [scrollStripTo, selectedDateKey, todayStr]);
 
   const openAddModal = () => {
     setTitle('');
@@ -289,11 +364,210 @@ const BudgetCalendar: React.FC = () => {
     },
   ];
 
+  const isMonth = viewMode === 'month';
+
   return (
     <div className="space-y-4 animate-in fade-in duration-(--duration-base)">
-      {/* Selected-day agenda — renders FIRST (UX audit Batch 3): the day's
-          bills/tasks are the actionable content and must be visible without
-          scrolling. The month grid (below) is secondary/collapsed by default. */}
+      {/* Calendar surface — leads the page (calendar first, the selected day's
+          agenda below), in both Day and Month views. */}
+      <div className="surface-section p-4">
+        {/* Header: month label (with prev/next arrows in Month view) on the
+            left; Today (Day view) + Day/Month toggle + overflow on the right. */}
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-0.5 min-w-0">
+            {isMonth && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setCurrentDate(subMonths(currentDate, 1))}
+                className="text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn shrink-0"
+                aria-label="Previous month"
+              >
+                <ChevronLeft size={20} />
+              </Button>
+            )}
+            <h2 className="font-display font-semibold text-base text-brand-900 dark:text-brand-100 tracking-tight truncate">
+              {isMonth ? format(currentDate, 'MMMM yyyy') : visibleMonth}
+            </h2>
+            {isMonth && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setCurrentDate(addMonths(currentDate, 1))}
+                className="text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn shrink-0"
+                aria-label="Next month"
+              >
+                <ChevronRight size={20} />
+              </Button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0">
+            {!isMonth && selectedDateKey !== todayStr && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={handleJumpToToday}
+                className="text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn"
+                aria-label="Jump to today"
+                title="Today"
+              >
+                <CalendarDays size={18} />
+              </Button>
+            )}
+            <SegmentedControl<CalendarViewMode>
+              value={viewMode}
+              onChange={changeViewMode}
+              name="Calendar view"
+              size="sm"
+              showBorder={false}
+              className="w-[136px]"
+              options={[
+                { value: 'day', label: 'Day' },
+                { value: 'month', label: 'Month' },
+              ]}
+            />
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setIsMenuOpen(v => !v)}
+                className="text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn"
+                aria-label="More calendar actions"
+                aria-haspopup="menu"
+                aria-expanded={isMenuOpen}
+              >
+                <MoreHorizontal size={20} />
+              </Button>
+              <Menu
+                isOpen={isMenuOpen}
+                onClose={() => setIsMenuOpen(false)}
+                items={calendarMenuItems}
+                ariaLabel="Calendar actions"
+                position="top-10 right-0"
+                className="min-w-[208px]"
+              />
+            </div>
+          </div>
+        </div>
+
+        {isMonth ? (
+          <div id="budget-calendar-month-grid">
+            {/* Weekday labels */}
+            <div className="grid grid-cols-7 mb-3" role="row">
+              {weekDays.map((d, i) => (
+                <div key={`${d.full}-${i}`} role="columnheader" className="text-center text-xs font-semibold text-brand-400 dark:text-brand-450 py-2">
+                  <abbr title={d.full} className="no-underline">{d.abbr}</abbr>
+                </div>
+              ))}
+            </div>
+            {/* Full month grid */}
+            <div className="grid grid-cols-7 gap-y-2">
+              {days.map(day => {
+                const dayKey = format(day, 'yyyy-MM-dd');
+                const dateItems = calendarItemsByDate.get(dayKey) ?? [];
+                const hasIncome = dateItems.some(i => i.type === 'income');
+                const hasExpense = dateItems.some(i => i.type === 'expense');
+                const hasTodo = (pendingTodosByDate.get(dayKey)?.length ?? 0) > 0;
+                const isSelected = isSameDay(day, selectedDate);
+
+                const eventParts: string[] = [];
+                if (hasIncome) eventParts.push('income');
+                if (hasExpense) eventParts.push('expense');
+                if (hasTodo) eventParts.push('tasks');
+                const ariaLabel = eventParts.length > 0
+                  ? `${format(day, 'MMMM d, yyyy')}, has ${eventParts.join(', ')}`
+                  : format(day, 'MMMM d, yyyy');
+
+                return (
+                  <div
+                    key={day.toString()}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={ariaLabel}
+                    aria-pressed={isSelected}
+                    onClick={() => handleSelectDate(day)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleSelectDate(day);
+                      }
+                    }}
+                    className={`
+                      relative flex flex-col items-center justify-center h-10 w-10 mx-auto rounded-card text-sm font-medium cursor-pointer transition-[background-color,color,transform] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40
+                      ${!isSameMonth(day, monthStart) ? 'text-brand-300 dark:text-brand-500' : 'text-brand-600 dark:text-brand-300'}
+                      ${isSelected ? 'bg-accent-600 dark:bg-accent-600 text-white scale-105 ring-2 ring-accent-600 ring-offset-2 ring-offset-white dark:ring-offset-brand-800' : 'hover:bg-brand-100 dark:hover:bg-brand-700/50'}
+                      ${isToday(day) && !isSelected ? 'text-accent-700 dark:text-accent-300 font-bold bg-brand-100 dark:bg-brand-700/50' : ''}
+                    `}
+                  >
+                    {format(day, 'd')}
+
+                    {/* Dots */}
+                    <div className="absolute bottom-1 flex gap-0.5">
+                      {hasIncome && <div className="w-1 h-1 rounded-full bg-money-pos"></div>}
+                      {hasExpense && <div className="w-1 h-1 rounded-full bg-money-neg"></div>}
+                      {hasTodo && <div className="w-1 h-1 rounded-full bg-habit-blue"></div>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          /* Day view — one continuous scrollable run of days */
+          <div
+            ref={stripRef}
+            onScroll={handleStripScroll}
+            className="relative flex gap-1 overflow-x-auto no-scrollbar snap-x"
+          >
+            {stripDays.map(day => {
+              const { dateStr } = day;
+              const dateItems = calendarItemsByDate.get(dateStr) ?? [];
+              const hasIncome = dateItems.some(i => i.type === 'income');
+              const hasExpense = dateItems.some(i => i.type === 'expense');
+              const hasTodo = (pendingTodosByDate.get(dateStr)?.length ?? 0) > 0;
+              const isSelected = dateStr === selectedDateKey;
+              const isTodayChip = dateStr === todayStr;
+
+              const eventParts: string[] = [];
+              if (hasIncome) eventParts.push('income');
+              if (hasExpense) eventParts.push('expense');
+              if (hasTodo) eventParts.push('tasks');
+              const ariaLabel = eventParts.length > 0
+                ? `${day.ariaLabel}, has ${eventParts.join(', ')}`
+                : day.ariaLabel;
+
+              return (
+                <button
+                  type="button"
+                  key={dateStr}
+                  data-date={dateStr}
+                  aria-label={ariaLabel}
+                  aria-pressed={isSelected}
+                  onClick={() => handleSelectDate(day.date)}
+                  className={cn(
+                    'w-12 shrink-0 snap-center flex flex-col items-center justify-center gap-0.5 rounded-card py-2 text-sm font-medium transition-[background-color,color] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
+                    isSelected
+                      ? 'bg-accent-600 dark:bg-accent-600 text-white'
+                      : 'hover:bg-brand-100 dark:hover:bg-brand-700/50 text-brand-600 dark:text-brand-300',
+                    isTodayChip && !isSelected && 'text-accent-700 dark:text-accent-300 font-bold bg-brand-100 dark:bg-brand-700/50'
+                  )}
+                >
+                  <span className="text-xxs uppercase tracking-wide opacity-70">{day.dayLetter}</span>
+                  <span>{day.dayNumber}</span>
+                  <div className="flex gap-0.5 h-1">
+                    {hasIncome && <div className="w-1 h-1 rounded-full bg-money-pos"></div>}
+                    {hasExpense && <div className="w-1 h-1 rounded-full bg-money-neg"></div>}
+                    {hasTodo && <div className="w-1 h-1 rounded-full bg-habit-blue"></div>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Selected-day agenda — the day's bills/tasks, below the calendar. */}
       <div>
         <div className="flex items-center justify-between mb-3 px-1">
           <h3 className="font-display font-semibold text-brand-900 dark:text-brand-100 text-lg tracking-tight">
@@ -428,185 +702,6 @@ const BudgetCalendar: React.FC = () => {
               </Row>
             ))}
           </SurfaceList>
-        )}
-      </div>
-
-      {/* Calendar surface — compact week strip by default, with an affordance
-          to expand into the full month grid (UX audit Batch 3). */}
-      <div className="surface-section p-4">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-display font-semibold text-base text-brand-900 dark:text-brand-100 tracking-tight">
-            {format(isGridExpanded ? currentDate : selectedDate, 'MMMM yyyy')}
-          </h2>
-          <div className="flex items-center gap-1">
-            <div className="relative">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setIsMenuOpen(v => !v)}
-                className="text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn"
-                aria-label="More calendar actions"
-                aria-haspopup="menu"
-                aria-expanded={isMenuOpen}
-              >
-                <MoreHorizontal size={20} />
-              </Button>
-              <Menu
-                isOpen={isMenuOpen}
-                onClose={() => setIsMenuOpen(false)}
-                items={calendarMenuItems}
-                ariaLabel="Calendar actions"
-                position="top-10 right-0"
-                className="min-w-[208px]"
-              />
-            </div>
-            {isGridExpanded && (
-              <>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-                  className="text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn"
-                  aria-label="Previous month"
-                >
-                  <ChevronLeft size={20} />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-                  className="text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn"
-                  aria-label="Next month"
-                >
-                  <ChevronRight size={20} />
-                </Button>
-              </>
-            )}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={toggleGridExpanded}
-              aria-expanded={isGridExpanded}
-              aria-controls={isGridExpanded ? 'budget-calendar-month-grid' : undefined}
-              className="text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300 rounded-btn"
-              aria-label={isGridExpanded ? 'Collapse to week view' : 'Expand to month view'}
-            >
-              <ChevronDown
-                size={20}
-                className={cn('transition-transform duration-(--duration-base) ease-(--ease-standard)', isGridExpanded && 'rotate-180')}
-              />
-            </Button>
-          </div>
-        </div>
-
-        {isGridExpanded ? (
-          <div id="budget-calendar-month-grid">
-            {/* Weekday labels */}
-            <div className="grid grid-cols-7 mb-3" role="row">
-              {weekDays.map((d, i) => (
-                <div key={`${d.full}-${i}`} role="columnheader" className="text-center text-xs font-semibold text-brand-400 dark:text-brand-450 py-2">
-                  <abbr title={d.full} className="no-underline">{d.abbr}</abbr>
-                </div>
-              ))}
-            </div>
-            {/* Full month grid */}
-            <div className="grid grid-cols-7 gap-y-2">
-              {days.map(day => {
-                const dayKey = format(day, 'yyyy-MM-dd');
-                const dateItems = calendarItemsByDate.get(dayKey) ?? [];
-                const hasIncome = dateItems.some(i => i.type === 'income');
-                const hasExpense = dateItems.some(i => i.type === 'expense');
-                const hasTodo = (pendingTodosByDate.get(dayKey)?.length ?? 0) > 0;
-                const isSelected = isSameDay(day, selectedDate);
-
-                const eventParts: string[] = [];
-                if (hasIncome) eventParts.push('income');
-                if (hasExpense) eventParts.push('expense');
-                if (hasTodo) eventParts.push('tasks');
-                const ariaLabel = eventParts.length > 0
-                  ? `${format(day, 'MMMM d, yyyy')}, has ${eventParts.join(', ')}`
-                  : format(day, 'MMMM d, yyyy');
-
-                return (
-                  <div
-                    key={day.toString()}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={ariaLabel}
-                    aria-pressed={isSelected}
-                    onClick={() => handleSelectDate(day)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        handleSelectDate(day);
-                      }
-                    }}
-                    className={`
-                      relative flex flex-col items-center justify-center h-10 w-10 mx-auto rounded-card text-sm font-medium cursor-pointer transition-[background-color,color,transform] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40
-                      ${!isSameMonth(day, monthStart) ? 'text-brand-300 dark:text-brand-500' : 'text-brand-600 dark:text-brand-300'}
-                      ${isSelected ? 'bg-accent-600 dark:bg-accent-600 text-white scale-105 ring-2 ring-accent-600 ring-offset-2 ring-offset-white dark:ring-offset-brand-800' : 'hover:bg-brand-100 dark:hover:bg-brand-700/50'}
-                      ${isToday(day) && !isSelected ? 'text-accent-700 dark:text-accent-300 font-bold bg-brand-100 dark:bg-brand-700/50' : ''}
-                    `}
-                  >
-                    {format(day, 'd')}
-
-                    {/* Dots */}
-                    <div className="absolute bottom-1 flex gap-0.5">
-                      {hasIncome && <div className="w-1 h-1 rounded-full bg-money-pos"></div>}
-                      {hasExpense && <div className="w-1 h-1 rounded-full bg-money-neg"></div>}
-                      {hasTodo && <div className="w-1 h-1 rounded-full bg-habit-blue"></div>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ) : (
-          /* Compact week strip (matches Meals' day-strip pattern) */
-          <div className="grid grid-cols-7 gap-1">
-            {weekStripDays.map(day => {
-              const dayKey = format(day, 'yyyy-MM-dd');
-              const dateItems = calendarItemsByDate.get(dayKey) ?? [];
-              const hasIncome = dateItems.some(i => i.type === 'income');
-              const hasExpense = dateItems.some(i => i.type === 'expense');
-              const hasTodo = (pendingTodosByDate.get(dayKey)?.length ?? 0) > 0;
-              const isSelected = isSameDay(day, selectedDate);
-
-              const eventParts: string[] = [];
-              if (hasIncome) eventParts.push('income');
-              if (hasExpense) eventParts.push('expense');
-              if (hasTodo) eventParts.push('tasks');
-              const ariaLabel = eventParts.length > 0
-                ? `${format(day, 'EEEE, MMMM d, yyyy')}, has ${eventParts.join(', ')}`
-                : format(day, 'EEEE, MMMM d, yyyy');
-
-              return (
-                <button
-                  type="button"
-                  key={day.toString()}
-                  aria-label={ariaLabel}
-                  aria-pressed={isSelected}
-                  onClick={() => handleSelectDate(day)}
-                  className={cn(
-                    'relative flex flex-col items-center justify-center gap-0.5 rounded-card py-2 text-sm font-medium transition-[background-color,color] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
-                    isSelected
-                      ? 'bg-accent-600 dark:bg-accent-600 text-white'
-                      : 'hover:bg-brand-100 dark:hover:bg-brand-700/50 text-brand-600 dark:text-brand-300',
-                    isToday(day) && !isSelected && 'text-accent-700 dark:text-accent-300 font-bold bg-brand-100 dark:bg-brand-700/50'
-                  )}
-                >
-                  <span className="text-xxs uppercase tracking-wide opacity-70">{format(day, 'EEEEE')}</span>
-                  <span>{format(day, 'd')}</span>
-                  <div className="flex gap-0.5 h-1">
-                    {hasIncome && <div className="w-1 h-1 rounded-full bg-money-pos"></div>}
-                    {hasExpense && <div className="w-1 h-1 rounded-full bg-money-neg"></div>}
-                    {hasTodo && <div className="w-1 h-1 rounded-full bg-habit-blue"></div>}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
         )}
       </div>
 
