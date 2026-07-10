@@ -5,6 +5,7 @@ import {
   addDoc,
   collection,
   deleteField,
+  runTransaction,
   type Firestore,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
@@ -24,9 +25,8 @@ import { addMoney, roundMoney } from '@/utils/money';
 export function makeSavingsGoalMutations(deps: {
   db: Firestore;
   householdId: string | null;
-  goals: SavingsGoal[];
 }) {
-  const { db, householdId, goals } = deps;
+  const { db, householdId } = deps;
 
   const addSavingsGoal = async (goal: Omit<SavingsGoal, 'id' | 'createdAt' | 'completedAt'>) => {
     if (!householdId) return;
@@ -64,6 +64,11 @@ export function makeSavingsGoalMutations(deps: {
    * goal's savedAmount in integer cents, and stamps completedAt the moment the
    * total first reaches the target (never un-sets it if later edits raise the
    * target back above savedAmount — that reopening is a v2 concern).
+   *
+   * Runs in a `runTransaction` so two devices contributing at once can't
+   * lost-update each other: the add is computed from the value read INSIDE the
+   * transaction (not the stale in-memory `goals` array), and the completedAt
+   * decision uses that same authoritative total.
    */
   const contributeToGoal = async (id: string, amount: number) => {
     if (!householdId) return;
@@ -72,18 +77,26 @@ export function makeSavingsGoalMutations(deps: {
       toast.error('Enter an amount greater than zero to contribute.');
       return;
     }
-    const goal = goals.find(g => g.id === id);
-    if (!goal) {
+    const ref = doc(db, `households/${householdId}/savingsGoals`, id);
+    try {
+      await runTransaction(db, async txn => {
+        const snap = await txn.get(ref);
+        if (!snap.exists()) throw new Error('missing-goal');
+        const data = snap.data() as Pick<
+          SavingsGoal,
+          'savedAmount' | 'targetAmount' | 'completedAt'
+        >;
+        const newSaved = addMoney(data.savedAmount ?? 0, rounded);
+        const patch: Record<string, unknown> = { savedAmount: newSaved };
+        if (!data.completedAt && newSaved >= data.targetAmount) {
+          patch.completedAt = new Date().toISOString();
+        }
+        txn.update(ref, patch);
+      });
+      toast.success('Contribution added');
+    } catch {
       toast.error('Could not find that savings goal.');
-      return;
     }
-    const newSaved = addMoney(goal.savedAmount, rounded);
-    const patch: Record<string, unknown> = { savedAmount: newSaved };
-    if (!goal.completedAt && newSaved >= goal.targetAmount) {
-      patch.completedAt = new Date().toISOString();
-    }
-    await updateDoc(doc(db, `households/${householdId}/savingsGoals`, id), patch);
-    toast.success('Contribution added');
   };
 
   return { addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, contributeToGoal };

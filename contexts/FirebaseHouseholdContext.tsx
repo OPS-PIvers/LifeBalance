@@ -1415,20 +1415,20 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // (contexts/household/mutations/savingsGoalMutations.ts)
 
   const addSavingsGoal = useCallback(async (goal: Omit<SavingsGoal, 'id' | 'createdAt' | 'completedAt'>) => {
-    await makeSavingsGoalMutations({ db, householdId, goals: savingsGoals }).addSavingsGoal(goal);
-  }, [householdId, savingsGoals]);
+    await makeSavingsGoalMutations({ db, householdId }).addSavingsGoal(goal);
+  }, [householdId]);
 
   const updateSavingsGoal = useCallback(async (id: string, updates: Partial<Pick<SavingsGoal, 'name' | 'targetAmount' | 'dueDate' | 'ownerId' | 'color'>>) => {
-    await makeSavingsGoalMutations({ db, householdId, goals: savingsGoals }).updateSavingsGoal(id, updates);
-  }, [householdId, savingsGoals]);
+    await makeSavingsGoalMutations({ db, householdId }).updateSavingsGoal(id, updates);
+  }, [householdId]);
 
   const deleteSavingsGoal = useCallback(async (id: string) => {
-    await makeSavingsGoalMutations({ db, householdId, goals: savingsGoals }).deleteSavingsGoal(id);
-  }, [householdId, savingsGoals]);
+    await makeSavingsGoalMutations({ db, householdId }).deleteSavingsGoal(id);
+  }, [householdId]);
 
   const contributeToGoal = useCallback(async (id: string, amount: number) => {
-    await makeSavingsGoalMutations({ db, householdId, goals: savingsGoals }).contributeToGoal(id, amount);
-  }, [householdId, savingsGoals]);
+    await makeSavingsGoalMutations({ db, householdId }).contributeToGoal(id, amount);
+  }, [householdId]);
 
   // --- ACTIONS: BUCKETS ---
   // (contexts/household/mutations/financeMutations.ts)
