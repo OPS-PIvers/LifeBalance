@@ -103,6 +103,17 @@ describe("assertFetchableUrl (SSRF guard)", () => {
     );
   });
 
+  it("rejects single-label (dotless) hostnames — internal service names", () => {
+    for (const bad of [
+      "http://metadata/",
+      "http://vault/secrets",
+      "https://router/",
+      "http://elasticsearch:9200/",
+    ]) {
+      expect(codeOf(() => assertFetchableUrl(bad)), bad).toBe("invalid-argument");
+    }
+  });
+
   it("rejects missing / non-string / unparseable input", () => {
     expect(codeOf(() => assertFetchableUrl(undefined))).toBe("invalid-argument");
     expect(codeOf(() => assertFetchableUrl(42))).toBe("invalid-argument");

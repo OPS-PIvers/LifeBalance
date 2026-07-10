@@ -81,7 +81,11 @@ export function assertFetchableUrl(raw: unknown): URL {
     hostname === "localhost" ||
     hostname.endsWith(".localhost") ||
     hostname.endsWith(".local") ||
-    hostname.endsWith(".internal");
+    hostname.endsWith(".internal") ||
+    // Single-label hostnames (no dot) are internal service names in cloud /
+    // container environments ("metadata", "vault", "router") — a public
+    // recipe site always has a TLD, so rejecting dotless names costs nothing.
+    !hostname.includes(".");
   if (isIpLiteral || isInternalName) {
     throw new HttpsError(
       "invalid-argument",
@@ -202,6 +206,18 @@ function htmlToText(html: string): string {
     .replace(/&gt;/gi, ">")
     .replace(/&#39;|&apos;/gi, "'")
     .replace(/&quot;/gi, '"')
+    // Decimal and hex numeric character references (smart quotes, dashes,
+    // fraction glyphs — common on recipe sites). Non-printable results are
+    // dropped rather than emitted.
+    .replace(/&#(?:x([0-9a-f]{1,6})|(\d{1,7}));/gi, (_, hex, dec) => {
+      const code = hex ? parseInt(hex, 16) : parseInt(dec, 10);
+      if (!Number.isFinite(code) || code < 32 || code > 0x10ffff) return " ";
+      try {
+        return String.fromCodePoint(code);
+      } catch {
+        return " ";
+      }
+    })
     .replace(/\s+/g, " ")
     .trim();
 }

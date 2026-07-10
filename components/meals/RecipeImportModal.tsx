@@ -75,12 +75,10 @@ export const RecipeImportModal: React.FC<RecipeImportModalProps> = ({
     setIsParsing(true);
     try {
       const { parseRecipe } = await import('@/services/geminiService');
-      const result = await parseRecipe(householdId, text);
-      if (fetchedUrl) {
-        // Code-owned URL (repo convention): the actual fetched link wins over
-        // whatever the model put in recipeUrl.
-        result.recipeUrl = fetchedUrl;
-      }
+      const parsed = await parseRecipe(householdId, text);
+      // Code-owned URL (repo convention): the actual fetched link wins over
+      // whatever the model put in recipeUrl.
+      const result = fetchedUrl ? { ...parsed, recipeUrl: fetchedUrl } : parsed;
       onConfirm(result);
       onClose();
       setText(''); // Reset
