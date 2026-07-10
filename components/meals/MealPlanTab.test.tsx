@@ -67,6 +67,7 @@ vi.mock('lucide-react', () => ({
   ChevronLeft: () => <div data-testid="chevron-left-icon" />,
   ShoppingCart: () => <div data-testid="shopping-cart-icon" />,
   Loader2: () => <div data-testid="loader-icon" />,
+  Link2: () => <div data-testid="link-icon" />,
   X: () => <div data-testid="x-icon" />,
   Copy: () => <div data-testid="copy-icon" />,
   FileText: () => <div data-testid="file-text-icon" />,
