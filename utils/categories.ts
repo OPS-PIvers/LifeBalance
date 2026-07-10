@@ -25,13 +25,14 @@ export const LEGACY_BILLS_CATEGORY = 'Bills';
  * matches a real bucket name (e.g. a household that literally named a bucket
  * "Bills") is matched to that bucket first and never reaches this check.
  */
+const CALENDAR_BUDGETED_SET = new Set([
+  BUDGETED_IN_CALENDAR.toLowerCase(),
+  LEGACY_BILLS_CATEGORY.toLowerCase(),
+]);
+
 export function isCalendarBudgetedCategory(category: string | null | undefined): boolean {
   if (!category) return false;
-  const normalized = category.toLowerCase();
-  return (
-    normalized === BUDGETED_IN_CALENDAR.toLowerCase() ||
-    normalized === LEGACY_BILLS_CATEGORY.toLowerCase()
-  );
+  return CALENDAR_BUDGETED_SET.has(category.toLowerCase());
 }
 
 /**
