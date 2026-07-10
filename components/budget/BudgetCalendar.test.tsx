@@ -85,6 +85,7 @@ describe('BudgetCalendar', () => {
       todos: [],
       completeToDo: vi.fn(),
       accounts: [],
+      transactions: [],
     });
   });
 
@@ -123,6 +124,7 @@ describe('BudgetCalendar', () => {
       ],
       completeToDo: vi.fn(),
       accounts: [],
+      transactions: [],
     });
 
     render(<BudgetCalendar />);
@@ -152,6 +154,7 @@ describe('BudgetCalendar', () => {
       ],
       completeToDo: mockCompleteToDo,
       accounts: [],
+      transactions: [],
     });
 
     render(<BudgetCalendar />);
@@ -212,6 +215,7 @@ describe('BudgetCalendar', () => {
       todos: [],
       completeToDo: vi.fn(),
       accounts: [],
+      transactions: [],
     });
 
     render(<BudgetCalendar />);
@@ -251,6 +255,7 @@ describe('BudgetCalendar', () => {
       todos: [],
       completeToDo: vi.fn(),
       accounts: [],
+      transactions: [],
     });
 
     render(<BudgetCalendar />);
@@ -294,6 +299,7 @@ describe('BudgetCalendar', () => {
       todos: [],
       completeToDo: vi.fn(),
       accounts: [],
+      transactions: [],
     });
 
     render(<BudgetCalendar />);
@@ -372,6 +378,7 @@ describe('BudgetCalendar', () => {
       todos: [],
       completeToDo: vi.fn(),
       accounts: [],
+      transactions: [],
     });
 
     render(<BudgetCalendar />);
@@ -430,6 +437,7 @@ describe('BudgetCalendar', () => {
       todos: [],
       completeToDo: vi.fn(),
       accounts: [],
+      transactions: [],
     });
 
     render(<BudgetCalendar />);

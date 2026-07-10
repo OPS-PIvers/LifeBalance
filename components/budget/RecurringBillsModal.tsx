@@ -1,25 +1,50 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { CalendarItem } from '@/types/schema';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Trash2, Edit2, Check, Repeat, TrendingUp, TrendingDown, X } from 'lucide-react';
+import { Trash2, Edit2, Check, Repeat, TrendingUp, TrendingDown, X, Sparkles, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Drawer } from '@/components/ui/Drawer';
 import EmptyState from '@/components/ui/EmptyState';
-import { SurfaceList, Row, StatGroup, Stat } from '@/components/ui/Section';
+import { Section, SurfaceList, Row, StatGroup, Stat } from '@/components/ui/Section';
+import { detectSubscriptions, type DetectedSubscription } from '@/utils/subscriptionDetection';
 
 interface RecurringBillsModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+/** localStorage dismissal key for a detected subscription, keyed on merchant+cadence. */
+const detectionDismissKey = (merchant: string, cadence: DetectedSubscription['cadence']) =>
+  `lb_subscription_dismissed_${cadence}_${merchant.toLowerCase().trim()}`;
+
+const isDetectionDismissed = (merchant: string, cadence: DetectedSubscription['cadence']): boolean => {
+  try {
+    return window.localStorage.getItem(detectionDismissKey(merchant, cadence)) === '1';
+  } catch {
+    return false;
+  }
+};
+
+const persistDetectionDismiss = (merchant: string, cadence: DetectedSubscription['cadence']): void => {
+  try {
+    window.localStorage.setItem(detectionDismissKey(merchant, cadence), '1');
+  } catch {
+    // Best-effort — the in-session state still hides the row.
+  }
+};
+
 const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClose }) => {
-  const { calendarItems, updateCalendarItem, deleteCalendarItem } = useFinance();
+  const { calendarItems, transactions, updateCalendarItem, deleteCalendarItem, addCalendarItem } = useFinance();
   const fmt = useFormatCurrency();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [dismissedKeys, setDismissedKeys] = useState<Set<string>>(new Set());
+  // Keys with an add-as-bill write in flight — guards double-clicks from
+  // creating duplicate bills (addCalendarItem is async).
+  const [addingKeys, setAddingKeys] = useState<Set<string>>(new Set());
 
   // Edit Form State
   const [editTitle, setEditTitle] = useState('');
@@ -58,6 +83,66 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
 
     return { totalIncome: income, totalExpenses: expenses };
   }, [recurringItems]);
+
+  // Detected subscriptions — pure clustering over the already-listened
+  // transactions (utils/subscriptionDetection.ts), excluding merchants that
+  // already have a calendar bill. Filtered against the per-detection
+  // localStorage dismissal (mirrors WeeklyRecapCard's per-week pattern).
+  const billTitles = useMemo(
+    () => calendarItems.filter(item => !item.isDeleted).map(item => item.title),
+    [calendarItems]
+  );
+
+  const detectedSubscriptions = useMemo(
+    () =>
+      detectSubscriptions(transactions, billTitles).filter(
+        d => !dismissedKeys.has(detectionDismissKey(d.merchant, d.cadence)) && !isDetectionDismissed(d.merchant, d.cadence)
+      ),
+    [transactions, billTitles, dismissedKeys]
+  );
+
+  const dismissDetection = useCallback((detection: DetectedSubscription) => {
+    const key = detectionDismissKey(detection.merchant, detection.cadence);
+    persistDetectionDismiss(detection.merchant, detection.cadence);
+    setDismissedKeys(prev => new Set(prev).add(key));
+  }, []);
+
+  const addDetectionAsBill = useCallback(
+    async (detection: DetectedSubscription) => {
+      const key = detectionDismissKey(detection.merchant, detection.cadence);
+      let alreadyInFlight = false;
+      setAddingKeys(prev => {
+        if (prev.has(key)) {
+          alreadyInFlight = true;
+          return prev;
+        }
+        return new Set(prev).add(key);
+      });
+      if (alreadyInFlight) return;
+      try {
+        await addCalendarItem({
+          id: crypto.randomUUID(),
+          title: detection.merchant,
+          amount: detection.averageAmount,
+          date: detection.lastDate,
+          type: 'expense',
+          isPaid: false,
+          isRecurring: true,
+          frequency: detection.cadence,
+        });
+        dismissDetection(detection);
+      } catch (_error) {
+        toast.error('Failed to add bill');
+      } finally {
+        setAddingKeys(prev => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+      }
+    },
+    [addCalendarItem, dismissDetection]
+  );
 
   const startEditing = (item: CalendarItem) => {
     setEditingId(item.id);
@@ -261,6 +346,66 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
             </SurfaceList>
           )}
       </div>
+
+      {/* Detected subscriptions — pure clustering over transaction history,
+          surfaced below the existing recurring-bills list (Plan 20). */}
+      {detectedSubscriptions.length > 0 && (
+        <div className="px-4 pb-6 sm:px-6">
+          <Section
+            title={
+              <span className="flex items-center gap-1.5">
+                <Sparkles size={12} /> Detected subscriptions
+              </span>
+            }
+          >
+            <SurfaceList>
+              {detectedSubscriptions.map(detection => (
+                <Row
+                  key={`${detection.merchant}-${detection.cadence}`}
+                  className="flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4"
+                >
+                  <div>
+                    <div className="font-semibold text-brand-900 dark:text-brand-100">{detection.merchant}</div>
+                    <div className="text-xs text-brand-500 dark:text-brand-400 capitalize flex items-center gap-1">
+                      <Repeat size={10} /> {detection.cadence} · next ~{detection.nextExpectedDate}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
+                    <div className="text-right">
+                      <div className="font-mono tabular-nums font-bold text-brand-900 dark:text-brand-100">
+                        {fmt(detection.averageAmount)}
+                      </div>
+                      <div className="text-xxs text-brand-400 dark:text-brand-450">avg / instance</div>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        leftIcon={<Plus size={14} />}
+                        onClick={() => addDetectionAsBill(detection)}
+                        disabled={addingKeys.has(detectionDismissKey(detection.merchant, detection.cadence))}
+                        aria-label={`Add ${detection.merchant} as a bill`}
+                      >
+                        Add as bill
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => dismissDetection(detection)}
+                        aria-label={`Dismiss ${detection.merchant} detection`}
+                      >
+                        <X size={14} className="text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300" />
+                      </Button>
+                    </div>
+                  </div>
+                </Row>
+              ))}
+            </SurfaceList>
+          </Section>
+        </div>
+      )}
 
       <ConfirmDialog
         isOpen={!!deleteConfirmId}
