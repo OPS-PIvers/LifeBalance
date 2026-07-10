@@ -2,7 +2,6 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CaptureTransactionReview } from './CaptureTransactionReview';
 import { ParsedTransaction } from '@/types/ui';
-import { BudgetBucket } from '@/types/schema';
 import { formatCurrency } from '@/utils/formatCurrency';
 
 // Mock lucide-react icons
@@ -37,11 +36,6 @@ const mockTransactions: ParsedTransaction[] = [
   }
 ];
 
-const mockBuckets: BudgetBucket[] = [
-    { id: 'b1', name: 'Food', limit: 100, color: 'red', isVariable: true, isCore: true, subBuckets: [{ id: 'sb1', name: 'Groceries' }] },
-    { id: 'b2', name: 'Transport', limit: 50, color: 'blue', isVariable: true, isCore: true }
-];
-
 describe('CaptureTransactionReview', () => {
   const mockOnUpdate = vi.fn();
   const mockOnToggle = vi.fn();
@@ -61,7 +55,6 @@ describe('CaptureTransactionReview', () => {
         onToggleAll={mockOnToggleAll}
         onSubmit={mockOnSubmit}
         dynamicCategories={['Food', 'Transport']}
-        buckets={mockBuckets}
         stores={[]}
         accounts={[]}
       />
@@ -82,7 +75,6 @@ describe('CaptureTransactionReview', () => {
         onToggleAll={mockOnToggleAll}
         onSubmit={mockOnSubmit}
         dynamicCategories={['Food', 'Transport']}
-        buckets={mockBuckets}
         stores={[]}
         accounts={[]}
       />
@@ -109,7 +101,6 @@ describe('CaptureTransactionReview', () => {
         onToggleAll={mockOnToggleAll}
         onSubmit={mockOnSubmit}
         dynamicCategories={['Food', 'Transport']}
-        buckets={mockBuckets}
         stores={[]}
         accounts={[]}
       />
@@ -130,7 +121,6 @@ describe('CaptureTransactionReview', () => {
         onToggleAll={mockOnToggleAll}
         onSubmit={mockOnSubmit}
         dynamicCategories={['Food', 'Transport']}
-        buckets={mockBuckets}
         stores={[]}
         accounts={[]}
       />
@@ -151,7 +141,6 @@ describe('CaptureTransactionReview', () => {
         onToggleAll={mockOnToggleAll}
         onSubmit={mockOnSubmit}
         dynamicCategories={['Food', 'Transport']}
-        buckets={mockBuckets}
         stores={[]}
         accounts={[]}
       />
@@ -170,7 +159,6 @@ describe('CaptureTransactionReview', () => {
         onToggleAll={mockOnToggleAll}
         onSubmit={mockOnSubmit}
         dynamicCategories={['Food', 'Transport']}
-        buckets={mockBuckets}
         stores={[]}
         accounts={[]}
       />
@@ -179,25 +167,6 @@ describe('CaptureTransactionReview', () => {
     // Click the 'Food' chip for the first transaction
     const foodChips = screen.getAllByText('Food');
     fireEvent.click(foodChips[0]!);
-    expect(mockOnUpdate).toHaveBeenCalledWith('1', { category: 'Food', subBucketId: undefined });
-  });
-
-  it('renders sub-bucket selector if bucket has sub-buckets', () => {
-     render(
-      <CaptureTransactionReview
-        parsedTransactions={mockTransactions}
-        onUpdateTransaction={mockOnUpdate}
-        onToggleSelection={mockOnToggle}
-        onToggleAll={mockOnToggleAll}
-        onSubmit={mockOnSubmit}
-        dynamicCategories={['Food', 'Transport']}
-        buckets={mockBuckets}
-        stores={[]}
-        accounts={[]}
-      />
-    );
-
-    // First transaction is Food, which has sub-buckets
-    expect(screen.getByText('Sub-Category...')).toBeInTheDocument();
+    expect(mockOnUpdate).toHaveBeenCalledWith('1', { category: 'Food' });
   });
 });

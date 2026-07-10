@@ -106,7 +106,6 @@ export function validateReceiptData(raw: unknown): ReceiptData {
   if (!isString(o['category'])) fail('receipt', 'category must be a string');
   if (!isOptString(o['date'])) fail('receipt', 'date must be a string');
   if (!isOptStringArray(o['suggestedHabits'])) fail('receipt', 'suggestedHabits must be string[]');
-  if (!isOptString(o['subBucket'])) fail('receipt', 'subBucket must be a string');
   if (!isOptString(o['store'])) fail('receipt', 'store must be a string');
   return o as unknown as ReceiptData;
 }
@@ -121,7 +120,6 @@ export interface BankTransactionLike {
   category: string;
   date: string;
   suggestedHabits?: string[];
-  subBucket?: string;
 }
 
 export function validateBankTransactions(raw: unknown): BankTransactionLike[] {
@@ -133,7 +131,6 @@ export function validateBankTransactions(raw: unknown): BankTransactionLike[] {
     if (!isString(o['category'])) fail(`bankStatement[${i}]`, 'category must be a string');
     if (!isString(o['date'])) fail(`bankStatement[${i}]`, 'date must be a string');
     if (!isOptStringArray(o['suggestedHabits'])) fail(`bankStatement[${i}]`, 'suggestedHabits must be string[]');
-    if (!isOptString(o['subBucket'])) fail(`bankStatement[${i}]`, 'subBucket must be a string');
     return o as unknown as BankTransactionLike;
   });
 }

@@ -32,7 +32,6 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
   const [amount, setAmount] = useState(() => transaction ? transaction.amount.toString() : '');
   const [merchant, setMerchant] = useState(() => transaction?.merchant ?? '');
   const [category, setCategory] = useState(() => transaction?.category ?? '');
-  const [subBucketId, setSubBucketId] = useState<string | undefined>(() => transaction?.subBucketId);
   const [accountId, setAccountId] = useState(() => transaction?.accountId || '');
   const [creditPayment, setCreditPayment] = useState(() => transaction?.creditPayment ?? false);
   const [date, setDate] = useState(() => transaction?.date ?? '');
@@ -61,10 +60,6 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
     return resolveStoreName(stores, merchantValue) ?? transaction?.store ?? undefined;
   };
 
-  // Find selected bucket and its sub-buckets
-  const selectedBucket = buckets.find(b => b.name === category);
-  const subBuckets = selectedBucket?.subBuckets || [];
-
   // The Charge/Payment toggle only applies to a credit account.
   const isSelectedAccountCredit = accounts.find(a => a.id === accountId)?.type === 'credit';
 
@@ -79,7 +74,6 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
       setAmount(transaction.amount.toString());
       setMerchant(transaction.merchant);
       setCategory(transaction.category);
-      setSubBucketId(transaction.subBucketId);
       setAccountId(transaction.accountId || '');
       setCreditPayment(transaction.creditPayment ?? false);
       setDate(transaction.date);
@@ -123,7 +117,6 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
         merchant: merchant.trim(),
         // Credit-tagged spend carries the sentinel, never a bucket category.
         category: isSelectedAccountCredit ? CREDIT_CARD_CATEGORY : category,
-        subBucketId: isSelectedAccountCredit ? undefined : (subBucketId || undefined),
         store: resolveStore(merchant),
         accountId: accountId || undefined,
         // Always pass the key so toggling Payment off on a credit transaction
@@ -196,7 +189,6 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
         isRecurring: false,
         source: 'manual',
         autoCategorized: transaction.autoCategorized ?? false,
-        subBucketId: isSelectedAccountCredit ? undefined : (subBucketId || undefined),
         store: resolveStore(merchant),
         accountId: accountId || undefined,
         creditPayment: isSelectedAccountCredit && creditPayment ? true : undefined
@@ -285,10 +277,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
           label="Category"
           disabled={isSaving}
           value={category}
-          onChange={(e) => {
-            setCategory(e.target.value);
-            setSubBucketId(undefined); // Reset sub-bucket when category changes
-          }}
+          onChange={(e) => setCategory(e.target.value)}
         >
           {/* A credit transaction re-tagged to checking has no bucket category
               yet — surface an explicit placeholder until one is picked. */}
@@ -305,23 +294,6 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
         </Select>
         )}
 
-        {!isSelectedAccountCredit && subBuckets.length > 0 && (
-          <Select
-            id="edit-sub-bucket"
-            label="Sub-Category"
-            disabled={isSaving}
-            value={subBucketId || ''}
-            onChange={(e) => setSubBucketId(e.target.value || undefined)}
-          >
-            <option value="">(None)</option>
-            {subBuckets.map((sb) => (
-              <option key={sb.id} value={sb.id}>
-                {sb.name}
-              </option>
-            ))}
-          </Select>
-        )}
-
         <Select
           id="edit-account"
           label="Account"
@@ -335,7 +307,6 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
             const nextIsCredit = accounts.find(a => a.id === nextId)?.type === 'credit';
             if (!nextIsCredit && category === CREDIT_CARD_CATEGORY) {
               setCategory('');
-              setSubBucketId(undefined);
             }
           }}
         >

@@ -873,7 +873,6 @@ const TransactionMasterList: React.FC = () => {
           dynamicCategories={financeBuckets.map(b => b.name)}
           habits={habits}
           transactions={transactions}
-          buckets={financeBuckets}
           stores={stores}
           accounts={accounts}
         />

@@ -55,7 +55,6 @@ describe('mergeTransactions', () => {
     const keeper = tx({
       plaidTransactionId: 'p1',
       payPeriodId: '2026-06-15',
-      subBucketId: 'sub1',
       store: 'Trader Joes',
       accountId: 'acct1',
       notes: 'note',
@@ -71,19 +70,17 @@ describe('mergeTransactions', () => {
     expect(mergeTransactions(keeper, dupe)).toEqual({ plaidTransactionId: 'p1' });
   });
 
-  it('inherits payPeriodId, subBucketId, store, accountId, and notes from the dupe when the keeper lacks them', () => {
+  it('inherits payPeriodId, store, accountId, and notes from the dupe when the keeper lacks them', () => {
     const keeper = tx();
     const dupe = tx({
       id: 'dupe',
       payPeriodId: '2026-06-15',
-      subBucketId: 'sub1',
       store: 'Trader Joes',
       accountId: 'acct1',
       notes: 'from dupe',
     });
     expect(mergeTransactions(keeper, dupe)).toEqual({
       payPeriodId: '2026-06-15',
-      subBucketId: 'sub1',
       store: 'Trader Joes',
       accountId: 'acct1',
       notes: 'from dupe',

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Check, AlertCircle } from 'lucide-react';
 import { ParsedTransaction } from '@/types/ui';
-import { BudgetBucket, Store, Account } from '@/types/schema';
+import { Store, Account } from '@/types/schema';
 import { CompactSelect } from '@/components/ui/CompactSelect';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { Button } from '@/components/ui/Button';
@@ -13,7 +13,6 @@ interface CaptureTransactionReviewProps {
   onToggleAll: () => void;
   onSubmit: () => void;
   dynamicCategories: string[];
-  buckets: BudgetBucket[];
   stores: Store[];
   accounts: Account[];
 }
@@ -25,7 +24,6 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
   onToggleAll,
   onSubmit,
   dynamicCategories,
-  buckets,
   stores,
   accounts
 }) => {
@@ -82,7 +80,7 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
                   {dynamicCategories.slice(0, 4).map((cat) => (
                     <button
                       key={cat}
-                      onClick={() => onUpdateTransaction(tx.id, { category: cat, subBucketId: undefined })}
+                      onClick={() => onUpdateTransaction(tx.id, { category: cat })}
                       className={`px-2 py-1 rounded-btn text-xxs font-bold transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
                         tx.category === cat
                           ? 'bg-accent-600 dark:bg-accent-500 text-white'
@@ -95,7 +93,7 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
                   {dynamicCategories.length > 4 && (
                     <select
                       value={tx.category}
-                      onChange={(e) => onUpdateTransaction(tx.id, { category: e.target.value, subBucketId: undefined })}
+                      onChange={(e) => onUpdateTransaction(tx.id, { category: e.target.value })}
                       className="px-2 py-1 rounded-lg text-xxs font-bold bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 border-none outline-hidden"
                     >
                       {dynamicCategories.map(cat => (
@@ -107,25 +105,6 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
                 )}
 
                 <div className="grid grid-cols-2 gap-2 mt-2">
-                  {/* Sub-Bucket Select (hidden for credit-tagged rows) */}
-                  {(() => {
-                    if (accounts.find(a => a.id === tx.accountId)?.type === 'credit') return null;
-                    const selectedBucket = buckets.find(b => b.name === tx.category);
-                    if (selectedBucket?.subBuckets && selectedBucket.subBuckets.length > 0) {
-                      return (
-                        <div>
-                          <CompactSelect
-                            value={tx.subBucketId || ''}
-                            onChange={(value) => onUpdateTransaction(tx.id, { subBucketId: value || undefined })}
-                            options={selectedBucket.subBuckets.map(sb => ({ id: sb.id, label: sb.name }))}
-                            placeholder="Sub-Category..."
-                          />
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
-
                   {/* Store Select */}
                   <div>
                     <CompactSelect

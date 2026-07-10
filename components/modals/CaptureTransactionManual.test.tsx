@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CaptureTransactionManual } from './CaptureTransactionManual';
-import { Transaction, Habit, BudgetBucket, Store } from '@/types/schema';
+import { Transaction, Habit, Store } from '@/types/schema';
 
 // Mock dependencies
 vi.mock('react-hot-toast', () => ({
@@ -32,7 +32,6 @@ describe('CaptureTransactionManual', () => {
   const mockCategories = ['Food', 'Transport', 'Utilities'];
   const mockHabits: Habit[] = [];
   const mockTransactions: Transaction[] = [];
-  const mockBuckets: BudgetBucket[] = [];
   const mockStores: Store[] = [
     { id: 'store-1', name: 'Trader Joes' },
     { id: 'store-2', name: 'Costco' },
@@ -50,7 +49,6 @@ describe('CaptureTransactionManual', () => {
         dynamicCategories={mockCategories}
         habits={mockHabits}
         transactions={mockTransactions}
-        buckets={mockBuckets}
         stores={[]}
         accounts={[]}
       />
@@ -70,7 +68,6 @@ describe('CaptureTransactionManual', () => {
         dynamicCategories={mockCategories}
         habits={mockHabits}
         transactions={mockTransactions}
-        buckets={mockBuckets}
         stores={mockStores}
         accounts={[]}
       />
@@ -93,7 +90,6 @@ describe('CaptureTransactionManual', () => {
         dynamicCategories={mockCategories}
         habits={mockHabits}
         transactions={mockTransactions}
-        buckets={mockBuckets}
         stores={mockStores}
         accounts={[]}
       />
@@ -121,7 +117,6 @@ describe('CaptureTransactionManual', () => {
         dynamicCategories={mockCategories}
         habits={mockHabits}
         transactions={mockTransactions}
-        buckets={mockBuckets}
         stores={mockStores}
         accounts={[]}
       />
@@ -148,7 +143,6 @@ describe('CaptureTransactionManual', () => {
         dynamicCategories={mockCategories}
         habits={mockHabits}
         transactions={mockTransactions}
-        buckets={mockBuckets}
         stores={[]}
         accounts={[]}
       />
@@ -179,7 +173,6 @@ describe('CaptureTransactionManual', () => {
         dynamicCategories={mockCategories}
         habits={mockHabits}
         transactions={mockTransactions}
-        buckets={mockBuckets}
         stores={[]}
         accounts={[]}
       />
@@ -216,7 +209,6 @@ describe('CaptureTransactionManual', () => {
         dynamicCategories={mockCategories}
         habits={mockHabits}
         transactions={mockTransactions}
-        buckets={mockBuckets}
         stores={[]}
         accounts={[]}
       />
@@ -253,7 +245,6 @@ describe('CaptureTransactionManual', () => {
         dynamicCategories={mockCategories}
         habits={mockHabits}
         transactions={mockTransactions}
-        buckets={mockBuckets}
         stores={[]}
         accounts={[]}
       />
@@ -288,7 +279,6 @@ describe('CaptureTransactionManual', () => {
         dynamicCategories={mockCategories}
         habits={mockHabits}
         transactions={mockTransactions}
-        buckets={mockBuckets}
         stores={[]}
         accounts={[]}
       />
@@ -322,7 +312,6 @@ describe('CaptureTransactionManual', () => {
         dynamicCategories={mockCategories}
         habits={mockHabits}
         transactions={mockTransactions}
-        buckets={mockBuckets}
         stores={[]}
         accounts={[]}
       />
@@ -358,7 +347,6 @@ describe('CaptureTransactionManual', () => {
         dynamicCategories={mockCategories}
         habits={mockHabits}
         transactions={mockTransactions}
-        buckets={mockBuckets}
         stores={[]}
         accounts={[]}
       />

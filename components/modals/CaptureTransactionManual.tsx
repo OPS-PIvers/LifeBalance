@@ -2,7 +2,7 @@ import React, { useId, useState, useMemo } from 'react';
 import { Check, CheckCircle2, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getLocalDateString } from '@/utils/dateHelpers';
-import { Transaction, Habit, BudgetBucket, Store, Account, CREDIT_CARD_CATEGORY } from '@/types/schema';
+import { Transaction, Habit, Store, Account, CREDIT_CARD_CATEGORY } from '@/types/schema';
 import { suggestHabitsForTransaction } from '@/utils/habitSuggestions';
 import { resolveStoreName } from '@/utils/stores';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
@@ -19,7 +19,6 @@ interface CaptureTransactionManualProps {
     merchant?: string;
     category?: string;
     date?: string;
-    subBucketId?: string;
     store?: string;
     accountId?: string;
     creditPayment?: boolean;
@@ -29,7 +28,6 @@ interface CaptureTransactionManualProps {
   dynamicCategories: string[];
   habits: Habit[];
   transactions: Transaction[];
-  buckets: BudgetBucket[];
   stores: Store[];
   accounts: Account[];
 }
@@ -41,7 +39,6 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
   dynamicCategories,
   habits,
   transactions,
-  buckets,
   stores,
   accounts
 }) => {
@@ -59,7 +56,6 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
     return '';
   });
 
-  const [subBucketId, setSubBucketId] = useState<string | undefined>(() => initialData?.subBucketId);
   const [accountId, setAccountId] = useState(() => initialData?.accountId || '');
   const [creditPayment, setCreditPayment] = useState(() => initialData?.creditPayment ?? false);
 
@@ -81,16 +77,6 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
 
   // Focus the amount field on desktop; never on touch (avoids iOS keyboard pop).
   const amountInputRef = useAutoFocus<HTMLInputElement>();
-
-  // Get current bucket and its sub-buckets
-  const currentBucket = useMemo(() => buckets.find(b => b.name === category), [buckets, category]);
-  const availableSubBuckets = useMemo(() => currentBucket?.subBuckets || [], [currentBucket]);
-
-  // Compute validated subBucketId (only valid if it exists in current bucket)
-  const validatedSubBucketId = useMemo(() => {
-    if (!subBucketId) return undefined;
-    return availableSubBuckets.find(sb => sb.id === subBucketId)?.id;
-  }, [subBucketId, availableSubBuckets]);
 
   // Default category update (if dynamicCategories loads late). Done during
   // render on the dynamicCategories-change edge rather than in an effect so it
@@ -195,7 +181,6 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
       source: 'manual',
       autoCategorized: false,
       relatedHabitIds: selectedHabitIds.length > 0 ? selectedHabitIds : undefined,
-      subBucketId: isSelectedAccountCredit ? undefined : validatedSubBucketId,
       store: resolveStoreName(stores, merchant),
       accountId: accountId || undefined,
       // Only meaningful for a credit account; a charge (false) raises the card's
@@ -276,7 +261,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
         <Select
           label="Category"
           value={category}
-          onChange={(e) => { setCategory(e.target.value); setSubBucketId(undefined); }}
+          onChange={(e) => setCategory(e.target.value)}
         >
           {dynamicCategories.length === 0 && <option value="">No buckets found</option>}
           {dynamicCategories.map(cat => (
@@ -326,48 +311,6 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
                   ? 'Lowers this card’s balance (paying it down).'
                   : 'Raises this card’s balance; never affects Safe-to-Spend.'}
               </p>
-            </div>
-          )}
-
-          {/* Sub-Bucket Selection (never applies to credit-tagged spend) */}
-          {!isSelectedAccountCredit && availableSubBuckets.length > 0 && (
-            <div>
-              <label id="manual-subbucket-label" className="block text-xs font-semibold text-brand-400 dark:text-brand-400 uppercase tracking-wider mb-2">
-                Sub-Category (Optional)
-              </label>
-              <div
-                className="flex gap-2 overflow-x-auto overscroll-x-contain pb-2 no-scrollbar"
-                role="radiogroup"
-                aria-labelledby="manual-subbucket-label"
-              >
-                <button
-                  onClick={() => setSubBucketId(undefined)}
-                  role="radio"
-                  aria-checked={!subBucketId}
-                  className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                    !subBucketId
-                      ? 'bg-accent-600 dark:bg-accent-500 text-white'
-                      : 'bg-brand-50 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 border border-brand-200 dark:border-brand-700 hover:bg-brand-100 dark:hover:bg-brand-700/50'
-                  }`}
-                >
-                  None
-                </button>
-                {availableSubBuckets.map(sb => (
-                  <button
-                    key={sb.id}
-                    role="radio"
-                    aria-checked={subBucketId === sb.id}
-                    onClick={() => setSubBucketId(sb.id)}
-                    className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                      subBucketId === sb.id
-                        ? 'bg-accent-600 dark:bg-accent-500 text-white'
-                        : 'bg-brand-50 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 border border-brand-200 dark:border-brand-700 hover:bg-brand-100 dark:hover:bg-brand-700/50'
-                    }`}
-                  >
-                    {sb.name}
-                  </button>
-                ))}
-              </div>
             </div>
           )}
 

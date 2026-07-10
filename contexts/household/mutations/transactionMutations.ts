@@ -130,9 +130,6 @@ export function makeAddTransaction(deps: {
       if (tx.creditPayment === true) {
         docData.creditPayment = true;
       }
-      if (tx.subBucketId && tx.subBucketId.trim()) {
-        docData.subBucketId = tx.subBucketId.trim();
-      }
       if (tx.notes && tx.notes.trim()) {
         docData.notes = tx.notes.trim();
       }
@@ -495,11 +492,6 @@ export function makeUpdateTransaction(deps: {
         if ('creditPayment' in updates && updates.creditPayment !== true && transaction.creditPayment) {
           sanitizedUpdates.creditPayment = deleteField();
         }
-      }
-      if (sanitizedUpdates.subBucketId === undefined || sanitizedUpdates.subBucketId === '') {
-        delete sanitizedUpdates.subBucketId;
-      } else if (typeof sanitizedUpdates.subBucketId === 'string') {
-        sanitizedUpdates.subBucketId = sanitizedUpdates.subBucketId.trim();
       }
       if (sanitizedUpdates.notes === undefined || sanitizedUpdates.notes === '') {
         delete sanitizedUpdates.notes;

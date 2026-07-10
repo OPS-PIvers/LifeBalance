@@ -61,8 +61,8 @@ export function pickKeeper(a: Transaction, b: Transaction): { keeper: Transactio
  * Union rules (never let the merge silently drop information):
  *  - `plaidTransactionId`: keeper's own value wins; otherwise inherit the
  *    dupe's, so a future Plaid sync still recognizes this row.
- *  - `payPeriodId` / `bucketId` (via `subBucketId`) / receipt linkage
- *    (`store`): keeper's own non-empty value wins; otherwise inherit dupe's.
+ *  - `payPeriodId` / receipt linkage (`store`): keeper's own non-empty value
+ *    wins; otherwise inherit dupe's.
  *  - `relatedHabitIds`: union of both (deduped), since either row may carry
  *    habit links entered independently.
  *
@@ -79,9 +79,6 @@ export function mergeTransactions(keeper: Transaction, dupe: Transaction): Parti
   }
   if (!keeper.payPeriodId && dupe.payPeriodId) {
     updates.payPeriodId = dupe.payPeriodId;
-  }
-  if (!keeper.subBucketId && dupe.subBucketId) {
-    updates.subBucketId = dupe.subBucketId;
   }
   if (!keeper.store && dupe.store) {
     updates.store = dupe.store;

@@ -20,7 +20,6 @@ export interface ReceiptData {
   category: string;
   date?: string; // Optional - may not be visible on all receipts
   suggestedHabits?: string[];
-  subBucket?: string;
   store?: string;
 }
 

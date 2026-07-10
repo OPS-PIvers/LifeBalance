@@ -6,7 +6,6 @@ export interface ParsedTransaction {
   date: string;
   selected: boolean;
   relatedHabitIds?: string[];
-  subBucketId?: string;
   store?: string;
   accountId?: string;
   creditPayment?: boolean;
