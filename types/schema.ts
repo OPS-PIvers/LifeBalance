@@ -125,11 +125,6 @@ export interface Account {
   plaidBalanceUpdatedAt?: string;
 }
 
-export interface SubBucket {
-  id: string;
-  name: string;
-}
-
 export interface BudgetBucket {
   id: string;
   name: string;
@@ -140,7 +135,6 @@ export interface BudgetBucket {
   isCore: boolean;
   currentPeriodId?: string; // Current pay period ID (YYYY-MM-DD)
   lastResetDate?: string; // YYYY-MM-DD when last reset occurred
-  subBuckets?: SubBucket[];
 }
 
 export interface BucketPeriodSnapshot {
@@ -169,7 +163,6 @@ export interface Transaction {
   autoCategorized: boolean;
   payPeriodId?: string; // Pay period ID (YYYY-MM-DD of period start), empty string if no period tracking
   relatedHabitIds?: string[];
-  subBucketId?: string;
   store?: string;
   accountId?: string;
   /** When the transaction is tagged to a CREDIT account, marks it as a PAYMENT

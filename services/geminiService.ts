@@ -429,7 +429,6 @@ export interface BankTransactionData {
   category: string;
   date: string;
   suggestedHabits?: string[];
-  subBucket?: string;
 }
 
 export interface GroceryItem {
@@ -783,7 +782,6 @@ export const analyzeReceipt = async (
   base64Image: string,
   availableCategories?: string[],
   availableHabits?: string[],
-  availableSubBuckets?: Record<string, string[]>,
   availableStores?: string[],
   _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<ReceiptData> => {
@@ -795,25 +793,12 @@ export const analyzeReceipt = async (
       ? sanitizeList(availableHabits)
       : '';
 
-    // Prepare sub-bucket context
-    let subBucketContext = '';
-    if (availableSubBuckets && Object.keys(availableSubBuckets).length > 0) {
-      subBucketContext = 'Available Sub-Buckets for Categories:\n';
-      Object.entries(availableSubBuckets).forEach(([cat, subs]) => {
-        if (subs.length > 0) {
-          subBucketContext += `- ${cat}: [${subs.join(', ')}]\n`;
-        }
-      });
-      subBucketContext += 'If the selected category has sub-buckets, please choose the most appropriate one as "subBucket".';
-    }
-
     const today = getLocalDateString();
     const prompt = [
       `Analyze this receipt image. Extract the merchant name, total amount, date (YYYY-MM-DD format), and suggest the most appropriate category.`,
       `The amount is in US dollars — return it as a positive decimal number (e.g. 12.34); ignore currency symbols, treat "." as the decimal separator and "," as a thousands separator.`,
       `For category, choose exactly one of these strings: ${categoryList}. If none fits, use "${FALLBACK_CATEGORY}". Do not invent a new category.`,
       habitList ? `Also suggest any relevant habits from this list that might apply to this transaction: ${habitList}.` : '',
-      subBucketContext,
       availableStores?.length
         ? `Extract the store name if visible. Prefer one of these existing stores when it's the same place: ${sanitizeList(availableStores)}. Only return a different name if it is clearly a different store; otherwise leave it blank.`
         : `Extract the store name if visible.`,
@@ -831,7 +816,6 @@ export const analyzeReceipt = async (
           category: { type: Type.STRING },
           date: { type: Type.STRING },
           suggestedHabits: { type: Type.ARRAY, items: { type: Type.STRING } },
-          subBucket: { type: Type.STRING },
           store: { type: Type.STRING }
         },
         required: ["merchant", "amount", "category"]
@@ -860,7 +844,6 @@ export const parseBankStatement = async (
   base64Image: string,
   availableCategories?: string[],
   availableHabits?: string[],
-  availableSubBuckets?: Record<string, string[]>,
   _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<BankTransactionData[]> => {
   return withErrorHandling('Bank Statement Parse', 'Failed to parse bank statement. Please try again or enter transactions manually.', async () => {
@@ -871,19 +854,6 @@ export const parseBankStatement = async (
       ? sanitizeList(availableHabits)
       : '';
 
-    // Sub-bucket context, mirroring analyzeReceipt so bulk-imported transactions
-    // can also be assigned a sub-bucket when their category has them.
-    let subBucketContext = '';
-    if (availableSubBuckets && Object.keys(availableSubBuckets).length > 0) {
-      subBucketContext = 'Available sub-buckets per category:\n';
-      Object.entries(availableSubBuckets).forEach(([cat, subs]) => {
-        if (subs.length > 0) {
-          subBucketContext += `- ${cat}: [${subs.join(', ')}]\n`;
-        }
-      });
-      subBucketContext += 'If the chosen category has sub-buckets, also return the most appropriate one as "subBucket".';
-    }
-
     const today = getLocalDateString();
     const prompt = [
       `Analyze this bank statement or transaction list screenshot. Extract ALL visible expense transactions. For each transaction, provide:`,
@@ -891,7 +861,6 @@ export const parseBankStatement = async (
       `- amount: The transaction amount in US dollars as a POSITIVE decimal number (even if shown as negative/debit). Parse "1,234.56" as 1234.56 ("." = decimal, "," = thousands separator).`,
       `- date: The transaction date in YYYY-MM-DD format. Today's date is ${today}. If the year is missing, infer it.`,
       `- category: choose exactly one of: ${categoryList}. Use these exact strings only; if none fits, use "${FALLBACK_CATEGORY}".`,
-      subBucketContext ? `- subBucket: ${subBucketContext}` : '',
       habitList ? `- suggestedHabits: Suggest any relevant habits from this list: ${habitList}` : '',
       `Treat money LEAVING the account (debits/withdrawals/purchases, often shown negative or in red) as expenses; exclude deposits, refunds, transfers in, and payments received. If the image shows no expense transactions, return an empty array [].`,
       `Return a JSON array of transactions.`
@@ -909,8 +878,7 @@ export const parseBankStatement = async (
             amount: { type: Type.NUMBER },
             category: { type: Type.STRING },
             date: { type: Type.STRING },
-            suggestedHabits: { type: Type.ARRAY, items: { type: Type.STRING } },
-            subBucket: { type: Type.STRING }
+            suggestedHabits: { type: Type.ARRAY, items: { type: Type.STRING } }
           },
           required: ["merchant", "amount", "category", "date"]
         }

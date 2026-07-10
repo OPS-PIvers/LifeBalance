@@ -36,7 +36,7 @@ describe('geminiValidation - validateReceiptData', () => {
   it('accepts optional fields when correctly typed', () => {
     const result = validateReceiptData({
       merchant: 'Target', amount: 25, category: 'Shopping',
-      date: '2026-01-01', suggestedHabits: ['a'], subBucket: 'sub', store: 'Target',
+      date: '2026-01-01', suggestedHabits: ['a'], store: 'Target',
     });
     expect(result.date).toBe('2026-01-01');
     expect(result.suggestedHabits).toEqual(['a']);
@@ -64,7 +64,6 @@ describe('geminiValidation - validateReceiptData', () => {
       category: 'Shopping',
       date: null,
       suggestedHabits: null,
-      subBucket: null,
       store: null,
     });
     expect(result.merchant).toBe('Target');

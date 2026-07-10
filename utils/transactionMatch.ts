@@ -158,8 +158,6 @@ export function buildReceiptMergeUpdates(
       ? receiptTx.relatedHabitIds
       : candidate.relatedHabitIds;
   if (habitIds && habitIds.length > 0) updates.relatedHabitIds = habitIds;
-  const subBucketId = receiptTx.subBucketId || candidate.subBucketId;
-  if (subBucketId) updates.subBucketId = subBucketId;
   const store = receiptTx.store || candidate.store;
   if (store) updates.store = store;
   // Delta-safe amount: only when it changes (full debit for a $0 stub, the

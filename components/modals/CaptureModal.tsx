@@ -56,7 +56,6 @@ interface ManualInitialData {
   merchant?: string;
   category?: string;
   date?: string;
-  subBucketId?: string;
   store?: string;
   accountId?: string;
   creditPayment?: boolean;
@@ -312,20 +311,6 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
       .map(h => h.id);
   };
 
-  const matchSubBucket = (category: string, suggestedSubBucket?: string): string | undefined => {
-    if (!suggestedSubBucket) return undefined;
-    const bucket = buckets.find(b => b.name === category);
-    if (!bucket?.subBuckets) return undefined;
-
-    const exact = bucket.subBuckets.find(sb => sb.name.toLowerCase() === suggestedSubBucket.toLowerCase());
-    if (exact) return exact.id;
-
-    const loose = bucket.subBuckets.find(sb => sb.name.toLowerCase().includes(suggestedSubBucket.toLowerCase()));
-    if (loose) return loose.id;
-
-    return undefined;
-  };
-
   const capturePhoto = async () => {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
@@ -343,14 +328,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
         if (!householdId) throw new Error("Household ID not found");
         const { analyzeReceipt } = await import('@/services/geminiService');
 
-        const subBucketsMap: Record<string, string[]> = {};
-        buckets.forEach(b => {
-          if (b.subBuckets && b.subBuckets.length > 0) {
-            subBucketsMap[b.name] = b.subBuckets.map(sb => sb.name);
-          }
-        });
-
-        const data: ReceiptData = await analyzeReceipt(householdId, base64Image, dynamicCategories, habitTitles, subBucketsMap, stores.map(s => s.name));
+        const data: ReceiptData = await analyzeReceipt(householdId, base64Image, dynamicCategories, habitTitles, stores.map(s => s.name));
         track('receipt_scanned');
         const category = matchCategory(data.category);
 
@@ -365,7 +343,6 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
           source: 'camera-scan',
           autoCategorized: true,
           relatedHabitIds: matchHabits(data.suggestedHabits),
-          subBucketId: matchSubBucket(category, data.subBucket),
           store: data.store
         };
         // Before writing, see if this receipt likely duplicates an existing
@@ -414,17 +391,10 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
       if (!householdId) throw new Error("Household ID not found");
       const { parseBankStatement, analyzeReceipt } = await import('@/services/geminiService');
 
-      const subBucketsMap: Record<string, string[]> = {};
-      buckets.forEach(b => {
-        if (b.subBuckets && b.subBuckets.length > 0) {
-          subBucketsMap[b.name] = b.subBuckets.map(sb => sb.name);
-        }
-      });
-
-      const transactions = await parseBankStatement(householdId, base64, dynamicCategories, habitTitles, subBucketsMap);
+      const transactions = await parseBankStatement(householdId, base64, dynamicCategories, habitTitles);
       if (transactions.length === 0) {
         setProcessingMessage('Trying receipt analysis...');
-        const receipt = await analyzeReceipt(householdId, base64, dynamicCategories, habitTitles, subBucketsMap, stores.map(s => s.name));
+        const receipt = await analyzeReceipt(householdId, base64, dynamicCategories, habitTitles, stores.map(s => s.name));
         const category = matchCategory(receipt.category);
         setParsedTransactions([{
           id: crypto.randomUUID(),
@@ -434,7 +404,6 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
           date: receipt.date || getLocalDateString(),
           selected: true,
           relatedHabitIds: matchHabits(receipt.suggestedHabits),
-          subBucketId: matchSubBucket(category, receipt.subBucket),
           store: receipt.store
         }]);
       } else {
@@ -448,7 +417,6 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
             date: tx.date || getLocalDateString(),
             selected: true,
             relatedHabitIds: matchHabits(tx.suggestedHabits),
-            subBucketId: matchSubBucket(category, tx.subBucket)
           };
         }));
       }
@@ -506,7 +474,6 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
           source: 'file-upload',
           autoCategorized: true,
           relatedHabitIds: tx.relatedHabitIds,
-          subBucketId: isCredit ? undefined : tx.subBucketId,
           store: resolvedStore,
           accountId: tx.accountId,
           creditPayment: tx.creditPayment
@@ -772,7 +739,6 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
                   onToggleAll={handleToggleAll}
                   onSubmit={submitParsedTransactions}
                   dynamicCategories={dynamicCategories}
-                  buckets={buckets}
                   stores={stores}
                   accounts={accounts}
                 />
@@ -787,7 +753,6 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
                   dynamicCategories={dynamicCategories}
                   habits={habits}
                   transactions={transactions}
-                  buckets={buckets}
                   stores={stores}
                   accounts={accounts}
                 />

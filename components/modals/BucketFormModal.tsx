@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Plus, X } from 'lucide-react';
-import { BudgetBucket, SubBucket } from '@/types/schema';
+import { Trash2 } from 'lucide-react';
+import { BudgetBucket } from '@/types/schema';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
@@ -26,8 +26,6 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
   const [name, setName] = useState('');
   const [limit, setLimit] = useState('');
   const [color, setColor] = useState<BucketColorKey>(DEFAULT_BUCKET_COLOR);
-  const [subBuckets, setSubBuckets] = useState<SubBucket[]>([]);
-  const [newSubBucketName, setNewSubBucketName] = useState('');
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   useEffect(() => {
@@ -38,30 +36,13 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
         setName(editingBucket.name);
         setLimit(editingBucket.limit.toString());
         setColor(normalizeBucketColorKey(editingBucket.color));
-        setSubBuckets(editingBucket.subBuckets || []);
       } else {
         setName('');
         setLimit('');
         setColor(DEFAULT_BUCKET_COLOR);
-        setSubBuckets([]);
       }
-      setNewSubBucketName('');
     }
   }, [isOpen, editingBucket]);
-
-  const handleAddSubBucket = () => {
-    if (!newSubBucketName.trim()) return;
-    const newSubBucket: SubBucket = {
-      id: crypto.randomUUID(),
-      name: newSubBucketName.trim()
-    };
-    setSubBuckets([...subBuckets, newSubBucket]);
-    setNewSubBucketName('');
-  };
-
-  const handleRemoveSubBucket = (id: string) => {
-    setSubBuckets(subBuckets.filter(sb => sb.id !== id));
-  };
 
   const handleSave = () => {
     if (!name || !limit) return;
@@ -73,7 +54,6 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
       color,
       isVariable: true,
       isCore: true,
-      subBuckets
     };
 
     if (editingBucket) {
@@ -153,48 +133,6 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
                 />
               );
             })}
-          </div>
-        </div>
-
-        <div>
-          <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase block mb-2">Sub-Categories (Optional)</label>
-          <div className="space-y-2 mb-2">
-            {subBuckets.map(sb => (
-              <div key={sb.id} className="flex justify-between items-center bg-brand-50 dark:bg-brand-700/50 p-2 rounded-lg">
-                <span className="text-sm font-medium text-brand-700 dark:text-brand-200">{sb.name}</span>
-                <button
-                  onClick={() => handleRemoveSubBucket(sb.id)}
-                  className="p-3.5 -m-2.5 text-brand-400 dark:text-brand-400 hover:text-money-neg dark:hover:text-money-negDark"
-                  aria-label={`Remove ${sb.name} sub-category`}
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={newSubBucketName}
-              onChange={e => setNewSubBucketName(e.target.value)}
-              placeholder="New sub-category..."
-              aria-label="New sub-category name"
-              className="flex-1 px-3 py-2 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-lg text-base focus:outline-hidden focus:ring-2 focus:ring-accent-500/30"
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleAddSubBucket();
-                }
-              }}
-            />
-            <button
-              onClick={handleAddSubBucket}
-              disabled={!newSubBucketName.trim()}
-              className="px-3 py-2 bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 rounded-lg hover:bg-brand-200 dark:hover:bg-brand-700 disabled:opacity-50 transition-colors"
-              aria-label="Add sub-category"
-            >
-              <Plus size={20} />
-            </button>
           </div>
         </div>
 

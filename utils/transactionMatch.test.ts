@@ -148,31 +148,29 @@ describe('buildReceiptMergeUpdates', () => {
     expect('needsAmount' in updates).toBe(false);
   });
 
-  it("preserves the candidate's existing store/subBucket/habits when the receipt lacks them (no wipe, no undefined)", () => {
+  it("preserves the candidate's existing store/habits when the receipt lacks them (no wipe, no undefined)", () => {
     const candidate = tx({
       id: 'stub', amount: 0, needsAmount: true,
-      store: 'Target', subBucketId: 'sb1', relatedHabitIds: ['h1'],
+      store: 'Target', relatedHabitIds: ['h1'],
     });
     // receipt has none of those optional fields
     const updates = buildReceiptMergeUpdates(
-      receiptTx({ store: undefined, subBucketId: undefined, relatedHabitIds: [] }),
+      receiptTx({ store: undefined, relatedHabitIds: [] }),
       candidate,
     );
     expect(updates.store).toBe('Target');
-    expect(updates.subBucketId).toBe('sb1');
     expect(updates.relatedHabitIds).toEqual(['h1']);
     // never writes undefined (Firestore rejects it)
     expect(Object.values(updates).every((v) => v !== undefined)).toBe(true);
   });
 
   it("uses the receipt's metadata when present (overrides candidate)", () => {
-    const candidate = tx({ id: 'stub', amount: 0, needsAmount: true, store: 'Old', subBucketId: 'sbOld' });
+    const candidate = tx({ id: 'stub', amount: 0, needsAmount: true, store: 'Old' });
     const updates = buildReceiptMergeUpdates(
-      receiptTx({ store: 'Target', subBucketId: 'sbNew', relatedHabitIds: ['h2'] }),
+      receiptTx({ store: 'Target', relatedHabitIds: ['h2'] }),
       candidate,
     );
     expect(updates.store).toBe('Target');
-    expect(updates.subBucketId).toBe('sbNew');
     expect(updates.relatedHabitIds).toEqual(['h2']);
   });
 });
