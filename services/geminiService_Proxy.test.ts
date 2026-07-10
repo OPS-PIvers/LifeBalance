@@ -25,6 +25,8 @@ const { httpsCallableMock, callableInvokeMock } = vi.hoisted(() => ({
   httpsCallableMock: vi.fn(),
   callableInvokeMock: vi.fn(),
 }));
+// Hoisted so tests can assert the client-side quota transaction is (not) used.
+const { runTransactionMock } = vi.hoisted(() => ({ runTransactionMock: vi.fn() }));
 
 vi.mock('@google/genai', () => ({
   GoogleGenAI: class {
@@ -49,16 +51,7 @@ vi.mock('@/firebase.config', () => ({
 vi.mock('firebase/firestore', () => ({
   doc: vi.fn(() => ({ withConverter: vi.fn().mockReturnThis() })),
   getDoc: vi.fn(() => Promise.resolve({ exists: () => true, data: () => ({ aiEnabled: true }) })),
-  runTransaction: vi.fn().mockImplementation(async (_db, fn) => {
-    const mockTxn = {
-      get: vi.fn().mockResolvedValue({
-        exists: () => true,
-        data: () => ({ aiUsage: { dailyCount: 0, lastResetDate: '2026-01-01' } }),
-      }),
-      update: vi.fn(),
-    };
-    await fn(mockTxn);
-  }),
+  runTransaction: runTransactionMock,
   collection: vi.fn(),
   addDoc: vi.fn(() => Promise.resolve({ id: 'mock-doc-id' })),
   serverTimestamp: vi.fn(),
@@ -84,6 +77,16 @@ beforeEach(() => {
   httpsCallableMock.mockReturnValue(callableInvokeMock);
   callableInvokeMock.mockResolvedValue({ data: { text: MEAL_JSON } });
   generateContentMock.mockResolvedValue({ text: MEAL_JSON });
+  runTransactionMock.mockImplementation(async (_db: unknown, fn: (txn: unknown) => Promise<void>) => {
+    const mockTxn = {
+      get: vi.fn().mockResolvedValue({
+        exists: () => true,
+        data: () => ({ aiUsage: { dailyCount: 0, lastResetDate: '2026-01-01' } }),
+      }),
+      update: vi.fn(),
+    };
+    await fn(mockTxn);
+  });
 });
 
 afterEach(() => {
@@ -182,6 +185,85 @@ describe('geminiService transport switch', () => {
 
     expect(result.name).toBe('Quick Pasta');
     // Retried once after the transient failure (2 invocations total).
+    expect(callableInvokeMock).toHaveBeenCalledTimes(2);
+  });
+
+  // -------------------------------------------------------------------------
+  // Plan 10: server-owned quota on the proxy path
+  // -------------------------------------------------------------------------
+
+  it('sends householdId and the caller-local today in the proxy payload', async () => {
+    vi.stubEnv('VITE_USE_GEMINI_PROXY', 'true');
+    const { suggestMeal } = await import('./geminiService');
+
+    await suggestMeal('hh-42', { ...REQUEST });
+
+    expect(callableInvokeMock).toHaveBeenCalledTimes(1);
+    const sentReq = callableInvokeMock.mock.calls[0]![0] as {
+      householdId: string;
+      today: string;
+    };
+    expect(sentReq.householdId).toBe('hh-42');
+    // Local calendar date in yyyy-MM-dd (getLocalDateString convention).
+    expect(sentReq.today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('does NOT run the client-side aiUsage transaction on the proxy path (server owns the counter)', async () => {
+    vi.stubEnv('VITE_USE_GEMINI_PROXY', 'true');
+    const { suggestMeal } = await import('./geminiService');
+
+    await suggestMeal('hh', { ...REQUEST });
+
+    // No client-side quota write — geminiproxy performs the authoritative
+    // check-and-increment; a client increment here would double-count.
+    expect(runTransactionMock).not.toHaveBeenCalled();
+    expect(callableInvokeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('still runs the client-side aiUsage transaction on the direct SDK path', async () => {
+    vi.stubEnv('VITE_USE_GEMINI_PROXY', '');
+    const { suggestMeal } = await import('./geminiService');
+
+    await suggestMeal('hh', { ...REQUEST });
+
+    expect(runTransactionMock).toHaveBeenCalledTimes(1);
+    expect(generateContentMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT retry a server quota rejection and surfaces its message unchanged', async () => {
+    vi.stubEnv('VITE_USE_GEMINI_PROXY', 'true');
+    const { suggestMeal } = await import('./geminiService');
+
+    // The FirebaseError shape for the proxy's HttpsError('resource-exhausted',
+    // 'Daily AI quota exceeded (…)') — the SAME code a transient Gemini 429
+    // maps to, so only the message carve-out can stop the retry.
+    const quotaError = Object.assign(
+      new Error('Daily AI quota exceeded (100 requests/day). Try again tomorrow.'),
+      { code: 'functions/resource-exhausted' },
+    );
+    callableInvokeMock.mockRejectedValue(quotaError);
+
+    await expect(suggestMeal('hh', { ...REQUEST })).rejects.toThrow(
+      /Daily AI quota exceeded/,
+    );
+    // Exactly one invocation — a daily-cap rejection cannot succeed on retry.
+    expect(callableInvokeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('still retries a genuine Gemini 429 (resource-exhausted WITHOUT the quota phrase)', async () => {
+    vi.stubEnv('VITE_USE_GEMINI_PROXY', 'true');
+    const { suggestMeal } = await import('./geminiService');
+
+    const transient429 = Object.assign(new Error('Gemini rate limit reached.'), {
+      code: 'functions/resource-exhausted',
+    });
+    callableInvokeMock
+      .mockRejectedValueOnce(transient429)
+      .mockResolvedValueOnce({ data: { text: MEAL_JSON } });
+
+    const result = await suggestMeal('hh', { ...REQUEST });
+
+    expect(result.name).toBe('Quick Pasta');
     expect(callableInvokeMock).toHaveBeenCalledTimes(2);
   });
 });

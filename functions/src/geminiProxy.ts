@@ -8,17 +8,26 @@
  * key never reaches the browser.
  *
  * This is intentionally a *thin* transport: all prompt-building and response
- * parsing stay in the client (services/geminiService.ts). The function only
+ * parsing stay in the client (services/geminiService.ts). The function
  * forwards the already-assembled `{ model, contents, config }` to
  * `ai.models.generateContent` and returns the plain `{ text }` the client reads
  * off the SDK response — so the client can consume it identically to the direct
  * SDK path it uses today.
+ *
+ * Plan 10 adds server-side spend protection before that forward: the caller
+ * must be a member of the `householdId` it names, the `aiEnabled` kill-switch
+ * is honored, and the daily AI quota is checked-and-incremented atomically on
+ * the household doc. On the proxy path the SERVER owns the `aiUsage` counter —
+ * the client skips its own increment (see geminiService.generateJsonContent),
+ * so each call counts exactly once.
  */
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import * as logger from "firebase-functions/logger";
+import * as admin from "firebase-admin";
 import { GoogleGenAI } from "@google/genai";
+import { getAiDailyCap, type HouseholdEntitlementData } from "./entitlements";
 
 /**
  * The Gemini API key, held server-side as a Cloud Functions secret. A human sets
@@ -33,6 +42,15 @@ interface GeminiProxyData {
   model?: unknown;
   contents?: unknown;
   config?: unknown;
+  /** Household whose quota this call spends (Plan 10) — required. */
+  householdId?: unknown;
+  /**
+   * Caller-local calendar date (yyyy-MM-dd), same convention as the quickAdd
+   * endpoints: Cloud Functions run in UTC, so the client's local date is
+   * forwarded to keep the daily-quota day boundary aligned with the user.
+   * Optional; validated and clamped server-side (see resolveQuotaDay).
+   */
+  today?: unknown;
 }
 
 /** Plain, JSON-serializable result the client consumes the same way it reads the SDK response. */
@@ -58,6 +76,136 @@ const httpStatusOf = (error: unknown): number | undefined => {
   return undefined;
 };
 
+/** Strict calendar-date shape the quota day accepts (yyyy-MM-dd). */
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Resolve the calendar day the quota transaction should count against.
+ *
+ * Accepts the caller-local `today` (the quickAdd convention — the client's
+ * local date keeps the day boundary aligned with the user rather than UTC),
+ * but CLAMPS it: if it is absent, malformed, or more than 1 calendar day away
+ * from the server's UTC date, the server's UTC date is used instead. The ±1
+ * day tolerance covers every real timezone offset while preventing a caller
+ * from gaming the counter with a fabricated far-off date.
+ */
+export function resolveQuotaDay(today: unknown, nowMs: number = Date.now()): string {
+  const serverToday = new Date(nowMs).toISOString().slice(0, 10);
+  if (typeof today !== "string" || !DATE_RE.test(today)) return serverToday;
+
+  const claimedMs = Date.parse(`${today}T00:00:00Z`);
+  const serverMs = Date.parse(`${serverToday}T00:00:00Z`);
+  if (Number.isNaN(claimedMs)) return serverToday;
+
+  const dayDiff = Math.abs(claimedMs - serverMs) / 86_400_000;
+  return dayDiff <= 1 ? today : serverToday;
+}
+
+/** Shape of the `aiUsage` counter stored on the household doc. */
+interface AiUsage {
+  dailyCount: number;
+  lastResetDate: string;
+}
+
+/**
+ * Membership + kill-switch + atomic daily-quota enforcement (Plan 10).
+ *
+ * The server owns the counter on the proxy path: the client no longer writes
+ * `aiUsage` when VITE_USE_GEMINI_PROXY is on, so this check-and-increment is
+ * the single authoritative one (no double count). Replicates the client's
+ * `checkAndIncrementAiUsage` semantics exactly: reset on date rollover,
+ * plan-aware cap once billing is live (legacy flat cap until then), and the
+ * full `aiUsage` object written back.
+ *
+ * @throws HttpsError not-found / permission-denied / failed-precondition /
+ *   resource-exhausted — thrown BEFORE any Gemini call so an over-cap or
+ *   non-member request never spends the server-side key.
+ */
+async function enforceAiQuota(
+  uid: string,
+  householdId: string,
+  today: string
+): Promise<void> {
+  // Lazily bound inside the handler-call path (not at module load) because this
+  // module is imported from index.ts before admin.initializeApp() runs — the
+  // same convention as plaid/stripe/recap.
+  const db = admin.firestore();
+
+  const householdRef = db.doc(`households/${householdId}`);
+
+  // 1. Operator flags: aiEnabled kill-switch (fail-open on missing doc/field or
+  // read error, matching the client) and billingEnabled (fail-closed).
+  let billingEnabled = false;
+  try {
+    const configSnap = await db.doc("app_config/global").get();
+    const config = configSnap.exists ? configSnap.data() : undefined;
+    if (config?.aiEnabled === false) {
+      throw new HttpsError(
+        "failed-precondition",
+        "AI features are temporarily disabled."
+      );
+    }
+    billingEnabled = config?.billingEnabled === true;
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    // Config unreachable: fail open on the kill-switch, closed on billing.
+    logger.warn("geminiproxy: app_config read failed; proceeding fail-open:", error);
+  }
+
+  // 2. Membership + atomic check-and-increment in ONE transaction — a single
+  // billed household read covers both (review follow-up: the membership check
+  // previously did its own get() outside the transaction, doubling the read
+  // cost of every proxy call).
+  await db.runTransaction(async (txn) => {
+    const snap = await txn.get(householdRef);
+    if (!snap.exists) {
+      throw new HttpsError("not-found", "Household not found.");
+    }
+    const data = (snap.data() ?? {}) as HouseholdEntitlementData & {
+      aiUsage?: AiUsage;
+      memberUids?: unknown;
+    };
+
+    // Only a member of the household may spend its quota.
+    if (!Array.isArray(data.memberUids) || !data.memberUids.includes(uid)) {
+      throw new HttpsError(
+        "permission-denied",
+        "You are not a member of this household."
+      );
+    }
+
+    const cap = getAiDailyCap(data, billingEnabled);
+
+    const usage = data.aiUsage ?? { dailyCount: 0, lastResetDate: today };
+    // Day-rollover semantics are MONOTONIC: the counter resets only when the
+    // resolved day is strictly LATER than the stored one (yyyy-MM-dd strings
+    // compare lexicographically = chronologically), and the stored key never
+    // moves backwards. A claimed day equal to or EARLIER than the stored day
+    // keeps counting against the stored day — without this, a caller could
+    // alternate `today` between two in-clamp dates (resolveQuotaDay allows
+    // ±1 day of server UTC) and force a reset on every call, bypassing the
+    // cap entirely. Worst case for an adversary is now one early rollover per
+    // real day (bounded at 2× cap/day), not unlimited.
+    const rolledOver = today > usage.lastResetDate;
+    const effectiveDay = rolledOver ? today : usage.lastResetDate;
+    const currentCount = rolledOver ? 0 : usage.dailyCount;
+
+    if (currentCount >= cap) {
+      // Message must contain "Daily AI quota exceeded" — the client's retry
+      // helper carves this exact phrase out of its resource-exhausted retry
+      // (a quota rejection can never succeed on retry today).
+      throw new HttpsError(
+        "resource-exhausted",
+        `Daily AI quota exceeded (${cap} requests/day). Try again tomorrow.`
+      );
+    }
+
+    txn.update(householdRef, {
+      aiUsage: { dailyCount: currentCount + 1, lastResetDate: effectiveDay },
+    });
+  });
+}
+
 export const geminiproxy = onCall(
   {
     secrets: [geminiApiKey],
@@ -77,7 +225,8 @@ export const geminiproxy = onCall(
       );
     }
 
-    const { model, contents, config } = (request.data ?? {}) as GeminiProxyData;
+    const { model, contents, config, householdId, today } = (request.data ??
+      {}) as GeminiProxyData;
 
     // `config` is optional (some callers may omit it), but model + contents are
     // required to perform a meaningful generateContent call.
@@ -93,6 +242,20 @@ export const geminiproxy = onCall(
         "The function must be called with 'contents'."
       );
     }
+    if (typeof householdId !== "string" || !householdId || householdId.includes("/")) {
+      // The slash check keeps a crafted id from escaping the households/
+      // collection path (it would otherwise throw an opaque path error).
+      throw new HttpsError(
+        "invalid-argument",
+        "The function must be called with a non-empty 'householdId' string."
+      );
+    }
+
+    // Membership + kill-switch + atomic daily-quota check-and-increment
+    // (Plan 10). Throws before any Gemini call, so an over-cap / non-member
+    // request never spends the server-side key. Kept OUTSIDE the try below so
+    // its HttpsErrors are not remapped by the upstream-Gemini error mapping.
+    await enforceAiQuota(request.auth.uid, householdId, resolveQuotaDay(today));
 
     try {
       const ai = new GoogleGenAI({ apiKey: geminiApiKey.value() });
