@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Star, TrendingUp, User } from 'lucide-react';
+import { Star, TrendingUp, User, Search } from 'lucide-react';
 import { useFinance, useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
@@ -9,6 +9,7 @@ import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { LazyMount } from '@/components/ui/LazyMount';
 import CountBadge from '@/components/ui/CountBadge';
+import { Button } from '@/components/ui/Button';
 import { preloadOnIdle } from '@/utils/preloadOnIdle';
 import ProfileMenu from './ProfileMenu';
 
@@ -18,6 +19,13 @@ import ProfileMenu from './ProfileMenu';
 // into Money → Overview and Habits → Rewards respectively (redesign IA).
 const loadFeedbackModal = () => import('@/components/modals/FeedbackModal');
 const FeedbackModal = React.lazy(loadFeedbackModal);
+
+// Plan 14: global search overlay — lazy for the same boot-bundle reason as
+// FeedbackModal above. It owns its own slice consumption (transactions,
+// habits, meals, todos, shopping items) so this always-mounted toolbar is not
+// re-coupled to that state.
+const loadSearchOverlay = () => import('@/components/search/SearchOverlay');
+const SearchOverlay = React.lazy(loadSearchOverlay);
 
 const TopToolbar: React.FC = () => {
   const { safeToSpendBreakdown } = useFinance();
@@ -39,8 +47,23 @@ const TopToolbar: React.FC = () => {
     : 0;
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   useEffect(() => preloadOnIdle(loadFeedbackModal), []);
+  useEffect(() => preloadOnIdle(loadSearchOverlay), []);
+
+  // Cmd/Ctrl+K opens search — a lightweight keydown listener only; no slice
+  // consumption is added here (SearchOverlay owns its own data).
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const isPositive = safeToSpend >= 0;
 
@@ -115,6 +138,17 @@ const TopToolbar: React.FC = () => {
               </button>
             )}
 
+            {/* Search entry point (Plan 14) — opens the lazy global search overlay. */}
+            <Button
+              type="button"
+              variant="ghost-inverted"
+              size="icon"
+              aria-label="Search"
+              onClick={() => setIsSearchOpen(true)}
+            >
+              <Search className="w-5 h-5" />
+            </Button>
+
             {/* Profile Icon */}
             <button
               type="button"
@@ -146,6 +180,10 @@ const TopToolbar: React.FC = () => {
 
       <LazyMount when={isFeedbackOpen}>
         <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
+      </LazyMount>
+
+      <LazyMount when={isSearchOpen}>
+        <SearchOverlay isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
       </LazyMount>
     </>
   );
