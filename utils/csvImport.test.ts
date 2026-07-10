@@ -146,6 +146,13 @@ describe('mapRows', () => {
     expect(ok[0]?.date).toBe('2026-07-05');
   });
 
+  it('accepts either separator for both date orders (YYYY/MM/DD and MM-DD-YYYY)', () => {
+    const isoSlash = mapRows([['2026/07/03', 'A', '10.00']], { date: 0, description: 1, amount: 2 });
+    expect(isoSlash.ok[0]?.date).toBe('2026-07-03');
+    const usDash = mapRows([['07-04-2026', 'B', '10.00']], { date: 0, description: 1, amount: 2 });
+    expect(usDash.ok[0]?.date).toBe('2026-07-04');
+  });
+
   it('collects an unparseable date into errors with a 1-based file line number', () => {
     const { ok, errors } = mapRows(
       [

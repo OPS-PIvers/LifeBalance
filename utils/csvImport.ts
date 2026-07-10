@@ -177,13 +177,15 @@ function parseDateCell(raw: string): string | null {
   const s = raw.trim();
   if (!s) return null;
 
-  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
+  // ISO (year-first): accept either separator — YYYY-MM-DD or YYYY/MM/DD.
+  const iso = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(s);
   if (iso) {
     const [, y, m, d] = iso;
     return toIsoIfValid(Number(y), Number(m), Number(d));
   }
 
-  const us = /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/.exec(s);
+  // US (month-first): accept either separator — MM/DD/YYYY or MM-DD-YYYY.
+  const us = /^(\d{1,2})[-/](\d{1,2})[-/](\d{2}|\d{4})$/.exec(s);
   if (us) {
     const [, m, d, yRaw] = us;
     const yearStr = yRaw ?? '';

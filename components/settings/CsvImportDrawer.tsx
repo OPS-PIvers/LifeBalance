@@ -73,8 +73,9 @@ const CsvImportDrawer: React.FC<CsvImportDrawerProps> = ({ isOpen, onClose }) =>
     reader.onload = () => {
       const text = typeof reader.result === 'string' ? reader.result : '';
       const parsed = parseCsv(text);
-      if (parsed.length === 0) {
-        toast.error('That file has no rows.');
+      if (parsed.length <= 1) {
+        // 0 = empty file; 1 = header row only, no data rows.
+        toast.error('That file has no transaction rows.');
         return;
       }
       const [header, ...body] = parsed;
@@ -98,6 +99,10 @@ const CsvImportDrawer: React.FC<CsvImportDrawerProps> = ({ isOpen, onClose }) =>
       } else {
         setAmountMode('single');
         setAmountCol(undefined);
+        // Clear any split-mode indices left over from a previous file so they
+        // can't leak stale column positions into single-mode mapping.
+        setDebitCol(undefined);
+        setCreditCol(undefined);
       }
       resetForNewFile();
     };
@@ -187,8 +192,16 @@ const CsvImportDrawer: React.FC<CsvImportDrawerProps> = ({ isOpen, onClose }) =>
           return addTransaction(newTransaction);
         })
       );
-      succeeded += results.filter(r => r.status === 'fulfilled').length;
-      failed += results.filter(r => r.status === 'rejected').length;
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          succeeded += 1;
+        } else {
+          failed += 1;
+          // Surface the cause for debugging import failures (Firestore
+          // permission/validation errors) instead of swallowing it.
+          console.error('CSV import: a row failed to save', r.reason);
+        }
+      }
     }
     setIsImporting(false);
 
