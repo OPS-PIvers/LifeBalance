@@ -7,88 +7,79 @@ vi.mock('react-hot-toast', () => ({
   default: { success: vi.fn(), error: vi.fn() },
 }));
 
-// Mock icons
+// Mock icons so we can target buttons by their glyph where needed.
 vi.mock('lucide-react', () => ({
   Bookmark: () => <div data-testid="bookmark-icon" />,
   Plus: () => <div data-testid="plus-icon" />,
   X: () => <div data-testid="x-icon" />,
+  Check: () => <div data-testid="check-icon" />,
 }));
 
-describe('SavedViewChips', () => {
-  const mockOnApply = vi.fn();
-  const householdId = 'test-household';
-  const currentFilters = {
-    searchTerm: 'test',
-    categoryFilter: 'Food',
-    sourceFilter: 'all'
-  };
+const householdId = 'test-household';
+const currentFilters = {
+  searchTerm: 'test',
+  categoryFilter: 'Food',
+  sourceFilter: 'all',
+};
 
+const renderChips = (onApply = vi.fn()) => {
+  render(
+    <SavedViewChips
+      householdId={householdId}
+      currentFilters={currentFilters}
+      onApply={onApply}
+    />
+  );
+  return onApply;
+};
+
+const openMenu = () => fireEvent.click(screen.getByLabelText('Saved views'));
+
+describe('SavedViewChips', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
   });
 
-  it('renders only the unobtrusive Save View control when there are no saved views', () => {
-    render(
-      <SavedViewChips
-        householdId={householdId}
-        currentFilters={currentFilters}
-        onApply={mockOnApply}
-      />
-    );
-    // No bordered "Views" row chrome for the empty state...
-    expect(screen.queryByText('Views')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('bookmark-icon')).not.toBeInTheDocument();
-    // ...but Save View is still reachable.
-    expect(screen.getByText('Save View')).toBeInTheDocument();
+  it('renders only the compact bookmark trigger; the menu is closed by default', () => {
+    renderChips();
+    expect(screen.getByLabelText('Saved views')).toBeInTheDocument();
+    // Nothing from the dropdown is rendered until it's opened.
+    expect(screen.queryByText('Save current view')).not.toBeInTheDocument();
+    expect(screen.queryByText('No saved views yet.')).not.toBeInTheDocument();
   });
 
-  it('renders the full bordered row once a view exists', () => {
-    const view = {
-      id: '1',
-      name: 'Test View',
-      filters: currentFilters
-    };
-    localStorage.setItem(`transaction_views_${householdId}`, JSON.stringify([view]));
-
-    render(
-      <SavedViewChips
-        householdId={householdId}
-        currentFilters={currentFilters}
-        onApply={mockOnApply}
-      />
-    );
-
-    expect(screen.getByText('Views')).toBeInTheDocument();
-    expect(screen.getByTestId('bookmark-icon')).toBeInTheDocument();
-    expect(screen.getByText('Test View')).toBeInTheDocument();
-    expect(screen.getByText('Save View')).toBeInTheDocument();
+  it('shows an empty state and a save action once opened', () => {
+    renderChips();
+    openMenu();
+    expect(screen.getByText('No saved views yet.')).toBeInTheDocument();
+    expect(screen.getByText('Save current view')).toBeInTheDocument();
   });
 
-  it('saves a new view', () => {
-    render(
-      <SavedViewChips
-        householdId={householdId}
-        currentFilters={currentFilters}
-        onApply={mockOnApply}
-      />
+  it('badges the trigger with the saved-view count', () => {
+    localStorage.setItem(
+      `transaction_views_${householdId}`,
+      JSON.stringify([
+        { id: '1', name: 'A', filters: currentFilters },
+        { id: '2', name: 'B', filters: currentFilters },
+      ])
     );
+    renderChips();
+    expect(screen.getByLabelText('Saved views')).toHaveTextContent('2');
+  });
 
-    // Click Save View
-    fireEvent.click(screen.getByText('Save View'));
+  it('saves a new view from the menu', () => {
+    renderChips();
+    openMenu();
 
-    // Input name
-    const input = screen.getByPlaceholderText('View Name...');
-    fireEvent.change(input, { target: { value: 'My View' } });
+    fireEvent.click(screen.getByText('Save current view'));
+    fireEvent.change(screen.getByPlaceholderText('View name…'), {
+      target: { value: 'My View' },
+    });
+    fireEvent.click(screen.getByLabelText('Confirm save view'));
 
-    // Submit
-    const submitBtn = screen.getByTestId('plus-icon').closest('button');
-    fireEvent.click(submitBtn!);
-
-    // Check if chip appears
     expect(screen.getByText('My View')).toBeInTheDocument();
 
-    // Check localStorage
     const stored = localStorage.getItem(`transaction_views_${householdId}`);
     expect(stored).toBeTruthy();
     expect(JSON.parse(stored!)).toHaveLength(1);
@@ -96,61 +87,44 @@ describe('SavedViewChips', () => {
     expect(JSON.parse(stored!)[0].filters).toEqual(currentFilters);
   });
 
-  it('applies a view', () => {
-    // Seed localStorage
+  it('applies a view when its name is clicked', () => {
     const view = {
       id: '1',
       name: 'Test View',
-      filters: { searchTerm: 'foo', categoryFilter: 'bar', sourceFilter: 'baz' }
+      filters: { searchTerm: 'foo', categoryFilter: 'bar', sourceFilter: 'baz' },
     };
     localStorage.setItem(`transaction_views_${householdId}`, JSON.stringify([view]));
 
-    render(
-      <SavedViewChips
-        householdId={householdId}
-        currentFilters={currentFilters}
-        onApply={mockOnApply}
-      />
-    );
-
-    // Click chip
+    const onApply = renderChips();
+    openMenu();
     fireEvent.click(screen.getByText('Test View'));
 
-    expect(mockOnApply).toHaveBeenCalledWith(view.filters);
+    expect(onApply).toHaveBeenCalledWith(view.filters);
   });
 
-  it('deletes a view', () => {
-    // Seed localStorage
-    const view = {
-      id: '1',
-      name: 'Test View',
-      filters: currentFilters
-    };
+  it('deletes a view via the confirm dialog', () => {
+    const view = { id: '1', name: 'Test View', filters: currentFilters };
     localStorage.setItem(`transaction_views_${householdId}`, JSON.stringify([view]));
 
-    render(
-      <SavedViewChips
-        householdId={householdId}
-        currentFilters={currentFilters}
-        onApply={mockOnApply}
-      />
-    );
-
+    renderChips();
+    openMenu();
     expect(screen.getByText('Test View')).toBeInTheDocument();
 
-    // Click the delete button (X icon) on the chip
-    const deleteBtn = screen.getByLabelText('Delete view Test View');
-    fireEvent.click(deleteBtn);
+    fireEvent.click(screen.getByLabelText('Delete view Test View'));
 
-    // ConfirmDialog should appear
+    // ConfirmDialog appears (the menu closes first to avoid duelling focus traps).
     expect(screen.getByText('Delete Saved View')).toBeInTheDocument();
-
-    // Confirm the deletion
     fireEvent.click(screen.getByRole('button', { name: /^Delete$/i }));
 
     expect(screen.queryByText('Test View')).not.toBeInTheDocument();
-
     const stored = localStorage.getItem(`transaction_views_${householdId}`);
     expect(JSON.parse(stored!)).toHaveLength(0);
+  });
+
+  it('returns null without a household id', () => {
+    const { container } = render(
+      <SavedViewChips householdId={null} currentFilters={currentFilters} onApply={vi.fn()} />
+    );
+    expect(container).toBeEmptyDOMElement();
   });
 });
