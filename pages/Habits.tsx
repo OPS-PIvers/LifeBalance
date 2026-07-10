@@ -275,7 +275,14 @@ const Habits: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe">
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      {/* 'coach' stays in the deep-link allowlist but its trigger/content are
+          gated on powerToolsEnabled — fall back to Track so a stale
+          ?tab=coach link can't land on an empty tab body while the flag is
+          off. */}
+      <Tabs
+        value={!powerToolsEnabled && activeTab === 'coach' ? 'track' : activeTab}
+        onValueChange={setActiveTab}
+      >
         {/* Compact PageHeader (title+subtitle) with the overflow menu as its
             actions slot, replacing the hand-rolled pt-8/text-3xl header — see
             UX content audit Batch 4. */}
