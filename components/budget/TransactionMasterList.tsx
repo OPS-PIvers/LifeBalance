@@ -409,7 +409,7 @@ const TransactionMasterList: React.FC = () => {
               placeholder="Search transactions"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pr-10 placeholder:truncate"
+              className="pr-10 truncate"
             />
             {searchTerm && (
               <Button
