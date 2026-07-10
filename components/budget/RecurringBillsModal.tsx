@@ -42,6 +42,9 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [dismissedKeys, setDismissedKeys] = useState<Set<string>>(new Set());
+  // Keys with an add-as-bill write in flight — guards double-clicks from
+  // creating duplicate bills (addCalendarItem is async).
+  const [addingKeys, setAddingKeys] = useState<Set<string>>(new Set());
 
   // Edit Form State
   const [editTitle, setEditTitle] = useState('');
@@ -106,6 +109,16 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
 
   const addDetectionAsBill = useCallback(
     async (detection: DetectedSubscription) => {
+      const key = detectionDismissKey(detection.merchant, detection.cadence);
+      let alreadyInFlight = false;
+      setAddingKeys(prev => {
+        if (prev.has(key)) {
+          alreadyInFlight = true;
+          return prev;
+        }
+        return new Set(prev).add(key);
+      });
+      if (alreadyInFlight) return;
       try {
         await addCalendarItem({
           id: crypto.randomUUID(),
@@ -120,6 +133,12 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
         dismissDetection(detection);
       } catch (_error) {
         toast.error('Failed to add bill');
+      } finally {
+        setAddingKeys(prev => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
       }
     },
     [addCalendarItem, dismissDetection]
@@ -366,6 +385,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
                         size="sm"
                         leftIcon={<Plus size={14} />}
                         onClick={() => addDetectionAsBill(detection)}
+                        disabled={addingKeys.has(detectionDismissKey(detection.merchant, detection.cadence))}
                         aria-label={`Add ${detection.merchant} as a bill`}
                       >
                         Add as bill

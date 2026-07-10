@@ -54,9 +54,13 @@ type DetectableTransaction = Pick<Transaction, 'id' | 'merchant' | 'amount' | 'd
 /** Convert a stored (always-positive) dollar amount to integer cents. */
 const amountCents = (amount: number): number => Math.round(Math.abs(amount) * 100);
 
-/** Splits a string into lowercase word tokens, stripping punctuation. */
+/**
+ * Splits a string into lowercase word tokens, stripping punctuation. Unicode
+ * letters/digits are kept so international merchant names ("Café", "Müller")
+ * tokenize instead of being stripped to nothing.
+ */
 function tokenize(text: string): string[] {
-  return text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(t => t.length > 0);
+  return text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(t => t.length > 0);
 }
 
 /** Whether `needle`'s token sequence appears contiguously inside `haystack`. */
@@ -81,7 +85,13 @@ function tokenSequenceIncluded(needle: string[], haystack: string[]): boolean {
  */
 function matchesExistingBill(merchant: string, existingBillTitles: string[]): boolean {
   const merchantNormalized = merchant.toLowerCase().trim();
-  if (merchantNormalized.length < MERCHANT_TOKEN_MIN_MATCH_LENGTH) return false;
+  if (merchantNormalized.length < MERCHANT_TOKEN_MIN_MATCH_LENGTH) {
+    // Too short for token matching, but an EXACT title match ("BP" bill vs
+    // "BP" merchant) is still unambiguous — exclude it.
+    return existingBillTitles.some(
+      title => title.toLowerCase().trim() === merchantNormalized
+    );
+  }
 
   const merchantTokens = tokenize(merchantNormalized);
   if (merchantTokens.length === 0) return false;
