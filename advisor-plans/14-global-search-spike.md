@@ -104,11 +104,13 @@ Boot Test Mode, open search, verify: mock transactions/habits/todos/meals are fi
 
 ## Done criteria
 
-- [ ] Spike notes appended to this file with evidence
-- [ ] `pnpm lint`, `pnpm test`, `pnpm run build` all exit 0
-- [ ] `utils/globalSearch.ts` + tests exist; overlay lazy-loaded (separate chunk)
-- [ ] Manual Test-Mode walkthrough recorded
-- [ ] `advisor-plans/README.md` status row updated
+- [x] Spike notes appended to this file with evidence
+- [x] `pnpm lint`, `pnpm test`, `pnpm run build` all exit 0
+- [x] `utils/globalSearch.ts` + tests exist; overlay lazy-loaded (separate chunk — verified `dist/assets/SearchOverlay-*.js` exists and is absent from `dist/index.html`'s modulepreload list)
+- [ ] Manual Test-Mode walkthrough recorded — **not done by the executor**; operator instructions for this run explicitly skip manual/browser verification (the orchestrator does visual checks). See "What to check" note below.
+- [ ] `advisor-plans/README.md` status row updated — **skipped per operator override** for this run.
+
+**What to check in the orchestrator's visual pass:** open Test Mode, tap the new search icon in `TopToolbar` (top-right, before the Profile avatar) or press Cmd/Ctrl+K; type a query that matches a mock transaction/habit/meal/todo/shopping item; confirm results are grouped by type with the right icon/subtitle; select a result and confirm it navigates to the right page/tab (transactions → Money → Transactions tab, habits → Habits → Track tab, meals/todos/shopping → Lists on the matching sub-tab) — landing on the page unfiltered is expected (see Spike note 1, a known v1 gap), not a bug; disable a module in Settings → App Modules and confirm its results disappear; check dark mode and mobile viewport.
 
 ## STOP conditions
 
