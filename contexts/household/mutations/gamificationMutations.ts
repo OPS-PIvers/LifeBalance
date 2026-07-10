@@ -798,7 +798,12 @@ export function makeRolloverFreezeBankTokens(deps: {
       type: 'rollover',
       amount: tokensAdded,
       date: getLocalDateString(),
-      notes: `Monthly refill to ${newBalance} freezes`,
+      // A negative delta is the one-time clamp of a legacy 3-token bank down to
+      // the new max — label it honestly rather than as a "refill".
+      notes:
+        tokensAdded > 0
+          ? `Monthly refill to ${newBalance} freezes`
+          : `Adjusted to the new ${newBalance}-freeze maximum`,
       createdAt: new Date().toISOString(),
     };
 

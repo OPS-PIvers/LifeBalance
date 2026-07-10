@@ -1061,6 +1061,14 @@ describe("Plan 25 — frozen dates: shared client/functions parity table", () =>
       expect(calculateStreak([], T, ["2026-07-08"])).toBe(0);
     });
 
+    it("a date in BOTH completed and frozen counts as a completion (completion wins)", () => {
+      // Auto-apply can never create this overlap, but locking the resolution
+      // keeps client/functions from diverging if the code is edited later.
+      expect(
+        calculateStreak(["2026-07-07", "2026-07-08", "2026-07-09"], T, ["2026-07-08"])
+      ).toBe(3);
+    });
+
     it("a frozen date deep in the past does not resurrect a dead streak", () => {
       expect(calculateStreak(["2026-07-01"], T, ["2026-07-02"])).toBe(0);
     });
