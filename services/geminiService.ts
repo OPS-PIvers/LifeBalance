@@ -191,8 +191,16 @@ export const resetAiEnabledCache = (): void => {
  * @throws Error("Household not found") when the householdId is invalid.
  * @throws Error("Daily AI quota exceeded …") when the household is at the cap.
  */
-const checkAndIncrementAiUsage = async (householdId: string): Promise<void> => {
-  // 1. Check Global Kill Switch (cached with 60 s TTL — fail-open on error)
+/**
+ * Fast-fail on the global `aiEnabled` kill-switch (cached with 60 s TTL —
+ * fail-open on error). Extracted from `checkAndIncrementAiUsage` so the proxy
+ * path can keep this cheap client-side fast-fail WITHOUT touching the quota
+ * counter (Plan 10: on the proxy path the SERVER owns `aiUsage` and re-checks
+ * the kill-switch authoritatively).
+ *
+ * @throws Error("AI features are temporarily disabled.") when the switch is off.
+ */
+const assertAiEnabled = async (): Promise<void> => {
   try {
     const aiEnabled = await getAiEnabled();
     if (!aiEnabled) {
@@ -205,6 +213,11 @@ const checkAndIncrementAiUsage = async (householdId: string): Promise<void> => {
     // Fail open if config fetch fails (don't block users due to config db error)
     console.warn("Failed to check global AI config:", error);
   }
+};
+
+const checkAndIncrementAiUsage = async (householdId: string): Promise<void> => {
+  // 1. Check Global Kill Switch (cached with 60 s TTL — fail-open on error)
+  await assertAiEnabled();
 
   // 1b. Is billing live? Decides whether the daily cap is plan-aware (billing on) or
   // the legacy flat cap for everyone (billing off — the current state). Cached and
@@ -301,6 +314,15 @@ const isTransientError = (error: unknown): boolean => {
   }
   if (error instanceof Error) {
     const msg = error.message.toLowerCase();
+    // Server-enforced daily-cap rejection from geminiproxy (Plan 10). It
+    // arrives as a FirebaseError with code "functions/resource-exhausted" —
+    // the same code a transient Gemini 429 maps to — so it MUST be carved out
+    // by message before the code check below, or the client would pointlessly
+    // retry a rejection that cannot succeed until tomorrow. Keep this phrase
+    // in sync with the HttpsError message in functions/src/geminiProxy.ts.
+    if (msg.includes('daily ai quota exceeded')) {
+      return false;
+    }
     // 429 Too Many Requests / 503 Service Unavailable may appear in the message
     if (msg.includes('429') || msg.includes('503') ||
         msg.includes('rate limit') || msg.includes('service unavailable') ||
@@ -605,17 +627,29 @@ interface GeminiGenerateResult {
 }
 
 /**
+ * The proxy transport's request payload: the SDK-shaped request plus the fields
+ * the server-side quota enforcement needs (Plan 10) — the household whose quota
+ * the call spends, and the caller-local calendar date (quickAdd convention:
+ * Cloud Functions run in UTC, so the client's local date keeps the daily-quota
+ * day boundary aligned with the user; the server validates and clamps it).
+ */
+interface GeminiProxyRequest extends GeminiGenerateRequest {
+  householdId: string;
+  today: string;
+}
+
+/**
  * Calls the `geminiproxy` Cloud Function with the assembled request and adapts
  * its `{ text }` result into the same shape the direct SDK path yields. The
  * `firebase/functions` import is dynamic so it (and any proxy-only code) stays
  * out of the boot bundle when the flag is off.
  */
-const callViaProxy = async (req: GeminiGenerateRequest): Promise<GeminiGenerateResult> => {
+const callViaProxy = async (req: GeminiProxyRequest): Promise<GeminiGenerateResult> => {
   const [{ httpsCallable }, functions] = await Promise.all([
     import("firebase/functions"),
     getFunctionsInstance(),
   ]);
-  const callable = httpsCallable<GeminiGenerateRequest, GeminiGenerateResult>(
+  const callable = httpsCallable<GeminiProxyRequest, GeminiGenerateResult>(
     functions,
     'geminiproxy',
   );
@@ -625,7 +659,8 @@ const callViaProxy = async (req: GeminiGenerateRequest): Promise<GeminiGenerateR
 
 /**
  * Single transport seam for the raw model call. Branches on USE_GEMINI_PROXY:
- *  - proxy ON (and no test client injected): route through geminiproxy.
+ *  - proxy ON (and no test client injected): route through geminiproxy, adding
+ *    the `householdId` + local `today` the server-side quota check reads.
  *  - otherwise (default): the existing direct SDK call, unchanged.
  *
  * An explicitly injected `client` (test harness) always takes the direct path so
@@ -635,9 +670,10 @@ const dispatchGenerateContent = (
   client: Pick<typeof ai, 'models'>,
   clientInjected: boolean,
   req: GeminiGenerateRequest,
+  householdId: string,
 ): Promise<GeminiGenerateResult> => {
   if (USE_GEMINI_PROXY && !clientInjected) {
-    return callViaProxy(req);
+    return callViaProxy({ ...req, householdId, today: getLocalDateString() });
   }
   return client.models.generateContent(req);
 };
@@ -664,8 +700,20 @@ async function generateJsonContent<T>(
   // direct SDK path (flag off, or an injected test client) still needs it.
   if (!USE_GEMINI_PROXY) validateApiKey();
 
-  // 1. Atomic quota check + increment (prevents TOCTOU race)
-  await checkAndIncrementAiUsage(householdId);
+  // 1. Daily quota. On the proxy transport the SERVER owns the counter
+  // (Plan 10): geminiproxy performs the membership check and the atomic
+  // check-and-increment itself, so the client must NOT also increment —
+  // that would double-count every call. We keep only the cheap kill-switch
+  // fast-fail for UX; the server re-checks it authoritatively. The direct
+  // SDK path (flag off, or an injected test client) keeps the client-side
+  // atomic check-and-increment unchanged.
+  const useProxyTransport = USE_GEMINI_PROXY && _aiClient === undefined;
+  if (useProxyTransport) {
+    await assertAiEnabled();
+  } else {
+    // Atomic quota check + increment (prevents TOCTOU race)
+    await checkAndIncrementAiUsage(householdId);
+  }
 
   const client = _aiClient || ai;
 
@@ -685,7 +733,7 @@ async function generateJsonContent<T>(
           responseMimeType: "application/json",
           responseSchema: schema
         }
-      })
+      }, householdId)
     );
 
     const text = response.text;
