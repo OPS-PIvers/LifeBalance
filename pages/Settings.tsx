@@ -28,6 +28,7 @@ import {
   Sparkles,
   Baby,
   Star,
+  Upload,
 } from 'lucide-react';
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
 import MemberModal from '@/components/modals/MemberModal';
@@ -45,6 +46,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import { Drawer } from '@/components/ui/Drawer';
 import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { LazyMount } from '@/components/ui/LazyMount';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { isModuleEnabled } from '@/utils/moduleVisibility';
 import type { ModuleKey } from '@/types/schema';
@@ -66,6 +68,10 @@ import { getPlan } from '@/utils/entitlements';
 // Lazy so react-plaid-link stays out of the boot bundle — the chunk only loads
 // when plaidEnabled is on AND this renders (dormant by default → never loads).
 const ConnectBankCard = lazy(() => import('@/components/settings/ConnectBankCard'));
+
+// Lazy so the CSV parser/dedup logic and its preview UI stay out of the
+// Settings page's own chunk until the user actually opens the import drawer.
+const CsvImportDrawer = lazy(() => import('@/components/settings/CsvImportDrawer'));
 
 const APP_VERSION = '0.8.0-alpha';
 
@@ -119,6 +125,7 @@ const Settings: React.FC = () => {
   // Sub-flow drawers
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isKidModeOpen, setIsKidModeOpen] = useState(false);
+  const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);
 
   // Billing / upgrade (Plan 050b) — dormant until billingEnabled is turned on.
   const billingEnabled = useBillingEnabled();
@@ -861,9 +868,38 @@ const Settings: React.FC = () => {
                 </div>
                 <Download size={16} className="text-brand-400 dark:text-brand-450 shrink-0" />
               </Row>
+
+              <Row
+                interactive
+                role="button"
+                tabIndex={0}
+                onClick={() => setIsCsvImportOpen(true)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setIsCsvImportOpen(true);
+                  }
+                }}
+                aria-label="Import transactions from a CSV file"
+              >
+                <div className="w-10 h-10 rounded-full bg-warm-50 dark:bg-warm-900/30 flex items-center justify-center shrink-0">
+                  <Upload size={18} className="text-warm-600 dark:text-warm-300" />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">Import Transactions</p>
+                  <p className="text-xs text-brand-500 dark:text-brand-400">From a bank, YNAB, or Mint CSV export</p>
+                </div>
+              </Row>
             </SurfaceList>
           </div>
         </Section>
+
+        {/* CSV transaction import — lazy so the parser/dedup logic and its preview
+            UI stay out of the Settings page's own chunk until first opened; stays
+            mounted after that so the drawer's exit animation still plays. */}
+        <LazyMount when={isCsvImportOpen}>
+          <CsvImportDrawer isOpen={isCsvImportOpen} onClose={() => setIsCsvImportOpen(false)} />
+        </LazyMount>
 
         {/* Connect a bank (Plaid) — dormant until the plaidEnabled flag is on.
             Lazy + flag-gated so react-plaid-link never enters the boot bundle. */}
