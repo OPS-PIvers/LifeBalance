@@ -6,7 +6,8 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { db } from '@/firebase.config';
 import { collection, query, getDocs, getDoc, addDoc, updateDoc, doc, deleteDoc, orderBy, limit } from 'firebase/firestore';
-import { readAppConfigFlags, setAppFlag, AI_ENABLED_FLAG_KEY, POWER_TOOLS_FLAG_KEY } from '@/services/appConfig';
+import { readAppConfigFlags, setAppFlag, getBillingEnabled, AI_ENABLED_FLAG_KEY, POWER_TOOLS_FLAG_KEY } from '@/services/appConfig';
+import { getLimits, LEGACY_AI_DAILY_QUOTA } from '@/utils/entitlements';
 import { BetaTester, FeedbackReport, Household } from '@/types/schema';
 import { Loader2, Plus, Trash2, Copy, X, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -19,7 +20,7 @@ interface DeveloperConsoleProps {
 type Tab = 'testers' | 'ai_meter' | 'reports' | 'flags';
 
 /**
- * The four operator flags on `app_config/global`. `danger` flags an action with a
+ * The six operator flags on `app_config/global`. `danger` flags an action with a
  * broad blast radius (opening signup / launching paid tiers) so the UI can warn harder.
  * Descriptions state what each gates AND the fail-safe direction.
  */
@@ -88,6 +89,10 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
   const [testers, setTesters] = useState<(BetaTester & { id: string })[]>([]);
   const [reports, setReports] = useState<(FeedbackReport & { id: string })[]>([]);
   const [households, setHouseholds] = useState<(Household & { id: string })[]>([]);
+  // Whether billing is live — decides if the AI meter's per-household cap is
+  // plan-aware (billing on) or the flat legacy cap for everyone (billing off,
+  // the current state). Mirrors geminiService.checkAndIncrementAiUsage exactly.
+  const [billingEnabled, setBillingEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
 
   // Tester Form
@@ -116,8 +121,11 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
         setReports(snap.docs.map(d => ({ ...d.data(), id: d.id } as FeedbackReport & { id: string })));
       } else if (activeTab === 'ai_meter') {
         const q = query(collection(db, 'households'), limit(50)); // Limit to 50 for safety
-        const snap = await getDocs(q);
+        // Independent reads — run in parallel so the meter tab loads faster.
+        const [snap, billingEnabledVal] = await Promise.all([getDocs(q), getBillingEnabled()]);
         setHouseholds(snap.docs.map(d => ({ ...d.data(), id: d.id } as Household & { id: string })));
+        // So the meter denominator matches the actually-enforced cap (see below).
+        setBillingEnabled(billingEnabledVal);
       } else if (activeTab === 'flags') {
         setFlags(await readAppConfigFlags());
         // Server-maintained count (incremented by plaidexchangepublictoken); a
@@ -387,7 +395,11 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                     <div className="divide-y">
                         {households.map(h => {
                             const usage = h.aiUsage?.dailyCount || 0;
-                            const percentage = Math.min((usage / 20) * 100, 100);
+                            // The actually-enforced cap: plan-aware once billing is live,
+                            // else the flat legacy cap for everyone (matches
+                            // geminiService.checkAndIncrementAiUsage).
+                            const cap = billingEnabled ? getLimits(h).aiDailyCap : LEGACY_AI_DAILY_QUOTA;
+                            const percentage = Math.min((usage / cap) * 100, 100);
                             return (
                                 <div key={h.id} className="p-4 hover:bg-brand-50/50 dark:hover:bg-brand-700/30">
                                     {/* Stack name + a full-width bar on mobile; side-by-side at sm+. */}
@@ -405,7 +417,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                                                 />
                                             </div>
                                             <span className={`text-sm font-mono font-bold w-12 text-right shrink-0 ${percentage > 90 ? 'text-money-neg dark:text-money-negDark' : 'text-brand-600 dark:text-brand-300'}`}>
-                                                {usage}/20
+                                                {usage}/{cap}
                                             </span>
                                         </div>
                                     </div>

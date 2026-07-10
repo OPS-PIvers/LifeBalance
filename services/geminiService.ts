@@ -14,7 +14,7 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 import { getLocalDateString } from "@/utils/dateHelpers";
-import { getLimits } from "@/utils/entitlements";
+import { getLimits, LEGACY_AI_DAILY_QUOTA } from "@/utils/entitlements";
 import { getBillingEnabled } from "./appConfig";
 import type { ReceiptData } from './geminiService.types';
 import {
@@ -91,14 +91,6 @@ const validateApiKey = () => {
 // ---------------------------------------------------------------------------
 // Quota management (fix #3 — single Firestore transaction to prevent TOCTOU)
 // ---------------------------------------------------------------------------
-
-/**
- * Legacy flat AI request cap, applied to EVERY household while billing is dormant
- * (`billingEnabled` off — the current state). Once billing is live the cap becomes
- * plan-aware (`utils/entitlements` `getLimits().aiDailyCap`); until then this keeps the
- * historical behavior so current / free-tier users are not suddenly throttled.
- */
-const LEGACY_AI_DAILY_QUOTA = 100;
 
 /**
  * Typed converter for the household quota doc (finding 6.1).

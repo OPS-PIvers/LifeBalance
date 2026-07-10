@@ -63,6 +63,18 @@ export const PREMIUM_LIMITS: PlanLimits = {
 };
 
 /**
+ * Legacy flat AI request cap, applied to EVERY household while billing is dormant
+ * (`billingEnabled` off — the current state). Once billing is live the cap becomes
+ * plan-aware (`getLimits().aiDailyCap`). Lives here (the SDK-free entitlements
+ * module) as the single source of truth so both `geminiService` (enforcement) and
+ * the Developer Console AI meter (display) read the same number.
+ *
+ * NOTE: `functions/src/entitlements.ts` keeps its own server-side copy of this
+ * value (separate package) and is documented to be kept in sync.
+ */
+export const LEGACY_AI_DAILY_QUOTA = 100;
+
+/**
  * Resolve a household's effective plan. Absent subscription → free. A `premium`
  * plan only counts while its status still grants access (active / trialing /
  * past_due); a canceled or incomplete subscription resolves to free even if the
