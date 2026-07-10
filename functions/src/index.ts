@@ -26,6 +26,10 @@ export { quickAddHabit, quickAddExpense, quickAddShoppingItem, quickAddNaturalLa
 // Export the Gemini API proxy (holds the GEMINI_API_KEY secret server-side).
 export { geminiproxy } from "./geminiProxy";
 
+// Recipe-page fetcher for URL recipe import (Plan 19). No secrets — plain
+// server-side fetch with SSRF guards, so exporting it cannot break CI deploys.
+export { fetchrecipepage } from "./fetchRecipePage";
+
 // Stripe billing functions (Plan 050a) live in ./stripe and are fully implemented
 // and unit-tested, but are intentionally NOT exported here yet. Exporting a function
 // deploys it, and deploying these binds the STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET

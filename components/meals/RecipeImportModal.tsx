@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
-import { Loader2, Sparkles } from 'lucide-react';
+import Input from '@/components/ui/Input';
+import { Link2, Loader2, Sparkles } from 'lucide-react';
 import type { Meal } from '@/types/schema';
+import { getFunctionsInstance } from '@/firebase.config';
 import toast from 'react-hot-toast';
 
 interface RecipeImportModalProps {
@@ -12,14 +14,57 @@ interface RecipeImportModalProps {
   onConfirm: (meal: Partial<Meal>) => void;
 }
 
+/** Response shape of the `fetchrecipepage` callable (functions/src/fetchRecipePage.ts). */
+interface FetchRecipePageResult {
+  text: string;
+  usedJsonLd: boolean;
+}
+
 export const RecipeImportModal: React.FC<RecipeImportModalProps> = ({
   isOpen,
   onClose,
   householdId,
   onConfirm
 }) => {
+  const [url, setUrl] = useState('');
   const [text, setText] = useState('');
+  // The URL a successful server-side fetch came from. Recipe URLs are set in
+  // CODE, never trusted from the model — after a parse that originated from a
+  // URL fetch, this overwrites `result.recipeUrl`.
+  const [fetchedUrl, setFetchedUrl] = useState('');
+  const [isFetching, setIsFetching] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
+
+  const handleFetch = async () => {
+    const trimmedUrl = url.trim();
+    if (!trimmedUrl) {
+      toast.error('Please enter a recipe link first');
+      return;
+    }
+
+    setIsFetching(true);
+    try {
+      // Lazy `firebase/functions` import + getFunctionsInstance keeps the
+      // functions SDK off the boot path (same pattern as NotificationSettings).
+      const [{ httpsCallable }, functions] = await Promise.all([
+        import('firebase/functions'),
+        getFunctionsInstance(),
+      ]);
+      const fetchPage = httpsCallable<{ url: string }, FetchRecipePageResult>(
+        functions,
+        'fetchrecipepage'
+      );
+      const { data } = await fetchPage({ url: trimmedUrl });
+      setText(data.text);
+      setFetchedUrl(trimmedUrl);
+      toast.success('Recipe page loaded — review the text, then parse.');
+    } catch (error) {
+      console.error('Recipe page fetch failed:', error);
+      toast.error('Could not fetch that link. Paste the recipe text instead.');
+    } finally {
+      setIsFetching(false);
+    }
+  };
 
   const handleParse = async () => {
     if (!text.trim()) {
@@ -31,9 +76,16 @@ export const RecipeImportModal: React.FC<RecipeImportModalProps> = ({
     try {
       const { parseRecipe } = await import('@/services/geminiService');
       const result = await parseRecipe(householdId, text);
+      if (fetchedUrl) {
+        // Code-owned URL (repo convention): the actual fetched link wins over
+        // whatever the model put in recipeUrl.
+        result.recipeUrl = fetchedUrl;
+      }
       onConfirm(result);
       onClose();
       setText(''); // Reset
+      setUrl('');
+      setFetchedUrl('');
       toast.success('Recipe parsed successfully!');
     } catch (error) {
       console.error('Recipe parsing failed:', error);
@@ -55,11 +107,32 @@ export const RecipeImportModal: React.FC<RecipeImportModalProps> = ({
                 <div>
                     <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">AI Recipe Parser</p>
                     <p className="text-xs text-brand-500 dark:text-brand-400 leading-relaxed mt-1">
-                        Paste the full text of a recipe (title, ingredients, instructions) below.
-                        Our AI will extract the structured data for you.
+                        Fetch a recipe from a link, or paste the full text of a recipe
+                        (title, ingredients, instructions) below. Our AI will extract
+                        the structured data for you.
                     </p>
                 </div>
             </div>
+        </div>
+
+        <div className="flex gap-2 items-start">
+            <Input
+                type="url"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://www.allrecipes.com/recipe/..."
+                aria-label="Recipe link"
+                disabled={isFetching || isParsing}
+            />
+            <Button
+                variant="secondary"
+                className="shrink-0"
+                onClick={handleFetch}
+                disabled={!url.trim() || isFetching || isParsing}
+                leftIcon={isFetching ? <Loader2 className="animate-spin" size={18} /> : <Link2 size={18} />}
+            >
+                {isFetching ? 'Fetching...' : 'Fetch from link'}
+            </Button>
         </div>
 
         <textarea
@@ -77,7 +150,7 @@ export const RecipeImportModal: React.FC<RecipeImportModalProps> = ({
                 variant="primary"
                 className="flex-1"
                 onClick={handleParse}
-                disabled={!text.trim() || isParsing}
+                disabled={!text.trim() || isParsing || isFetching}
                 leftIcon={isParsing ? <Loader2 className="animate-spin" /> : <Sparkles size={18} />}
             >
                 {isParsing ? 'Parsing...' : 'Parse Recipe'}
