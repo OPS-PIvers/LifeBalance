@@ -1665,7 +1665,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const addKidProfile = useCallback(async (
     input: { displayName: string; avatarColor?: string; avatarEmoji?: string }
   ): Promise<void> => {
-    await makeAddKidProfile({ db, householdId, user, householdSettings, membersRef }).addKidProfile(input);
+    await makeAddKidProfile({ householdId, user, householdSettings, membersRef }).addKidProfile(input);
   }, [householdId, user, householdSettings]);
 
   const updateKidProfile = useCallback(async (

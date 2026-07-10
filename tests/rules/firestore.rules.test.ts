@@ -342,6 +342,98 @@ describe('subscription writes (Plan 051 — entitlement is server-truth)', () =>
   });
 });
 
+describe('member cap (Plan 051 — server-side, billing-gated, grandfathered)', () => {
+  const PREMIUM = { plan: 'premium', status: 'active' };
+
+  // Seed DAVE as a real member doc in H1 so isMemberOf(DAVE) holds, letting DAVE
+  // add himself to memberUids — the growth vector the cap guards. H1 seeds
+  // memberUids [ALICE, BOB] = exactly the free cap of 2, so adding DAVE = 3.
+  async function seedDaveMember(): Promise<void> {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = asFirestore(ctx.firestore());
+      await setDoc(doc(db, 'households', H1, 'members', DAVE), {
+        displayName: 'Dave',
+        role: 'member',
+      });
+    });
+  }
+  async function setBilling(enabled: boolean): Promise<void> {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = asFirestore(ctx.firestore());
+      await setDoc(doc(db, 'app_config', 'global'), { billingEnabled: enabled });
+    });
+  }
+  async function setHouseholdSubscription(sub: object): Promise<void> {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = asFirestore(ctx.firestore());
+      await setDoc(doc(db, 'households', H1), { subscription: sub }, { merge: true });
+    });
+  }
+
+  it('billing dormant: a 3rd member can be added (no enforcement — current prod behavior)', async () => {
+    await seedDaveMember();
+    // No app_config/global doc → billingLive() is false → cap is inert.
+    await assertSucceeds(
+      updateDoc(doc(dbFor(DAVE), 'households', H1), { memberUids: [ALICE, BOB, DAVE] }),
+    );
+  });
+
+  it('billing live + free plan at cap: adding a 3rd member is denied', async () => {
+    await seedDaveMember();
+    await setBilling(true);
+    await assertFails(
+      updateDoc(doc(dbFor(DAVE), 'households', H1), { memberUids: [ALICE, BOB, DAVE] }),
+    );
+  });
+
+  it('billing live + premium plan: adding a 3rd member is allowed (cap 20)', async () => {
+    await seedDaveMember();
+    await setBilling(true);
+    await setHouseholdSubscription(PREMIUM);
+    await assertSucceeds(
+      updateDoc(doc(dbFor(DAVE), 'households', H1), { memberUids: [ALICE, BOB, DAVE] }),
+    );
+  });
+
+  it('billing live + subscription explicitly null: treated as free (no rule error)', async () => {
+    // Guards the null-parent path: get(['subscription','plan']) must resolve to the
+    // free cap rather than erroring on a null `subscription` map.
+    await seedDaveMember();
+    await setBilling(true);
+    await setHouseholdSubscription(null as unknown as object);
+    await assertFails(
+      updateDoc(doc(dbFor(DAVE), 'households', H1), { memberUids: [ALICE, BOB, DAVE] }),
+    );
+  });
+
+  it('billing live + free plan: a non-growth update (rename) still succeeds', async () => {
+    await setBilling(true);
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1), { name: 'Renamed Household' }),
+    );
+  });
+
+  it('billing live: an already-over-cap household can still shrink (grandfathered)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = asFirestore(ctx.firestore());
+      await setDoc(
+        doc(db, 'households', H1),
+        { memberUids: [ALICE, BOB, DAVE] },
+        { merge: true },
+      );
+      await setDoc(doc(db, 'households', H1, 'members', DAVE), {
+        displayName: 'Dave',
+        role: 'member',
+      });
+    });
+    await setBilling(true);
+    // DAVE removes himself: newSize (2) <= oldSize (3) → allowed despite being over cap.
+    await assertSucceeds(
+      updateDoc(doc(dbFor(DAVE), 'households', H1), { memberUids: [ALICE, BOB] }),
+    );
+  });
+});
+
 describe('input validation', () => {
   it('rejects a transaction with a non-numeric amount', async () => {
     await assertFails(

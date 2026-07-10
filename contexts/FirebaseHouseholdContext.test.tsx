@@ -142,7 +142,19 @@ vi.mock('firebase/firestore', () => {
   };
 });
 
-vi.mock('@/firebase.config', () => ({ db: {} }));
+vi.mock('@/firebase.config', () => ({ db: {}, getFunctionsInstance: vi.fn(async () => ({})) }));
+
+// Plan 051: addKidProfile now creates the managed-kid member via the
+// `createkidprofile` Cloud Function (the server-side cap boundary) instead of a
+// direct setDoc. Mock the callable so we can assert it was/wasn't invoked.
+const { createKidProfileCallableMock } = vi.hoisted(() => ({
+  createKidProfileCallableMock: vi.fn(async (_payload?: unknown) => ({
+    data: { memberId: 'kid_new' },
+  })),
+}));
+vi.mock('firebase/functions', () => ({
+  httpsCallable: () => createKidProfileCallableMock,
+}));
 
 vi.mock('react-hot-toast', () => ({
   default: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
@@ -173,8 +185,8 @@ import {
   useShopping,
 } from './FirebaseHouseholdContext';
 // Plan 080d reward CRUD writes through these single-doc APIs (not a batch), so we
-// read their captured call args to assert path + payload. Plan 080e: addKidProfile
-// writes the managed-kid member via setDoc(), so we assert it was/wasn't called.
+// read their captured call args to assert path + payload. (Plan 051: addKidProfile
+// no longer writes via setDoc — it calls the createkidprofile callable, mocked above.)
 import { addDoc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
 
 const addDocMock = vi.mocked(addDoc);
@@ -270,6 +282,7 @@ beforeEach(() => {
   updateDocMock.mockClear();
   deleteDocMock.mockClear();
   setDocMock.mockClear();
+  createKidProfileCallableMock.mockClear();
   // Default: billing OFF (dormant prod state). The cap-enforcement tests opt in
   // per-test with mockResolvedValueOnce(true); every other test keeps this default
   // so addKidProfile's cap block is skipped exactly as it is in production.
@@ -1284,11 +1297,13 @@ describe('FirebaseHouseholdContext — addKidProfile cap enforcement (Plan 080e)
       ).rejects.toThrow(/limit reached/i);
     });
 
-    // The members-subcollection write must NOT happen when the cap blocks the add.
+    // The client pre-check blocks BEFORE the round-trip, so the server callable is
+    // never invoked (and no direct write happens either).
+    expect(createKidProfileCallableMock).not.toHaveBeenCalled();
     expect(setDocMock).not.toHaveBeenCalled();
   });
 
-  it('proceeds (one members write) when billing is ON but the household is under the cap', async () => {
+  it('proceeds (one callable invocation) when billing is ON but the household is under the cap', async () => {
     getBillingEnabledMock.mockResolvedValueOnce(true);
     renderProvider();
     // Only 1 managed kid => under the free cap of 2, so the add is allowed.
@@ -1298,23 +1313,20 @@ describe('FirebaseHouseholdContext — addKidProfile cap enforcement (Plan 080e)
       await captured.value!.core.addKidProfile({ displayName: 'Second Kid' });
     });
 
-    expect(setDocMock).toHaveBeenCalledTimes(1);
-    const [ref, data] = setDocMock.mock.calls[0]!;
-    // Written to the members subcollection as a managed kid (login-less kid id).
-    expect(pathOf(ref)).toMatch(new RegExp(`^${householdPath}/members/kid_`));
-    expect(data).toMatchObject({
+    // The managed-kid doc is created by the createkidprofile Cloud Function (the
+    // server-side cap boundary), invoked with the household + profile input.
+    expect(createKidProfileCallableMock).toHaveBeenCalledTimes(1);
+    const [payload] = createKidProfileCallableMock.mock.calls[0]!;
+    expect(payload).toMatchObject({
+      householdId: HOUSEHOLD_ID,
       displayName: 'Second Kid',
-      role: 'kid',
-      isManaged: true,
-      managedByUid: AUTH_USER.uid,
     });
   });
 
-  it('skips the cap entirely (DORMANT) when billing is OFF, even with many managed kids', async () => {
+  it('skips the client cap (DORMANT) when billing is OFF and delegates to the callable', async () => {
     // Default getBillingEnabled => false (see beforeEach). With billing dormant the
-    // count is never checked, so an over-cap household can still add a kid — the
-    // pre-080e behaviour, preserved (Plan 080 Principle 6: gate the count, not the
-    // mechanics).
+    // client count is never checked, so it delegates straight to the function (which
+    // is itself inert while billing is dormant). Preserves the pre-080e behaviour.
     renderProvider();
     seedHousehold(5); // well over the free cap of 2
 
@@ -1322,9 +1334,9 @@ describe('FirebaseHouseholdContext — addKidProfile cap enforcement (Plan 080e)
       await captured.value!.core.addKidProfile({ displayName: 'Another Kid' });
     });
 
-    expect(setDocMock).toHaveBeenCalledTimes(1);
-    const [, data] = setDocMock.mock.calls[0]!;
-    expect(data).toMatchObject({ displayName: 'Another Kid', isManaged: true });
+    expect(createKidProfileCallableMock).toHaveBeenCalledTimes(1);
+    const [payload] = createKidProfileCallableMock.mock.calls[0]!;
+    expect(payload).toMatchObject({ householdId: HOUSEHOLD_ID, displayName: 'Another Kid' });
   });
 });
 

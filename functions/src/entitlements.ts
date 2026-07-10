@@ -59,11 +59,40 @@ export function getAiDailyCap(
 ): number {
   if (!billingEnabled) return LEGACY_AI_DAILY_QUOTA;
 
+  return isPremiumHousehold(household)
+    ? PREMIUM_AI_DAILY_CAP
+    : FREE_AI_DAILY_CAP;
+}
+
+/** Free-tier managed-kid-profile cap (Plan 080). Mirrors FREE_LIMITS.maxKidProfiles. */
+export const FREE_MAX_KID_PROFILES = 2;
+
+/** Premium managed-kid-profile cap (Plan 080). Mirrors PREMIUM_LIMITS.maxKidProfiles. */
+export const PREMIUM_MAX_KID_PROFILES = 10;
+
+/**
+ * Whether the household's subscription grants premium access — an `active` /
+ * `trialing` / `past_due` subscription with `plan === "premium"`. Mirrors
+ * `isPremium` / `getPlan` in `utils/entitlements.ts`.
+ */
+export function isPremiumHousehold(household: HouseholdEntitlementData): boolean {
   const sub = household.subscription;
-  const isPremium =
+  return (
     sub?.plan === "premium" &&
     typeof sub.status === "string" &&
-    PREMIUM_STATUSES.includes(sub.status);
+    PREMIUM_STATUSES.includes(sub.status)
+  );
+}
 
-  return isPremium ? PREMIUM_AI_DAILY_CAP : FREE_AI_DAILY_CAP;
+/**
+ * The household's managed-kid-profile cap for the current plan. Unlike
+ * `getAiDailyCap` this does NOT take `billingEnabled`: the caller
+ * (`createkidprofile`) enforces the cap ONLY while billing is live, matching the
+ * client's `addKidProfile`. Mirrors `getLimits().maxKidProfiles` in
+ * `utils/entitlements.ts`.
+ */
+export function getMaxKidProfiles(household: HouseholdEntitlementData): number {
+  return isPremiumHousehold(household)
+    ? PREMIUM_MAX_KID_PROFILES
+    : FREE_MAX_KID_PROFILES;
 }
