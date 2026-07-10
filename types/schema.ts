@@ -583,6 +583,15 @@ export interface Household {
   // the scheduled recap function; absent until the first recap is generated.
   lastRecapWeek?: string;
 
+  // Plan 22 (calendar ICS feed): a capability-URL token for the read-only
+  // `calendarfeed` HTTP Cloud Function subscription (`webcal://…/calendarfeed
+  // ?hid=…&token=…`). Written ONLY by the `generatecalendarfeedtoken` callable
+  // (Admin SDK — bypasses rules, matching the field-permissive household-doc
+  // update rule anyway). Absent until a member first enables the feed;
+  // regenerating rotates the token, invalidating prior subscription URLs.
+  // Never log this value — it grants read access to the household's bills.
+  calendarFeedToken?: string;
+
   // Legacy fields for migration support
   startDate?: string; // YYYY-MM-DD format - deprecated, use lastPaycheckDate
   payPeriodSettings?: { startDate: string }; // Deprecated, use lastPaycheckDate

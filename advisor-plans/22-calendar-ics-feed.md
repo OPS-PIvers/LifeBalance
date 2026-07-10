@@ -36,6 +36,55 @@ The app has a bills/income calendar (`CalendarItem`) but no way to see those dat
 - Functions exemplars: HTTP endpoints live in `functions/src/quickAdd/index.ts` (onRequest style, auth patterns); callables like `deletehousehold` (`index.ts:666-719`) show the membership check to copy.
 - No `firestore.rules` change is needed under this design (Admin SDK writes) — if the spike finds otherwise, STOP (rules PRs are human-watched in this repo).
 
+## Spike notes (2026-07-09, executor)
+
+**Drift check**: `git diff --stat fce26e4..HEAD -- utils/calendarRecurrence.ts functions/src/index.ts firestore.rules`
+shows only `functions/src/index.ts` changed (115 lines, mostly deletions from an
+unrelated dead-code cleanup, plan 15). `findBillsDueOnDate`/`BillCalendarItem`/
+`recurrenceFallsOn` still exist, semantics unchanged, just shifted to
+`functions/src/index.ts:324-409` (was 328-405). No functional divergence — proceeding.
+
+1. **Rules check**: read `firestore.rules:111-147` (household `allow update`). There
+   is **no `request.resource.data.keys().hasOnly([...])` allowlist** at the
+   household-doc level — the rule only *blocks* specific fields (`createdBy`,
+   `createdAt`, `inviteCode`, `subscription`, plus validated `aiUsage`/`memberUids`
+   diffs). A brand-new field like `calendarFeedToken` would actually **pass**
+   today's rules for a client-side write. This mildly undercuts the plan's stated
+   rationale ("client write would violate rules"), but doesn't change the
+   decision: the callable design is kept anyway because (a) it needs
+   `crypto.randomBytes` server-side entropy, not a client-guessable/predictable
+   token, (b) it still means **zero rules diff**, satisfying the hard
+   "no `firestore.rules` edits" constraint regardless of whether one was
+   technically required. STOP condition ("spike shows a rules change IS
+   required") is **not** triggered — no rules file edits are needed under this
+   design, full stop.
+2. **Income vs expense**: `types/schema.ts:226` — `CalendarItem.type: 'income' |
+   'expense'`. Confirmed v1 scope per the design: feed emits `type === 'expense'`
+   items only ("bills on the calendar"); `income` items excluded.
+3. **Hosting rewrites**: not configured for a friendly feed path; v1 uses the
+   default `https://<region>-<project>.cloudfunctions.net/calendarfeed` URL
+   (matches `deletehousehold`-style callables/HTTP fns in this codebase — no
+   custom domain routing exists for any function today). Acceptable per design.
+4. **ICS escaping/folding**: RFC 5545 TEXT escaping — backslash `\`, comma `,`,
+   semicolon `;` are escaped with a leading backslash; literal newlines become
+   `\n` (escaped, two chars). Line folding: any content line over 75 **octets**
+   is split with a CRLF followed by a single leading space (soft line break),
+   splitting only at UTF-8-safe boundaries (never inside a multi-byte
+   char/escape pair). `buildIcs` implements both — folding is asserted with a
+   generated long-SUMMARY test case.
+
+Function-file conventions confirmed from neighboring code (`geminiProxy.ts`,
+`fetchRecipePage.ts`, `quickAdd/index.ts`): callables use `onCall(opts, handler)`
++ `HttpsError`; HTTP endpoints use `onRequest(opts, (req, res) => ...)` with a
+minimal `HttpResponse`-shaped `res` (`status().json/send()` + `set()`); `admin.firestore()`
+is called lazily inside the handler (not module scope) in the newer modules
+(`geminiProxy.ts:132`) — followed here. Tests mock `firebase-functions/v2/https`
+(`onCall`/`onRequest` → return the raw handler) and `firebase-admin` (a single
+shared reconfigurable mock `db`), matching `geminiProxy.test.ts` /
+`quickAdd/index.test.ts` style.
+
+**Decision: proceed to Step 2.** No STOP conditions triggered.
+
 ## Steps
 
 ### Step 1: Spike (append "## Spike notes" here before coding)
@@ -65,9 +114,24 @@ End-to-end needs a deployed function: record in the PR that verification = subsc
 
 ## Done criteria
 
-- [ ] Spike notes appended; `buildIcs` unit-tested; both functions exported
-- [ ] Settings row ships with the revocation warning
-- [ ] All gates green; post-deploy verification steps in the PR; `advisor-plans/README.md` updated
+- [x] Spike notes appended; `buildIcs` unit-tested; both functions exported
+- [x] Settings row ships with the revocation warning
+- [x] All gates green; post-deploy verification steps in the PR (see below); `advisor-plans/README.md` update SKIPPED per operator amendment (this executor run)
+
+## Post-deploy verification (Step 4)
+
+This feed cannot be fully verified locally — `calendarfeed`/`generatecalendarfeedtoken`
+only work once deployed (real Cloud Functions URL, real Firestore). After deploy:
+
+1. In Settings → Data → "Enable calendar feed", tap Enable; confirm a `webcal://…`
+   URL appears with `hid=` and `token=` query params.
+2. Copy the URL, swap `webcal://` for `https://` and open it in a browser — confirm
+   a `text/calendar` response body starting `BEGIN:VCALENDAR`.
+3. Subscribe from Google Calendar (Other calendars → From URL) using the `https://`
+   form of the link; confirm unpaid expense bills appear, recurring ones repeat on
+   schedule, and paid/deleted occurrences do NOT appear.
+4. Tap Regenerate; confirm the OLD URL now 404s and the NEW URL serves the feed.
+5. Confirm income calendar items never appear in the feed (v1 = expenses only).
 
 ## STOP conditions
 

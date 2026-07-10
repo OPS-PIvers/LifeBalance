@@ -36,6 +36,7 @@ import PointsBreakdownModal from '@/components/modals/PointsBreakdownModal';
 import NotificationSettings from '@/components/settings/NotificationSettings';
 import { ThemeToggle } from '@/components/settings/ThemeToggle';
 import ApiKeyManager from '@/components/settings/ApiKeyManager';
+import CalendarFeedCard from '@/components/settings/CalendarFeedCard';
 import ShortcutSetupGuide from '@/components/settings/ShortcutSetupGuide';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -813,6 +814,7 @@ const Settings: React.FC = () => {
 
         {/* Data Management */}
         <Section title="Data">
+          <div className="space-y-6">
           <div className="space-y-2">
             <p className="text-xs text-brand-500 dark:text-brand-400 px-1">
               JSON is a complete backup of everything; CSV contains transactions only, ready for Excel or Google Sheets.
@@ -891,6 +893,9 @@ const Settings: React.FC = () => {
                 </div>
               </Row>
             </SurfaceList>
+          </div>
+
+          <CalendarFeedCard />
           </div>
         </Section>
 
