@@ -4,13 +4,17 @@ import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { useDashboardTransactionStats } from '@/hooks/useDashboardTransactionStats';
 import { roundMoney } from '@/utils/money';
 import { TrendingUp, TrendingDown, Receipt } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import SectionActionLink from '@/components/ui/SectionActionLink';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
+import EmptyState from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
 
 export const MoneyPulseWidget: React.FC = () => {
   const { transactions } = useFinance();
   const { thisWeekSpend, lastWeekSpend, recentTransactions } = useDashboardTransactionStats();
   const fmt = useFormatCurrency();
+  const navigate = useNavigate();
 
   // Spending pulse — week deltas derived from the shared single-pass totals.
   // Identical arithmetic to the prior local useMemo (the week totals are now
@@ -23,7 +27,24 @@ export const MoneyPulseWidget: React.FC = () => {
     isHigher: diff > 0,
   };
 
-  if (transactions.length === 0) return null;
+  if (transactions.length === 0) {
+    return (
+      <Section title="Money pulse">
+        <EmptyState
+          variant="dashed"
+          size="compact"
+          icon={<Receipt size={20} />}
+          title="No transactions yet"
+          description="Add a transaction to start tracking your spending."
+          action={
+            <Button variant="primary" size="sm" onClick={() => navigate('/budget')}>
+              Go to Money
+            </Button>
+          }
+        />
+      </Section>
+    );
+  }
 
   const noPrior = spendingStats.percentChange === 0 && spendingStats.isHigher;
 
