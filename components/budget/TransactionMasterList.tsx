@@ -20,13 +20,23 @@ import { generateCsvExport } from '@/utils/exportUtils';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { roundMoney } from '@/utils/money';
 import { usePowerToolsEnabled } from '@/hooks/usePowerToolsEnabled';
+import { useScrollToHighlight } from '@/hooks/useScrollToHighlight';
 import { TransactionItem } from './TransactionItem';
 import SavedViewChips from './SavedViewChips';
 import FilterControls from './FilterControls';
 
+interface TransactionMasterListProps {
+  /**
+   * A transaction id to scroll-to + briefly flash on mount/update (global
+   * search deep-link, Plan 14 v1.1 — see `useDeepLinkHighlight` in `Budget`).
+   * Cleared automatically by the caller after a few seconds.
+   */
+  highlightId?: string | null;
+}
+
 // --- Main Component ---
 
-const TransactionMasterList: React.FC = () => {
+const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlightId = null }) => {
   const {
     transactions,
     deleteTransaction,
@@ -372,6 +382,19 @@ const TransactionMasterList: React.FC = () => {
     getItemKey: (index) => filteredTransactions[index]?.id ?? index,
   });
 
+  // Global search deep-link (Plan 14 v1.1): the target row may not be in the
+  // virtualizer's currently-rendered window, so scroll it into range first
+  // (onBeforeScroll) — useScrollToHighlight then queries the DOM a frame
+  // later, by which point the row has mounted.
+  const scrollToHighlightedIndex = useCallback(() => {
+    if (!highlightId) return;
+    const index = filteredTransactions.findIndex((tx) => tx.id === highlightId);
+    if (index >= 0) {
+      virtualizer.scrollToIndex(index, { align: 'center' });
+    }
+  }, [highlightId, filteredTransactions, virtualizer]);
+  useScrollToHighlight(highlightId, scrollToHighlightedIndex);
+
   return (
     <div className="space-y-4 animate-in fade-in duration-(--duration-base)">
       {/* Summary — hero content: the Income/Expense/Net/Count figures lead the
@@ -604,6 +627,10 @@ const TransactionMasterList: React.FC = () => {
                 <div
                   key={virtualRow.key}
                   data-index={virtualRow.index}
+                  // Search deep-link target (see useScrollToHighlight) — flash
+                  // applied imperatively via DOM classList so TransactionItem's
+                  // narrow memo comparator doesn't need a highlight prop.
+                  data-highlight-target={tx.id}
                   ref={virtualizer.measureElement}
                   style={{
                     position: 'absolute',

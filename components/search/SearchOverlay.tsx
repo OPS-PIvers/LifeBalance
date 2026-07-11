@@ -6,7 +6,7 @@ import Input from '@/components/ui/Input';
 import EmptyState from '@/components/ui/EmptyState';
 import { Section, SurfaceList, DisclosureRow } from '@/components/ui/Section';
 import { useFinance, useGamification, useMealPlan, useShopping, useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { searchAll, type GlobalSearchEntityType, type GlobalSearchNavTarget, type GlobalSearchResult } from '@/utils/globalSearch';
+import { searchAll, type GlobalSearchEntityType, type GlobalSearchResult } from '@/utils/globalSearch';
 
 interface SearchOverlayProps {
   isOpen: boolean;
@@ -37,11 +37,19 @@ const TYPE_ORDER: GlobalSearchEntityType[] = ['transaction', 'habit', 'todo', 'm
  * use the `useDeepLinkTab` convention (`state: { tab }`); `/lists` has no such
  * param, so the target sub-tab is seeded into the `lists-active-tab`
  * localStorage key first, mirroring `PlanTabRedirect`
- * (`components/auth/PlanTabRedirect.tsx`). None of the four pages support
- * filtering to a single record yet (see the plan's Spike notes), so this is a
- * page/tab-level jump, not a record-level one.
+ * (`components/auth/PlanTabRedirect.tsx`).
+ *
+ * v1.1 (Plan 14 follow-up): `/budget` and `/habits` also carry `highlightId`
+ * in the same `state` object — `useDeepLinkHighlight` on those pages reads it
+ * to scroll to and briefly flash the specific transaction/habit row, instead
+ * of just landing on its containing tab. `/lists` (meals/todos/shopping)
+ * still only deep-links to the tab — those pages have paginated/sectioned
+ * layouts (Eisenhower quadrants, `maxVisible` caps) where "the matching row
+ * may not even be rendered yet" is a bigger lift than a follow-up warrants;
+ * tracked as a remaining gap rather than wired here.
  */
-function navigateToResult(navigate: ReturnType<typeof useNavigate>, nav: GlobalSearchNavTarget): void {
+function navigateToResult(navigate: ReturnType<typeof useNavigate>, result: GlobalSearchResult): void {
+  const { nav } = result;
   if (nav.path === '/lists') {
     try {
       window.localStorage.setItem('lists-active-tab', nav.listsTab ?? 'todos');
@@ -51,7 +59,7 @@ function navigateToResult(navigate: ReturnType<typeof useNavigate>, nav: GlobalS
     navigate('/lists');
     return;
   }
-  navigate(nav.path, { state: { tab: nav.tab } });
+  navigate(nav.path, { state: { tab: nav.tab, highlightId: result.id } });
 }
 
 /**
@@ -97,7 +105,7 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ isOpen, onClose }) => {
   }, [results]);
 
   const handleSelect = (result: GlobalSearchResult) => {
-    navigateToResult(navigate, result.nav);
+    navigateToResult(navigate, result);
     onClose();
   };
 

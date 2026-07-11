@@ -105,15 +105,25 @@ describe('SearchOverlay', () => {
     expect(screen.getByText('Taco Tuesday')).toBeInTheDocument();
   });
 
-  it('navigates to /budget with the transactions tab and closes on select', () => {
+  it('navigates to /budget with the transactions tab, a highlightId, and closes on select', () => {
     const { onClose } = renderOverlay();
     fireEvent.change(screen.getByLabelText('Search query'), { target: { value: 'Target' } });
     fireEvent.click(screen.getByText('Target'));
 
     expect(screen.getByTestId('location-probe').textContent).toBe(
-      '/budget | {"tab":"transactions"}'
+      '/budget | {"tab":"transactions","highlightId":"tx-1"}'
     );
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('navigates to /habits with the track tab and a highlightId on select', () => {
+    renderOverlay();
+    fireEvent.change(screen.getByLabelText('Search query'), { target: { value: 'Read' } });
+    fireEvent.click(screen.getByText('Read 30 mins'));
+
+    expect(screen.getByTestId('location-probe').textContent).toBe(
+      '/habits | {"tab":"track","highlightId":"habit-1"}'
+    );
   });
 
   it('navigates to /lists and seeds the shopping tab on select', () => {
