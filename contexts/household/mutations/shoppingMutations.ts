@@ -241,8 +241,13 @@ export function makeToggleShoppingItemPurchased(deps: {
       if (!item) return;
 
       if (!item.isPurchased) {
+        // Commit the purchase flag and the catalog (history) upsert in a single
+        // batch so they can never diverge (item checked off but its purchase
+        // history never recorded, or vice versa).
+        const purchaseBatch = writeBatch(db);
+
         // Mark as purchased
-        await updateDoc(doc(db, `households/${householdId}/shoppingList`, id), {
+        purchaseBatch.update(doc(db, `households/${householdId}/shoppingList`, id), {
           isPurchased: true,
         });
 
@@ -261,7 +266,7 @@ export function makeToggleShoppingItemPurchased(deps: {
 
         if (existingCatalogItem) {
           // Update existing catalog item
-          await updateDoc(doc(db, `households/${householdId}/groceryCatalog`, existingCatalogItem.id), {
+          purchaseBatch.update(doc(db, `households/${householdId}/groceryCatalog`, existingCatalogItem.id), {
             lastPurchased: new Date().toISOString(),
             purchaseCount: increment(1),
             // Refresh the category to the item's latest categorization
@@ -281,8 +286,14 @@ export function makeToggleShoppingItemPurchased(deps: {
             lastPurchased: new Date().toISOString(),
             purchaseCount: 1
           };
-          await addDoc(collection(db, `households/${householdId}/groceryCatalog`), sanitizeFirestoreData(newCatalogItem));
+          // Pre-allocate the ref so the create participates in the batch.
+          purchaseBatch.set(
+            doc(collection(db, `households/${householdId}/groceryCatalog`)),
+            sanitizeFirestoreData(newCatalogItem)
+          );
         }
+
+        await purchaseBatch.commit();
 
         track('shopping_item_checked');
         toast.success('Marked as purchased');

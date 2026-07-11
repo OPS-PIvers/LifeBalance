@@ -15,6 +15,7 @@ import {
   limit,
   startAfter,
   type Firestore,
+  type WriteBatch,
   type QueryDocumentSnapshot,
   type DocumentData,
 } from 'firebase/firestore';
@@ -274,11 +275,14 @@ export function makeResetBucketsForNewPeriod(deps: {
 }) {
   const { db, householdId, currentPeriodId, buckets, bucketSpentMap, transactions } = deps;
 
-  const resetBucketsForNewPeriod = async (newPeriodId: string) => {
+  // When `externalBatch` is provided the writes are STAGED into it and the
+  // caller owns the commit (and any success toast) — used by payCalendarItem's
+  // income path so the period roll and the paycheck credit commit atomically.
+  const resetBucketsForNewPeriod = async (newPeriodId: string, externalBatch?: WriteBatch) => {
     if (!householdId || !currentPeriodId) return;
 
     try {
-      const batch = writeBatch(db);
+      const batch = externalBatch ?? writeBatch(db);
 
       // Create snapshots for all buckets from the old period
       for (const bucket of buckets) {
@@ -319,6 +323,9 @@ export function makeResetBucketsForNewPeriod(deps: {
         lastPaycheckDate: newPeriodId,
       });
 
+      // Staged mode: the caller commits (atomically with its own writes).
+      if (externalBatch) return;
+
       // Commit all changes atomically
       await batch.commit();
       toast.success('Buckets reset for new pay period');
@@ -344,11 +351,13 @@ export function makeInitializeFirstPeriod(deps: {
 }) {
   const { db, householdId, user, buckets } = deps;
 
-  const initializeFirstPeriod = async (paycheckDate: string) => {
+  // `externalBatch` stages the writes for the caller to commit — see
+  // resetBucketsForNewPeriod.
+  const initializeFirstPeriod = async (paycheckDate: string, externalBatch?: WriteBatch) => {
     if (!householdId || !user) return;
 
     try {
-      const batch = writeBatch(db);
+      const batch = externalBatch ?? writeBatch(db);
 
       // Set household's first paycheck
       const householdRef = doc(db, `households/${householdId}`);
@@ -364,6 +373,9 @@ export function makeInitializeFirstPeriod(deps: {
           lastResetDate: paycheckDate,
         });
       }
+
+      // Staged mode: the caller commits (atomically with its own writes).
+      if (externalBatch) return;
 
       await batch.commit();
       toast.success('Pay period tracking initialized!');
@@ -386,18 +398,22 @@ export function makeHandlePaycheckApproval(deps: {
   householdId: string | null;
   user: { uid: string } | null;
   currentPeriodId: string;
-  initializeFirstPeriod: (paycheckDate: string) => Promise<void>;
-  resetBucketsForNewPeriod: (newPeriodId: string) => Promise<void>;
+  initializeFirstPeriod: (paycheckDate: string, externalBatch?: WriteBatch) => Promise<void>;
+  resetBucketsForNewPeriod: (newPeriodId: string, externalBatch?: WriteBatch) => Promise<void>;
 }) {
   const { householdId, user, currentPeriodId, initializeFirstPeriod, resetBucketsForNewPeriod } = deps;
 
-  const handlePaycheckApproval = async (paycheckDate: string) => {
+  // `externalBatch` stages the period-tracking writes into the caller's batch
+  // instead of committing them here, so payCalendarItem's income path can
+  // commit the period roll AND the paycheck credit atomically (a partial
+  // commit could otherwise advance the pay period without crediting income).
+  const handlePaycheckApproval = async (paycheckDate: string, externalBatch?: WriteBatch) => {
     if (!householdId || !user) return;
 
     try {
       if (!currentPeriodId) {
         // First paycheck ever - initialize period tracking
-        await initializeFirstPeriod(paycheckDate);
+        await initializeFirstPeriod(paycheckDate, externalBatch);
         return;
       }
 
@@ -413,7 +429,7 @@ export function makeHandlePaycheckApproval(deps: {
       // Reset buckets for the period that just ended. This also advances the
       // household's lastPaycheckDate within the same atomic batch, so the bucket
       // resets and the period pointer can never desync from a partial write.
-      await resetBucketsForNewPeriod(paycheckDate);
+      await resetBucketsForNewPeriod(paycheckDate, externalBatch);
     } catch (error) {
       console.error('[handlePaycheckApproval] Failed:', error);
       toast.error('Failed to process paycheck approval. Please try again.');

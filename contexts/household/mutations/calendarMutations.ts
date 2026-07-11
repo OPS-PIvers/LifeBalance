@@ -9,6 +9,7 @@ import {
   increment,
   serverTimestamp,
   type Firestore,
+  type WriteBatch,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 import { format, parseISO, addDays, startOfToday, isAfter, isValid } from 'date-fns';
@@ -246,7 +247,7 @@ export function makePayCalendarItem(deps: {
   accounts: Account[];
   calendarItems: CalendarItem[];
   householdSettings: Household | null;
-  handlePaycheckApproval: (paycheckDate: string) => Promise<void>;
+  handlePaycheckApproval: (paycheckDate: string, externalBatch?: WriteBatch) => Promise<void>;
 }) {
   const { db, householdId, user, accounts, calendarItems, householdSettings, handlePaycheckApproval } = deps;
 
@@ -293,10 +294,19 @@ export function makePayCalendarItem(deps: {
         specificDate = item.date;
       }
 
-      // NEW: If this is an income item (paycheck), trigger period reset BEFORE creating transaction.
-      // This runs as its own prior atomic op before the writeBatch below.
+      // Atomically commit the calendar item, account balance, and transaction —
+      // and, for an income item, the paycheck-approval period roll — in a single
+      // writeBatch so they can never partially apply (e.g. the pay period
+      // advances but the paycheck is never credited, or the balance moves but
+      // the bill isn't marked paid). Created BEFORE the approval so its writes
+      // can be staged into the same batch.
+      const payBatch = writeBatch(db);
+
+      // If this is an income item (paycheck), stage the period reset writes
+      // BEFORE the transaction writes. Staged mode defers the commit (and the
+      // period-roll toast) to this function.
       if (item.type === 'income') {
-        await handlePaycheckApproval(specificDate);
+        await handlePaycheckApproval(specificDate, payBatch);
       }
 
       // Buckets and the calendar are separate domains (Plan 016): a paid bill is
@@ -328,12 +338,6 @@ export function makePayCalendarItem(deps: {
       // writing an absolute balance computed from local state prevents lost
       // updates when household members act concurrently.
       const balanceDelta = item.type === 'expense' ? -item.amount : item.amount;
-
-      // Atomically commit the calendar item, account balance, and transaction in a
-      // single writeBatch so they can never partially apply (e.g. balance moves but
-      // the bill isn't marked paid). Pre-allocate the new transaction ref so it can
-      // participate in the batch.
-      const payBatch = writeBatch(db);
 
       // 1. Create or update the paid calendar item
       if (isRecurringInstance) {
@@ -455,8 +459,14 @@ export function makeDeferCalendarItem(deps: {
 
       const newDate = calculateDeferredDate(specificDate);
 
+      // Commit the deferred item and the tombstone in a single batch so a
+      // partial write can never duplicate the instance (deferred copy created
+      // but the original never hidden) or vanish it (hidden but never
+      // re-created). Pre-allocate refs so both creates participate in the batch.
+      const deferBatch = writeBatch(db);
+
       // 1. Create deferred item
-      await addDoc(collection(db, `households/${householdId}/calendarItems`), {
+      deferBatch.set(doc(collection(db, `households/${householdId}/calendarItems`)), {
         title: template.title,
         amount: template.amount,
         date: newDate,
@@ -468,7 +478,7 @@ export function makeDeferCalendarItem(deps: {
 
       // 2. Delete/Hide original instance
       // We create a "tombstone" with isDeleted: true to hide this specific instance from expansion
-      await addDoc(collection(db, `households/${householdId}/calendarItems`), {
+      deferBatch.set(doc(collection(db, `households/${householdId}/calendarItems`)), {
         title: template.title,
         amount: template.amount,
         date: specificDate,
@@ -479,6 +489,8 @@ export function makeDeferCalendarItem(deps: {
         parentRecurringId: parentRecurringId,
         createdBy: user.uid,
       });
+
+      await deferBatch.commit();
 
       if (!opts?.silent) {
         toast.success(`Deferred to ${format(parseISO(newDate), 'MMM d')}`);
