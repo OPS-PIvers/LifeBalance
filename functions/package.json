@@ -11,7 +11,8 @@
     "shell": "pnpm run build && firebase functions:shell",
     "start": "pnpm run shell",
     "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log"
+    "logs": "firebase functions:log",
+    "test": "cd .. && vitest run functions/src"
   },
   "engines": {
     "node": "20"
@@ -33,7 +34,7 @@
     "@types/node": "^22.19.21",
     "eslint": "^9.39.4",
     "globals": "^17.6.0",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.3",
     "typescript-eslint": "^8.61.1"
   }
 }
