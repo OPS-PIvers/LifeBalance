@@ -710,6 +710,26 @@ describe('habitLogic', () => {
         // Current week still gated on the live counter.
         expect(calculatePointsForDate([habit], WED)).toBe(0);
       });
+
+      it('threshold: a PAST week still scores after the week-rollover reset zeroed count', () => {
+        // Completed last week; this week's rollover reset count to 0. The
+        // count===0 short-circuit must not erase the past week's completion
+        // (regression: §2C audit — the guard applied regardless of target date).
+        const habit = weeklyHabit({
+          scoringType: 'threshold',
+          basePoints: 10,
+          targetCount: 1,
+          count: 0, // week rolled over, nothing done this week yet
+          totalCount: 1,
+          completedDates: [PREV_MON],
+          streakDays: 0,
+        });
+        // Past week: streak ending there = 1 → 1.0x → 10 (pre-fix: 0).
+        expect(calculatePointsForDate([habit], PREV_MON)).toBe(10);
+        expect(calculatePointsForDate([habit], PREV_MON)).toBe(
+          calculatePointsForDateRange([habit], PREV_MON, PREV_MON)
+        );
+      });
     });
   });
 
@@ -856,6 +876,78 @@ describe('habitLogic', () => {
       expect(calculatePointsForDateRange(all, today, today, 'kid_leo')).toBe(10);
       // A member with no completed chore scores 0.
       expect(calculatePointsForDate([make('h1'), make('h3', 'kid_mia')], today, 'kid_leo')).toBe(0);
+    });
+  });
+
+  // Regression (§2C audit): the live `count` is zeroed by every period reset, so
+  // the count===0 short-circuit (and the threshold/incremental counter reads)
+  // must only apply when the target date falls in the CURRENT period. For a
+  // historical date, presence in completedDates proves the completion —
+  // otherwise every points recalc after a reset silently drops history and the
+  // per-date totals drift away from calculatePointsForDateRange.
+  describe('calculatePointsForDate — reset counter must not erase history', () => {
+    it('daily threshold: a past completion still scores after the midnight reset zeroed count', () => {
+      const habit: Habit = {
+        ...baseHabit,
+        scoringType: 'threshold',
+        targetCount: 1,
+        basePoints: 10,
+        count: 0, // midnight auto-reset already ran
+        totalCount: 1,
+        completedDates: [yesterday],
+        streakDays: 1,
+      };
+      // Pre-fix: the count===0 guard returned 0 for yesterday.
+      expect(calculatePointsForDate([habit], yesterday)).toBe(10);
+      // And it agrees with the range recompute for the same day.
+      expect(calculatePointsForDate([habit], yesterday)).toBe(
+        calculatePointsForDateRange([habit], yesterday, yesterday)
+      );
+    });
+
+    it('daily incremental: a past day scores as ONE completion, not the live counter', () => {
+      const habit: Habit = {
+        ...baseHabit,
+        scoringType: 'incremental',
+        targetCount: 1,
+        basePoints: 10,
+        count: 3, // 3 completions made TODAY
+        totalCount: 4,
+        completedDates: [today, yesterday],
+        streakDays: 2,
+      };
+      // Yesterday: streak ending there = 1 → 1.0x → 1 × 10 (pre-fix: 3 × 10).
+      expect(calculatePointsForDate([habit], yesterday)).toBe(10);
+      // Today keeps the live-counter behavior: streak 2 → 1.0x → 3 × 10.
+      expect(calculatePointsForDate([habit], today)).toBe(30);
+    });
+
+    it('daily threshold: a past day scores even while today sits below target', () => {
+      const habit: Habit = {
+        ...baseHabit,
+        scoringType: 'threshold',
+        targetCount: 3,
+        basePoints: 10,
+        count: 1, // today: 1 of 3 so far
+        totalCount: 4,
+        completedDates: [yesterday],
+        streakDays: 1,
+      };
+      expect(calculatePointsForDate([habit], yesterday)).toBe(10);
+    });
+
+    it('today with a zeroed counter still scores 0 (guard preserved)', () => {
+      const habit: Habit = {
+        ...baseHabit,
+        scoringType: 'incremental',
+        targetCount: 1,
+        basePoints: 10,
+        count: 0,
+        totalCount: 1,
+        completedDates: [today], // manual-reset edge: today still listed
+        streakDays: 1,
+      };
+      expect(calculatePointsForDate([habit], today)).toBe(0);
     });
   });
 
