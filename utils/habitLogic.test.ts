@@ -1841,3 +1841,38 @@ describe('calculateDayNetPoints', () => {
     expect(calculateDayNetPoints([habit, neg], d(1), undefined, localToday)).toBe(8);
   });
 });
+
+describe('pointsForHabitOnDate (weekly incremental, past ISO week)', () => {
+  it("does not leak the CURRENT week's live counter into a past week's days", () => {
+    // A weekly incremental habit completed twice in a PAST ISO week, with a
+    // live counter of 5 from the current week. Past-week days must ignore
+    // count: the week scores as ONE completion on its latest completed day,
+    // matching calculatePointsForDateRange's past-week convention.
+    const pastMonday = format(subWeeks(startOfISOWeek(new Date()), 2), 'yyyy-MM-dd');
+    const pastTuesday = format(subDays(subWeeks(startOfISOWeek(new Date()), 2), -1), 'yyyy-MM-dd');
+
+    const habit = {
+      id: 'w1',
+      type: 'positive',
+      period: 'weekly',
+      scoringType: 'incremental',
+      basePoints: 10,
+      targetCount: 1,
+      count: 5, // current week's live counter — irrelevant to the past week
+      totalCount: 7,
+      completedDates: [pastMonday, pastTuesday],
+      streakDays: 0,
+      lastUpdated: new Date().toISOString(),
+    } as unknown as Habit;
+
+    // Latest completed day of the past week carries the single completion…
+    expect(pointsForHabitOnDate(habit, pastTuesday)).toBe(10);
+    // …and the other day contributes nothing (not 1 × perDay, not count-based).
+    expect(pointsForHabitOnDate(habit, pastMonday)).toBe(0);
+
+    // Per-day attributions sum to the range recompute for that week.
+    expect(
+      pointsForHabitOnDate(habit, pastMonday) + pointsForHabitOnDate(habit, pastTuesday)
+    ).toBe(calculatePointsForDateRange([habit], pastMonday, pastTuesday));
+  });
+});

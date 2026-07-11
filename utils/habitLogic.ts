@@ -692,15 +692,26 @@ export const pointsForHabitOnDate = (
       isSameWeek(parseISO(d), ref, { weekStartsOn: 1 })
     );
     if (habit.scoringType === 'incremental') {
-      // No per-day counters are stored, so attribute one completion to each
-      // other completed day of the week and the remainder to the LATEST day
-      // (in practice "today", where the live counter keeps growing) — the
-      // per-day attributions then sum to `count`, matching the range recompute.
       const latestSameWeekDay = sameWeekDates.reduce((a, b) => (a > b ? a : b));
-      const completionsOnDate =
-        targetDate === latestSameWeekDay
-          ? Math.max(habit.count - (sameWeekDates.length - 1), 0)
-          : 1;
+      const isCurrentWeekTarget = isSameWeek(parseISO(today), ref, { weekStartsOn: 1 });
+      let completionsOnDate: number;
+      if (isCurrentWeekTarget) {
+        // No per-day counters are stored, so attribute one completion to each
+        // other completed day of the week and the remainder to the LATEST day
+        // (in practice "today", where the live counter keeps growing) — the
+        // per-day attributions then sum to `count`, matching the range recompute.
+        completionsOnDate =
+          targetDate === latestSameWeekDay
+            ? Math.max(habit.count - (sameWeekDates.length - 1), 0)
+            : 1;
+      } else {
+        // PAST ISO week: the live `count` describes the CURRENT week only, so
+        // it must not leak into historical attribution. The range recompute
+        // scores a past week as ONE completion (per weekStart), so attribute
+        // that single completion to the week's latest completed day — the
+        // per-day sum across the week then matches calculatePointsForDateRange.
+        completionsOnDate = targetDate === latestSameWeekDay ? 1 : 0;
+      }
       return sign * completionsOnDate * perDayPoints;
     }
     // Threshold: the week's single award landed on the FIRST completed day
