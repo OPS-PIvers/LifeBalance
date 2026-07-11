@@ -33,7 +33,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   // Keeps the header and fixed overlays (toasts) anchored when the iOS
   // keyboard pans the window; the ref scopes it to in-page inputs (portal
   // Drawers/Modals keep WebKit's native pan). See the hook's doc comment.
-  const shellRef = useKeyboardViewportAnchor<HTMLDivElement>();
+  const { shellRef, isKeyboardAnchored } = useKeyboardViewportAnchor<HTMLDivElement>();
 
   // Every un-snoozed pending_review transaction is a review candidate. Ordered
   // newest-first (date desc) so the most recent activity is reviewed first.
@@ -140,7 +140,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         </div>
       </main>
 
-      <div className="flex-none z-sticky">
+      {/* Hidden while the keyboard has the shell anchored — a nav bar pinned
+          directly above the keyboard reads as floating mid-screen. The freed
+          space goes to the <main> scroller. */}
+      <div className={`flex-none z-sticky ${isKeyboardAnchored ? 'hidden' : ''}`}>
         <BottomNav />
       </div>
 

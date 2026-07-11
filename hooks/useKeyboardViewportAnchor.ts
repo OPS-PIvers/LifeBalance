@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /**
  * A visual-viewport shortfall at least this large is treated as the software
@@ -20,8 +20,8 @@ export const KEYBOARD_MIN_HEIGHT_PX = 120;
  * visual viewport has shrunk by a keyboard's worth:
  *   1. set `--app-height` on `<html>` to the visual viewport height — the
  *      shell (sized `h-[var(--app-height,100dvh)]`) shrinks to the visible
- *      area, so the header and bottom nav stay put and the inner `<main>`
- *      scroller is what reveals the input;
+ *      area, so the header stays put and the inner `<main>` scroller is what
+ *      reveals the input;
  *   2. pin the window scroll back to (0,0) whenever WebKit pans it, keeping
  *      fixed overlays (toasts) anchored to the real top of the screen;
  *   3. nudge the focused field into view inside the inner scroller.
@@ -34,9 +34,17 @@ export const KEYBOARD_MIN_HEIGHT_PX = 120;
  * Everything no-ops where `window.visualViewport` is unavailable (jsdom, old
  * browsers), and on platforms whose keyboards resize the layout viewport
  * (Android `resizes-content`) the shortfall stays ~0 so the hook stays inert.
+ *
+ * `isKeyboardAnchored` mirrors the anchored state so the shell can hide
+ * bottom-anchored chrome (the nav bar) while the keyboard is up — a footer
+ * pinned directly above the keyboard reads as floating mid-screen.
  */
-export function useKeyboardViewportAnchor<T extends HTMLElement>(): React.RefObject<T | null> {
+export function useKeyboardViewportAnchor<T extends HTMLElement>(): {
+  shellRef: React.RefObject<T | null>;
+  isKeyboardAnchored: boolean;
+} {
   const shellRef = useRef<T>(null);
+  const [isKeyboardAnchored, setIsKeyboardAnchored] = useState(false);
 
   useEffect(() => {
     const vv = window.visualViewport;
@@ -74,9 +82,15 @@ export function useKeyboardViewportAnchor<T extends HTMLElement>(): React.RefObj
         keyboardHeight >= KEYBOARD_MIN_HEIGHT_PX && vv.scale <= 1.02 && focused !== null;
 
       if (shouldAnchor) {
+        // --app-height and the pin re-apply on every event (the height keeps
+        // changing while the keyboard animates), but the state flip happens
+        // once per anchor so viewport churn doesn't dispatch no-op updates.
         document.documentElement.style.setProperty('--app-height', `${Math.round(vv.height)}px`);
         pinWindow();
-        anchored = true;
+        if (!anchored) {
+          anchored = true;
+          setIsKeyboardAnchored(true);
+        }
         // The shell just shrank to the visible area; let the inner scroller
         // (not a window pan) bring the focused field into view — once per
         // field, so later resize/scroll events don't override user scrolling.
@@ -91,6 +105,7 @@ export function useKeyboardViewportAnchor<T extends HTMLElement>(): React.RefObj
         if (anchored) {
           document.documentElement.style.removeProperty('--app-height');
           anchored = false;
+          setIsKeyboardAnchored(false);
         }
       }
     };
@@ -130,5 +145,5 @@ export function useKeyboardViewportAnchor<T extends HTMLElement>(): React.RefObj
     };
   }, []);
 
-  return shellRef;
+  return { shellRef, isKeyboardAnchored };
 }
