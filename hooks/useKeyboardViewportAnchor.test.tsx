@@ -23,9 +23,9 @@ class FakeVisualViewport extends EventTarget {
 }
 
 const Shell: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
-  const shellRef = useKeyboardViewportAnchor<HTMLDivElement>();
+  const { shellRef, isKeyboardAnchored } = useKeyboardViewportAnchor<HTMLDivElement>();
   return (
-    <div ref={shellRef} data-testid="shell">
+    <div ref={shellRef} data-testid="shell" data-keyboard-anchored={isKeyboardAnchored}>
       <input data-testid="in-shell-input" />
       {children}
     </div>
@@ -148,6 +148,29 @@ describe('useKeyboardViewportAnchor', () => {
     expect(appHeightVar()).not.toBe('');
     unmount();
     expect(appHeightVar()).toBe('');
+  });
+
+  it('reports isKeyboardAnchored while anchored and clears it when the keyboard closes', () => {
+    const { getByTestId } = render(<Shell />);
+    expect(getByTestId('shell').dataset.keyboardAnchored).toBe('false');
+    openKeyboardWithFocus((id) => getByTestId(id));
+    expect(getByTestId('shell').dataset.keyboardAnchored).toBe('true');
+    act(() => {
+      fakeViewport.close();
+    });
+    expect(getByTestId('shell').dataset.keyboardAnchored).toBe('false');
+  });
+
+  it('does not report isKeyboardAnchored for focus outside the shell', () => {
+    const outsideInput = document.createElement('input');
+    document.body.appendChild(outsideInput);
+    const { getByTestId } = render(<Shell />);
+    outsideInput.focus();
+    act(() => {
+      fakeViewport.open(336);
+    });
+    expect(getByTestId('shell').dataset.keyboardAnchored).toBe('false');
+    outsideInput.remove();
   });
 
   it('clears the anchor when the input blurs while the keyboard closes', () => {
