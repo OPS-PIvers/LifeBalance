@@ -590,6 +590,7 @@ export const calculatePointsForDate = (
   assignedTo?: string,
 ): number => {
   let totalPoints = 0;
+  const today = getLocalDateString();
 
   for (const habit of habits) {
     // Plan 080c scope filter. Default (assignedTo === undefined) = the shared
@@ -603,9 +604,17 @@ export const calculatePointsForDate = (
     // Check if habit was completed on the target date
     if (!habit.completedDates.includes(targetDate)) continue;
 
-    // Only count if the habit currently has a count > 0 (hasn't been reset yet)
-    // or if the targetDate is in completedDates (which means it was completed)
-    if (habit.count === 0) continue;
+    // The live `count` only describes the CURRENT period (today for daily
+    // habits, the current ISO week for weekly ones) — it is zeroed by every
+    // period reset. So the "reset ⇒ no points" short-circuit must apply only
+    // when the target date falls in the current period; for a HISTORICAL date,
+    // presence in completedDates proves the completion and the (long-reset)
+    // counter must not zero it out (mirrors calculatePointsForDateRange).
+    const targetInCurrentPeriod =
+      habit.period === 'weekly'
+        ? isSameWeek(parseISO(targetDate), parseISO(today), { weekStartsOn: 1 })
+        : targetDate === today;
+    if (targetInCurrentPeriod && habit.count === 0) continue;
 
     // Use the streak that ended on the target date, not the habit's CURRENT
     // streak. Retro-applying the current multiplier to a past day over- or
@@ -645,7 +654,7 @@ export const calculatePointsForDate = (
         // completedDates already proves it was completed) — mirrors the
         // isCurrentWeek bypass in calculatePointsForDateRange.
         const firstSameWeekDay = sameWeekDates.reduce((a, b) => (a < b ? a : b));
-        const isCurrentWeek = isSameWeek(parseISO(getLocalDateString()), ref, { weekStartsOn: 1 });
+        const isCurrentWeek = isSameWeek(parseISO(today), ref, { weekStartsOn: 1 });
         if ((!isCurrentWeek || habit.count >= habit.targetCount) && targetDate === firstSameWeekDay) {
           totalPoints += sign * perDayPoints;
         }
@@ -654,11 +663,16 @@ export const calculatePointsForDate = (
     }
 
     if (habit.scoringType === 'incremental') {
-      // For incremental: points per count
-      totalPoints += sign * habit.count * perDayPoints;
+      // For incremental: points per count. No historical per-day counts are
+      // stored, so a past day counts as a single completion — only "today" is
+      // scored from the live counter (mirrors calculatePointsForDateRange).
+      const completionsOnDate = targetDate === today ? habit.count : 1;
+      totalPoints += sign * completionsOnDate * perDayPoints;
     } else {
-      // For threshold: points only if target met
-      if (habit.count >= habit.targetCount) {
+      // For threshold: points only if target met. The live counter only
+      // describes today — a past day's presence in completedDates already
+      // proves its target was reached (mirrors calculatePointsForDateRange).
+      if (targetDate !== today || habit.count >= habit.targetCount) {
         totalPoints += sign * perDayPoints;
       }
     }
