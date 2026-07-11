@@ -1,4 +1,4 @@
-import { Account, CalendarItem, BudgetBucket, Transaction, INCOME_CATEGORY } from '@/types/schema';
+import { Account, CalendarItem, Transaction, INCOME_CATEGORY } from '@/types/schema';
 import { endOfMonth, parseISO, isAfter, isBefore, addMonths } from 'date-fns';
 import { expandCalendarItems } from '@/utils/calendarRecurrence';
 import { sumMoney, subtractMoney } from '@/utils/money';
@@ -36,111 +36,31 @@ function findNextPaycheckFromExpanded(
 }
 
 /**
- * Minimum number of characters a bucket name must have for name-based matching
- * to be attempted. Short names like "Co" or "Gas" produce too many false positives
- * against unrelated bill titles (e.g. "Bob's Gasoline Station").
- */
-const BUCKET_NAME_MIN_MATCH_LENGTH = 3;
-
-/**
- * Splits a string into lowercase word tokens, stripping punctuation.
- * e.g. "Bob's Gasoline Station" → ["bob", "s", "gasoline", "station"]
- */
-function tokenize(text: string): string[] {
-  return text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(t => t.length > 0);
-}
-
-/**
- * Resolve which budget bucket covers a calendar expense item.
+ * Helper to calculate unpaid bills within a date range.
  *
- * Matching rules (applied in order):
- *  1. EXACT ID MATCH: if the item carries a `bucketId`, compare it directly to
- *     bucket IDs — this is precise and bypasses all name heuristics.
- *  2. WHOLE-WORD NAME MATCH (fallback): the bucket name (normalised to lowercase,
- *     punctuation stripped) must appear as one or more consecutive whole words
- *     inside the bill title's token list.
- *     - Bucket names shorter than BUCKET_NAME_MIN_MATCH_LENGTH characters are
- *       skipped to avoid short tokens ("Co", "Gas") matching unrelated bills.
- *     - Only the bill→bucket direction is checked (bucket name found inside bill
- *       title). The reverse direction (bill title inside bucket name) is dropped
- *       because it is almost always wrong and was the primary source of false
- *       exclusions.
- *
- * Exported as the SINGLE source of truth for bill↔bucket matching: both the
- * safe-to-spend bill exclusion below and payCalendarItem's auto-categorization
- * in FirebaseHouseholdContext use it. The two disagreeing means a bill that
- * safe-to-spend counts as NOT bucket-covered could still be charged against
- * that bucket once paid (double-counting the spend).
- */
-export function resolveBucketForCalendarItem(
-  item: Pick<CalendarItem, 'title' | 'bucketId'>,
-  buckets: BudgetBucket[]
-): BudgetBucket | undefined {
-  // Strategy 1: precise id-based match (no false positives possible).
-  // Loose nullish check: Firestore can surface a cleared bucketId as null,
-  // which must fall through to name matching like an absent field.
-  if (item.bucketId != null) {
-    return buckets.find(b => b.id === item.bucketId);
-  }
-
-  // Strategy 2: whole-word name match
-  const titleTokens = tokenize(item.title);
-
-  return buckets.find(bucket => {
-    const bucketNormalized = bucket.name.toLowerCase().trim();
-    if (bucketNormalized.length < BUCKET_NAME_MIN_MATCH_LENGTH) {
-      // Too short to match reliably — skip.
-      return false;
-    }
-
-    // Tokenize the bucket name so multi-word bucket names (e.g. "Natural Gas")
-    // are matched as a phrase inside the bill title tokens.
-    const bucketTokens = tokenize(bucketNormalized);
-    if (bucketTokens.length === 0) return false;
-
-    // Slide a window of bucketTokens.length over titleTokens and check equality.
-    const windowSize = bucketTokens.length;
-    for (let i = 0; i <= titleTokens.length - windowSize; i++) {
-      const windowMatches = bucketTokens.every((bt, j) => titleTokens[i + j] === bt);
-      if (windowMatches) return true;
-    }
-    return false;
-  });
-}
-
-function isBillCoveredByBucket(item: CalendarItem, buckets: BudgetBucket[]): boolean {
-  return resolveBucketForCalendarItem(item, buckets) !== undefined;
-}
-
-/**
- * Helper to calculate unpaid bills within a date range, excluding bucket-covered items.
+ * Plan 016: buckets and the calendar are separate domains — buckets are a
+ * pure tracking overlay and never reserve against Safe-to-Spend, so EVERY
+ * unpaid bill in range subtracts (no bill↔bucket exclusion). See the drawer at
+ * components/budget/SafeToSpendBreakdownDrawer.tsx for the pool/overlay model.
  *
  * @param expandedItems - Pre-expanded calendar items
  * @param startDate - Start of the range (exclusive)
  * @param endDate - End of the range (inclusive)
- * @param buckets - Budget buckets for exclusion logic
  * @returns Total amount of unpaid bills in range
  */
 function calculateUnpaidBillsInRange(
   expandedItems: CalendarItem[],
   startDate: Date,
-  endDate: Date,
-  buckets: BudgetBucket[]
+  endDate: Date
 ): number {
   const billsInRange = expandedItems.filter(item => {
     const itemDate = parseISO(item.date);
-
-    // Exclude bills covered by buckets to avoid double-counting.
-    // Uses precise id-based matching when available, with whole-word name
-    // matching as a fallback. See isBillCoveredByBucket for full rule details.
-    const coveredByBucket = isBillCoveredByBucket(item, buckets);
 
     return (
       item.type === 'expense' &&
       !item.isPaid &&
       isAfter(itemDate, startDate) && // AFTER start date (exclusive)
-      (isBefore(itemDate, endDate) || itemDate.getTime() === endDate.getTime()) && // Up to range end (inclusive)
-      !coveredByBucket
+      (isBefore(itemDate, endDate) || itemDate.getTime() === endDate.getTime()) // Up to range end (inclusive)
     );
   });
 
@@ -178,20 +98,18 @@ export function findNextPaycheckDate(
  *
  * @param accounts - All household accounts
  * @param allExpandedItems - Pre-expanded calendar items (should cover at least 2 months from currentPeriodId)
- * @param buckets - All budget buckets
  * @param currentPeriodId - Last paycheck date (YYYY-MM-DD)
  * @param transactions - Optional household transactions; pending_review ones are subtracted
  */
 export const calculateSafeToSpendFromExpanded = (
   accounts: Account[],
   allExpandedItems: CalendarItem[],
-  buckets: BudgetBucket[],
   currentPeriodId: string = '',
   transactions: Transaction[] = []
 ): number =>
   // Delegate to the breakdown so the number and its itemization can never
   // diverge — there is exactly one place the formula lives.
-  calculateSafeToSpendBreakdownFromExpanded(accounts, allExpandedItems, buckets, currentPeriodId, transactions)
+  calculateSafeToSpendBreakdownFromExpanded(accounts, allExpandedItems, currentPeriodId, transactions)
     .safeToSpend;
 
 /**
@@ -200,7 +118,7 @@ export const calculateSafeToSpendFromExpanded = (
 export interface SafeToSpendBreakdown {
   /** Sum of checking-account balances (the only funds counted as available). */
   checkingBalance: number;
-  /** Unpaid bills from this paycheck to the next (bucket-covered bills excluded). */
+  /** Unpaid bills from this paycheck to the next (Plan 016: all unpaid bills subtract). */
   unpaidBills: number;
   /**
    * Sum of current-period pending_review *spend* deducted from available funds.
@@ -274,7 +192,6 @@ export const sumPendingSpend = (
 export const calculateSafeToSpendBreakdownFromExpanded = (
   accounts: Account[],
   allExpandedItems: CalendarItem[],
-  buckets: BudgetBucket[],
   currentPeriodId: string = '',
   transactions: Transaction[] = []
 ): SafeToSpendBreakdown => {
@@ -306,7 +223,7 @@ export const calculateSafeToSpendBreakdownFromExpanded = (
   const rangeEndDate = paycheckBDate ? parseISO(paycheckBDate) : endOfMonth(paycheckA);
 
   // 5. Unpaid bills in range (AFTER paycheck A, up to and including range end).
-  const unpaidBills = calculateUnpaidBillsInRange(allExpandedItems, paycheckA, rangeEndDate, buckets);
+  const unpaidBills = calculateUnpaidBillsInRange(allExpandedItems, paycheckA, rangeEndDate);
 
   return {
     checkingBalance,
@@ -325,17 +242,16 @@ export const calculateSafeToSpendBreakdownFromExpanded = (
 export const calculateSafeToSpendBreakdown = (
   accounts: Account[],
   calendarItems: CalendarItem[],
-  buckets: BudgetBucket[],
   currentPeriodId: string = '',
   transactions: Transaction[] = []
 ): SafeToSpendBreakdown => {
   if (!currentPeriodId) {
-    return calculateSafeToSpendBreakdownFromExpanded(accounts, [], buckets, currentPeriodId, transactions);
+    return calculateSafeToSpendBreakdownFromExpanded(accounts, [], currentPeriodId, transactions);
   }
   const paycheckA = parseISO(currentPeriodId);
   const searchWindowEnd = addMonths(paycheckA, 2);
   const allExpandedItems = expandCalendarItems(calendarItems, paycheckA, searchWindowEnd);
-  return calculateSafeToSpendBreakdownFromExpanded(accounts, allExpandedItems, buckets, currentPeriodId, transactions);
+  return calculateSafeToSpendBreakdownFromExpanded(accounts, allExpandedItems, currentPeriodId, transactions);
 };
 
 /**
@@ -346,7 +262,6 @@ export const calculateSafeToSpendBreakdown = (
  *
  * @param accounts - All household accounts
  * @param calendarItems - All calendar items (bills/income)
- * @param buckets - All budget buckets (for bill matching only)
  * @param currentPeriodId - Last paycheck date (YYYY-MM-DD), or empty string to return full checking balance
  * @param transactions - Optional household transactions; pending_review ones are subtracted
  * @returns The safe-to-spend amount
@@ -354,12 +269,11 @@ export const calculateSafeToSpendBreakdown = (
 export const calculateSafeToSpend = (
   accounts: Account[],
   calendarItems: CalendarItem[],
-  buckets: BudgetBucket[],
   currentPeriodId: string = '',
   transactions: Transaction[] = []
 ): number => {
   if (!currentPeriodId) {
-    return calculateSafeToSpendFromExpanded(accounts, [], buckets, currentPeriodId, transactions);
+    return calculateSafeToSpendFromExpanded(accounts, [], currentPeriodId, transactions);
   }
 
   const paycheckA = parseISO(currentPeriodId);
@@ -372,5 +286,5 @@ export const calculateSafeToSpend = (
   const searchWindowEnd = addMonths(paycheckA, 2);
   const allExpandedItems = expandCalendarItems(calendarItems, paycheckA, searchWindowEnd);
 
-  return calculateSafeToSpendFromExpanded(accounts, allExpandedItems, buckets, currentPeriodId, transactions);
+  return calculateSafeToSpendFromExpanded(accounts, allExpandedItems, currentPeriodId, transactions);
 };

@@ -32,7 +32,7 @@ export const WEEKLY_MIN_OCCURRENCES = 4;
  */
 const AMOUNT_STABILITY_RATIO = 1.3;
 
-/** Minimum merchant-name token length considered for the existing-bill exclusion match (mirrors safeToSpendCalculator's bucket↔bill token matching). */
+/** Minimum merchant-name token length considered for the existing-bill exclusion match (below this, only an exact title match counts). */
 const MERCHANT_TOKEN_MIN_MATCH_LENGTH = 3;
 
 export interface DetectedSubscription {
@@ -74,12 +74,11 @@ function tokenSequenceIncluded(needle: string[], haystack: string[]): boolean {
 
 /**
  * Whether `merchant` matches one of the existing calendar-bill titles, using
- * whole-word token-window matching — mirrors `resolveBucketForCalendarItem`'s
- * bucket↔bill approach documented in CLAUDE.md's Safe-to-Spend section, but
- * SYMMETRIC: a bill titled "Netflix" suppresses a detected "Netflix.com
- * Monthly" just as a bill "Netflix Premium Plan" suppresses a detected
- * "Netflix" (whichever token sequence is shorter is looked for inside the
- * other). Merchant names shorter than
+ * whole-word token-window matching. The match is SYMMETRIC: a bill titled
+ * "Netflix" suppresses a detected "Netflix.com Monthly" just as a bill
+ * "Netflix Premium Plan" suppresses a detected "Netflix" (whichever token
+ * sequence is shorter is looked for inside the other). Merchant names shorter
+ * than
  * {@link MERCHANT_TOKEN_MIN_MATCH_LENGTH} chars are skipped (too short to
  * match reliably).
  */

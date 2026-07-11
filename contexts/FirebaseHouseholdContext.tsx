@@ -557,8 +557,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }, [calendarItems, currentPeriodId]);
 
   const safeToSpendBreakdown = useMemo(
-    () => calculateSafeToSpendBreakdownFromExpanded(accounts, expandedCalendarItemsForSafeToSpend, buckets, currentPeriodId, transactions),
-    [accounts, expandedCalendarItemsForSafeToSpend, buckets, currentPeriodId, transactions]
+    () => calculateSafeToSpendBreakdownFromExpanded(accounts, expandedCalendarItemsForSafeToSpend, currentPeriodId, transactions),
+    [accounts, expandedCalendarItemsForSafeToSpend, currentPeriodId, transactions]
   );
   const safeToSpend = safeToSpendBreakdown.safeToSpend;
   const dailyPoints = householdSettings?.points?.daily || 0;
@@ -1498,9 +1498,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   const payCalendarItem = useCallback(async (itemId: string, accountId: string, opts?: MutationOpts) => {
     await makePayCalendarItem({
-      db, householdId, user, accounts, calendarItems, buckets, householdSettings, handlePaycheckApproval,
+      db, householdId, user, accounts, calendarItems, householdSettings, handlePaycheckApproval,
     }).payCalendarItem(itemId, accountId, opts);
-  }, [householdId, user, accounts, calendarItems, buckets, householdSettings, handlePaycheckApproval]);
+  }, [householdId, user, accounts, calendarItems, householdSettings, handlePaycheckApproval]);
 
   const deferCalendarItem = useCallback(async (itemId: string, opts?: MutationOpts) => {
     await makeDeferCalendarItem({ db, householdId, user, calendarItems }).deferCalendarItem(itemId, opts);

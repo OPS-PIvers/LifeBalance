@@ -53,7 +53,6 @@ describe('MockHouseholdContext finance slice parity', () => {
     const expected = calculateSafeToSpendBreakdown(
       finance.accounts,
       finance.calendarItems,
-      finance.buckets,
       finance.currentPeriodId,
       finance.transactions
     );

@@ -2035,7 +2035,7 @@ describe('FirebaseHouseholdContext — payCalendarItem bucket auto-categorizatio
     expect(paidTxCategory()).toBe('Budgeted in Calendar');
   });
 
-  it('categorizes a whole-word match ("Gas Bill") under the "Gas" bucket', async () => {
+  it('Plan 016: a paid bill whose title matches a bucket name still gets "Budgeted in Calendar" (buckets are a separate domain)', async () => {
     renderProvider();
     seed({
       id: 'cal1', title: 'Gas Bill', amount: 8000, date: '2026-06-10',
@@ -2046,10 +2046,10 @@ describe('FirebaseHouseholdContext — payCalendarItem bucket auto-categorizatio
       await captured.value!.finance.payCalendarItem('cal1', 'acc1');
     });
 
-    expect(paidTxCategory()).toBe('Gas');
+    expect(paidTxCategory()).toBe('Budgeted in Calendar');
   });
 
-  it('honors an exact bucketId over any name heuristic', async () => {
+  it('Plan 016: a paid bill carrying an explicit bucketId still gets "Budgeted in Calendar"', async () => {
     renderProvider();
     seed({
       id: 'cal1', title: 'Some Utility', amount: 8000, date: '2026-06-10',
@@ -2060,7 +2060,7 @@ describe('FirebaseHouseholdContext — payCalendarItem bucket auto-categorizatio
       await captured.value!.finance.payCalendarItem('cal1', 'acc1');
     });
 
-    expect(paidTxCategory()).toBe('Gas');
+    expect(paidTxCategory()).toBe('Budgeted in Calendar');
   });
 });
 

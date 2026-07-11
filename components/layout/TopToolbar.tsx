@@ -27,6 +27,12 @@ const FeedbackModal = React.lazy(loadFeedbackModal);
 const loadSearchOverlay = () => import('@/components/search/SearchOverlay');
 const SearchOverlay = React.lazy(loadSearchOverlay);
 
+// Plan 016: the Safe-to-Spend figure opens a breakdown drawer (pool + bucket-
+// tracking overlay) instead of deep-linking to Money → Overview. Lazy for the
+// same boot-bundle reason as the modals above (Drawer/framer-motion off boot).
+const loadSafeToSpendBreakdownDrawer = () => import('@/components/budget/SafeToSpendBreakdownDrawer');
+const SafeToSpendBreakdownDrawer = React.lazy(loadSafeToSpendBreakdownDrawer);
+
 const TopToolbar: React.FC = () => {
   const { safeToSpendBreakdown } = useFinance();
   // Fall back to 0 while the breakdown hasn't been computed yet (matches the
@@ -48,9 +54,11 @@ const TopToolbar: React.FC = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [stsOpen, setStsOpen] = useState(false);
 
   useEffect(() => preloadOnIdle(loadFeedbackModal), []);
   useEffect(() => preloadOnIdle(loadSearchOverlay), []);
+  useEffect(() => preloadOnIdle(loadSafeToSpendBreakdownDrawer), []);
 
   // Cmd/Ctrl+K opens search — a lightweight keydown listener only; no slice
   // consumption is added here (SearchOverlay owns its own data).
@@ -79,7 +87,7 @@ const TopToolbar: React.FC = () => {
               type="button"
               aria-label="View Safe to Spend details"
               className="flex flex-col text-left cursor-pointer active:opacity-80 transition-opacity focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-400 focus-visible:rounded-lg"
-              onClick={() => navigate('/budget', { state: { tab: 'overview' } })}
+              onClick={() => setStsOpen(true)}
             >
               <span
                 className={`text-2xl font-mono font-bold tracking-tight tabular-nums ${isPositive ? 'text-money-pos dark:text-money-posDark' : 'text-money-neg dark:text-money-negDark'}`}
@@ -184,6 +192,10 @@ const TopToolbar: React.FC = () => {
 
       <LazyMount when={isSearchOpen}>
         <SearchOverlay isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+      </LazyMount>
+
+      <LazyMount when={stsOpen}>
+        <SafeToSpendBreakdownDrawer open={stsOpen} onClose={() => setStsOpen(false)} />
       </LazyMount>
     </>
   );
