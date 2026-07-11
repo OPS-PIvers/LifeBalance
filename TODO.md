@@ -44,19 +44,19 @@ human-watched PR (tagged **[rules]** / **[index]**).
 ### 2A. Performance & scale (the pre-monetization cost items)
 
 - [ ] **Bound the 3 unbounded Firestore listeners** — the biggest cold-start-cost item.
-  - **groceryCatalog** (`contexts/household/listeners/shoppingListeners.ts:41`): `orderBy('purchaseCount','desc') limit(200)` + converter default + on-demand full-catalog fallback for shopping-form search. **S / LOW.**
-  - **meals** (`contexts/household/listeners/mealListeners.ts:35`): `orderBy('lastCooked'/'createdAt') limit(50)` + `loadAllMeals()` for the cookbook + by-id resolution for `mealPlan`-referenced meals outside the window. **M / MED.**
+  - [x] **groceryCatalog** (`contexts/household/listeners/shoppingListeners.ts:41`): `orderBy('purchaseCount','desc') limit(200)` + converter default + on-demand full-catalog fallback for shopping-form search. **S / LOW.** ✅ 2026-07-11: bounded, with `loadFullGroceryCatalog()` on the shopping slice for Smart Add / template picker / catalog modal.
+  - [x] **meals** (`contexts/household/listeners/mealListeners.ts:35`): `orderBy('lastCooked'/'createdAt') limit(50)` + `loadAllMeals()` for the cookbook + by-id resolution for `mealPlan`-referenced meals outside the window. **M / MED.** ✅ 2026-07-11: bounded on `createdAt` (always written; `lastCooked` is sparse and orderBy drops docs missing the field), with `loadAllMeals()` + by-id resolution for plan references outside the window. Note: SearchOverlay now searches the bounded meals/catalog windows until a loader has run.
   - **calendarItems** (`contexts/household/listeners/financeListeners.ts:105`): split into an *unbounded recurring-templates* listener + a *date-windowed instances* listener. **[index]** ships first (composite index, human watches it reach *Enabled*), then the query change; verify Safe-to-Spend + upcoming-bills values are unchanged. **L / HIGH.**
-- [ ] **quickAddHabit: kill the full-collection scan** (`functions/src/quickAdd/index.ts:185-191`). Add denormalized `titleLower` on habit docs (written in client `addHabit`/`updateHabit` + any server writer), ship a one-off backfill migration **first**, then `where('titleLower','==',…) limit(1)` before the existing fuzzy fallback. **S each / LOW.**
-- [ ] **BudgetCalendar: dedupe `expandCalendarItems`** (`components/budget/BudgetCalendar.tsx:120`). Window-keyed memo cache so the month window isn't re-expanded independently of the Safe-to-Spend memo. Pure perf hygiene, identical output. **S / LOW.**
-- [ ] **`sendbudgetalerts` N+1**: parallelize/reduce the members+accounts reads fired on every account write. **S / LOW.**
+- [x] **quickAddHabit: kill the full-collection scan** (`functions/src/quickAdd/index.ts:185-191`). Add denormalized `titleLower` on habit docs (written in client `addHabit`/`updateHabit` + any server writer), ship a one-off backfill migration **first**, then `where('titleLower','==',…) limit(1)` before the existing fuzzy fallback. **S each / LOW.** ✅ 2026-07-11: shipped (run-once client backfill migration + indexed exact-match query; fuzzy full-scan kept as fallback for un-backfilled docs).
+- [x] **BudgetCalendar: dedupe `expandCalendarItems`** (`components/budget/BudgetCalendar.tsx:120`). Window-keyed memo cache so the month window isn't re-expanded independently of the Safe-to-Spend memo. Pure perf hygiene, identical output. **S / LOW.** ✅ 2026-07-11: now uses the shared `useExpandedCalendarItems(start, end)` hook.
+- [x] **`sendbudgetalerts` N+1**: parallelize/reduce the members+accounts reads fired on every account write. **S / LOW.** ✅ 2026-07-11: reads now issued via `Promise.all`.
 - [ ] **Merge the 4 hourly notification crons into one dispatcher** (`functions/src/index.ts` `sendhabitreminders`/`sendactionqueuereminders`/`sendstreakwarnings`/`sendbillreminders`). The full-collection-*scan* cost is already fixed (plan-06 collection-group query); this is the remaining invocation-count reduction. **M / LOW-MED.**
 
 ### 2B. Security hardening (2026-06 audit, re-verified 2026-07-10 — still open)
 
-- [ ] **SEC-04 — quickAdd rate-limiter fails OPEN.** `functions/src/quickAdd/apiKeyValidation.ts` returns `{allowed:true}` on a Firestore error; make it fail closed. **S / LOW-MED.**
-- [ ] **SEC-05 — quickAdd CORS is `Access-Control-Allow-Origin: *`** on 5 `onRequest` endpoints. Restrict to an allowlist after confirming iOS Shortcuts sends no `Origin` header. **S / LOW.**
-- [ ] **SEC-11 — quickAdd 404 echoes user input** (`functions/src/quickAdd/index.ts:198`, `Habit not found: ${…}`). Stop reflecting it. **S / LOW.**
+- [x] **SEC-04 — quickAdd rate-limiter fails OPEN.** `functions/src/quickAdd/apiKeyValidation.ts` returns `{allowed:true}` on a Firestore error; make it fail closed. **S / LOW-MED.** ❌ 2026-07-11: stale finding — `checkRateLimit()` already fails CLOSED on error, with an existing test covering the path. No change needed.
+- [x] **SEC-05 — quickAdd CORS is `Access-Control-Allow-Origin: *`** on 5 `onRequest` endpoints. Restrict to an allowlist after confirming iOS Shortcuts sends no `Origin` header. **S / LOW.** ✅ 2026-07-11: allowlisted to the two Firebase-default hosting origins (no custom domain configured); Origin-less callers (iOS Shortcuts/curl) unaffected. If a custom domain is added later, append it to `ALLOWED_ORIGINS` in `functions/src/quickAdd/index.ts`.
+- [x] **SEC-11 — quickAdd 404 echoes user input** (`functions/src/quickAdd/index.ts:198`, `Habit not found: ${…}`). Stop reflecting it. **S / LOW.** ✅ 2026-07-11: generic message, no reflection.
 - [ ] **[rules] SEC-06 — missing audit-log rule.** Add an explicit `firestore.rules` match for `logs/api_calls/requests` (only `logs/ai_usage/requests` is covered). **S / LOW.**
 - [ ] **[rules] SEC-10 — catch-all subcollection write rule** (`firestore.rules` ~907-912) is exclusion-list-permits. Change to deny-by-default after grepping every `.collection()` usage so nothing untracked breaks. **S / LOW-MED.**
 - [ ] **[rules] Sub-bucket field cleanup.** Drop the now-dead `subBucketId` / `subBuckets` references from `firestore.rules` (~389, 482, 497, 506) — the app code for sub-buckets was removed; rules just permit an unused field. Bundle with the next rules PR. **S / LOW.**
@@ -76,19 +76,19 @@ human-watched PR (tagged **[rules]** / **[index]**).
 
 ### 2D. Tooling / deps
 
-- [ ] Add pnpm overrides: `basic-ftp >=5.2.0` (firebase-tools path-traversal), `minimatch >=3.1.3` (eslint ReDoS). Dev-chain only. **S / LOW.**
-- [ ] Bump `functions/package.json` TypeScript `^5.9.3` → root `^6.0.x`; fix any newly-surfaced type errors. **S / MED.**
-- [ ] Add an explicit `pnpm --filter functions run test` step to `ci.yml` + `deploy.yml` (+ a real `test` script in `functions/package.json`) — functions tests currently run only via implicit root-vitest glob pickup. **S / LOW.**
-- [ ] Split the atomic `firebase deploy` in `deploy.yml` into ordered `--only` steps (rules → functions → hosting) and/or add a PR preview channel, to shrink blast radius. **M / LOW.**
-- [ ] Add coverage-threshold floors for `contexts/**` and `services/**` in `vite.config.ts` (only `utils/**` is gated today). **S / LOW.**
+- [x] Add pnpm overrides: `basic-ftp >=5.2.0` (firebase-tools path-traversal), `minimatch >=3.1.3` (eslint ReDoS). Dev-chain only. **S / LOW.** ✅ 2026-07-11.
+- [x] Bump `functions/package.json` TypeScript `^5.9.3` → root `^6.0.x`; fix any newly-surfaced type errors. **S / MED.** ✅ 2026-07-11: bumped to `^6.0.3`; no new type errors.
+- [x] Add an explicit `pnpm --filter functions run test` step to `ci.yml` + `deploy.yml` (+ a real `test` script in `functions/package.json`) — functions tests currently run only via implicit root-vitest glob pickup. **S / LOW.** ✅ 2026-07-11.
+- [x] Split the atomic `firebase deploy` in `deploy.yml` into ordered `--only` steps (rules → functions → hosting) and/or add a PR preview channel, to shrink blast radius. **M / LOW.** ✅ 2026-07-11: ordered `--only` steps (rules → functions → hosting); PR preview channel not added.
+- [x] Add coverage-threshold floors for `contexts/**` and `services/**` in `vite.config.ts` (only `utils/**` is gated today). **S / LOW.** ✅ 2026-07-11: floors set ~5 points below then-current coverage.
 
 ### 2E. UX / product polish (small, code-only)
 
-- [ ] **Empty-state CTAs:** `DailyHabitsWidget` (and similar dashboard widgets) `return null` when empty — show an add-first CTA instead. **S / LOW.**
-- [ ] **Global search v1.1:** deep-link/highlight to the specific result item instead of just its containing tab; add a `SearchOverlay` component test. **M+S / LOW.**
-- [ ] **HabitSubmission history/stats view** — the data is already captured (`schema.ts:180`: `pointsEarned`/`streakDaysAtTime`/`multiplierApplied`); no reader UI exists. **S / LOW.**
-- [ ] **ShoppingListTab** mirrored-state-in-effect → derived `useMemo` (lint no longer fires, so this is optional cleanup). **M / LOW.**
-- [ ] **Finish the `useHousehold()` migration** — ~7 shim consumers remain; move them to narrow domain slices. **S each / LOW.**
+- [x] **Empty-state CTAs:** `DailyHabitsWidget` (and similar dashboard widgets) `return null` when empty — show an add-first CTA instead. **S / LOW.** ✅ 2026-07-11: `DailyHabitsWidget` + `MoneyPulseWidget` (the two true first-run cases) now show a compact `EmptyState` + CTA; the other null-returning widgets are period-scoped or intentionally dormant, left as-is.
+- [x] **Global search v1.1:** deep-link/highlight to the specific result item instead of just its containing tab; add a `SearchOverlay` component test. **M+S / LOW.** ✅ 2026-07-11: scroll-to + transient flash-highlight wired for transactions (Budget → Transactions) and habits (Track tab), reduced-motion-safe; meals/todos/shopping still deep-link to their tab only (their sectioned/paginated layouts need a follow-up). SearchOverlay tests extended.
+- [x] **HabitSubmission history/stats view** — the data is already captured (`schema.ts:180`: `pointsEarned`/`streakDaysAtTime`/`multiplierApplied`); no reader UI exists. **S / LOW.** ❌ 2026-07-11: stale — `HabitSubmissionLogModal` (Log/Stats/Calendar tabs) already exists and is wired from `HabitCard`.
+- [x] **ShoppingListTab** mirrored-state-in-effect → derived `useMemo` (lint no longer fires, so this is optional cleanup). **M / LOW.** ❌ 2026-07-11: won't-fix — the mirrored state is load-bearing for `Reorder.Group` drag gestures (local mutation gated by `isDraggingRef` before committing via `reorderShoppingItems`); a derived `useMemo` would break mid-drag reordering.
+- [x] **Finish the `useHousehold()` migration** — ~7 shim consumers remain; move them to narrow domain slices. **S each / LOW.** ❌ 2026-07-11: stale — zero production consumers remain; only test-file mocks reference the shim.
 
 ---
 
