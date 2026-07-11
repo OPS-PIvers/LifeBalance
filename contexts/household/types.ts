@@ -112,6 +112,10 @@ export interface HouseholdContextType {
   loadOlderCompletedTodos: () => Promise<void>;
   /** Ensure the meal-plan entries for the week containing `date` are loaded. */
   ensureMealPlanWeek: (date: Date) => Promise<void>;
+  /** Fetch every meal beyond the bounded live window (cookbook view). Idempotent per household. */
+  loadAllMeals: () => Promise<void>;
+  /** Fetch the full grocery catalog beyond the bounded live window (shopping-form search fallback). Idempotent per household. */
+  loadFullGroceryCatalog: () => Promise<void>;
 
   // Natural Language Processing
   pendingItemsCount: number;
@@ -381,13 +385,13 @@ export type GamificationContextValue = Pick<HouseholdContextType,
 >;
 
 export type MealPlanContextValue = Pick<HouseholdContextType,
-  | 'meals' | 'mealPlan' | 'ensureMealPlanWeek'
+  | 'meals' | 'mealPlan' | 'ensureMealPlanWeek' | 'loadAllMeals'
   | 'addMeal' | 'updateMeal' | 'deleteMeal'
   | 'addMealPlanItem' | 'updateMealPlanItem' | 'deleteMealPlanItem'
 >;
 
 export type ShoppingContextValue = Pick<HouseholdContextType,
-  | 'shoppingList' | 'groceryCatalog' | 'stores' | 'groceryCategories' | 'quickStockLists'
+  | 'shoppingList' | 'groceryCatalog' | 'loadFullGroceryCatalog' | 'stores' | 'groceryCategories' | 'quickStockLists'
   | 'addShoppingItem' | 'addShoppingItems' | 'updateShoppingItem' | 'reorderShoppingItems'
   | 'deleteShoppingItem' | 'toggleShoppingItemPurchased' | 'clearPurchasedShoppingItems'
   | 'addStore' | 'updateStore' | 'deleteStore' | 'updateGroceryCategories'

@@ -26,6 +26,7 @@ const mockHousehold = {
     }
   ],
   shoppingList: [] as unknown[],
+  loadFullGroceryCatalog: vi.fn(async () => {}),
   addShoppingItem: vi.fn(),
   updateGroceryCatalogItem: vi.fn(),
   deleteGroceryCatalogItem: vi.fn()

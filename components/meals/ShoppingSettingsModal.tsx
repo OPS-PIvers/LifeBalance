@@ -26,6 +26,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
     groceryCategories,
     updateGroceryCategories,
     groceryCatalog,
+    loadFullGroceryCatalog,
     quickStockLists,
     addQuickStockList,
     updateQuickStockList,
@@ -46,6 +47,12 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
   // Template Form State
   const [editingTemplate, setEditingTemplate] = useState<Partial<QuickStockList> | null>(null);
   const [itemSearch, setItemSearch] = useState('');
+  // The live grocery-catalog listener is bounded (top items by purchaseCount);
+  // the template item picker searches the FULL catalog, so lazily pull in the
+  // rest on the first keystroke (idempotent per household).
+  useEffect(() => {
+    if (itemSearch.trim()) void loadFullGroceryCatalog();
+  }, [itemSearch, loadFullGroceryCatalog]);
 
   // Store Form State
   const [newStoreName, setNewStoreName] = useState('');

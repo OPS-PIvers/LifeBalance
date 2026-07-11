@@ -62,6 +62,7 @@ const MealPlanTab: React.FC = () => {
     updateMealPlanItem,
     deleteMealPlanItem,
     ensureMealPlanWeek,
+    loadAllMeals,
   } = useMealPlan();
   const {
     addShoppingItems,
@@ -569,7 +570,12 @@ const MealPlanTab: React.FC = () => {
 
   // Stable modal-open handlers passed to AddMealModal so they don't recreate each
   // render (keeps the prop identity stable for child memoization).
-  const handleOpenCookbook = useCallback(() => setIsPreviousMealsModalOpen(true), []);
+  const handleOpenCookbook = useCallback(() => {
+    // The live meals listener is bounded (MEALS_LIMIT); the cookbook shows the
+    // whole collection, so pull in the rest on demand (idempotent).
+    void loadAllMeals();
+    setIsPreviousMealsModalOpen(true);
+  }, [loadAllMeals]);
   const handleOpenAI = useCallback(() => setIsAIModalOpen(true), []);
   const handleOpenImport = useCallback(() => setIsImportModalOpen(true), []);
 

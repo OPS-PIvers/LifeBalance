@@ -3,10 +3,13 @@ import {
   query,
   onSnapshot,
   where,
+  orderBy,
+  limit,
   type Firestore,
   type Unsubscribe,
 } from 'firebase/firestore';
 import { mealConverter, mealPlanItemConverter } from '@/utils/firestoreConverters';
+import { MEALS_LIMIT } from '@/utils/listenerWindows';
 import { Meal, MealPlanItem } from '@/types/schema';
 
 /**
@@ -20,22 +23,34 @@ export function attachMealListeners({
   db,
   householdId,
   mealPlanRange,
-  setMeals,
+  setMealsWindow,
   setMealPlanWindow,
 }: {
   db: Firestore;
   householdId: string;
   mealPlanRange: { start: string; end: string };
-  setMeals: (meals: Meal[]) => void;
+  setMealsWindow: (meals: Meal[]) => void;
   setMealPlanWindow: (items: MealPlanItem[]) => void;
 }): Unsubscribe[] {
   const unsubscribers: Unsubscribe[] = [];
 
-  // Meals listener
-  const mealsQuery = query(collection(db, `households/${householdId}/meals`).withConverter(mealConverter));
+  // Meals listener — bounded to the most recently created recipes so the cold
+  // load doesn't scale with the cookbook's lifetime size. Ordered by
+  // `createdAt` (always written by addMeal) rather than the sparse `lastCooked`
+  // — Firestore drops docs missing the orderBy field, so ordering by the
+  // reliably-present field loses the fewest recipes. Legacy pre-`createdAt`
+  // meals fall outside the window; they — and anything past the limit — remain
+  // reachable via `loadAllMeals()` (cookbook view) and the by-id resolution of
+  // meals referenced by mealPlan entries. Single-field orderBy: no composite
+  // index needed.
+  const mealsQuery = query(
+    collection(db, `households/${householdId}/meals`).withConverter(mealConverter),
+    orderBy('createdAt', 'desc'),
+    limit(MEALS_LIMIT)
+  );
   unsubscribers.push(
     onSnapshot(mealsQuery, (snapshot) => {
-      setMeals(snapshot.docs.map(doc => doc.data()));
+      setMealsWindow(snapshot.docs.map(doc => doc.data()));
     }, (error) => {
       console.error('[meals] listener failed:', error);
     })

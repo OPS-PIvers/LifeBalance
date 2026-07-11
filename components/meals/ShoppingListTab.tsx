@@ -88,6 +88,7 @@ const ShoppingListTab: React.FC = () => {
     stores,
     groceryCategories,
     groceryCatalog,
+    loadFullGroceryCatalog,
     quickStockLists,
     addGroceryCatalogItem,
     updateQuickStockLists,
@@ -172,6 +173,12 @@ const ShoppingListTab: React.FC = () => {
 
   // Input State
   const [newItemText, setNewItemText] = useState('');
+  // The live grocery-catalog listener is bounded (top items by purchaseCount).
+  // Smart Add matches typed names against the FULL catalog, so lazily pull in
+  // the rest on the first keystroke (idempotent per household).
+  useEffect(() => {
+    if (newItemText.trim()) void loadFullGroceryCatalog();
+  }, [newItemText, loadFullGroceryCatalog]);
   // Focus the quick-add field on desktop only. On touch devices this would pop
   // the iOS keyboard every time the tab/page mounts (this component is shared by
   // the Lists "Shopping" tab, the Meals "Shopping List" tab, and the standalone

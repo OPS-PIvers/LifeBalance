@@ -253,7 +253,9 @@ export const groceryCatalogItemConverter: FirestoreDataConverter<GroceryCatalogI
     return omitKey(item, 'id');
   },
   fromFirestore(snapshot: QueryDocumentSnapshot): GroceryCatalogItem {
-    return { ...snapshot.data(), id: snapshot.id } as GroceryCatalogItem;
+    // Default `purchaseCount` for legacy docs written before the field was
+    // required — the bounded catalog listener orders by it.
+    return { purchaseCount: 0, ...snapshot.data(), id: snapshot.id } as GroceryCatalogItem;
   },
 };
 
