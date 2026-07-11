@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Award, Edit2, Minus, Plus } from 'lucide-react';
 import { Habit } from '@/types/schema';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { streakForHabit, streakEndingOnForHabit, getMultiplier } from '@/utils/habitLogic';
+import { streakForHabit, streakEndingOnForHabit, getMultiplier, signedHabitPoints } from '@/utils/habitLogic';
 import { format, startOfWeek, eachDayOfInterval } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import toast from 'react-hot-toast';
@@ -56,13 +56,13 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
           if (habit.count === 0) return null; // Should have count if completed today
 
           if (habit.scoringType === 'incremental') {
-            points = habit.count * Math.floor(habit.basePoints * multiplier);
+            points = habit.count * signedHabitPoints(habit, multiplier);
             details = `${habit.count} times`;
             relevantCount = habit.count;
           } else {
             // Threshold
             if (habit.count >= habit.targetCount) {
-              points = Math.floor(habit.basePoints * multiplier);
+              points = signedHabitPoints(habit, multiplier);
               details = 'Completed';
               relevantCount = 1;
             } else {
@@ -87,10 +87,10 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
                     totalUnits += 1;
                 }
              }
-             points = totalUnits * Math.floor(habit.basePoints * multiplier);
+             points = totalUnits * signedHabitPoints(habit, multiplier);
              details = `${totalUnits} units over ${relevantDates.length} days`;
           } else {
-             points = relevantDates.length * Math.floor(habit.basePoints * multiplier);
+             points = relevantDates.length * signedHabitPoints(habit, multiplier);
              details = `${relevantDates.length} days completed`;
           }
         } else {
@@ -102,7 +102,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
           // We don't store per-habit total points, only household total.
           // So we display totalCount (lifetime completions/units) and calculate base points earned.
           // Note: Actual points earned historically may differ due to streaks/multipliers.
-          points = habit.totalCount * Math.floor(habit.basePoints);
+          points = habit.totalCount * signedHabitPoints(habit);
           details = `${habit.totalCount} total`;
         }
 
@@ -190,7 +190,9 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
         dateStr,
     );
     const multiplier = getMultiplier(dayStreak, habit.type === 'positive', habit.period);
-    const pointsPerCompletion = Math.floor(habit.basePoints * multiplier);
+    // Signed: restoring a negative habit's date must DEBIT points (and removing
+    // one must credit them back) — raw basePoints credited them instead.
+    const pointsPerCompletion = signedHabitPoints(habit, multiplier);
 
     // Determine points change
     let pointsChange = 0;

@@ -61,6 +61,7 @@ import { migrateBucketsToPeriods, needsMigration, migrateToPaycheckPeriods, need
 import { migrateOrphanedHabits, needsHabitMigration } from '@/utils/migrations/habitMigration';
 import { backfillTitleLower, needsTitleLowerMigration } from '@/utils/migrations/titleLowerMigration';
 import { migrateDuplicateMeals, needsMealDedup } from '@/utils/migrations/mealDedupMigration';
+import { repairNegativePointsCorruption, needsNegativePointsRepair } from '@/utils/migrations/negativePointsRepair';
 import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
 import { usePointsSync, type PointsSyncUpdate } from '@/hooks/usePointsSync';
 import { useHabitActions } from '@/hooks/useHabitActions';
@@ -1428,6 +1429,26 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     runTitleLowerMigration();
   }, [householdId, habits]);
+
+  // One-time repair of the negative-habit submission sign bug (wrongly-awarded
+  // points from back-dated logs). Marker-gated via
+  // Household.negativePointsRepairedAt; keyed on the household id so switching
+  // households still gets its own pass.
+  const attemptedNegativePointsRepairFor = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!householdId || !householdSettings || !habits.length) return;
+    if (attemptedNegativePointsRepairFor.current === householdId) return;
+
+    if (needsNegativePointsRepair(householdSettings, habits)) {
+      // Mark as attempted before running to prevent race conditions/loops
+      attemptedNegativePointsRepairFor.current = householdId;
+      console.log('[Migration] Starting negative-points repair...');
+      // Errors are caught and logged inside repairNegativePointsCorruption;
+      // the marker is only written on success, so a failed run retries next session.
+      repairNegativePointsCorruption(householdId, habits);
+    }
+  }, [householdId, householdSettings, habits]);
 
   // Merge duplicate recipes (same name up to case/spacing/punctuation) —
   // owner-approved cleanup; run-once guarded per household (keyed on the id,

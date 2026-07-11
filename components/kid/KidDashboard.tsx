@@ -5,6 +5,7 @@ import { useHouseholdCore, useGamification, useFinance } from '@/contexts/Fireba
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { signedHabitPoints } from '@/utils/habitLogic';
 import { calculateChallengeProgress } from '@/utils/challengeCalculator';
 import { verifyKidPin } from '@/utils/kidPin';
 import ProgressBar from '@/components/ui/ProgressBar';
@@ -342,7 +343,7 @@ const KidDashboard: React.FC = () => {
                         >
                           <span className="inline-flex items-center gap-1">
                             <Star className="h-3.5 w-3.5 fill-current" />
-                            {h.basePoints} pts
+                            {signedHabitPoints(h)} pts
                           </span>
                           {h.streakDays > 0 && (
                             <span className="inline-flex items-center gap-1">

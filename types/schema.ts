@@ -656,6 +656,13 @@ export interface Household {
   // Never log this value — it grants read access to the household's bills.
   calendarFeedToken?: string;
 
+  // One-time repair marker (utils/migrations/negativePointsRepair.ts): ISO
+  // timestamp written after the client fixes wrongly-signed pointsEarned on
+  // negative-habit submissions and corrects the points triple. Its presence
+  // stops the repair from ever running again (submissions have no standing
+  // listener, so the needs-check can't be derived from in-memory data).
+  negativePointsRepairedAt?: string;
+
   // Legacy fields for migration support
   startDate?: string; // YYYY-MM-DD format - deprecated, use lastPaycheckDate
   payPeriodSettings?: { startDate: string }; // Deprecated, use lastPaycheckDate

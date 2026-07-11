@@ -1,28 +1,36 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import HabitHistoryCalendar from './HabitHistoryCalendar';
-import { Habit } from '@/types/schema';
+import { Habit, HabitSubmission } from '@/types/schema';
 
-// Mock Lucide icons
+// Mock Lucide icons (calendar chrome + DayHabitEditor row icons)
 vi.mock('lucide-react', () => ({
   ChevronLeft: () => <span data-testid="icon-chevron-left" />,
   ChevronRight: () => <span data-testid="icon-chevron-right" />,
-  CheckCircle2: () => <span data-testid="icon-check-circle" />,
-  Flame: () => <span data-testid="icon-flame" />,
-  Calendar: () => <span data-testid="icon-calendar" />,
-  Loader2: () => <span data-testid="icon-loader" />,
   Snowflake: () => <span data-testid="icon-snowflake" />,
+  CalendarDays: () => <span data-testid="icon-calendar-days" />,
+  Plus: () => <span data-testid="icon-plus" />,
+  Star: () => <span data-testid="icon-star" />,
+  X: () => <span data-testid="icon-x" />,
 }));
 
-// Mock the context
-// Using a hoisted mock object for flexibility
+vi.mock('@/services/analytics', () => ({ track: vi.fn() }));
+
+const mockAddHabitSubmission = vi.fn().mockResolvedValue(undefined);
+const mockResetHabitDay = vi.fn().mockResolvedValue(undefined);
+const mockGetHabitSubmissions = vi.fn(async (): Promise<HabitSubmission[]> => []);
+
+// Mock the context — HabitHistoryCalendar + DayHabitEditor + useHabitCalendarData
+// all read useGamification; alias every hook to one fn.
 const mockContextValue = {
   habits: [] as Habit[],
+  addHabitSubmission: mockAddHabitSubmission,
+  resetHabitDay: mockResetHabitDay,
+  getHabitSubmissions: mockGetHabitSubmissions,
 };
 
 vi.mock('@/contexts/FirebaseHouseholdContext', () => {
-  // HabitHistoryCalendar reads useGamification; alias every hook to one fn.
   const value = vi.fn(() => mockContextValue);
   return {
     useHousehold: value,
@@ -72,12 +80,18 @@ describe('HabitHistoryCalendar', () => {
 
   beforeEach(() => {
     // Only fake Date, leave setTimeout/interval real for userEvent
-    // This prevents userEvent.click() from hanging/timing out
+    // This prevents userEvent.click() from hanging/timing out.
+    // Jan 17 makes the fixture's Jan 15/16 completions PAST days — the grid
+    // disables future days, so "today" must sit after every fixture date.
     vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date('2024-01-15T12:00:00Z'));
+    vi.setSystemTime(new Date('2024-01-17T12:00:00Z'));
 
     // Reset mock data
     mockContextValue.habits = [...mockHabits];
+    mockAddHabitSubmission.mockClear();
+    mockResetHabitDay.mockClear();
+    mockGetHabitSubmissions.mockClear();
+    mockGetHabitSubmissions.mockImplementation(async () => []);
   });
 
   afterEach(() => {
@@ -94,57 +108,83 @@ describe('HabitHistoryCalendar', () => {
     const user = userEvent.setup();
     render(<HabitHistoryCalendar />);
 
-    // Check initial state
     expect(screen.getByText('January 2024')).toBeInTheDocument();
 
-    // Go to previous month
-    const prevButton = screen.getByLabelText('Previous month');
-    await user.click(prevButton);
+    await user.click(screen.getByLabelText('Previous month'));
     expect(screen.getByText('December 2023')).toBeInTheDocument();
 
-    // Go back to January
-    const nextButton = screen.getByLabelText('Next month');
-    await user.click(nextButton);
+    await user.click(screen.getByLabelText('Next month'));
     expect(screen.getByText('January 2024')).toBeInTheDocument();
   });
 
-  it('displays habit completions summary when a date is selected', () => {
+  it('shows signed net points on day cells (green positive)', () => {
+    // Jan 15: Workout (+10, streak 1) + Read (+5) = +15; Jan 16: Workout with
+    // a 2-day streak (< the 3-day 1.5x tier) = +10.
     render(<HabitHistoryCalendar />);
 
-    // Initial state should be selected date (today = Jan 15)
-    expect(screen.getByText('January 15 summary')).toBeInTheDocument();
-    expect(screen.getByText('2 completed')).toBeInTheDocument();
-    expect(screen.getByText('Workout')).toBeInTheDocument();
-    expect(screen.getByText('Read')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Jan 15: \+15 points/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Jan 16: \+10 points/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Jan 10: 0 points/ })).toBeInTheDocument();
   });
 
-  it('updates summary when a different date is clicked', async () => {
+  it('shows NEGATIVE net points for negative habits, whichever sign basePoints was stored with', () => {
+    mockContextValue.habits = [
+      // HabitFormModal convention: positive basePoints + type negative
+      { ...mockHabits[0]!, id: 'neg-1', title: 'Skip workout', type: 'negative', basePoints: 2, completedDates: ['2024-01-15'] },
+      // HabitCreatorWizard convention: negative basePoints + type negative
+      { ...mockHabits[1]!, id: 'neg-2', title: 'Late snack', type: 'negative', basePoints: -3, completedDates: ['2024-01-15'] },
+    ];
+    render(<HabitHistoryCalendar />);
+
+    expect(screen.getByRole('button', { name: /Jan 15: -5 points/ })).toBeInTheDocument();
+    // Row labels are signed too
+    expect(screen.getByText('-2 pts')).toBeInTheDocument();
+    expect(screen.getByText('-3 pts')).toBeInTheDocument();
+  });
+
+  it('prefers stored submission totals for a day over the derived attribution', async () => {
+    mockContextValue.habits = [
+      { ...mockHabits[0]!, hasSubmissionTracking: true, completedDates: ['2024-01-10'] },
+    ];
+    mockGetHabitSubmissions.mockImplementation(async () => ([
+      {
+        id: 's1', habitId: 'habit-1', habitTitle: 'Workout',
+        timestamp: '2024-01-10T12:00:00', date: '2024-01-10',
+        count: 3, pointsEarned: 30, streakDaysAtTime: 1, multiplierApplied: 1,
+        createdBy: 'user-1', createdAt: '2024-01-10T12:00:00',
+      },
+    ]));
+    render(<HabitHistoryCalendar />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Jan 10: \+30 points/ })).toBeInTheDocument();
+    });
+  });
+
+  it('lets the selected day be edited: tap logs one unit for that date', async () => {
     const user = userEvent.setup();
     render(<HabitHistoryCalendar />);
 
-    // Click on Jan 16 (has 1 completion: Workout)
-    // Using a more robust selector than aria-label string matching if possible
-    // Here we find the button by its text content (date number) and then verify properties
-    const dayButton = screen.getByRole('button', { name: /Jan 16/i });
-    await user.click(dayButton);
+    await user.click(screen.getByRole('button', { name: /Jan 16/ }));
+    await user.click(screen.getByRole('button', { name: /Log Read for/ }));
 
-    expect(screen.getByText('January 16 summary')).toBeInTheDocument();
-    expect(screen.getByText('1 completed')).toBeInTheDocument();
-    expect(screen.getByText('Workout')).toBeInTheDocument();
-    expect(screen.queryByText('Read')).not.toBeInTheDocument();
+    expect(mockAddHabitSubmission).toHaveBeenCalledWith('habit-2', 1, '2024-01-16T12:00:00');
   });
 
-  it('shows empty state for days with no completions', async () => {
+  it('clears a logged day via the × control', async () => {
     const user = userEvent.setup();
     render(<HabitHistoryCalendar />);
 
-    // Click on Jan 10 (no completions)
-    const dayButton = screen.getByRole('button', { name: /Jan 10/i });
-    await user.click(dayButton);
+    await user.click(screen.getByRole('button', { name: /Jan 16/ }));
+    // Workout was completed on Jan 16 (derived count 1) → its row shows ×.
+    await user.click(screen.getByRole('button', { name: /Clear Workout for/ }));
 
-    expect(screen.getByText('January 10 summary')).toBeInTheDocument();
-    expect(screen.getByText('0 completed')).toBeInTheDocument();
-    expect(screen.getByText('No habits completed on this day.')).toBeInTheDocument();
+    expect(mockResetHabitDay).toHaveBeenCalledWith('habit-1', '2024-01-16');
+  });
+
+  it('disables future days', () => {
+    render(<HabitHistoryCalendar />);
+    expect(screen.getByRole('button', { name: /Jan 20/ })).toBeDisabled();
   });
 
   it('handles empty habits array gracefully', () => {
@@ -152,44 +192,23 @@ describe('HabitHistoryCalendar', () => {
     render(<HabitHistoryCalendar />);
 
     expect(screen.getByText('January 2024')).toBeInTheDocument();
-    // Verify heatmap has no highlighted days (all should be base style)
-    // Checking for absence of intensity classes or presence of base classes
-    const dayButtons = screen.getAllByRole('button', { name: /Jan \d+/ });
-    // Sample a few buttons
-    dayButtons.slice(0, 5).forEach(btn => {
-       expect(btn).not.toHaveClass('bg-accent-600');
-    });
+    expect(screen.getByText('No habits yet')).toBeInTheDocument();
   });
 
-  it('handles habits with no completed dates', () => {
-    mockContextValue.habits = [{ ...mockHabits[0]!, completedDates: [] }];
+  it('excludes kid-assigned chores from the grid and editor', () => {
+    mockContextValue.habits = [
+      mockHabits[0]!,
+      { ...mockHabits[1]!, id: 'chore-1', title: 'Feed the dog', assignedTo: 'kid-1', completedDates: ['2024-01-15'] },
+    ];
     render(<HabitHistoryCalendar />);
 
-    // Select today (Jan 15)
-    expect(screen.getByText('January 15 summary')).toBeInTheDocument();
-    expect(screen.getByText('0 completed')).toBeInTheDocument();
-  });
-
-  it('applies intensity classes based on completion count', () => {
-    // Setup: Max completions = 2 (Workout + Read on Jan 15)
-    // Jan 15: 2 completions (100% of max) -> should be darkest (accent-600)
-    // Jan 16: 1 completion (50% of max) -> should be lighter (accent-500)
-
-    render(<HabitHistoryCalendar />);
-
-    const day15 = screen.getByRole('button', { name: /Jan 15/i });
-    const day16 = screen.getByRole('button', { name: /Jan 16/i });
-
-    // Based on getIntensityClass logic in component (evergreen accent ramp):
-    // ratio 1.0 >= 0.75 -> bg-accent-600
-    // ratio 0.5 >= 0.5 -> bg-accent-500
-
-    expect(day15).toHaveClass('bg-accent-600');
-    expect(day16).toHaveClass('bg-accent-500');
+    expect(screen.queryByText('Feed the dog')).not.toBeInTheDocument();
+    // Net for Jan 15 counts only the parent-visible habit (+10), not the chore.
+    expect(screen.getByRole('button', { name: /Jan 15: \+10 points/ })).toBeInTheDocument();
   });
 
   describe('frozen-day marker (Plan 25)', () => {
-    it('marks a frozen day distinctly (habit-blue, not the completion ramp) and labels it', async () => {
+    it('marks a frozen day distinctly (habit-blue, no points figure) and labels it', async () => {
       mockContextValue.habits = [
         { ...mockHabits[0]!, frozenDates: ['2024-01-12'] },
         mockHabits[1]!,
@@ -198,15 +217,12 @@ describe('HabitHistoryCalendar', () => {
       render(<HabitHistoryCalendar />);
 
       const frozenDay = screen.getByRole('button', {
-        name: /Jan 12: 0 habits completed, streak protected by a freeze/i,
+        name: /Jan 12: 0 points, streak protected by a freeze/i,
       });
       expect(frozenDay).toHaveClass('bg-habit-blue/15');
-      // A frozen day is NOT a completion: no intensity class.
-      expect(frozenDay.className).not.toMatch(/bg-accent-/);
 
       // Selecting it shows the freeze note (streak kept, zero points).
       await user.click(frozenDay);
-      expect(screen.getByText('0 completed')).toBeInTheDocument();
       expect(screen.getByText(/A freeze protected/)).toBeInTheDocument();
       expect(screen.getByText(/streak kept, no points earned/)).toBeInTheDocument();
     });

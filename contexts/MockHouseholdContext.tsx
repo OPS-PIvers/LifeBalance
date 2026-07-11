@@ -1386,6 +1386,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toggleHabit,
     resetHabit,
     addHabitSubmission: noOp,
+    resetHabitDay: noOp,
     updateHabitSubmission: noOp,
     deleteHabitSubmission: noOp,
     getHabitSubmissions,

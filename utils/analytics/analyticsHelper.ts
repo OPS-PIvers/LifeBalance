@@ -4,11 +4,7 @@ import {
   startOfWeek, subWeeks, subMonths
 } from 'date-fns';
 import { sumMoney, roundMoney } from '@/utils/money';
-
-// Helper to check negative habit safely
-const isNegativeHabit = (h: Habit): boolean => {
-  return h.type === 'negative';
-};
+import { signedHabitPoints, habitPointsMagnitude } from '@/utils/habitLogic';
 
 // --- View 1: Pulse (Overview) ---
 
@@ -24,11 +20,9 @@ export const calculatePulseData = (habits: Habit[], transactions: Transaction[],
     let points = 0;
     habits.forEach(h => {
       if (h.completedDates?.includes(dateStr)) {
-         if (isNegativeHabit(h)) {
-            points -= h.basePoints;
-         } else {
-            points += h.basePoints;
-         }
+         // Sign from type, magnitude from |basePoints| — raw basePoints is
+         // stored with either sign depending on the creation path.
+         points += signedHabitPoints(h);
       }
     });
 
@@ -72,10 +66,10 @@ export const calculateWeeklyComparison = (habits: Habit[]) => {
 
     habits.forEach(h => {
       if (h.completedDates?.includes(currentDateStr)) {
-         currentPoints += isNegativeHabit(h) ? -h.basePoints : h.basePoints;
+         currentPoints += signedHabitPoints(h);
       }
       if (h.completedDates?.includes(lastDateStr)) {
-         lastPoints += isNegativeHabit(h) ? -h.basePoints : h.basePoints;
+         lastPoints += signedHabitPoints(h);
       }
     });
 
@@ -100,7 +94,9 @@ export const calculateHabitConsistency = (habits: Habit[]) => {
     // Compare ISO date strings directly (lexicographic order equals chronological)
     const recentCompletions = habit.completedDates?.filter(dateStr => dateStr >= cutoffStr).length || 0;
 
-    const points = recentCompletions * habit.basePoints;
+    // Magnitude only: this radar chart ranks category activity volume, and a
+    // negative-stored basePoints would silently subtract from its category.
+    const points = recentCompletions * habitPointsMagnitude(habit);
     categoryStats.set(habit.category, (categoryStats.get(habit.category) || 0) + points);
   });
 
