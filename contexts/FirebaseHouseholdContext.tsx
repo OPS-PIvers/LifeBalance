@@ -16,6 +16,7 @@ import {
   setDoc,
   type QueryDocumentSnapshot,
   type DocumentData,
+  type WriteBatch,
 } from 'firebase/firestore';
 import {
   householdMemberConverter,
@@ -1585,20 +1586,20 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // --- ACTIONS: PAY PERIOD MANAGEMENT ---
   // (contexts/household/mutations/financeMutations.ts)
 
-  const resetBucketsForNewPeriod = useCallback(async (newPeriodId: string) => {
+  const resetBucketsForNewPeriod = useCallback(async (newPeriodId: string, externalBatch?: WriteBatch) => {
     await makeResetBucketsForNewPeriod({
       db, householdId, currentPeriodId, buckets, bucketSpentMap, transactions,
-    }).resetBucketsForNewPeriod(newPeriodId);
+    }).resetBucketsForNewPeriod(newPeriodId, externalBatch);
   }, [householdId, currentPeriodId, buckets, bucketSpentMap, transactions]);
 
-  const initializeFirstPeriod = useCallback(async (paycheckDate: string) => {
-    await makeInitializeFirstPeriod({ db, householdId, user, buckets }).initializeFirstPeriod(paycheckDate);
+  const initializeFirstPeriod = useCallback(async (paycheckDate: string, externalBatch?: WriteBatch) => {
+    await makeInitializeFirstPeriod({ db, householdId, user, buckets }).initializeFirstPeriod(paycheckDate, externalBatch);
   }, [householdId, user, buckets]);
 
-  const handlePaycheckApproval = useCallback(async (paycheckDate: string) => {
+  const handlePaycheckApproval = useCallback(async (paycheckDate: string, externalBatch?: WriteBatch) => {
     await makeHandlePaycheckApproval({
       householdId, user, currentPeriodId, initializeFirstPeriod, resetBucketsForNewPeriod,
-    }).handlePaycheckApproval(paycheckDate);
+    }).handlePaycheckApproval(paycheckDate, externalBatch);
   }, [householdId, user, currentPeriodId, initializeFirstPeriod, resetBucketsForNewPeriod]);
 
   // --- ACTIONS: CALENDAR ---
@@ -1726,8 +1727,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }, [householdId, user]);
 
   const markChallengeComplete = useCallback(async (challengeId: string, success: boolean) => {
-    await makeMarkChallengeComplete({ db, householdId, challenges, updateYearlyGoalProgress }).markChallengeComplete(challengeId, success);
-  }, [householdId, challenges, updateYearlyGoalProgress]);
+    await makeMarkChallengeComplete({ db, householdId, challenges, yearlyGoals }).markChallengeComplete(challengeId, success);
+  }, [householdId, challenges, yearlyGoals]);
 
   const redeemReward = useCallback(async (rewardId: string) => {
     await makeRedeemReward({ db, householdId, rewards, userRef }).redeemReward(rewardId);

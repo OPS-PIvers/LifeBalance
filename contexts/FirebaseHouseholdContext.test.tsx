@@ -1542,7 +1542,7 @@ describe('FirebaseHouseholdContext — paycheck approval / period rollover', () 
     } as CalendarItem;
   }
 
-  it('rollover branch: snapshots + per-bucket currentPeriodId + lastPaycheckDate land in ONE batch', async () => {
+  it('rollover branch: snapshots + per-bucket currentPeriodId + lastPaycheckDate + the paycheck credit land in ONE batch', async () => {
     renderProvider();
     seedBucketsAndAccount([bucket('b1', 'Groceries', 50000), bucket('b2', 'Gas', 20000)]);
     // OLD period present => currentPeriodId is non-empty => rollover branch.
@@ -1558,17 +1558,19 @@ describe('FirebaseHouseholdContext — paycheck approval / period rollover', () 
       await captured.value!.finance.payCalendarItem('cal_income', 'acc1');
     });
 
-    // Two batches total: [0] = resetBucketsForNewPeriod (the rollover), [1] =
-    // payCalendarItem's own income batch (calendar item + balance + transaction).
-    expect(batches.length).toBe(2);
-    const resetBatch = batches[0]!;
-    expect(resetBatch.committed).toBe(true);
+    // ONE batch total: the period roll (resetBucketsForNewPeriod, staged) AND
+    // payCalendarItem's own income writes (calendar item + balance + transaction)
+    // commit atomically — a partial commit could otherwise advance the pay
+    // period without ever crediting the income.
+    expect(batches.length).toBe(1);
+    const payBatch = batches[0]!;
+    expect(payBatch.committed).toBe(true);
 
     const newPeriod = '2026-06-15';
     const periodEnd = '2026-06-14'; // newPeriodId − 1 day
 
-    // One bucketHistory snapshot per bucket, all in the reset batch.
-    const snapshotSets = resetBatch.ops.filter(
+    // One bucketHistory snapshot per bucket, all in the single batch.
+    const snapshotSets = payBatch.ops.filter(
       o => o.kind === 'set' && o.path.startsWith(`${householdPath}/bucketHistory`),
     );
     expect(snapshotSets).toHaveLength(2);
@@ -1581,29 +1583,60 @@ describe('FirebaseHouseholdContext — paycheck approval / period rollover', () 
     }
 
     // Each bucket's currentPeriodId advances to the new period, in the SAME batch.
-    const b1Ops = opsForPath(resetBatch, `${householdPath}/buckets/b1`);
-    const b2Ops = opsForPath(resetBatch, `${householdPath}/buckets/b2`);
+    const b1Ops = opsForPath(payBatch, `${householdPath}/buckets/b1`);
+    const b2Ops = opsForPath(payBatch, `${householdPath}/buckets/b2`);
     expect(b1Ops).toHaveLength(1);
     expect(b2Ops).toHaveLength(1);
     expect(b1Ops[0]!.data).toMatchObject({ currentPeriodId: newPeriod, lastResetDate: oldPeriod });
     expect(b2Ops[0]!.data).toMatchObject({ currentPeriodId: newPeriod, lastResetDate: oldPeriod });
 
-    // The household lastPaycheckDate advance is in the SAME reset batch.
-    const hhOps = opsForPath(resetBatch, householdPath);
+    // The household lastPaycheckDate advance is in the SAME batch.
+    const hhOps = opsForPath(payBatch, householdPath);
     expect(hhOps).toHaveLength(1);
     expect(hhOps[0]!.data).toMatchObject({ lastPaycheckDate: newPeriod });
+
+    // The account credit for the paycheck is in the SAME batch.
+    const accOps = opsForPath(payBatch, `${householdPath}/accounts/acc1`);
+    expect(accOps).toHaveLength(1);
 
     // The opening paycheck transaction is filed under the NEW period it opens
     // (the period that was just created), NOT the period that just closed —
     // payCalendarItem derives the income period from the just-approved date, not
     // the stale closure-captured householdSettings.lastPaycheckDate.
-    const payBatch = batches[1]!;
     const txSets = payBatch.ops.filter(
       o => o.kind === 'set' && o.path.startsWith(`${householdPath}/transactions`),
     );
     expect(txSets).toHaveLength(1);
     expect(txSets[0]!.data).toMatchObject({ payPeriodId: newPeriod });
     expect(txSets[0]!.data!['payPeriodId']).not.toBe(oldPeriod);
+  });
+
+  it('income path atomicity: a rejected commit rolls back the period roll AND the paycheck credit together', async () => {
+    renderProvider();
+    seedBucketsAndAccount([bucket('b1', 'Groceries', 50000)]);
+    const oldPeriod = '2026-06-01';
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+      lastPaycheckDate: oldPeriod,
+    });
+    emitCollection(`${householdPath}/calendarItems`, [docSnap('cal_income', incomeItem('cal_income', '2026-06-15'))]);
+
+    commitController.failNextCommit = true;
+    await act(async () => {
+      await expect(captured.value!.finance.payCalendarItem('cal_income', 'acc1')).rejects.toThrow(
+        'commit rejected',
+      );
+    });
+
+    // The period roll and the payment shared the single failed batch: the pay
+    // period was NOT advanced without the income being credited (the pre-fix
+    // two-commit sequence could strand exactly that partial state).
+    expect(batches).toHaveLength(1);
+    expect(batches[0]!.committed).toBe(false);
+    expect(addDocMock).not.toHaveBeenCalled();
+    expect(updateDocMock).not.toHaveBeenCalled();
+    expect(setDocMock).not.toHaveBeenCalled();
   });
 
   it('first-period branch: no prior period → initializeFirstPeriod sets lastPaycheckDate + each bucket, no snapshots', async () => {
@@ -1620,7 +1653,9 @@ describe('FirebaseHouseholdContext — paycheck approval / period rollover', () 
       await captured.value!.finance.payCalendarItem('cal_income', 'acc1');
     });
 
-    expect(batches.length).toBe(2);
+    // ONE batch: the first-period init is staged into payCalendarItem's batch
+    // (same atomicity as the rollover branch).
+    expect(batches.length).toBe(1);
     const initBatch = batches[0]!;
     expect(initBatch.committed).toBe(true);
 
@@ -2147,13 +2182,20 @@ describe('FirebaseHouseholdContext — grocery catalog dedup on purchase', () =>
       await captured.value!.shopping.toggleShoppingItemPurchased('s1');
     });
 
+    // The purchase flag and the catalog upsert commit in ONE batch (atomicity).
+    expect(batches).toHaveLength(1);
+    const batch = batches[0]!;
+    expect(batch.committed).toBe(true);
+    expect(opsForPath(batch, `${householdPath}/shoppingList/s1`)).toHaveLength(1);
+
     // NO new catalog row is created — the existing row is updated in place.
-    expect(addDocMock).not.toHaveBeenCalled();
-    const catalogUpdate = updateDocMock.mock.calls.find(
-      c => pathOf(c[0]) === `${householdPath}/groceryCatalog/cat1`,
+    const catalogSets = batch.ops.filter(
+      o => o.kind === 'set' && o.path.startsWith(`${householdPath}/groceryCatalog`),
     );
-    expect(catalogUpdate).toBeDefined();
-    const updates = catalogUpdate![1] as unknown as Record<string, unknown>;
+    expect(catalogSets).toHaveLength(0);
+    const catalogUpdates = opsForPath(batch, `${householdPath}/groceryCatalog/cat1`);
+    expect(catalogUpdates).toHaveLength(1);
+    const updates = catalogUpdates[0]!.data!;
     expect(updates['purchaseCount']).toEqual({ __increment: 1 });
     // The category is refreshed to the item's latest categorization.
     expect(updates['category']).toBe('Dairy');
@@ -2170,9 +2212,16 @@ describe('FirebaseHouseholdContext — grocery catalog dedup on purchase', () =>
       await captured.value!.shopping.toggleShoppingItemPurchased('s1');
     });
 
-    expect(addDocMock).toHaveBeenCalledTimes(1);
-    const [collRef, data] = addDocMock.mock.calls[0]!;
-    expect(pathOf(collRef)).toBe(`${householdPath}/groceryCatalog`);
-    expect(data).toMatchObject({ name: 'Bread', category: 'Bakery', purchaseCount: 1 });
+    // The new catalog row is created via a batch set (pre-allocated ref) in the
+    // SAME batch as the purchase flag.
+    expect(batches).toHaveLength(1);
+    const batch = batches[0]!;
+    expect(batch.committed).toBe(true);
+    expect(opsForPath(batch, `${householdPath}/shoppingList/s1`)).toHaveLength(1);
+    const catalogSets = batch.ops.filter(
+      o => o.kind === 'set' && o.path.startsWith(`${householdPath}/groceryCatalog`),
+    );
+    expect(catalogSets).toHaveLength(1);
+    expect(catalogSets[0]!.data).toMatchObject({ name: 'Bread', category: 'Bakery', purchaseCount: 1 });
   });
 });

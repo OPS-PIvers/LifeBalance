@@ -100,6 +100,46 @@ export function makeYearlyGoalCrudMutations(deps: {
 }
 
 /**
+ * Compute the Firestore update for recording a month's success/failure on a
+ * yearly goal. Shared by `updateYearlyGoalProgress` (standalone write) and
+ * `markChallengeComplete` (staged into the challenge batch) so the progress
+ * rule has a single source of truth.
+ *
+ * achievedAt is a string on read, but we write a server timestamp; the update
+ * object accepts a FieldValue for that field instead of casting.
+ */
+function buildYearlyGoalProgressUpdate(
+  goal: YearlyGoal,
+  month: string,
+  success: boolean
+): {
+  updates: Partial<Omit<YearlyGoal, 'achievedAt'>> & { achievedAt?: string | FieldValue };
+  isAchieved: boolean;
+} {
+  let updatedMonths = [...goal.successfulMonths];
+
+  if (success && !updatedMonths.includes(month)) {
+    updatedMonths.push(month);
+  } else if (!success && updatedMonths.includes(month)) {
+    updatedMonths = updatedMonths.filter(m => m !== month);
+  }
+
+  // Check if yearly goal is achieved
+  const isAchieved = updatedMonths.length >= goal.requiredMonths;
+
+  const updates: Partial<Omit<YearlyGoal, 'achievedAt'>> & { achievedAt?: string | FieldValue } = {
+    successfulMonths: updatedMonths,
+  };
+
+  if (isAchieved && goal.status !== 'achieved') {
+    updates.status = 'achieved';
+    updates.achievedAt = serverTimestamp();
+  }
+
+  return { updates, isAchieved };
+}
+
+/**
  * updateYearlyGoalProgress — original closure captured `householdId`,
  * `yearlyGoals`.
  */
@@ -116,27 +156,7 @@ export function makeUpdateYearlyGoalProgress(deps: {
     const goal = yearlyGoals.find(g => g.id === goalId);
     if (!goal) return;
 
-    let updatedMonths = [...goal.successfulMonths];
-
-    if (success && !updatedMonths.includes(month)) {
-      updatedMonths.push(month);
-    } else if (!success && updatedMonths.includes(month)) {
-      updatedMonths = updatedMonths.filter(m => m !== month);
-    }
-
-    // Check if yearly goal is achieved
-    const isAchieved = updatedMonths.length >= goal.requiredMonths;
-
-    // achievedAt is a string on read, but we write a server timestamp; type the
-    // write object to accept a FieldValue for that field instead of casting.
-    const updates: Partial<Omit<YearlyGoal, 'achievedAt'>> & { achievedAt?: string | FieldValue } = {
-      successfulMonths: updatedMonths,
-    };
-
-    if (isAchieved && goal.status !== 'achieved') {
-      updates.status = 'achieved';
-      updates.achievedAt = serverTimestamp();
-    }
+    const { updates, isAchieved } = buildYearlyGoalProgressUpdate(goal, month, success);
 
     await updateDoc(doc(db, `households/${householdId}/yearlyGoals`, goalId), updates);
 
@@ -271,15 +291,15 @@ export function makeAddChallenge(deps: {
 
 /**
  * markChallengeComplete — original closure captured `householdId`,
- * `challenges`, `updateYearlyGoalProgress`.
+ * `challenges`, `yearlyGoals`.
  */
 export function makeMarkChallengeComplete(deps: {
   db: Firestore;
   householdId: string | null;
   challenges: Challenge[];
-  updateYearlyGoalProgress: (goalId: string, month: string, success: boolean) => Promise<void>;
+  yearlyGoals: YearlyGoal[];
 }) {
-  const { db, householdId, challenges, updateYearlyGoalProgress } = deps;
+  const { db, householdId, challenges, yearlyGoals } = deps;
 
   const markChallengeComplete = async (challengeId: string, success: boolean) => {
     if (!householdId) return;
@@ -287,19 +307,35 @@ export function makeMarkChallengeComplete(deps: {
     const challenge = challenges.find(c => c.id === challengeId);
     if (!challenge) return;
 
+    // Commit the challenge status and the linked yearly-goal progress in a
+    // single batch so a partial write can never mark the challenge succeeded
+    // without crediting the month to its yearly goal (or vice versa).
+    const batch = writeBatch(db);
+
     // Update challenge status
-    await updateDoc(doc(db, `households/${householdId}/challenges`, challengeId), {
+    batch.update(doc(db, `households/${householdId}/challenges`, challengeId), {
       status: success ? 'success' : 'failed',
       completedAt: serverTimestamp(),
     });
 
     // If successful and linked to yearly goal, update yearly goal progress
+    let achievedGoal: YearlyGoal | undefined;
     if (success && challenge.yearlyGoalId) {
       const monthKey = challenge.month; // Already in YYYY-MM format
-      await updateYearlyGoalProgress(challenge.yearlyGoalId, monthKey, true);
+      const goal = yearlyGoals.find(g => g.id === challenge.yearlyGoalId);
+      if (goal) {
+        const { updates, isAchieved } = buildYearlyGoalProgressUpdate(goal, monthKey, true);
+        batch.update(doc(db, `households/${householdId}/yearlyGoals`, goal.id), updates);
+        if (isAchieved) achievedGoal = goal;
+      }
     }
 
+    await batch.commit();
+
     toast.success(success ? '🎉 Challenge completed!' : 'Challenge marked failed');
+    if (achievedGoal) {
+      toast.success(`🎉 Yearly goal achieved: ${achievedGoal.title}!`, { duration: 5000 });
+    }
   };
 
   return { markChallengeComplete };

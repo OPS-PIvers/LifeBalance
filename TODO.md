@@ -66,13 +66,13 @@ human-watched PR (tagged **[rules]** / **[index]**).
 > Several money-path findings here were written **before** the `#737` verified-only balance model
 > shipped; some may now be by-design. Re-check each against current behavior first.
 
-- [ ] **Non-atomic multi-writes** (real regardless of model — batch into a `writeBatch`):
+- [x] **Non-atomic multi-writes** (real regardless of model — batch into a `writeBatch`):
   `deferCalendarItem` recurring branch (two `addDoc`s, `calendarMutations.ts` ~459);
   `markChallengeComplete` + linked yearly goal (`gamificationMutations.ts` ~284);
-  `toggleShoppingItemPurchased` (`shoppingMutations.ts` ~236). **S each / LOW.**
-- [ ] **payCalendarItem income path** commits `handlePaycheckApproval` and the payment as two separate batches (`calendarMutations.ts` ~297-336) — a partial commit could advance the pay period without crediting income. **Re-validate**, then batch. **L / HIGH if real.**
-- [ ] **calculatePointsForDate** skips historical completions when `count===0` regardless of whether the target date is today (`utils/habitLogic.ts:596`) — points-recalc drift. **S / MED.**
-- [ ] **Dead code:** `safeToSpendCalculator.ts:63` `getTime()`-equality branch. **S / LOW.**
+  `toggleShoppingItemPurchased` (`shoppingMutations.ts` ~236). **S each / LOW.** ✅ 2026-07-11: each is now a single `writeBatch`.
+- [x] **payCalendarItem income path** commits `handlePaycheckApproval` and the payment as two separate batches (`calendarMutations.ts` ~297-336) — a partial commit could advance the pay period without crediting income. **Re-validate**, then batch. **L / HIGH if real.** ✅ 2026-07-11: re-validated as real; the paycheck-approval family now accepts an optional external `WriteBatch` and the income path stages the period roll into payCalendarItem's single batch (rollback test added).
+- [x] **calculatePointsForDate** skips historical completions when `count===0` regardless of whether the target date is today (`utils/habitLogic.ts:596`) — points-recalc drift. **S / MED.** ✅ 2026-07-11: counter guards now apply only when the target date is in the current period (day/ISO week); historical dates score from `completedDates`, mirroring `calculatePointsForDateRange` (regression tests added).
+- [x] **Dead code:** `safeToSpendCalculator.ts:63` `getTime()`-equality branch. **S / LOW.** ❌ 2026-07-11: stale finding — the branch is reachable and load-bearing (it includes a bill dated exactly on the next paycheck; covered by the "bills on boundary dates" test). Kept.
 
 ### 2D. Tooling / deps
 
