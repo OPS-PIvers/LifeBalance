@@ -1,12 +1,12 @@
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { useFinance, useTodos } from '@/contexts/FirebaseHouseholdContext';
+import { useFinance, useTodos, useExpandedCalendarItems } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { format, isSameMonth, isSameDay, isToday, addMonths, subMonths, startOfWeek, addDays } from 'date-fns';
 import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, Copy, CheckSquare, Download, MoreVertical, MoreHorizontal, Repeat, CalendarPlus, CalendarDays } from 'lucide-react';
 import { CalendarItem } from '@/types/schema';
 import { useCalendarGrid } from '@/hooks/useCalendarGrid';
-import { expandCalendarItems, parseRecurringId, isRecurringId } from '@/utils/calendarRecurrence';
+import { parseRecurringId, isRecurringId } from '@/utils/calendarRecurrence';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
@@ -117,10 +117,11 @@ const BudgetCalendar: React.FC = () => {
     };
   }, [stripDays, startDate, endDate]);
 
-  const expandedCalendarItems = useMemo(
-    () => expandCalendarItems(calendarItems, expandStart, expandEnd),
-    [calendarItems, expandStart, expandEnd]
-  );
+  // Shared window-keyed expansion memo (keyed on the bounds' timestamps, not
+  // Date object identity) — selecting a day recreates `currentDate` and thus
+  // fresh Date bounds for the SAME window, which previously re-ran the whole
+  // expansion; the shared hook reuses the prior result for identical windows.
+  const expandedCalendarItems = useExpandedCalendarItems(expandStart, expandEnd);
 
   // Pre-group calendar items by date string for O(1) day-cell lookup
   const calendarItemsByDate = useMemo(() => {

@@ -8,7 +8,11 @@ import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 // BudgetCalendar reads useFinance + useTodos (and renders RecurringBillsModal,
 // which reads useFinance). Back every hook with one shared mock fn so existing
 // `useHousehold` mock setup drives all of them with the same value object.
-vi.mock('@/contexts/FirebaseHouseholdContext', () => {
+vi.mock('@/contexts/FirebaseHouseholdContext', async () => {
+  // BudgetCalendar now consumes the shared memoized expansion hook; delegate
+  // to the REAL expandCalendarItems over the mocked slice's calendarItems so
+  // the existing `useHousehold` mock setup keeps driving the expanded output.
+  const { expandCalendarItems } = await vi.importActual<typeof import('@/utils/calendarRecurrence')>('@/utils/calendarRecurrence');
   const fn = vi.fn();
   return {
     useHousehold: fn,
@@ -17,6 +21,10 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => {
     useMeals: fn,
     useTodos: fn,
     useGamification: fn,
+    useExpandedCalendarItems: (start: Date, end: Date) => {
+      const { calendarItems } = fn() as { calendarItems?: import('@/types/schema').CalendarItem[] };
+      return expandCalendarItems(calendarItems ?? [], start, end);
+    },
   };
 });
 
