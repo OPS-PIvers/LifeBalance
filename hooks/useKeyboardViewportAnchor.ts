@@ -82,10 +82,15 @@ export function useKeyboardViewportAnchor<T extends HTMLElement>(): {
         keyboardHeight >= KEYBOARD_MIN_HEIGHT_PX && vv.scale <= 1.02 && focused !== null;
 
       if (shouldAnchor) {
+        // --app-height and the pin re-apply on every event (the height keeps
+        // changing while the keyboard animates), but the state flip happens
+        // once per anchor so viewport churn doesn't dispatch no-op updates.
         document.documentElement.style.setProperty('--app-height', `${Math.round(vv.height)}px`);
         pinWindow();
-        anchored = true;
-        setIsKeyboardAnchored(true);
+        if (!anchored) {
+          anchored = true;
+          setIsKeyboardAnchored(true);
+        }
         // The shell just shrank to the visible area; let the inner scroller
         // (not a window pan) bring the focused field into view — once per
         // field, so later resize/scroll events don't override user scrolling.
