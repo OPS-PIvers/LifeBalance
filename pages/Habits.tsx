@@ -4,7 +4,7 @@ import { Habit, HouseholdMember } from '@/types/schema';
 import { Skeleton } from '@/components/ui/Skeleton';
 import HabitCategoryList from '@/components/habits/HabitCategoryList';
 import {
-  Sparkles, LayoutList, GraduationCap, Calendar,
+  Sparkles, LayoutList, GraduationCap, Calendar, CalendarPlus,
   ListChecks, Check, Flame, Star, BarChart2, Gift, Trophy,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -38,6 +38,7 @@ const HABIT_TABS = ['track', 'history', 'coach', 'rewards', 'challenges', 'insig
 // bundle and only load when a tab's "manage" CTA is actually used (mirrors the
 // Dashboard's lazy-modal pattern).
 const ChallengeHubModal = React.lazy(() => import('@/components/modals/ChallengeHubModal'));
+const PastDayLogModal = React.lazy(() => import('@/components/modals/PastDayLogModal'));
 
 const HabitsSkeleton: React.FC = () => (
   <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe pt-6" aria-busy="true" aria-live="polite">
@@ -179,6 +180,7 @@ const Habits: React.FC = () => {
   const [isSmartAdjustOpen, setIsSmartAdjustOpen] = useState(false);
   const [isSmartReorderOpen, setIsSmartReorderOpen] = useState(false);
   const [isChallengeHubOpen, setIsChallengeHubOpen] = useState(false);
+  const [isPastDayLogOpen, setIsPastDayLogOpen] = useState(false);
   // Controlled so the toolbar points glance can deep-link straight to Rewards.
   const [activeTab, setActiveTab] = useDeepLinkTab('track', HABIT_TABS);
 
@@ -290,14 +292,28 @@ const Habits: React.FC = () => {
           title="Habits"
           subtitle="Build your streak, earn rewards."
           actions={
-            <HabitsHeaderMenu
-              onExport={handleExport}
-              onAdjust={() => setIsSmartAdjustOpen(true)}
-              onReorder={() => setIsSmartReorderOpen(true)}
-              onManage={() => setIsWizardOpen(true)}
-              actionsDisabled={hasNoHabits}
-              showSmartTools={powerToolsEnabled}
-            />
+            <div className="flex items-center gap-2">
+              {/* Backfill entry point: opens the past-day log drawer. Sits inline
+                  with the overflow menu and mirrors its trigger styling so the
+                  header stays one calm row. */}
+              <button
+                type="button"
+                onClick={() => setIsPastDayLogOpen(true)}
+                disabled={hasNoHabits}
+                className="shrink-0 p-2.5 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-card text-brand-500 dark:text-brand-400 hover:text-warm-600 dark:hover:text-warm-300 hover:border-brand-300 dark:hover:border-brand-600 active:scale-95 transition-[transform,color,border-color] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900 disabled:opacity-40 disabled:pointer-events-none"
+                aria-label="Log habits for a past day"
+              >
+                <CalendarPlus size={20} />
+              </button>
+              <HabitsHeaderMenu
+                onExport={handleExport}
+                onAdjust={() => setIsSmartAdjustOpen(true)}
+                onReorder={() => setIsSmartReorderOpen(true)}
+                onManage={() => setIsWizardOpen(true)}
+                actionsDisabled={hasNoHabits}
+                showSmartTools={powerToolsEnabled}
+              />
+            </div>
           }
         />
 
@@ -426,6 +442,9 @@ const Habits: React.FC = () => {
       <Suspense fallback={<div className="fixed inset-0 z-modal bg-brand-900/50" />}>
         {isChallengeHubOpen && (
           <ChallengeHubModal isOpen={isChallengeHubOpen} onClose={() => setIsChallengeHubOpen(false)} />
+        )}
+        {isPastDayLogOpen && (
+          <PastDayLogModal isOpen={isPastDayLogOpen} onClose={() => setIsPastDayLogOpen(false)} />
         )}
       </Suspense>
     </div>
