@@ -43,6 +43,10 @@ export function useKeyboardViewportAnchor<T extends HTMLElement>(): React.RefObj
     if (!vv) return;
 
     let anchored = false;
+    // Last field scrollIntoView was issued for — repeat viewport resize/scroll
+    // events must not re-snap it into view and fight the user's own scrolling.
+    let lastRevealed: HTMLElement | null = null;
+    let focusRafId: number | null = null;
 
     const focusedEditableInShell = (): HTMLElement | null => {
       const shell = shellRef.current;
@@ -74,17 +78,33 @@ export function useKeyboardViewportAnchor<T extends HTMLElement>(): React.RefObj
         pinWindow();
         anchored = true;
         // The shell just shrank to the visible area; let the inner scroller
-        // (not a window pan) bring the focused field into view.
-        requestAnimationFrame(() => focused.scrollIntoView({ block: 'nearest' }));
-      } else if (anchored) {
-        document.documentElement.style.removeProperty('--app-height');
-        anchored = false;
+        // (not a window pan) bring the focused field into view — once per
+        // field, so later resize/scroll events don't override user scrolling.
+        if (focused !== lastRevealed) {
+          lastRevealed = focused;
+          requestAnimationFrame(() => {
+            if (document.activeElement === focused) focused.scrollIntoView({ block: 'nearest' });
+          });
+        }
+      } else {
+        lastRevealed = null;
+        if (anchored) {
+          document.documentElement.style.removeProperty('--app-height');
+          anchored = false;
+        }
       }
     };
 
     // Re-check on the next frame: during focusin/focusout, document.activeElement
-    // isn't reliably settled yet across browsers.
-    const syncAfterFocusChange = () => requestAnimationFrame(sync);
+    // isn't reliably settled yet across browsers. Coalesced so rapid focus
+    // transitions schedule a single frame.
+    const syncAfterFocusChange = () => {
+      if (focusRafId !== null) cancelAnimationFrame(focusRafId);
+      focusRafId = requestAnimationFrame(() => {
+        focusRafId = null;
+        sync();
+      });
+    };
 
     // WebKit pans the window during the keyboard animation; undo each pan.
     const onWindowScroll = () => {
@@ -98,6 +118,9 @@ export function useKeyboardViewportAnchor<T extends HTMLElement>(): React.RefObj
     document.addEventListener('focusout', syncAfterFocusChange);
 
     return () => {
+      // A frame surviving unmount would re-run sync() and could re-apply
+      // --app-height after this cleanup already removed it.
+      if (focusRafId !== null) cancelAnimationFrame(focusRafId);
       vv.removeEventListener('resize', sync);
       vv.removeEventListener('scroll', sync);
       window.removeEventListener('scroll', onWindowScroll);

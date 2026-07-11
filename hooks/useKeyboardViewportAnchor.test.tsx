@@ -127,6 +127,21 @@ describe('useKeyboardViewportAnchor', () => {
     Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 });
   });
 
+  it('reveals the focused field only once per field, not on every viewport event', () => {
+    const { getByTestId } = render(<Shell />);
+    const input = getByTestId('in-shell-input');
+    const scrollIntoView = input.scrollIntoView as ReturnType<typeof vi.fn>;
+    openKeyboardWithFocus((id) => getByTestId(id));
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    // Later viewport churn (keyboard settling, user scrolling) must not
+    // re-snap the input into view.
+    act(() => {
+      fakeViewport.dispatchEvent(new Event('scroll'));
+      fakeViewport.dispatchEvent(new Event('resize'));
+    });
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+
   it('clears --app-height on unmount', () => {
     const { getByTestId, unmount } = render(<Shell />);
     openKeyboardWithFocus((id) => getByTestId(id));
