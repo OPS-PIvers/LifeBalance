@@ -14,6 +14,7 @@ interface CapturedUpdate {
 
 const capturedUpdates: CapturedUpdate[] = [];
 const capturedSets: CapturedUpdate[] = [];
+const capturedDeletes: { __path: string }[] = [];
 let commitCount = 0;
 
 // increment() returns a tagged sentinel so we can read back the numeric delta.
@@ -34,6 +35,9 @@ vi.mock('firebase/firestore', () => {
       },
       update: (ref: { __path: string }, data: Record<string, unknown>) => {
         capturedUpdates.push({ ref, data });
+      },
+      delete: (ref: { __path: string }) => {
+        capturedDeletes.push(ref);
       },
       commit: vi.fn(async () => {
         commitCount++;
@@ -391,6 +395,171 @@ describe('useHabitActions.addHabitSubmission (Plan 080c: assigned chores credit 
     expect(memberUpd).toBeDefined();
     expect(memberUpd!.data['points.total']).toEqual({ __increment: 10 });
     // The shared household pool must NOT receive the kid's chore points.
+    expect(capturedUpdates.find(u => u.ref.__path === householdPath)).toBeUndefined();
+  });
+});
+
+describe('useHabitActions.addHabitSubmission (negative habits are DEBITED)', () => {
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    capturedDeletes.length = 0;
+    commitCount = 0;
+    incrementMock.mockClear();
+    getDocsMock.mockReset();
+    getDocsMock.mockResolvedValue(submissionsSnap([]));
+  });
+
+  it('debits points for a negative habit stored with POSITIVE basePoints', async () => {
+    // HabitFormModal convention: basePoints 2, type 'negative'. The bug this
+    // guards: reading basePoints raw AWARDED +2 for logging a bad habit.
+    const habit = baseHabit({ type: 'negative', basePoints: 2, completedDates: [] });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.addHabitSubmission('h1', 1);
+    });
+
+    const hh = householdUpdate();
+    expect(hh).toBeDefined();
+    expect(hh!.data['points.total']).toEqual({ __increment: -2 });
+    expect(hh!.data['points.daily']).toEqual({ __increment: -2 });
+    // The stored submission carries the signed value too, so a later
+    // delete/clear reverses exactly what was credited.
+    expect(capturedSets[0]!.data['pointsEarned']).toBe(-2);
+  });
+
+  it('debits points for a negative habit stored with NEGATIVE basePoints (wizard convention)', async () => {
+    const habit = baseHabit({ type: 'negative', basePoints: -2, completedDates: [] });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.addHabitSubmission('h1', 1);
+    });
+
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: -2 });
+    expect(capturedSets[0]!.data['pointsEarned']).toBe(-2);
+  });
+});
+
+describe('useHabitActions.resetHabitDay', () => {
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    capturedDeletes.length = 0;
+    commitCount = 0;
+    incrementMock.mockClear();
+    getDocsMock.mockReset();
+  });
+
+  const yesterday = () => format(subDays(new Date(), 1), 'yyyy-MM-dd');
+
+  // QuerySnapshot stand-in for the day's submissions, with refs for batch.delete.
+  const daySubmissionsSnap = (subs: { count: number; pointsEarned: number }[]) =>
+    ({
+      empty: subs.length === 0,
+      docs: subs.map((s, i) => ({
+        data: () => s,
+        ref: { __path: `${householdPath}/habits/h1/submissions/s${i}` },
+      })),
+    }) as unknown as Awaited<ReturnType<typeof getDocs>>;
+
+  it('deletes the day submissions and reverses EXACTLY their stored points', async () => {
+    // A wrongly-credited negative-habit day (pre-repair, +2 was stored):
+    // clearing it must subtract the +2 that was actually credited — reversal
+    // always mirrors the stored value, never a recomputed one.
+    getDocsMock.mockResolvedValue(daySubmissionsSnap([{ count: 1, pointsEarned: 2 }]));
+    const habit = baseHabit({
+      type: 'negative',
+      basePoints: 2,
+      completedDates: [yesterday()],
+      totalCount: 1,
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.resetHabitDay('h1', yesterday());
+    });
+
+    expect(capturedDeletes).toHaveLength(1);
+    const hh = householdUpdate();
+    expect(hh).toBeDefined();
+    expect(hh!.data['points.total']).toEqual({ __increment: -2 });
+    // Past date: no daily reversal.
+    expect(hh!.data['points.daily']).toBeUndefined();
+
+    const hu = habitUpdate();
+    expect(hu!.data['completedDates']).toEqual([]);
+    expect(hu!.data['totalCount']).toBe(0);
+    expect(hu!.data['streakDays']).toBe(0);
+    expect(commitCount).toBe(1);
+  });
+
+  it('reverses a toggle-path day (no submissions) with the derived per-date points', async () => {
+    getDocsMock.mockResolvedValue(daySubmissionsSnap([]));
+    const habit = baseHabit({
+      scoringType: 'threshold',
+      targetCount: 1,
+      completedDates: [yesterday()],
+      totalCount: 1,
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.resetHabitDay('h1', yesterday());
+    });
+
+    expect(capturedDeletes).toHaveLength(0);
+    const hh = householdUpdate();
+    expect(hh).toBeDefined();
+    // Yesterday's threshold completion earned floor(10 * 1.0) = +10 → reverse it.
+    expect(hh!.data['points.total']).toEqual({ __increment: -10 });
+    expect(habitUpdate()!.data['completedDates']).toEqual([]);
+  });
+
+  it('does nothing when the day has no submissions and no completion', async () => {
+    getDocsMock.mockResolvedValue(daySubmissionsSnap([]));
+    const habit = baseHabit({ completedDates: [] });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.resetHabitDay('h1', yesterday());
+    });
+
+    expect(commitCount).toBe(0);
+    expect(capturedUpdates).toHaveLength(0);
+  });
+
+  it("reverses an assigned chore's points on the assignee's member doc", async () => {
+    getDocsMock.mockResolvedValue(daySubmissionsSnap([{ count: 1, pointsEarned: 5 }]));
+    const habit = baseHabit({
+      assignedTo: 'kid_leo',
+      completedDates: [yesterday()],
+      totalCount: 1,
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.resetHabitDay('h1', yesterday());
+    });
+
+    const memberUpd = capturedUpdates.find(
+      u => u.ref.__path === `${householdPath}/members/kid_leo`,
+    );
+    expect(memberUpd).toBeDefined();
+    expect(memberUpd!.data['points.total']).toEqual({ __increment: -5 });
     expect(capturedUpdates.find(u => u.ref.__path === householdPath)).toBeUndefined();
   });
 });

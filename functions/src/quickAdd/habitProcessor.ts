@@ -221,7 +221,12 @@ export function processToggleHabit(
   // actually completes the habit today. We dispatch by period so weekly habits
   // use the ISO-week streak rather than the day-based one (which would reset
   // on every ~7-day gap).
+  // Sign from `type`, magnitude from |basePoints| — mirrors the client's
+  // habitSign/habitPointsMagnitude (utils/habitLogic.ts). Two client creation
+  // paths historically stored negative habits with opposite basePoints signs,
+  // so reading basePoints raw awards points for one convention.
   const sign = habit.type === "positive" ? 1 : -1;
+  const baseMagnitude = Math.abs(habit.basePoints);
   let multiplier = 1.0;
 
   let isCompletedNow = false;
@@ -252,9 +257,9 @@ export function processToggleHabit(
 
     // Incremental: Points on every action
     if (direction === "up") {
-      pointsChange = sign * Math.floor(habit.basePoints * multiplier);
+      pointsChange = sign * Math.floor(baseMagnitude * multiplier);
     } else {
-      pointsChange = -sign * Math.floor(habit.basePoints * multiplier);
+      pointsChange = -sign * Math.floor(baseMagnitude * multiplier);
     }
   } else {
     // Threshold: Points only when target hit
@@ -272,7 +277,7 @@ export function processToggleHabit(
         habit.type === "positive",
         habit.period
       );
-      pointsChange = sign * Math.floor(habit.basePoints * multiplier);
+      pointsChange = sign * Math.floor(baseMagnitude * multiplier);
     } else if (!isCompletedNow && wasCompletedBefore) {
       // Just lost target → remove using the OLD streak (today still present).
       multiplier = getMultiplier(
@@ -280,7 +285,7 @@ export function processToggleHabit(
         habit.type === "positive",
         habit.period
       );
-      pointsChange = -sign * Math.floor(habit.basePoints * multiplier);
+      pointsChange = -sign * Math.floor(baseMagnitude * multiplier);
     }
   }
 

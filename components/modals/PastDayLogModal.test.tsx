@@ -3,16 +3,20 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { format, subDays } from 'date-fns';
 import PastDayLogModal from './PastDayLogModal';
-import { Habit } from '@/types/schema';
+import { Habit, HabitSubmission } from '@/types/schema';
 
 // Framer-motion's AnimatePresence/portal machinery isn't needed to test the
 // modal's logic — Drawer renders through a portal which testing-library sees.
 vi.mock('@/services/analytics', () => ({ track: vi.fn() }));
 
 const mockAddHabitSubmission = vi.fn().mockResolvedValue(undefined);
+const mockResetHabitDay = vi.fn().mockResolvedValue(undefined);
+const mockGetHabitSubmissions = vi.fn(async (): Promise<HabitSubmission[]> => []);
 const mockContextValue = {
   habits: [] as Habit[],
   addHabitSubmission: mockAddHabitSubmission,
+  resetHabitDay: mockResetHabitDay,
+  getHabitSubmissions: mockGetHabitSubmissions,
 };
 
 vi.mock('@/contexts/FirebaseHouseholdContext', () => {
@@ -53,6 +57,8 @@ describe('PastDayLogModal', () => {
     yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
     mockContextValue.habits = [baseHabit];
     mockAddHabitSubmission.mockClear();
+    mockResetHabitDay.mockClear();
+    mockGetHabitSubmissions.mockClear();
   });
 
   afterEach(() => {
@@ -67,7 +73,7 @@ describe('PastDayLogModal', () => {
     expect(screen.getByText(format(subDays(new Date(), 1), 'EEEE, MMMM d'))).toBeInTheDocument();
   });
 
-  it('logs a threshold habit for the selected past day with the full target count', async () => {
+  it('logs ONE unit per tap for threshold habits (Track-tab parity)', async () => {
     const user = userEvent.setup();
     mockContextValue.habits = [{ ...baseHabit, targetCount: 3 }];
     render(<PastDayLogModal isOpen={true} onClose={() => {}} />);
@@ -75,7 +81,7 @@ describe('PastDayLogModal', () => {
     await user.click(screen.getByRole('button', { name: /Log Read 30 mins/ }));
 
     expect(mockAddHabitSubmission).toHaveBeenCalledTimes(1);
-    expect(mockAddHabitSubmission).toHaveBeenCalledWith('habit-1', 3, `${yesterday}T12:00:00`);
+    expect(mockAddHabitSubmission).toHaveBeenCalledWith('habit-1', 1, `${yesterday}T12:00:00`);
   });
 
   it('logs one count per tap for incremental habits', async () => {
@@ -88,24 +94,46 @@ describe('PastDayLogModal', () => {
     expect(mockAddHabitSubmission).toHaveBeenCalledWith('habit-1', 1, `${yesterday}T12:00:00`);
   });
 
-  it('locks a threshold habit already completed on the selected day', () => {
+  it('shows the day count and a clear control for a day already logged', () => {
     mockContextValue.habits = [{ ...baseHabit, completedDates: [yesterday] }];
     render(<PastDayLogModal isOpen={true} onClose={() => {}} />);
 
-    const row = screen.getByRole('button', { name: /already logged/ });
-    expect(row).toBeDisabled();
-    expect(screen.getByText('Logged')).toBeInTheDocument();
+    // The row stays tappable ("+1 more", Track-tab parity)…
+    expect(screen.getByRole('button', { name: /Log Read 30 mins again .* \(currently 1\)/ })).toBeInTheDocument();
+    expect(screen.getByText('+1 more')).toBeInTheDocument();
+    // …and the × clears exactly that date.
+    expect(screen.getByRole('button', { name: /Clear Read 30 mins/ })).toBeInTheDocument();
   });
 
-  it('keeps an incremental habit tappable after completion', () => {
+  it('clears the selected day via resetHabitDay', async () => {
+    const user = userEvent.setup();
+    mockContextValue.habits = [{ ...baseHabit, completedDates: [yesterday] }];
+    render(<PastDayLogModal isOpen={true} onClose={() => {}} />);
+
+    await user.click(screen.getByRole('button', { name: /Clear Read 30 mins/ }));
+
+    expect(mockResetHabitDay).toHaveBeenCalledWith('habit-1', yesterday);
+  });
+
+  it('displays SIGNED points for negative habits (both storage conventions)', () => {
     mockContextValue.habits = [
-      { ...baseHabit, scoringType: 'incremental', completedDates: [yesterday] },
+      { ...baseHabit, id: 'neg-1', title: 'Missed meds', type: 'negative', basePoints: 2 },
+      { ...baseHabit, id: 'neg-2', title: 'Skip workout', type: 'negative', basePoints: -2 },
     ];
     render(<PastDayLogModal isOpen={true} onClose={() => {}} />);
 
-    const row = screen.getByRole('button', { name: /Log Read 30 mins/ });
-    expect(row).not.toBeDisabled();
-    expect(screen.getByText('+1 more')).toBeInTheDocument();
+    // Both render "-2 pts" — the sign comes from habit.type, never basePoints.
+    expect(screen.getAllByText('-2 pts')).toHaveLength(2);
+  });
+
+  it('shows signed net points on the calendar day cell', () => {
+    mockContextValue.habits = [{ ...baseHabit, completedDates: [yesterday] }];
+    render(<PastDayLogModal isOpen={true} onClose={() => {}} />);
+
+    // Past threshold day: +10 at 1.0x. Cell aria-label carries the figure.
+    expect(
+      screen.getByRole('button', { name: new RegExp(`${format(subDays(new Date(), 1), 'MMMM d')}, \\+10 points`) })
+    ).toBeInTheDocument();
   });
 
   it('does not double-submit on a rapid double-tap while a write is in flight', async () => {

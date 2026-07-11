@@ -1,57 +1,64 @@
 import React, { useState, useMemo } from 'react';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { format, isSameMonth, isToday, addMonths, subMonths } from 'date-fns';
-import { ChevronLeft, ChevronRight, CheckCircle2, Flame, Calendar, Snowflake } from 'lucide-react';
-import { Badge } from '@/components/ui/Badge';
+import { ChevronLeft, ChevronRight, Snowflake } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useCalendarGrid } from '@/hooks/useCalendarGrid';
+import { useHabitCalendarData } from '@/hooks/useHabitCalendarData';
+import DayHabitEditor from '@/components/habits/DayHabitEditor';
+import { getLocalDateString } from '@/utils/dateHelpers';
 import { Habit } from '@/types/schema';
 import { cn } from '@/utils/cn';
-
-/** Pure module-level helper: stable reference, never re-created on render. */
-function getIntensityClass(count: number, maxDailyCompletions: number): string {
-  if (count === 0) return '';
-  const ratio = count / maxDailyCompletions;
-  if (ratio >= 0.75) return 'bg-accent-600 text-white';
-  if (ratio >= 0.5) return 'bg-accent-500 text-white';
-  if (ratio >= 0.25) return 'bg-accent-300 text-accent-900';
-  return 'bg-accent-200 text-accent-900';
-}
 
 // Optimization: Memoized calendar day to prevent re-rendering the entire grid on selection change
 interface CalendarDayProps {
   day: Date;
-  count: number;
+  /** Signed net habit points earned on this day. */
+  netPoints: number;
   isSelected: boolean;
   isCurrentMonth: boolean;
-  intensityClass: string;
+  isFuture: boolean;
   isToday: boolean;
   /** Plan 25: an auto-applied freeze protected at least one streak this day. */
   isFrozen: boolean;
   onSelect: (date: Date) => void;
 }
 
-const CalendarDay = React.memo(({ day, count, isSelected, isCurrentMonth, intensityClass, isToday, isFrozen, onSelect }: CalendarDayProps) => {
+const CalendarDay = React.memo(({ day, netPoints, isSelected, isCurrentMonth, isFuture, isToday, isFrozen, onSelect }: CalendarDayProps) => {
   return (
     <button
       onClick={() => onSelect(day)}
+      disabled={isFuture}
       className={cn(
-        "relative flex flex-col items-center justify-center h-10 w-full rounded-card text-sm font-medium transition-[transform,background-color] duration-(--duration-fast) ease-(--ease-standard)",
+        "relative flex flex-col items-center justify-center h-12 w-full rounded-card text-sm font-medium leading-none transition-[transform,background-color] duration-(--duration-fast) ease-(--ease-standard)",
         !isCurrentMonth && "opacity-30",
+        isFuture && "opacity-25 cursor-not-allowed",
         isSelected
-          ? "ring-2 ring-warm-500 dark:ring-warm-400 scale-105 z-10"
-          : "hover:scale-105 hover:bg-brand-100 dark:hover:bg-brand-700/50",
-        !intensityClass && !isSelected && !isFrozen && "text-brand-400 dark:text-brand-400 bg-brand-50 dark:bg-brand-700/30",
-        intensityClass,
-        // Frozen day with no completions: distinct habit-blue marker (a frozen
-        // day is NOT a completion, so it never gets the green intensity ramp).
-        isFrozen && !intensityClass && "bg-habit-blue/15 text-habit-blue dark:bg-habit-blue/20",
+          ? "ring-2 ring-warm-500 dark:ring-warm-400 scale-105 z-10 bg-brand-100 dark:bg-brand-700/60 text-brand-900 dark:text-brand-50"
+          : "hover:scale-105 hover:bg-brand-100 dark:hover:bg-brand-700/50 text-brand-600 dark:text-brand-300 bg-brand-50 dark:bg-brand-700/30",
+        // Frozen day: distinct habit-blue marker (a frozen day is NOT a
+        // completion, so it never affects the points figure).
         isFrozen && !isSelected && "ring-1 ring-habit-blue/40",
-        isToday && !isSelected && !intensityClass && !isFrozen && "text-brand-900 dark:text-brand-50 font-bold bg-brand-200 dark:bg-brand-700"
+        isFrozen && "bg-habit-blue/15 dark:bg-habit-blue/20",
+        isToday && !isSelected && "font-bold ring-1 ring-inset ring-brand-300 dark:ring-brand-600"
       )}
-      aria-label={`${format(day, 'MMM d')}: ${count} habits completed${isFrozen ? ', streak protected by a freeze' : ''}`}
+      aria-label={`${format(day, 'MMM d')}: ${netPoints > 0 ? '+' : ''}${netPoints} points${isFrozen ? ', streak protected by a freeze' : ''}`}
     >
       {format(day, 'd')}
+      {/* Signed net day points: green positive, red negative. */}
+      {netPoints !== 0 && !isFuture && (
+        <span
+          className={cn(
+            'mt-0.5 text-[10px] font-bold tabular-nums',
+            netPoints > 0
+              ? 'text-money-pos dark:text-money-posDark'
+              : 'text-money-neg dark:text-money-negDark'
+          )}
+          aria-hidden="true"
+        >
+          {netPoints > 0 ? `+${netPoints}` : netPoints}
+        </span>
+      )}
     </button>
   );
 });
@@ -61,6 +68,8 @@ const HabitHistoryCalendar: React.FC = () => {
   const { habits } = useGamification();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
+
+  const today = getLocalDateString();
 
   // Calendar Grid Logic
   const { monthStart, days } = useCalendarGrid(currentDate);
@@ -74,36 +83,31 @@ const HabitHistoryCalendar: React.FC = () => {
     { abbr: 'S', full: 'Saturday' },
   ];
 
-  // Map: DateString -> Completed Habits & Max Count. Memoized on `habits` so it
-  // only rebuilds when the habits array changes (i.e. on a Firestore snapshot).
-  const { dailyCompletions, maxDailyCompletions, frozenByDate } = useMemo(() => {
-    const map = new Map<string, Habit[]>();
-    let max = 0;
+  // Same parent-visible set as the Track tab and PastDayLogModal: kid chores
+  // (assignedTo) excluded, so the day cells sum to the HOUSEHOLD points the
+  // toolbar shows (assigned chores credit the kid's own balance instead).
+  const sortedHabits = useMemo(
+    () => habits.filter(h => !h.assignedTo).sort((a, b) => (a.order ?? 999) - (b.order ?? 999)),
+    [habits]
+  );
 
-    habits.forEach(habit => {
-      habit.completedDates.forEach(date => {
-        if (!map.has(date)) map.set(date, []);
-        const list = map.get(date)!;
-        list.push(habit);
-        if (list.length > max) max = list.length;
-      });
-    });
+  const { netPointsByDate, countForHabitOnDate, refresh } = useHabitCalendarData(sortedHabits, days);
 
-    // Plan 25: days where an auto-applied freeze protected a streak. Frozen
-    // days are NOT completions — they get their own marker, never intensity.
+  // Plan 25: days where an auto-applied freeze protected a streak. Frozen days
+  // are NOT completions — they get their own marker, never a points figure.
+  const frozenByDate = useMemo(() => {
     const frozen = new Map<string, Habit[]>();
-    habits.forEach(habit => {
+    sortedHabits.forEach(habit => {
       (habit.frozenDates ?? []).forEach(date => {
         if (!frozen.has(date)) frozen.set(date, []);
         frozen.get(date)!.push(habit);
       });
     });
-
-    return { dailyCompletions: map, maxDailyCompletions: max || 1, frozenByDate: frozen };
-  }, [habits]);
+    return frozen;
+  }, [sortedHabits]);
 
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
-  const selectedDateHabits = dailyCompletions.get(selectedDateStr) || [];
+  const selectedLabel = selectedDateStr === today ? 'Today' : format(selectedDate, 'EEEE, MMMM d');
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-(--duration-base)">
@@ -147,21 +151,18 @@ const HabitHistoryCalendar: React.FC = () => {
         <div className="grid grid-cols-7 gap-y-2 gap-x-1">
           {days.map(day => {
             const dateStr = format(day, 'yyyy-MM-dd');
-            const habitsOnDate = dailyCompletions.get(dateStr) || [];
-            const count = habitsOnDate.length;
             // String compare avoids allocating Date objects for every cell on every render.
             const isSelected = dateStr === selectedDateStr;
             const isCurrentMonth = isSameMonth(day, monthStart);
-            const intensityClass = getIntensityClass(count, maxDailyCompletions);
 
             return (
               <CalendarDay
                 key={dateStr}
                 day={day}
-                count={count}
+                netPoints={netPointsByDate.get(dateStr) ?? 0}
                 isSelected={isSelected}
                 isCurrentMonth={isCurrentMonth}
-                intensityClass={intensityClass}
+                isFuture={dateStr > today}
                 isToday={isToday(day)}
                 isFrozen={frozenByDate.has(dateStr)}
                 onSelect={setSelectedDate}
@@ -171,84 +172,40 @@ const HabitHistoryCalendar: React.FC = () => {
         </div>
 
         {/* Legend */}
-        <div className="mt-4 flex items-center justify-end gap-2 text-xxs font-bold text-brand-300 dark:text-brand-450 uppercase tracking-wide">
-          <span className="flex items-center gap-1 mr-2 normal-case">
+        <div className="mt-4 flex items-center justify-end gap-3 text-xxs font-bold text-brand-300 dark:text-brand-450 uppercase tracking-wide">
+          <span className="flex items-center gap-1 normal-case">
             <Snowflake size={10} className="text-habit-blue" /> Frozen
           </span>
-          <span>Less</span>
-          <div className="flex gap-1">
-             <div className="w-3 h-3 rounded-sm bg-accent-200"></div>
-             <div className="w-3 h-3 rounded-sm bg-accent-300"></div>
-             <div className="w-3 h-3 rounded-sm bg-accent-500"></div>
-             <div className="w-3 h-3 rounded-sm bg-accent-600"></div>
-          </div>
-          <span>More</span>
+          <span className="flex items-center gap-1 normal-case">
+            <span className="font-bold text-money-pos dark:text-money-posDark">+pts</span> earned
+          </span>
+          <span className="flex items-center gap-1 normal-case">
+            <span className="font-bold text-money-neg dark:text-money-negDark">−pts</span> lost
+          </span>
         </div>
       </div>
 
-      {/* Detail List */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between px-1">
-          <h3 className="font-display font-semibold text-brand-700 dark:text-brand-200 text-sm">
-            {format(selectedDate, 'MMMM d')} summary
-          </h3>
-          <Badge variant="neutral" size="md">
-            {selectedDateHabits.length} completed
-          </Badge>
+      {/* Plan 25: a freeze protected streak(s) on the selected day */}
+      {(frozenByDate.get(selectedDateStr)?.length ?? 0) > 0 && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-habit-blue/10 dark:bg-habit-blue/15 text-sm text-brand-700 dark:text-brand-200">
+          <Snowflake size={16} className="text-habit-blue shrink-0" />
+          <span>
+            A freeze protected{' '}
+            {frozenByDate.get(selectedDateStr)!.map(h => h.title).join(', ')} on this day —
+            streak kept, no points earned.
+          </span>
         </div>
+      )}
 
-        {/* Plan 25: a freeze protected streak(s) on the selected day */}
-        {(frozenByDate.get(selectedDateStr)?.length ?? 0) > 0 && (
-          <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-habit-blue/10 dark:bg-habit-blue/15 text-sm text-brand-700 dark:text-brand-200">
-            <Snowflake size={16} className="text-habit-blue shrink-0" />
-            <span>
-              A freeze protected{' '}
-              {frozenByDate.get(selectedDateStr)!.map(h => h.title).join(', ')} on this day —
-              streak kept, no points earned.
-            </span>
-          </div>
-        )}
-
-        {selectedDateHabits.length === 0 ? (
-          <div className="text-center py-10 bg-white dark:bg-brand-800 border border-dashed border-brand-200 dark:border-brand-700 rounded-2xl text-brand-400 dark:text-brand-450">
-            <Calendar className="w-10 h-10 mx-auto mb-3 opacity-20" />
-            <p className="font-medium text-sm">No habits completed on this day.</p>
-          </div>
-        ) : (
-          <div className="surface-section overflow-hidden [&>*:first-child]:border-t-0">
-            {selectedDateHabits.map(habit => {
-              const isPositive = habit.type === 'positive';
-              return (
-                <div key={habit.id} className="px-4 py-3.5 hairline-divider flex items-center justify-between group animate-in fade-in duration-(--duration-base)">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={cn(
-                      "w-10 h-10 rounded-card flex items-center justify-center font-bold shrink-0",
-                      isPositive ? "bg-money-bgPos dark:bg-money-pos/15 text-money-pos dark:text-money-posDark" : "bg-money-bgNeg dark:bg-money-neg/15 text-money-neg dark:text-money-negDark"
-                    )}>
-                      {isPositive ? <CheckCircle2 size={20} /> : <Flame size={20} />}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-brand-800 dark:text-brand-100 text-sm truncate">{habit.title}</p>
-                      <p className="text-xs text-brand-400 dark:text-brand-450">{habit.category}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col items-end shrink-0">
-                    <Badge variant={isPositive ? 'success' : 'danger'} size="md">
-                      {habit.basePoints} pts
-                    </Badge>
-                    {habit.streakDays > 0 && (
-                      <span className="text-xxs text-habit-streak font-bold flex items-center gap-0.5 mt-0.5">
-                        <Flame size={8} fill="currentColor" /> {habit.streakDays} day streak
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      {/* Selected-day editor: the same add/increment/clear surface as the
+          "Log a past day" drawer, so history is editable in place. */}
+      <DayHabitEditor
+        habits={sortedHabits}
+        selectedDate={selectedDateStr}
+        selectedLabel={selectedLabel}
+        countForHabitOnDate={countForHabitOnDate}
+        onMutated={refresh}
+      />
     </div>
   );
 };

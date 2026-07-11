@@ -28,7 +28,9 @@ import {
   streakEndingOnForHabit,
   isHabitStale,
   getMultiplier,
-  normalizeHabitTitle
+  normalizeHabitTitle,
+  signedHabitPoints,
+  pointsForHabitOnDate
 } from '@/utils/habitLogic';
 import toast from 'react-hot-toast';
 import { addDays, format, parseISO, startOfWeek } from 'date-fns';
@@ -419,16 +421,19 @@ export const useHabitActions = (
         d => periodStartOf(d) === periodStartOf(submissionDate)
       );
 
+      // Signed via habit.type (see signedHabitPoints): a negative habit's
+      // submission must DEBIT points. Reading basePoints raw awarded positive
+      // points for every negative habit stored with a positive magnitude.
       let pointsEarned = 0;
       if (habit.scoringType === 'incremental') {
-        pointsEarned = count * Math.floor(habit.basePoints * multiplier);
+        pointsEarned = count * signedHabitPoints(habit, multiplier);
       } else if (
         newPeriodCount >= habit.targetCount &&
         priorPeriodCount < habit.targetCount &&
         !alreadyCompletedInPeriod
       ) {
         // Threshold: this submission pushes its OWN period over the target.
-        pointsEarned = Math.floor(habit.basePoints * multiplier);
+        pointsEarned = signedHabitPoints(habit, multiplier);
       }
 
       // Create submission document
@@ -608,6 +613,108 @@ export const useHabitActions = (
     }
   }, [householdId]);
 
+  /**
+   * Reset a habit's log for ONE calendar day back to zero — the day-editor
+   * twin of `resetHabit` (which only understands the live period). Used by the
+   * habit calendars' × control.
+   *
+   * Deletes every submission stored for that date, reversing EXACTLY the
+   * points each one earned (the stored `pointsEarned`, so a reversal always
+   * undoes what was actually credited — even entries written before the
+   * negative-habit sign fix). Days completed via the toggle path leave no
+   * submission docs; for those the reversal is derived with the same per-date
+   * attribution the corrective recompute uses (`pointsForHabitOnDate`), or —
+   * for today — the tested `calculateResetPoints` math. Submission deletes,
+   * habit state, and points reversal commit in a single atomic batch.
+   */
+  const resetHabitDay = useCallback(async (habitId: string, date: string) => {
+    if (!householdId) return;
+
+    const habit = habitsRef.current.find(h => h.id === habitId);
+    if (!habit) return;
+
+    try {
+      const today = getLocalDateString();
+
+      const subsSnap = await getDocs(query(
+        collection(db, `households/${householdId}/habits/${habitId}/submissions`),
+        where('date', '==', date),
+      ));
+
+      const wasCompleted = habit.completedDates.includes(date);
+      if (subsSnap.empty && !wasCompleted) return; // nothing logged that day
+
+      let pointsToReverse = 0;
+      let unitsRemoved = 0;
+      const batch = writeBatch(db);
+
+      subsSnap.docs.forEach(d => {
+        const s = d.data() as HabitSubmission;
+        pointsToReverse += s.pointsEarned;
+        unitsRemoved += s.count;
+        batch.delete(d.ref);
+      });
+
+      if (subsSnap.empty) {
+        if (date === today && !isHabitStale(habit)) {
+          // Live completion (toggle path): reuse the tested reset math,
+          // including the pre/post-threshold multiplier split for incrementals.
+          pointsToReverse = calculateResetPoints(habit);
+          unitsRemoved = habit.count;
+        } else {
+          // Historical toggle-path day: reverse the same per-date attribution
+          // calculatePointsForDate assigns it (past incremental days = 1).
+          pointsToReverse = pointsForHabitOnDate(habit, date, today);
+          unitsRemoved = habit.scoringType === 'threshold' ? Math.max(1, habit.targetCount) : 1;
+        }
+      }
+
+      // Does the cleared date fall in the habit's LIVE period? Only then does
+      // the live counter shrink (a stale counter belongs to an older period).
+      const periodStartOf = (d: string): string =>
+        habit.period === 'weekly'
+          ? format(startOfWeek(parseISO(d), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+          : d;
+      const inLivePeriod =
+        periodStartOf(date) === periodStartOf(today) && !isHabitStale(habit);
+
+      const updatedCompletedDates = habit.completedDates.filter(d => d !== date);
+      const habitUpdates: Record<string, unknown> = {
+        completedDates: updatedCompletedDates,
+        streakDays: streakForHabit({ period: habit.period, completedDates: updatedCompletedDates, frozenDates: habit.frozenDates }),
+        totalCount: Math.max(0, habit.totalCount - unitsRemoved),
+        lastUpdated: serverTimestamp(),
+      };
+      if (inLivePeriod) {
+        habitUpdates['count'] = Math.max(0, habit.count - unitsRemoved);
+      }
+      batch.update(doc(db, `households/${householdId}/habits`, habitId), habitUpdates);
+
+      // Reverse points with the same period gating as deleteHabitSubmission:
+      // total always, daily only for today, weekly only inside the current week.
+      if (pointsToReverse !== 0) {
+        const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+        const pointUpdates: Record<string, unknown> = {
+          'points.total': increment(-pointsToReverse),
+        };
+        if (date === today) {
+          pointUpdates['points.daily'] = increment(-pointsToReverse);
+        }
+        if (date >= weekStart && date <= today) {
+          pointUpdates['points.weekly'] = increment(-pointsToReverse);
+        }
+        batch.update(habitPointsTargetRef(householdId, habit.assignedTo), pointUpdates);
+      }
+
+      await batch.commit();
+
+      toast('Day cleared', { icon: '↺' });
+    } catch (error) {
+      console.error('[resetHabitDay] Failed:', error);
+      toast.error('Failed to clear day');
+    }
+  }, [householdId]);
+
   const updateHabitSubmission = useCallback(async (
     habitId: string,
     submissionId: string,
@@ -635,7 +742,8 @@ export const useHabitActions = (
         const countDelta = updates.count - originalSubmission.count;
 
         if (habit.scoringType === 'incremental') {
-          pointsDelta = countDelta * Math.floor(habit.basePoints * originalSubmission.multiplierApplied);
+          // Signed via habit.type — mirrors addHabitSubmission.
+          pointsDelta = countDelta * signedHabitPoints(habit, originalSubmission.multiplierApplied);
         } else {
           // For threshold, disallow count edits (too complex to recalculate)
           toast.error('Cannot edit count for threshold habits. Delete and re-add instead.');
@@ -706,7 +814,8 @@ export const useHabitActions = (
     addHabitSubmission,
     updateHabitSubmission,
     deleteHabitSubmission,
-    getHabitSubmissions
+    getHabitSubmissions,
+    resetHabitDay
   }), [
     addHabit,
     updateHabit,
@@ -717,6 +826,7 @@ export const useHabitActions = (
     addHabitSubmission,
     updateHabitSubmission,
     deleteHabitSubmission,
-    getHabitSubmissions
+    getHabitSubmissions,
+    resetHabitDay
   ]);
 };

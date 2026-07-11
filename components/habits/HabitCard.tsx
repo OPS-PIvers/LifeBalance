@@ -15,7 +15,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { subDays } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { haptic } from '@/utils/haptics';
-import { getMultiplier } from '@/utils/habitLogic';
+import { getMultiplier, signedHabitPoints } from '@/utils/habitLogic';
 import StreakFlame from './StreakFlame';
 import CountUp from './CountUp';
 
@@ -48,8 +48,10 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
   const streakMultiplier = getMultiplier(habit.streakDays, isPositive, habit.period);
   const totalMultiplier = streakMultiplier;
 
-  const pointsDisplay = Math.floor(habit.basePoints * totalMultiplier);
-  const signedPointsDisplay = isPositive ? pointsDisplay : -pointsDisplay;
+  // Canonical sign handling (habit.type drives the sign, |basePoints| the
+  // magnitude) — negating raw basePoints here double-negated wizard-created
+  // negative habits, which store basePoints as a negative number.
+  const signedPointsDisplay = signedHabitPoints(habit, totalMultiplier);
 
   // Period-aware streak unit for the streak badge label ("Day(s)" vs "Week(s)").
   const isWeekly = habit.period === 'weekly';

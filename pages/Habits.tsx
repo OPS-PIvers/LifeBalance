@@ -27,7 +27,7 @@ import { useDeepLinkTab } from '@/hooks/useDeepLinkTab';
 import { useDeepLinkHighlight } from '@/hooks/useDeepLinkHighlight';
 import { useScrollToHighlight } from '@/hooks/useScrollToHighlight';
 import { getLocalDateString } from '@/utils/dateHelpers';
-import { isHabitCompletedInCurrentPeriod } from '@/utils/habitLogic';
+import { isHabitCompletedInCurrentPeriod, signedHabitPoints } from '@/utils/habitLogic';
 import { generateCsvExport } from '@/utils/exportUtils';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -151,7 +151,7 @@ const KidChoresGroup: React.FC<{ kid: HouseholdMember; chores: Habit[] }> = ({ k
                 <div className="flex items-center gap-2 text-xxs font-medium text-brand-400 dark:text-brand-450">
                   <span className="inline-flex items-center gap-0.5">
                     <Star size={10} className="fill-current text-habit-gold" aria-hidden="true" />
-                    {h.basePoints} pts
+                    {signedHabitPoints(h)} pts
                   </span>
                   {h.streakDays > 0 && (
                     <span className="inline-flex items-center gap-0.5 text-habit-streak">
@@ -262,7 +262,7 @@ const Habits: React.FC = () => {
         'Total Completions (Days)': habit.completedDates.length,
         'Last Updated': habit.lastUpdated ? format(new Date(habit.lastUpdated), 'yyyy-MM-dd') : 'N/A',
         'Scoring Type': habit.scoringType,
-        'Base Points': habit.basePoints
+        'Base Points': signedHabitPoints(habit)
       }));
 
       // Sort by Category then Title

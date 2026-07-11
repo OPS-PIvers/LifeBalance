@@ -16,7 +16,12 @@ import {
   computeHouseholdPointsSync,
   computeManagedMemberPointsReset,
   isHabitCompletedInCurrentPeriod,
-  normalizeHabitTitle
+  normalizeHabitTitle,
+  habitSign,
+  habitPointsMagnitude,
+  signedHabitPoints,
+  pointsForHabitOnDate,
+  calculateDayNetPoints
 } from './habitLogic';
 import { Habit } from '@/types/schema';
 import { format, subDays, subWeeks, startOfISOWeek } from 'date-fns';
@@ -1691,5 +1696,148 @@ describe('normalizeHabitTitle', () => {
 
   it('collapses only leading/trailing whitespace, not internal', () => {
     expect(normalizeHabitTitle(' Drink   Water ')).toBe('drink   water');
+  });
+});
+
+// Canonical sign handling: habit.type drives the sign, |basePoints| the
+// magnitude. Two creation paths historically stored negative habits with
+// opposite basePoints signs (wizard: -2, form: 2 + type 'negative'), so every
+// scoring/display path must survive BOTH conventions.
+describe('habitSign / habitPointsMagnitude / signedHabitPoints', () => {
+  const negStoredPositive = { type: 'negative', basePoints: 2 } as Habit;
+  const negStoredNegative = { type: 'negative', basePoints: -2 } as Habit;
+  const positive = { type: 'positive', basePoints: 10 } as Habit;
+
+  it('derives the sign from type only', () => {
+    expect(habitSign(positive)).toBe(1);
+    expect(habitSign(negStoredPositive)).toBe(-1);
+    expect(habitSign(negStoredNegative)).toBe(-1);
+  });
+
+  it('derives the magnitude regardless of stored sign', () => {
+    expect(habitPointsMagnitude(negStoredPositive)).toBe(2);
+    expect(habitPointsMagnitude(negStoredNegative)).toBe(2);
+  });
+
+  it('produces identical signed points for both storage conventions', () => {
+    expect(signedHabitPoints(negStoredPositive)).toBe(-2);
+    expect(signedHabitPoints(negStoredNegative)).toBe(-2);
+    expect(signedHabitPoints(positive, 1.5)).toBe(15);
+    // Negative habits never get a streak multiplier (getMultiplier is 1.0),
+    // but signedHabitPoints itself must still floor on the magnitude.
+    expect(signedHabitPoints(negStoredNegative, 1.5)).toBe(-3);
+  });
+});
+
+describe('processToggleHabit (negative habit stored with negative basePoints)', () => {
+  const localToday = format(new Date(), 'yyyy-MM-dd');
+
+  const wizardNegative = {
+    id: 'n1',
+    title: 'Skip workout',
+    type: 'negative',
+    period: 'daily',
+    scoringType: 'incremental',
+    basePoints: -2, // HabitCreatorWizard convention
+    targetCount: 1,
+    count: 0,
+    totalCount: 0,
+    completedDates: [],
+    streakDays: 0,
+    lastUpdated: new Date().toISOString(),
+  } as unknown as Habit;
+
+  it('DEBITS points on up-toggle (raw basePoints double-negated to +2)', () => {
+    const result = processToggleHabit(wizardNegative, 'up');
+    expect(result).not.toBeNull();
+    expect(result!.pointsChange).toBe(-2);
+    expect(result!.updatedHabit.completedDates).toContain(localToday);
+  });
+
+  it('credits points back on down-toggle', () => {
+    const active = { ...wizardNegative, count: 1, totalCount: 1, completedDates: [localToday] };
+    const result = processToggleHabit(active, 'down');
+    expect(result).not.toBeNull();
+    expect(result!.pointsChange).toBe(2);
+  });
+});
+
+describe('pointsForHabitOnDate', () => {
+  const localToday = format(new Date(), 'yyyy-MM-dd');
+  const d = (n: number) => format(subDays(new Date(), n), 'yyyy-MM-dd');
+
+  const base = {
+    id: 'p1',
+    type: 'positive',
+    period: 'daily',
+    scoringType: 'threshold',
+    basePoints: 10,
+    targetCount: 1,
+    count: 0,
+    totalCount: 0,
+    completedDates: [],
+    streakDays: 0,
+    lastUpdated: new Date().toISOString(),
+  } as unknown as Habit;
+
+  it('returns 0 for a date with no completion', () => {
+    expect(pointsForHabitOnDate(base, d(1), localToday)).toBe(0);
+  });
+
+  it('scores a past threshold day with the streak that ended on that day', () => {
+    // 3-day chain ending on d(1): that day's streak is 3 → 1.5x → 15.
+    const habit = { ...base, completedDates: [d(3), d(2), d(1)] };
+    expect(pointsForHabitOnDate(habit, d(1), localToday)).toBe(15);
+    expect(pointsForHabitOnDate(habit, d(3), localToday)).toBe(10);
+  });
+
+  it('is signed for negative habits under both storage conventions', () => {
+    const negA = { ...base, type: 'negative', basePoints: 2, scoringType: 'incremental', completedDates: [d(1)] } as Habit;
+    const negB = { ...negA, basePoints: -2 } as Habit;
+    expect(pointsForHabitOnDate(negA, d(1), localToday)).toBe(-2);
+    expect(pointsForHabitOnDate(negB, d(1), localToday)).toBe(-2);
+  });
+
+  it('matches calculatePointsForDate summed over habits', () => {
+    const h1 = { ...base, completedDates: [d(1)] };
+    const h2 = { ...base, id: 'p2', type: 'negative', basePoints: 2, scoringType: 'incremental', completedDates: [d(1)] } as Habit;
+    expect(calculatePointsForDate([h1, h2], d(1))).toBe(
+      pointsForHabitOnDate(h1, d(1)) + pointsForHabitOnDate(h2, d(1))
+    );
+  });
+});
+
+describe('calculateDayNetPoints', () => {
+  const localToday = format(new Date(), 'yyyy-MM-dd');
+  const d = (n: number) => format(subDays(new Date(), n), 'yyyy-MM-dd');
+
+  const habit = {
+    id: 'h1',
+    type: 'positive',
+    period: 'daily',
+    scoringType: 'incremental',
+    basePoints: 10,
+    targetCount: 1,
+    count: 0,
+    totalCount: 0,
+    completedDates: [d(1)],
+    streakDays: 0,
+    lastUpdated: new Date().toISOString(),
+  } as unknown as Habit;
+
+  it('falls back to the derived per-date attribution without submissions', () => {
+    expect(calculateDayNetPoints([habit], d(1), undefined, localToday)).toBe(10);
+  });
+
+  it('prefers stored submission totals when present (multi-count backfills)', () => {
+    const totals = new Map([[
+      'h1', new Map([[d(1), { count: 3, points: 30 }]]),
+    ]]);
+    expect(calculateDayNetPoints([habit], d(1), totals, localToday)).toBe(30);
+  });
+
+  it('sums signed contributions across habits', () => {
+    const neg = { ...habit, id: 'h2', type: 'negative', basePoints: 2 } as Habit;
+    expect(calculateDayNetPoints([habit, neg], d(1), undefined, localToday)).toBe(8);
   });
 });

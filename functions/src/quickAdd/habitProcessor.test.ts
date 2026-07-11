@@ -1200,3 +1200,53 @@ describe("normalizeHabitTitle", () => {
     expect(normalizeHabitTitle(" Drink   Water ")).toBe("drink   water");
   });
 });
+
+// ---------------------------------------------------------------------------
+// processToggleHabit — negative habits: sign from type, magnitude from
+// |basePoints|. Mirrors the client's habitSign/signedHabitPoints handling —
+// two client creation paths stored negative habits with opposite basePoints
+// signs, and reading basePoints raw AWARDED points for one convention.
+// ---------------------------------------------------------------------------
+
+describe("processToggleHabit — negative habit sign canonicalization", () => {
+  it("debits points for a negative habit stored with positive basePoints", () => {
+    const habit: Habit = {
+      ...baseHabit,
+      type: "negative",
+      basePoints: 2,
+      scoringType: "incremental",
+    };
+    const result = processToggleHabit(habit, "up");
+    expect(result).not.toBeNull();
+    expect(result!.pointsChange).toBe(-2);
+  });
+
+  it("debits points for a negative habit stored with NEGATIVE basePoints (wizard convention)", () => {
+    const habit: Habit = {
+      ...baseHabit,
+      type: "negative",
+      basePoints: -2,
+      scoringType: "incremental",
+    };
+    const result = processToggleHabit(habit, "up");
+    expect(result).not.toBeNull();
+    expect(result!.pointsChange).toBe(-2);
+  });
+
+  it("credits points back on down-toggle for both conventions", () => {
+    const stored = [-2, 2].map(basePoints => ({
+      ...baseHabit,
+      type: "negative" as const,
+      basePoints,
+      scoringType: "incremental" as const,
+      count: 1,
+      totalCount: 1,
+      completedDates: [today],
+    }));
+    stored.forEach(habit => {
+      const result = processToggleHabit(habit, "down");
+      expect(result).not.toBeNull();
+      expect(result!.pointsChange).toBe(2);
+    });
+  });
+});

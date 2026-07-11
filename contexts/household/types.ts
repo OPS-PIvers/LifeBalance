@@ -230,6 +230,10 @@ export interface HouseholdContextType {
   updateHabitSubmission: (habitId: string, submissionId: string, updates: Partial<HabitSubmission>) => Promise<void>;
   deleteHabitSubmission: (habitId: string, submissionId: string) => Promise<void>;
   getHabitSubmissions: (habitId: string, startDate?: string, endDate?: string) => Promise<HabitSubmission[]>;
+  /** Clear ONE calendar day of a habit's log: deletes that day's submissions
+   *  (or reverses a toggle-path completion), reversing exactly the points that
+   *  were credited, and recomputes streaks — all in one atomic batch. */
+  resetHabitDay: (habitId: string, date: string) => Promise<void>;
 
   // Challenge & Reward Actions
   updateChallenge: (challenge: Challenge) => Promise<void>;
@@ -377,6 +381,7 @@ export type GamificationContextValue = Pick<HouseholdContextType,
   | 'rewardsInventory' | 'freezeBank'
   | 'addHabit' | 'updateHabit' | 'deleteHabit' | 'reorderHabits' | 'toggleHabit' | 'resetHabit'
   | 'addHabitSubmission' | 'updateHabitSubmission' | 'deleteHabitSubmission' | 'getHabitSubmissions'
+  | 'resetHabitDay'
   | 'updateChallenge' | 'addChallenge' | 'markChallengeComplete' | 'redeemReward'
   | 'addReward' | 'updateReward' | 'deleteReward'
   | 'requestRedemption' | 'approveRedemption' | 'denyRedemption'
