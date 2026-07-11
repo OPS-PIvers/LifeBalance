@@ -15,7 +15,8 @@ import {
   getHabitResetUpdate,
   computeHouseholdPointsSync,
   computeManagedMemberPointsReset,
-  isHabitCompletedInCurrentPeriod
+  isHabitCompletedInCurrentPeriod,
+  normalizeHabitTitle
 } from './habitLogic';
 import { Habit } from '@/types/schema';
 import { format, subDays, subWeeks, startOfISOWeek } from 'date-fns';
@@ -1582,5 +1583,21 @@ describe('Plan 25 — frozen-aware streak persistence (reset + toggle)', () => {
     // The frozen day never enters completedDates.
     expect(result!.updatedHabit.completedDates).not.toContain(d(1));
     expect(result!.updatedHabit.completedDates).toContain(localToday);
+  });
+});
+
+// TODO.md §2A — client twin of functions/src/quickAdd/habitProcessor.ts's
+// normalizeHabitTitle.
+describe('normalizeHabitTitle', () => {
+  it('lowercases and trims', () => {
+    expect(normalizeHabitTitle('  Read Before Bed  ')).toBe('read before bed');
+  });
+
+  it('is idempotent on an already-normalized string', () => {
+    expect(normalizeHabitTitle('read')).toBe('read');
+  });
+
+  it('collapses only leading/trailing whitespace, not internal', () => {
+    expect(normalizeHabitTitle(' Drink   Water ')).toBe('drink   water');
   });
 });

@@ -28,6 +28,7 @@ import {
   processToggleHabit,
   isHabitStale,
   resetStaleHabit,
+  normalizeHabitTitle,
   Habit,
 } from "./habitProcessor";
 import { getPayPeriodForTransaction } from "../plaid/payPeriod";
@@ -1182,5 +1183,20 @@ describe("Plan 25 — resetStaleHabit keeps a frozen-bridged streak", () => {
     expect(resetStaleHabit(habit, T).streakDays).toBe(3);
     // Without the freeze, the reset collapses the streak.
     expect(resetStaleHabit({ ...habit, frozenDates: [] }, T).streakDays).toBe(0);
+  });
+});
+
+// TODO.md §2A — server twin of utils/habitLogic.ts's normalizeHabitTitle.
+describe("normalizeHabitTitle", () => {
+  it("lowercases and trims", () => {
+    expect(normalizeHabitTitle("  Read Before Bed  ")).toBe("read before bed");
+  });
+
+  it("is idempotent on an already-normalized string", () => {
+    expect(normalizeHabitTitle("read")).toBe("read");
+  });
+
+  it("collapses only leading/trailing whitespace, not internal", () => {
+    expect(normalizeHabitTitle(" Drink   Water ")).toBe("drink   water");
   });
 });

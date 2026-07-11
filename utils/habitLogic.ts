@@ -16,6 +16,18 @@ import {
 type HabitPeriod = Habit['period'];
 
 /**
+ * Normalizes a habit title into the denormalized `Habit.titleLower` field:
+ * lowercased and trimmed. Written by the client's `addHabit`/`updateHabit`
+ * (hooks/useHabitActions.tsx) so `functions/src/quickAdd/index.ts`'s
+ * quickAddHabit endpoint can do an indexed `where('titleLower', '==', ...)`
+ * exact-match lookup instead of a full-collection scan for every request.
+ * Duplicated (not shared) in functions/src/quickAdd/habitProcessor.ts —
+ * Cloud Functions is a separate package with no cross-package import path;
+ * change both together.
+ */
+export const normalizeHabitTitle = (title: string): string => title.toLowerCase().trim();
+
+/**
  * Check if a habit is stale (last updated in a previous period)
  * @param habit - The habit to check (must contain id, period, and lastUpdated)
  * @returns true if the habit needs to be reset, false otherwise

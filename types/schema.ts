@@ -300,6 +300,15 @@ export interface Habit {
   category: string;
   type: 'positive' | 'negative';
 
+  // Denormalized lowercased/trimmed `title` (utils/habitLogic.ts's
+  // `normalizeHabitTitle`), written by client addHabit/updateHabit. Lets the
+  // quickAddHabit Cloud Function do an indexed exact-match `where('titleLower',
+  // '==', ...)` query instead of a full-collection scan on every iOS Shortcut
+  // request. Optional/absent on legacy docs until utils/migrations/titleLowerMigration.ts
+  // backfills them; quickAddHabit falls back to its existing fuzzy full-scan
+  // when the indexed lookup misses.
+  titleLower?: string;
+
   // Scoring & Frequency
   basePoints: number;
   scoringType: 'incremental' | 'threshold';

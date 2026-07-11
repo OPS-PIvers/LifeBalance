@@ -36,6 +36,22 @@ export interface Habit {
    * points. Mirrors `Habit.frozenDates` in types/schema.ts.
    */
   frozenDates?: string[];
+  /**
+   * Denormalized lowercased/trimmed `title` (see `normalizeHabitTitle` below),
+   * written by the client's addHabit/updateHabit. Mirrors `Habit.titleLower`
+   * in types/schema.ts. Optional/absent on un-backfilled docs.
+   */
+  titleLower?: string;
+}
+
+/**
+ * Normalizes a habit title into the denormalized `titleLower` field:
+ * lowercased and trimmed. Duplicated from (not shared with) the client's
+ * `normalizeHabitTitle` in utils/habitLogic.ts — Cloud Functions is a
+ * separate package with no cross-package import path; change both together.
+ */
+export function normalizeHabitTitle(title: string): string {
+  return title.toLowerCase().trim();
 }
 
 export interface ToggleHabitResult {
