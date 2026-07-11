@@ -10,6 +10,7 @@ import { isReviewSnoozed } from '@/hooks/useActionQueue';
 import { useAppReopen } from '@/hooks/useAppReopen';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
+import { useKeyboardViewportAnchor } from '@/hooks/useKeyboardViewportAnchor';
 
 // Lazy so the kid view (Plan 080b) stays out of the always-mounted boot bundle —
 // it only loads when a parent actually switches into a kid.
@@ -29,6 +30,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const { members, activeMemberId, isLoading } = useHouseholdCore();
   const { transactions } = useFinance();
   const kidModeEnabled = useKidModeEnabled();
+  // Keeps the header and fixed overlays (toasts) anchored when the iOS
+  // keyboard pans the window; the ref scopes it to in-page inputs (portal
+  // Drawers/Modals keep WebKit's native pan). See the hook's doc comment.
+  const shellRef = useKeyboardViewportAnchor<HTMLDivElement>();
 
   // Every un-snoozed pending_review transaction is a review candidate. Ordered
   // newest-first (date desc) so the most recent activity is reviewed first.
@@ -115,7 +120,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   }
 
   return (
-    <div className="flex flex-col h-dvh overflow-hidden bg-brand-50 dark:bg-brand-900 transition-colors">
+    <div
+      ref={shellRef}
+      // --app-height is set by useKeyboardViewportAnchor while the iOS
+      // keyboard is open (visual viewport height); otherwise 100dvh as before.
+      className="flex flex-col h-[var(--app-height,100dvh)] overflow-hidden bg-brand-50 dark:bg-brand-900 transition-colors"
+    >
       <div className="flex-none">
         <TopToolbar />
       </div>
