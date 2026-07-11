@@ -5,8 +5,7 @@ code alone** because they require Admin-SDK / Google Cloud Console / ops access.
 Each item is gated: do the out-of-band step first, then make (and deploy) the
 code/rules change. Until the gate is satisfied, the current state is intentional.
 
-Related audit: [`docs/CODEBASE_IMPROVEMENTS.md`](./CODEBASE_IMPROVEMENTS.md) §3.
-Security model: [`SECURITY_MODEL.md`](../SECURITY_MODEL.md).
+Security model: [`SECURITY_MODEL.md`](../SECURITY_MODEL.md). Consolidated backlog: [`TODO.md`](../TODO.md).
 
 ---
 
