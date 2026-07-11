@@ -14,7 +14,7 @@
 import { addDays, format, isAfter, isValid, parseISO, startOfToday } from 'date-fns';
 
 import { CREDIT_CARD_CATEGORY, type Account, type BudgetBucket, type CalendarItem, type Transaction } from '@/types/schema';
-import { normalizeStoreName } from '@/utils/storeMatch';
+import { matchMerchantNames, type MerchantMatchStrength } from '@/utils/habitSuggestions';
 
 /** Fallback category assigned by AI scans / shortcut stubs when nothing matched. */
 const UNCATEGORIZED = 'Uncategorized';
@@ -28,17 +28,45 @@ const byRecency = (a: Transaction, b: Transaction): number => {
   return 0;
 };
 
-/** Verified transactions whose normalized merchant/store matches `name`, most recent first. */
+/**
+ * Verified transactions matching `name`, most recent first. Reuses the shipped
+ * merchant matcher (`matchMerchantNames`, exact/similar/none): exact-identity
+ * rows are preferred, and only when NONE exist does the lookup widen to the
+ * fuzzier 'similar' tier, so feed variants like "STARBUCKS STORE #08841" still
+ * inherit "Starbucks" history without fuzzy rows ever outvoting exact ones.
+ */
 const verifiedHistoryFor = (name: string, transactions: readonly Transaction[]): Transaction[] => {
-  const key = normalizeStoreName(name);
-  if (!key) return [];
-  return transactions
-    .filter(
-      tx =>
-        tx.status === 'verified' &&
-        (normalizeStoreName(tx.merchant) === key || normalizeStoreName(tx.store) === key)
-    )
-    .sort(byRecency);
+  if (!name || !name.trim()) return [];
+
+  // Memoize matchMerchantNames per distinct `other` string: histories repeat the
+  // same merchant/store names, and matchMerchantNames re-normalizes + tokenizes on
+  // every call, so a local cache avoids redundant regex work. Single-pass with no
+  // intermediate arrays keeps GC pressure low when the Action Queue scores many
+  // items on a single render.
+  const cache = new Map<string, MerchantMatchStrength>();
+  const strengthFor = (other: string): MerchantMatchStrength => {
+    let cached = cache.get(other);
+    if (cached === undefined) {
+      cached = matchMerchantNames(name, other);
+      cache.set(other, cached);
+    }
+    return cached;
+  };
+
+  const exact: Transaction[] = [];
+  const similar: Transaction[] = [];
+  for (const tx of transactions) {
+    if (tx.status !== 'verified') continue;
+    const byMerchant = strengthFor(tx.merchant);
+    if (byMerchant === 'exact') { exact.push(tx); continue; }
+    const byStore = tx.store ? strengthFor(tx.store) : 'none';
+    if (byStore === 'exact') { exact.push(tx); continue; }
+    if (byMerchant === 'similar' || byStore === 'similar') similar.push(tx);
+  }
+
+  // Exact-identity rows win outright; 'similar' rows apply only when no exact exist.
+  const pool = exact.length > 0 ? exact : similar;
+  return pool.sort(byRecency);
 };
 
 /**
