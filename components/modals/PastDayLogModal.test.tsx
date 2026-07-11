@@ -44,10 +44,13 @@ const baseHabit: Habit = {
   createdBy: 'user-1',
 };
 
-const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
-
 describe('PastDayLogModal', () => {
+  // Computed per-test (not at import time) so a midnight rollover between
+  // module load and render can't desync it from the modal's own "yesterday".
+  let yesterday: string;
+
   beforeEach(() => {
+    yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
     mockContextValue.habits = [baseHabit];
     mockAddHabitSubmission.mockClear();
   });
@@ -103,6 +106,23 @@ describe('PastDayLogModal', () => {
     const row = screen.getByRole('button', { name: /Log Read 30 mins/ });
     expect(row).not.toBeDisabled();
     expect(screen.getByText('+1 more')).toBeInTheDocument();
+  });
+
+  it('does not double-submit on a rapid double-tap while a write is in flight', async () => {
+    const user = userEvent.setup();
+    let resolveWrite: () => void = () => {};
+    mockAddHabitSubmission.mockImplementationOnce(
+      () => new Promise<void>(resolve => { resolveWrite = resolve; })
+    );
+    render(<PastDayLogModal isOpen={true} onClose={() => {}} />);
+
+    const row = screen.getByRole('button', { name: /Log Read 30 mins/ });
+    // Two clicks before the first write settles — the synchronous ref guard
+    // must swallow the second even though React hasn't re-rendered yet.
+    await user.dblClick(row);
+    resolveWrite();
+
+    expect(mockAddHabitSubmission).toHaveBeenCalledTimes(1);
   });
 
   it('disables future days in the calendar', () => {

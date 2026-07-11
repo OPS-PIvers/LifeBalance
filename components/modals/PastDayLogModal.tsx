@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { format, isSameMonth, isToday, addMonths, subMonths, subDays, parseISO, differenceInCalendarDays } from 'date-fns';
 import { ChevronLeft, ChevronRight, Check, Plus, CalendarDays, Star } from 'lucide-react';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
@@ -50,6 +50,11 @@ const PastDayLogModal: React.FC<PastDayLogModalProps> = ({ isOpen, onClose }) =>
   );
   const [currentMonth, setCurrentMonth] = useState<Date>(() => parseISO(selectedDate));
   // Habit ids with an in-flight write, so a slow network can't double-log a tap.
+  // The stable mutable Set is the actual guard — it updates synchronously inside
+  // the handler, so a fast double-tap that lands before React re-renders is
+  // still caught. The state mirror exists only to drive the disabled/dimmed row
+  // UI.
+  const [inFlightIds] = useState(() => new Set<string>());
   const [loggingIds, setLoggingIds] = useState<ReadonlySet<string>>(new Set());
 
   const { monthStart, days } = useCalendarGrid(currentMonth);
@@ -71,16 +76,19 @@ const PastDayLogModal: React.FC<PastDayLogModalProps> = ({ isOpen, onClose }) =>
   }, [sortedHabits]);
 
   // Days that already have at least one completion get a subtle dot, so the
-  // gaps (the days worth backfilling) stand out at a glance.
+  // gaps (the days worth backfilling) stand out at a glance. Derived from the
+  // same parent-visible set as the list below, so a kid chore's completion
+  // can't light up a day this modal doesn't show.
   const completedDateSet = useMemo(() => {
     const set = new Set<string>();
-    habits.forEach(h => h.completedDates.forEach(d => set.add(d)));
+    sortedHabits.forEach(h => h.completedDates.forEach(d => set.add(d)));
     return set;
-  }, [habits]);
+  }, [sortedHabits]);
 
-  const handleLog = async (habit: Habit) => {
-    if (loggingIds.has(habit.id)) return;
-    setLoggingIds(prev => new Set(prev).add(habit.id));
+  const handleLog = useCallback(async (habit: Habit) => {
+    if (inFlightIds.has(habit.id)) return;
+    inFlightIds.add(habit.id);
+    setLoggingIds(new Set(inFlightIds));
     try {
       // Threshold habits complete by reaching targetCount; one tap logs the
       // full target so the day flips to done. Incremental habits score per
@@ -93,13 +101,10 @@ const PastDayLogModal: React.FC<PastDayLogModalProps> = ({ isOpen, onClose }) =>
         positive: habit.type === 'positive',
       });
     } finally {
-      setLoggingIds(prev => {
-        const next = new Set(prev);
-        next.delete(habit.id);
-        return next;
-      });
+      inFlightIds.delete(habit.id);
+      setLoggingIds(new Set(inFlightIds));
     }
-  };
+  }, [addHabitSubmission, inFlightIds, selectedDate, today]);
 
   const selectedIsToday = selectedDate === today;
   const selectedLabel = selectedIsToday ? 'Today' : format(parseISO(selectedDate), 'EEEE, MMMM d');
