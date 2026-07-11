@@ -71,24 +71,51 @@ function errorResponse(
   });
 }
 
-// CORS headers for iOS Shortcuts
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
+// Production hosting origins (see firebase.json / .github/DEPLOYMENT_SETUP.md).
+// There is no browser UI that calls these endpoints today — the allowlist just
+// bounds the blast radius if one is ever added, rather than granting every
+// website on the internet the ability to read responses from a signed-in
+// visitor's browser via `Access-Control-Allow-Origin: *`.
+const ALLOWED_ORIGINS = new Set<string>([
+  "https://lifebalance-26080.web.app",
+  "https://lifebalance-26080.firebaseapp.com",
+]);
+
+/**
+ * Set CORS headers for browser callers only.
+ *
+ * These endpoints are consumed primarily by iOS Shortcuts / curl / other
+ * non-browser HTTP clients, none of which send an `Origin` header — CORS is a
+ * browser-only enforcement mechanism, so those callers are unaffected either
+ * way. When an `Origin` header IS present we only echo it back (letting the
+ * browser read the response) if it's in the production hosting allowlist
+ * above; otherwise no `Access-Control-Allow-Origin` header is set, so the
+ * browser blocks the response (and, since these endpoints require a
+ * non-simple `Authorization`/JSON request, blocks the preflight from ever
+ * authorizing the actual POST).
+ */
+function applyCorsHeaders(
+  req: { headers: { origin?: string } },
+  res: HttpResponse
+): void {
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.has(origin)) {
+    res.set("Access-Control-Allow-Origin", origin);
+    res.set("Vary", "Origin");
+    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  }
+}
 
 /**
  * POST /quickAddHabit
  * Toggle a habit by ID or name
  */
 export const quickAddHabit = onRequest(
-  { cors: true, region: "us-central1" },
+  { cors: false, region: "us-central1" },
   async (req, res) => {
     // Set CORS headers
-    Object.entries(corsHeaders).forEach(([key, value]) =>
-      res.set(key, value)
-    );
+    applyCorsHeaders(req, res);
 
     // Handle preflight
     if (req.method === "OPTIONS") {
@@ -217,7 +244,10 @@ export const quickAddHabit = onRequest(
       }
 
       if (!habit || !habitRef) {
-        errorResponse(res, 404, `Habit not found: ${habitId || habitName}`, "NOT_FOUND");
+        // Do not echo user-supplied habitId/habitName back into the response —
+        // it's unvalidated input and this endpoint is public (API-key auth
+        // only), so reflecting it would be a stored/reflected content risk.
+        errorResponse(res, 404, "Habit not found", "NOT_FOUND");
         await logApiCall(householdId, apiKey.substring(0, 16), "habit", req.body, 404);
         return;
       }
@@ -301,12 +331,10 @@ export const quickAddHabit = onRequest(
  * Create a quick expense transaction
  */
 export const quickAddExpense = onRequest(
-  { cors: true, region: "us-central1" },
+  { cors: false, region: "us-central1" },
   async (req, res) => {
     // Set CORS headers
-    Object.entries(corsHeaders).forEach(([key, value]) =>
-      res.set(key, value)
-    );
+    applyCorsHeaders(req, res);
 
     // Handle preflight
     if (req.method === "OPTIONS") {
@@ -939,12 +967,10 @@ export const quickAddExpense = onRequest(
  * Add an item to the shopping list via voice or shortcut
  */
 export const quickAddShoppingItem = onRequest(
-  { cors: true, region: "us-central1" },
+  { cors: false, region: "us-central1" },
   async (req, res) => {
     // Set CORS headers
-    Object.entries(corsHeaders).forEach(([key, value]) =>
-      res.set(key, value)
-    );
+    applyCorsHeaders(req, res);
 
     // Handle preflight
     if (req.method === "OPTIONS") {
@@ -1312,12 +1338,10 @@ function detectCommandType(text: string): 'shopping' | 'todo' | 'expense' | 'unk
  * Accepts natural language text from iOS Shortcuts and queues it for processing
  */
 export const quickAddNaturalLanguage = onRequest(
-  { cors: true, region: "us-central1" },
+  { cors: false, region: "us-central1" },
   async (req, res) => {
     // Set CORS headers
-    Object.entries(corsHeaders).forEach(([key, value]) =>
-      res.set(key, value)
-    );
+    applyCorsHeaders(req, res);
 
     // Handle preflight
     if (req.method === "OPTIONS") {
