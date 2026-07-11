@@ -1,6 +1,6 @@
 # Stripe Setup Runbook — turnkey `[H]` steps for monetization (Plan 050–052)
 
-The **code** for billing is the `[C]` half (see [`plans/050-stripe-monetization.md`](../plans/050-stripe-monetization.md));
+The **code** for billing is the `[C]` half (shipped, dormant/unexported — see [`TODO.md`](../TODO.md) §1.3);
 **this** runbook is the irreducible human half — the Stripe account, money/legal entity, secrets, and
 webhook wiring that Claude can never do. It expands the plan's 6-line checklist into click-by-click
 steps with a verification at each gate.
@@ -132,7 +132,7 @@ Only after 1.6 passes in test mode:
   client can corrupt entitlement in the meantime.
 
 ## Cross-references
-- Code plan + PR sequence + non-negotiable principles: [`plans/050-stripe-monetization.md`](../plans/050-stripe-monetization.md).
+- Activation checklist (export the dormant functions + flip `billingEnabled`): [`TODO.md`](../TODO.md) §1.3.
 - Flag pattern this reuses: [`services/appConfig.ts`](../services/appConfig.ts) (`getOpenSignup` → add `getBillingEnabled`).
 - Secret pattern this reuses: the `GEMINI_API_KEY` setup in [`DEPLOY_CHECKLIST.md`](./DEPLOY_CHECKLIST.md) §2 and the 014 history.
 - **Sequencing:** don't begin Phase 1 charging before the launch gate in [`PRELAUNCH_CHECKLIST.md`](./PRELAUNCH_CHECKLIST.md) is satisfied.

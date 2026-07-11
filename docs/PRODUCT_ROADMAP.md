@@ -34,7 +34,7 @@ This is **not** a weekend toy. By engineering standards it is already ahead of m
   sync, AI receipt/statement scanning, push notifications, and an iOS Shortcuts API.
 - **Operational maturity for a hobby project.** CI on every PR (lint + test + build),
   Husky pre-commit hooks, a documented security model, and a self-maintained tech-debt
-  backlog (`docs/CODEBASE_IMPROVEMENTS.md`, `todo/`).
+  backlog (`TODO.md`).
 
 **Translation:** the *engine* is built. What's missing is almost entirely the stuff that
 turns an engine into a *business*: a way to get in (frictionless onboarding), a reason to
@@ -182,7 +182,7 @@ Each phase has an **exit criterion** — don't move on until you hit it.
   spouse should be one tap with a nice shareable link, not a 6-char code buried in setup.
 - **A real marketing/landing page** (separate static site — Framer, Carrd, or a Vite page):
   what it is, who it's for (couples/families), screenshots, a waitlist/sign-up.
-- **Fix the unbounded listeners** (`todo/14`) before real users with large data hit them.
+- **Fix the unbounded listeners** ([`TODO.md`](../TODO.md) §2A) before real users with large data hit them.
 - **Exit:** **Week-4 retention you can measure** and a handful of unprompted "I told my
   friend about this" moments. Don't add billing until people come back on their own.
 
@@ -216,7 +216,7 @@ Each phase has an **exit criterion** — don't move on until you hit it.
 ### Phase 4 — Scale & Fundability
 **Goal:** the metrics and infra that make you fundable/acquirable.
 - **Cost control at scale:** paginate high-cardinality listeners, denormalize Safe-to-Spend
-  into a summary doc, and stop the hourly all-household notification scan (`todo/4`) —
+  into a summary doc, and merge the hourly notification crons ([`TODO.md`](../TODO.md) §2A) —
   these are the things that turn a $50/mo Firebase bill into a $3k/mo one at 100k users.
 - **Bank sync (Plaid)** — the big one. Removes the only feature gap vs. paid competitors,
   but it's a real cost ($) and a vendor relationship. This is the feature that converts
@@ -268,7 +268,7 @@ solo, in your spare time.** Tiers:
 | **Onboarding wizard** | #1 retention lever for new users | 4–5 steps; the single highest-ROI UX work. |
 | **Delightful partner-invite flow** | Built-in virality | One-tap shareable link; replace buried 6-char code. |
 | **Marketing/landing page + waitlist** | Distribution | Static site (Framer/Carrd) or a public Vite route. |
-| **Fix unbounded listeners (`todo/14`)** | Breaks at scale | Window meals/calendar/grocery + add indexes. |
+| **Fix unbounded listeners ([`TODO.md`](../TODO.md) §2A)** | Breaks at scale | Window meals/calendar/grocery + add indexes. |
 | **Proactive AI insights** (auto-surface, not just on-tap) | Marquee differentiator | Integration exists; trigger it automatically (recap/dashboard/pattern-shift). |
 | **Weekly household recap (email/push)** | Retention heartbeat | Scheduled function + a digest template. |
 | **E2E test skeleton (Playwright)** | Confidence to ship fast | Cover signup → add account → add habit. |
@@ -280,7 +280,7 @@ solo, in your spare time.** Tiers:
 |---|---|---|
 | **Stripe billing + plans + entitlements** | This is literally how you make money | 3–4 weeks: checkout, webhook fn, server-side gating, upgrade UI. |
 | **Referral / invite-reward system** | Primary growth lever | Tracking, attribution, reward granting. |
-| **Cost-control refactor for scale** | Avoids a surprise $3k Firebase bill | Paginate listeners, denormalize Safe-to-Spend summary, fix hourly notification scan (`todo/4`). |
+| **Cost-control refactor for scale** | Avoids a surprise $3k Firebase bill | Paginate listeners, denormalize Safe-to-Spend summary, merge hourly notification crons ([`TODO.md`](../TODO.md) §2A). |
 | **Split the 3.8k-line context** | Maintainability as you add features | Already partially sliced; finish it. |
 | **Admin panel** | You'll need it for support day 1 | Household lookup, quota reset, billing overrides. |
 | **Audit log for financial edits** | Trust + future compliance | Who changed which transaction, when. |
@@ -423,7 +423,7 @@ retention number you'd put on a slide._
 | Cloud Functions (billing/deletion go here) | `functions/src/` |
 | Onboarding entry points | `pages/Login.tsx`, `pages/HouseholdSetup.tsx` |
 | AI insights (make proactive/automatic) | context `refreshInsight` (`:3614`) + `generateInsight` |
-| Deferred scale work | `todo/04`, `todo/14`, `todo/18`, `todo/19` |
+| Deferred scale work | [`TODO.md`](../TODO.md) §2A |
 
 ---
 

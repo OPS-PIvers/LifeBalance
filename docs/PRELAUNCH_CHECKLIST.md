@@ -85,8 +85,8 @@ These don't block opening signup, but are worth closing around launch:
       ([`DEPLOY_CHECKLIST.md`](./DEPLOY_CHECKLIST.md) §1). HIGH-risk rules change; human-watched.
 - [ ] **004 CSP** — flip Content-Security-Policy from Report-Only to enforce after an authed-path verify
       (runbook in the #646 PR).
-- [ ] **015** — decide the money-model fix ([`plans/015-money-model-decision.md`](../plans/015-money-model-decision.md))
-      so Safe-to-Spend is correct before money-sensitive users arrive.
+- [x] **015** — money-model fix **DONE** (shipped in #737: verified-only checking balance; Safe-to-Spend
+      no longer double-counts pending). No action remaining.
 
 ---
 
