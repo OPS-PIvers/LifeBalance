@@ -58,6 +58,7 @@ import { calculatePointsForDate, calculatePointsForDateRange, computeManagedMemb
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { migrateBucketsToPeriods, needsMigration, migrateToPaycheckPeriods, needsPaycheckMigration } from '@/utils/migrations/payPeriodMigration';
 import { migrateOrphanedHabits, needsHabitMigration } from '@/utils/migrations/habitMigration';
+import { backfillTitleLower, needsTitleLowerMigration } from '@/utils/migrations/titleLowerMigration';
 import { migrateDuplicateMeals, needsMealDedup } from '@/utils/migrations/mealDedupMigration';
 import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
 import { usePointsSync, type PointsSyncUpdate } from '@/hooks/usePointsSync';
@@ -1397,6 +1398,33 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     };
 
     runHabitMigration();
+  }, [householdId, habits]);
+
+  // Backfill Habit.titleLower (TODO.md §2A) so quickAddHabit's indexed
+  // exact-match lookup can find pre-existing habits.
+  const hasAttemptedTitleLowerMigration = useRef(false);
+
+  useEffect(() => {
+    if (!householdId || !habits.length) return;
+    if (hasAttemptedTitleLowerMigration.current) return;
+
+    const runTitleLowerMigration = async () => {
+      if (needsTitleLowerMigration(habits)) {
+        // Mark as attempted before running to prevent race conditions/loops
+        hasAttemptedTitleLowerMigration.current = true;
+
+        console.log('[Migration] Starting titleLower backfill...');
+        try {
+          await backfillTitleLower(householdId, habits);
+        } catch (error) {
+          console.error('[Migration] Failed to backfill titleLower:', error);
+          // Allow retrying on next session/reload if it failed
+          // But kept true for this session to avoid loop spamming
+        }
+      }
+    };
+
+    runTitleLowerMigration();
   }, [householdId, habits]);
 
   // Merge duplicate recipes (same name up to case/spacing/punctuation) —

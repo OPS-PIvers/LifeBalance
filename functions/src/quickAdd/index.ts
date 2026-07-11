@@ -22,6 +22,7 @@ import {
   processToggleHabit,
   resetStaleHabit,
   fuzzyMatchHabit,
+  normalizeHabitTitle,
 } from "./habitProcessor";
 import { formatCurrency } from "../utils/formatCurrency";
 import { getPayPeriodForTransaction } from "../plaid/payPeriod";
@@ -181,16 +182,37 @@ export const quickAddHabit = onRequest(
           habit = { id: habitDoc.id, ...habitDoc.data() } as Habit;
         }
       } else if (habitName) {
-        // Fuzzy match by name
-        const habitsSnapshot = await db
+        // Fast path: indexed exact-match lookup on the denormalized
+        // `titleLower` field, avoiding a full-collection scan for the common
+        // case of an exact (case/whitespace-insensitive) title match.
+        const normalizedName = normalizeHabitTitle(habitName);
+        const exactSnapshot = await db
           .collection(`households/${householdId}/habits`)
+          .where("titleLower", "==", normalizedName)
+          .limit(1)
           .get();
-        const habits = habitsSnapshot.docs.map(
-          (doc) => ({ id: doc.id, ...doc.data() } as Habit)
-        );
-        habit = fuzzyMatchHabit(habits, habitName);
-        if (habit) {
-          habitRef = db.doc(`households/${householdId}/habits/${habit.id}`);
+
+        if (!exactSnapshot.empty) {
+          const exactDoc = exactSnapshot.docs[0];
+          if (exactDoc) {
+            habit = { id: exactDoc.id, ...exactDoc.data() } as Habit;
+            habitRef = db.doc(`households/${householdId}/habits/${habit.id}`);
+          }
+        }
+
+        // Fallback: full-collection scan + fuzzy match. Covers habits not yet
+        // backfilled with `titleLower` and partial/starts-with name matches.
+        if (!habit) {
+          const habitsSnapshot = await db
+            .collection(`households/${householdId}/habits`)
+            .get();
+          const habits = habitsSnapshot.docs.map(
+            (doc) => ({ id: doc.id, ...doc.data() } as Habit)
+          );
+          habit = fuzzyMatchHabit(habits, habitName);
+          if (habit) {
+            habitRef = db.doc(`households/${householdId}/habits/${habit.id}`);
+          }
         }
       }
 

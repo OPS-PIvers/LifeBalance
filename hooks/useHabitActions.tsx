@@ -27,7 +27,8 @@ import {
   streakForHabit,
   streakEndingOnForHabit,
   isHabitStale,
-  getMultiplier
+  getMultiplier,
+  normalizeHabitTitle
 } from '@/utils/habitLogic';
 import toast from 'react-hot-toast';
 import { addDays, format, parseISO, startOfWeek } from 'date-fns';
@@ -83,6 +84,7 @@ export const useHabitActions = (
       // The original code used `user.uid` from useAuth() but currentUser.uid should match
       const docRef = await addDoc(collection(db, `households/${householdId}/habits`), {
         ...habit,
+        titleLower: normalizeHabitTitle(habit.title),
         createdBy: currentUser.uid,
         isShared: habit.isShared ?? true,
         ownerId: habit.isShared ? null : currentUser.uid,
@@ -104,6 +106,7 @@ export const useHabitActions = (
       const updateData = Object.fromEntries(
         Object.entries({
           title: habit.title,
+          titleLower: normalizeHabitTitle(habit.title),
           category: habit.category,
           type: habit.type,
           basePoints: habit.basePoints,

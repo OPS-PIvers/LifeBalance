@@ -252,6 +252,7 @@ function renderProvider() {
 const baseHabit = (overrides: Partial<Habit>): Habit => ({
   id: 'hb1',
   title: 'Read',
+  titleLower: 'read',
   category: 'Health',
   type: 'positive',
   period: 'daily',

@@ -226,6 +226,10 @@ const logAddMock = vi.fn(() => Promise.resolve({ id: "log1" }));
 interface CollectionOverride {
   add?: ReturnType<typeof vi.fn>;
   whereGetDocs?: unknown[];
+  /** Docs returned by an un-filtered `.get()` on the collection ref (full scan). */
+  getDocs?: unknown[];
+  /** Docs returned by `.where('titleLower', '==', ...).limit(1).get()` (indexed exact match). */
+  whereLimitDocs?: unknown[];
 }
 
 let collectionOverrides: Record<string, CollectionOverride> = {};
@@ -238,11 +242,17 @@ function configureCollections(): void {
     const override = collectionOverrides[path] ?? {};
     const add = override.add ?? vi.fn(() => Promise.resolve({ id: "new1" }));
     const docs = override.whereGetDocs ?? [];
+    const scanDocs = override.getDocs ?? [];
+    const limitDocs = override.whereLimitDocs ?? [];
     return {
       add,
       doc: () => ({ id: "preallocated1" }),
+      get: () => Promise.resolve({ docs: scanDocs }),
       where: () => ({
         get: () => Promise.resolve({ docs }),
+        limit: () => ({
+          get: () => Promise.resolve({ docs: limitDocs, empty: limitDocs.length === 0 }),
+        }),
       }),
     };
   });
@@ -468,6 +478,77 @@ describe("quickAddHabit validation & happy path", () => {
     expect(lastBatch.commit).toHaveBeenCalledTimes(1);
     // Two updates: the habit ref and the household ref (pointsChange = +10 != 0).
     expect(lastBatch.update).toHaveBeenCalledTimes(2);
+  });
+
+  it("habitName resolves via the indexed titleLower exact match, skipping the full scan", async () => {
+    const habitsPath = `households/${HOUSEHOLD_ID}/habits`;
+    collectionOverrides[habitsPath] = {
+      // whereLimitDocs backs the titleLower exact-match query. getDocs (the
+      // full-scan fallback) is deliberately left empty — if the code fell
+      // through to the fuzzy scan it would find nothing and 404, so a 200
+      // here proves the indexed path was used.
+      whereLimitDocs: [
+        { id: "h1", data: () => nonStaleHabitData() },
+      ],
+      getDocs: [],
+    };
+    configureCollections();
+    docOverrides[`households/${HOUSEHOLD_ID}/habits/h1`] = {
+      get: vi.fn(() =>
+        Promise.resolve({ exists: true, id: "h1", data: () => nonStaleHabitData() })
+      ),
+      update: vi.fn(() => Promise.resolve()),
+    };
+
+    const res = makeRes();
+    await asHandler(quickAddHabit)(
+      makeReq({ body: { habitName: "  Read  " } }),
+      res
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ success: true });
+  });
+
+  it("habitName falls back to the fuzzy full-scan when no titleLower exact match exists", async () => {
+    const habitsPath = `households/${HOUSEHOLD_ID}/habits`;
+    collectionOverrides[habitsPath] = {
+      whereLimitDocs: [], // no indexed exact match (un-backfilled doc)
+      getDocs: [
+        { id: "h1", data: () => nonStaleHabitData() },
+      ],
+    };
+    configureCollections();
+    docOverrides[`households/${HOUSEHOLD_ID}/habits/h1`] = {
+      get: vi.fn(() =>
+        Promise.resolve({ exists: true, id: "h1", data: () => nonStaleHabitData() })
+      ),
+      update: vi.fn(() => Promise.resolve()),
+    };
+
+    const res = makeRes();
+    await asHandler(quickAddHabit)(
+      makeReq({ body: { habitName: "Read" } }),
+      res
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ success: true });
+  });
+
+  it("habitName with no exact or fuzzy match returns 404", async () => {
+    const habitsPath = `households/${HOUSEHOLD_ID}/habits`;
+    collectionOverrides[habitsPath] = { whereLimitDocs: [], getDocs: [] };
+    configureCollections();
+
+    const res = makeRes();
+    await asHandler(quickAddHabit)(
+      makeReq({ body: { habitName: "Nonexistent" } }),
+      res
+    );
+
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toMatchObject({ error: { code: "NOT_FOUND" } });
   });
 });
 
