@@ -2,10 +2,12 @@ import React, { useMemo } from 'react';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { isHabitStale } from '@/utils/habitLogic';
 import { format, startOfToday } from 'date-fns';
-import { Check, Flame, Plus } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Check, Flame, ListChecks, Plus } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import SectionActionLink from '@/components/ui/SectionActionLink';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
+import EmptyState from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
 import { cn } from '@/utils/cn';
 
 const MAX_VISIBLE_HABITS = 5;
@@ -13,6 +15,7 @@ const DEFAULT_ORDER_FALLBACK = 999;
 
 export const DailyHabitsWidget: React.FC = React.memo(() => {
   const { habits, toggleHabit } = useGamification();
+  const navigate = useNavigate();
 
   // Computed on every render (date formatting is cheap) so the value stays
   // correct across a midnight rollover even if the dashboard is left open.
@@ -58,7 +61,29 @@ export const DailyHabitsWidget: React.FC = React.memo(() => {
       });
   }, [habits, today]);
 
-  if (dailyHabits.length === 0) return null;
+  if (dailyHabits.length === 0) {
+    return (
+      <Section title="Today's habits">
+        <EmptyState
+          variant="dashed"
+          size="compact"
+          icon={<ListChecks size={20} />}
+          title="No habits yet"
+          description="Add a habit to start building streaks and earning points."
+          action={
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => navigate('/habits')}
+              leftIcon={<Plus size={14} />}
+            >
+              Add a habit
+            </Button>
+          }
+        />
+      </Section>
+    );
+  }
 
   const visibleHabits = dailyHabits.slice(0, MAX_VISIBLE_HABITS);
   const remainingCount = dailyHabits.length - MAX_VISIBLE_HABITS;

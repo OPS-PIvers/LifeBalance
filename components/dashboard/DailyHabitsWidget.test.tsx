@@ -91,4 +91,18 @@ describe('DailyHabitsWidget smart ranking', () => {
     ]);
     expect(order).toEqual(['Daily one']);
   });
+
+  it('shows an add-first-habit CTA instead of nothing when there are no daily habits', () => {
+    vi.mocked(useGamification).mockReturnValue({
+      habits: [],
+      toggleHabit: vi.fn(),
+    } as unknown as ReturnType<typeof useGamification>);
+    const { getByText, getByRole } = render(
+      <MemoryRouter>
+        <DailyHabitsWidget />
+      </MemoryRouter>
+    );
+    expect(getByText('No habits yet')).toBeInTheDocument();
+    expect(getByRole('button', { name: /add a habit/i })).toBeInTheDocument();
+  });
 });
