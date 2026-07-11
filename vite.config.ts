@@ -56,6 +56,18 @@ export default defineConfig(({ command }) => {
               functions: 82,
               branches: 70,
             },
+            'services/**/*.{ts,tsx}': {
+              lines: 66,
+              statements: 52,
+              functions: 77,
+              branches: 52,
+            },
+            'contexts/**/*.{ts,tsx}': {
+              lines: 44,
+              statements: 28,
+              functions: 27,
+              branches: 47,
+            },
           },
         },
       },
