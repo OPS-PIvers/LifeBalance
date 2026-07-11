@@ -36,6 +36,9 @@ jobs:
         # Runs 'vitest run' via package.json script
         run: pnpm test
 
+      - name: Functions Tests
+        run: pnpm --filter functions run test
+
       - name: Generate build version
         run: |
           BUILD_VERSION=$(date +%s)
@@ -78,5 +81,11 @@ jobs:
           credentials_json: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
           create_credentials_file: true
 
-      - name: Deploy to Firebase
-        run: pnpm exec firebase deploy --project lifebalance-26080
+      - name: Deploy Firestore Rules
+        run: pnpm exec firebase deploy --only firestore:rules --project lifebalance-26080
+
+      - name: Deploy Cloud Functions
+        run: pnpm exec firebase deploy --only functions --project lifebalance-26080
+
+      - name: Deploy to Firebase Hosting
+        run: pnpm exec firebase deploy --only hosting --project lifebalance-26080

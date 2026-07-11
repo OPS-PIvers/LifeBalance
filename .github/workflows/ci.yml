@@ -44,6 +44,8 @@ jobs:
         # up. Replaces the previous plain 'pnpm test' step (coverage runs the
         # tests too, so we don't run the suite twice).
         run: pnpm test:coverage
+      - name: Functions Tests
+        run: pnpm --filter functions run test
       # Firestore Security Rules tests run against the Firestore emulator
       # (ubuntu-latest ships a compatible JDK, so no extra Java setup needed).
       # This gates every firestore.rules change: a bad rules deploy is atomic
