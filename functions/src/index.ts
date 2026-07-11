@@ -547,12 +547,19 @@ export const sendbudgetalerts = onDocumentWritten(
     const householdId = event.params.householdId;
     const householdRef = db.collection("households").doc(householdId);
 
-    // Fetch members from subcollection
-    const membersSnapshot = await householdRef.collection("members").get();
+    // Fetch members, accounts, and the household doc in parallel — none of
+    // these reads depends on another's result, so there's no reason to pay
+    // for three sequential round trips on every single account write.
+    const [membersSnapshot, accountsSnapshot, householdSnap] = await Promise.all([
+      householdRef.collection("members").get(),
+      // Recompute total checking balance across all accounts in the
+      // subcollection so the alert threshold reflects the real current state.
+      householdRef.collection("accounts").get(),
+      // Currency for the alert string is sourced from the household doc (the
+      // top-level `currency` field added by the client). Falls back to USD.
+      householdRef.get(),
+    ]);
 
-    // Recompute total checking balance across all accounts in the subcollection
-    // so the alert threshold reflects the real current state.
-    const accountsSnapshot = await householdRef.collection("accounts").get();
     const checkingBalance = accountsSnapshot.docs
       .map((accDoc) => accDoc.data())
       .filter((acc) => acc.type === "checking")
@@ -561,9 +568,6 @@ export const sendbudgetalerts = onDocumentWritten(
         0
       );
 
-    // Currency for the alert string is sourced from the household doc (the
-    // top-level `currency` field added by the client). Falls back to USD.
-    const householdSnap = await householdRef.get();
     const currency = householdSnap.data()?.currency || "USD";
 
     for (const memberDoc of membersSnapshot.docs) {

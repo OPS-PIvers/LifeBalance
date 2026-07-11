@@ -347,6 +347,45 @@ describe("quickAdd common HTTP-layer behavior", () => {
     expect(res.body).toMatchObject({ error: { code: "METHOD_NOT_ALLOWED" } });
   });
 
+  it("request with no Origin header gets no CORS headers but still succeeds (iOS Shortcuts/curl)", async () => {
+    const res = makeRes();
+    await asHandler(quickAddHabit)(
+      makeReq({ method: "OPTIONS", headers: { authorization: VALID_AUTH } }),
+      res
+    );
+    expect(res.statusCode).toBe(204);
+    expect(res.headers["Access-Control-Allow-Origin"]).toBeUndefined();
+  });
+
+  it("request from the allowlisted production origin gets a matching Access-Control-Allow-Origin", async () => {
+    const res = makeRes();
+    await asHandler(quickAddHabit)(
+      makeReq({
+        method: "OPTIONS",
+        headers: { authorization: VALID_AUTH, origin: "https://lifebalance-26080.web.app" },
+      }),
+      res
+    );
+    expect(res.statusCode).toBe(204);
+    expect(res.headers["Access-Control-Allow-Origin"]).toBe(
+      "https://lifebalance-26080.web.app"
+    );
+    expect(res.headers["Vary"]).toBe("Origin");
+  });
+
+  it("request from a non-allowlisted origin gets no Access-Control-Allow-Origin header", async () => {
+    const res = makeRes();
+    await asHandler(quickAddHabit)(
+      makeReq({
+        method: "OPTIONS",
+        headers: { authorization: VALID_AUTH, origin: "https://evil.example.com" },
+      }),
+      res
+    );
+    expect(res.statusCode).toBe(204);
+    expect(res.headers["Access-Control-Allow-Origin"]).toBeUndefined();
+  });
+
   it("missing Authorization header returns 401 UNAUTHORIZED", async () => {
     const res = makeRes();
     await asHandler(quickAddHabit)(makeReq({ headers: {} }), res);
@@ -452,7 +491,7 @@ describe("quickAddHabit validation & happy path", () => {
     expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
   });
 
-  it("habit not found returns 404 NOT_FOUND", async () => {
+  it("habit not found returns 404 NOT_FOUND without echoing the lookup input", async () => {
     docOverrides[`households/${HOUSEHOLD_ID}/habits/h1`] = {
       get: vi.fn(() => Promise.resolve({ exists: false })),
     };
@@ -460,6 +499,7 @@ describe("quickAddHabit validation & happy path", () => {
     await asHandler(quickAddHabit)(makeReq({ body: { habitId: "h1" } }), res);
     expect(res.statusCode).toBe(404);
     expect(res.body).toMatchObject({ error: { code: "NOT_FOUND" } });
+    expect((res.body as { message: string }).message).not.toContain("h1");
   });
 
   it("happy path toggles habit up, commits batch, updates habit + household points", async () => {
