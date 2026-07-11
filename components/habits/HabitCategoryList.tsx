@@ -81,6 +81,10 @@ const ReorderableHabitItem: React.FC<ReorderableItemProps> = ({ habit, onSave })
       // hairline-divider draws the 1px separator between rows; the parent
       // SurfaceList suppresses it on the first row.
       className="hairline-divider"
+      // Search deep-link target (see useScrollToHighlight) — applied
+      // imperatively via DOM classList, so it doesn't need a prop threaded
+      // through HabitCard's memo comparator.
+      data-highlight-target={habit.id}
       // Removed touch-none to allow vertical scrolling on the card itself.
       // Dragging is handled via the grip handle which has touch-none.
     >

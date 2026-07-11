@@ -340,6 +340,28 @@
 }
 
 /*
+ * Global search deep-link highlight (Plan 14 v1.1) — a brief flash applied to
+ * the row a search result scrolled to (see useScrollToHighlight). The
+ * app-wide prefers-reduced-motion guard below collapses this animation's
+ * duration to near-instant, so no separate reduced-motion variant is needed
+ * here — the element still gets a (near-instant) visible tint.
+ */
+@keyframes search-highlight-flash {
+  0%,
+  100% {
+    background-color: transparent;
+  }
+  20%,
+  55% {
+    background-color: color-mix(in srgb, var(--color-warm-500) 22%, transparent);
+  }
+}
+
+.search-highlight-flash {
+  animation: search-highlight-flash 1.6s ease-in-out;
+}
+
+/*
  * Global reduced-motion guard. When the user asks the OS for reduced motion,
  * collapse animations/transitions to near-instant instead of removing state
  * changes entirely. Gates CSS animations; component-level Framer Motion is

@@ -24,6 +24,8 @@ import HabitsInsightsTab from '@/components/habits/HabitsInsightsTab';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { usePowerToolsEnabled } from '@/hooks/usePowerToolsEnabled';
 import { useDeepLinkTab } from '@/hooks/useDeepLinkTab';
+import { useDeepLinkHighlight } from '@/hooks/useDeepLinkHighlight';
+import { useScrollToHighlight } from '@/hooks/useScrollToHighlight';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { isHabitCompletedInCurrentPeriod } from '@/utils/habitLogic';
 import { generateCsvExport } from '@/utils/exportUtils';
@@ -183,6 +185,10 @@ const Habits: React.FC = () => {
   const [isPastDayLogOpen, setIsPastDayLogOpen] = useState(false);
   // Controlled so the toolbar points glance can deep-link straight to Rewards.
   const [activeTab, setActiveTab] = useDeepLinkTab('track', HABIT_TABS);
+  // Global search deep-link (v1.1): scroll-to + briefly flash the specific
+  // habit row selected in SearchOverlay, on top of the tab-level jump above.
+  const highlightHabitId = useDeepLinkHighlight();
+  useScrollToHighlight(highlightHabitId);
 
   // Group Habits by Category (with Sorting)
   // Sort habits by order first. Exclude kid chores (assignedTo set) up front so the

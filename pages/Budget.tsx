@@ -9,6 +9,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Skeleton, SkeletonText } from '@/components/ui/Skeleton';
 import { useDeepLinkTab } from '@/hooks/useDeepLinkTab';
+import { useDeepLinkHighlight } from '@/hooks/useDeepLinkHighlight';
 import { preloadOnIdle } from '@/utils/preloadOnIdle';
 
 // recharts is heavy — lazy-load the Trends chart body so it only enters the
@@ -65,6 +66,9 @@ const Budget: React.FC = () => {
   // Controlled so the toolbar Safe-to-Spend glance / Home Analytics button can
   // deep-link straight to a tab (Overview / Trends) instead of opening a modal.
   const [activeTab, setActiveTab] = useDeepLinkTab('overview', MONEY_TABS);
+  // Global search deep-link (v1.1): scroll-to + briefly flash the specific
+  // transaction row selected in SearchOverlay, on top of the tab-level jump.
+  const highlightTransactionId = useDeepLinkHighlight();
 
   // Warm the heavy recharts/Trends chunk during browser idle once the Money
   // page is open, so switching to the Trends tab is instant — without competing
@@ -107,7 +111,7 @@ const Budget: React.FC = () => {
               <BudgetAccounts />
             </TabsContent>
             <TabsContent value="transactions">
-              <TransactionMasterList />
+              <TransactionMasterList highlightId={highlightTransactionId} />
             </TabsContent>
             <TabsContent value="trends">
               <Suspense
