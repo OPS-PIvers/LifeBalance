@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { differenceInCalendarDays, parseISO } from 'date-fns';
 import { CalendarDays, Plus, Star, X } from 'lucide-react';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
@@ -47,10 +47,10 @@ const DayHabitEditor: React.FC<DayHabitEditorProps> = ({
   const { addHabitSubmission, resetHabitDay } = useGamification();
 
   // Habit ids with an in-flight write, so a slow network can't double-log a
-  // tap. The stable mutable Set is the actual guard — it updates synchronously
+  // tap. The ref-held mutable Set is the actual guard — it updates synchronously
   // inside the handler, so a fast double-tap that lands before React re-renders
   // is still caught. The state mirror only drives the disabled/dimmed row UI.
-  const [inFlightIds] = useState(() => new Set<string>());
+  const inFlightIdsRef = useRef(new Set<string>());
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set());
 
   const groupedHabits = useMemo<[string, Habit[]][]>(() => {
@@ -64,6 +64,7 @@ const DayHabitEditor: React.FC<DayHabitEditorProps> = ({
   }, [habits]);
 
   const runGuarded = useCallback(async (habitId: string, action: () => Promise<void>) => {
+    const inFlightIds = inFlightIdsRef.current;
     if (inFlightIds.has(habitId)) return;
     inFlightIds.add(habitId);
     setBusyIds(new Set(inFlightIds));
@@ -74,7 +75,7 @@ const DayHabitEditor: React.FC<DayHabitEditorProps> = ({
       inFlightIds.delete(habitId);
       setBusyIds(new Set(inFlightIds));
     }
-  }, [inFlightIds, onMutated]);
+  }, [onMutated]);
 
   const handleLog = useCallback((habit: Habit) => runGuarded(habit.id, async () => {
     // One unit per tap — Track-tab parity (threshold habits fill toward their
