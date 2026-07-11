@@ -37,20 +37,36 @@ const byRecency = (a: Transaction, b: Transaction): number => {
  */
 const verifiedHistoryFor = (name: string, transactions: readonly Transaction[]): Transaction[] => {
   if (!name || !name.trim()) return [];
-  const strengthFor = (tx: Transaction): MerchantMatchStrength => {
-    const byMerchant = matchMerchantNames(name, tx.merchant);
-    if (byMerchant === 'exact') return 'exact';
-    const byStore = tx.store ? matchMerchantNames(name, tx.store) : 'none';
-    if (byStore === 'exact') return 'exact';
-    return byMerchant === 'similar' || byStore === 'similar' ? 'similar' : 'none';
+
+  // Memoize matchMerchantNames per distinct `other` string: histories repeat the
+  // same merchant/store names, and matchMerchantNames re-normalizes + tokenizes on
+  // every call, so a local cache avoids redundant regex work. Single-pass with no
+  // intermediate arrays keeps GC pressure low when the Action Queue scores many
+  // items on a single render.
+  const cache = new Map<string, MerchantMatchStrength>();
+  const strengthFor = (other: string): MerchantMatchStrength => {
+    let cached = cache.get(other);
+    if (cached === undefined) {
+      cached = matchMerchantNames(name, other);
+      cache.set(other, cached);
+    }
+    return cached;
   };
-  const verified = transactions
-    .filter(tx => tx.status === 'verified')
-    .map(tx => ({ tx, strength: strengthFor(tx) }))
-    .filter(({ strength }) => strength !== 'none');
-  const exact = verified.filter(({ strength }) => strength === 'exact');
-  const pool = exact.length > 0 ? exact : verified;
-  return pool.map(({ tx }) => tx).sort(byRecency);
+
+  const exact: Transaction[] = [];
+  const similar: Transaction[] = [];
+  for (const tx of transactions) {
+    if (tx.status !== 'verified') continue;
+    const byMerchant = strengthFor(tx.merchant);
+    if (byMerchant === 'exact') { exact.push(tx); continue; }
+    const byStore = tx.store ? strengthFor(tx.store) : 'none';
+    if (byStore === 'exact') { exact.push(tx); continue; }
+    if (byMerchant === 'similar' || byStore === 'similar') similar.push(tx);
+  }
+
+  // Exact-identity rows win outright; 'similar' rows apply only when no exact exist.
+  const pool = exact.length > 0 ? exact : similar;
+  return pool.sort(byRecency);
 };
 
 /**
