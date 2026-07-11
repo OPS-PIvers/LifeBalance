@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 const FLASH_CLASS = 'search-highlight-flash';
@@ -20,15 +20,21 @@ const FLASH_DURATION_MS = 1600; // matches the .search-highlight-flash keyframe 
  * this hook re-runs once per id and is a no-op once cleared. `onBeforeScroll`
  * lets a virtualized list (e.g. `TransactionMasterList`) scroll the item into
  * the render window first (e.g. via `virtualizer.scrollToIndex`) before this
- * hook queries the DOM; pass a stable (`useCallback`-wrapped) function, or
- * omit it for plain (always-mounted) lists.
+ * hook queries the DOM, or omit it for plain (always-mounted) lists. It is
+ * read through a ref so the scroll/flash effect fires once per id even if the
+ * callback's identity changes on re-renders it causes (e.g. a virtualized
+ * list re-rendering mid-smooth-scroll).
  */
 export function useScrollToHighlight(highlightId: string | null, onBeforeScroll?: () => void): void {
   const reducedMotion = useReducedMotion();
+  const onBeforeScrollRef = useRef(onBeforeScroll);
+  useEffect(() => {
+    onBeforeScrollRef.current = onBeforeScroll;
+  }, [onBeforeScroll]);
 
   useEffect(() => {
     if (!highlightId) return;
-    onBeforeScroll?.();
+    onBeforeScrollRef.current?.();
 
     let flashTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -52,5 +58,5 @@ export function useScrollToHighlight(highlightId: string | null, onBeforeScroll?
       );
       el?.classList.remove(FLASH_CLASS);
     };
-  }, [highlightId, reducedMotion, onBeforeScroll]);
+  }, [highlightId, reducedMotion]);
 }

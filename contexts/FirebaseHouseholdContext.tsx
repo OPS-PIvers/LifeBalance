@@ -1402,17 +1402,18 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }, [householdId, habits]);
 
   // Backfill Habit.titleLower (TODO.md §2A) so quickAddHabit's indexed
-  // exact-match lookup can find pre-existing habits.
-  const hasAttemptedTitleLowerMigration = useRef(false);
+  // exact-match lookup can find pre-existing habits. Keyed on the household id,
+  // not a boolean, so switching households still gets its own pass.
+  const attemptedTitleLowerMigrationFor = useRef<string | null>(null);
 
   useEffect(() => {
     if (!householdId || !habits.length) return;
-    if (hasAttemptedTitleLowerMigration.current) return;
+    if (attemptedTitleLowerMigrationFor.current === householdId) return;
 
     const runTitleLowerMigration = async () => {
       if (needsTitleLowerMigration(habits)) {
         // Mark as attempted before running to prevent race conditions/loops
-        hasAttemptedTitleLowerMigration.current = true;
+        attemptedTitleLowerMigrationFor.current = householdId;
 
         console.log('[Migration] Starting titleLower backfill...');
         try {
