@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useShopping, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem, QuickStockList } from '@/types/schema';
-import { Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Share2, Save, ShoppingCart, MoreHorizontal, ChevronDown } from 'lucide-react';
+import { Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Share2, Save, ShoppingCart, MoreHorizontal, Zap } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import type { OptimizableItem } from '@/services/geminiService.types';
@@ -9,7 +9,7 @@ import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import GroceryCatalogModal from '@/components/modals/GroceryCatalogModal';
 import ShoppingSettingsModal from '@/components/meals/ShoppingSettingsModal';
 import { ShoppingItemRow } from '@/components/meals/ShoppingItemRow';
-import { QuickRestockRow } from '@/components/meals/QuickRestockRow';
+import { QuickRestockDrawer } from '@/components/meals/QuickRestockDrawer';
 import { ShoppingItemForm } from '@/components/meals/ShoppingItemForm';
 import { Drawer } from '@/components/ui/Drawer';
 import { Popover } from '@/components/ui/Popover';
@@ -137,10 +137,10 @@ const ShoppingListTab: React.FC = () => {
   const [items, setItems] = useState<ShoppingItem[]>([]);
   const [filterStore, setFilterStore] = useState<string | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  // Overflow ("...") menu of secondary/bulk actions, and the collapsed
-  // quick-restock disclosure (closed by default — see the render).
+  // Overflow ("...") menu of secondary/bulk actions, and the quick-restock
+  // drawer (opened from the lightning-bolt icon in the title row).
   const [menuOpen, setMenuOpen] = useState(false);
-  const [restockOpen, setRestockOpen] = useState(false);
+  const [isRestockDrawerOpen, setIsRestockDrawerOpen] = useState(false);
 
   // Use a ref for drag state to prevent re-renders and potential race conditions
   // caused by the dependency array in useEffect.
@@ -535,6 +535,21 @@ const ShoppingListTab: React.FC = () => {
             title="Shopping list"
             actions={
                 <div className="flex items-center gap-1">
+                    {/* Quick restock — a lightning-bolt icon in the title row
+                        (owner decision: the old inline disclosure ate a row of
+                        prime space even when collapsed). Opens a drawer of
+                        restock templates; hidden when none exist. */}
+                    {quickStockLists && quickStockLists.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={() => setIsRestockDrawerOpen(true)}
+                            aria-label="Quick restock"
+                            aria-haspopup="dialog"
+                            className="p-2 text-brand-500 hover:text-accent-600 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-400 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
+                        >
+                            <Zap className="w-5 h-5" />
+                        </button>
+                    )}
                     {/* Store filter — lives in the title row (owner decision:
                         filtering is about VIEWING the list, so it belongs with
                         the page-level controls, not the add row). Quiet icon at
@@ -615,29 +630,6 @@ const ShoppingListTab: React.FC = () => {
                 </div>
             }
         />
-
-        {/* Quick restock — demoted from an always-on top strip to a collapsed
-            disclosure (rarely used; must not eat prime real estate). One tap
-            reveals the unchanged horizontally-scrollable chip row. Hidden
-            entirely when no quick-stock lists exist (zero footprint). */}
-        {quickStockLists && quickStockLists.length > 0 && (
-            <div>
-                <button
-                    type="button"
-                    onClick={() => setRestockOpen((o) => !o)}
-                    aria-expanded={restockOpen}
-                    className="flex items-center gap-1.5 px-1 text-xxs font-bold uppercase tracking-wider text-brand-400 hover:text-brand-600 dark:text-brand-450 dark:hover:text-brand-300 transition-colors"
-                >
-                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-(--duration-fast) ease-(--ease-standard) ${restockOpen ? '' : '-rotate-90'}`} />
-                    Quick restock
-                </button>
-                {restockOpen && (
-                    <div className="mt-2">
-                        <QuickRestockRow showHeader={false} />
-                    </div>
-                )}
-            </div>
-        )}
 
         {/* Clear Checked */}
         {hasPurchasedItems && (
@@ -732,6 +724,10 @@ const ShoppingListTab: React.FC = () => {
         </div>
 
         {/* Modals */}
+        <QuickRestockDrawer
+            isOpen={isRestockDrawerOpen}
+            onClose={() => setIsRestockDrawerOpen(false)}
+        />
         <GroceryCatalogModal
             isOpen={isCatalogOpen}
             onClose={() => setIsCatalogOpen(false)}
