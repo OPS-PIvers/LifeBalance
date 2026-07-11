@@ -212,6 +212,33 @@ describe('suggestCategoryForTransaction', () => {
     );
     expect(result).toBeUndefined();
   });
+
+  it('inherits history from a fuzzy feed variant when no exact-merchant row exists', () => {
+    // "STARBUCKS STORE #08841" has no exact match, but is a 'similar' match to
+    // the plain "Starbucks" row — so it inherits that category via the fallback.
+    const history = [makeTx({ merchant: 'Starbucks', category: 'Fun', date: '2026-06-01' })];
+    const result = suggestCategoryForTransaction(
+      { merchant: 'STARBUCKS STORE #08841', category: 'Uncategorized' },
+      buckets,
+      history
+    );
+    expect(result).toBe('Fun');
+  });
+
+  it('prefers exact-merchant history over a more-recent fuzzy match', () => {
+    // The 'similar' "Costco Wholesale #55" row is newer, but an exact "Costco"
+    // row exists — exact rows win outright, so fuzzy rows never dilute them.
+    const history = [
+      makeTx({ id: 't1', merchant: 'Costco Wholesale #55', category: 'Gas', date: '2026-06-10' }),
+      makeTx({ id: 't2', merchant: 'Costco', category: 'Groceries', date: '2026-06-01' }),
+    ];
+    const result = suggestCategoryForTransaction(
+      { merchant: 'Costco', category: 'Uncategorized' },
+      buckets,
+      history
+    );
+    expect(result).toBe('Groceries');
+  });
 });
 
 describe('nextDeferDate', () => {

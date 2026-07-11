@@ -14,7 +14,7 @@
 import { addDays, format, isAfter, isValid, parseISO, startOfToday } from 'date-fns';
 
 import { CREDIT_CARD_CATEGORY, type Account, type BudgetBucket, type CalendarItem, type Transaction } from '@/types/schema';
-import { normalizeStoreName } from '@/utils/storeMatch';
+import { matchMerchantNames, type MerchantMatchStrength } from '@/utils/habitSuggestions';
 
 /** Fallback category assigned by AI scans / shortcut stubs when nothing matched. */
 const UNCATEGORIZED = 'Uncategorized';
@@ -28,17 +28,29 @@ const byRecency = (a: Transaction, b: Transaction): number => {
   return 0;
 };
 
-/** Verified transactions whose normalized merchant/store matches `name`, most recent first. */
+/**
+ * Verified transactions matching `name`, most recent first. Reuses the shipped
+ * merchant matcher (`matchMerchantNames`, exact/similar/none): exact-identity
+ * rows are preferred, and only when NONE exist does the lookup widen to the
+ * fuzzier 'similar' tier, so feed variants like "STARBUCKS STORE #08841" still
+ * inherit "Starbucks" history without fuzzy rows ever outvoting exact ones.
+ */
 const verifiedHistoryFor = (name: string, transactions: readonly Transaction[]): Transaction[] => {
-  const key = normalizeStoreName(name);
-  if (!key) return [];
-  return transactions
-    .filter(
-      tx =>
-        tx.status === 'verified' &&
-        (normalizeStoreName(tx.merchant) === key || normalizeStoreName(tx.store) === key)
-    )
-    .sort(byRecency);
+  if (!name || !name.trim()) return [];
+  const strengthFor = (tx: Transaction): MerchantMatchStrength => {
+    const byMerchant = matchMerchantNames(name, tx.merchant);
+    if (byMerchant === 'exact') return 'exact';
+    const byStore = tx.store ? matchMerchantNames(name, tx.store) : 'none';
+    if (byStore === 'exact') return 'exact';
+    return byMerchant === 'similar' || byStore === 'similar' ? 'similar' : 'none';
+  };
+  const verified = transactions
+    .filter(tx => tx.status === 'verified')
+    .map(tx => ({ tx, strength: strengthFor(tx) }))
+    .filter(({ strength }) => strength !== 'none');
+  const exact = verified.filter(({ strength }) => strength === 'exact');
+  const pool = exact.length > 0 ? exact : verified;
+  return pool.map(({ tx }) => tx).sort(byRecency);
 };
 
 /**
