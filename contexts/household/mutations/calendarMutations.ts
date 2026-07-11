@@ -12,10 +12,9 @@ import {
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 import { format, parseISO, addDays, startOfToday, isAfter, isValid } from 'date-fns';
-import { Account, BudgetBucket, CalendarItem, Household } from '@/types/schema';
+import { Account, CalendarItem, Household } from '@/types/schema';
 import type { MutationOpts } from '@/contexts/household/types';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
-import { resolveBucketForCalendarItem } from '@/utils/safeToSpendCalculator';
 import { BUDGETED_IN_CALENDAR } from '@/utils/categories';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { parseRecurringId, isRecurringId, rollRecurringAnchorForward } from '@/utils/calendarRecurrence';
@@ -236,7 +235,7 @@ export function makeDeleteCalendarItem(deps: {
 
 /**
  * payCalendarItem — original closure captured `householdId`, `user`,
- * `accounts`, `calendarItems`, `buckets`, `householdSettings`, plus
+ * `accounts`, `calendarItems`, `householdSettings`, plus
  * `handlePaycheckApproval` (passed in so the paycheck-approval family stays a
  * single source of truth in financeMutations.ts).
  */
@@ -246,11 +245,10 @@ export function makePayCalendarItem(deps: {
   user: { uid: string } | null;
   accounts: Account[];
   calendarItems: CalendarItem[];
-  buckets: BudgetBucket[];
   householdSettings: Household | null;
   handlePaycheckApproval: (paycheckDate: string) => Promise<void>;
 }) {
-  const { db, householdId, user, accounts, calendarItems, buckets, householdSettings, handlePaycheckApproval } = deps;
+  const { db, householdId, user, accounts, calendarItems, householdSettings, handlePaycheckApproval } = deps;
 
   const payCalendarItem = async (itemId: string, accountId: string, opts?: MutationOpts) => {
     if (!householdId || !user) return;
@@ -301,18 +299,9 @@ export function makePayCalendarItem(deps: {
         await handlePaycheckApproval(specificDate);
       }
 
-      // Auto-categorize before building the batch, using the same bucket-matching
-      // rules as safe-to-spend's bill exclusion (see resolveBucketForCalendarItem).
-      // An unmatched bill is already accounted for by the calendar, so tag it
-      // with the "Budgeted in Calendar" sentinel (not a discretionary bucket) —
-      // this keeps it out of the "Unbudgeted & Other" bucket on the Buckets tab.
-      let category: string = BUDGETED_IN_CALENDAR;
-      if (item.type === 'expense') {
-        const matchedBucket = resolveBucketForCalendarItem(item, buckets);
-        if (matchedBucket) category = matchedBucket.name;
-      } else {
-        category = 'Income';
-      }
+      // Buckets and the calendar are separate domains (Plan 016): a paid bill is
+      // already accounted for on the calendar and never lands in a budget bucket.
+      const category: string = item.type === 'expense' ? BUDGETED_IN_CALENDAR : 'Income';
 
       // Transaction dated to when the item was actually due/scheduled
       // (specificDate), not "today" — so a bill due on the 10th but paid on the

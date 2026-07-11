@@ -1231,8 +1231,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // useFinance() slice in parity with production — a consumer reading
   // `safeToSpendBreakdown` no longer gets `undefined` in Test Mode.
   const safeToSpendBreakdown: SafeToSpendBreakdown = useMemo(
-    () => calculateSafeToSpendBreakdown(accounts, calendarItems, buckets, currentPeriodId, transactions),
-    [accounts, calendarItems, buckets, currentPeriodId, transactions]
+    () => calculateSafeToSpendBreakdown(accounts, calendarItems, currentPeriodId, transactions),
+    [accounts, calendarItems, currentPeriodId, transactions]
   );
   const safeToSpend = safeToSpendBreakdown.safeToSpend;
   // Derived from the test user's member points so habit toggles/resets move
