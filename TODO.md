@@ -10,8 +10,10 @@ if you ever need the fine-grained execution steps behind an item here.
 
 Living **reference** docs were kept in place — see [Reference docs](#reference-docs) at the bottom.
 
-Conventions for anyone (or any agent) executing these: pnpm only; `@/` imports; money in cents via
-`utils/money.ts`; "today" via `getLocalDateString()`; no lint/type suppressions; any
+Conventions for anyone (or any agent) executing these: pnpm only; `@/` imports; money is **stored in
+decimal dollars** — `utils/money.ts` helpers take/return dollars (summing in integer cents internally to
+avoid FP drift), never write cents to Firestore; "today" via `getLocalDateString()`; no lint/type
+suppressions; any
 `firestore.rules` / `firestore.indexes.json` change ships in **its own PR, human-watched** (atomic
 deploy, no staging). See `CLAUDE.md`.
 
