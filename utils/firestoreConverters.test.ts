@@ -555,6 +555,17 @@ describe('groceryCatalogItemConverter', () => {
     const partial = { name: 'Cheese', category: 'Dairy', purchaseCount: 0 };
     expect(() => groceryCatalogItemConverter.fromFirestore(fakeSnap('gc-2', partial))).not.toThrow();
   });
+
+  it('(b) legacy doc missing purchaseCount defaults to 0', () => {
+    const legacy = { name: 'Butter', category: 'Dairy' };
+    const result = groceryCatalogItemConverter.fromFirestore(fakeSnap('gc-3', legacy));
+    expect(result.purchaseCount).toBe(0);
+  });
+
+  it('(b) purchaseCount default never overrides a stored value', () => {
+    const result = groceryCatalogItemConverter.fromFirestore(fakeSnap('gc-4', wellFormed));
+    expect(result.purchaseCount).toBe(5);
+  });
 });
 
 // ---------------------------------------------------------------------------

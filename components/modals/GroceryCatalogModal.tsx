@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useShopping } from '@/contexts/FirebaseHouseholdContext';
 import { GroceryCatalogItem } from '@/types/schema';
 import { Search, Plus, Trash2, Edit2, ShoppingCart, Clock, ChevronLeft, X } from 'lucide-react';
@@ -19,11 +19,19 @@ interface GroceryCatalogModalProps {
 const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClose }) => {
   const {
     groceryCatalog,
+    loadFullGroceryCatalog,
     shoppingList,
     addShoppingItem,
     updateGroceryCatalogItem,
     deleteGroceryCatalogItem
   } = useShopping();
+
+  // The live catalog listener is bounded (top items by purchaseCount); this
+  // modal browses/searches the whole catalog, so pull in the rest on open
+  // (idempotent per household).
+  useEffect(() => {
+    if (isOpen) void loadFullGroceryCatalog();
+  }, [isOpen, loadFullGroceryCatalog]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [editingItem, setEditingItem] = useState<GroceryCatalogItem | null>(null);

@@ -23,6 +23,7 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
     updateMealPlanItem: vi.fn(),
     deleteMealPlanItem: vi.fn(),
     ensureMealPlanWeek: vi.fn(),
+    loadAllMeals: vi.fn(async () => {}),
   }),
   useShopping: () => ({
     addShoppingItem: mocks.addShoppingItem,

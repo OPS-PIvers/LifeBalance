@@ -21,6 +21,8 @@ import {
   householdMemberConverter,
   pendingItemConverter,
   insightConverter,
+  mealConverter,
+  groceryCatalogItemConverter,
 } from '@/utils/firestoreConverters';
 import { db } from '@/firebase.config';
 import { useAuth } from '@/contexts/AuthContext';
@@ -71,7 +73,7 @@ import { ParsedShoppingList, ParsedTodoList, ParsedExpense } from '@/services/ge
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import toast from 'react-hot-toast';
 import { isSameDay, isSameWeek, parseISO, format, startOfWeek, addMonths } from 'date-fns';
-import { mergeById } from '@/contexts/household/selectors';
+import { mergeById, collectMissingMealIds } from '@/contexts/household/selectors';
 import { attachTodoListeners } from '@/contexts/household/listeners/todoListeners';
 import { attachMealListeners } from '@/contexts/household/listeners/mealListeners';
 import { attachShoppingListeners } from '@/contexts/household/listeners/shoppingListeners';
@@ -438,7 +440,20 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
   const [yearlyGoals, setYearlyGoals] = useState<YearlyGoal[]>([]);
   const [freezeBank, setFreezeBank] = useState<FreezeBank | null>(null);
-  const [meals, setMeals] = useState<Meal[]>([]);
+  // Meals: live window (most recently created MEALS_LIMIT recipes) merged with
+  // on-demand extras — the full cookbook via loadAllMeals() plus individual
+  // meals resolved by id when a mealPlan entry references one outside the window.
+  const [mealsWindow, setMealsWindow] = useState<Meal[]>([]);
+  const [mealsExtra, setMealsExtra] = useState<Meal[]>([]);
+  const meals = useMemo(
+    () => mergeById(mealsWindow, mealsExtra),
+    [mealsWindow, mealsExtra]
+  );
+  const mealsLoadedAllRef = useRef(false);
+  // Meal ids already fetched (or in flight) by the by-id resolution, so each
+  // missing reference is requested at most once per household (deleted meals
+  // stay marked and are never re-fetched).
+  const requestedMealIdsRef = useRef<Set<string>>(new Set());
   const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
   // Meal plan: live window (current week ± 1) merged with weeks loaded on demand
   // as the user navigates the calendar.
@@ -471,7 +486,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [hasMoreCompletedTodos, setHasMoreCompletedTodos] = useState(false);
   const completedTodoCursorRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
   const completedTodoWindowStartRef = useRef<Date | null>(null);
-  const [groceryCatalog, setGroceryCatalog] = useState<GroceryCatalogItem[]>([]);
+  // Grocery catalog: live window (top GROCERY_CATALOG_LIMIT by purchaseCount)
+  // merged with the on-demand full-catalog fetch (loadFullGroceryCatalog).
+  const [groceryCatalogWindow, setGroceryCatalogWindow] = useState<GroceryCatalogItem[]>([]);
+  const [groceryCatalogExtra, setGroceryCatalogExtra] = useState<GroceryCatalogItem[]>([]);
+  const groceryCatalog = useMemo(
+    () => mergeById(groceryCatalogWindow, groceryCatalogExtra),
+    [groceryCatalogWindow, groceryCatalogExtra]
+  );
+  const groceryCatalogLoadedAllRef = useRef(false);
   // Bucket history: live window (most-recent N periods) merged with older history.
   // Weekly recaps (Plan 02) — bounded live window, newest first (see RECAPS_LIMIT).
   const [recaps, setRecaps] = useState<WeeklyRecap[]>([]);
@@ -608,9 +631,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setHouseholdSettings(null);
     setFreezeBank(null);
     setYearlyGoals([]);
-    setMeals([]);
+    setMealsWindow([]);
+    setMealsExtra([]);
+    mealsLoadedAllRef.current = false;
+    requestedMealIdsRef.current = new Set();
     setShoppingList([]);
-    setGroceryCatalog([]);
+    setGroceryCatalogWindow([]);
+    setGroceryCatalogExtra([]);
+    groceryCatalogLoadedAllRef.current = false;
     setMealPlanWindow([]);
     setMealPlanExtra([]);
     loadedMealPlanWeeksRef.current = new Set();
@@ -753,7 +781,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       db,
       householdId,
       mealPlanRange: mealPlanWindowRef.current,
-      setMeals: (data) => setMeals(data),
+      setMealsWindow: (data) => setMealsWindow(data),
       setMealPlanWindow: (data) => setMealPlanWindow(data),
     }));
 
@@ -762,7 +790,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       db,
       householdId,
       setShoppingList: (data) => setShoppingList(data),
-      setGroceryCatalog: (data) => setGroceryCatalog(data),
+      setGroceryCatalogWindow: (data) => setGroceryCatalogWindow(data),
     }));
 
     // To-Do listeners (contexts/household/listeners/todoListeners.ts)
@@ -1097,6 +1125,74 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       loadedMealPlanWeeksRef, mealPlanWindowRef, refreshMealPlanWeek,
     }).ensureMealPlanWeek(date);
   }, [refreshMealPlanWeek]);
+
+  // Mirror of the current householdId so async loaders resolving after a
+  // household switch can detect staleness and drop their result instead of
+  // polluting the new household's state.
+  const householdIdRef = useRef(householdId);
+  useEffect(() => { householdIdRef.current = householdId; }, [householdId]);
+
+  // Escape hatch for the cookbook view: fetch every meal beyond the bounded
+  // live window. Idempotent per household (guarded by mealsLoadedAllRef).
+  const loadAllMeals = useCallback(async () => {
+    if (!householdId || mealsLoadedAllRef.current) return;
+    mealsLoadedAllRef.current = true;
+    try {
+      const snap = await getDocs(
+        collection(db, `households/${householdId}/meals`).withConverter(mealConverter)
+      );
+      if (householdIdRef.current !== householdId) return;
+      setMealsExtra(snap.docs.map(d => d.data()));
+    } catch (error) {
+      console.error('[loadAllMeals] Failed:', error);
+      // Allow a retry on the next call (e.g. transient offline error).
+      if (householdIdRef.current === householdId) mealsLoadedAllRef.current = false;
+    }
+  }, [householdId]);
+
+  // Escape hatch for shopping-form search / catalog browse: fetch the full
+  // grocery catalog beyond the bounded live window. Idempotent per household.
+  const loadFullGroceryCatalog = useCallback(async () => {
+    if (!householdId || groceryCatalogLoadedAllRef.current) return;
+    groceryCatalogLoadedAllRef.current = true;
+    try {
+      const snap = await getDocs(
+        collection(db, `households/${householdId}/groceryCatalog`).withConverter(groceryCatalogItemConverter)
+      );
+      if (householdIdRef.current !== householdId) return;
+      setGroceryCatalogExtra(snap.docs.map(d => d.data()));
+    } catch (error) {
+      console.error('[loadFullGroceryCatalog] Failed:', error);
+      if (householdIdRef.current === householdId) groceryCatalogLoadedAllRef.current = false;
+    }
+  }, [householdId]);
+
+  // Resolve meals referenced by mealPlan entries that fall outside the bounded
+  // meals window, so the plan never shows a broken reference. Each missing id
+  // is fetched once per household (requestedMealIdsRef); deleted meals simply
+  // don't resolve and are not retried.
+  useEffect(() => {
+    if (!householdId) return;
+    const missing = collectMissingMealIds(mealPlan, meals, requestedMealIdsRef.current);
+    if (missing.length === 0) return;
+    missing.forEach(id => requestedMealIdsRef.current.add(id));
+    (async () => {
+      try {
+        const snaps = await Promise.all(missing.map(id =>
+          getDoc(doc(db, `households/${householdId}/meals`, id).withConverter(mealConverter))
+        ));
+        if (householdIdRef.current !== householdId) return;
+        const found = snaps.filter(s => s.exists()).map(s => s.data());
+        if (found.length > 0) setMealsExtra(prev => mergeById(prev, found));
+      } catch (error) {
+        console.error('[resolveMealPlanMeals] Failed:', error);
+        // Un-mark so a later snapshot retries (transient offline error).
+        if (householdIdRef.current === householdId) {
+          missing.forEach(id => requestedMealIdsRef.current.delete(id));
+        }
+      }
+    })();
+  }, [householdId, mealPlan, meals]);
 
   // Memoize habit reset data to avoid unnecessary callback re-creation
   // Only recreate when habit IDs, periods, or lastUpdated values change
@@ -2040,6 +2136,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     meals,
     mealPlan,
     ensureMealPlanWeek,
+    loadAllMeals,
     addMeal,
     updateMeal,
     deleteMeal,
@@ -2047,7 +2144,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateMealPlanItem,
     deleteMealPlanItem,
   }), [
-    meals, mealPlan, ensureMealPlanWeek,
+    meals, mealPlan, ensureMealPlanWeek, loadAllMeals,
     addMeal, updateMeal, deleteMeal,
     addMealPlanItem, updateMealPlanItem, deleteMealPlanItem,
   ]);
@@ -2055,6 +2152,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const shoppingValue = useMemo<ShoppingContextValue>(() => ({
     shoppingList,
     groceryCatalog,
+    loadFullGroceryCatalog,
     stores,
     groceryCategories,
     quickStockLists,
@@ -2077,7 +2175,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateGroceryCatalogItem,
     deleteGroceryCatalogItem,
   }), [
-    shoppingList, groceryCatalog, stores, groceryCategories, quickStockLists,
+    shoppingList, groceryCatalog, loadFullGroceryCatalog, stores, groceryCategories, quickStockLists,
     addShoppingItem, addShoppingItems, updateShoppingItem, reorderShoppingItems, deleteShoppingItem, toggleShoppingItemPurchased, clearPurchasedShoppingItems,
     addStore, updateStore, deleteStore, updateGroceryCategories,
     addQuickStockList, updateQuickStockList, updateQuickStockLists, deleteQuickStockList,

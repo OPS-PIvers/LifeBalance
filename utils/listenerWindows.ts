@@ -41,6 +41,21 @@ export const TODO_COMPLETED_PAGE_SIZE = 50;
 export const MEAL_PLAN_WEEK_RADIUS = 1;
 
 /**
+ * Meals (recipes): live listener keeps the N most recently created recipes
+ * (ordered by `createdAt` desc). The full cookbook is loadable on demand via
+ * `loadAllMeals()`, and meals referenced by meal-plan entries outside the
+ * window are resolved by id so the plan never shows a broken reference.
+ */
+export const MEALS_LIMIT = 50;
+
+/**
+ * Grocery catalog: live listener keeps the N most-purchased items (ordered by
+ * `purchaseCount` desc). The full catalog is loadable on demand via
+ * `loadFullGroceryCatalog()` (shopping-form search / catalog browse).
+ */
+export const GROCERY_CATALOG_LIMIT = 200;
+
+/**
  * Determine the inclusive lower bound (yyyy-MM-dd) for the live transactions
  * listener, or `null` when transactions should NOT be windowed at all.
  *
