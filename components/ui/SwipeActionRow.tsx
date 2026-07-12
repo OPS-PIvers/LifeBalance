@@ -63,9 +63,17 @@ const OPEN_PX = 88;
 const STICK_PX = 32;
 /** Outward fling speed (px/s) that commits from anywhere past STICK_PX. */
 const FLICK_VELOCITY = 800;
-/** Commit distance = this fraction of the row width (min COMMIT_MIN_PX). */
+/**
+ * Commit distance = this fraction of the row width, clamped to
+ * [COMMIT_MIN_PX, COMMIT_MAX_PX]. The max keeps the commit reachable inside
+ * DRAG_LIMIT_PX on wide rows (tablet/desktop) — and a ~320px drag is already
+ * plenty deliberate with a mouse.
+ */
 const COMMIT_FRACTION = 0.55;
 const COMMIT_MIN_PX = 160;
+const COMMIT_MAX_PX = 320;
+/** Hard cap on row travel. Must exceed COMMIT_MAX_PX or commits become unreachable. */
+const DRAG_LIMIT_PX = 400;
 
 // Background tints per tone, matching the app's money/warm token values
 // (hex because framer-motion interpolates raw colors, same pattern the old
@@ -142,7 +150,7 @@ export const SwipeActionRow: React.FC<SwipeActionRowProps> = ({
 
   const commitDistance = () => {
     const width = containerRef.current?.offsetWidth ?? 0;
-    return Math.max(COMMIT_MIN_PX, width * COMMIT_FRACTION);
+    return Math.min(COMMIT_MAX_PX, Math.max(COMMIT_MIN_PX, width * COMMIT_FRACTION));
   };
 
   const handleDragEnd = (_: unknown, info: PanInfo) => {
@@ -220,7 +228,7 @@ export const SwipeActionRow: React.FC<SwipeActionRowProps> = ({
 
       <motion.div
         drag="x"
-        dragConstraints={{ left: endAction ? -400 : 0, right: startAction ? 400 : 0 }}
+        dragConstraints={{ left: endAction ? -DRAG_LIMIT_PX : 0, right: startAction ? DRAG_LIMIT_PX : 0 }}
         dragElastic={{ left: endAction ? 0 : 0.15, right: startAction ? 0 : 0.15 }}
         dragMomentum={false}
         onDragStart={onSwipeStart}
