@@ -60,6 +60,13 @@ describe('haptic', () => {
     expect(input.checked).toBe(false);
   });
 
+  it('reduced motion also suppresses the iOS switch fallback', () => {
+    stubMatchMedia(true);
+    setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15');
+    haptic('light');
+    expect(document.querySelector('label[aria-hidden="true"]')).toBeNull();
+  });
+
   it('does nothing on non-iOS devices without vibrate', () => {
     setUserAgent('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36');
     haptic('light');

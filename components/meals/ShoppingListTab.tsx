@@ -811,7 +811,11 @@ const ShoppingListTab: React.FC = () => {
                 })
             ) : (
                 // as="ul" so the li Reorder.Items nest validly; list-none kills marker styling
-                <Reorder.Group axis="y" values={items} onReorder={handleReorder} as="ul" className="list-none">
+                // The ul is the card's direct child, so the parent's first-child
+                // border strip misses the li rows one level down — re-apply it
+                // here so the add-row card's bottom border stays the single seam
+                // line (no doubled hairline).
+                <Reorder.Group axis="y" values={items} onReorder={handleReorder} as="ul" className="list-none [&>*:first-child]:border-t-0">
                     {items.map(item => (
                         <ShoppingItemRow
                             key={item.id}

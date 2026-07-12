@@ -322,6 +322,20 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
             )}
         </div>
 
+        {/* Keyboard/AT path to the edit drawer: long-press and right-click are
+            pointer-only, and macOS has no context-menu key — without this,
+            keyboard and screen-reader users would have no way to reach
+            store/quick-list/delete. sr-only until keyboard-focused (skip-link
+            pattern), so pointer users never see an extra control. */}
+        <button
+            type="button"
+            onClick={() => { if (!consumeSuppressedClick()) onEdit(item); }}
+            aria-label={`Edit ${item.name}`}
+            className="sr-only focus-visible:not-sr-only focus-visible:flex-none focus-visible:px-2 focus-visible:py-1 focus-visible:text-xs focus-visible:text-accent-600 dark:focus-visible:text-accent-300 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:rounded-sm"
+        >
+            Edit
+        </button>
+
       </motion.div>
     </>
   );
