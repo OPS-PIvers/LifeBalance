@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import { Check, Trash2, Edit2, AlertCircle, Clock, User, Copy, MoreVertical, Calendar, Star, CheckSquare } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, startOfToday } from 'date-fns';
 import { ToDo, HouseholdMember } from '@/types/schema';
@@ -7,7 +6,7 @@ import { DEFAULT_TODO_POINTS } from '@/utils/todoPoints';
 import toast from 'react-hot-toast';
 import { haptic } from '@/utils/haptics';
 import { HapticCheck } from '@/components/ui/HapticCheck';
-import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { SwipeActionRow } from '@/components/ui/SwipeActionRow';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/utils/cn';
@@ -56,6 +55,17 @@ export const TodoRow = React.memo(function TodoRow({
   const dueDate = parseISO(item.completeByDate);
   const isOverdue = isBefore(dueDate, startOfToday());
 
+  // Shared by the checkbox control and the right-swipe action.
+  const handleComplete = async () => {
+    try {
+      await onComplete(item.id);
+      toast.success('To-Do completed! 🎉');
+    } catch (error) {
+      console.error('Failed to complete task:', error);
+      toast.error('Failed to complete to-do');
+    }
+  };
+
   const cardInner = (
     <div
       onClick={() => isSelectionMode && onToggleSelection(item.id)}
@@ -89,15 +99,7 @@ export const TodoRow = React.memo(function TodoRow({
         ) : (
           <HapticCheck
             checked={false}
-            onCheckedChange={async () => {
-              try {
-                await onComplete(item.id);
-                toast.success('To-Do completed! 🎉');
-              } catch (error) {
-                console.error('Failed to complete task:', error);
-                toast.error('Failed to complete to-do');
-              }
-            }}
+            onCheckedChange={handleComplete}
             onClick={(e) => e.stopPropagation()}
             className="mt-0.5 p-2.5 -m-2.5 shrink-0"
             aria-label={`Complete task: ${item.text}`}
@@ -240,62 +242,33 @@ export const TodoRow = React.memo(function TodoRow({
     return <>{cardInner}</>;
   }
 
+  // Gmail-style swipe: right = complete, left = delete (with confirmation).
+  // Partial swipes stick open to a tappable button; SwipeActionRow handles
+  // thresholds, reveal, haptics, and the reduced-motion fallback (the row's
+  // own checkbox and delete buttons remain the accessible path).
   return (
-    <SwipeableTodoRow
-      onDelete={() => {
-        showDeleteConfirmation(async () => {
-          haptic('medium');
-          await onDelete(item.id);
-          toast.success('Task deleted');
-        });
+    <SwipeActionRow
+      startAction={{
+        icon: Check,
+        label: 'Complete',
+        tone: 'positive',
+        hapticPattern: 'success',
+        onAction: handleComplete,
+      }}
+      endAction={{
+        icon: Trash2,
+        label: 'Delete',
+        tone: 'destructive',
+        hapticPattern: 'medium',
+        onAction: () => {
+          showDeleteConfirmation(async () => {
+            await onDelete(item.id);
+            toast.success('Task deleted');
+          });
+        },
       }}
     >
       {cardInner}
-    </SwipeableTodoRow>
+    </SwipeActionRow>
   );
 });
-
-// Swipe-left-to-delete wrapper for to-do rows. Falls back to a plain container
-// (relying on the row's existing delete buttons) when the user prefers reduced motion.
-const SWIPE_THRESHOLD = 80;
-
-const SwipeableTodoRow: React.FC<{ onDelete: () => void; children: React.ReactNode }> = ({ onDelete, children }) => {
-  const reduceMotion = useReducedMotion();
-  const x = useMotionValue(0);
-  const deleteOpacity = useTransform(x, [-SWIPE_THRESHOLD, -20, 0], [1, 0.4, 0]);
-
-  if (reduceMotion) {
-    // No drag animation; the row still exposes accessible delete buttons.
-    return <>{children}</>;
-  }
-
-  const handleDragEnd = (_: unknown, info: PanInfo) => {
-    if (info.offset.x < -SWIPE_THRESHOLD) {
-      onDelete();
-    }
-  };
-
-  return (
-    <div className="relative overflow-hidden">
-      <motion.div
-        className="absolute inset-0 flex items-center justify-end pr-6 bg-money-neg text-white z-0"
-        style={{ opacity: deleteOpacity }}
-        aria-hidden="true"
-      >
-        <span className="flex items-center gap-2 font-bold text-sm">
-          <Trash2 size={18} /> Delete
-        </span>
-      </motion.div>
-      <motion.div
-        drag="x"
-        dragConstraints={{ left: 0, right: 0 }}
-        dragElastic={{ left: 0.6, right: 0 }}
-        onDragEnd={handleDragEnd}
-        style={{ x, touchAction: 'pan-y' }}
-        className="relative z-10"
-      >
-        {children}
-      </motion.div>
-    </div>
-  );
-};

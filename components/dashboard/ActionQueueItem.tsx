@@ -3,7 +3,6 @@ import {
   CalendarClock, Receipt, Check, Trash2, Clock, ListTodo, AlertCircle, Pencil, Tag
 } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
-import { motion, useMotionValue, useTransform, PanInfo } from 'framer-motion';
 import { format, parseISO, isBefore, addDays, isAfter, startOfToday, isValid } from 'date-fns';
 import toast from 'react-hot-toast';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
@@ -14,21 +13,11 @@ import { HouseholdMember, BudgetBucket, Transaction, ToDo } from '@/types/schema
 import { suggestCategoryForTransaction } from '@/utils/actionQueueSmart';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { cn } from '@/utils/cn';
-import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { haptic } from '@/utils/haptics';
 import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
+import { SwipeActionRow } from '@/components/ui/SwipeActionRow';
 import TransactionReviewForm from '@/components/transactions/TransactionReviewForm';
-
-// Swipe affordance background colors per theme (same pattern as ShoppingItemRow).
-const SWIPE_COLORS = {
-  light: { defer: '#faf4ea', default: '#ffffff', approve: '#eef6f1' }, // warm-50 / white / money-bgPos
-  dark: { defer: '#3a2c15', default: '#242220', approve: '#0f2e23' },   // warm tint / brand-800 / money-pos tint
-};
-
-/** Drag distance (px) past which releasing the row commits the swipe action. */
-const SWIPE_THRESHOLD = 80;
 
 /** Hold duration (ms) before a press on a row enters multi-select mode. */
 const LONG_PRESS_MS = 500;
@@ -170,49 +159,27 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
   const fmt = useFormatCurrency();
 
   // --- Swipe-to-triage gesture (right = approve/complete, left = defer) ---
-  const x = useMotionValue(0);
-  const reduceMotion = useReducedMotion();
-  const isDark = useMediaQuery('(prefers-color-scheme: dark)') ||
-    (typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
-  const palette = isDark ? SWIPE_COLORS.dark : SWIPE_COLORS.light;
-
   // Swipe is a shortcut, never the only path: the Review button and expanded
-  // actions remain, so disabling it (reduced motion / expanded / select mode)
-  // loses no capability.
-  const swipeEnabled = !reduceMotion && !isExpanded && !selectionMode;
+  // actions remain, so disabling it (reduced motion — handled inside
+  // SwipeActionRow — / expanded / select mode) loses no capability.
+  const swipeDisabled = isExpanded || selectionMode;
 
-  const bgColor = useTransform(
-    x,
-    [-100, -50, 0, 50, 100],
-    [palette.defer, palette.defer, palette.default, palette.approve, palette.approve]
-  );
-  const deferOpacity = useTransform(x, [-50, -20], [1, 0]);
-  const approveOpacity = useTransform(x, [20, 50], [0, 1]);
-  const deferScale = useTransform(x, [-100, -50], [1.2, 1]);
-  const approveScale = useTransform(x, [50, 100], [1, 1.2]);
-
-  const handleDragEnd = (_: unknown, info: PanInfo) => {
-    if (info.offset.x > SWIPE_THRESHOLD) {
-      haptic('light');
-      // Transactions that can't be instant-approved fall back to the review
-      // panel via handleExpand (which surfaces the amount field for $0 stubs).
-      if (isTransactionQueueItem(item)) {
-        if (item.needsAmount) {
-          handleExpand();
-          toast('Add the amount, then approve.', { icon: toastIcon(Pencil) });
-          return;
-        }
-        if (!suggestCategoryForTransaction(item, buckets, transactions)) {
-          handleExpand();
-          toast('Pick a category to approve this one.', { icon: toastIcon(Tag) });
-          return;
-        }
+  const approveAction = () => {
+    // Transactions that can't be instant-approved fall back to the review
+    // panel via handleExpand (which surfaces the amount field for $0 stubs).
+    if (isTransactionQueueItem(item)) {
+      if (item.needsAmount) {
+        handleExpand();
+        toast('Add the amount, then approve.', { icon: toastIcon(Pencil) });
+        return;
       }
-      onSwipeApprove(item);
-    } else if (info.offset.x < -SWIPE_THRESHOLD) {
-      haptic('light');
-      onSwipeDefer(item);
+      if (!suggestCategoryForTransaction(item, buckets, transactions)) {
+        handleExpand();
+        toast('Pick a category to approve this one.', { icon: toastIcon(Tag) });
+        return;
+      }
     }
+    onSwipeApprove(item);
   };
 
   // --- Long-press → enter multi-select mode (standard mobile list pattern) ---
@@ -319,42 +286,28 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
     : 'Approve';
 
   return (
-    <div className="relative overflow-hidden hairline-divider group">
-      {/* Background layer revealed by the swipe (right = approve, left = defer) */}
-      {swipeEnabled && (
-        <motion.div
-          className="absolute inset-0 z-0 flex items-center justify-between px-4"
-          style={{ backgroundColor: bgColor }}
-          aria-hidden="true"
-        >
-          <motion.div
-            style={{ opacity: approveOpacity, scale: approveScale }}
-            className="flex items-center gap-2 font-bold text-money-pos dark:text-money-posDark"
-          >
-            <Check size={20} />
-            <span>{approveLabel}</span>
-          </motion.div>
-          <motion.div
-            style={{ opacity: deferOpacity, scale: deferScale }}
-            className="flex items-center gap-2 font-bold ml-auto text-warm-600 dark:text-warm-300"
-          >
-            <Clock size={20} />
-            <span>Defer</span>
-          </motion.div>
-        </motion.div>
-      )}
-
-      {/* Foreground layer — draggable summary row */}
-      <motion.div
-        drag={swipeEnabled ? 'x' : false}
-        dragConstraints={{ left: 0, right: 0 }}
-        // With constraints pinned at 0, ALL movement is elastic overflow, so the
-        // visual displacement is offset × dragElastic. 0.5 keeps the resistance
-        // feel while still revealing the approve/defer affordance underneath
-        // (0.1 would cap a 150px swipe at a ~15px reveal).
-        dragElastic={0.5}
-        onDragEnd={swipeEnabled ? handleDragEnd : undefined}
-        style={{ x, touchAction: 'pan-y' }}
+    <div className="relative hairline-divider group">
+      {/* Gmail-style swipe (right = approve/complete, left = defer): partial
+          swipes stick open to a tappable button; SwipeActionRow handles
+          thresholds, reveal, and haptics. */}
+      <SwipeActionRow
+        disabled={swipeDisabled}
+        startAction={{
+          icon: Check,
+          label: approveLabel,
+          tone: 'positive',
+          onAction: approveAction,
+        }}
+        endAction={{
+          icon: Clock,
+          label: 'Defer',
+          tone: 'warm',
+          onAction: () => onSwipeDefer(item),
+        }}
+        onSwipeStart={cancelLongPress}
+      >
+      {/* Foreground layer — summary row */}
+      <div
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={cancelLongPress}
@@ -371,7 +324,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
           }
         } : undefined}
         className={cn(
-          'relative z-10 bg-white dark:bg-brand-800 transition-colors duration-(--duration-fast) ease-(--ease-standard)',
+          'relative bg-white dark:bg-brand-800 transition-colors duration-(--duration-fast) ease-(--ease-standard)',
           selectionMode
             ? isSelected
               ? 'bg-accent-50 dark:bg-accent-800/20 cursor-pointer'
@@ -444,7 +397,8 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
           )}
         </div>
       </div>
-      </motion.div>
+      </div>
+      </SwipeActionRow>
 
       {/* Review / approve flow lives in its own bottom sheet rather than
           expanding the row in place, so the list stays a static summary. */}
