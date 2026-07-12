@@ -251,7 +251,7 @@ const Dashboard: React.FC = () => {
     }
     setIsBulkRunning(false);
     if (approved > 0) toast.success(`Approved ${approved} item${approved === 1 ? '' : 's'}`);
-    if (skipped > 0) toast(`${skipped} left in the queue (needs an amount, category, or account)`, { icon: '👀' });
+    if (skipped > 0) toast(`${skipped} left in the queue (needs an amount, category, or account)`);
     exitSelectionMode();
   }, [selectedItems, accounts, buckets, transactions, completeToDo, payCalendarItem, updateTransactionCategory, exitSelectionMode]);
 

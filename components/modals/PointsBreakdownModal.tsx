@@ -203,7 +203,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
         pointsChange = 0;
 
         // Notify user if they are adding/removing a date but points won't change
-        toast('Date updated. Points unchanged for threshold habit as daily count history is not tracked.', { icon: 'ℹ️' });
+        toast('Date updated. Points unchanged for threshold habit as daily count history is not tracked.');
     } else {
         pointsChange = isCompleted ? -pointsPerCompletion : pointsPerCompletion;
     }

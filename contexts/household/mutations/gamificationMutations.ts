@@ -778,7 +778,7 @@ export function makeAutoApplyFreezes(deps: {
     }
 
     if (applied > 0) {
-      toast(`Streak protected — ${applied} freeze${applied === 1 ? '' : 's'} auto-applied`, { icon: '❄️' });
+      toast(`Streak protected — ${applied} freeze${applied === 1 ? '' : 's'} auto-applied`);
     }
   };
 

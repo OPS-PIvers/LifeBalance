@@ -108,7 +108,7 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
   const handlePasteFromClipboard = async () => {
     try {
       if (!navigator.clipboard?.readText) {
-        toast('Long-press the box below to paste', { icon: '📋' });
+        toast('Long-press the box below to paste');
         return;
       }
       const text = await navigator.clipboard.readText();

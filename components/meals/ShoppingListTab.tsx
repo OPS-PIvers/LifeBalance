@@ -448,7 +448,7 @@ const ShoppingListTab: React.FC = () => {
         // Share pending items only
         const itemsToShare = shoppingList.filter(i => !i.isPurchased);
         if (itemsToShare.length === 0) {
-          toast('No pending items to share', { icon: 'ℹ️' });
+          toast('No pending items to share');
           return;
         }
 

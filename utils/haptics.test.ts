@@ -15,17 +15,25 @@ const setUserAgent = (ua: string) => {
   Object.defineProperty(navigator, 'userAgent', { value: ua, configurable: true });
 };
 
+const IOS_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15';
+
 describe('haptic', () => {
+  // The iOS transport creates, clicks, and removes a hidden label
+  // synchronously, so observe the clicks themselves rather than the DOM.
+  let clickedElements: HTMLElement[];
+
   beforeEach(() => {
     stubMatchMedia(false);
+    clickedElements = [];
+    vi.spyOn(HTMLElement.prototype, 'click').mockImplementation(function (this: HTMLElement) {
+      clickedElements.push(this);
+    });
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
-    // Remove any hidden switch element left behind (the helper re-creates it
-    // when detached, so removal keeps tests independent).
-    document.querySelectorAll('label[aria-hidden="true"]').forEach(el => el.remove());
+    vi.useRealTimers();
   });
 
   it('uses navigator.vibrate when available', () => {
@@ -33,11 +41,12 @@ describe('haptic', () => {
     Object.defineProperty(navigator, 'vibrate', { value: vibrate, configurable: true });
     haptic('light');
     expect(vibrate).toHaveBeenCalledWith(10);
+    expect(clickedElements).toHaveLength(0);
     // Remove the stub so later tests exercise the no-vibrate path.
     delete (navigator as unknown as Record<string, unknown>).vibrate;
   });
 
-  it('respects prefers-reduced-motion', () => {
+  it('suppresses vibration under prefers-reduced-motion', () => {
     stubMatchMedia(true);
     const vibrate = vi.fn();
     Object.defineProperty(navigator, 'vibrate', { value: vibrate, configurable: true });
@@ -46,30 +55,37 @@ describe('haptic', () => {
     delete (navigator as unknown as Record<string, unknown>).vibrate;
   });
 
-  it('falls back to the hidden switch-toggle on iOS-like devices without vibrate', () => {
-    setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15');
+  it('falls back to a hidden switch-toggle click on iOS-like devices without vibrate', () => {
+    setUserAgent(IOS_UA);
     haptic('light');
-    const label = document.querySelector('label[aria-hidden="true"]');
-    expect(label).not.toBeNull();
-    const input = label?.querySelector('input[type="checkbox"][switch]') as HTMLInputElement;
-    expect(input).toBeTruthy();
-    // A label click toggles its nested checkbox — that toggle is what fires
-    // the iOS system haptic.
-    expect(input.checked).toBe(true);
-    haptic('light');
-    expect(input.checked).toBe(false);
+    expect(clickedElements).toHaveLength(1);
+    const label = clickedElements[0]!;
+    expect(label.tagName).toBe('LABEL');
+    expect(label.getAttribute('aria-hidden')).toBe('true');
+    expect(label.querySelector('input[type="checkbox"][switch]')).not.toBeNull();
+    // Throwaway element: removed synchronously after the click.
+    expect(document.head.contains(label)).toBe(false);
   });
 
-  it('reduced motion also suppresses the iOS switch fallback', () => {
+  it('adds a delayed second tick on iOS for success/warning/error patterns', () => {
+    vi.useFakeTimers();
+    setUserAgent(IOS_UA);
+    haptic('success');
+    expect(clickedElements).toHaveLength(1);
+    vi.advanceTimersByTime(200);
+    expect(clickedElements).toHaveLength(2);
+  });
+
+  it('still ticks on iOS under prefers-reduced-motion (System Haptics governs there)', () => {
     stubMatchMedia(true);
-    setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15');
+    setUserAgent(IOS_UA);
     haptic('light');
-    expect(document.querySelector('label[aria-hidden="true"]')).toBeNull();
+    expect(clickedElements).toHaveLength(1);
   });
 
   it('does nothing on non-iOS devices without vibrate', () => {
     setUserAgent('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36');
     haptic('light');
-    expect(document.querySelector('label[aria-hidden="true"]')).toBeNull();
+    expect(clickedElements).toHaveLength(0);
   });
 });

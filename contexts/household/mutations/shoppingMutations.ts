@@ -303,7 +303,7 @@ export function makeToggleShoppingItemPurchased(deps: {
         await updateDoc(doc(db, `households/${householdId}/shoppingList`, id), {
           isPurchased: false,
         });
-        toast('Marked as not purchased', { icon: 'ℹ️' });
+        toast('Marked as not purchased');
       }
 
     } catch (error) {

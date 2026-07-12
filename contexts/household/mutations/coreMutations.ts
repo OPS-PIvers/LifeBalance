@@ -124,7 +124,7 @@ export function makeRefreshInsight(deps: {
       await addDoc(collection(db, `households/${householdId}/insights`), newInsight);
 
       track('insight_generated');
-      toast.success('New insight generated!', { id: 'insight-loading', icon: '✨' });
+      toast.success('New insight generated!', { id: 'insight-loading' });
     } catch (error) {
       console.error("Failed to generate insight:", error);
       toast.error('Failed to generate insight', { id: 'insight-loading' });

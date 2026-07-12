@@ -190,7 +190,7 @@ export const useHabitActions = (
           lastUpdated: serverTimestamp(),
         });
 
-        toast("Habit reset to 0 for today. Previous points preserved.", { icon: '📅' });
+        toast("Habit reset to 0 for today. Previous points preserved.");
         return;
       }
 

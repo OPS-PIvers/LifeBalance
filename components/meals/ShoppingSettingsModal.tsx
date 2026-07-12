@@ -169,7 +169,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
     if (existing) {
       toggleItemInTemplate(existing.id);
       setItemSearch('');
-      toast('Item found in history and added', { icon: '✨' });
+      toast('Item found in history and added');
       return;
     }
 

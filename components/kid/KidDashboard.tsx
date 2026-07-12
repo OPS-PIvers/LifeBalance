@@ -146,7 +146,7 @@ const KidDashboard: React.FC = () => {
       // Guard against a double-request for the same reward (the button is also
       // swapped to a non-interactive "Requested" pill below).
       if (pendingRewardIds.has(r.id)) {
-        toast(`You already asked for "${r.title}" — hang tight! ⏳`, { icon: '⏳' });
+        toast(`You already asked for "${r.title}" — hang tight!`);
         return;
       }
       try {

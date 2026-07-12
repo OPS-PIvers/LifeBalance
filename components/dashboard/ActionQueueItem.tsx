@@ -198,12 +198,12 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
       if (isTransactionQueueItem(item)) {
         if (item.needsAmount) {
           handleExpand();
-          toast('Add the amount, then approve.', { icon: '✏️' });
+          toast('Add the amount, then approve.');
           return;
         }
         if (!suggestCategoryForTransaction(item, buckets, transactions)) {
           handleExpand();
-          toast('Pick a category to approve this one.', { icon: '🏷️' });
+          toast('Pick a category to approve this one.');
           return;
         }
       }

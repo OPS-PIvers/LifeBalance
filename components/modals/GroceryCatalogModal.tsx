@@ -95,7 +95,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
     );
 
     if (isInList) {
-      toast('Already in your list!', { icon: '🛒' });
+      toast('Already in your list!');
       return;
     }
 

@@ -1211,7 +1211,6 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const noOp = useCallback(async <T,>(..._args: unknown[]): Promise<T | void> => {
     // toast.info doesn't exist, use toast with custom styling instead
     toast('Mock: Operation not implemented in test mode', {
-      icon: 'ℹ️',
       duration: 2000
     });
   }, []);

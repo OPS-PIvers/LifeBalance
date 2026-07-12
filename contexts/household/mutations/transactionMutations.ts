@@ -373,7 +373,6 @@ export function makeUpdateTransactionCategory(deps: {
         ),
         {
           duration: 2000,
-          icon: '🌟',
           style: {
             background: '#ECFDF5',
             color: '#065F46',

@@ -164,7 +164,7 @@ const MealPlanTab: React.FC = () => {
         });
 
       if (itemsToAdd.length === 0) {
-          toast('All selected items are already in your list.', { icon: 'ℹ️' });
+          toast('All selected items are already in your list.');
           setIngredientSelectorData(null);
           return;
       }
@@ -259,7 +259,7 @@ const MealPlanTab: React.FC = () => {
     );
 
     if (weekPlanItems.length === 0) {
-        toast('No meals planned for this week', { icon: '📅' });
+        toast('No meals planned for this week');
         return;
     }
 
@@ -287,7 +287,7 @@ const MealPlanTab: React.FC = () => {
     const uniqueIngredients = Array.from(ingredientMap.values());
 
     if (uniqueIngredients.length === 0) {
-        toast('No ingredients found in planned meals', { icon: '🤷' });
+        toast('No ingredients found in planned meals');
         return;
     }
 
@@ -483,7 +483,7 @@ const MealPlanTab: React.FC = () => {
               try {
                 await updateMeal(mergeFormIntoMeal(existing, currentMeal));
                 mealId = existing.id;
-                toast(`Matched your existing "${existing.name}" recipe`, { icon: '📖' });
+                toast(`Matched your existing "${existing.name}" recipe`);
               } catch (_error) {
                 toast.error('Failed to save meal');
                 return;

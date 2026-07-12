@@ -88,7 +88,7 @@ export const QuickRestockDrawer: React.FC<QuickRestockDrawerProps> = ({ isOpen, 
       await addShoppingItems(itemsToAdd);
       toast.success(`Added ${itemsToAdd.length} items from ${list.name}`);
     } else {
-      toast('All items already in list', { icon: 'ℹ️' });
+      toast('All items already in list');
     }
   };
 

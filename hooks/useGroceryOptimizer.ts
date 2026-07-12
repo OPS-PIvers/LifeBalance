@@ -138,16 +138,15 @@ export const useGroceryOptimizer = <T extends { id: string }>({
       }
 
       if (updatedCount > 0 && failedCount === 0) {
-        toast.success(`Optimized ${updatedCount} items!`, { icon: '✨' });
+        toast.success(`Optimized ${updatedCount} items!`);
       } else if (updatedCount > 0 && failedCount > 0) {
         toast.success(
-          `Optimized ${updatedCount} items, but ${failedCount} updates failed.`,
-          { icon: '⚠️' }
+          `Optimized ${updatedCount} items, but ${failedCount} updates failed.`
         );
       } else if (updatedCount === 0 && failedCount > 0) {
         toast.error(`${errorMessage}. Please try again.`);
       } else {
-        toast.success('Everything looks good!', { icon: '✨' });
+        toast.success('Everything looks good!');
       }
 
     } catch (error) {
