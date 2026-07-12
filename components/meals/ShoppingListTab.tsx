@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useShopping, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem, QuickStockList } from '@/types/schema';
-import { Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Share2, Save, ShoppingCart, MoreHorizontal, Zap } from 'lucide-react';
+import { Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Share2, Save, ShoppingCart, MoreHorizontal, Zap, ArrowUpDown, Check } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import type { OptimizableItem } from '@/services/geminiService.types';
@@ -26,6 +26,14 @@ import { haptic } from '@/utils/haptics';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { formatShoppingListForShare } from '@/utils/shoppingListFormatter';
 import { suggestItemDefaults } from '@/utils/grocerySmartDefaults';
+import {
+  ShoppingSortMode,
+  SHOPPING_SORT_LABELS,
+  SHOPPING_SORT_STORAGE_KEY,
+  readStoredShoppingSortMode,
+  sortShoppingItems,
+  shoppingGroupLabel,
+} from '@/utils/shoppingSort';
 import toast from 'react-hot-toast';
 
 interface FilterDropdownProps {
@@ -71,6 +79,40 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({ filterStore, stores, on
           <div className="px-4 py-2 text-xs text-brand-400 dark:text-brand-450 italic">No stores configured</div>
         )}
       </div>
+    </Popover>
+  );
+};
+
+interface SortDropdownProps {
+  sortMode: ShoppingSortMode;
+  onSelect: (mode: ShoppingSortMode) => void;
+  onClose: () => void;
+}
+
+const SORT_MODE_ORDER: ShoppingSortMode[] = ['entry', 'alpha', 'store', 'section'];
+
+const SortDropdown: React.FC<SortDropdownProps> = ({ sortMode, onSelect, onClose }) => {
+  return (
+    <Popover
+      isOpen
+      onClose={onClose}
+      role="menu"
+      ariaLabel="Sort shopping list"
+      position="top-full right-0 mt-2"
+      className="w-52 overflow-hidden py-1"
+    >
+      {SORT_MODE_ORDER.map(mode => (
+        <button
+          key={mode}
+          role="menuitemradio"
+          aria-checked={sortMode === mode}
+          onClick={() => onSelect(mode)}
+          className={`w-full text-left px-4 py-2 min-h-[44px] text-sm hover:bg-brand-50 dark:hover:bg-brand-700/50 flex items-center justify-between focus:outline-hidden focus:bg-brand-50 dark:focus:bg-brand-700/50 ${sortMode === mode ? 'text-accent-600 font-medium bg-accent-50 dark:text-accent-300 dark:bg-accent-900/30' : 'text-brand-700 dark:text-brand-300'}`}
+        >
+          {SHOPPING_SORT_LABELS[mode]}
+          {sortMode === mode && <Check size={14} />}
+        </button>
+      ))}
     </Popover>
   );
 };
@@ -137,6 +179,20 @@ const ShoppingListTab: React.FC = () => {
   const [items, setItems] = useState<ShoppingItem[]>([]);
   const [filterStore, setFilterStore] = useState<string | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  // User-selected sort mode — a PREFERENCE persisted across sessions (same
+  // localStorage pattern as ListsPage's tab memory). 'entry' is the classic
+  // order-added/manual view and the only mode where drag-to-reorder is live.
+  const [sortMode, setSortMode] = useState<ShoppingSortMode>(() => readStoredShoppingSortMode());
+  const [isSortOpen, setIsSortOpen] = useState(false);
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(SHOPPING_SORT_STORAGE_KEY, sortMode);
+      }
+    } catch (_error) {
+      // Ignore persistence errors
+    }
+  }, [sortMode]);
   // Overflow ("...") menu of secondary/bulk actions, and the quick-restock
   // drawer (opened from the lightning-bolt icon in the title row).
   const [menuOpen, setMenuOpen] = useState(false);
@@ -154,22 +210,17 @@ const ShoppingListTab: React.FC = () => {
     // Avoid resetting items while user is dragging
     if (isDraggingRef.current) return;
 
-    // Sort items by order field, then by creation or name as fallback
-    let sorted = [...shoppingList].sort((a, b) => {
-      const orderA = a.order ?? 9999;
-      const orderB = b.order ?? 9999;
-      if (orderA !== orderB) return orderA - orderB;
-      // Fallback to name
-      return a.name.localeCompare(b.name);
-    });
+    // Sort per the persisted user preference ('entry' = order field, the
+    // classic behavior); pure logic lives in utils/shoppingSort.ts.
+    let sorted = sortShoppingItems(shoppingList, sortMode, categories);
 
     if (filterStore) {
       sorted = sorted.filter(item => item.store === filterStore);
     }
 
-     
+
     setItems(sorted);
-  }, [shoppingList, filterStore]);
+  }, [shoppingList, filterStore, sortMode, categories]);
 
   // Input State
   const [newItemText, setNewItemText] = useState('');
@@ -550,6 +601,32 @@ const ShoppingListTab: React.FC = () => {
                             <Zap className="w-5 h-5" />
                         </button>
                     )}
+                    {/* Sort — persists across sessions; icon tinted when a
+                        non-default mode is active so the derived view is
+                        glanceable (mirrors the filter affordance). */}
+                    <div className="relative flex-none">
+                        <button
+                            type="button"
+                            onClick={() => setIsSortOpen(!isSortOpen)}
+                            aria-label={`Sort: ${SHOPPING_SORT_LABELS[sortMode]}`}
+                            aria-expanded={isSortOpen}
+                            aria-haspopup="menu"
+                            className={`p-2 rounded-full transition-colors hover:bg-brand-100 dark:hover:bg-brand-700/50 ${
+                                sortMode !== 'entry'
+                                    ? 'text-accent-600 dark:text-accent-300'
+                                    : 'text-brand-500 hover:text-accent-600 dark:text-brand-400 dark:hover:text-accent-300'
+                            }`}
+                        >
+                            <ArrowUpDown className="w-5 h-5" />
+                        </button>
+                        {isSortOpen && (
+                            <SortDropdown
+                                sortMode={sortMode}
+                                onSelect={(mode) => { setSortMode(mode); setIsSortOpen(false); }}
+                                onClose={() => setIsSortOpen(false)}
+                            />
+                        )}
+                    </div>
                     {/* Store filter — lives in the title row (owner decision:
                         filtering is about VIEWING the list, so it belongs with
                         the page-level controls, not the add row). Quiet icon at
@@ -646,28 +723,40 @@ const ShoppingListTab: React.FC = () => {
             </div>
         )}
 
-        {/* Main List — the add bar + store filter are now the first row INSIDE
-            this same rounded surface (owner request: the add field should be
-            row one of the list, not a detached floating band above it). The
-            row scrolls with the card (no longer sticky/pinned) — the global
-            Capture FAB covers add-while-scrolled. Reorder.Group (the drag
-            layer) is nested as a plain sibling below the add row inside one
-            shared rounded container, so it never owns the outer radius/border
-            itself — only the item rows drag. */}
-        <div className="surface-section overflow-hidden [&>*:first-child]:border-t-0">
-            <div className="flex items-center gap-2 hairline-divider">
-                <QuickAddBar
-                    attached
-                    onSubmit={handleSmartAdd}
-                    inputRef={addInputRef}
-                    value={newItemText}
-                    onChange={setNewItemText}
-                    placeholder="Add item..."
-                    disabled={!newItemText.trim()}
-                    submitLabel="Add item to shopping list"
-                />
+        {/* Main List — the add bar is row one of the list surface AND sticky
+            (owner request: keep it in sight while scrolling a long list). It
+            lives in its own top card because `position: sticky` dies inside
+            an `overflow-hidden` ancestor — so the surface is split into a
+            sticky top card (add row, bottom border = the divider) and a
+            flush list card below (border-t-0, rounded-t-none) that together
+            read as one rounded section. The sticky offset tucks it under
+            ListsPage's sticky tab strip via --lists-sticky-top (0px fallback
+            when the strip is hidden). The wrapper's page-colored background
+            masks rows scrolling past the card's rounded top corners. */}
+        <div>
+            <div className="sticky top-[var(--lists-sticky-top,0px)] z-20 bg-brand-50 dark:bg-brand-900">
+                <div className="surface-section rounded-b-none overflow-hidden">
+                    <div className="flex items-center gap-2">
+                        <QuickAddBar
+                            attached
+                            onSubmit={handleSmartAdd}
+                            inputRef={addInputRef}
+                            value={newItemText}
+                            onChange={setNewItemText}
+                            placeholder="Add item..."
+                            disabled={!newItemText.trim()}
+                            submitLabel="Add item to shopping list"
+                        />
+                    </div>
+                </div>
             </div>
 
+            {/* Reorder.Group (the drag layer) is nested as a plain child inside
+                the shared rounded container, so it never owns the outer
+                radius/border itself — only the item rows drag. Drag reorder is
+                only live in 'entry' (order added) sort with no store filter;
+                the other sorts are derived views that never write `order`. */}
+            <div className="surface-section rounded-t-none border-t-0 overflow-hidden [&>*:first-child]:border-t-0">
             {isLoading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                     <div key={i} className="flex items-center gap-3 px-3 py-2.5 hairline-divider">
@@ -690,19 +779,32 @@ const ShoppingListTab: React.FC = () => {
                         ) : undefined}
                     />
                 </div>
-            ) : filterStore ? (
-                items.map(item => (
-                    <ShoppingItemRow
-                        key={item.id}
-                        item={item}
-                        stores={stores}
-                        activeQuickList={itemQuickListMap.get(item.name.toLowerCase())?.[0]}
-                        onCheck={handleCheck}
-                        onDelete={handleDelete}
-                        onEdit={setEditingItem}
-                        isReorderable={false}
-                    />
-                ))
+            ) : sortMode !== 'entry' || filterStore ? (
+                items.map((item, index) => {
+                    const label = shoppingGroupLabel(item, sortMode);
+                    const prev = index > 0 ? items[index - 1] : undefined;
+                    const prevLabel = prev ? shoppingGroupLabel(prev, sortMode) : null;
+                    return (
+                        <React.Fragment key={item.id}>
+                            {/* Section header between groups (store / store-section
+                                modes only — shoppingGroupLabel is null for flat modes) */}
+                            {label !== null && label !== prevLabel && (
+                                <div className="hairline-divider px-3 pt-2.5 pb-1 text-xxs font-semibold uppercase tracking-wide text-brand-500 dark:text-brand-400 bg-brand-50/60 dark:bg-brand-900/40">
+                                    {label}
+                                </div>
+                            )}
+                            <ShoppingItemRow
+                                item={item}
+                                stores={stores}
+                                activeQuickList={itemQuickListMap.get(item.name.toLowerCase())?.[0]}
+                                onCheck={handleCheck}
+                                onDelete={handleDelete}
+                                onEdit={setEditingItem}
+                                isReorderable={false}
+                            />
+                        </React.Fragment>
+                    );
+                })
             ) : (
                 // as="ul" so the li Reorder.Items nest validly; list-none kills marker styling
                 <Reorder.Group axis="y" values={items} onReorder={handleReorder} as="ul" className="list-none">
@@ -721,6 +823,7 @@ const ShoppingListTab: React.FC = () => {
                     ))}
                 </Reorder.Group>
             )}
+            </div>
         </div>
 
         {/* Modals */}

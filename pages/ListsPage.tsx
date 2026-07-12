@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import ToDosPage from './ToDosPage';
 import MealPlanTab from '@/components/meals/MealPlanTab';
@@ -66,11 +66,31 @@ const ListsPage: React.FC = () => {
   // The sticky tab strip is only rendered when there's more than one tab.
   const showTabStrip = enabledTabs.length > 1;
 
+  // Publish the strip's measured height as --lists-sticky-top so nested sticky
+  // elements (e.g. the shopping list's add row) can pin themselves flush BELOW
+  // the strip instead of sliding underneath it. Written straight to the DOM
+  // (no state) — a re-render for a pixel offset would be wasted work.
+  const containerRef = useRef<HTMLDivElement>(null);
+  const tabStripRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const strip = tabStripRef.current;
+    const update = () => {
+      container.style.setProperty('--lists-sticky-top', `${strip ? strip.offsetHeight : 0}px`);
+    };
+    update();
+    if (!strip || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(update);
+    observer.observe(strip);
+    return () => observer.disconnect();
+  }, [showTabStrip]);
+
   return (
-    <div className="flex flex-col h-full">
+    <div ref={containerRef} className="flex flex-col h-full">
       {/* Hide the tab strip when only one tab remains — there's nothing to switch. */}
       {showTabStrip && (
-        <div className="flex-none px-4 pt-4 pb-2 sticky top-0 z-30 bg-brand-50 dark:bg-brand-900 border-b border-brand-200 dark:border-brand-800">
+        <div ref={tabStripRef} className="flex-none px-4 pt-4 pb-2 sticky top-0 z-30 bg-brand-50 dark:bg-brand-900 border-b border-brand-200 dark:border-brand-800">
           <Tabs value={activeTab} onValueChange={(value) => setSelectedTab(value as PlanTab)}>
             <TabsList size="sm">
               {enabledTabs.map((tab) => (
