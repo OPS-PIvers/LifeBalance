@@ -7,6 +7,7 @@ import { quadrantForTodo, QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhow
 import { ToDo, HouseholdMember } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { haptic } from '@/utils/haptics';
+import { HapticCheck } from '@/components/ui/HapticCheck';
 import { useIsLandscape } from '@/hooks/useOrientation';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
@@ -316,6 +317,9 @@ const ToDosPage: React.FC = () => {
     const assignee = currentUser?.uid ?? members[0]!.uid; // members[0] is defined: guarded by members.length === 0 above
     submittingQuickAddRef.current = true;
     setQuickText('');
+    // Haptic at gesture time: after the await, transient user activation has
+    // expired and the iOS transport silently no-ops (see utils/haptics.ts).
+    haptic('success');
     try {
       await addToDo({
         text: trimmed,
@@ -323,7 +327,6 @@ const ToDosPage: React.FC = () => {
         assignedTo: assignee,
         isCompleted: false,
       });
-      haptic('success');
       toast.success('Task added');
     } catch (error) {
       console.error('Error adding to-do:', error);
@@ -345,6 +348,7 @@ const ToDosPage: React.FC = () => {
   }, []);
 
   const handleDuplicate = useCallback(async (todo: ToDo) => {
+      haptic('success'); // at gesture time — dead after the await on iOS
       try {
           await addToDo({
               text: todo.text,
@@ -352,7 +356,6 @@ const ToDosPage: React.FC = () => {
               assignedTo: todo.assignedTo,
               isCompleted: false,
           });
-          haptic('success');
           toast.success('Task duplicated');
       } catch (error) {
           console.error('Failed to duplicate task:', error);
@@ -390,9 +393,9 @@ const ToDosPage: React.FC = () => {
   // to walk the list with a partner without opening the edit drawer per task.
   const handleToggleImportant = useCallback(async (todo: ToDo) => {
       const next = todo.isImportant !== true;
+      haptic('light'); // at gesture time — dead after the await on iOS
       try {
           await updateToDo(todo.id, { isImportant: next });
-          haptic('light');
       } catch (error) {
           console.error('Failed to update importance:', error);
           toast.error('Failed to update importance');
@@ -559,6 +562,7 @@ const ToDosPage: React.FC = () => {
         });
         toast.success('Task updated');
       } else {
+        haptic('success'); // at gesture time — dead after the await on iOS
         await addToDo({
           text: trimmedText,
           completeByDate,
@@ -566,7 +570,6 @@ const ToDosPage: React.FC = () => {
           isCompleted: false,
           isImportant
         });
-        haptic('success');
         toast.success('Task added');
         setQuickText(''); // the detailed form consumed the carried-over text
       }
@@ -1296,14 +1299,19 @@ const CompletedSection = React.memo(function CompletedSection({ title, items, on
                             key={item.id}
                             className="group items-start"
                         >
-                            <button
-                                onClick={() => { haptic('light'); onUncomplete(item.id); }}
-                                className="mt-0.5 w-6 h-6 rounded-full border-2 border-brand-300 bg-brand-50 text-brand-400 flex items-center justify-center hover:bg-brand-100 hover:text-accent-600 transition-colors shrink-0 dark:border-brand-600 dark:bg-brand-700/50 dark:text-brand-400 dark:hover:bg-brand-700 dark:hover:text-accent-300"
-                                title="Mark as incomplete"
+                            <HapticCheck
+                                checked={true}
+                                onCheckedChange={() => onUncomplete(item.id)}
+                                className="mt-0.5 shrink-0"
                                 aria-label={`Mark as incomplete: ${item.text}`}
                             >
-                                <RotateCcw size={14} />
-                            </button>
+                                <span
+                                    title="Mark as incomplete"
+                                    className="w-6 h-6 rounded-full border-2 border-brand-300 bg-brand-50 text-brand-400 flex items-center justify-center hover:bg-brand-100 hover:text-accent-600 transition-colors dark:border-brand-600 dark:bg-brand-700/50 dark:text-brand-400 dark:hover:bg-brand-700 dark:hover:text-accent-300"
+                                >
+                                    <RotateCcw size={14} />
+                                </span>
+                            </HapticCheck>
 
                             <div className="flex-1 min-w-0">
                                 <p className="text-brand-500 dark:text-brand-400 line-through decoration-brand-300 dark:decoration-brand-600">{item.text}</p>

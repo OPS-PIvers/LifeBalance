@@ -235,6 +235,8 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
     longPressTimer.current = window.setTimeout(() => {
       longPressTimer.current = null;
       longPressFired.current = true;
+      // Android-only in practice: a timer callback has no transient user
+      // activation, so the iOS transport can't fire here (see utils/haptics.ts).
       haptic('medium');
       onEnterSelectionMode(item.id);
     }, LONG_PRESS_MS);

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { SurfaceList } from '@/components/ui/Section';
 import { Check, ExternalLink, ChefHat, Utensils, CheckCircle2 } from 'lucide-react';
-import { haptic } from '@/utils/haptics';
+import { HapticCheck } from '@/components/ui/HapticCheck';
 import clsx from 'clsx';
 
 interface RecipeModalProps {
@@ -26,8 +26,9 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
   const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(new Set());
   const [checkedInstructions, setCheckedInstructions] = useState<Set<number>>(new Set());
 
+  // Haptics come from the HapticCheck rows themselves (native iOS tick +
+  // Android vibrate), so the toggles are pure state updates.
   const toggleIngredient = (index: number) => {
-    haptic('light');
     const newSet = new Set(checkedIngredients);
     if (newSet.has(index)) {
       newSet.delete(index);
@@ -38,7 +39,6 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
   };
 
   const toggleInstruction = (index: number) => {
-    haptic('light');
     const newSet = new Set(checkedInstructions);
     if (newSet.has(index)) {
       newSet.delete(index);
@@ -92,11 +92,12 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
                 {meal.ingredients.map((ing, idx) => {
                   const isChecked = checkedIngredients.has(idx);
                   return (
-                    <button
+                    <HapticCheck
                       key={ing.name}
-                      onClick={() => toggleIngredient(idx)}
+                      checked={isChecked}
+                      onCheckedChange={() => toggleIngredient(idx)}
                       className={clsx(
-                        "flex items-center gap-3 px-4 py-3 hairline-divider cursor-pointer transition-colors duration-(--duration-fast) ease-(--ease-standard) w-full text-left hover:bg-brand-50 dark:hover:bg-brand-700/40",
+                        "flex items-center gap-3 px-4 py-3 hairline-divider transition-colors duration-(--duration-fast) ease-(--ease-standard) w-full text-left hover:bg-brand-50 dark:hover:bg-brand-700/40",
                         isChecked && "opacity-60"
                       )}
                     >
@@ -110,7 +111,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
                         <span className="font-bold text-brand-700 dark:text-brand-200">{ing.name}</span>
                         {ing.quantity && <span className="text-brand-500 dark:text-brand-400 ml-1">({ing.quantity})</span>}
                       </div>
-                    </button>
+                    </HapticCheck>
                   );
                 })}
               </SurfaceList>
@@ -127,11 +128,12 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
                 {meal.instructions.map((step, idx) => {
                   const isChecked = checkedInstructions.has(idx);
                   return (
-                    <button
+                    <HapticCheck
                       key={step}
-                      onClick={() => toggleInstruction(idx)}
+                      checked={isChecked}
+                      onCheckedChange={() => toggleInstruction(idx)}
                       className={clsx(
-                        "flex gap-4 px-4 py-3 hairline-divider cursor-pointer transition-colors duration-(--duration-fast) ease-(--ease-standard) w-full text-left hover:bg-brand-50 dark:hover:bg-brand-700/40",
+                        "flex gap-4 px-4 py-3 hairline-divider transition-colors duration-(--duration-fast) ease-(--ease-standard) w-full text-left hover:bg-brand-50 dark:hover:bg-brand-700/40",
                         isChecked && "opacity-60"
                       )}
                     >
@@ -146,7 +148,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
                       <p className={clsx("text-sm leading-relaxed min-w-0", isChecked ? "line-through text-brand-400 dark:text-brand-450" : "text-brand-700 dark:text-brand-200")}>
                         {step}
                       </p>
-                    </button>
+                    </HapticCheck>
                   );
                 })}
               </SurfaceList>

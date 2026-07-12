@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { haptic } from './haptics';
+import { haptic, hapticForNativeSwitch } from './haptics';
 
 // jsdom has no matchMedia; stub it per-test so we control reduced-motion.
 const stubMatchMedia = (reducedMotion: boolean) => {
@@ -87,5 +87,32 @@ describe('haptic', () => {
     setUserAgent('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36');
     haptic('light');
     expect(clickedElements).toHaveLength(0);
+  });
+});
+
+describe('hapticForNativeSwitch', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('uses navigator.vibrate when available', () => {
+    stubMatchMedia(false);
+    const vibrate = vi.fn();
+    Object.defineProperty(navigator, 'vibrate', { value: vibrate, configurable: true });
+    hapticForNativeSwitch('light');
+    expect(vibrate).toHaveBeenCalledWith(10);
+    delete (navigator as unknown as Record<string, unknown>).vibrate;
+  });
+
+  it('never falls back to the programmatic switch tick on iOS (the real switch input provides the haptic)', () => {
+    stubMatchMedia(false);
+    setUserAgent(IOS_UA);
+    const clicked: HTMLElement[] = [];
+    vi.spyOn(HTMLElement.prototype, 'click').mockImplementation(function (this: HTMLElement) {
+      clicked.push(this);
+    });
+    hapticForNativeSwitch('success');
+    expect(clicked).toHaveLength(0);
   });
 });

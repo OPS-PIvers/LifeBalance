@@ -430,6 +430,9 @@ const MealPlanTab: React.FC = () => {
 
     const { meal, planItem } = viewingMeal;
 
+    // Haptic at gesture time: after the awaits, transient user activation has
+    // expired and the iOS transport silently no-ops (see utils/haptics.ts).
+    haptic('success');
     try {
       // 1. Update Plan Item
       await updateMealPlanItem(planItem.id, { isCooked: true });
@@ -443,7 +446,6 @@ const MealPlanTab: React.FC = () => {
         });
       }
 
-      haptic('success');
       setViewingMeal(null);
       toast.success('Bon Appétit! Marked as cooked.');
     } catch (error) {
@@ -454,6 +456,11 @@ const MealPlanTab: React.FC = () => {
 
   const saveMeal = async (forceNew = false) => {
       if (!currentMeal.name) return;
+
+      // This save will create a new plan item — fire the haptic now, at
+      // gesture time; after the meal-library awaits below it would be dead
+      // on iOS (see utils/haptics.ts).
+      if (targetDate && !editingPlanItemId) haptic('success');
 
       let mealId = forceNew ? null : editingMealId;
 
@@ -525,7 +532,6 @@ const MealPlanTab: React.FC = () => {
                   type: mealType,
                   isCooked: false
               });
-              haptic('success');
           }
       }
 

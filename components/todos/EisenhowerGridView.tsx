@@ -4,7 +4,7 @@ import { format, isToday, isTomorrow, parseISO, isBefore, startOfToday } from 'd
 import { QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhower';
 import { ToDo } from '@/types/schema';
 import toast from 'react-hot-toast';
-import { haptic } from '@/utils/haptics';
+import { HapticCheck } from '@/components/ui/HapticCheck';
 import { Button } from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
 import { cn } from '@/utils/cn';
@@ -212,11 +212,10 @@ const GridChip = React.memo(function GridChip({ item, color, onComplete, onEdit,
     // min-h-11 (44px) row + generous complete-toggle hit area: the immersive
     // overlay gives the chips room to meet touch-target size without a redesign.
     <div className="flex items-center gap-1.5 px-2 py-1.5 min-h-11 hairline-divider first:border-t-0">
-      <button
-        type="button"
-        onClick={async () => {
+      <HapticCheck
+        checked={false}
+        onCheckedChange={async () => {
           try {
-            haptic('light');
             await onComplete(item.id);
             toast.success('To-Do completed! 🎉');
           } catch (error) {
@@ -224,13 +223,13 @@ const GridChip = React.memo(function GridChip({ item, color, onComplete, onEdit,
             toast.error('Failed to complete to-do');
           }
         }}
-        className="group p-2.5 -m-1.5 shrink-0"
+        className="p-2.5 -m-1.5 shrink-0"
         aria-label={`Complete task: ${item.text}`}
       >
         <span className="w-4.5 h-4.5 rounded-full border-2 flex items-center justify-center transition-colors border-brand-300 group-hover:border-accent-500 group-hover:bg-accent-50 dark:border-brand-600 dark:group-hover:border-accent-400 dark:group-hover:bg-accent-900/30">
           <Check size={10} className="text-transparent group-hover:text-current group-active:text-current transition-colors" />
         </span>
-      </button>
+      </HapticCheck>
 
       <button
         type="button"
