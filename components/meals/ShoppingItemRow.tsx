@@ -56,12 +56,13 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
   const leftIconScale = useTransform(x, [-100, -50], [1.2, 1]);
   const rightIconScale = useTransform(x, [50, 100], [1, 1.2]);
 
-  // --- Long-press anywhere on the row → edit drawer (replaces the per-row
-  // pencil button, which ate a full icon column on every row). Same pattern as
-  // ActionQueueItem: a timer armed on pointer-down, cancelled by >10px movement
-  // (that's a swipe/scroll/reorder, not a press). The reorder grip stops
-  // pointer-down propagation in the capture phase, so pressing it never arms
-  // the timer. ---
+  // --- Gesture model: TAP anywhere on the row (checkbox or content) toggles
+  // purchased; LONG-PRESS anywhere on the row opens the edit drawer (as does
+  // right-click / the keyboard context-menu key, for pointers that can't
+  // long-press). Same timer pattern as ActionQueueItem: armed on pointer-down,
+  // cancelled by >10px movement (that's a swipe/scroll/reorder, not a press).
+  // The reorder grip stops pointer-down propagation in the capture phase, so
+  // pressing it never arms the timer. ---
   const longPressTimer = useRef<number | null>(null);
   // When true, the next click on a row control is a gesture artifact and must
   // be swallowed: browsers synthesize a click from the pointer-up that ends a
@@ -121,6 +122,22 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
     if (consumeSuppressedClick()) return;
     haptic('light');
     onCheck(item);
+  };
+
+  // Right-click / keyboard context-menu → edit drawer. Guarded by
+  // suppressClick so a long-press that already fired (some platforms
+  // synthesize contextmenu around the same ~500ms mark) doesn't open it twice.
+  // suppressClick is SET only when a touch long-press is in flight (timer
+  // armed): that release synthesizes a click that must be swallowed, whereas a
+  // desktop right-click / keyboard menu key never produces one — setting the
+  // flag there would instead swallow a later keyboard-Enter "click" (which has
+  // no pointer-down to reset the flag).
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (suppressClick.current) return;
+    if (longPressTimer.current !== null) suppressClick.current = true;
+    cancelLongPress();
+    onEdit(item);
   };
 
   const handleDragEnd = (_: unknown, info: PanInfo) => {
@@ -197,6 +214,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
         onPointerMove={handlePointerMove}
         onPointerUp={cancelLongPress}
         onPointerCancel={cancelLongPress}
+        onContextMenu={handleContextMenu}
         className={clsx(
           "relative z-10 flex items-center gap-3 px-3 py-2.5 bg-white dark:bg-brand-800 transition-colors duration-(--duration-fast) ease-(--ease-standard) select-none [-webkit-touch-callout:none]",
           item.isPurchased && "opacity-70 bg-brand-50 dark:bg-brand-800/60"
@@ -255,13 +273,17 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
             </span>
         </button>
 
-        {/* Content — tap (or long-press anywhere on the row) opens the edit
-            drawer where store / quick-list / delete live. */}
-        <button
-            type="button"
-            onClick={() => { if (!consumeSuppressedClick()) onEdit(item); }}
-            className="flex-1 min-w-0 text-left focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-sm"
-            aria-label={`Edit ${item.name}`}
+        {/* Content — a plain TAP here toggles purchased, same as the checkbox
+            (owner request: tap anywhere on the card completes the item).
+            Long-press (or right-click / context-menu key) opens the edit
+            drawer where store / quick-list / delete live. Deliberately NOT a
+            button: it duplicates the checkbox's action for pointers only, so a
+            second per-row tab stop / SR control would be pure noise — the
+            checkbox is the one accessible toggle, while the name/meta here
+            stay readable as plain text. */}
+        <div
+            onClick={handleCheck}
+            className="flex-1 min-w-0 text-left"
         >
             <div className={clsx(
                 "text-sm font-medium truncate transition-colors",
@@ -298,6 +320,20 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                     )}
                 </div>
             )}
+        </div>
+
+        {/* Keyboard/AT path to the edit drawer: long-press and right-click are
+            pointer-only, and macOS has no context-menu key — without this,
+            keyboard and screen-reader users would have no way to reach
+            store/quick-list/delete. sr-only until keyboard-focused (skip-link
+            pattern), so pointer users never see an extra control. */}
+        <button
+            type="button"
+            onClick={() => { if (!consumeSuppressedClick()) onEdit(item); }}
+            aria-label={`Edit ${item.name}`}
+            className="sr-only focus-visible:not-sr-only focus-visible:flex-none focus-visible:px-2 focus-visible:py-1 focus-visible:text-xs focus-visible:text-accent-600 dark:focus-visible:text-accent-300 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:rounded-sm"
+        >
+            Edit
         </button>
 
       </motion.div>
