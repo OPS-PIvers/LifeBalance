@@ -54,6 +54,9 @@ interface ActionQueueItemProps {
   completeToDo: (id: string) => Promise<void>;
   deferCalendarItem: (itemId: string) => Promise<void>;
   deleteCalendarItem: (id: string) => Promise<void>;
+  /** Backs the inline swipe-reveal Delete (transactions only reach delete
+      through the review drawer otherwise). */
+  deleteTransaction: (id: string) => Promise<void>;
 }
 
 const areActionQueueItemPropsEqual = (
@@ -102,7 +105,8 @@ const areActionQueueItemPropsEqual = (
       prev.deleteToDo !== next.deleteToDo ||
       prev.completeToDo !== next.completeToDo ||
       prev.deferCalendarItem !== next.deferCalendarItem ||
-      prev.deleteCalendarItem !== next.deleteCalendarItem) {
+      prev.deleteCalendarItem !== next.deleteCalendarItem ||
+      prev.deleteTransaction !== next.deleteTransaction) {
       return false;
   }
 
@@ -154,6 +158,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
   completeToDo,
   deferCalendarItem,
   deleteCalendarItem,
+  deleteTransaction,
 }) => {
 
   const fmt = useFormatCurrency();
@@ -180,6 +185,21 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
       }
     }
     onSwipeApprove(item);
+  };
+
+  // Inline delete revealed by a partial left swipe (Apple Mail's secondary
+  // button). Confirmation-gated like every other delete path.
+  const deleteAction = () => {
+    showDeleteConfirmation(async () => {
+      if (isCalendarQueueItem(item)) {
+        await deleteCalendarItem(item.id);
+      } else if (isTodoQueueItem(item)) {
+        await deleteToDo(item.id);
+        toast.success('Task deleted');
+      } else {
+        await deleteTransaction(item.id);
+      }
+    }, isCalendarQueueItem(item) ? 'calendar item' : isTodoQueueItem(item) ? 'task' : 'transaction');
   };
 
   // --- Long-press → enter multi-select mode (standard mobile list pattern) ---
@@ -292,18 +312,29 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
           thresholds, reveal, and haptics. */}
       <SwipeActionRow
         disabled={swipeDisabled}
-        startAction={{
+        startActions={[{
           icon: Check,
           label: approveLabel,
           tone: 'positive',
           onAction: approveAction,
-        }}
-        endAction={{
-          icon: Clock,
-          label: 'Defer',
-          tone: 'warm',
-          onAction: () => onSwipeDefer(item),
-        }}
+        }]}
+        endActions={[
+          // Primary (full swipe / outer edge): defer.
+          {
+            icon: Clock,
+            label: 'Defer',
+            tone: 'warm',
+            onAction: () => onSwipeDefer(item),
+          },
+          // Secondary (tappable from the stuck-open state): delete.
+          {
+            icon: Trash2,
+            label: 'Delete',
+            tone: 'destructive',
+            hapticPattern: 'medium',
+            onAction: deleteAction,
+          },
+        ]}
         onSwipeStart={cancelLongPress}
       >
       {/* Foreground layer — summary row */}

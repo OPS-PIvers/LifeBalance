@@ -143,19 +143,19 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
     // it; unchecking is a tap, not a swipe). Partial swipes stick open to a
     // tappable button; SwipeActionRow handles thresholds, reveal, and haptics.
     <SwipeActionRow
-      startAction={item.isPurchased ? undefined : {
+      startActions={item.isPurchased ? undefined : [{
         icon: Check,
         label: 'Purchased',
         tone: 'positive',
         onAction: () => onCheck(item),
-      }}
-      endAction={{
+      }]}
+      endActions={[{
         icon: Trash2,
         label: 'Delete',
         tone: 'destructive',
         hapticPattern: 'medium',
         onAction: () => onDelete(item),
-      }}
+      }]}
       onSwipeStart={handleGestureDragStart}
     >
       {/* Foreground layer — the checkbox and tap/long-press-to-edit live here.

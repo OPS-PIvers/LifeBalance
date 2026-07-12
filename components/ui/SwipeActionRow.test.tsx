@@ -20,7 +20,7 @@ const deleteAction: SwipeAction = {
 describe('SwipeActionRow', () => {
   it('renders its children', () => {
     render(
-      <SwipeActionRow startAction={completeAction} endAction={deleteAction}>
+      <SwipeActionRow startActions={[completeAction]} endActions={[deleteAction]}>
         <div>Row content</div>
       </SwipeActionRow>
     );
@@ -29,7 +29,7 @@ describe('SwipeActionRow', () => {
 
   it('renders both action zones as affordances, not tap targets, while closed', () => {
     render(
-      <SwipeActionRow startAction={completeAction} endAction={deleteAction}>
+      <SwipeActionRow startActions={[completeAction]} endActions={[deleteAction]}>
         <div>Row content</div>
       </SwipeActionRow>
     );
@@ -48,7 +48,7 @@ describe('SwipeActionRow', () => {
 
   it('renders only the zones for the actions provided', () => {
     render(
-      <SwipeActionRow endAction={deleteAction}>
+      <SwipeActionRow endActions={[deleteAction]}>
         <div>Row content</div>
       </SwipeActionRow>
     );
@@ -56,9 +56,29 @@ describe('SwipeActionRow', () => {
     expect(screen.queryByText('Complete')).not.toBeInTheDocument();
   });
 
+  it('renders every action of a multi-action side, primary at the outer edge', () => {
+    const deferAction: SwipeAction = {
+      icon: Check,
+      label: 'Defer',
+      tone: 'warm',
+      onAction: vi.fn(),
+    };
+    render(
+      // Primary first per the API contract; on the end (right) side it must
+      // render LAST so it sits at the outer (right) edge, Apple Mail-style.
+      <SwipeActionRow endActions={[deferAction, deleteAction]}>
+        <div>Row content</div>
+      </SwipeActionRow>
+    );
+    const buttons = screen.getAllByRole('button', { hidden: true });
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0]).toHaveTextContent('Delete');
+    expect(buttons[1]).toHaveTextContent('Defer');
+  });
+
   it('renders a static row (no action zones) when disabled', () => {
     render(
-      <SwipeActionRow startAction={completeAction} endAction={deleteAction} disabled>
+      <SwipeActionRow startActions={[completeAction]} endActions={[deleteAction]} disabled>
         <div>Row content</div>
       </SwipeActionRow>
     );

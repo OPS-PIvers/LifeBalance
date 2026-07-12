@@ -248,14 +248,14 @@ export const TodoRow = React.memo(function TodoRow({
   // own checkbox and delete buttons remain the accessible path).
   return (
     <SwipeActionRow
-      startAction={{
+      startActions={[{
         icon: Check,
         label: 'Complete',
         tone: 'positive',
         hapticPattern: 'success',
         onAction: handleComplete,
-      }}
-      endAction={{
+      }]}
+      endActions={[{
         icon: Trash2,
         label: 'Delete',
         tone: 'destructive',
@@ -266,7 +266,7 @@ export const TodoRow = React.memo(function TodoRow({
             toast.success('Task deleted');
           });
         },
-      }}
+      }]}
     >
       {cardInner}
     </SwipeActionRow>

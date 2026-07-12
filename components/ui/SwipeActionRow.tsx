@@ -16,10 +16,12 @@ import { cn } from '@/utils/cn';
  *    the raw finger offset silently commits" (the old rows pinned constraints
  *    at 0 with a small dragElastic, so a 100px swipe revealed ~10px of hint).
  * 2. Release PAST the commit distance (~55% of the row width, or an outward
- *    flick) → the action fires.
- * 3. Release in the middle zone → the row snaps open, leaving the action as a
- *    real tappable button (like Gmail); tapping it fires the action, tapping
- *    the row content (or dragging back) closes it without acting.
+ *    flick) → the PRIMARY action (first in the side's array) fires.
+ * 3. Release in the middle zone → the row snaps open, leaving the side's
+ *    actions as real tappable buttons (like Apple Mail: the primary sits at
+ *    the outer edge, secondaries inline toward the content); tapping one
+ *    fires it, tapping the row content (or dragging back) closes the row
+ *    without acting.
  * 4. Release before the reveal threshold → the row snaps shut, nothing fires.
  *
  * Under prefers-reduced-motion the drag is disabled entirely (existing app
@@ -40,10 +42,14 @@ export interface SwipeAction {
 }
 
 interface SwipeActionRowProps {
-  /** Action revealed under the LEFT edge when swiping right. */
-  startAction?: SwipeAction;
-  /** Action revealed under the RIGHT edge when swiping left. */
-  endAction?: SwipeAction;
+  /**
+   * Actions revealed under the LEFT edge when swiping right. The FIRST entry
+   * is the primary (commits on a full swipe, rendered at the outer edge);
+   * the rest are secondaries, tappable only from the stuck-open state.
+   */
+  startActions?: SwipeAction[];
+  /** Actions revealed under the RIGHT edge when swiping left. Same order rules. */
+  endActions?: SwipeAction[];
   /** Disables the gesture (selection mode, expanded rows, …). */
   disabled?: boolean;
   /** Outer wrapper classes (the wrapper is relative + overflow-hidden). */
@@ -57,8 +63,10 @@ interface SwipeActionRowProps {
   children: React.ReactNode;
 }
 
-/** Rest offset (px) of a stuck-open row — the width of the revealed button. */
+/** Width (px) of one revealed button; a stuck-open row rests at count × this. */
 const OPEN_PX = 88;
+/** Breathing room the commit distance keeps beyond the stuck-open width. */
+const COMMIT_BEYOND_OPEN_PX = 48;
 /** Minimum travel (px) for a release to stick open instead of snapping shut. */
 const STICK_PX = 32;
 /** Outward fling speed (px/s) that commits from anywhere past STICK_PX. */
@@ -94,8 +102,8 @@ const TONE_TEXT = {
 type OpenSide = 'start' | 'end' | null;
 
 export const SwipeActionRow: React.FC<SwipeActionRowProps> = ({
-  startAction,
-  endAction,
+  startActions,
+  endActions,
   disabled = false,
   className,
   onSwipeStart,
@@ -108,15 +116,18 @@ export const SwipeActionRow: React.FC<SwipeActionRowProps> = ({
   const isDark = useMediaQuery('(prefers-color-scheme: dark)') ||
     (typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
 
-  const enabled = !reduceMotion && !disabled && Boolean(startAction || endAction);
+  const hasStart = Boolean(startActions?.length);
+  const hasEnd = Boolean(endActions?.length);
+  const enabled = !reduceMotion && !disabled && (hasStart || hasEnd);
 
   // Function-form transform so the range re-derives from the CURRENT
   // actions/theme every render (the array form captures its output statically).
+  // The zone tint follows the side's PRIMARY action.
   const bgColor = useTransform(x, (latest: number) => {
     const theme = isDark ? 'dark' : 'light';
     const base = ROW_BG[theme];
-    if (latest > 0 && startAction) return TONE_BG[startAction.tone][theme];
-    if (latest < 0 && endAction) return TONE_BG[endAction.tone][theme];
+    if (latest > 0 && startActions?.[0]) return TONE_BG[startActions[0].tone][theme];
+    if (latest < 0 && endActions?.[0]) return TONE_BG[endActions[0].tone][theme];
     return base;
   });
 
@@ -148,9 +159,15 @@ export const SwipeActionRow: React.FC<SwipeActionRowProps> = ({
     action.onAction();
   };
 
-  const commitDistance = () => {
+  const openWidth = (side: Exclude<OpenSide, null>) =>
+    OPEN_PX * ((side === 'end' ? endActions : startActions)?.length ?? 0);
+
+  const commitDistance = (side: Exclude<OpenSide, null>) => {
     const width = containerRef.current?.offsetWidth ?? 0;
-    return Math.min(COMMIT_MAX_PX, Math.max(COMMIT_MIN_PX, width * COMMIT_FRACTION));
+    const clamped = Math.min(COMMIT_MAX_PX, Math.max(COMMIT_MIN_PX, width * COMMIT_FRACTION));
+    // Never let the commit point sit inside (or right at) the stuck-open rest
+    // position — a multi-button side is wider than a single-button one.
+    return Math.max(clamped, openWidth(side) + COMMIT_BEYOND_OPEN_PX);
   };
 
   const handleDragEnd = (_: unknown, info: PanInfo) => {
@@ -159,20 +176,20 @@ export const SwipeActionRow: React.FC<SwipeActionRowProps> = ({
     // dragging further from a stuck-open state behaves like one long swipe.
     const position = x.get();
     const side: Exclude<OpenSide, null> = position < 0 ? 'end' : 'start';
-    const action = side === 'end' ? endAction : startAction;
+    const primary = (side === 'end' ? endActions : startActions)?.[0];
     const distance = Math.abs(position);
 
-    if (!action || distance < STICK_PX) {
+    if (!primary || distance < STICK_PX) {
       close();
       return;
     }
     const outwardFlick = side === 'end' ? info.velocity.x < -FLICK_VELOCITY : info.velocity.x > FLICK_VELOCITY;
-    if (distance >= commitDistance() || outwardFlick) {
-      fire(action);
+    if (distance >= commitDistance(side) || outwardFlick) {
+      fire(primary);
       return;
     }
     setOpen(side);
-    settle(side === 'end' ? -OPEN_PX : OPEN_PX);
+    settle(side === 'end' ? -openWidth('end') : openWidth('start'));
   };
 
   if (!enabled) {
@@ -185,36 +202,46 @@ export const SwipeActionRow: React.FC<SwipeActionRowProps> = ({
     return <div className={cn('relative', className)}>{children}</div>;
   }
 
-  const renderZone = (side: Exclude<OpenSide, null>, action: SwipeAction) => {
-    const Icon = action.icon;
+  const renderZone = (side: Exclude<OpenSide, null>, actions: SwipeAction[]) => {
     const isOpen = open === side;
+    // Apple Mail order: the primary sits at the OUTER edge (so a full swipe
+    // reads as "the edge button expanding"), secondaries inline toward the
+    // content. actions[0] is primary, so the end side reverses render order.
+    const ordered = side === 'end' ? [...actions].reverse() : actions;
     return (
       <motion.div
-        style={{
-          opacity: side === 'start' ? startOpacity : endOpacity,
-          scale: side === 'start' ? startScale : endScale,
-        }}
+        style={{ opacity: side === 'start' ? startOpacity : endOpacity }}
         className={cn(
-          'absolute inset-y-0 flex items-center justify-center',
+          'absolute inset-y-0 flex items-stretch',
           side === 'start' ? 'left-0' : 'right-0'
         )}
       >
-        <button
-          type="button"
-          tabIndex={isOpen ? 0 : -1}
-          aria-hidden={!isOpen}
-          onClick={() => fire(action)}
-          className={cn(
-            'flex h-full w-[88px] flex-col items-center justify-center gap-1 font-bold',
-            TONE_TEXT[action.tone],
-            // Only the stuck-open state is a real tap target; during a drag
-            // the zone is purely an affordance.
-            isOpen ? 'pointer-events-auto' : 'pointer-events-none'
-          )}
-        >
-          <Icon size={22} />
-          <span className="text-xxs uppercase tracking-wide">{action.label}</span>
-        </button>
+        {ordered.map((action, index) => {
+          const Icon = action.icon;
+          const isPrimary = action === actions[0];
+          return (
+            <motion.button
+              key={`${action.label}-${index}`}
+              type="button"
+              tabIndex={isOpen ? 0 : -1}
+              aria-hidden={!isOpen}
+              onClick={() => fire(action)}
+              // Only the primary grows toward the commit point — it's the one
+              // a continued swipe will fire.
+              style={isPrimary ? { scale: side === 'start' ? startScale : endScale } : undefined}
+              className={cn(
+                'flex w-[88px] flex-col items-center justify-center gap-1 font-bold',
+                TONE_TEXT[action.tone],
+                // Only the stuck-open state is a real tap target; during a
+                // drag the zone is purely an affordance.
+                isOpen ? 'pointer-events-auto' : 'pointer-events-none'
+              )}
+            >
+              <Icon size={22} />
+              <span className="text-xxs uppercase tracking-wide">{action.label}</span>
+            </motion.button>
+          );
+        })}
       </motion.div>
     );
   };
@@ -222,14 +249,14 @@ export const SwipeActionRow: React.FC<SwipeActionRowProps> = ({
   return (
     <div ref={containerRef} className={cn('relative overflow-hidden', className)}>
       <motion.div className="absolute inset-0 z-0" style={{ backgroundColor: bgColor }}>
-        {startAction && renderZone('start', startAction)}
-        {endAction && renderZone('end', endAction)}
+        {startActions?.length ? renderZone('start', startActions) : null}
+        {endActions?.length ? renderZone('end', endActions) : null}
       </motion.div>
 
       <motion.div
         drag="x"
-        dragConstraints={{ left: endAction ? -DRAG_LIMIT_PX : 0, right: startAction ? DRAG_LIMIT_PX : 0 }}
-        dragElastic={{ left: endAction ? 0 : 0.15, right: startAction ? 0 : 0.15 }}
+        dragConstraints={{ left: hasEnd ? -DRAG_LIMIT_PX : 0, right: hasStart ? DRAG_LIMIT_PX : 0 }}
+        dragElastic={{ left: hasEnd ? 0 : 0.15, right: hasStart ? 0 : 0.15 }}
         dragMomentum={false}
         onDragStart={onSwipeStart}
         onDragEnd={handleDragEnd}
