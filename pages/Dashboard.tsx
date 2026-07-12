@@ -387,6 +387,7 @@ const Dashboard: React.FC = () => {
               completeToDo={completeToDo}
               deferCalendarItem={deferCalendarItem}
               deleteCalendarItem={deleteCalendarItem}
+              deleteTransaction={deleteTransaction}
             />
           ))}
           {!selectionMode && (
