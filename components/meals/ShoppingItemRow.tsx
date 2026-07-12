@@ -1,7 +1,7 @@
-import React, { memo } from 'react';
+import React, { memo, useRef } from 'react';
 import { ShoppingItem, Store as StoreType, QuickStockList } from '@/types/schema';
 import { Reorder, useDragControls, useMotionValue, useTransform, motion, PanInfo } from 'framer-motion';
-import { GripVertical, Check, Trash2, Edit2, Store, RotateCcw, ShoppingBag } from 'lucide-react';
+import { GripVertical, Check, Trash2, Store, RotateCcw, ShoppingBag } from 'lucide-react';
 import { STORE_COLORS, DEFAULT_STORE_COLOR } from '@/data/storeColors';
 import { TEMPLATE_ICONS } from '@/data/templateIcons';
 import { haptic } from '@/utils/haptics';
@@ -14,6 +14,8 @@ const SWIPE_COLORS = {
   light: { delete: '#fbeeec', default: '#ffffff', complete: '#eef6f1' }, // money-bgNeg / white / money-bgPos
   dark: { delete: '#3f1d2b', default: '#242220', complete: '#0f2e23' },   // money-neg tint / brand-800 / money-pos tint
 };
+
+const LONG_PRESS_MS = 500;
 
 interface ShoppingItemRowProps {
   item: ShoppingItem;
@@ -54,8 +56,69 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
   const leftIconScale = useTransform(x, [-100, -50], [1.2, 1]);
   const rightIconScale = useTransform(x, [50, 100], [1, 1.2]);
 
+  // --- Long-press anywhere on the row → edit drawer (replaces the per-row
+  // pencil button, which ate a full icon column on every row). Same pattern as
+  // ActionQueueItem: a timer armed on pointer-down, cancelled by >10px movement
+  // (that's a swipe/scroll/reorder, not a press). The reorder grip stops
+  // pointer-down propagation in the capture phase, so pressing it never arms
+  // the timer. ---
+  const longPressTimer = useRef<number | null>(null);
+  // When true, the next click on a row control is a gesture artifact and must
+  // be swallowed: browsers synthesize a click from the pointer-up that ends a
+  // fired long-press AND from the one that ends a horizontal swipe — without
+  // this, finishing a swipe over the item name pops the edit drawer.
+  const suppressClick = useRef(false);
+  const pressOrigin = useRef<{ x: number; y: number } | null>(null);
+
+  const cancelLongPress = () => {
+    if (longPressTimer.current !== null) {
+      window.clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return; // primary button / touch contact only
+    pressOrigin.current = { x: e.clientX, y: e.clientY };
+    suppressClick.current = false;
+    cancelLongPress();
+    longPressTimer.current = window.setTimeout(() => {
+      longPressTimer.current = null;
+      suppressClick.current = true;
+      haptic('medium');
+      onEdit(item);
+    }, LONG_PRESS_MS);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (longPressTimer.current === null || !pressOrigin.current) return;
+    // A press that starts moving is a swipe/scroll, not a long-press.
+    if (Math.hypot(e.clientX - pressOrigin.current.x, e.clientY - pressOrigin.current.y) > 10) {
+      cancelLongPress();
+    }
+  };
+
+  // A starting swipe both kills the pending long-press and marks the gesture's
+  // terminating click as an artifact. The pointer-move cancel alone is not
+  // enough: once framer-motion's drag session claims the pointer, React
+  // pointermove handlers on this element stop firing.
+  const handleGestureDragStart = () => {
+    cancelLongPress();
+    suppressClick.current = true;
+  };
+
+  // Swallow the click that ends a fired long-press or a swipe (see above).
+  const consumeSuppressedClick = () => {
+    if (suppressClick.current) {
+      suppressClick.current = false;
+      return true;
+    }
+    return false;
+  };
+
   // Check toggle with light haptic.
   const handleCheck = () => {
+    if (consumeSuppressedClick()) return;
     haptic('light');
     onCheck(item);
   };
@@ -120,15 +183,22 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
         </motion.div>
       </motion.div>
 
-      {/* Foreground Layer — drag disabled under reduced motion; checkbox/edit buttons remain. */}
+      {/* Foreground Layer — drag disabled under reduced motion; the checkbox and
+          tap/long-press-to-edit remain. select-none + no touch-callout keep iOS
+          from starting text selection / the share sheet during a long-press. */}
       <motion.div
         drag={reduceMotion ? false : "x"}
         dragConstraints={{ left: 0, right: 0 }}
         dragElastic={0.1} // Resistance feel
         onDragEnd={reduceMotion ? undefined : handleDragEnd}
+        onDragStart={handleGestureDragStart}
         style={{ x, touchAction: 'pan-y' }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={cancelLongPress}
+        onPointerCancel={cancelLongPress}
         className={clsx(
-          "relative z-10 flex items-center gap-3 px-3 py-2.5 bg-white dark:bg-brand-800 transition-colors duration-(--duration-fast) ease-(--ease-standard)",
+          "relative z-10 flex items-center gap-3 px-3 py-2.5 bg-white dark:bg-brand-800 transition-colors duration-(--duration-fast) ease-(--ease-standard) select-none [-webkit-touch-callout:none]",
           item.isPurchased && "opacity-70 bg-brand-50 dark:bg-brand-800/60"
         )}
       >
@@ -185,10 +255,11 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
             </span>
         </button>
 
-        {/* Content — tap opens the edit drawer where store / quick-list / delete live. */}
+        {/* Content — tap (or long-press anywhere on the row) opens the edit
+            drawer where store / quick-list / delete live. */}
         <button
             type="button"
-            onClick={() => onEdit(item)}
+            onClick={() => { if (!consumeSuppressedClick()) onEdit(item); }}
             className="flex-1 min-w-0 text-left focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-sm"
             aria-label={`Edit ${item.name}`}
         >
@@ -227,15 +298,6 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                     )}
                 </div>
             )}
-        </button>
-
-        {/* Edit Action */}
-        <button
-            onClick={() => onEdit(item)}
-            className="shrink-0 p-2 text-brand-300 hover:text-brand-600 rounded-full hover:bg-brand-100 transition-colors dark:text-brand-450 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
-            aria-label={`Edit ${item.name}`}
-        >
-            <Edit2 size={16} />
         </button>
 
       </motion.div>
