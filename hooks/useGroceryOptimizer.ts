@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import toast from 'react-hot-toast';
+import { Sparkles, TriangleAlert } from 'lucide-react';
+import { toastIcon } from '@/components/ui/toastIcon';
 import type { OptimizableItem } from '@/services/geminiService.types';
 import { normalizeValue } from '@/utils/stringNormalizer';
 
@@ -138,15 +140,16 @@ export const useGroceryOptimizer = <T extends { id: string }>({
       }
 
       if (updatedCount > 0 && failedCount === 0) {
-        toast.success(`Optimized ${updatedCount} items!`);
+        toast.success(`Optimized ${updatedCount} items!`, { icon: toastIcon(Sparkles) });
       } else if (updatedCount > 0 && failedCount > 0) {
         toast.success(
-          `Optimized ${updatedCount} items, but ${failedCount} updates failed.`
+          `Optimized ${updatedCount} items, but ${failedCount} updates failed.`,
+          { icon: toastIcon(TriangleAlert, 'text-warm-300') }
         );
       } else if (updatedCount === 0 && failedCount > 0) {
         toast.error(`${errorMessage}. Please try again.`);
       } else {
-        toast.success('Everything looks good!');
+        toast.success('Everything looks good!', { icon: toastIcon(Sparkles) });
       }
 
     } catch (error) {

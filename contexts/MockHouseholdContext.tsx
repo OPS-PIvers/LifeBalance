@@ -1,4 +1,6 @@
 import React, { useState, ReactNode, useCallback, useMemo, useRef } from 'react';
+import { Info } from 'lucide-react';
+import { toastIcon } from '@/components/ui/toastIcon';
 import { format, addDays, subDays } from 'date-fns';
 import { HouseholdContextType, HouseholdSliceProviders } from './FirebaseHouseholdContext';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -1211,6 +1213,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const noOp = useCallback(async <T,>(..._args: unknown[]): Promise<T | void> => {
     // toast.info doesn't exist, use toast with custom styling instead
     toast('Mock: Operation not implemented in test mode', {
+      icon: toastIcon(Info),
       duration: 2000
     });
   }, []);

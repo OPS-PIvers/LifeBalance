@@ -1,6 +1,6 @@
 import React, { memo, useRef } from 'react';
 import { ShoppingItem, Store as StoreType, QuickStockList } from '@/types/schema';
-import { Reorder, useDragControls, useMotionValue, useTransform, motion, PanInfo } from 'framer-motion';
+import { Reorder, useDragControls, useMotionValue, useTransform, motion, transform, PanInfo } from 'framer-motion';
 import { GripVertical, Check, Trash2, Store, ShoppingBag } from 'lucide-react';
 import { STORE_COLORS, DEFAULT_STORE_COLOR } from '@/data/storeColors';
 import { TEMPLATE_ICONS } from '@/data/templateIcons';
@@ -38,19 +38,18 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
   const palette = isDark ? SWIPE_COLORS.dark : SWIPE_COLORS.light;
 
   // Background color interpolation based on drag position. Right swipe only
-  // acts on (and therefore only tints for) unchecked items.
-  const completeTint = item.isPurchased ? palette.default : palette.complete;
-  const bgColor = useTransform(
-    x,
-    [-100, -50, 0, 50, 100],
-    [
-      palette.delete,
-      palette.delete,
-      palette.default,
-      completeTint,
-      completeTint
-    ]
-  );
+  // acts on (and therefore only tints for) unchecked items. Function form so
+  // the range re-derives from the CURRENT isPurchased/palette on every render
+  // — the array form captures its output range statically, which would keep
+  // the green tint alive right after an item is checked.
+  const bgColor = useTransform(x, (latest: number) => {
+    const completeTint = item.isPurchased ? palette.default : palette.complete;
+    return transform(
+      latest,
+      [-100, -50, 0, 50, 100],
+      [palette.delete, palette.delete, palette.default, completeTint, completeTint]
+    );
+  });
 
   // Icon opacity/scale based on drag position
   const leftIconOpacity = useTransform(x, [-50, -20], [1, 0]);

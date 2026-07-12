@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Check, Flame, Gift, Lock, LogOut, PiggyBank, Sparkles, Star, Trophy } from 'lucide-react';
+import { Check, Flame, Gift, Hourglass, Lock, LogOut, PiggyBank, Sparkles, Star, Trophy } from 'lucide-react';
+import { toastIcon } from '@/components/ui/toastIcon';
 import toast from 'react-hot-toast';
 import { useHouseholdCore, useGamification, useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
@@ -146,7 +147,7 @@ const KidDashboard: React.FC = () => {
       // Guard against a double-request for the same reward (the button is also
       // swapped to a non-interactive "Requested" pill below).
       if (pendingRewardIds.has(r.id)) {
-        toast(`You already asked for "${r.title}" — hang tight!`);
+        toast(`You already asked for "${r.title}" — hang tight!`, { icon: toastIcon(Hourglass) });
         return;
       }
       try {

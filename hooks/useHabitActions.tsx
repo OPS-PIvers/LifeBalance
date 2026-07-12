@@ -33,6 +33,8 @@ import {
   pointsForHabitOnDate
 } from '@/utils/habitLogic';
 import toast from 'react-hot-toast';
+import { CalendarDays, RotateCcw } from 'lucide-react';
+import { toastIcon } from '@/components/ui/toastIcon';
 import { addDays, format, parseISO, startOfWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { track } from '@/services/analytics';
@@ -190,7 +192,7 @@ export const useHabitActions = (
           lastUpdated: serverTimestamp(),
         });
 
-        toast("Habit reset to 0 for today. Previous points preserved.");
+        toast("Habit reset to 0 for today. Previous points preserved.", { icon: toastIcon(CalendarDays) });
         return;
       }
 
@@ -307,7 +309,7 @@ export const useHabitActions = (
       await updateDoc(doc(db, `households/${householdId}/habits`, id), {
         lastUpdated: serverTimestamp(),
       });
-      toast('Reset', { icon: '↺' });
+      toast('Reset', { icon: toastIcon(RotateCcw) });
       return;
     }
 
@@ -336,7 +338,7 @@ export const useHabitActions = (
 
     await resetBatch.commit();
 
-    toast('Reset', { icon: '↺' });
+    toast('Reset', { icon: toastIcon(RotateCcw) });
   }, [householdId]);
 
   const addHabitSubmission = useCallback(async (habitId: string, count: number, timestamp?: string) => {
@@ -708,7 +710,7 @@ export const useHabitActions = (
 
       await batch.commit();
 
-      toast('Day cleared', { icon: '↺' });
+      toast('Day cleared', { icon: toastIcon(RotateCcw) });
     } catch (error) {
       console.error('[resetHabitDay] Failed:', error);
       toast.error('Failed to clear day');

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useShopping } from '@/contexts/FirebaseHouseholdContext';
-import { Store as StoreIcon, Plus, Trash2, Edit2, Save, RotateCcw, Search, Check, ShoppingBag, X } from 'lucide-react';
+import { Store as StoreIcon, Plus, Trash2, Edit2, Save, RotateCcw, Search, Check, ShoppingBag, Sparkles, X } from 'lucide-react';
+import { toastIcon } from '@/components/ui/toastIcon';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { QuickStockList } from '@/types/schema';
 import { STORE_COLORS, DEFAULT_STORE_COLOR } from '@/data/storeColors';
@@ -169,7 +170,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
     if (existing) {
       toggleItemInTemplate(existing.id);
       setItemSearch('');
-      toast('Item found in history and added');
+      toast('Item found in history and added', { icon: toastIcon(Sparkles) });
       return;
     }
 

@@ -7,6 +7,8 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
+import { Sparkles } from 'lucide-react';
+import { toastIcon } from '@/components/ui/toastIcon';
 import { Habit, Insight, ModuleKey, Transaction } from '@/types/schema';
 import { hashKidPin } from '@/utils/kidPin';
 import { track } from '@/services/analytics';
@@ -124,7 +126,7 @@ export function makeRefreshInsight(deps: {
       await addDoc(collection(db, `households/${householdId}/insights`), newInsight);
 
       track('insight_generated');
-      toast.success('New insight generated!', { id: 'insight-loading' });
+      toast.success('New insight generated!', { id: 'insight-loading', icon: toastIcon(Sparkles) });
     } catch (error) {
       console.error("Failed to generate insight:", error);
       toast.error('Failed to generate insight', { id: 'insight-loading' });

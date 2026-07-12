@@ -10,6 +10,8 @@ import {
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 import React from 'react';
+import { Star } from 'lucide-react';
+import { toastIcon } from '@/components/ui/toastIcon';
 import { Account, Habit, Household, Transaction } from '@/types/schema';
 import type { MutationOpts } from '@/contexts/household/types';
 import { effectiveAccountImpact, resolveTargetAccount } from '@/utils/accountImpact';
@@ -373,6 +375,7 @@ export function makeUpdateTransactionCategory(deps: {
         ),
         {
           duration: 2000,
+          icon: toastIcon(Star, 'text-accent-600'),
           style: {
             background: '#ECFDF5',
             color: '#065F46',
