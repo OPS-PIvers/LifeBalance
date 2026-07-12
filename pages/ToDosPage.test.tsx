@@ -603,7 +603,11 @@ describe('ToDosPage', () => {
 
     it('cycles list → matrix → grid → list and persists each step to localStorage', () => {
       setOrientation(true);
-      setup();
+      // Use the quadrant fixture so every stacked section has an item — the
+      // quick-add bar now lives in a page-level sticky card, so an empty
+      // quadrant section (like "Do First") collapses away instead of being
+      // kept alive by the add row.
+      setup(quadrantTodos);
 
       // Default: list arrangement — the toggle offers the prioritized list next.
       fireEvent.click(screen.getByRole('button', { name: 'Switch to prioritized list' }));

@@ -8,15 +8,14 @@ import { QUADRANT_SECTIONS } from './todoDisplay';
 // `effectiveArrangement === 'matrix'` render branch, moved verbatim. Same
 // tasks as the list arrangement, partitioned by urgency (derived from due
 // date, same window as Immediate) × importance (the star). Stacked sections
-// in actionability order; quick-add stays row one of the first section.
+// in actionability order; the quick-add bar lives in a sticky card above the
+// sections (page level), shared with the list arrangement.
 
 export interface EisenhowerMatrixViewProps {
   quadrants: Record<Quadrant, ToDo[]>;
   memberMap: ReadonlyMap<string, HouseholdMember>;
   isSelectionMode: boolean;
   selectedIds: ReadonlySet<string>;
-  /** Rendered as the first row of the first (Do First) section. */
-  quickAddRow: React.ReactNode;
   onComplete: (id: string) => void;
   onEdit: (todo: ToDo) => void;
   onDelete: (id: string) => void;
@@ -32,7 +31,6 @@ export const EisenhowerMatrixView: React.FC<EisenhowerMatrixViewProps> = ({
   memberMap,
   isSelectionMode,
   selectedIds,
-  quickAddRow,
   onComplete,
   onEdit,
   onDelete,
@@ -43,7 +41,7 @@ export const EisenhowerMatrixView: React.FC<EisenhowerMatrixViewProps> = ({
   onToggleSelection,
 }) => (
   <>
-    {QUADRANT_ORDER.map((q, idx) => (
+    {QUADRANT_ORDER.map((q) => (
       <Section
         key={q}
         title={QUADRANT_SECTIONS[q].title}
@@ -62,7 +60,6 @@ export const EisenhowerMatrixView: React.FC<EisenhowerMatrixViewProps> = ({
         isSelectionMode={isSelectionMode}
         selectedIds={selectedIds}
         onToggleSelection={onToggleSelection}
-        addRow={idx === 0 ? quickAddRow : undefined}
       />
     ))}
   </>
