@@ -10,6 +10,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 
 interface Props {
   isOpen: boolean;
@@ -35,6 +36,10 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
   } = useShopping();
 
   const [activeTab, setActiveTab] = useState<'stores' | 'categories' | 'templates'>('stores');
+  // Guards the footer save buttons against double-taps: both handlers are
+  // async writes, and a second tap before the first resolves would issue a
+  // concurrent duplicate (a repeated addQuickStockList creates a second doc).
+  const [isSaving, setIsSaving] = useState(false);
 
   // Shared destructive-confirmation dialog state
   const [confirm, setConfirm] = useState<{
@@ -119,8 +124,9 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
   }, [isOpen, onClose]);
 
   const handleSaveTemplate = async () => {
-    if (!editingTemplate || !editingTemplate.name?.trim()) return;
+    if (!editingTemplate || !editingTemplate.name?.trim() || isSaving) return;
 
+    setIsSaving(true);
     try {
       if (editingTemplate.id) {
         await updateQuickStockList(editingTemplate as QuickStockList);
@@ -135,6 +141,8 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
       setEditingTemplate(null);
     } catch (error) {
       console.error(error);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -253,12 +261,16 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
   };
 
   const saveCategories = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
     try {
       await updateGroceryCategories(localCategories);
       setHasUnsavedCategoryChanges(false);
     } catch (error) {
       console.error('Failed to save grocery categories', error);
       toast.error('Failed to save categories. Please try again.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -274,51 +286,66 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
     });
   };
 
+  // Tab bar — the standardized Tabs strip (same primitive as ListsPage), in the
+  // Drawer's fixed header slot so it never scrolls and the sheet frame stays
+  // stable across tabs.
+  const tabBar = (
+      <div className="px-4 pb-3 border-b border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as typeof activeTab)}>
+              <TabsList size="sm">
+                  <TabsTrigger value="stores" className="flex-1">Stores</TabsTrigger>
+                  <TabsTrigger value="categories" className="flex-1">Categories</TabsTrigger>
+                  <TabsTrigger value="templates" className="flex-1">Templates</TabsTrigger>
+              </TabsList>
+          </Tabs>
+      </div>
+  );
+
+  // Per-tab action bars — rendered in the Drawer's fixed footer slot (below the
+  // scrollable body) so they stay pinned to the sheet bottom at the tall detent.
+  const footer =
+    activeTab === 'categories' ? (
+        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
+            <Button
+                variant="primary"
+                size="lg"
+                onClick={saveCategories}
+                disabled={!hasUnsavedCategoryChanges || isSaving}
+                className="w-full"
+            >
+                Save Category Changes
+            </Button>
+        </div>
+    ) : activeTab === 'templates' && editingTemplate ? (
+        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
+            <Button
+              variant="primary"
+              size="lg"
+              onClick={handleSaveTemplate}
+              disabled={!editingTemplate.name?.trim() || isSaving}
+              className="w-full"
+            >
+              Save Template
+            </Button>
+        </div>
+    ) : undefined;
+
   return (
     <Drawer
       isOpen={isOpen}
       onClose={onClose}
       title="Shopping List Settings"
       noPadding={true}
+      // Fixed tall detent: the sheet frame stays the same height across the
+      // Stores / Categories / Templates tabs instead of resizing to each tab's
+      // content, which made the whole sheet jump on every tab switch.
+      height="tall"
+      header={tabBar}
+      footer={footer}
     >
-      {/* Tabs */}
-      <div className="flex border-b border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800 sticky top-0 z-10">
-          <button
-            onClick={() => setActiveTab('stores')}
-            className={`flex-1 py-4 text-sm font-medium transition-colors relative ${
-              activeTab === 'stores' ? 'text-accent-700 bg-brand-50 dark:text-accent-300 dark:bg-brand-700/40' : 'text-brand-500 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-700/50'
-            }`}
-          >
-            Stores
-            {activeTab === 'stores' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent-600 dark:bg-accent-400" />
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab('categories')}
-            className={`flex-1 py-4 text-sm font-medium transition-colors relative ${
-              activeTab === 'categories' ? 'text-accent-700 bg-brand-50 dark:text-accent-300 dark:bg-brand-700/40' : 'text-brand-500 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-700/50'
-            }`}
-          >
-            Categories
-            {activeTab === 'categories' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent-600 dark:bg-accent-400" />
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab('templates')}
-            className={`flex-1 py-4 text-sm font-medium transition-colors relative ${
-              activeTab === 'templates' ? 'text-accent-700 bg-brand-50 dark:text-accent-300 dark:bg-brand-700/40' : 'text-brand-500 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-700/50'
-            }`}
-          >
-            Templates
-            {activeTab === 'templates' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent-600 dark:bg-accent-400" />
-            )}
-          </button>
-        </div>
-
-        <div className="flex-1 scroll-contain-y p-4 sm:p-6 bg-brand-50 dark:bg-brand-900/40">
+        {/* min-h-full so the tinted body fills the fixed-height sheet even when
+            a tab's content is short. */}
+        <div className="min-h-full p-4 sm:p-6 bg-brand-50 dark:bg-brand-900/40">
 
           {activeTab === 'stores' && (
             <div className="space-y-6">
@@ -668,34 +695,6 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
             </div>
           )}
         </div>
-
-        {activeTab === 'categories' && (
-            <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
-                <Button
-                    variant="primary"
-                    size="lg"
-                    onClick={saveCategories}
-                    disabled={!hasUnsavedCategoryChanges}
-                    className="w-full"
-                >
-                    Save Category Changes
-                </Button>
-            </div>
-        )}
-
-        {activeTab === 'templates' && editingTemplate && (
-            <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
-                <Button
-                  variant="primary"
-                  size="lg"
-                  onClick={handleSaveTemplate}
-                  disabled={!editingTemplate.name?.trim()}
-                  className="w-full"
-                >
-                  Save Template
-                </Button>
-            </div>
-        )}
 
         <ConfirmDialog
           isOpen={confirm !== null}
