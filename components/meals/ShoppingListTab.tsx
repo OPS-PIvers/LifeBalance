@@ -307,6 +307,9 @@ const ShoppingListTab: React.FC = () => {
     // Use full shoppingList to ensure correct ordering even when filtered
     const maxOrder = shoppingList.length > 0 ? Math.max(...shoppingList.map(i => i.order || 0)) : 0;
 
+    // Haptic at gesture time: after the await, transient user activation has
+    // expired and the iOS transport silently no-ops (see utils/haptics.ts).
+    haptic('success');
     await addShoppingItem({
         name: rawName,
         category,
@@ -315,7 +318,6 @@ const ShoppingListTab: React.FC = () => {
         isPurchased: false,
         order: maxOrder + 1
     });
-    haptic('success');
 
     // If we inferred metadata, maybe show a toast?
     if (store || (category !== 'Uncategorized')) {

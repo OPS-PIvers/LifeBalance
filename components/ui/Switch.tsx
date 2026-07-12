@@ -1,5 +1,6 @@
 import React, { useId } from 'react';
 import { cn } from '@/utils/cn';
+import { hapticForNativeSwitch, markAsWebKitSwitch } from '@/utils/haptics';
 
 interface SwitchProps {
   checked: boolean;
@@ -50,10 +51,15 @@ export const Switch: React.FC<SwitchProps> = ({
       <input
         type="checkbox"
         id={inputId}
+        ref={markAsWebKitSwitch}
         aria-label={ariaLabel}
         aria-labelledby={ariaLabelledby}
         checked={checked}
-        onChange={(e) => !disabled && onCheckedChange(e.target.checked)}
+        onChange={(e) => {
+          if (disabled) return;
+          hapticForNativeSwitch('light');
+          onCheckedChange(e.target.checked);
+        }}
         disabled={disabled}
         className="sr-only peer"
       />

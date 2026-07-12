@@ -5,6 +5,7 @@ import { GripVertical, Check, Trash2, Store, ShoppingBag } from 'lucide-react';
 import { STORE_COLORS, DEFAULT_STORE_COLOR } from '@/data/storeColors';
 import { TEMPLATE_ICONS } from '@/data/templateIcons';
 import { haptic } from '@/utils/haptics';
+import { HapticCheck } from '@/components/ui/HapticCheck';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import clsx from 'clsx';
@@ -87,6 +88,8 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
     longPressTimer.current = window.setTimeout(() => {
       longPressTimer.current = null;
       suppressClick.current = true;
+      // Android-only in practice: a timer callback has no transient user
+      // activation, so the iOS transport can't fire here (see utils/haptics.ts).
       haptic('medium');
       onEdit(item);
     }, LONG_PRESS_MS);
@@ -118,10 +121,19 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
     return false;
   };
 
-  // Check toggle with light haptic.
+  // Check toggle with light haptic — for the content-area tap, where the
+  // haptic must be triggered programmatically (dead on iOS 26.5+, works
+  // elsewhere; see utils/haptics.ts).
   const handleCheck = () => {
     if (consumeSuppressedClick()) return;
     haptic('light');
+    onCheck(item);
+  };
+
+  // Same toggle for the HapticCheck control, which produces its own haptic
+  // (native iOS tick from the real switch input + Android vibrate).
+  const handleCheckFromControl = () => {
+    if (consumeSuppressedClick()) return;
     onCheck(item);
   };
 
@@ -249,11 +261,14 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
             </div>
         )}
 
-        {/* Checkbox (Alternative to Swipe) - p-3 -m-3 enlarges tappable area to ~44px */}
-        <button
-            onClick={handleCheck}
+        {/* Checkbox (Alternative to Swipe) - p-3 -m-3 enlarges tappable area to
+            ~44px. HapticCheck (real switch input) so the tap fires the native
+            iOS system haptic even on 26.5+. */}
+        <HapticCheck
+            checked={item.isPurchased}
+            onCheckedChange={handleCheckFromControl}
             aria-label={item.isPurchased ? `Mark ${item.name} as not purchased` : `Mark ${item.name} as purchased`}
-            className="group p-3 -m-3 shrink-0"
+            className="p-3 -m-3 shrink-0"
         >
             <span
                 className={clsx(
@@ -265,7 +280,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
             >
                 <Check size={12} strokeWidth={3} />
             </span>
-        </button>
+        </HapticCheck>
 
         {/* Content — a plain TAP here toggles purchased, same as the checkbox
             (owner request: tap anywhere on the card completes the item).

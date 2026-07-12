@@ -6,6 +6,7 @@ import { ToDo, HouseholdMember } from '@/types/schema';
 import { DEFAULT_TODO_POINTS } from '@/utils/todoPoints';
 import toast from 'react-hot-toast';
 import { haptic } from '@/utils/haptics';
+import { HapticCheck } from '@/components/ui/HapticCheck';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import { Button } from '@/components/ui/Button';
@@ -86,11 +87,10 @@ export const TodoRow = React.memo(function TodoRow({
             {isSelected ? <CheckSquare aria-hidden="true" size={24} /> : <div className="w-5 h-5 border-2 border-current rounded-sm" />}
           </div>
         ) : (
-          <button
-            onClick={async (e) => {
-              e.stopPropagation();
+          <HapticCheck
+            checked={false}
+            onCheckedChange={async () => {
               try {
-                haptic('light');
                 await onComplete(item.id);
                 toast.success('To-Do completed! 🎉');
               } catch (error) {
@@ -98,13 +98,14 @@ export const TodoRow = React.memo(function TodoRow({
                 toast.error('Failed to complete to-do');
               }
             }}
-            className="group mt-0.5 p-2.5 -m-2.5 shrink-0"
+            onClick={(e) => e.stopPropagation()}
+            className="mt-0.5 p-2.5 -m-2.5 shrink-0"
             aria-label={`Complete task: ${item.text}`}
           >
             <span className="w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors border-brand-300 group-hover:border-accent-500 group-hover:bg-accent-50 group-active:bg-accent-100 dark:border-brand-600 dark:group-hover:border-accent-400 dark:group-hover:bg-accent-900/30">
-              <Check size={14} className="text-transparent group-hover:text-current group-active:text-current group-focus-visible:text-current transition-colors" />
+              <Check size={14} className="text-transparent group-hover:text-current group-active:text-current group-has-[:focus-visible]:text-current transition-colors" />
             </span>
-          </button>
+          </HapticCheck>
         )}
 
         <div className="flex-1 min-w-0">

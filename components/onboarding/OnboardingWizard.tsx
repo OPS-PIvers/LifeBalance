@@ -10,6 +10,7 @@ import Input from '@/components/ui/Input';
 import Card from '@/components/ui/Card';
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
 import { cn } from '@/utils/cn';
+import { hapticForNativeSwitch, markAsWebKitSwitch } from '@/utils/haptics';
 import { track } from '@/services/analytics';
 
 /** Wizard steps, in order. */
@@ -305,9 +306,13 @@ const OnboardingWizard: React.FC = () => {
                   >
                     <input
                       type="checkbox"
+                      ref={markAsWebKitSwitch}
                       className="sr-only"
                       checked={checked}
-                      onChange={() => togglePreset(preset.id)}
+                      onChange={() => {
+                        hapticForNativeSwitch('light');
+                        togglePreset(preset.id);
+                      }}
                     />
                     <span
                       className={cn(

@@ -107,4 +107,9 @@ describe('Switch', () => {
     const track = container.querySelector('input + div');
     expect(track).toHaveAttribute('aria-hidden', 'true');
   });
+
+  it('marks the input as a WebKit switch so user taps fire the iOS system haptic', () => {
+    render(<Switch checked={false} onCheckedChange={() => {}} />);
+    expect(screen.getByRole('checkbox')).toHaveAttribute('switch');
+  });
 });
