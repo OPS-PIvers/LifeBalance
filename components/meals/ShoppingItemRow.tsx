@@ -127,11 +127,16 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
   // Right-click / keyboard context-menu → edit drawer. Guarded by
   // suppressClick so a long-press that already fired (some platforms
   // synthesize contextmenu around the same ~500ms mark) doesn't open it twice.
+  // suppressClick is SET only when a touch long-press is in flight (timer
+  // armed): that release synthesizes a click that must be swallowed, whereas a
+  // desktop right-click / keyboard menu key never produces one — setting the
+  // flag there would instead swallow a later keyboard-Enter "click" (which has
+  // no pointer-down to reset the flag).
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    cancelLongPress();
     if (suppressClick.current) return;
-    suppressClick.current = true;
+    if (longPressTimer.current !== null) suppressClick.current = true;
+    cancelLongPress();
     onEdit(item);
   };
 
@@ -271,12 +276,14 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
         {/* Content — a plain TAP here toggles purchased, same as the checkbox
             (owner request: tap anywhere on the card completes the item).
             Long-press (or right-click / context-menu key) opens the edit
-            drawer where store / quick-list / delete live. */}
-        <button
-            type="button"
+            drawer where store / quick-list / delete live. Deliberately NOT a
+            button: it duplicates the checkbox's action for pointers only, so a
+            second per-row tab stop / SR control would be pure noise — the
+            checkbox is the one accessible toggle, while the name/meta here
+            stay readable as plain text. */}
+        <div
             onClick={handleCheck}
-            className="flex-1 min-w-0 text-left focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-sm"
-            aria-label={item.isPurchased ? `Mark ${item.name} as not purchased` : `Mark ${item.name} as purchased`}
+            className="flex-1 min-w-0 text-left"
         >
             <div className={clsx(
                 "text-sm font-medium truncate transition-colors",
@@ -313,7 +320,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                     )}
                 </div>
             )}
-        </button>
+        </div>
 
       </motion.div>
     </>

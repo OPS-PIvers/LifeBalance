@@ -784,11 +784,15 @@ const ShoppingListTab: React.FC = () => {
                     const label = shoppingGroupLabel(item, sortMode);
                     const prev = index > 0 ? items[index - 1] : undefined;
                     const prevLabel = prev ? shoppingGroupLabel(prev, sortMode) : null;
+                    // Case-insensitive: the sort already groups "Target"/"target"
+                    // adjacently, so casing drift must not split the header.
+                    const isNewGroup = label !== null &&
+                        label.toLowerCase() !== prevLabel?.toLowerCase();
                     return (
                         <React.Fragment key={item.id}>
                             {/* Section header between groups (store / store-section
                                 modes only — shoppingGroupLabel is null for flat modes) */}
-                            {label !== null && label !== prevLabel && (
+                            {isNewGroup && (
                                 <div className="hairline-divider px-3 pt-2.5 pb-1 text-xxs font-semibold uppercase tracking-wide text-brand-500 dark:text-brand-400 bg-brand-50/60 dark:bg-brand-900/40">
                                     {label}
                                 </div>
