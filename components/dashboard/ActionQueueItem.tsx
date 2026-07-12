@@ -1,7 +1,8 @@
 import React, { useMemo, memo, useRef } from 'react';
 import {
-  CalendarClock, Receipt, Check, Trash2, Clock, ListTodo, AlertCircle
+  CalendarClock, Receipt, Check, Trash2, Clock, ListTodo, AlertCircle, Pencil, Tag
 } from 'lucide-react';
+import { toastIcon } from '@/components/ui/toastIcon';
 import { motion, useMotionValue, useTransform, PanInfo } from 'framer-motion';
 import { format, parseISO, isBefore, addDays, isAfter, startOfToday, isValid } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -198,12 +199,12 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
       if (isTransactionQueueItem(item)) {
         if (item.needsAmount) {
           handleExpand();
-          toast('Add the amount, then approve.', { icon: '✏️' });
+          toast('Add the amount, then approve.', { icon: toastIcon(Pencil) });
           return;
         }
         if (!suggestCategoryForTransaction(item, buckets, transactions)) {
           handleExpand();
-          toast('Pick a category to approve this one.', { icon: '🏷️' });
+          toast('Pick a category to approve this one.', { icon: toastIcon(Tag) });
           return;
         }
       }

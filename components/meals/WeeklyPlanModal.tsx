@@ -7,6 +7,7 @@ import { mapWeeklyPlan } from '@/utils/weeklyPlanMapper';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import { MealGuide } from './MealGuide';
 import { Sparkles, FileJson, CalendarPlus, ChefHat, ClipboardPaste } from 'lucide-react';
+import { toastIcon } from '@/components/ui/toastIcon';
 import toast from 'react-hot-toast';
 
 type Mode = 'choose' | 'generate' | 'import' | 'preview';
@@ -108,7 +109,7 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
   const handlePasteFromClipboard = async () => {
     try {
       if (!navigator.clipboard?.readText) {
-        toast('Long-press the box below to paste', { icon: '📋' });
+        toast('Long-press the box below to paste', { icon: toastIcon(ClipboardPaste) });
         return;
       }
       const text = await navigator.clipboard.readText();

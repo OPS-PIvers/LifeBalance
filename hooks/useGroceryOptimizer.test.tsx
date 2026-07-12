@@ -117,7 +117,7 @@ describe('useGroceryOptimizer', () => {
     });
 
     expect(updateItem).toHaveBeenCalledTimes(2);
-    expect(toast.success).toHaveBeenCalledWith('Optimized 2 items!', { icon: '✨' });
+    expect(toast.success).toHaveBeenCalledWith('Optimized 2 items!', expect.objectContaining({ icon: expect.anything() }));
     expect(result.current.isOptimizing).toBe(false);
   });
 
@@ -134,7 +134,7 @@ describe('useGroceryOptimizer', () => {
     });
 
     expect(updateItem).not.toHaveBeenCalled();
-    expect(toast.success).toHaveBeenCalledWith('Everything looks good!', { icon: '✨' });
+    expect(toast.success).toHaveBeenCalledWith('Everything looks good!', expect.objectContaining({ icon: expect.anything() }));
   });
 
   it('skips optimized items whose id is not in the original list (warns), no update', async () => {
@@ -153,7 +153,7 @@ describe('useGroceryOptimizer', () => {
 
     expect(updateItem).not.toHaveBeenCalled();
     expect(warnSpy).toHaveBeenCalled();
-    expect(toast.success).toHaveBeenCalledWith('Everything looks good!', { icon: '✨' });
+    expect(toast.success).toHaveBeenCalledWith('Everything looks good!', expect.objectContaining({ icon: expect.anything() }));
   });
 
   it('handles partial failure: one update succeeds, one rejects', async () => {
@@ -181,7 +181,7 @@ describe('useGroceryOptimizer', () => {
     expect(updateItem).toHaveBeenCalledTimes(2);
     expect(toast.success).toHaveBeenCalledWith(
       'Optimized 1 items, but 1 updates failed.',
-      { icon: '⚠️' }
+      expect.objectContaining({ icon: expect.anything() })
     );
   });
 

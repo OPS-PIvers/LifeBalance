@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useShopping, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem, QuickStockList } from '@/types/schema';
-import { Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Share2, Save, ShoppingCart, MoreHorizontal, Zap, ArrowUpDown, Check } from 'lucide-react';
+import { Download, Sparkles, Loader2, Clock, Filter, Info, RotateCcw, X, Settings, Share2, Save, ShoppingCart, MoreHorizontal, Zap, ArrowUpDown, Check } from 'lucide-react';
+import { toastIcon } from '@/components/ui/toastIcon';
 import { Reorder } from 'framer-motion';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import type { OptimizableItem } from '@/services/geminiService.types';
@@ -448,7 +449,7 @@ const ShoppingListTab: React.FC = () => {
         // Share pending items only
         const itemsToShare = shoppingList.filter(i => !i.isPurchased);
         if (itemsToShare.length === 0) {
-          toast('No pending items to share', { icon: 'ℹ️' });
+          toast('No pending items to share', { icon: toastIcon(Info) });
           return;
         }
 

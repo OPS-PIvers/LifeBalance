@@ -12,6 +12,8 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
+import { Info } from 'lucide-react';
+import { toastIcon } from '@/components/ui/toastIcon';
 import { ShoppingItem, GroceryCatalogItem, Store, QuickStockList, Household } from '@/types/schema';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { normalizeToKey } from '@/utils/stringNormalizer';
@@ -303,7 +305,7 @@ export function makeToggleShoppingItemPurchased(deps: {
         await updateDoc(doc(db, `households/${householdId}/shoppingList`, id), {
           isPurchased: false,
         });
-        toast('Marked as not purchased', { icon: 'ℹ️' });
+        toast('Marked as not purchased', { icon: toastIcon(Info) });
       }
 
     } catch (error) {

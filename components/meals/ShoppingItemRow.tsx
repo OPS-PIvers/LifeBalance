@@ -1,7 +1,7 @@
 import React, { memo, useRef } from 'react';
 import { ShoppingItem, Store as StoreType, QuickStockList } from '@/types/schema';
-import { Reorder, useDragControls, useMotionValue, useTransform, motion, PanInfo } from 'framer-motion';
-import { GripVertical, Check, Trash2, Store, RotateCcw, ShoppingBag } from 'lucide-react';
+import { Reorder, useDragControls, useMotionValue, useTransform, motion, transform, PanInfo } from 'framer-motion';
+import { GripVertical, Check, Trash2, Store, ShoppingBag } from 'lucide-react';
 import { STORE_COLORS, DEFAULT_STORE_COLOR } from '@/data/storeColors';
 import { TEMPLATE_ICONS } from '@/data/templateIcons';
 import { haptic } from '@/utils/haptics';
@@ -37,18 +37,19 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
     (typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
   const palette = isDark ? SWIPE_COLORS.dark : SWIPE_COLORS.light;
 
-  // Background color interpolation based on drag position
-  const bgColor = useTransform(
-    x,
-    [-100, -50, 0, 50, 100],
-    [
-      palette.delete,
-      palette.delete,
-      palette.default,
-      palette.complete,
-      palette.complete
-    ]
-  );
+  // Background color interpolation based on drag position. Right swipe only
+  // acts on (and therefore only tints for) unchecked items. Function form so
+  // the range re-derives from the CURRENT isPurchased/palette on every render
+  // — the array form captures its output range statically, which would keep
+  // the green tint alive right after an item is checked.
+  const bgColor = useTransform(x, (latest: number) => {
+    const completeTint = item.isPurchased ? palette.default : palette.complete;
+    return transform(
+      latest,
+      [-100, -50, 0, 50, 100],
+      [palette.delete, palette.delete, palette.default, completeTint, completeTint]
+    );
+  });
 
   // Icon opacity/scale based on drag position
   const leftIconOpacity = useTransform(x, [-50, -20], [1, 0]);
@@ -143,20 +144,16 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
   const handleDragEnd = (_: unknown, info: PanInfo) => {
     const threshold = 80;
     if (info.offset.x > threshold) {
-      // Swipe Right -> Check
+      // Swipe Right -> Check (no-op on already-checked items)
       if (!item.isPurchased) {
         haptic('light');
         onCheck(item);
       }
     } else if (info.offset.x < -threshold) {
-      // Swipe Left -> Delete or Uncheck
-      if (item.isPurchased) {
-        haptic('light');
-        onCheck(item); // Toggle back
-      } else {
-        haptic('medium');
-        onDelete(item);
-      }
+      // Swipe Left -> Delete, checked or not (owner decision: swiping a
+      // checked item removes it; unchecking is a tap, not a swipe).
+      haptic('medium');
+      onDelete(item);
     }
   };
 
@@ -182,21 +179,18 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
         className="absolute inset-0 flex items-center justify-between px-4 z-0"
         style={{ backgroundColor: bgColor }}
       >
-        <motion.div style={{ opacity: rightIconOpacity, scale: rightIconScale }} className="flex items-center gap-2 text-money-pos dark:text-money-posDark font-bold">
-           <Check size={20} />
-           <span>Purchased</span>
-        </motion.div>
+        {/* Right-swipe affordance only applies to unchecked items (a checked
+            item's right swipe is a no-op, so don't advertise one). */}
+        {!item.isPurchased && (
+          <motion.div style={{ opacity: rightIconOpacity, scale: rightIconScale }} className="flex items-center gap-2 text-money-pos dark:text-money-posDark font-bold">
+             <Check size={20} />
+             <span>Purchased</span>
+          </motion.div>
+        )}
 
-        <motion.div style={{ opacity: leftIconOpacity, scale: leftIconScale }} className="flex items-center gap-2 font-bold ml-auto">
-           {item.isPurchased ? (
-             <span className="flex items-center gap-2 text-accent-600 dark:text-accent-300">
-                <RotateCcw size={20} /> Uncheck
-             </span>
-           ) : (
-             <span className="flex items-center gap-2 text-money-neg dark:text-money-negDark">
-                <Trash2 size={20} /> Delete
-             </span>
-           )}
+        {/* Left swipe deletes, checked or not — unchecking is a tap. */}
+        <motion.div style={{ opacity: leftIconOpacity, scale: leftIconScale }} className="flex items-center gap-2 font-bold ml-auto text-money-neg dark:text-money-negDark">
+           <Trash2 size={20} /> Delete
         </motion.div>
       </motion.div>
 

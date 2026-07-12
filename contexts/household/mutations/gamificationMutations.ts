@@ -13,6 +13,8 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
+import { Snowflake } from 'lucide-react';
+import { toastIcon } from '@/components/ui/toastIcon';
 import { parseISO, format, subDays } from 'date-fns';
 import {
   Challenge,
@@ -778,7 +780,7 @@ export function makeAutoApplyFreezes(deps: {
     }
 
     if (applied > 0) {
-      toast(`Streak protected — ${applied} freeze${applied === 1 ? '' : 's'} auto-applied`, { icon: '❄️' });
+      toast(`Streak protected — ${applied} freeze${applied === 1 ? '' : 's'} auto-applied`, { icon: toastIcon(Snowflake) });
     }
   };
 

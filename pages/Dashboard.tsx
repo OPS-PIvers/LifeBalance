@@ -5,7 +5,8 @@ import toast from 'react-hot-toast';
 import { useFinance, useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { AccountPicker } from '@/components/budget/AccountPicker';
-import { BarChart2, Check, CheckCircle2, Clock, Trash2, X } from 'lucide-react';
+import { BarChart2, Check, CheckCircle2, Clock, Eye, Trash2, X } from 'lucide-react';
+import { toastIcon } from '@/components/ui/toastIcon';
 // Lazy-loaded so their heavy dependencies (e.g. recharts) stay out of the
 // initial Dashboard bundle and only load when a modal is actually opened.
 // The Analytics modal is retired: its Wallet charts now live in Money → Trends
@@ -251,7 +252,7 @@ const Dashboard: React.FC = () => {
     }
     setIsBulkRunning(false);
     if (approved > 0) toast.success(`Approved ${approved} item${approved === 1 ? '' : 's'}`);
-    if (skipped > 0) toast(`${skipped} left in the queue (needs an amount, category, or account)`, { icon: '👀' });
+    if (skipped > 0) toast(`${skipped} left in the queue (needs an amount, category, or account)`, { icon: toastIcon(Eye) });
     exitSelectionMode();
   }, [selectedItems, accounts, buckets, transactions, completeToDo, payCalendarItem, updateTransactionCategory, exitSelectionMode]);
 

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Award, Edit2, Minus, Plus } from 'lucide-react';
+import { Award, Edit2, Info, Minus, Plus } from 'lucide-react';
+import { toastIcon } from '@/components/ui/toastIcon';
 import { Habit } from '@/types/schema';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { streakForHabit, streakEndingOnForHabit, getMultiplier, signedHabitPoints } from '@/utils/habitLogic';
@@ -203,7 +204,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
         pointsChange = 0;
 
         // Notify user if they are adding/removing a date but points won't change
-        toast('Date updated. Points unchanged for threshold habit as daily count history is not tracked.', { icon: 'ℹ️' });
+        toast('Date updated. Points unchanged for threshold habit as daily count history is not tracked.', { icon: toastIcon(Info) });
     } else {
         pointsChange = isCompleted ? -pointsPerCompletion : pointsPerCompletion;
     }

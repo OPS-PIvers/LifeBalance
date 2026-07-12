@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useShopping } from '@/contexts/FirebaseHouseholdContext';
 import { QuickStockList } from '@/types/schema';
 import { normalizeToKey } from '@/utils/stringNormalizer';
-import { ShoppingBag, ChevronDown, Check, Plus } from 'lucide-react';
+import { ShoppingBag, ChevronDown, Check, Info, Plus } from 'lucide-react';
+import { toastIcon } from '@/components/ui/toastIcon';
 import toast from 'react-hot-toast';
 import { ShoppingItem } from '@/types/schema';
 import { STORE_COLORS, DEFAULT_STORE_COLOR } from '@/data/storeColors';
@@ -88,7 +89,7 @@ export const QuickRestockDrawer: React.FC<QuickRestockDrawerProps> = ({ isOpen, 
       await addShoppingItems(itemsToAdd);
       toast.success(`Added ${itemsToAdd.length} items from ${list.name}`);
     } else {
-      toast('All items already in list', { icon: 'ℹ️' });
+      toast('All items already in list', { icon: toastIcon(Info) });
     }
   };
 

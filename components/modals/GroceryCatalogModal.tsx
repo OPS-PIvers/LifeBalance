@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useShopping } from '@/contexts/FirebaseHouseholdContext';
 import { GroceryCatalogItem } from '@/types/schema';
 import { Search, Plus, Trash2, Edit2, ShoppingCart, Clock, ChevronLeft, X } from 'lucide-react';
+import { toastIcon } from '@/components/ui/toastIcon';
 import toast from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { Drawer } from '@/components/ui/Drawer';
@@ -95,7 +96,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
     );
 
     if (isInList) {
-      toast('Already in your list!', { icon: '🛒' });
+      toast('Already in your list!', { icon: toastIcon(ShoppingCart) });
       return;
     }
 
