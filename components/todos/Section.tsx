@@ -33,26 +33,20 @@ export interface SectionProps {
    * select-all/batch actions always operate on the full visible list.
    */
   maxVisible?: number;
-  /**
-   * Optional content rendered as the FIRST ROW of this section's `SurfaceList`
-   * (e.g. the quick-add bar). When provided, the section renders even if
-   * `items` is empty — the add row must always be visible, not just when
-   * there's something to show below it.
-   */
-  addRow?: React.ReactNode;
 }
 
 // Sub-component for sections.
 // Uses a custom memo comparator: when `selectedIds` changes, re-render is skipped unless
 // at least one of this section's own items changed its selected/deselected state.
 // This prevents toggling an item in one section from re-rendering the other two sections.
-export const Section = React.memo(function Section({ title, subtitle, items, color, onComplete, onEdit, onDelete, onDuplicate, onMoveToTomorrow, onToggleImportant, onMore, memberMap, isSelectionMode, selectedIds, onToggleSelection, maxVisible, addRow }: SectionProps) {
+export const Section = React.memo(function Section({ title, subtitle, items, color, onComplete, onEdit, onDelete, onDuplicate, onMoveToTomorrow, onToggleImportant, onMore, memberMap, isSelectionMode, selectedIds, onToggleSelection, maxVisible }: SectionProps) {
   // Show-more state for capped lists (hooks must run before the empty early-return).
   const [expanded, setExpanded] = useState(false);
 
-  // Without an add row, an empty section renders nothing (unchanged). With an
-  // add row, the section always renders — the add row is the whole point.
-  if (items.length === 0 && !addRow) return null;
+  // An empty section renders nothing. (The quick-add bar is no longer a section
+  // row — it lives in a sticky card at the top of the page, so an empty
+  // Immediate section can now collapse away entirely.)
+  if (items.length === 0) return null;
 
   // In selection mode the full list always renders so select-all / batch
   // actions operate on everything the user expects — the cap is purely a
@@ -73,7 +67,6 @@ export const Section = React.memo(function Section({ title, subtitle, items, col
       </div>
 
       <SurfaceList className="[&>*:first-child]:border-t-0 [&>*:first-child_.hairline-divider]:border-t-0">
-        {addRow}
         {visibleItems.map(item => (
           <TodoRow
             key={item.id}
@@ -121,8 +114,7 @@ export const Section = React.memo(function Section({ title, subtitle, items, col
     prev.onMoveToTomorrow === next.onMoveToTomorrow &&
     prev.onToggleImportant === next.onToggleImportant &&
     prev.onMore === next.onMore &&
-    prev.onToggleSelection === next.onToggleSelection &&
-    prev.addRow === next.addRow;
+    prev.onToggleSelection === next.onToggleSelection;
   if (!sameOtherProps) return false;
   // selectedIds reference changed — only re-render if at least one item in THIS
   // section switched its selected/deselected state.

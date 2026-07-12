@@ -688,37 +688,48 @@ const ToDosPage: React.FC = () => {
     },
   ];
 
-  // Quick-add row shared by both arrangements — always the first row of the
-  // first section (Immediate in list, Do First in matrix). Hidden in
-  // selection mode, where adding has no context.
-  const quickAddRow = !isSelectionMode ? (
-    <div className="flex items-center gap-2">
-      <QuickAddBar
-        attached
-        onSubmit={handleQuickAdd}
-        inputRef={quickAddRef}
-        value={quickText}
-        onChange={setQuickText}
-        placeholder="Add a task..."
-        aria-label="Quick add task"
-        disabled={!quickText.trim()}
-        submitLabel="Add task"
-      />
+  // Sticky quick-add card — reuses the shopping list's pattern: the add bar is
+  // its own top card that stays pinned while a long list scrolls beneath it, so
+  // adding a task is always one tap away. `position: sticky` dies inside an
+  // `overflow-hidden` ancestor, so the bar lives in a plain sticky wrapper
+  // (page-colored background masks rows scrolling past the card's rounded
+  // corners) with the `SurfaceList` card nested inside — never in a section's
+  // clipped surface. The sticky offset tucks it under ListsPage's sticky tab
+  // strip via --lists-sticky-top (0px fallback when the strip is hidden).
+  // Shared by the list and matrix arrangements; hidden in selection mode (adding
+  // has no context there) and in the grid arrangement (landscape-immersive).
+  const stickyQuickAdd = !isSelectionMode && effectiveArrangement !== 'grid' ? (
+    <div className="sticky top-[var(--lists-sticky-top,0px)] z-20 bg-brand-50 dark:bg-brand-900">
+      <SurfaceList>
+        <div className="flex items-center gap-2">
+          <QuickAddBar
+            attached
+            onSubmit={handleQuickAdd}
+            inputRef={quickAddRef}
+            value={quickText}
+            onChange={setQuickText}
+            placeholder="Add a task..."
+            aria-label="Quick add task"
+            disabled={!quickText.trim()}
+            submitLabel="Add task"
+          />
 
-      {/* Details — opens the full form to set a custom due date / assignee /
-          importance. Retains aria-label "Add new task" so it is the page's
-          full-add entry point. */}
-      <button
-        type="button"
-        onClick={openAddModal}
-        aria-label="Add new task"
-        title="Add with date & assignee"
-        className="flex-none flex items-center justify-center p-3 mr-2 rounded-btn text-brand-600 hover:text-brand-900 hover:bg-brand-100 dark:text-brand-300 dark:hover:text-brand-50 dark:hover:bg-brand-700/50 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
-      >
-        <SlidersHorizontal className="w-5 h-5" />
-      </button>
+          {/* Details — opens the full form to set a custom due date / assignee /
+              importance. Retains aria-label "Add new task" so it is the page's
+              full-add entry point. */}
+          <button
+            type="button"
+            onClick={openAddModal}
+            aria-label="Add new task"
+            title="Add with date & assignee"
+            className="flex-none flex items-center justify-center p-3 mr-2 rounded-btn text-brand-600 hover:text-brand-900 hover:bg-brand-100 dark:text-brand-300 dark:hover:text-brand-50 dark:hover:bg-brand-700/50 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
+          >
+            <SlidersHorizontal className="w-5 h-5" />
+          </button>
+        </div>
+      </SurfaceList>
     </div>
-  ) : undefined;
+  ) : null;
 
   return (
     <div className={cn("px-4 max-w-2xl mx-auto space-y-4 min-h-screen", isSelectionMode ? "pb-40" : "pb-nav-safe")}>
@@ -810,15 +821,16 @@ const ToDosPage: React.FC = () => {
 
       {viewMode === 'active' ? (
           <>
+            {/* Sticky quick-add card — pinned at the top of the active view so
+                the add bar stays visible while a long list scrolls beneath it
+                (reused from the Shopping list). Precedes the sections in both
+                the list and matrix arrangements. */}
+            {stickyQuickAdd}
             {effectiveArrangement === 'list' ? (
             <>
-            {/* Immediate Section — quick-add lives INSIDE this section's list
-                surface as its first row (owner request: the add field should be
-                row one of the list, not a detached floating band). Quick-add
-                defaults to due-today / current user, which is exactly this
-                section's scope, so it's the natural home. The row scrolls with
-                the card (no longer sticky) — the global Capture FAB covers
-                add-while-scrolled. */}
+            {/* Immediate Section — Overdue, Today & Tomorrow. Quick-add now lives
+                in the sticky card above (not row one of this section), so an
+                empty Immediate section collapses away entirely. */}
             <Section
                 title="Immediate"
                 subtitle="Overdue, Today & Tomorrow"
@@ -835,7 +847,6 @@ const ToDosPage: React.FC = () => {
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
                 onToggleSelection={toggleSelection}
-                addRow={quickAddRow}
             />
 
             {/* Upcoming Section */}
@@ -882,13 +893,12 @@ const ToDosPage: React.FC = () => {
             /* Eisenhower matrix arrangement — same tasks, partitioned by
                urgency (derived from due date, same window as Immediate) ×
                importance (the star). Stacked sections in actionability order;
-               quick-add stays row one of the first section. */
+               the quick-add bar sits in the sticky card above. */
             <EisenhowerMatrixView
               quadrants={quadrants}
               memberMap={memberMap}
               isSelectionMode={isSelectionMode}
               selectedIds={selectedIds}
-              quickAddRow={quickAddRow}
               onComplete={completeToDo}
               onEdit={openEditModal}
               onDelete={deleteToDo}
@@ -912,11 +922,10 @@ const ToDosPage: React.FC = () => {
             />
             )}
 
-            {/* The Immediate section's add row is always visible in Active view
-                (rendered even with zero items), so there's no truly "empty"
-                active state anymore — this note only shows when there's
-                nothing beyond what the Immediate card already offers. The grid
-                arrangement has no quick-add row, so the note would mislead. */}
+            {/* The sticky quick-add card is always visible in the list/matrix
+                arrangements, so "add a task above" points straight at it. Shown
+                only when every section is empty; the grid arrangement has no
+                quick-add card, so the note would mislead there. */}
             {effectiveArrangement !== 'grid' && immediate.length === 0 && upcoming.length === 0 && radar.length === 0 && (
                  <p className="px-1 text-sm text-brand-400 dark:text-brand-450 flex items-center gap-1.5">
                      <ClipboardList size={14} aria-hidden="true" />
