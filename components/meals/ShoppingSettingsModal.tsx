@@ -274,15 +274,10 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
     });
   };
 
-  return (
-    <Drawer
-      isOpen={isOpen}
-      onClose={onClose}
-      title="Shopping List Settings"
-      noPadding={true}
-    >
-      {/* Tabs */}
-      <div className="flex border-b border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800 sticky top-0 z-10">
+  // Tab bar — rendered in the Drawer's fixed header slot so it never scrolls,
+  // and the sheet keeps one stable frame across tabs.
+  const tabBar = (
+      <div className="flex border-b border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
           <button
             onClick={() => setActiveTab('stores')}
             className={`flex-1 py-4 text-sm font-medium transition-colors relative ${
@@ -316,9 +311,54 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent-600 dark:bg-accent-400" />
             )}
           </button>
-        </div>
+      </div>
+  );
 
-        <div className="flex-1 scroll-contain-y p-4 sm:p-6 bg-brand-50 dark:bg-brand-900/40">
+  // Per-tab action bars — rendered in the Drawer's fixed footer slot (below the
+  // scrollable body) so they stay pinned to the sheet bottom at the tall detent.
+  const footer =
+    activeTab === 'categories' ? (
+        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
+            <Button
+                variant="primary"
+                size="lg"
+                onClick={saveCategories}
+                disabled={!hasUnsavedCategoryChanges}
+                className="w-full"
+            >
+                Save Category Changes
+            </Button>
+        </div>
+    ) : activeTab === 'templates' && editingTemplate ? (
+        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
+            <Button
+              variant="primary"
+              size="lg"
+              onClick={handleSaveTemplate}
+              disabled={!editingTemplate.name?.trim()}
+              className="w-full"
+            >
+              Save Template
+            </Button>
+        </div>
+    ) : undefined;
+
+  return (
+    <Drawer
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Shopping List Settings"
+      noPadding={true}
+      // Fixed tall detent: the sheet frame stays the same height across the
+      // Stores / Categories / Templates tabs instead of resizing to each tab's
+      // content, which made the whole sheet jump on every tab switch.
+      height="tall"
+      header={tabBar}
+      footer={footer}
+    >
+        {/* min-h-full so the tinted body fills the fixed-height sheet even when
+            a tab's content is short. */}
+        <div className="min-h-full p-4 sm:p-6 bg-brand-50 dark:bg-brand-900/40">
 
           {activeTab === 'stores' && (
             <div className="space-y-6">
@@ -668,34 +708,6 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
             </div>
           )}
         </div>
-
-        {activeTab === 'categories' && (
-            <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
-                <Button
-                    variant="primary"
-                    size="lg"
-                    onClick={saveCategories}
-                    disabled={!hasUnsavedCategoryChanges}
-                    className="w-full"
-                >
-                    Save Category Changes
-                </Button>
-            </div>
-        )}
-
-        {activeTab === 'templates' && editingTemplate && (
-            <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
-                <Button
-                  variant="primary"
-                  size="lg"
-                  onClick={handleSaveTemplate}
-                  disabled={!editingTemplate.name?.trim()}
-                  className="w-full"
-                >
-                  Save Template
-                </Button>
-            </div>
-        )}
 
         <ConfirmDialog
           isOpen={confirm !== null}
