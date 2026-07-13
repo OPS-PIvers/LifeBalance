@@ -169,7 +169,7 @@ const DayHabitEditor: React.FC<DayHabitEditorProps> = ({
                           handleClearDay(habit);
                         }}
                         disabled={isBusy}
-                        className="absolute -top-2 -right-2 p-2 -m-2 bg-white dark:bg-brand-700 border border-brand-200 dark:border-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-brand-400 dark:text-brand-300 active:scale-90 hover:bg-money-bgNeg dark:hover:bg-money-neg/20 hover:text-money-neg dark:hover:text-money-negDark hover:border-money-neg/30 transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-1 focus:ring-money-neg/50"
+                        className="absolute -top-1.5 -right-1.5 bg-white dark:bg-brand-700 border border-brand-200 dark:border-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-brand-400 dark:text-brand-300 active:scale-90 hover:bg-money-bgNeg dark:hover:bg-money-neg/20 hover:text-money-neg dark:hover:text-money-negDark hover:border-money-neg/30 transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-1 focus:ring-money-neg/50 after:absolute after:-inset-2.5 after:rounded-full after:content-['']"
                         aria-label={`Clear ${habit.title} for ${selectedLabel}`}
                         style={{ zIndex: 3 }}
                       >

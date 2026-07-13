@@ -59,7 +59,7 @@ export const TodoRow = React.memo(function TodoRow({
   const handleComplete = async () => {
     try {
       await onComplete(item.id);
-      toast.success('To-Do completed! 🎉');
+      toast.success('To-Do completed!');
     } catch (error) {
       console.error('Failed to complete task:', error);
       toast.error('Failed to complete to-do');

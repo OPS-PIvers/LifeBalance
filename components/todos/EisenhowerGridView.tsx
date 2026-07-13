@@ -217,7 +217,7 @@ const GridChip = React.memo(function GridChip({ item, color, onComplete, onEdit,
         onCheckedChange={async () => {
           try {
             await onComplete(item.id);
-            toast.success('To-Do completed! 🎉');
+            toast.success('To-Do completed!');
           } catch (error) {
             console.error('Failed to complete task:', error);
             toast.error('Failed to complete to-do');

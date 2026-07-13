@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Check, Plus, Users } from 'lucide-react';
+import { Check, Inbox, Plus, Snowflake, Users } from 'lucide-react';
 import { Challenge, CreateChallengePayload } from '@/types/schema';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
@@ -652,7 +652,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                       <p className="text-sm font-medium text-brand-700 dark:text-brand-200 text-center">
                         {displayYearlyGoal.successfulMonths.length >=
                         displayYearlyGoal.requiredMonths
-                          ? '🎉 Yearly goal achieved!'
+                          ? 'Yearly goal achieved!'
                           : `${
                               displayYearlyGoal.requiredMonths -
                               displayYearlyGoal.successfulMonths.length
@@ -693,7 +693,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                             : 'bg-brand-100 dark:bg-brand-700/50 text-brand-300 dark:text-brand-450'
                         }`}
                       >
-                        <span className="text-2xl">❄️</span>
+                        <Snowflake size={28} aria-hidden="true" />
                       </div>
                     ))}
                   </div>
@@ -720,8 +720,18 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                         .map((entry) => (
                           <Row key={entry.id} className="justify-between">
                             <div className="min-w-0">
-                              <p className="text-sm font-medium text-brand-700 dark:text-brand-200">
-                                {entry.type === 'used' ? '❄️ Token Used' : '📥 Rollover'}
+                              <p className="flex items-center gap-1.5 text-sm font-medium text-brand-700 dark:text-brand-200">
+                                {entry.type === 'used' ? (
+                                  <>
+                                    <Snowflake size={14} className="shrink-0 text-habit-blue" aria-hidden="true" />
+                                    Token Used
+                                  </>
+                                ) : (
+                                  <>
+                                    <Inbox size={14} className="shrink-0 text-brand-400" aria-hidden="true" />
+                                    Rollover
+                                  </>
+                                )}
                               </p>
                               <p className="text-xs text-brand-400 dark:text-brand-400 truncate">{entry.notes}</p>
                             </div>

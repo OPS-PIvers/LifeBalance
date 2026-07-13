@@ -173,14 +173,18 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
                 )}
               </div>
 
-              {/* Reset Button (X) - p-2 -m-2 enlarges tappable area to ~44px */}
+              {/* Reset Button (X) — the visible circle stays w-6 h-6 at the
+                  indicator's top-right corner; the after: pseudo-element
+                  extends the hit area to ~44px without shifting the circle
+                  (the old p-2/-m-2 hack moved an absolutely-positioned box
+                  instead of growing it, clipping the top habit row). */}
               {isActive && (
                 <button
                   onClick={(e) => {
                      e.stopPropagation();
                      resetHabit(habit.id);
                   }}
-                  className="absolute -top-2 -right-2 p-2 -m-2 bg-white dark:bg-brand-700 border border-brand-200 dark:border-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-brand-400 dark:text-brand-300 active:scale-90 hover:bg-money-bgNeg dark:hover:bg-money-neg/20 hover:text-money-neg dark:hover:text-money-negDark hover:border-money-neg/30 transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-1 focus:ring-money-neg/50 pointer-events-auto"
+                  className="absolute -top-1.5 -right-1.5 bg-white dark:bg-brand-700 border border-brand-200 dark:border-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-brand-400 dark:text-brand-300 active:scale-90 hover:bg-money-bgNeg dark:hover:bg-money-neg/20 hover:text-money-neg dark:hover:text-money-negDark hover:border-money-neg/30 transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-1 focus:ring-money-neg/50 pointer-events-auto after:absolute after:-inset-2.5 after:rounded-full after:content-['']"
                   aria-label="Reset habit progress"
                   style={{ zIndex: 20 }}
                 >
