@@ -35,17 +35,19 @@ describe('ShoppingItemRow', () => {
   });
 
   it('hides the reorder grip when not reorderable', () => {
-    render(<ShoppingItemRow item={item} {...handlers} isReorderable={false} />);
-    expect(screen.queryByRole('button', { name: 'Drag to reorder Milk' })).not.toBeInTheDocument();
+    const { container } = render(<ShoppingItemRow item={item} {...handlers} isReorderable={false} />);
+    expect(container.querySelector('.cursor-grab')).toBeNull();
   });
 
   it('renders the grip in the right rail (after content, before kebab) when reorderable', () => {
-    render(
+    const { container } = render(
       <Reorder.Group axis="y" values={[item]} onReorder={() => {}}>
         <ShoppingItemRow item={item} {...handlers} />
       </Reorder.Group>
     );
-    const grip = screen.getByRole('button', { name: 'Drag to reorder Milk' });
+    // The grip is a pointer-only decoration (aria-hidden), so query by class.
+    const grip = container.querySelector('.cursor-grab') as HTMLElement;
+    expect(grip).toHaveAttribute('aria-hidden', 'true');
     const kebab = screen.getByRole('button', { name: 'Options for Milk' });
     const name = screen.getByText('Milk');
     expect(name.compareDocumentPosition(grip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

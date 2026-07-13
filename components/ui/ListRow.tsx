@@ -3,8 +3,6 @@ import { GripVertical, MoreVertical } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
 export interface ListRowGrip {
-  /** Accessible name, e.g. `Drag to reorder Milk`. */
-  ariaLabel: string;
   /**
    * Capture-phase pointer-down. The caller starts its drag gesture here and
    * must stopPropagation before any parent gesture layer (e.g. a horizontal
@@ -61,17 +59,14 @@ export const ListRow: React.FC<ListRowProps> = ({
     {(grip || menu) && (
       <div className="flex items-center gap-0.5 shrink-0 -mr-1">
         {grip && (
+          // Pointer-only decoration, hidden from AT: it implements no keyboard
+          // reordering, and a focusable "button" that does nothing on
+          // Space/Enter is a WCAG trap. Keyboard/screen-reader users manage
+          // items (including ordering) through the kebab's surface instead.
           <div
-            role="button"
-            tabIndex={0}
             onPointerDownCapture={grip.onPointerDownCapture}
-            onKeyDown={(e) => {
-              // Space/Enter don't initiate a drag but keep the element
-              // keyboard-reachable without scrolling the page.
-              if (e.key === ' ' || e.key === 'Enter') e.preventDefault();
-            }}
-            className="touch-none cursor-grab active:cursor-grabbing p-1.5 text-brand-300 hover:text-brand-600 dark:text-brand-500 dark:hover:text-brand-300 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-sm"
-            aria-label={grip.ariaLabel}
+            className="touch-none cursor-grab active:cursor-grabbing p-1.5 text-brand-300 hover:text-brand-600 dark:text-brand-500 dark:hover:text-brand-300 rounded-sm"
+            aria-hidden="true"
           >
             <GripVertical size={16} />
           </div>

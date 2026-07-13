@@ -20,16 +20,18 @@ describe('ListRow', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('renders the grip with its accessible name and forwards capture pointer-down', () => {
+  it('renders the grip as a pointer-only decoration and forwards capture pointer-down', () => {
     const onPointerDownCapture = vi.fn();
-    render(
-      <ListRow grip={{ ariaLabel: 'Drag to reorder Milk', onPointerDownCapture }}>
-        content
-      </ListRow>
+    const { container } = render(
+      <ListRow grip={{ onPointerDownCapture }}>content</ListRow>
     );
-    const grip = screen.getByRole('button', { name: 'Drag to reorder Milk' });
-    expect(grip).toHaveAttribute('tabindex', '0');
-    // fireEvent.pointerDown routes through the capture handler on the grip itself.
+    const grip = container.querySelector('.cursor-grab') as HTMLElement;
+    expect(grip).not.toBeNull();
+    // Hidden from AT and out of the tab order — it has no keyboard behavior;
+    // the kebab's surface is the accessible management path.
+    expect(grip).toHaveAttribute('aria-hidden', 'true');
+    expect(grip).not.toHaveAttribute('tabindex');
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
     grip.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
     expect(onPointerDownCapture).toHaveBeenCalledTimes(1);
   });
@@ -37,19 +39,19 @@ describe('ListRow', () => {
   it('renders the kebab after the grip and calls onOpen on click', async () => {
     const user = userEvent.setup();
     const onOpen = vi.fn();
-    render(
+    const { container } = render(
       <ListRow
-        grip={{ ariaLabel: 'Drag to reorder Milk', onPointerDownCapture: () => {} }}
+        grip={{ onPointerDownCapture: () => {} }}
         menu={{ ariaLabel: 'Options for Milk', onOpen, hasPopup: 'dialog' }}
       >
         content
       </ListRow>
     );
-    const buttons = screen.getAllByRole('button');
-    expect(buttons[0]).toHaveAccessibleName('Drag to reorder Milk');
-    expect(buttons[1]).toHaveAccessibleName('Options for Milk');
-    expect(buttons[1]).toHaveAttribute('aria-haspopup', 'dialog');
-    await user.click(buttons[1] as HTMLElement);
+    const grip = container.querySelector('.cursor-grab') as HTMLElement;
+    const kebab = screen.getByRole('button', { name: 'Options for Milk' });
+    expect(grip.compareDocumentPosition(kebab) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(kebab).toHaveAttribute('aria-haspopup', 'dialog');
+    await user.click(kebab);
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
 

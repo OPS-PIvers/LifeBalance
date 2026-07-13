@@ -197,7 +197,6 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
           </HapticCheck>
         }
         grip={isReorderable ? {
-            ariaLabel: `Drag to reorder ${item.name}`,
             onPointerDownCapture: (e) => {
                 // Only react to the primary button / touch contact. Without this,
                 // a right-click on the handle would be swallowed (blocking the
