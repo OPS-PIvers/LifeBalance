@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useShopping } from '@/contexts/FirebaseHouseholdContext';
 import { QuickStockList } from '@/types/schema';
 import { normalizeToKey } from '@/utils/stringNormalizer';
@@ -31,6 +31,10 @@ export const QuickRestockDrawer: React.FC<QuickRestockDrawerProps> = ({ isOpen, 
   // Id of the template currently being added — the tapped row shows a pending
   // state and all rows are guarded against a second tap mid-await.
   const [busyListId, setBusyListId] = useState<string | null>(null);
+  // Synchronous in-flight guard: setState is async, so two taps in the same
+  // tick would both pass a state-only check before React commits. The ref
+  // flips immediately; busyListId stays purely for rendering.
+  const isRestockingRef = useRef(false);
 
   // Collapse any previews left open from the last time the drawer was shown.
   // Done during render on the open edge (no effect) — mirrors MemberModal.
@@ -72,41 +76,46 @@ export const QuickRestockDrawer: React.FC<QuickRestockDrawerProps> = ({ isOpen, 
   };
 
   const handleRestock = async (list: QuickStockList) => {
-    if (busyListId) return; // an add is already in flight
-    const itemsToAdd: Omit<ShoppingItem, 'id'>[] = [];
-    const addedNames = new Set<string>(); // Track items being added in this batch
+    if (isRestockingRef.current) return; // an add is already in flight
+    isRestockingRef.current = true;
+    try {
+      const itemsToAdd: Omit<ShoppingItem, 'id'>[] = [];
+      const addedNames = new Set<string>(); // Track items being added in this batch
 
-    // Process each item in the template (list.items contains catalog IDs)
-    for (const itemId of list.items) {
-      const catalogItem = catalogById.get(itemId);
-      if (!catalogItem) continue; // Skip if catalog item no longer exists
+      // Process each item in the template (list.items contains catalog IDs)
+      for (const itemId of list.items) {
+        const catalogItem = catalogById.get(itemId);
+        if (!catalogItem) continue; // Skip if catalog item no longer exists
 
-      const normalizedName = normalizeToKey(catalogItem.name);
+        const normalizedName = normalizeToKey(catalogItem.name);
 
-      // Skip if already in shopping list or already added in this batch
-      if (pendingNames.has(normalizedName) || addedNames.has(normalizedName)) continue;
+        // Skip if already in shopping list or already added in this batch
+        if (pendingNames.has(normalizedName) || addedNames.has(normalizedName)) continue;
 
-      itemsToAdd.push({
-        name: catalogItem.name,
-        category: catalogItem.category || 'Uncategorized',
-        quantity: catalogItem.defaultQuantity,
-        store: catalogItem.defaultStore,
-        isPurchased: false
-      });
+        itemsToAdd.push({
+          name: catalogItem.name,
+          category: catalogItem.category || 'Uncategorized',
+          quantity: catalogItem.defaultQuantity,
+          store: catalogItem.defaultStore,
+          isPurchased: false
+        });
 
-      addedNames.add(normalizedName);
-    }
-
-    if (itemsToAdd.length > 0) {
-      setBusyListId(list.id);
-      try {
-        await addShoppingItems(itemsToAdd);
-        toast.success(`Added ${itemsToAdd.length} items from ${list.name}`);
-      } finally {
-        setBusyListId(null);
+        addedNames.add(normalizedName);
       }
-    } else {
-      toast('All items already in list', { icon: toastIcon(Info) });
+
+      if (itemsToAdd.length > 0) {
+        setBusyListId(list.id);
+        try {
+          await addShoppingItems(itemsToAdd);
+          toast.success(`Added ${itemsToAdd.length} items from ${list.name}`);
+        } finally {
+          setBusyListId(null);
+        }
+      } else {
+        toast('All items already in list', { icon: toastIcon(Info) });
+      }
+    } finally {
+      isRestockingRef.current = false;
     }
   };
 

@@ -1063,7 +1063,7 @@ const ToDosPage: React.FC = () => {
       {/* Add/Edit Task Drawer */}
       <Drawer
         isOpen={isAddModalOpen}
-        onClose={() => !isSaving && setIsAddModalOpen(false)}
+        onClose={() => setIsAddModalOpen(false)}
         disableClose={isSaving}
         title={editingId ? 'Edit task' : 'New task'}
       >

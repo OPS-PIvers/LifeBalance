@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Check, Flame, Gift, Hourglass, Lock, LogOut, PiggyBank, Sparkles, Star, Trophy } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
 import toast from 'react-hot-toast';
@@ -98,12 +98,18 @@ const KidDashboard: React.FC = () => {
   }, [activeChallenge, challengeHabits]);
 
   // Habit ids with a toggle currently in flight — double-tapping a chore would
-  // re-read stale completedDates and double-apply the points delta.
+  // re-read stale completedDates and double-apply the points delta. The ref is
+  // the synchronous source of truth (setState is async, so two taps in the same
+  // tick would both pass a state-only check); the state mirrors it for the
+  // disabled UI.
+  const busyChoreIdsRef = useRef<Set<string>>(new Set());
   const [busyChoreIds, setBusyChoreIds] = useState<Set<string>>(new Set());
 
   // Reward ids requested this session, added synchronously BEFORE the await so
   // a rapid double-tap can't fire two redemption requests during the round-trip
-  // (the household snapshot only reflects it afterwards).
+  // (the household snapshot only reflects it afterwards). Same ref/state split:
+  // the ref guards synchronously, the state renders the "Requested" pill.
+  const requestedIdsRef = useRef<Set<string>>(new Set());
   const [locallyRequestedIds, setLocallyRequestedIds] = useState<Set<string>>(new Set());
 
   const [showPinModal, setShowPinModal] = useState(false);
@@ -140,7 +146,8 @@ const KidDashboard: React.FC = () => {
 
   const handleToggleChore = useCallback(
     async (h: Habit) => {
-      if (busyChoreIds.has(h.id)) return;
+      if (busyChoreIdsRef.current.has(h.id)) return;
+      busyChoreIdsRef.current.add(h.id);
       setBusyChoreIds(prev => new Set(prev).add(h.id));
       const done = h.completedDates.includes(today);
       try {
@@ -148,6 +155,7 @@ const KidDashboard: React.FC = () => {
       } catch {
         // toggleHabit surfaces its own error toast.
       } finally {
+        busyChoreIdsRef.current.delete(h.id);
         setBusyChoreIds(prev => {
           const next = new Set(prev);
           next.delete(h.id);
@@ -155,7 +163,7 @@ const KidDashboard: React.FC = () => {
         });
       }
     },
-    [busyChoreIds, toggleHabit, today],
+    [toggleHabit, today],
   );
 
   const handleRequestReward = useCallback(
@@ -163,17 +171,19 @@ const KidDashboard: React.FC = () => {
       if (!activeKid) return;
       // Guard against a double-request for the same reward (the button is also
       // swapped to a non-interactive "Requested" pill below).
-      if (pendingRewardIds.has(r.id) || locallyRequestedIds.has(r.id)) {
+      if (pendingRewardIds.has(r.id) || requestedIdsRef.current.has(r.id)) {
         toast(`You already asked for "${r.title}" — hang tight!`, { icon: toastIcon(Hourglass) });
         return;
       }
-      // Mark as requested BEFORE the await so a double-tap during the
-      // round-trip can't send a second request.
+      // Mark as requested BEFORE the await (ref synchronously, state for the
+      // pill) so a double-tap during the round-trip can't send a second request.
+      requestedIdsRef.current.add(r.id);
       setLocallyRequestedIds(prev => new Set(prev).add(r.id));
       try {
         await requestRedemption(r.id, activeKid.uid);
       } catch {
         // requestRedemption surfaces its own error toast; allow a retry.
+        requestedIdsRef.current.delete(r.id);
         setLocallyRequestedIds(prev => {
           const next = new Set(prev);
           next.delete(r.id);
@@ -181,7 +191,7 @@ const KidDashboard: React.FC = () => {
         });
       }
     },
-    [activeKid, pendingRewardIds, locallyRequestedIds, requestRedemption],
+    [activeKid, pendingRewardIds, requestRedemption],
   );
 
   // The gate in MainLayout guarantees a kid is active, but guard anyway so a stale
