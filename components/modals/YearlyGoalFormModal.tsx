@@ -23,6 +23,7 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
   const [description, setDescription] = useState('');
   const [year, setYear] = useState(new Date().getFullYear());
   const [requiredMonths, setRequiredMonths] = useState(10);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -46,37 +47,43 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
   }, [editingGoal, isOpen]);
 
   const handleSave = async () => {
-    if (!title || requiredMonths < 1 || requiredMonths > 12) {
+    if (!title || requiredMonths < 1 || requiredMonths > 12 || isSaving) {
       return;
     }
 
-    if (editingGoal) {
-      await updateYearlyGoal(editingGoal.id, {
-        title,
-        description,
-        year,
-        requiredMonths,
-      });
-    } else {
-      await createYearlyGoal({
-        title,
-        description,
-        year,
-        requiredMonths,
-        successfulMonths: [],
-        status: 'in_progress',
-        createdBy: '', // Will be set in context
-        createdAt: '', // Will be set in context
-      });
-    }
+    setIsSaving(true);
+    try {
+      if (editingGoal) {
+        await updateYearlyGoal(editingGoal.id, {
+          title,
+          description,
+          year,
+          requiredMonths,
+        });
+      } else {
+        await createYearlyGoal({
+          title,
+          description,
+          year,
+          requiredMonths,
+          successfulMonths: [],
+          status: 'in_progress',
+          createdBy: '', // Will be set in context
+          createdAt: '', // Will be set in context
+        });
+      }
 
-    onClose();
+      onClose();
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
     <Drawer
       isOpen={isOpen}
       onClose={onClose}
+      disableClose={isSaving}
       title={editingGoal ? 'Edit Yearly Goal' : 'New Yearly Goal'}
       noPadding={true}
     >
@@ -150,6 +157,7 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
           variant="warning"
           size="lg"
           onClick={handleSave}
+          isLoading={isSaving}
           disabled={!title || requiredMonths < 1 || requiredMonths > 12}
           className="w-full"
         >
