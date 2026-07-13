@@ -285,8 +285,8 @@ export const useHabitActions = (
             // money-token surface. A className (not inline style) is used
             // so the .dark variants actually apply.
             className: net > 0
-              ? 'bg-money-bgPos text-money-pos border border-money-pos/25 dark:bg-money-pos/15 dark:text-money-posDark dark:border-money-pos/30 font-medium rounded-btn shadow-raised'
-              : 'bg-money-bgNeg text-money-neg border border-money-neg/25 dark:bg-money-neg/15 dark:text-money-negDark dark:border-money-neg/30 font-medium rounded-btn shadow-raised',
+              ? 'bg-money-bgPos text-money-pos border border-money-pos/25 dark:bg-money-posDark/15 dark:text-money-posDark dark:border-money-posDark/30 font-medium rounded-btn shadow-raised'
+              : 'bg-money-bgNeg text-money-neg border border-money-neg/25 dark:bg-money-negDark/15 dark:text-money-negDark dark:border-money-negDark/30 font-medium rounded-btn shadow-raised',
           }
         );
       }
