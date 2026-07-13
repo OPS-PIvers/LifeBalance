@@ -21,6 +21,15 @@ const BatchRescheduleModal: React.FC<BatchRescheduleModalProps> = ({
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
 
+  // Reset the date on the open edge so a Cancel/backdrop dismissal doesn't
+  // leave a stale date pre-filled for the next batch. Done during render on
+  // the change edge (no effect) — mirrors MemberModal's reset pattern.
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  if (prevIsOpen !== isOpen) {
+    setPrevIsOpen(isOpen);
+    if (isOpen) setSelectedDate('');
+  }
+
   const handleConfirm = async () => {
     if (!selectedDate) {
       toast.error('Please select a date');

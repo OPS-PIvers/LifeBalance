@@ -102,6 +102,7 @@ const ToDosPage: React.FC = () => {
 
   // Modal and form state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // Top-right overflow ("…") menu of secondary actions (Export, Select multiple)
@@ -533,6 +534,7 @@ const ToDosPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     if (members.length === 0) {
       toast.error('No household members available. Please add members first.');
       return;
@@ -551,6 +553,7 @@ const ToDosPage: React.FC = () => {
       return;
     }
 
+    setIsSaving(true);
     try {
       const trimmedText = text.trim();
       if (editingId) {
@@ -577,6 +580,8 @@ const ToDosPage: React.FC = () => {
     } catch (error) {
       console.error('Error saving to-do:', error);
       toast.error('Failed to save to-do. Please try again.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1059,6 +1064,7 @@ const ToDosPage: React.FC = () => {
       <Drawer
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
+        disableClose={isSaving}
         title={editingId ? 'Edit task' : 'New task'}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -1151,6 +1157,7 @@ const ToDosPage: React.FC = () => {
           <Button
             type="submit"
             variant="primary"
+            isLoading={isSaving}
             disabled={members.length === 0}
             className="w-full mt-4 py-3.5"
           >

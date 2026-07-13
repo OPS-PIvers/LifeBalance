@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Check, Flame, Gift, Hourglass, Lock, LogOut, PiggyBank, Sparkles, Star, Trophy } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
 import toast from 'react-hot-toast';
@@ -97,6 +97,21 @@ const KidDashboard: React.FC = () => {
     );
   }, [activeChallenge, challengeHabits]);
 
+  // Habit ids with a toggle currently in flight — double-tapping a chore would
+  // re-read stale completedDates and double-apply the points delta. The ref is
+  // the synchronous source of truth (setState is async, so two taps in the same
+  // tick would both pass a state-only check); the state mirrors it for the
+  // disabled UI.
+  const busyChoreIdsRef = useRef<Set<string>>(new Set());
+  const [busyChoreIds, setBusyChoreIds] = useState<Set<string>>(new Set());
+
+  // Reward ids requested this session, added synchronously BEFORE the await so
+  // a rapid double-tap can't fire two redemption requests during the round-trip
+  // (the household snapshot only reflects it afterwards). Same ref/state split:
+  // the ref guards synchronously, the state renders the "Requested" pill.
+  const requestedIdsRef = useRef<Set<string>>(new Set());
+  const [locallyRequestedIds, setLocallyRequestedIds] = useState<Set<string>>(new Set());
+
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
@@ -131,11 +146,21 @@ const KidDashboard: React.FC = () => {
 
   const handleToggleChore = useCallback(
     async (h: Habit) => {
+      if (busyChoreIdsRef.current.has(h.id)) return;
+      busyChoreIdsRef.current.add(h.id);
+      setBusyChoreIds(prev => new Set(prev).add(h.id));
       const done = h.completedDates.includes(today);
       try {
         await toggleHabit(h.id, done ? 'down' : 'up');
       } catch {
         // toggleHabit surfaces its own error toast.
+      } finally {
+        busyChoreIdsRef.current.delete(h.id);
+        setBusyChoreIds(prev => {
+          const next = new Set(prev);
+          next.delete(h.id);
+          return next;
+        });
       }
     },
     [toggleHabit, today],
@@ -146,14 +171,24 @@ const KidDashboard: React.FC = () => {
       if (!activeKid) return;
       // Guard against a double-request for the same reward (the button is also
       // swapped to a non-interactive "Requested" pill below).
-      if (pendingRewardIds.has(r.id)) {
+      if (pendingRewardIds.has(r.id) || requestedIdsRef.current.has(r.id)) {
         toast(`You already asked for "${r.title}" — hang tight!`, { icon: toastIcon(Hourglass) });
         return;
       }
+      // Mark as requested BEFORE the await (ref synchronously, state for the
+      // pill) so a double-tap during the round-trip can't send a second request.
+      requestedIdsRef.current.add(r.id);
+      setLocallyRequestedIds(prev => new Set(prev).add(r.id));
       try {
         await requestRedemption(r.id, activeKid.uid);
       } catch {
-        // requestRedemption surfaces its own error toast.
+        // requestRedemption surfaces its own error toast; allow a retry.
+        requestedIdsRef.current.delete(r.id);
+        setLocallyRequestedIds(prev => {
+          const next = new Set(prev);
+          next.delete(r.id);
+          return next;
+        });
       }
     },
     [activeKid, pendingRewardIds, requestRedemption],
@@ -318,7 +353,8 @@ const KidDashboard: React.FC = () => {
                   <li key={h.id}>
                     <button
                       onClick={() => handleToggleChore(h)}
-                      className={`w-full flex items-center gap-4 rounded-2xl border p-4 text-left transition-all active:scale-[0.98] ${
+                      disabled={busyChoreIds.has(h.id)}
+                      className={`w-full flex items-center gap-4 rounded-2xl border p-4 text-left transition-all active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none ${
                         done
                           ? 'bg-warm-500 text-white border-warm-600'
                           : 'bg-white dark:bg-brand-800 text-brand-900 dark:text-white border-brand-200 dark:border-brand-700'
@@ -383,7 +419,7 @@ const KidDashboard: React.FC = () => {
             <ul className="space-y-3">
               {rewardsInventory.map((r) => {
                 const canAfford = points.total >= r.cost;
-                const alreadyRequested = pendingRewardIds.has(r.id);
+                const alreadyRequested = pendingRewardIds.has(r.id) || locallyRequestedIds.has(r.id);
                 return (
                   <li
                     key={r.id}

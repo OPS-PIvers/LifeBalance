@@ -104,6 +104,7 @@ export const AISuggestModal: React.FC<AISuggestModalProps> = ({
     <Drawer
       isOpen={isOpen}
       onClose={onClose}
+      disableClose={isGeneratingAI}
       noPadding
       title="Chef AI"
     >

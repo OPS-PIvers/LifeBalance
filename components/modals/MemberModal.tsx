@@ -64,7 +64,7 @@ const MemberModal: React.FC<MemberModalProps> = ({
   };
 
   return (
-    <Drawer isOpen={isOpen} onClose={onClose} title={title}>
+    <Drawer isOpen={isOpen} onClose={onClose} title={title} disableClose={loading}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <Input
           label="Display Name"
@@ -113,7 +113,7 @@ const MemberModal: React.FC<MemberModalProps> = ({
         </div>
 
         <div className="pt-4 flex justify-end gap-3">
-          <Button type="button" variant="ghost" onClick={onClose}>
+          <Button type="button" variant="ghost" onClick={onClose} disabled={loading}>
             Cancel
           </Button>
           <Button type="submit" isLoading={loading} leftIcon={<Save size={18} />}>

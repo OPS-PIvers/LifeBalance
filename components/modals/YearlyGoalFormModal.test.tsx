@@ -18,6 +18,7 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
 vi.mock('lucide-react', async () => {
   return {
     X: () => <span data-testid="x-icon" />,
+    Loader2: () => <span data-testid="loader-icon" />,
   };
 });
 
@@ -73,5 +74,29 @@ describe('YearlyGoalFormModal', () => {
     expect(screen.getByLabelText(/Required Months/i)).toHaveValue(8);
 
     expect(screen.getByText('Edit Yearly Goal')).toBeInTheDocument();
+  });
+
+  it('only submits once when the save button is double-clicked mid-save', async () => {
+    let resolveCreate: () => void = () => {};
+    mockCreateYearlyGoal.mockImplementation(
+      () => new Promise<void>(resolve => { resolveCreate = resolve; })
+    );
+    const handleClose = vi.fn();
+    render(<YearlyGoalFormModal isOpen={true} onClose={handleClose} />);
+
+    fireEvent.change(screen.getByLabelText(/Goal Title/i), { target: { value: 'My Goal' } });
+
+    const saveButton = screen.getByRole('button', { name: /Create Goal/i });
+    fireEvent.click(saveButton);
+    fireEvent.click(saveButton);
+
+    expect(mockCreateYearlyGoal).toHaveBeenCalledTimes(1);
+
+    // The drawer's Close button is inert while the save is in flight.
+    fireEvent.click(screen.getByLabelText('Close drawer'));
+    expect(handleClose).not.toHaveBeenCalled();
+
+    resolveCreate();
+    await waitFor(() => expect(handleClose).toHaveBeenCalledTimes(1));
   });
 });
