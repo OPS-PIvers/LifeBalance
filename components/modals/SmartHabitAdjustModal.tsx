@@ -134,7 +134,7 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
             {suggestions.map((suggestion) => (
               <div
                 key={suggestion.habitId}
-                className="bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-2xl p-4 transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-brand-50 dark:hover:bg-brand-700/40 animate-in slide-in-from-bottom-2 fade-in duration-300"
+                className="bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-2xl p-4 transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-brand-50 dark:hover:bg-brand-700/40 animate-in slide-in-from-bottom-2 fade-in"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
 

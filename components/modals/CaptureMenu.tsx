@@ -74,7 +74,7 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
   };
 
   return (
-    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-(--duration-base)">
 
       {!piiNoticeSeen && (
         <div className="bg-brand-50 dark:bg-brand-700/40 p-3 rounded-xl border border-brand-200 dark:border-brand-700 flex items-start gap-3">

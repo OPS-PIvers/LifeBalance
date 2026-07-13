@@ -152,8 +152,8 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, onSendFeedba
             >
               {kid.avatarColor ? (
                 <div
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                  style={{ backgroundColor: kid.avatarColor, color: '#fff' }}
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 text-white"
+                  style={{ backgroundColor: kid.avatarColor }}
                 >
                   {kid.avatarEmoji ?? kid.displayName.charAt(0)}
                 </div>

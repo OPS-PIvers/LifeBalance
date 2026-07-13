@@ -11,7 +11,7 @@ import { CONSENT_VERSION } from '@/utils/legal';
  */
 const TermsOfService: React.FC = () => {
   return (
-    <div className="min-h-screen bg-linear-to-br from-brand-100 via-brand-50 to-money-50 dark:from-brand-900 dark:via-brand-900 dark:to-brand-900 py-10 px-4">
+    <div className="min-h-screen bg-brand-50 dark:bg-brand-900 py-10 px-4">
       <div className="w-full max-w-2xl mx-auto">
         <div className="bg-white dark:bg-brand-800 rounded-2xl shadow-2xl p-8 space-y-6">
           {/* Back link */}
