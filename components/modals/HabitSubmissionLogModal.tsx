@@ -402,7 +402,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                         </div>
                         <div className="h-2 bg-brand-100 dark:bg-brand-700/50 rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-linear-to-r from-money-pos to-accent-600 rounded-full transition-all duration-500"
+                            className="h-full bg-linear-to-r from-money-pos to-accent-600 rounded-full transition-all duration-(--duration-slow)"
                             style={{ width: `${barWidth}%` }}
                           />
                         </div>
@@ -434,7 +434,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                           </div>
                           <div className="h-2 bg-brand-100 dark:bg-brand-700/50 rounded-full overflow-hidden">
                             <div
-                              className="h-full bg-linear-to-r from-habit-blue to-accent-500 rounded-full transition-all duration-500"
+                              className="h-full bg-linear-to-r from-habit-blue to-accent-500 rounded-full transition-all duration-(--duration-slow)"
                               style={{ width: `${barWidth}%` }}
                             />
                           </div>

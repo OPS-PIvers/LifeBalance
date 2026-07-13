@@ -278,13 +278,15 @@ export const useHabitActions = (
             id: toastId,
             duration: POINTS_TOAST_WINDOW_MS,
             icon: net > 0
-              ? toastIcon(Star, 'text-money-pos')
-              : toastIcon(TrendingDown, 'text-money-neg'),
-            style: {
-              background: net > 0 ? '#ECFDF5' : '#FFF1F2',
-              color: net > 0 ? '#065F46' : '#9F1239',
-              border: net > 0 ? '1px solid #A7F3D0' : '1px solid #FECDD3',
-            },
+              ? toastIcon(Star, 'text-money-pos dark:text-money-posDark')
+              : toastIcon(TrendingDown, 'text-money-neg dark:text-money-negDark'),
+            // Per-toast className replaces the global Toaster one (dark
+            // brand-800 surface), so restate shape/shadow alongside the
+            // money-token surface. A className (not inline style) is used
+            // so the .dark variants actually apply.
+            className: net > 0
+              ? 'bg-money-bgPos text-money-pos border border-money-pos/25 dark:bg-money-pos/15 dark:text-money-posDark dark:border-money-pos/30 font-medium rounded-btn shadow-raised'
+              : 'bg-money-bgNeg text-money-neg border border-money-neg/25 dark:bg-money-neg/15 dark:text-money-negDark dark:border-money-neg/30 font-medium rounded-btn shadow-raised',
           }
         );
       }

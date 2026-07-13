@@ -28,7 +28,7 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
 }) => {
   const taskInputRef = useAutoFocus<HTMLInputElement>();
   return (
-    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-(--duration-base)">
       <Input
         ref={taskInputRef}
         label="Task"
