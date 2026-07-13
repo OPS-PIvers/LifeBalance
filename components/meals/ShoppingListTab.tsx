@@ -128,8 +128,9 @@ interface DeleteUndoToastProps {
 // Toasts always sit on the dark brand-800 surface (Toaster config in App.tsx),
 // so light-tint text is correct in both themes — no dark: pair needed here.
 export const DeleteUndoToast: React.FC<DeleteUndoToastProps> = ({ itemName, onUndo }) => (
-  <div className="flex items-center gap-2">
-    <span className="text-sm">Deleted &ldquo;{itemName}&rdquo;</span>
+  <div className="flex min-w-0 items-center gap-2">
+    {/* min-w-0 + truncate keep a long item name from pushing Undo off-screen */}
+    <span className="min-w-0 flex-1 truncate text-sm" title={itemName}>Deleted &ldquo;{itemName}&rdquo;</span>
     {/* -my-3 lets the 44px hit area overhang the toast padding without growing it */}
     <button
       type="button"
