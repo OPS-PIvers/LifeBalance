@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Reorder, useDragControls } from 'framer-motion';
-import { GripVertical } from 'lucide-react';
 import { Habit } from '@/types/schema';
 import HabitCard from './HabitCard';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
@@ -71,6 +70,13 @@ interface ReorderableItemProps {
 const ReorderableHabitItem: React.FC<ReorderableItemProps> = ({ habit, onSave }) => {
   const controls = useDragControls();
 
+  // Stable identity so HabitCard's memo comparator holds across re-renders
+  // (the old inline dragHandle JSX broke the memo on every parent render).
+  const startDrag = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => controls.start(e),
+    [controls]
+  );
+
   return (
     <Reorder.Item
       value={habit}
@@ -88,21 +94,7 @@ const ReorderableHabitItem: React.FC<ReorderableItemProps> = ({ habit, onSave })
       // Removed touch-none to allow vertical scrolling on the card itself.
       // Dragging is handled via the grip handle which has touch-none.
     >
-      <HabitCard
-        habit={habit}
-        dragHandle={
-          <div
-            onPointerDown={e => controls.start(e)}
-            className="cursor-grab active:cursor-grabbing touch-none p-1 focus:outline-hidden focus:ring-2 focus:ring-brand-400 rounded-sm"
-            title="Drag to reorder"
-            tabIndex={0}
-            role="button"
-            aria-label="Drag handle"
-          >
-            <GripVertical size={16} />
-          </div>
-        }
-      />
+      <HabitCard habit={habit} onGripPointerDown={startDrag} />
     </Reorder.Item>
   );
 };
