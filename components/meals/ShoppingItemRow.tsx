@@ -1,12 +1,13 @@
 import React, { memo, useRef } from 'react';
 import { ShoppingItem, Store as StoreType, QuickStockList } from '@/types/schema';
 import { Reorder, useDragControls } from 'framer-motion';
-import { GripVertical, Check, Trash2, Store, ShoppingBag } from 'lucide-react';
+import { Check, Trash2, Store, ShoppingBag } from 'lucide-react';
 import { STORE_COLORS, DEFAULT_STORE_COLOR } from '@/data/storeColors';
 import { TEMPLATE_ICONS } from '@/data/templateIcons';
 import { haptic } from '@/utils/haptics';
 import { HapticCheck } from '@/components/ui/HapticCheck';
 import { SwipeActionRow } from '@/components/ui/SwipeActionRow';
+import { ListRow } from '@/components/ui/ListRow';
 import clsx from 'clsx';
 
 const LONG_PRESS_MS = 500;
@@ -159,75 +160,72 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
       onSwipeStart={handleGestureDragStart}
     >
       {/* Foreground layer — the checkbox and tap/long-press-to-edit live here.
-          select-none + no touch-callout keep iOS from starting text selection /
-          the share sheet during a long-press. */}
-      <div
+          ListRow gives the standard anatomy: [checkbox] [content] [grip][kebab],
+          with the grip in the right rail so it stays out of the start path of
+          the rightward "purchased" swipe. select-none + no touch-callout keep
+          iOS from starting text selection / the share sheet during a long-press. */}
+      <ListRow
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={cancelLongPress}
         onPointerCancel={cancelLongPress}
         onContextMenu={handleContextMenu}
         className={clsx(
-          "relative flex items-center gap-3 px-3 py-2.5 bg-white dark:bg-brand-800 transition-colors duration-(--duration-fast) ease-(--ease-standard) select-none [-webkit-touch-callout:none]",
+          "bg-white dark:bg-brand-800 transition-colors duration-(--duration-fast) ease-(--ease-standard) select-none [-webkit-touch-callout:none]",
           item.isPurchased && "opacity-70 bg-brand-50 dark:bg-brand-800/60"
         )}
+        leading={
+          /* Checkbox (Alternative to Swipe) - p-3 -m-3 enlarges tappable area to
+             ~44px. HapticCheck (real switch input) so the tap fires the native
+             iOS system haptic even on 26.5+. */
+          <HapticCheck
+              checked={item.isPurchased}
+              onCheckedChange={handleCheckFromControl}
+              aria-label={item.isPurchased ? `Mark ${item.name} as not purchased` : `Mark ${item.name} as purchased`}
+              className="p-3 -m-3 shrink-0"
+          >
+              <span
+                  className={clsx(
+                      "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors",
+                      item.isPurchased
+                          ? "bg-money-pos border-money-pos text-white"
+                          : "border-brand-300 group-hover:border-accent-500 text-transparent dark:border-brand-600 dark:group-hover:border-accent-400"
+                  )}
+              >
+                  <Check size={12} strokeWidth={3} />
+              </span>
+          </HapticCheck>
+        }
+        grip={isReorderable ? {
+            ariaLabel: `Drag to reorder ${item.name}`,
+            onPointerDownCapture: (e) => {
+                // Only react to the primary button / touch contact. Without this,
+                // a right-click on the handle would be swallowed (blocking the
+                // context menu) and would needlessly start a drag.
+                if (e.button !== 0) return;
+                // Start ONLY the vertical reorder gesture from the handle, and
+                // stop the pointer event in the capture phase before it reaches
+                // the parent swipe layer's `drag="x"` listener. Otherwise both
+                // framer-motion drag gestures start on the same pointer and
+                // contend for the single global drag lock: the losing gesture's
+                // onMove silently no-ops and the conflicted pointer-up can skip
+                // the Reorder.Item's onDragEnd, which leaves the item visually
+                // "stuck" (dark) and un-draggable until a full page reload.
+                e.stopPropagation();
+                dragControls.start(e);
+            },
+        } : undefined}
+        menu={{
+            // Visible, focusable path to the edit drawer (store / quick-list /
+            // delete). This is also the keyboard/AT route — long-press and
+            // right-click are pointer-only — replacing the old sr-only Edit
+            // button. Guarded like every row control against the synthetic
+            // click that ends a swipe or fired long-press.
+            ariaLabel: `Options for ${item.name}`,
+            hasPopup: 'dialog',
+            onOpen: () => { if (!consumeSuppressedClick()) onEdit(item); },
+        }}
       >
-        {/* Drag Handle - Only render if reorderable */}
-        {isReorderable && (
-            <div
-                role="button"
-                tabIndex={0}
-                onPointerDownCapture={(e) => {
-                    // Only react to the primary button / touch contact. Without this,
-                    // a right-click on the handle would be swallowed (blocking the
-                    // context menu) and would needlessly start a drag.
-                    if (e.button !== 0) return;
-                    // Start ONLY the vertical reorder gesture from the handle, and
-                    // stop the pointer event in the capture phase before it reaches
-                    // the parent swipe layer's `drag="x"` listener. Otherwise both
-                    // framer-motion drag gestures start on the same pointer and
-                    // contend for the single global drag lock: the losing gesture's
-                    // onMove silently no-ops and the conflicted pointer-up can skip
-                    // the Reorder.Item's onDragEnd, which leaves the item visually
-                    // "stuck" (dark) and un-draggable until a full page reload.
-                    e.stopPropagation();
-                    dragControls.start(e);
-                }}
-                onKeyDown={(e) => {
-                    // Space/Enter don't initiate drag but ensure the element is reachable
-                    // by keyboard; actual reorder via keyboard is handled by edit flow.
-                    if (e.key === ' ' || e.key === 'Enter') {
-                        e.preventDefault();
-                    }
-                }}
-                className="touch-none cursor-grab active:cursor-grabbing -ml-1 p-1 text-brand-300 hover:text-brand-600 dark:text-brand-500 dark:hover:text-brand-300 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-sm shrink-0"
-                aria-label={`Drag to reorder ${item.name}`}
-            >
-                <GripVertical size={16} />
-            </div>
-        )}
-
-        {/* Checkbox (Alternative to Swipe) - p-3 -m-3 enlarges tappable area to
-            ~44px. HapticCheck (real switch input) so the tap fires the native
-            iOS system haptic even on 26.5+. */}
-        <HapticCheck
-            checked={item.isPurchased}
-            onCheckedChange={handleCheckFromControl}
-            aria-label={item.isPurchased ? `Mark ${item.name} as not purchased` : `Mark ${item.name} as purchased`}
-            className="p-3 -m-3 shrink-0"
-        >
-            <span
-                className={clsx(
-                    "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors",
-                    item.isPurchased
-                        ? "bg-money-pos border-money-pos text-white"
-                        : "border-brand-300 group-hover:border-accent-500 text-transparent dark:border-brand-600 dark:group-hover:border-accent-400"
-                )}
-            >
-                <Check size={12} strokeWidth={3} />
-            </span>
-        </HapticCheck>
-
         {/* Content — a plain TAP here toggles purchased, same as the checkbox
             (owner request: tap anywhere on the card completes the item).
             Long-press (or right-click / context-menu key) opens the edit
@@ -238,7 +236,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
             stay readable as plain text. */}
         <div
             onClick={handleCheck}
-            className="flex-1 min-w-0 text-left"
+            className="text-left"
         >
             <div className={clsx(
                 "text-sm font-medium truncate transition-colors",
@@ -276,22 +274,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                 </div>
             )}
         </div>
-
-        {/* Keyboard/AT path to the edit drawer: long-press and right-click are
-            pointer-only, and macOS has no context-menu key — without this,
-            keyboard and screen-reader users would have no way to reach
-            store/quick-list/delete. sr-only until keyboard-focused (skip-link
-            pattern), so pointer users never see an extra control. */}
-        <button
-            type="button"
-            onClick={() => { if (!consumeSuppressedClick()) onEdit(item); }}
-            aria-label={`Edit ${item.name}`}
-            className="sr-only focus-visible:not-sr-only focus-visible:flex-none focus-visible:px-2 focus-visible:py-1 focus-visible:text-xs focus-visible:text-accent-600 dark:focus-visible:text-accent-300 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:rounded-sm"
-        >
-            Edit
-        </button>
-
-      </div>
+      </ListRow>
     </SwipeActionRow>
   );
 
