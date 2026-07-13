@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "lifebalance",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev"
+      ],
+      "port": 3000
+    },
+    {
+      "name": "wt24",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "-C",
+        ".claude/worktrees/advisor-24",
+        "dev"
+      ],
+      "port": 3000
+    }
+  ]
+}
