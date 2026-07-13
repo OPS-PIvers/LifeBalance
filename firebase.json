@@ -89,7 +89,7 @@
     "predeploy": [
       "pnpm --filter functions run build"
     ],
-    "runtime": "nodejs20"
+    "runtime": "nodejs22"
   },
   "emulators": {
     "firestore": {
