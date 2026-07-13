@@ -116,6 +116,16 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ isOpen, onClose }) => {
 
   const trimmedQuery = query.trim();
 
+  // Announced via the aria-live region below — updates only when the memoized
+  // results change (per query-state change), not on any extra render.
+  const resultsAnnouncement = !trimmedQuery
+    ? ''
+    : results.length === 0
+      // "No results" (not "No matches") so it can't collide with the visible
+      // EmptyState title in text queries by AT or tests.
+      ? 'No results'
+      : `${results.length} ${results.length === 1 ? 'result' : 'results'}`;
+
   return (
     <Drawer isOpen={isOpen} onClose={handleClose} title="Search" height="tall">
       <div className="space-y-4">
@@ -131,6 +141,12 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ isOpen, onClose }) => {
           // AT navigating by label — doesn't ambiguously match both.
           aria-label="Search query"
         />
+
+        {/* Screen-reader announcement of the result count for the current
+            query; visually hidden so sighted users just see the lists. */}
+        <div aria-live="polite" role="status" className="sr-only">
+          {resultsAnnouncement}
+        </div>
 
         {trimmedQuery && results.length === 0 && (
           <EmptyState

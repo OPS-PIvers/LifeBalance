@@ -89,6 +89,22 @@ const BudgetTrends: React.FC = () => {
     [...trendCategories, 'Other'].some(key => (row[key] as number) > 0)
   );
 
+  // Text alternatives for the charts (role="img" containers below, mirroring
+  // the HabitsInsightsCharts heatmap pattern) — summarize the plotted data so
+  // screen-reader users get the takeaway, not just "chart".
+  const burnDownLabel = useMemo(() => {
+    // Latest day with actual spend plotted (future days have spent: null).
+    const latest = [...burnDownData].reverse().find(d => d.spent !== null);
+    if (!latest || latest.spent === null) return 'Budget burn-down chart.';
+    const pace = latest.spent <= latest.idealPacing ? 'on or under the ideal pace' : 'over the ideal pace';
+    return `Budget burn-down chart. As of ${latest.day}, ${fmt(latest.spent)} spent of a ${fmt(latest.budget)} budget, ${pace} of ${fmt(latest.idealPacing)}.`;
+  }, [burnDownData, fmt]);
+
+  // trendCategories is ranked by 6-month total spend, so [0] is the top one.
+  const trendLabel = trendCategories.length > 0
+    ? `Stacked area chart of monthly spending by category over the last six months. Top category: ${trendCategories[0]}.`
+    : 'Stacked area chart of monthly spending by category over the last six months.';
+
   return (
     <div className="space-y-6 animate-in fade-in duration-(--duration-base)">
       <Section title="Wallet trends">
@@ -98,6 +114,7 @@ const BudgetTrends: React.FC = () => {
           {burnDownData.length === 0 ? (
             <EmptyChart message="Set bucket limits to see how your spending paces against the budget over the period." />
           ) : (
+            <div role="img" aria-label={burnDownLabel} className="h-full">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={burnDownData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={GRID_STROKE} />
@@ -136,6 +153,7 @@ const BudgetTrends: React.FC = () => {
                 />
               </ComposedChart>
             </ResponsiveContainer>
+            </div>
           )}
         </ChartCard>
 
@@ -144,6 +162,7 @@ const BudgetTrends: React.FC = () => {
           {!hasTrendData ? (
             <EmptyChart message="As you log more spending, your category trends will chart here across the last six months." />
           ) : (
+            <div role="img" aria-label={trendLabel} className="h-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={trendData}>
                 <defs>
@@ -182,6 +201,7 @@ const BudgetTrends: React.FC = () => {
                 />
               </AreaChart>
             </ResponsiveContainer>
+            </div>
           )}
         </ChartCard>
       </div>

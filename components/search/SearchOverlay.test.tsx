@@ -89,6 +89,19 @@ describe('SearchOverlay', () => {
     expect(screen.getByText('Tostadas')).toBeInTheDocument();
   });
 
+  it('announces the result count via the polite live region', () => {
+    renderOverlay();
+    const liveRegion = screen.getByRole('status');
+    expect(liveRegion).toHaveAttribute('aria-live', 'polite');
+    expect(liveRegion).toHaveTextContent('');
+
+    fireEvent.change(screen.getByLabelText('Search query'), { target: { value: 'ta' } });
+    expect(liveRegion).toHaveTextContent(/^\d+ results?$/);
+
+    fireEvent.change(screen.getByLabelText('Search query'), { target: { value: 'zzzzz' } });
+    expect(liveRegion).toHaveTextContent('No results');
+  });
+
   it('shows a compact empty state when nothing matches', () => {
     renderOverlay();
     fireEvent.change(screen.getByLabelText('Search query'), { target: { value: 'zzzzz' } });
