@@ -94,7 +94,7 @@ const BudgetTrends: React.FC = () => {
   // screen-reader users get the takeaway, not just "chart".
   const burnDownLabel = useMemo(() => {
     // Latest day with actual spend plotted (future days have spent: null).
-    const latest = [...burnDownData].reverse().find(d => d.spent !== null);
+    const latest = burnDownData.findLast(d => d.spent !== null);
     if (!latest || latest.spent === null) return 'Budget burn-down chart.';
     const pace = latest.spent <= latest.idealPacing ? 'on or under the ideal pace' : 'over the ideal pace';
     return `Budget burn-down chart. As of ${latest.day}, ${fmt(latest.spent)} spent of a ${fmt(latest.budget)} budget, ${pace} of ${fmt(latest.idealPacing)}.`;
