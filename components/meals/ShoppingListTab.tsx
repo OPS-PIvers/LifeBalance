@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useShopping, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem, QuickStockList } from '@/types/schema';
-import { Download, Sparkles, Loader2, Clock, Filter, Info, RotateCcw, X, Settings, Share2, Save, ShoppingCart, MoreHorizontal, Zap, ArrowUpDown, Check } from 'lucide-react';
+import { Download, Sparkles, Loader2, Clock, Filter, Info, RotateCcw, X, Settings, Share2, Save, ShoppingCart, MoreHorizontal, Zap, ArrowUpDown, Check, Trash2 } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { Reorder } from 'framer-motion';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
@@ -117,6 +117,29 @@ const SortDropdown: React.FC<SortDropdownProps> = ({ sortMode, onSelect, onClose
     </Popover>
   );
 };
+
+interface DeleteUndoToastProps {
+  itemName: string;
+  onUndo: () => void;
+}
+
+// Toast body for a single-item delete: message + Undo action. react-hot-toast
+// has no built-in action slot, so this renders inside toast((t) => ...).
+// Toasts always sit on the dark brand-800 surface (Toaster config in App.tsx),
+// so light-tint text is correct in both themes — no dark: pair needed here.
+export const DeleteUndoToast: React.FC<DeleteUndoToastProps> = ({ itemName, onUndo }) => (
+  <div className="flex items-center gap-2">
+    <span className="text-sm">Deleted &ldquo;{itemName}&rdquo;</span>
+    {/* -my-3 lets the 44px hit area overhang the toast padding without growing it */}
+    <button
+      type="button"
+      onClick={onUndo}
+      className="-my-3 min-h-[44px] min-w-[44px] shrink-0 px-3 text-sm font-semibold text-accent-300 hover:text-accent-200 focus:outline-hidden focus:underline"
+    >
+      Undo
+    </button>
+  </div>
+);
 
 const ShoppingListTab: React.FC = () => {
   const powerToolsEnabled = usePowerToolsEnabled();
@@ -469,9 +492,28 @@ const ShoppingListTab: React.FC = () => {
         toggleShoppingItemPurchased(item.id);
     }, [toggleShoppingItemPurchased]);
 
+    // Deletes stay instant (no confirm on the swipe path) — the undo toast is
+    // the safety net. Undo re-adds the item; a new id is acceptable.
+    const showDeleteUndoToast = useCallback((item: ShoppingItem) => {
+        const { id: _id, ...restored } = item;
+        toast(
+            (t) => (
+                <DeleteUndoToast
+                    itemName={item.name}
+                    onUndo={() => {
+                        toast.dismiss(t.id);
+                        void addShoppingItem(restored);
+                    }}
+                />
+            ),
+            { duration: 5000, icon: toastIcon(Trash2) }
+        );
+    }, [addShoppingItem]);
+
     const handleDelete = useCallback((item: ShoppingItem) => {
         deleteShoppingItem(item.id);
-    }, [deleteShoppingItem]);
+        showDeleteUndoToast(item);
+    }, [deleteShoppingItem, showDeleteUndoToast]);
 
     // Toggles a single list's membership for an item, leaving every OTHER
     // list untouched (the old handler forced exclusive single-list membership;
@@ -868,6 +910,7 @@ const ShoppingListTab: React.FC = () => {
               onSave={handleSaveEdit}
               onDelete={() => {
                 deleteShoppingItem(editingItem.id);
+                showDeleteUndoToast(editingItem);
                 setEditingItem(null);
               }}
               stores={stores}
