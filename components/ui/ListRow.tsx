@@ -57,7 +57,9 @@ export const ListRow: React.FC<ListRowProps> = ({
     <div className="flex-1 min-w-0">{children}</div>
     {accessories}
     {(grip || menu) && (
-      <div className="flex items-center gap-0.5 shrink-0 -mr-1">
+      // relative z-10 keeps the rail's controls clickable above a full-row
+      // overlay toggle (HabitCard's absolutely-positioned main-overlay button).
+      <div className="relative z-10 flex items-center gap-0.5 shrink-0 -mr-1">
         {grip && (
           // Pointer-only decoration, hidden from AT: it implements no keyboard
           // reordering, and a focusable "button" that does nothing on

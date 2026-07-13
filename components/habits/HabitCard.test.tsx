@@ -49,6 +49,7 @@ vi.mock('@/components/ui/Drawer', () => ({
 
 // Mock Lucide icons
 vi.mock('lucide-react', () => ({
+  GripVertical: () => <span data-testid="icon-grip" />,
   X: () => <span data-testid="icon-x" />,
   Flame: () => <span data-testid="icon-flame" />,
   MoreVertical: () => <span data-testid="icon-more-vertical" />,
@@ -140,6 +141,65 @@ describe('HabitCard', () => {
 
     // Verify Dropdown is NOT present
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+});
+
+describe('HabitCard - core row interactions (ListRow migration regression)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupMatchMedia(true);
+  });
+
+  it('tapping the full-row overlay increments the habit', async () => {
+    const user = userEvent.setup();
+    render(<HabitCard habit={mockHabit} />);
+
+    await user.click(screen.getByLabelText(`Toggle habit: ${mockHabit.title}, current count: ${mockHabit.count}`));
+
+    expect(mockHouseholdContext.toggleHabit).toHaveBeenCalledWith(mockHabit.id, 'up');
+    expect(mockHouseholdContext.resetHabit).not.toHaveBeenCalled();
+  });
+
+  it('tapping the X resets the habit without also toggling it', async () => {
+    const user = userEvent.setup();
+    render(<HabitCard habit={{ ...mockHabit, count: 1 }} />);
+
+    await user.click(screen.getByLabelText('Reset habit progress'));
+
+    expect(mockHouseholdContext.resetHabit).toHaveBeenCalledWith(mockHabit.id);
+    expect(mockHouseholdContext.toggleHabit).not.toHaveBeenCalled();
+  });
+
+  it('the X is not rendered while the habit count is zero', () => {
+    render(<HabitCard habit={mockHabit} />);
+    expect(screen.queryByLabelText('Reset habit progress')).not.toBeInTheDocument();
+  });
+
+  it('opening the options menu does not toggle the habit', async () => {
+    const user = userEvent.setup();
+    render(<HabitCard habit={mockHabit} />);
+
+    await user.click(screen.getByLabelText('Habit options menu'));
+
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    expect(mockHouseholdContext.toggleHabit).not.toHaveBeenCalled();
+  });
+
+  it('renders a grip that forwards pointer-down when onGripPointerDown is set, and none otherwise', () => {
+    const onGripPointerDown = vi.fn();
+    const { container, rerender } = render(
+      <HabitCard habit={mockHabit} onGripPointerDown={onGripPointerDown} />
+    );
+
+    const grip = container.querySelector('.cursor-grab') as HTMLElement;
+    expect(grip).not.toBeNull();
+    expect(grip).toHaveAttribute('aria-hidden', 'true');
+    grip.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    expect(onGripPointerDown).toHaveBeenCalledTimes(1);
+    expect(mockHouseholdContext.toggleHabit).not.toHaveBeenCalled();
+
+    rerender(<HabitCard habit={{ ...mockHabit, lastUpdated: '2023-01-02' }} />);
+    expect(container.querySelector('.cursor-grab')).toBeNull();
   });
 });
 

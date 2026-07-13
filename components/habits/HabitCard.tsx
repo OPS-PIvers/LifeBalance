@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Habit } from '@/types/schema';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
-import { X, MoreVertical, Edit2, Trash2, Target, Calendar, Snowflake } from 'lucide-react';
+import { X, Edit2, Trash2, Target, Calendar, Snowflake } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import HabitFormModal from '@/components/modals/HabitFormModal';
 import HabitSubmissionLogModal from '@/components/modals/HabitSubmissionLogModal';
@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import ProgressRing from '@/components/ui/ProgressRing';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
+import { ListRow } from '@/components/ui/ListRow';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { subDays } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -21,10 +22,11 @@ import CountUp from './CountUp';
 
 interface HabitCardProps {
   habit: Habit;
-  dragHandle?: React.ReactNode;
+  /** Starts the parent Reorder.Item's drag; when set, ListRow renders the standard right-rail grip. */
+  onGripPointerDown?: (e: React.PointerEvent<HTMLDivElement>) => void;
 }
 
-const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) => {
+const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDown }) => {
   const { toggleHabit, deleteHabit, resetHabit, activeChallenge } = useGamification();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -83,8 +85,9 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
   // SurfaceList (HabitCategoryList) — never a floating, individually-bordered
   // card. Hierarchy comes from spacing + a quiet active tint (money-pos /
   // money-neg), not from a per-card border/shadow.
+  // Extends ListRow's base anatomy classes (cn merges px/py overrides).
   const containerClasses = cn(
-    "relative flex items-center justify-between px-4 py-3.5 transition-[transform,background-color] duration-(--duration-base) ease-(--ease-standard) has-[.main-overlay:active]:scale-[0.99] select-none group/card",
+    "px-4 py-3.5 transition-[transform,background-color] duration-(--duration-base) ease-(--ease-standard) has-[.main-overlay:active]:scale-[0.99] select-none group/card",
     !isActive && "bg-white dark:bg-brand-800 hover:bg-brand-50 dark:hover:bg-brand-700/40",
     isActive && isPositive && "bg-money-bgPos dark:bg-money-pos/10",
     isActive && !isPositive && "bg-money-bgNeg dark:bg-money-neg/10"
@@ -132,89 +135,77 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
 
   return (
     <>
-      <div className={containerClasses}>
-        
-        {/* Invisible clickable overlay for main card interaction */}
-        <button
-          onClick={handleCardClick}
-          className="main-overlay absolute inset-0 w-full h-full cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900 rounded-card"
-          aria-label={`Toggle habit: ${habit.title}, current count: ${habit.count}`}
-          tabIndex={0}
-          style={{ zIndex: 1 }}
-        />
-        
-        {/* ACTION INDICATOR */}
-        <div className="shrink-0 mr-4 relative group pointer-events-none" style={{ zIndex: 2 }}>
-          <div className={buttonClasses}>
-            {isThreshold && !isCompleted ? (
-              <span className="text-lg font-bold font-mono">{habit.count}</span>
-            ) : isActive ? (
-              <span className="text-xl font-bold font-mono">{habit.count}</span>
-            ) : (
-              <div className="w-6 h-6 rounded-full border-2 border-current opacity-40" />
-            )}
-            
-            {/* Progress Ring for Threshold */}
-            {isThreshold && (
-              <ProgressRing
-                percent={(habit.count / habit.targetCount) * 100}
-                strokeWidth={3}
-                trackClassName={isActive && !isCompleted ? 'text-brand-900/10 dark:text-white/10' : 'text-white/20'}
-                barClassName={isCompleted ? 'text-white' : 'text-accent-600 dark:text-accent-300'}
-                className="absolute inset-0 w-full h-full p-0.5 pointer-events-none"
-              />
-            )}
-          </div>
-          
-          {/* Reset Button (X) - p-2 -m-2 enlarges tappable area to ~44px */}
-          {isActive && (
+      <ListRow
+        className={containerClasses}
+        leading={
+          <>
+            {/* Invisible clickable overlay for main card interaction — spans the
+                whole row (ListRow is `relative`). The right rail sits above it
+                (z-10), so grip/kebab taps never increment the habit. */}
             <button
-              onClick={(e) => {
-                 e.stopPropagation();
-                 resetHabit(habit.id);
-              }}
-              className="absolute -top-2 -right-2 p-2 -m-2 bg-white dark:bg-brand-700 border border-brand-200 dark:border-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-brand-400 dark:text-brand-300 active:scale-90 hover:bg-money-bgNeg dark:hover:bg-money-neg/20 hover:text-money-neg dark:hover:text-money-negDark hover:border-money-neg/30 transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-1 focus:ring-money-neg/50 pointer-events-auto"
-              aria-label="Reset habit progress"
-              style={{ zIndex: 20 }}
-            >
-              <X size={12} strokeWidth={3} />
-            </button>
-          )}
-        </div>
+              onClick={handleCardClick}
+              className="main-overlay absolute inset-0 w-full h-full cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900 rounded-card"
+              aria-label={`Toggle habit: ${habit.title}, current count: ${habit.count}`}
+              tabIndex={0}
+              style={{ zIndex: 1 }}
+            />
 
-        {/* CONTENT */}
-        <div className="flex-1 min-w-0 pointer-events-none" style={{ zIndex: 2 }}>
-          <div className="flex justify-between items-start">
-            <div>
-              <h3 className={cn("font-semibold tracking-tight text-sm truncate", isActive ? "text-brand-900 dark:text-brand-50" : "text-brand-700 dark:text-brand-200")}>
-                {habit.title}
-              </h3>
-            </div>
-            
-            {/* Context Menu Trigger & Drag Handle */}
-            <div className="flex items-center gap-1 -mr-2 relative" style={{ zIndex: 3 }}>
-              {dragHandle && (
-                <div className="text-brand-300 dark:text-brand-450 hover:text-brand-500 dark:hover:text-brand-300 cursor-grab active:cursor-grabbing p-1 pointer-events-auto">
-                  {dragHandle}
-                </div>
+            {/* ACTION INDICATOR */}
+            <div className="shrink-0 relative group pointer-events-none" style={{ zIndex: 2 }}>
+              <div className={buttonClasses}>
+                {isThreshold && !isCompleted ? (
+                  <span className="text-lg font-bold font-mono">{habit.count}</span>
+                ) : isActive ? (
+                  <span className="text-xl font-bold font-mono">{habit.count}</span>
+                ) : (
+                  <div className="w-6 h-6 rounded-full border-2 border-current opacity-40" />
+                )}
+
+                {/* Progress Ring for Threshold */}
+                {isThreshold && (
+                  <ProgressRing
+                    percent={(habit.count / habit.targetCount) * 100}
+                    strokeWidth={3}
+                    trackClassName={isActive && !isCompleted ? 'text-brand-900/10 dark:text-white/10' : 'text-white/20'}
+                    barClassName={isCompleted ? 'text-white' : 'text-accent-600 dark:text-accent-300'}
+                    className="absolute inset-0 w-full h-full p-0.5 pointer-events-none"
+                  />
+                )}
+              </div>
+
+              {/* Reset Button (X) - p-2 -m-2 enlarges tappable area to ~44px */}
+              {isActive && (
+                <button
+                  onClick={(e) => {
+                     e.stopPropagation();
+                     resetHabit(habit.id);
+                  }}
+                  className="absolute -top-2 -right-2 p-2 -m-2 bg-white dark:bg-brand-700 border border-brand-200 dark:border-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-brand-400 dark:text-brand-300 active:scale-90 hover:bg-money-bgNeg dark:hover:bg-money-neg/20 hover:text-money-neg dark:hover:text-money-negDark hover:border-money-neg/30 transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-1 focus:ring-money-neg/50 pointer-events-auto"
+                  aria-label="Reset habit progress"
+                  style={{ zIndex: 20 }}
+                >
+                  <X size={12} strokeWidth={3} />
+                </button>
               )}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsMenuOpen(!isMenuOpen);
-                }}
-                className="p-2 -m-1 text-brand-300 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300 rounded-full hover:bg-brand-100 dark:hover:bg-brand-700/50 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 pointer-events-auto"
-                aria-label="Habit options menu"
-                aria-haspopup="menu"
-                aria-expanded={isMenuOpen}
-              >
-                <MoreVertical size={16} />
-              </button>
             </div>
-          </div>
+          </>
+        }
+        grip={onGripPointerDown ? { onPointerDownCapture: onGripPointerDown } : undefined}
+        menu={{
+          ariaLabel: 'Habit options menu',
+          // What actually opens differs by breakpoint: desktop anchors the
+          // dropdown Menu, mobile presents the options Drawer (a dialog).
+          hasPopup: isDesktop ? 'menu' : 'dialog',
+          expanded: isMenuOpen,
+          onOpen: () => setIsMenuOpen(!isMenuOpen),
+        }}
+      >
+        <h3 className={cn("font-semibold tracking-tight text-sm truncate", isActive ? "text-brand-900 dark:text-brand-50" : "text-brand-700 dark:text-brand-200")}>
+          {habit.title}
+        </h3>
 
-          {/* Badges */}
-          <div className="flex flex-wrap gap-2">
+        {/* Badges */}
+        <div className="flex flex-wrap gap-2">
             {/* Points Potential */}
             <Badge variant={isPositive ? 'success' : 'danger'} size="sm">
               <CountUp value={signedPointsDisplay} suffix=" pts" />
@@ -258,9 +249,10 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
               </Badge>
             )}
           </div>
-        </div>
 
-        {/* Action menu (desktop dropdown; mobile uses the Drawer below) */}
+        {/* Action menu (desktop dropdown; mobile uses the Drawer below).
+            Popover anchors to the nearest positioned ancestor — the ListRow
+            container (`relative`) — so the old top/right offsets still apply. */}
         <Menu
           isOpen={isMenuOpen && isDesktop}
           onClose={() => setIsMenuOpen(false)}
@@ -270,7 +262,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
           className="min-w-[140px]"
           stopPropagation
         />
-      </div>
+      </ListRow>
 
       {/* Mobile Drawer Actions */}
       <Drawer
@@ -325,7 +317,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
   // re-render every card on any habit change. Challenge/freeze-bank state is
   // read from context (useGamification), not props, so those updates already
   // re-render this card through the context subscription regardless of memo.
-  prev.dragHandle === next.dragHandle &&
+  prev.onGripPointerDown === next.onGripPointerDown &&
   prev.habit.id === next.habit.id &&
   prev.habit.title === next.habit.title &&
   prev.habit.count === next.habit.count &&
