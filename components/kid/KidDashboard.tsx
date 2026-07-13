@@ -390,7 +390,7 @@ const KidDashboard: React.FC = () => {
                     className="flex items-center gap-3 rounded-2xl bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 p-4"
                   >
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-warm-100 dark:bg-warm-500/20 text-xl">
-                      {r.icon || '🎁'}
+                      {r.icon || <Gift className="h-5 w-5 text-warm-600 dark:text-warm-300" aria-hidden="true" />}
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-base font-bold text-brand-900 dark:text-white">

@@ -420,12 +420,12 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       { title: 'Internet', amount: 65, date: getLocalDateString(new Date(Date.now() + 5 * 86400000)) },
     ],
     narrative:
-      '🧪 Test Mode: You spent 23% less than last week — groceries did the heavy lifting. Keep the exercise streak alive tonight to lock in your multiplier.',
+      'Test Mode: You spent 23% less than last week — groceries did the heavy lifting. Keep the exercise streak alive tonight to lock in your multiplier.',
     narrativeSource: 'template',
     premium: true,
   }]);
   const [insightsHistory] = useState<Insight[]>([]);
-  const [insight] = useState("🧪 Test Mode: This is mock data for AI testing");
+  const [insight] = useState("Test Mode: This is mock data for AI testing");
   const [stores, setStores] = useState<Store[]>(SEED_STORES);
   const [groceryCategories, setGroceryCategories] = useState<string[]>([]);
   const [quickStockLists, setQuickStockLists] = useState<QuickStockList[]>([]);

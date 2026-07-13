@@ -169,7 +169,7 @@ async function processHousehold(
 
     await sendNotificationToUser(
       member.fcmTokens,
-      "Your weekly recap is ready 📊",
+      "Your weekly recap is ready",
       "See how your spending, habits, and points stacked up this week.",
       { type: "weekly_recap", url: `/?recap=${memberIsoWeek}` },
       memberDoc.ref

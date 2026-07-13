@@ -5,6 +5,7 @@ import { isIOSDevice, isPWA, supportsPush, parseIOSVersion } from '@/utils/platf
 import { computeAnyNotificationsEnabled } from '@/utils/notificationFlags';
 import type { HouseholdMember } from '@/types/schema';
 import toast from 'react-hot-toast';
+import { Bell } from 'lucide-react';
 
 // Re-export the pure platform helpers so existing
 // `import ... from '@/services/notificationService'` call sites keep working.
@@ -166,7 +167,7 @@ export const setupForegroundNotificationListener = (): Promise<(() => void) | nu
             }}
           >
             <div className="flex-shrink-0 w-8 h-8 bg-brand-100 rounded-full flex items-center justify-center">
-              <span className="text-lg">🔔</span>
+              <Bell size={16} className="text-brand-600" aria-hidden="true" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-brand-800 text-sm">{title}</p>

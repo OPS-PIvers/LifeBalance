@@ -211,20 +211,20 @@ export function getChallengeStatusMessage(
   const { progress: progressPercent } = progress;
 
   if (progressPercent >= 100) {
-    return '🎉 Challenge Complete!';
+    return 'Challenge Complete!';
   }
 
   if (progressPercent >= 80) {
-    return '🔥 Almost there!';
+    return 'Almost there!';
   }
 
   if (progressPercent >= 50) {
-    return '💪 Making great progress';
+    return 'Making great progress';
   }
 
   if (progressPercent >= 25) {
-    return '📈 Keep it up!';
+    return 'Keep it up!';
   }
 
-  return '🎯 Just getting started';
+  return 'Just getting started';
 }

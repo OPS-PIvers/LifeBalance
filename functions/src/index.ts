@@ -96,7 +96,7 @@ export const sendhabitreminders = onSchedule("every 1 hours", async () => {
         logger.info(`Member ${member.uid}: sending habit reminder now`);
         await sendNotificationToUser(
           member.fcmTokens,
-          "Time for your daily habit check-in! 🎯",
+          "Time for your daily habit check-in!",
           "Let's keep those streaks alive and hit your goals today.",
           {
             type: "habit_reminder",
@@ -246,7 +246,7 @@ export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
           logger.info(`Member ${member.uid}: sending streak warning (${habitsAtRisk.length} habits at risk)`);
           await sendNotificationToUser(
             member.fcmTokens,
-            "Don't break your streak! 🔥",
+            "Don't break your streak!",
             `You have ${habitsAtRisk.length} habit${
               habitsAtRisk.length > 1 ? "s" : ""
             } with active streaks that need attention today.`,
@@ -581,7 +581,7 @@ export const sendbudgetalerts = onDocumentWritten(
       if (checkingBalance < threshold) {
         await sendNotificationToUser(
           member.fcmTokens,
-          "Low Balance Alert! 💰",
+          "Low Balance Alert!",
           `Your safe-to-spend is down to ${formatCurrency(checkingBalance, {
             currency,
           })}. Time to watch your spending.`,
@@ -652,7 +652,7 @@ export const sendtestnotification = onCall(
 
     await sendNotificationToUser(
       tokens,
-      "Test Notification 🔔",
+      "Test Notification",
       "Great! Your device is set up to receive notifications.",
       {
         type: "test_notification",

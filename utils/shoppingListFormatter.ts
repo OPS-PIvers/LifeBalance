@@ -27,7 +27,7 @@ export const formatShoppingListForShare = (items: ShoppingItem[]): string => {
     return a.localeCompare(b);
   });
 
-  const lines: string[] = ['🛒 Shopping List', ''];
+  const lines: string[] = ['Shopping List', ''];
 
   sortedStores.forEach(store => {
     lines.push(store === NO_STORE_KEY ? NO_STORE_LABEL.toUpperCase() : store);

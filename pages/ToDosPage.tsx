@@ -600,7 +600,7 @@ const ToDosPage: React.FC = () => {
       const failed = results.filter(r => r.status === 'rejected').length;
 
       if (successful > 0) {
-        toast.success(`Completed ${successful} tasks! 🎉`);
+        toast.success(`Completed ${successful} tasks!`);
       }
       if (failed > 0) {
         toast.error(`Failed to complete ${failed} tasks`);

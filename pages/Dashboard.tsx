@@ -143,7 +143,7 @@ const Dashboard: React.FC = () => {
     try {
       if (isTodoQueueItem(item)) {
         await completeToDo(item.id);
-        toast.success('To-Do completed! 🎉');
+        toast.success('To-Do completed!');
         return;
       }
       if (isCalendarQueueItem(item)) {

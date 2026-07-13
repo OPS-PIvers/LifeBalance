@@ -163,7 +163,7 @@ export function makeUpdateYearlyGoalProgress(deps: {
     await updateDoc(doc(db, `households/${householdId}/yearlyGoals`, goalId), updates);
 
     if (isAchieved) {
-      toast.success(`🎉 Yearly goal achieved: ${goal.title}!`, { duration: 5000 });
+      toast.success(`Yearly goal achieved: ${goal.title}!`, { duration: 5000 });
     }
   };
 
@@ -334,9 +334,9 @@ export function makeMarkChallengeComplete(deps: {
 
     await batch.commit();
 
-    toast.success(success ? '🎉 Challenge completed!' : 'Challenge marked failed');
+    toast.success(success ? 'Challenge completed!' : 'Challenge marked failed');
     if (achievedGoal) {
-      toast.success(`🎉 Yearly goal achieved: ${achievedGoal.title}!`, { duration: 5000 });
+      toast.success(`Yearly goal achieved: ${achievedGoal.title}!`, { duration: 5000 });
     }
   };
 
@@ -583,7 +583,7 @@ export function makeRequestRedemption(deps: {
       if (alreadyPending) {
         toast.success('Already requested!');
       } else {
-        toast.success(`Sent! A grown-up will review "${reward.title}" 🎁`);
+        toast.success(`Sent! A grown-up will review "${reward.title}"`);
       }
     } catch (error) {
       console.error('[requestRedemption] Failed:', error);
@@ -661,7 +661,7 @@ export function makeRedemptionResolutionMutations(deps: {
         toast.error('Not enough points');
       } else {
         track('reward_redeemed', { via: 'parent_approval' });
-        toast.success('Approved! 🎉');
+        toast.success('Approved!');
       }
     } catch (error) {
       console.error('[approveRedemption] Failed:', error);
@@ -850,7 +850,7 @@ export function makeRolloverFreezeBankTokens(deps: {
     });
 
     if (tokensAdded > 0) {
-      toast.success(`❄️ Freeze bank refilled: ${newBalance} freezes ready`);
+      toast.success(`Freeze bank refilled: ${newBalance} freezes ready`);
     }
   };
 

@@ -490,7 +490,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                  onClick={async () => {
                    try {
                      await completeToDo(item.id);
-                     toast.success('To-Do completed! 🎉');
+                     toast.success('To-Do completed!');
                      setExpandedId(null);
                    } catch (error) {
                      console.error('Failed to complete task:', error);

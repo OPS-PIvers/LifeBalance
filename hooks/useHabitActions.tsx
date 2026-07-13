@@ -33,7 +33,7 @@ import {
   pointsForHabitOnDate
 } from '@/utils/habitLogic';
 import toast from 'react-hot-toast';
-import { CalendarDays, RotateCcw } from 'lucide-react';
+import { CalendarDays, RotateCcw, Star, TrendingDown } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { addDays, format, parseISO, startOfWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -277,7 +277,9 @@ export const useHabitActions = (
           {
             id: toastId,
             duration: POINTS_TOAST_WINDOW_MS,
-            icon: net > 0 ? '🌟' : '📉',
+            icon: net > 0
+              ? toastIcon(Star, 'text-money-pos')
+              : toastIcon(TrendingDown, 'text-money-neg'),
             style: {
               background: net > 0 ? '#ECFDF5' : '#FFF1F2',
               color: net > 0 ? '#065F46' : '#9F1239',

@@ -12,7 +12,7 @@ describe('formatShoppingListForShare', () => {
       { id: '1', name: 'Apples', category: 'Produce', store: 'Safeway', isPurchased: false },
       { id: '2', name: 'Milk', category: 'Dairy', store: 'Safeway', isPurchased: false }
     ];
-    const expected = `🛒 Shopping List
+    const expected = `Shopping List
 
 SAFEWAY
 
@@ -28,7 +28,7 @@ Produce:
     const items: ShoppingItem[] = [
       { id: '1', name: 'Bread', category: 'Bakery', quantity: '2 loaves', store: 'BakeryShop', isPurchased: false }
     ];
-    const expected = `🛒 Shopping List
+    const expected = `Shopping List
 
 BAKERYSHOP
 
