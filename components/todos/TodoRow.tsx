@@ -1,8 +1,9 @@
 import React from 'react';
-import { Check, Trash2, Edit2, AlertCircle, Clock, User, Copy, MoreVertical, Calendar, Star, CheckSquare } from 'lucide-react';
+import { Check, Trash2, Edit2, AlertCircle, Clock, User, Copy, MoreVertical, Calendar, Star, CheckSquare, ChevronDown, ListChecks } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, startOfToday } from 'date-fns';
 import { ToDo, HouseholdMember } from '@/types/schema';
 import { DEFAULT_TODO_POINTS } from '@/utils/todoPoints';
+import { subtaskProgress } from '@/utils/subtasks';
 import toast from 'react-hot-toast';
 import { haptic } from '@/utils/haptics';
 import { HapticCheck } from '@/components/ui/HapticCheck';
@@ -31,6 +32,8 @@ export interface TodoRowProps {
   onToggleImportant: (todo: ToDo) => void;
   onMore: (todo: ToDo) => void;
   onToggleSelection: (id: string) => void;
+  // F-TODO-08: toggle a single subtask's done state from the expanded checklist.
+  onToggleSubtask: (todo: ToDo, subtaskId: string) => void;
 }
 
 // Memoized row for a single active to-do.
@@ -50,10 +53,16 @@ export const TodoRow = React.memo(function TodoRow({
   onToggleImportant,
   onMore,
   onToggleSelection,
+  onToggleSubtask,
 }: TodoRowProps) {
   // Parse the due date once per row render to avoid repeated parseISO calls
   const dueDate = parseISO(item.completeByDate);
   const isOverdue = isBefore(dueDate, startOfToday());
+
+  // F-TODO-08: subtask checklist progress + expand/collapse state.
+  const progress = subtaskProgress(item.subtasks);
+  const hasSubtasks = progress.total > 0;
+  const [subtasksExpanded, setSubtasksExpanded] = React.useState(false);
 
   // Shared by the checkbox control and the right-swipe action.
   const handleComplete = async () => {
@@ -153,7 +162,59 @@ export const TodoRow = React.memo(function TodoRow({
                 +{item.points ?? DEFAULT_TODO_POINTS} pts
               </span>
             )}
+
+            {/* F-TODO-08: subtask progress chip — expands the checklist inline. */}
+            {hasSubtasks && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setSubtasksExpanded(v => !v); }}
+                aria-expanded={subtasksExpanded}
+                aria-label={`${subtasksExpanded ? 'Hide' : 'Show'} subtasks — ${progress.done} of ${progress.total} done`}
+                className={cn(
+                  'flex items-center gap-1 font-semibold transition-colors',
+                  progress.allDone
+                    ? 'text-accent-600 dark:text-accent-300'
+                    : 'text-brand-500 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-200'
+                )}
+              >
+                <ListChecks size={12} aria-hidden="true" />
+                {progress.done}/{progress.total}
+                <ChevronDown
+                  size={12}
+                  aria-hidden="true"
+                  className={cn('transition-transform duration-(--duration-fast)', subtasksExpanded && 'rotate-180')}
+                />
+              </button>
+            )}
           </div>
+
+          {/* F-TODO-08: expandable checkable subtask list. Toggling never touches
+              points, so it is a plain updateToDo in the parent handler. */}
+          {hasSubtasks && subtasksExpanded && !isSelectionMode && (
+            <ul className="mt-2.5 space-y-1" aria-label={`Subtasks for ${item.text}`}>
+              {(item.subtasks ?? []).map(sub => (
+                <li key={sub.id}>
+                  <label className="flex items-start gap-2 py-1 cursor-pointer group/sub">
+                    <input
+                      type="checkbox"
+                      checked={sub.isDone}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => { e.stopPropagation(); onToggleSubtask(item, sub.id); }}
+                      className="mt-0.5 w-4 h-4 shrink-0 rounded-sm border-brand-300 text-accent-600 focus-visible:ring-2 focus-visible:ring-accent-500 dark:border-brand-600 dark:bg-brand-700"
+                    />
+                    <span className={cn(
+                      'text-sm leading-snug',
+                      sub.isDone
+                        ? 'line-through text-brand-400 dark:text-brand-500'
+                        : 'text-brand-700 dark:text-brand-200'
+                    )}>
+                      {sub.text}
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {/* Actions */}
