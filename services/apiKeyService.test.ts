@@ -10,9 +10,23 @@ import {
   deleteApiKey,
   getQuickAddBaseUrl,
   getQuickAddEndpointUrl,
+  isApiKeyRevealEnabled,
+  attachApiKeyEncryption,
+  revealApiKey,
 } from '@/services/apiKeyService';
 
-vi.mock('@/firebase.config', () => ({ db: {} }));
+const { httpsCallableMock, callableInvokeMock } = vi.hoisted(() => ({
+  httpsCallableMock: vi.fn(),
+  callableInvokeMock: vi.fn(),
+}));
+
+// httpsCallable(functions, name) -> (req) => Promise<{ data }>
+vi.mock('firebase/functions', () => ({ httpsCallable: httpsCallableMock }));
+
+vi.mock('@/firebase.config', () => ({
+  db: {},
+  getFunctionsInstance: vi.fn().mockResolvedValue({ __isFunctions: true }),
+}));
 vi.mock('firebase/firestore', () => ({
   collection: vi.fn(() => ({ __collection: true })),
   addDoc: vi.fn(async () => ({ id: 'docId' })),
@@ -48,6 +62,7 @@ async function sha256Hex(message: string): Promise<string> {
 describe('apiKeyService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    httpsCallableMock.mockReturnValue(callableInvokeMock);
   });
 
   afterEach(() => {
@@ -212,6 +227,61 @@ describe('apiKeyService', () => {
       await deleteApiKey('hh', 'key-1');
 
       expect(deleteDoc).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('isApiKeyRevealEnabled', () => {
+    it('is true only when the flag is exactly "true"', () => {
+      vi.stubEnv('VITE_APIKEY_REVEAL_ENABLED', 'true');
+      expect(isApiKeyRevealEnabled()).toBe(true);
+      vi.stubEnv('VITE_APIKEY_REVEAL_ENABLED', 'false');
+      expect(isApiKeyRevealEnabled()).toBe(false);
+      vi.stubEnv('VITE_APIKEY_REVEAL_ENABLED', '');
+      expect(isApiKeyRevealEnabled()).toBe(false);
+      vi.unstubAllEnvs();
+    });
+  });
+
+  describe('attachApiKeyEncryption', () => {
+    it('invokes the attachapikeyencryption callable with the ids and plaintext key', async () => {
+      callableInvokeMock.mockResolvedValue({ data: { success: true } });
+
+      await attachApiKeyEncryption('hh', 'key-1', 'lb_househ_abc');
+
+      expect(httpsCallableMock).toHaveBeenCalledWith(
+        { __isFunctions: true },
+        'attachapikeyencryption'
+      );
+      expect(callableInvokeMock).toHaveBeenCalledWith({
+        householdId: 'hh',
+        keyId: 'key-1',
+        key: 'lb_househ_abc',
+      });
+    });
+
+    it('propagates callable failures (caller decides whether to swallow)', async () => {
+      callableInvokeMock.mockRejectedValue(new Error('functions/not-found'));
+      await expect(
+        attachApiKeyEncryption('hh', 'key-1', 'lb_x')
+      ).rejects.toThrow('functions/not-found');
+    });
+  });
+
+  describe('revealApiKey', () => {
+    it('returns the plaintext key from the revealapikey callable', async () => {
+      callableInvokeMock.mockResolvedValue({ data: { key: 'lb_househ_secret' } });
+
+      const key = await revealApiKey('hh', 'key-1');
+
+      expect(httpsCallableMock).toHaveBeenCalledWith(
+        { __isFunctions: true },
+        'revealapikey'
+      );
+      expect(callableInvokeMock).toHaveBeenCalledWith({
+        householdId: 'hh',
+        keyId: 'key-1',
+      });
+      expect(key).toBe('lb_househ_secret');
     });
   });
 

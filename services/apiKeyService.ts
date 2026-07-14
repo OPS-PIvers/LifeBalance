@@ -5,7 +5,7 @@
  * for the Quick Add Cloud Functions.
  */
 
-import { db } from "@/firebase.config";
+import { db, getFunctionsInstance } from "@/firebase.config";
 import {
   collection,
   addDoc,
@@ -241,6 +241,61 @@ export async function deleteApiKey(
 ): Promise<void> {
   const keyRef = doc(db, `households/${householdId}/apiKeys/${keyId}`);
   await deleteDoc(keyRef);
+}
+
+/**
+ * Whether the operator has enabled the "reveal & copy an existing key" flow.
+ *
+ * Mirrors the VITE_USE_GEMINI_PROXY convention: OFF by default, flipped ON in
+ * the deploy workflow once the APIKEY_ENC_KEY secret is provisioned and the
+ * reveal Cloud Functions are exported (docs/APIKEY_REVEAL_RUNBOOK.md). When OFF,
+ * keys behave exactly as before — hash-only, shown once, no copy-again.
+ */
+export function isApiKeyRevealEnabled(): boolean {
+  return import.meta.env.VITE_APIKEY_REVEAL_ENABLED === "true";
+}
+
+/**
+ * Attach an at-rest-encrypted copy of a freshly created/regenerated key so it
+ * can be revealed later. Best-effort: the caller should tolerate failure (the
+ * key still works, it just won't be copyable). Sends the plaintext to the
+ * `attachapikeyencryption` callable, which stores the ciphertext only if its
+ * hash matches the key doc.
+ */
+export async function attachApiKeyEncryption(
+  householdId: string,
+  keyId: string,
+  key: string
+): Promise<void> {
+  const [{ httpsCallable }, functions] = await Promise.all([
+    import("firebase/functions"),
+    getFunctionsInstance(),
+  ]);
+  const fn = httpsCallable<
+    { householdId: string; keyId: string; key: string },
+    { success: boolean }
+  >(functions, "attachapikeyencryption");
+  await fn({ householdId, keyId, key });
+}
+
+/**
+ * Fetch the plaintext of a previously-encrypted key (admin-only, server-side
+ * decryption via the `revealapikey` callable) so the user can copy it again.
+ */
+export async function revealApiKey(
+  householdId: string,
+  keyId: string
+): Promise<string> {
+  const [{ httpsCallable }, functions] = await Promise.all([
+    import("firebase/functions"),
+    getFunctionsInstance(),
+  ]);
+  const fn = httpsCallable<
+    { householdId: string; keyId: string },
+    { key: string }
+  >(functions, "revealapikey");
+  const result = await fn({ householdId, keyId });
+  return result.data.key;
 }
 
 /**

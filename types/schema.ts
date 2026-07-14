@@ -835,6 +835,9 @@ export interface HouseholdApiKey {
   id: string;
   hashedKey: string;           // SHA-256 hash of the actual key (never store plain text)
   keyPrefix: string;           // First 16 chars for display (e.g., "lb_abc123_7f4e9a")
+  encryptedKey?: string;       // Server-managed AES-256-GCM ciphertext of the key, enabling
+                               // admin "reveal & copy" (opt-in). Written only by the
+                               // attachapikeyencryption Cloud Function; never by the client.
   name: string;                // User-provided name (e.g., "iPhone Shortcut")
   createdAt: string;           // ISO timestamp
   createdBy: string;           // uid of creator
