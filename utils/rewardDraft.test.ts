@@ -69,6 +69,31 @@ describe('buildRewardPayload', () => {
     });
   });
 
+  describe('F-HABITS-02: unlockRequirement (streak milestone gate)', () => {
+    it('omits unlockRequirement when milestoneStreakDays is blank', () => {
+      expect(buildRewardPayload(makeDraft())).not.toHaveProperty('unlockRequirement');
+    });
+
+    it('sets an ANY-habit requirement when milestoneHabitId is blank', () => {
+      const payload = buildRewardPayload(makeDraft({ milestoneStreakDays: '30' }));
+      expect(payload).toMatchObject({ unlockRequirement: { streakDays: 30 } });
+      expect(payload?.unlockRequirement).not.toHaveProperty('habitId');
+    });
+
+    it('sets a specific-habit requirement when milestoneHabitId is present', () => {
+      const payload = buildRewardPayload(
+        makeDraft({ milestoneStreakDays: '7', milestoneHabitId: 'habit-1' })
+      );
+      expect(payload).toMatchObject({ unlockRequirement: { streakDays: 7, habitId: 'habit-1' } });
+    });
+
+    it('aborts the submit for a non-positive milestoneStreakDays', () => {
+      expect(buildRewardPayload(makeDraft({ milestoneStreakDays: '0' }))).toBeNull();
+      expect(buildRewardPayload(makeDraft({ milestoneStreakDays: '-7' }))).toBeNull();
+      expect(buildRewardPayload(makeDraft({ milestoneStreakDays: 'abc' }))).toBeNull();
+    });
+  });
+
   it('includes targetMemberId only when present', () => {
     expect(buildRewardPayload(makeDraft({ targetMemberId: 'kid_leo' }))).toMatchObject({
       targetMemberId: 'kid_leo',
@@ -100,6 +125,8 @@ describe('draftFromReward', () => {
       allowanceDollars: '5.10',
       targetMemberId: 'kid_leo',
       active: false,
+      milestoneStreakDays: '',
+      milestoneHabitId: '',
     });
   });
 
@@ -119,6 +146,8 @@ describe('draftFromReward', () => {
       allowanceDollars: '',
       targetMemberId: '',
       active: true,
+      milestoneStreakDays: '',
+      milestoneHabitId: '',
     });
   });
 
@@ -137,5 +166,22 @@ describe('draftFromReward', () => {
 
     const payload = buildRewardPayload(draft);
     expect(payload).toMatchObject({ type: 'allowance', allowanceCents: 510 });
+  });
+
+  it('round-trips an unlockRequirement: {streakDays:30, habitId} → draft → payload', () => {
+    const reward: RewardItem = {
+      id: 'rw2',
+      title: '30-day reward',
+      cost: 200,
+      icon: '🏆',
+      createdBy: 'u1',
+      unlockRequirement: { streakDays: 30, habitId: 'habit-1' },
+    };
+    const draft = draftFromReward(reward);
+    expect(draft.milestoneStreakDays).toBe('30');
+    expect(draft.milestoneHabitId).toBe('habit-1');
+
+    const payload = buildRewardPayload(draft);
+    expect(payload).toMatchObject({ unlockRequirement: { streakDays: 30, habitId: 'habit-1' } });
   });
 });

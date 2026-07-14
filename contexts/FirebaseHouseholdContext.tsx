@@ -563,7 +563,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   useEffect(() => { householdSettingsRef.current = householdSettings; }, [householdSettings]);
 
   // Habit Actions Hook
-  const habitActions = useHabitActions(householdId, currentUser, habits, householdSettings);
+  const habitActions = useHabitActions(householdId, currentUser, habits, householdSettings, rewards);
 
   // Derived state (Optimized to prevent extra re-renders)
   const currentPeriodId = householdSettings?.lastPaycheckDate || '';

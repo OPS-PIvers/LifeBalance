@@ -422,6 +422,19 @@ export interface RewardItem {
   targetMemberId?: string;
   /** Whether the reward is shown in the store. Treated as true when absent. */
   active?: boolean;
+  // F-HABITS-02 (streak milestone celebrations): an optional milestone gate on
+  // this reward. When present, the reward renders locked in the store until a
+  // habit's streak crosses `streakDays` (one of utils/habitMilestones.ts's
+  // MILESTONES) — either a SPECIFIC habit (`habitId` set) or ANY habit
+  // (`habitId` absent). Unlocking is tracked separately via
+  // `Household.unlockedRewardIds` (crossing is a one-time event; a later streak
+  // reset must not re-lock an already-unlocked reward). Absent = no gate
+  // (always available, subject only to the existing point-cost affordability
+  // check).
+  unlockRequirement?: {
+    streakDays: number;
+    habitId?: string;
+  };
 }
 
 /**
@@ -668,6 +681,16 @@ export interface Household {
   // Absent on legacy households (treat absent as empty). Like pendingRedemptions,
   // it rides on the field-permissive household-doc update rule (no rules change).
   redemptionHistory?: RewardRedemptionRecord[];
+
+  // F-HABITS-02 (streak milestone celebrations): reward ids that have been
+  // permanently unlocked by crossing their `RewardItem.unlockRequirement`
+  // streak milestone (see hooks/useHabitActions.tsx's toggleHabit, which
+  // arrayUnion-appends here in the SAME writeBatch as the triggering habit
+  // toggle). Once unlocked a reward stays unlocked even if the streak later
+  // resets. Absent on legacy/non-gated households (treat absent as empty).
+  // Rides on the same field-permissive household-doc update rule as
+  // pendingRedemptions/redemptionHistory — no rules change needed.
+  unlockedRewardIds?: string[];
 
   // Billing / subscription (Plan 050). Absent on every legacy + free-tier
   // household — treat absent as the free plan everywhere (see utils/entitlements.ts).

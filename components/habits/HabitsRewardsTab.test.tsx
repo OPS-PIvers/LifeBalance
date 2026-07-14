@@ -62,6 +62,7 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   }),
   useGamification: () => ({
     rewardsInventory: mockRewards(),
+    habits: [],
     totalPoints: 100,
     redeemReward: redeemRewardMock,
     addReward: vi.fn(),

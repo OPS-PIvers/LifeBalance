@@ -1,5 +1,5 @@
 import React, { useState, ReactNode, useCallback, useMemo, useRef } from 'react';
-import { Info } from 'lucide-react';
+import { Info, PartyPopper, Gift } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { format, addDays, subDays } from 'date-fns';
 import { HouseholdContextType, HouseholdSliceProviders } from './FirebaseHouseholdContext';
@@ -11,6 +11,7 @@ import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redempt
 import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { processToggleHabit, calculateResetPoints, streakForHabit } from '@/utils/habitLogic';
+import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
 import { selectAutoFreezeCandidates } from '@/utils/freezeBank';
 import { accountImpactOf, effectiveAccountImpact, resolveTargetAccount } from '@/utils/accountImpact';
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
@@ -336,6 +337,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [rewards, setRewards] = useState<RewardItem[]>(SEED_REWARDS);
   const [pendingRedemptions, setPendingRedemptions] = useState<RewardRedemption[]>(SEED_PENDING_REDEMPTIONS);
   const [redemptionHistory, setRedemptionHistory] = useState<RewardRedemptionRecord[]>(SEED_REDEMPTION_HISTORY);
+  // F-HABITS-02 (streak milestone celebrations): mirrors Household.unlockedRewardIds.
+  const [unlockedRewardIds, setUnlockedRewardIds] = useState<string[]>([]);
   // Stateful so an instant redeem in Test Mode actually deducts the shared total
   // (production deducts household.points.total). dailyPoints/weeklyPoints stay
   // fixed — only the redeemable lifetime total moves.
@@ -934,7 +937,29 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     setHabits(prev => prev.map(h => h.id === id ? { ...h, ...result.updatedHabit } : h));
     creditPoints(result.pointsChange);
     toast.success(`Mock: Habit ${direction === 'up' ? 'incremented' : 'decremented'}`);
-  }, [habits, creditPoints]);
+
+    // F-HABITS-02 (streak milestone celebrations): mirrors the real
+    // toggleHabit's presentation-only milestone toast + reward unlock.
+    const nextStreakDays = result.updatedHabit.streakDays ?? habit.streakDays;
+    const milestone = direction === 'up'
+      ? crossedMilestone(habit.streakDays, nextStreakDays)
+      : null;
+    if (milestone !== null) {
+      toast(`${milestone}-day streak! ${habit.title}`, { icon: toastIcon(PartyPopper, 'text-habit-streak') });
+      const newlyUnlocked = rewards.filter(
+        (reward) =>
+          !unlockedRewardIds.includes(reward.id) &&
+          reward.unlockRequirement &&
+          rewardMilestoneSatisfied(reward, id, nextStreakDays)
+      );
+      if (newlyUnlocked.length > 0) {
+        setUnlockedRewardIds(prev => [...prev, ...newlyUnlocked.map(r => r.id)]);
+        newlyUnlocked.forEach((reward) => {
+          toast(`Reward unlocked! ${reward.title}`, { icon: toastIcon(Gift, 'text-warm-600') });
+        });
+      }
+    }
+  }, [habits, creditPoints, rewards, unlockedRewardIds]);
 
   // Manual reset (the card's X button): zero the period counter, drop today
   // from completedDates, and reverse today's awarded points — mirroring the
@@ -1165,6 +1190,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       toast.error('Mock: Not enough points');
       return;
     }
+    if (reward.unlockRequirement && !unlockedRewardIds.includes(reward.id)) {
+      toast.error('Mock: Reward is still locked');
+      return;
+    }
     const record: RewardRedemptionRecord = {
       id: generateId(),
       rewardId: reward.id,
@@ -1177,7 +1206,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     setTotalPoints(prev => prev - reward.cost);
     setRedemptionHistory(prev => [record, ...prev].slice(0, REDEMPTION_HISTORY_LIMIT));
     toast.success(`Mock: Redeemed ${reward.title}`);
-  }, [rewards, totalPoints]);
+  }, [rewards, totalPoints, unlockedRewardIds]);
 
   // Reward CRUD operations (Plan 080d) — mutate the stateful rewards store so the
   // parent-facing "Manage rewards" UI is walkable in Test Mode.
@@ -1346,6 +1375,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     kidModePinHash,
     pendingRedemptions,
     redemptionHistory,
+    unlockedRewardIds,
     moduleVisibility,
 
   } as unknown as Household;
