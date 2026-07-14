@@ -87,14 +87,11 @@ const Dashboard: React.FC = () => {
 
   // State for expansions/modals
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [payModalItemId, setPayModalItemId] = useState<string | null>(null);
-  // The calendar item behind the open pay sheet — seeds the sheet's editable
-  // amount field with the budgeted amount.
-  const payModalItem = useMemo(() => {
-    if (!payModalItemId) return null;
-    const queued = actionQueue.find(i => i.id === payModalItemId);
-    return queued && isCalendarQueueItem(queued) ? queued : null;
-  }, [actionQueue, payModalItemId]);
+  // The pay sheet's target: the calendar item id plus the amount to pay —
+  // already edited in the queue's review drawer, or the budgeted amount when
+  // arriving via a path with no edit step (swipe fallback).
+  const [payModal, setPayModal] = useState<{ id: string; amount: number } | null>(null);
+  const openPaySheet = useCallback((id: string, amount: number) => setPayModal({ id, amount }), []);
   // The credit card targeted by the "Pay down" quick action (opens the capture
   // form pre-tagged as a payment toward that card).
   const [payDownAccountId, setPayDownAccountId] = useState<string | null>(null);
@@ -157,7 +154,7 @@ const Dashboard: React.FC = () => {
         const account = suggestAccountForCalendarItem(item, accounts, transactions);
         if (!account) {
           // No payable account to guess — fall back to the explicit pay sheet.
-          setPayModalItemId(item.id);
+          openPaySheet(item.id, item.amount);
           return;
         }
         await payCalendarItem(item.id, account.id, { silent: true });
@@ -188,7 +185,7 @@ const Dashboard: React.FC = () => {
       console.error('[ActionQueue] Swipe approve failed:', error);
       toast.error('Failed to approve. Please try again.');
     }
-  }, [accounts, buckets, transactions, completeToDo, payCalendarItem, updateTransactionCategory]);
+  }, [accounts, buckets, transactions, completeToDo, payCalendarItem, updateTransactionCategory, openPaySheet]);
 
   // Swipe left — instant defer: bills/to-dos move a day forward, pending
   // transactions snooze out of the queue until tomorrow.
@@ -379,7 +376,7 @@ const Dashboard: React.FC = () => {
               item={item}
               isExpanded={expandedId === item.id}
               setExpandedId={setExpandedId}
-              setPayModalItemId={setPayModalItemId}
+              openPaySheet={openPaySheet}
               selectionMode={selectionMode}
               isSelected={selectedIds.has(item.id)}
               onToggleSelect={toggleSelect}
@@ -528,21 +525,22 @@ const Dashboard: React.FC = () => {
         )}
       </Suspense>
 
-      {/* Pay sheet for calendar items — the amount is editable at pay-time so a
-          variable bill can be approved with what was actually charged. */}
+      {/* Pay sheet for calendar items — seeded with the amount already edited
+          in the review drawer (still editable here for paths without an edit
+          step, e.g. the swipe fallback). */}
       <AccountPicker
-        isOpen={!!payModalItemId}
-        onClose={() => setPayModalItemId(null)}
-        editableAmount={payModalItem?.amount}
+        isOpen={!!payModal}
+        onClose={() => setPayModal(null)}
+        editableAmount={payModal?.amount}
         onSelect={(accountId, amount) => {
-          if (payModalItemId) {
+          if (payModal) {
             payCalendarItem(
-              payModalItemId,
+              payModal.id,
               accountId,
               amount !== undefined ? { actualAmount: amount } : undefined
             );
           }
-          setPayModalItemId(null);
+          setPayModal(null);
         }}
       />
 
