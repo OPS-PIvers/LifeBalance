@@ -62,6 +62,9 @@ export { plaiddisconnectbank } from "./plaid/disconnect";
 // Weekly recap engine (Plan 02).
 export { sendweeklyrecap } from "./recap";
 
+// Daily net worth snapshot (F-MONEY-09). No secrets — safe to export/deploy.
+export { snapshotnetworth } from "./netWorth";
+
 // Managed kid-profile creation (Plan 080 / Plan 051): authoritatively enforces the
 // per-plan maxKidProfiles cap server-side. No secrets — safe to export/deploy.
 export { createkidprofile } from "./kid/createKidProfile";
