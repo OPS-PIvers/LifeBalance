@@ -33,104 +33,104 @@ paragraph for the existing examples to mirror).
 
 ## Index
 
-| ID | Title | Domain | Size | Value | Hook |
+| ID | Title | Domain | Size | Value | Hook | Human Notes for AI agent (if empty, no notes / ready to implement) |
 |---|---|---|---|---|---|
-| F-MONEY-01 | Pay a bill with the actual amount | Money | small | high | Enter real amount at pay-time for variable bills |
-| F-MONEY-02 | Daily spend pace indicator | Money | small | high | "$X/day until payday" derived from Safe-to-Spend |
-| F-MONEY-03 | Bucket rollover | Money | medium | high | Carry unspent bucket limit into next period |
-| F-MONEY-04 | Credit card due-date tracking + reminders | Money | medium | high | Push reminder before a card's statement due date |
-| F-MONEY-05 | Subscriptions / recurring-spend dashboard | Money | medium | high | "$X/month on subscriptions" rollup |
-| F-MONEY-06 | Monthly Money Recap | Money | suite | high | Budget-vs-actual close-out, Weekly Recap's money sibling |
-| F-MONEY-07 | Sweep Safe-to-Spend leftover into a savings goal | Money | small | medium | One-tap move unallocated leftover to a goal |
-| F-MONEY-08 | Archive an account instead of hard-deleting | Money | small | medium | Soft-delete preserves transaction history fidelity |
-| F-MONEY-09 | Net worth history + trend chart | Money | medium | medium | Daily net-worth snapshot + Trends chart |
-| F-MONEY-10 | Export transactions to CSV | Money | tweak | medium | Self-service transaction export for taxes/reconciliation |
-| F-MONEY-11 | quickAddBillPay | Money | medium | medium | "Hey Siri, I paid rent" voice bill-pay |
-| F-MONEY-12 | Duplicate a calendar item | Money | tweak | low | Pre-fill add-form from an existing bill/item |
-| F-MONEY-13 | Shared expense splitting / IOU tracking | Money | large | high | Adult↔adult "who owes whom" Settle-Up view |
+| F-MONEY-01 | Pay a bill with the actual amount | Money | small | high | Enter real amount at pay-time for variable bills | |
+| F-MONEY-02 | Daily spend pace indicator | Money | small | high | "$X/day until payday" derived from Safe-to-Spend | |
+| F-MONEY-03 | Bucket rollover | Money | medium | high | Carry unspent bucket limit into next period | Optional, user settings flag |
+| F-MONEY-04 | Credit card due-date tracking + reminders | Money | medium | high | Push reminder before a card's statement due date | Optional, user settings flag like all push notifications|
+| F-MONEY-05 | Subscriptions / recurring-spend dashboard | Money | medium | high | "$X/month on subscriptions" rollup | |
+| F-MONEY-06 | Monthly Money Recap | Money | suite | high | Budget-vs-actual close-out, Weekly Recap's money sibling | |
+| F-MONEY-07 | Sweep Safe-to-Spend leftover into a savings goal | Money | small | medium | One-tap move unallocated leftover to a goal | |
+| F-MONEY-08 | Archive an account instead of hard-deleting | Money | small | medium | Soft-delete preserves transaction history fidelity | |
+| F-MONEY-09 | Net worth history + trend chart | Money | medium | medium | Daily net-worth snapshot + Trends chart | |
+| F-MONEY-10 | Export transactions to CSV | Money | tweak | medium | Self-service transaction export for taxes/reconciliation | |
+| F-MONEY-11 | quickAddBillPay | Money | medium | medium | "Hey Siri, I paid rent" voice bill-pay | |
+| F-MONEY-12 | Duplicate a calendar item | Money | tweak | low | Pre-fill add-form from an existing bill/item | |
+| F-MONEY-13 | Shared expense splitting / IOU tracking | Money | large | high | Adult↔adult "who owes whom" Settle-Up view | Tie into email for users without accounts to get them to create an account (e.g. User enters an expense, taps split bill option, email goes to non-user letting them know the split amount and hten providing a one tap way to create an account |
 | F-HABITS-01 | Habit pause / vacation mode | Habits & Gamification | medium | high | Planned multi-day break without burning freeze tokens |
-| F-HABITS-02 | Streak milestone celebrations | Habits & Gamification | medium | high | Distinct toast at 7/30/100/365-day streaks |
-| F-HABITS-03 | Content-aware per-habit reminder push | Habits & Gamification | medium | high | List actual incomplete habits + per-habit mute |
-| F-HABITS-04 | Export habit history to CSV | Habits & Gamification | small | low | Same pattern as F-MONEY-10, habit data |
-| F-HABITS-05 | Archive a habit | Habits & Gamification | small | medium | Retire a habit without losing streak/points history |
-| F-HABITS-06 | Completion notes & mood | Habits & Gamification | small | medium | Lightweight journal on each habit submission |
-| F-HABITS-07 | Day-of-week completion pattern chart | Habits & Gamification | small | medium | Free, always-on non-AI insight chart |
-| F-HABITS-08 | "At risk today" streak filter chip | Habits & Gamification | tweak | medium | Triage which habits need attention right now |
-| F-HABITS-09 | Bulk "catch up yesterday's habits" | Habits & Gamification | small | medium | One tap completes yesterday's forgotten habits |
-| F-HABITS-10 | Nudge a housemate (partner-nudge) | Habits & Gamification | medium | high | Merged habits+notifications idea; ad-hoc peer push |
-| F-HABITS-11 | Custom color tags per habit category | Habits & Gamification | tweak | low | Bucket-color pattern reused for habit categories |
-| F-HABITS-12 | Per-member attribution + leaderboard | Habits & Gamification | large | high | Who actually did the shared chore, adult version |
-| F-HABITS-13 | Photo-verified habit completion (Gemini vision) | Habits & Gamification | suite | high | AI plausibility check on a chore photo |
-| F-MEALS-01 | Cost-per-meal tracking | Meals & Shopping | medium | high | "This week's dinners cost ~$87" |
-| F-MEALS-02 | Meal-plan gap reminder push | Meals & Shopping | medium | medium | Sunday nudge when dinners are unplanned |
-| F-MEALS-03 | Dietary/allergy household profile | Meals & Shopping | medium | medium | Standing constraint auto-applied to AI meal calls |
-| F-MEALS-04 | "Cook at home" habit auto-credit | Meals & Shopping | small | medium | Marking a meal cooked auto-toggles a linked habit |
-| F-MEALS-05 | Leftover / "use it up" nudge | Meals & Shopping | tweak | medium | Stale catalog items surfaced on the shopping list |
-| F-MEALS-06 | Recipe rating prompt after cooking | Meals & Shopping | tweak | medium | Inline star-rate right after marking cooked |
-| F-MEALS-07 | Multi-store shopping route ordering | Meals & Shopping | small | medium | Group + order shopping list by store visit order |
-| F-MEALS-08 | Recipe tag filter + smart collections | Meals & Shopping | small | medium | Browse 50+ recipes with tag chips + smart filters |
-| F-MEALS-09 | Multi-item paste import to shopping list | Meals & Shopping | small | medium | Paste an ingredient block, parse into items |
-| F-MEALS-10 | "Repeat last week's shop" | Meals & Shopping | tweak | medium | Re-add everything purchased on the last trip |
-| F-MEALS-11 | Portion-scaling (servings multiplier) | Meals & Shopping | tweak | medium | Scale ingredient quantities for the shopping handoff |
-| F-MEALS-12 | Recipe photo attachment | Meals & Shopping | small | low | Personal photo on a saved recipe |
-| F-MEALS-13 | Shopping list collaborative presence | Meals & Shopping | small | low | "Sam is shopping" live indicator |
-| F-MEALS-14 | Weekly meal-plan + shopping print export | Meals & Shopping | tweak | low | Fridge-friendly print view of the week |
-| F-TODO-01 | Recurring / repeating to-dos | To-Dos & Lists | large | high | #1 flagged gap; auto-spawn next instance on completion |
-| F-TODO-02 | Completion points for every member | To-Dos & Lists | medium | high | Extend kid-only to-do points to any assignee |
-| F-TODO-03 | Task templates ("Quick Task Lists") | To-Dos & Lists | medium | high | QuickStockList pattern applied to chores |
-| F-TODO-04 | Chore rotation & fairness suite | To-Dos & Lists | suite | high | Rotating assignment + fairness indicator |
-| F-TODO-05 | "Who does what" completion analytics | To-Dos & Lists | large | medium | Per-member completion/on-time-rate bar chart |
-| F-TODO-06 | Photo-to-tasklist | To-Dos & Lists | small | medium | Snap a whiteboard/note into multiple to-dos |
-| F-TODO-07 | quickAddTodo iOS Shortcuts endpoint | To-Dos & Lists | medium | medium | Siri phrase creates a to-do |
-| F-TODO-08 | Subtask checklist within a task | To-Dos & Lists | medium | medium | Steps inside one to-do instead of many top-level tasks |
-| F-TODO-09 | Assignee filter chips | To-Dos & Lists | small | medium | One-tap filter to a single member's tasks |
-| F-TODO-10 | Batch reassign in FAB | To-Dos & Lists | small | medium | Bulk move tasks from one person to another |
-| F-TODO-11 | Instant undo toast on completion | To-Dos & Lists | tweak | medium | DeleteUndoToast pattern ported to task completion |
-| F-TODO-12 | Sort control for sections/quadrants | To-Dos & Lists | tweak | low | Due date / Alphabetical / Assignee sort |
-| F-TODO-13 | Notes indicator + inline expand | To-Dos & Lists | tweak | low | Surface the already-stored `notes` field on the row |
-| F-DASH-01 | Dashboard universal AI quick-capture bar | Dashboard & AI | medium | high | Natural-language capture without opening a modal |
-| F-DASH-02 | AI Daily Briefing push notification | Dashboard & AI | suite | high | Proactive one-sentence morning summary push |
-| F-DASH-03 | Habit Coach card | Dashboard & AI | medium | high | Wires up already-shipped `analyzeHabitPatterns` |
-| F-DASH-04 | Itemized receipt line-item splitting | Dashboard & AI | large | high | Split a mixed-category receipt into several transactions |
-| F-DASH-05 | Scoped insight regeneration | Dashboard & AI | small | medium | Spending / Habits / Surprise-me insight lens |
-| F-DASH-06 | AI usage transparency meter | Dashboard & AI | small | medium | "X of Y AI requests used today" |
-| F-DASH-07 | Streaks-at-risk quick actions in recap | Dashboard & AI | small | medium | "Mark done today" button inline in the recap drawer |
-| F-DASH-08 | Point-rebalance nudge | Dashboard & AI | medium | medium | Wires up already-shipped `analyzeHabitPoints` |
-| F-DASH-09 | Shareable weekly recap card | Dashboard & AI | medium | medium | Spotify-Wrapped-style shareable image |
-| F-DASH-10 | "Explain this number" tap-to-ask AI | Dashboard & AI | medium | medium | On-demand one-sentence explanation of a stat |
-| F-DASH-11 | Insight thumbs up/down feedback | Dashboard & AI | tweak | medium | First quality signal on AI insight output |
-| F-DASH-12 | Insight archive filter and search | Dashboard & AI | small | low | Filter/search past insights |
-| F-DASH-13 | Tappable PulseStrip cells | Dashboard & AI | tweak | low | Spent/Consistency cells become navigation shortcuts |
-| F-NOTIF-01 | Quiet hours / do-not-disturb window | Notifications & Server Jobs | small | high | Global DND across all push categories |
-| F-NOTIF-02 | In-app notification inbox/history | Notifications & Server Jobs | medium | high | Bell icon feed of past pushes |
-| F-NOTIF-03 | Digest mode | Notifications & Server Jobs | medium | medium | One consolidated daily push instead of several |
-| F-NOTIF-04 | FCM token health & multi-device UI | Notifications & Server Jobs | small | medium | See/revoke registered push devices |
-| F-NOTIF-05 | Notification action buttons | Notifications & Server Jobs | medium | medium | "Mark Paid"/"Snooze" inline on the push itself |
-| F-NOTIF-06 | Smart bill-reminder lead time | Notifications & Server Jobs | small | medium | Suggest lead time from pay-cycle cadence |
-| F-NOTIF-07 | Web App Badging | Notifications & Server Jobs | small | medium | Unread count on the installed PWA icon |
-| F-NOTIF-08 | Low-balance alert tuning | Notifications & Server Jobs | small | medium | Percent/trend thresholds, not just a flat dollar amount |
-| F-NOTIF-09 | Weekly recap push teaser | Notifications & Server Jobs | tweak | low | Real headline stat in the push body |
-| F-NOTIF-10 | Per-type vibration pattern | Notifications & Server Jobs | tweak | low | Distinguish urgency by feel |
-| F-NOTIF-11 | Snooze a reminder type for N days | Notifications & Server Jobs | tweak | low | Temporary snooze vs. permanent disable |
-| F-PLAT-01 | PWA install prompt capture + banner | Platform & Growth | medium | high | Custom "Add to Home Screen" banner |
-| F-PLAT-02 | Freemium usage-limit nudge banners | Platform & Growth | large | high | In-context upgrade prompts at entitlement boundaries |
-| F-PLAT-03 | Post-onboarding setup checklist widget | Platform & Growth | medium | high | Dismissible activation-depth checklist |
-| F-PLAT-04 | In-app waitlist capture | Platform & Growth | medium | medium | Code-only alternative to a landing page |
-| F-PLAT-05 | Stripe customer billing portal | Platform & Growth | medium | medium | Self-serve card update/cancel via Stripe Portal |
-| F-PLAT-06 | Trial period on Stripe checkout | Platform & Growth | small | medium | 14-day free trial, data model already supports it |
-| F-PLAT-07 | Module visibility presets | Platform & Growth | small | medium | One-tap "Finance only"/"Everything" toggle bundles |
-| F-PLAT-08 | Regenerate invite code | Platform & Growth | small | medium | Rotate a leaked household invite code |
-| F-PLAT-09 | Feature-flag household allowlist targeting | Platform & Growth | medium | medium | Soft-launch a flag to specific households first |
-| F-PLAT-10 | GA4 user properties for segmentation | Platform & Growth | small | medium | Segment analytics by plan/module shape |
-| F-PLAT-11 | Onboarding funnel analytics | Platform & Growth | small | medium | Per-step drop-off events, not just one completion event |
-| F-PLAT-12 | Plan badge + limits summary in Settings | Platform & Growth | tweak | low | Surface `getPlan()`/`getLimits()` to end users |
-| F-PLAT-13 | "What's New" changelog drawer | Platform & Growth | small | low | Release highlights keyed off `APP_VERSION` |
-| F-XCUT-01 | Household activity log / audit trail | Cross-Cutting | medium | high | Who-did-what-when feed across every domain |
-| F-XCUT-02 | Dashboard widget customization | Cross-Cutting | medium | medium | Reorder/hide cards, persisted per-member |
-| F-XCUT-03 | Unified trash / recently-deleted recovery | Cross-Cutting | medium | medium | 30-day soft-delete + restore across 5+ domains |
-| F-XCUT-04 | Full household data export/backup (JSON) | Cross-Cutting | small | medium | One-click portable backup of everything |
-| F-XCUT-05 | Self-serve "Leave household" | Cross-Cutting | small | medium | Non-admin members can leave without an admin |
-| F-XCUT-06 | Accessibility: text size + high-contrast | Cross-Cutting | small | medium | Font scale + high-contrast theme variant |
+| F-HABITS-02 | Streak milestone celebrations | Habits & Gamification | medium | high | Distinct toast at 7/30/100/365-day streaks | Tie these into specific rewards (e.g. 30 day streak milestone = unlock reward, etc.)
+| F-HABITS-03 | Content-aware per-habit reminder push | Habits & Gamification | medium | high | List actual incomplete habits + per-habit mute | Off by default for habits, user an toggle on for specific habits |
+| F-HABITS-04 | Export habit history to CSV | Habits & Gamification | small | low | Same pattern as F-MONEY-10, habit data | |
+| F-HABITS-05 | Archive a habit | Habits & Gamification | small | medium | Retire a habit without losing streak/points history | |
+| F-HABITS-06 | Completion notes & mood | Habits & Gamification | small | medium | Lightweight journal on each habit submission | Add a toggle-able push notification, user-controlled flag in settings, and one tap open-reflection-drawer to save (tie these into insights, somehow) |
+| F-HABITS-07 | Day-of-week completion pattern chart | Habits & Gamification | small | medium | Free, always-on non-AI insight chart | |
+| F-HABITS-08 | "At risk today" streak filter chip | Habits & Gamification | tweak | medium | Triage which habits need attention right now | |
+| F-HABITS-09 | Bulk "catch up yesterday's habits" | Habits & Gamification | small | medium | One tap completes yesterday's forgotten habits | |
+| F-HABITS-10 | Nudge a housemate (partner-nudge) | Habits & Gamification | medium | high | Merged habits+notifications idea; ad-hoc peer push | |
+| F-HABITS-11 | Custom color tags per habit category | Habits & Gamification | tweak | low | Bucket-color pattern reused for habit categories | |
+| F-HABITS-12 | Per-member attribution + leaderboard | Habits & Gamification | large | high | Who actually did the shared chore, adult version | |
+| F-HABITS-13 | Photo-verified habit completion (Gemini vision) | Habits & Gamification | suite | high | AI plausibility check on a chore photo | Hold off for now |
+| F-MEALS-01 | Cost-per-meal tracking | Meals & Shopping | medium | high | "This week's dinners cost ~$87" | How do we do this without adding a ton of friction? |
+| F-MEALS-02 | Meal-plan gap reminder push | Meals & Shopping | medium | medium | Sunday nudge when dinners are unplanned | User-settings flag |
+| F-MEALS-03 | Dietary/allergy household profile | Meals & Shopping | medium | medium | Standing constraint auto-applied to AI meal calls | |
+| F-MEALS-04 | "Cook at home" habit auto-credit | Meals & Shopping | small | medium | Marking a meal cooked auto-toggles a linked habit | |
+| F-MEALS-05 | Leftover / "use it up" nudge | Meals & Shopping | tweak | medium | Stale catalog items surfaced on the shopping list | Hold off for now |
+| F-MEALS-06 | Recipe rating prompt after cooking | Meals & Shopping | tweak | medium | Inline star-rate right after marking cooked | |
+| F-MEALS-07 | Multi-store shopping route ordering | Meals & Shopping | small | medium | Group + order shopping list by store visit order | |
+| F-MEALS-08 | Recipe tag filter + smart collections | Meals & Shopping | small | medium | Browse 50+ recipes with tag chips + smart filters | |
+| F-MEALS-09 | Multi-item paste import to shopping list | Meals & Shopping | small | medium | Paste an ingredient block, parse into items | |
+| F-MEALS-10 | "Repeat last week's shop" | Meals & Shopping | tweak | medium | Re-add everything purchased on the last trip | |
+| F-MEALS-11 | Portion-scaling (servings multiplier) | Meals & Shopping | tweak | medium | Scale ingredient quantities for the shopping handoff | |
+| F-MEALS-12 | Recipe photo attachment | Meals & Shopping | small | low | Personal photo on a saved recipe | Make sure we appropriately compress image size |
+| F-MEALS-13 | Shopping list collaborative presence | Meals & Shopping | small | low | "Sam is shopping" live indicator | How would we even track this? |
+| F-MEALS-14 | Weekly meal-plan + shopping print export | Meals & Shopping | tweak | low | Fridge-friendly print view of the week | |
+| F-TODO-01 | Recurring / repeating to-dos | To-Dos & Lists | large | high | #1 flagged gap; auto-spawn next instance on completion | |
+| F-TODO-02 | Completion points for every member | To-Dos & Lists | medium | high | Extend kid-only to-do points to any assignee | |
+| F-TODO-03 | Task templates ("Quick Task Lists") | To-Dos & Lists | medium | high | QuickStockList pattern applied to chores | |
+| F-TODO-04 | Chore rotation & fairness suite | To-Dos & Lists | suite | high | Rotating assignment + fairness indicator | |
+| F-TODO-05 | "Who does what" completion analytics | To-Dos & Lists | large | medium | Per-member completion/on-time-rate bar chart | |
+| F-TODO-06 | Photo-to-tasklist | To-Dos & Lists | small | medium | Snap a whiteboard/note into multiple to-dos | |
+| F-TODO-07 | quickAddTodo iOS Shortcuts endpoint | To-Dos & Lists | medium | medium | Siri phrase creates a to-do | |
+| F-TODO-08 | Subtask checklist within a task | To-Dos & Lists | medium | medium | Steps inside one to-do instead of many top-level tasks | |
+| F-TODO-09 | Assignee filter chips | To-Dos & Lists | small | medium | One-tap filter to a single member's tasks | |
+| F-TODO-10 | Batch reassign in FAB | To-Dos & Lists | small | medium | Bulk move tasks from one person to another | |
+| F-TODO-11 | Instant undo toast on completion | To-Dos & Lists | tweak | medium | DeleteUndoToast pattern ported to task completion | |
+| F-TODO-12 | Sort control for sections/quadrants | To-Dos & Lists | tweak | low | Due date / Alphabetical / Assignee sort | |
+| F-TODO-13 | Notes indicator + inline expand | To-Dos & Lists | tweak | low | Surface the already-stored `notes` field on the row | |
+| F-DASH-01 | Dashboard universal AI quick-capture bar | Dashboard & AI | medium | high | Natural-language capture without opening a modal | Hold off for now |
+| F-DASH-02 | AI Daily Briefing push notification | Dashboard & AI | suite | high | Proactive one-sentence morning summary push | |
+| F-DASH-03 | Habit Coach card | Dashboard & AI | medium | high | Wires up already-shipped `analyzeHabitPatterns` | |
+| F-DASH-04 | Itemized receipt line-item splitting | Dashboard & AI | large | high | Split a mixed-category receipt into several transactions | |
+| F-DASH-05 | Scoped insight regeneration | Dashboard & AI | small | medium | Spending / Habits / Surprise-me insight lens | |
+| F-DASH-06 | AI usage transparency meter | Dashboard & AI | small | medium | "X of Y AI requests used today" | |
+| F-DASH-07 | Streaks-at-risk quick actions in recap | Dashboard & AI | small | medium | "Mark done today" button inline in the recap drawer | |
+| F-DASH-08 | Point-rebalance nudge | Dashboard & AI | medium | medium | Wires up already-shipped `analyzeHabitPoints` | |
+| F-DASH-09 | Shareable weekly recap card | Dashboard & AI | medium | medium | Spotify-Wrapped-style shareable image | |
+| F-DASH-10 | "Explain this number" tap-to-ask AI | Dashboard & AI | medium | medium | On-demand one-sentence explanation of a stat | |
+| F-DASH-11 | Insight thumbs up/down feedback | Dashboard & AI | tweak | medium | First quality signal on AI insight output | I like this a lot but we need to then be able to use the data to improve the AI prompts and responses automatically/dynamically, right? |
+| F-DASH-12 | Insight archive filter and search | Dashboard & AI | small | low | Filter/search past insights | |
+| F-DASH-13 | Tappable PulseStrip cells | Dashboard & AI | tweak | low | Spent/Consistency cells become navigation shortcuts | |
+| F-NOTIF-01 | Quiet hours / do-not-disturb window | Notifications & Server Jobs | small | high | Global DND across all push categories | |
+| F-NOTIF-02 | In-app notification inbox/history | Notifications & Server Jobs | medium | high | Bell icon feed of past pushes | |
+| F-NOTIF-03 | Digest mode | Notifications & Server Jobs | medium | medium | One consolidated daily push instead of several | |
+| F-NOTIF-04 | FCM token health & multi-device UI | Notifications & Server Jobs | small | medium | See/revoke registered push devices | |
+| F-NOTIF-05 | Notification action buttons | Notifications & Server Jobs | medium | medium | "Mark Paid"/"Snooze" inline on the push itself | |
+| F-NOTIF-06 | Smart bill-reminder lead time | Notifications & Server Jobs | small | medium | Suggest lead time from pay-cycle cadence | |
+| F-NOTIF-07 | Web App Badging | Notifications & Server Jobs | small | medium | Unread count on the installed PWA icon | |
+| F-NOTIF-08 | Low-balance alert tuning | Notifications & Server Jobs | small | medium | Percent/trend thresholds, not just a flat dollar amount | |
+| F-NOTIF-09 | Weekly recap push teaser | Notifications & Server Jobs | tweak | low | Real headline stat in the push body | |
+| F-NOTIF-10 | Per-type vibration pattern | Notifications & Server Jobs | tweak | low | Distinguish urgency by feel | |
+| F-NOTIF-11 | Snooze a reminder type for N days | Notifications & Server Jobs | tweak | low | Temporary snooze vs. permanent disable | |
+| F-PLAT-01 | PWA install prompt capture + banner | Platform & Growth | medium | high | Custom "Add to Home Screen" banner | |
+| F-PLAT-02 | Freemium usage-limit nudge banners | Platform & Growth | large | high | In-context upgrade prompts at entitlement boundaries | Connected to flipping the web app to paid model |
+| F-PLAT-03 | Post-onboarding setup checklist widget | Platform & Growth | medium | high | Dismissible activation-depth checklist | |
+| F-PLAT-04 | In-app waitlist capture | Platform & Growth | medium | medium | Code-only alternative to a landing page | |
+| F-PLAT-05 | Stripe customer billing portal | Platform & Growth | medium | medium | Self-serve card update/cancel via Stripe Portal | |
+| F-PLAT-06 | Trial period on Stripe checkout | Platform & Growth | small | medium | 14-day free trial, data model already supports it | |
+| F-PLAT-07 | Module visibility presets | Platform & Growth | small | medium | One-tap "Finance only"/"Everything" toggle bundles | Yes, but more options such as 'Lifestyle' or 'Habit's or something like that and 'Meals & Lists' or 'Productivity' and others that dynamically set the UI/UX |
+| F-PLAT-08 | Regenerate invite code | Platform & Growth | small | medium | Rotate a leaked household invite code | |
+| F-PLAT-09 | Feature-flag household allowlist targeting | Platform & Growth | medium | medium | Soft-launch a flag to specific households first | |
+| F-PLAT-10 | GA4 user properties for segmentation | Platform & Growth | small | medium | Segment analytics by plan/module shape | |
+| F-PLAT-11 | Onboarding funnel analytics | Platform & Growth | small | medium | Per-step drop-off events, not just one completion event | |
+| F-PLAT-12 | Plan badge + limits summary in Settings | Platform & Growth | tweak | low | Surface `getPlan()`/`getLimits()` to end users | |
+| F-PLAT-13 | "What's New" changelog drawer | Platform & Growth | small | low | Release highlights keyed off `APP_VERSION` | |
+| F-XCUT-01 | Household activity log / audit trail | Cross-Cutting | medium | high | Who-did-what-when feed across every domain | |
+| F-XCUT-02 | Dashboard widget customization | Cross-Cutting | medium | medium | Reorder/hide cards, persisted per-member | |
+| F-XCUT-03 | Unified trash / recently-deleted recovery | Cross-Cutting | medium | medium | 30-day soft-delete + restore across 5+ domains | |
+| F-XCUT-04 | Full household data export/backup (JSON) | Cross-Cutting | small | medium | One-click portable backup of everything | |
+| F-XCUT-05 | Self-serve "Leave household" | Cross-Cutting | small | medium | Non-admin members can leave without an admin | |
+| F-XCUT-06 | Accessibility: text size + high-contrast | Cross-Cutting | small | medium | Font scale + high-contrast theme variant | |
 
 ---
 
