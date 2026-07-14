@@ -21,6 +21,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import { cn } from '@/utils/cn';
 import Input from '@/components/ui/Input';
+import Textarea from '@/components/ui/Textarea';
 import BatchRescheduleModal from '@/components/modals/BatchRescheduleModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Section } from '@/components/todos/Section';
@@ -165,6 +166,9 @@ const ToDosPage: React.FC = () => {
   const [completeByDate, setCompleteByDate] = useState(getLocalDateString());
   const [assignedTo, setAssignedTo] = useState('');
   const [isImportant, setIsImportant] = useState(false);
+  // Shared notes surfaced in the editor drawer — visible to all household members
+  // (to-dos are already shared). Capped to match the firestore.rules validator.
+  const [notes, setNotes] = useState('');
 
   // Sticky quick-add bar state — mirrors the shopping list's inline add. The
   // input is desktop-only autofocused (useAutoFocus skips touch so it doesn't
@@ -300,6 +304,7 @@ const ToDosPage: React.FC = () => {
     const defaultAssignee = currentUser?.uid ?? (members.length > 0 ? members[0]!.uid : ''); // members[0] is defined: guarded by members.length > 0
     setAssignedTo(defaultAssignee);
     setIsImportant(false);
+    setNotes('');
     setEditingId(null);
     setIsAddModalOpen(true);
   }, [quickText, currentUser, members]);
@@ -344,6 +349,7 @@ const ToDosPage: React.FC = () => {
     setCompleteByDate(todo.completeByDate);
     setAssignedTo(todo.assignedTo);
     setIsImportant(todo.isImportant === true);
+    setNotes(todo.notes ?? '');
     setEditingId(todo.id);
     setIsAddModalOpen(true);
   }, []);
@@ -556,12 +562,14 @@ const ToDosPage: React.FC = () => {
     setIsSaving(true);
     try {
       const trimmedText = text.trim();
+      const trimmedNotes = notes.trim();
       if (editingId) {
         await updateToDo(editingId, {
           text: trimmedText,
           completeByDate,
           assignedTo,
-          isImportant
+          isImportant,
+          notes: trimmedNotes
         });
         toast.success('Task updated');
       } else {
@@ -571,7 +579,8 @@ const ToDosPage: React.FC = () => {
           completeByDate,
           assignedTo,
           isCompleted: false,
-          isImportant
+          isImportant,
+          notes: trimmedNotes
         });
         toast.success('Task added');
         setQuickText(''); // the detailed form consumed the carried-over text
@@ -1086,6 +1095,17 @@ const ToDosPage: React.FC = () => {
             onChange={(e) => setCompleteByDate(e.target.value)}
             icon={<Calendar size={18} />}
             className="appearance-none"
+          />
+
+          <Textarea
+            id="task-notes"
+            label="Notes"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Add details, links, or context (optional)"
+            maxLength={1000}
+            showCount
+            rows={3}
           />
 
           {/* Eisenhower importance — a household judgment call, deliberately a

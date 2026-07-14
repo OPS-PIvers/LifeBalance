@@ -943,3 +943,43 @@ describe('sumPendingSpend — account-aware exclusion', () => {
     expect(withCheckingCharge).toBe(4950);
   });
 });
+
+describe('F-MONEY-08 — archived accounts excluded from Safe-to-Spend', () => {
+  const accountsWithArchivedChecking: Account[] = [
+    { id: 'chk', name: 'Checking', type: 'checking', balance: 5000, lastUpdated: '' },
+    { id: 'old-chk', name: 'Old Checking', type: 'checking', balance: 10000, lastUpdated: '', archived: true },
+  ];
+
+  const tx = (overrides: Partial<Transaction> = {}): Transaction => ({
+    id: 'tx',
+    amount: 50,
+    merchant: 'Shop',
+    category: 'Groceries',
+    date: '2026-06-10',
+    status: 'pending_review',
+    isRecurring: false,
+    source: 'manual',
+    autoCategorized: false,
+    payPeriodId: '2026-06-01',
+    ...overrides,
+  });
+
+  it('excludes an archived checking account balance from Safe-to-Spend', () => {
+    const sts = calculateSafeToSpend(accountsWithArchivedChecking, [], '', []);
+    // Only the active $5000 checking account counts; the archived $10000
+    // account's stale balance must not keep inflating Safe-to-Spend.
+    expect(sts).toBe(5000);
+  });
+
+  it('excludes a pending transaction tagged to an archived checking account', () => {
+    expect(
+      sumPendingSpend([tx({ accountId: 'old-chk' })], '2026-06-01', accountsWithArchivedChecking)
+    ).toBe(0);
+  });
+
+  it('still counts a pending transaction tagged to an active checking account', () => {
+    expect(
+      sumPendingSpend([tx({ accountId: 'chk' })], '2026-06-01', accountsWithArchivedChecking)
+    ).toBe(50);
+  });
+});

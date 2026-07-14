@@ -1086,3 +1086,84 @@ describe('transaction comments (Plan 23 — author-only, nested under a transact
     );
   });
 });
+
+describe('todos (Eisenhower importance + shared notes — additive optional fields)', () => {
+  const TODO = 'todo-seed';
+
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = asFirestore(ctx.firestore());
+      await setDoc(doc(db, 'households', H1, 'todos', TODO), {
+        text: 'Take out the trash',
+        completeByDate: '2026-06-22',
+        isCompleted: false,
+        assignedTo: BOB,
+        createdBy: BOB,
+      });
+    });
+  });
+
+  // Regression: the `isImportant` star-toggle field was absent from the todos
+  // hasOnly() whitelist, so every create/update carrying it was rejected with
+  // "Failed to save to-do." Both create and update must now accept it.
+  it('a member can create an important to-do (isImportant: true)', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'todos', 'todo-important'), {
+        text: 'Pay rent',
+        completeByDate: '2026-07-01',
+        isCompleted: false,
+        assignedTo: BOB,
+        isImportant: true,
+        createdBy: BOB,
+      }),
+    );
+  });
+
+  it('a member can toggle importance on an existing to-do', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'todos', TODO), {
+        isImportant: true,
+      }),
+    );
+  });
+
+  it('rejects a non-boolean isImportant', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'todos', TODO), {
+        isImportant: 'yes',
+      }),
+    );
+  });
+
+  it('a member can save shared notes on a to-do', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'todos', TODO), {
+        notes: 'Bins go out Tuesday night',
+      }),
+    );
+  });
+
+  it('rejects notes exceeding the 1000-char cap', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'todos', TODO), {
+        notes: 'x'.repeat(1001),
+      }),
+    );
+  });
+
+  it('a member can set managed-kid completion points', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'todos', TODO), {
+        points: 5,
+      }),
+    );
+  });
+
+  it('rejects an update carrying an unknown field (storage abuse)', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'todos', TODO), {
+        injected: 'x'.repeat(5000),
+      }),
+    );
+  });
+});

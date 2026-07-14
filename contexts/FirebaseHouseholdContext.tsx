@@ -31,6 +31,7 @@ import {
   Account,
   BudgetBucket,
   Transaction,
+  SplitParticipant,
   CalendarItem,
   Habit,
   Challenge,
@@ -112,6 +113,8 @@ import {
   makeMergeTransactions,
   makeKeepBothTransactions,
   makeSplitTransaction,
+  makeSetTransactionSplit,
+  makeMarkSplitSettled,
 } from '@/contexts/household/mutations/transactionMutations';
 import {
   makeGetTransactionComments,
@@ -563,7 +566,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   useEffect(() => { householdSettingsRef.current = householdSettings; }, [householdSettings]);
 
   // Habit Actions Hook
-  const habitActions = useHabitActions(householdId, currentUser, habits, householdSettings);
+  const habitActions = useHabitActions(householdId, currentUser, habits, householdSettings, rewards);
 
   // Derived state (Optimized to prevent extra re-renders)
   const currentPeriodId = householdSettings?.lastPaycheckDate || '';
@@ -1563,6 +1566,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeAccountMutations({ db, householdId, user }).deleteAccount(id);
   }, [householdId, user]);
 
+  const archiveAccount = useCallback(async (id: string) => {
+    await makeAccountMutations({ db, householdId, user }).archiveAccount(id);
+  }, [householdId, user]);
+
+  const unarchiveAccount = useCallback(async (id: string) => {
+    await makeAccountMutations({ db, householdId, user }).unarchiveAccount(id);
+  }, [householdId, user]);
+
   const updateAccountOrder = useCallback(async (accountId: string, newOrder: number) => {
     await makeAccountMutations({ db, householdId, user }).updateAccountOrder(accountId, newOrder);
   }, [householdId, user]);
@@ -1705,6 +1716,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       db, householdId, user, transactions, householdSettings, accounts,
     }).splitTransaction(originalTransactionId, newTransactions);
   }, [householdId, user, transactions, householdSettings, accounts]);
+
+  const setTransactionSplit = useCallback(async (transactionId: string, split: SplitParticipant[] | null) => {
+    await makeSetTransactionSplit({ db, householdId }).setTransactionSplit(transactionId, split);
+  }, [householdId]);
+
+  const markSplitSettled = useCallback(async (transactionId: string, participantKey: string, settled?: boolean) => {
+    await makeMarkSplitSettled({ db, householdId, transactions }).markSplitSettled(transactionId, participantKey, settled);
+  }, [householdId, transactions]);
 
   // Plan 23 — transaction comments. ON-DEMAND fetch (no listener); the
   // households/{id}/transactions/{txnId}/comments subcollection has no
@@ -2115,6 +2134,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setAccountGoal,
     setAccountCardLast4,
     deleteAccount,
+    archiveAccount,
+    unarchiveAccount,
     updateAccountOrder,
     reorderAccounts,
     addSavingsGoal,
@@ -2136,6 +2157,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateTransaction,
     deleteTransaction,
     splitTransaction,
+    setTransactionSplit,
+    markSplitSettled,
     mergeTransactions,
     keepBothTransactions,
     getTransactionComments,
@@ -2145,11 +2168,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     safeToSpend, safeToSpendBreakdown, accounts, buckets, savingsGoals, netWorthHistory, calendarItems, transactions, currentPeriodId, bucketSpentMap, bucketHistory,
     transactionWindowStart, isLoadingOlderTransactions, hasMoreTransactions, loadOlderTransactions, loadAllTransactions,
     isLoadingOlderBucketHistory, hasMoreBucketHistory, loadAllBucketHistory,
-    addAccount, updateAccountBalance, setAccountGoal, setAccountCardLast4, deleteAccount, updateAccountOrder, reorderAccounts,
+    addAccount, updateAccountBalance, setAccountGoal, setAccountCardLast4, deleteAccount, archiveAccount, unarchiveAccount, updateAccountOrder, reorderAccounts,
     addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, contributeToGoal,
     addBucket, updateBucket, deleteBucket, updateBucketLimit, reallocateBucket,
     addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem,
     addTransaction, updateTransactionCategory, updateTransaction, deleteTransaction, splitTransaction,
+    setTransactionSplit, markSplitSettled,
     mergeTransactions, keepBothTransactions, getTransactionComments, addTransactionComment, deleteTransactionComment,
   ]);
 

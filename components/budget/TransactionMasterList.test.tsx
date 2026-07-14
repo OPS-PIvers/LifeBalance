@@ -21,9 +21,13 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => {
   };
 });
 
-vi.mock('@/utils/exportUtils', () => ({
-  generateCsvExport: vi.fn(),
-}));
+vi.mock('@/utils/exportUtils', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/utils/exportUtils')>();
+  return {
+    ...actual,
+    generateCsvExport: vi.fn(),
+  };
+});
 
 vi.mock('react-hot-toast', () => ({
   default: { success: vi.fn(), error: vi.fn() },

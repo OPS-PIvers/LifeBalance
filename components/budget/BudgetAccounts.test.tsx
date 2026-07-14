@@ -60,6 +60,8 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => {
     setAccountGoal: setAccountGoalMock,
     setAccountCardLast4: vi.fn(),
     deleteAccount: deleteAccountMock,
+    archiveAccount: vi.fn(),
+    unarchiveAccount: vi.fn(),
     updateAccountOrder: vi.fn(),
     reorderAccounts: reorderAccountsMock,
     savingsGoals: [],
@@ -93,6 +95,11 @@ vi.mock('lucide-react', () => ({
   ChevronDown: () => <span data-testid="chevron-down-icon" />,
   MoreVertical: () => <span data-testid="more-vertical-icon" />,
   PiggyBank: () => <span data-testid="piggy-bank-icon" />,
+  Archive: () => <span data-testid="archive-icon" />,
+  ArchiveRestore: () => <span data-testid="archive-restore-icon" />,
+  Landmark: () => <span data-testid="landmark-icon" />,
+  CreditCard: () => <span data-testid="credit-card-icon" />,
+  Banknote: () => <span data-testid="banknote-icon" />,
 }));
 
 // Mock Modal to avoid portal/fixed positioning issues in tests
