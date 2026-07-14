@@ -251,7 +251,11 @@ export function makePayCalendarItem(deps: {
 }) {
   const { db, householdId, user, accounts, calendarItems, householdSettings, handlePaycheckApproval } = deps;
 
-  const payCalendarItem = async (itemId: string, accountId: string, opts?: MutationOpts) => {
+  const payCalendarItem = async (
+    itemId: string,
+    accountId: string,
+    opts?: MutationOpts & { actualAmount?: number }
+  ) => {
     if (!householdId || !user) return;
 
     try {
@@ -334,10 +338,20 @@ export function makePayCalendarItem(deps: {
           : priorPeriodId;
       const payPeriodId = getPayPeriodForTransaction(transactionDate, effectiveLastPaycheck);
 
+      // What was ACTUALLY paid — an explicit override (variable bills edited at
+      // pay-time) wins over the item's budgeted amount. Non-finite / non-positive
+      // overrides are ignored rather than corrupting the balance. The recurring
+      // TEMPLATE's own amount is never touched, so future occurrences keep the
+      // budgeted figure.
+      const paidAmount =
+        opts?.actualAmount !== undefined && Number.isFinite(opts.actualAmount) && opts.actualAmount > 0
+          ? roundMoney(opts.actualAmount)
+          : item.amount;
+
       // Account balance delta. Using increment() (a server-side delta) instead of
       // writing an absolute balance computed from local state prevents lost
       // updates when household members act concurrently.
-      const balanceDelta = item.type === 'expense' ? -item.amount : item.amount;
+      const balanceDelta = item.type === 'expense' ? -paidAmount : paidAmount;
 
       // 1. Create or update the paid calendar item
       if (isRecurringInstance) {
@@ -345,7 +359,7 @@ export function makePayCalendarItem(deps: {
         const newCalendarRef = doc(collection(db, `households/${householdId}/calendarItems`));
         payBatch.set(newCalendarRef, {
           title: item.title,
-          amount: item.amount,
+          amount: paidAmount,
           date: specificDate,
           type: item.type,
           isPaid: true,
@@ -354,9 +368,11 @@ export function makePayCalendarItem(deps: {
           createdBy: user.uid,
         });
       } else {
-        // Mark non-recurring item as paid
+        // Mark non-recurring item as paid — recording the actual amount so the
+        // calendar reflects what really cleared.
         payBatch.update(doc(db, `households/${householdId}/calendarItems`, itemId), {
           isPaid: true,
+          amount: paidAmount,
         });
       }
 
@@ -371,7 +387,7 @@ export function makePayCalendarItem(deps: {
       // "the account you used last time" for this bill going forward.
       const newTransactionRef = doc(collection(db, `households/${householdId}/transactions`));
       payBatch.set(newTransactionRef, {
-        amount: item.amount,
+        amount: paidAmount,
         merchant: item.title,
         category: category,
         date: transactionDate,

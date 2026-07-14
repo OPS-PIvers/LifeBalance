@@ -850,6 +850,81 @@ describe('FirebaseHouseholdContext — payCalendarItem atomicity', () => {
       status: 'verified',
     });
   });
+
+  it('an actualAmount override drives the balance delta, transaction, and paid item (variable bills)', async () => {
+    renderProvider();
+
+    const account: Account = {
+      id: 'acc1',
+      name: 'Checking',
+      type: 'checking',
+      balance: 100000,
+      lastUpdated: new Date().toISOString(),
+    } as Account;
+    emitCollection(`${householdPath}/accounts`, [docSnap('acc1', account)]);
+
+    const item: CalendarItem = {
+      id: 'cal1',
+      title: 'Electric Bill',
+      amount: 5000,
+      date: format(new Date(), 'yyyy-MM-dd'),
+      type: 'expense',
+      isPaid: false,
+      isRecurring: false,
+    } as CalendarItem;
+    emitCollection(`${householdPath}/calendarItems`, [docSnap('cal1', item)]);
+
+    await act(async () => {
+      await captured.value!.finance.payCalendarItem('cal1', 'acc1', { actualAmount: 5250 });
+    });
+
+    const batch = batches[0]!;
+
+    // Paid item records the ACTUAL amount (calendar shows what really cleared).
+    const calOps = opsForPath(batch, `${householdPath}/calendarItems/cal1`);
+    expect(calOps[0]!.data).toMatchObject({ isPaid: true, amount: 5250 });
+
+    // Balance moves by the actual amount, not the budgeted one.
+    const accOps = opsForPath(batch, `${householdPath}/accounts/acc1`);
+    expect(accOps[0]!.data!['balance']).toEqual({ __increment: -5250 });
+
+    // Transaction carries the actual amount.
+    const txSets = batch.ops.filter(
+      o => o.kind === 'set' && o.path.startsWith(`${householdPath}/transactions`)
+    );
+    expect(txSets[0]!.data).toMatchObject({ amount: 5250 });
+  });
+
+  it('a non-positive actualAmount is ignored and the budgeted amount is used', async () => {
+    renderProvider();
+
+    const account: Account = {
+      id: 'acc1',
+      name: 'Checking',
+      type: 'checking',
+      balance: 100000,
+      lastUpdated: new Date().toISOString(),
+    } as Account;
+    emitCollection(`${householdPath}/accounts`, [docSnap('acc1', account)]);
+
+    const item: CalendarItem = {
+      id: 'cal1',
+      title: 'Electric Bill',
+      amount: 5000,
+      date: format(new Date(), 'yyyy-MM-dd'),
+      type: 'expense',
+      isPaid: false,
+      isRecurring: false,
+    } as CalendarItem;
+    emitCollection(`${householdPath}/calendarItems`, [docSnap('cal1', item)]);
+
+    await act(async () => {
+      await captured.value!.finance.payCalendarItem('cal1', 'acc1', { actualAmount: 0 });
+    });
+
+    const accOps = opsForPath(batches[0]!, `${householdPath}/accounts/acc1`);
+    expect(accOps[0]!.data!['balance']).toEqual({ __increment: -5000 });
+  });
 });
 
 describe('FirebaseHouseholdContext — autoApplyFreezes (Plan 25)', () => {
