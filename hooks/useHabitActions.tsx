@@ -461,7 +461,7 @@ export const useHabitActions = (
         multiplierApplied: multiplier,
         createdBy: currentUser.uid,
         createdAt: new Date().toISOString(),
-        ...(note ? { note: note.slice(0, 280) } : {}),
+        ...(note && note.trim() ? { note: note.trim().slice(0, 280) } : {}),
         ...(mood ? { mood } : {}),
       };
 

@@ -47,6 +47,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
   const [formCount, setFormCount] = useState('1');
   const [formNote, setFormNote] = useState('');
   const [formMood, setFormMood] = useState<HabitMood | undefined>(undefined);
+  const [isSaving, setIsSaving] = useState(false);
 
   const loadSubmissions = useCallback(async () => {
     setIsLoading(true);
@@ -87,6 +88,8 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
       return;
     }
 
+    if (isSaving) return;
+    setIsSaving(true);
     const timestamp = `${formDate}T${formTime}:00`;
     await addHabitSubmission(habit.id, count, timestamp, formNote, formMood);
     await loadSubmissions();
@@ -98,6 +101,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
     setFormCount('1');
     setFormNote('');
     setFormMood(undefined);
+    setIsSaving(false);
   };
 
   const handleUpdate = async () => {
@@ -543,6 +547,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                     variant="secondary"
                     onClick={() => setIsAddMode(false)}
                     className="flex-1"
+                    disabled={isSaving}
                   >
                     Cancel
                   </Button>
@@ -550,6 +555,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                     variant="warning"
                     onClick={handleAdd}
                     className="flex-1"
+                    disabled={isSaving}
                   >
                     Add
                   </Button>

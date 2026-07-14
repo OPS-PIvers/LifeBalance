@@ -91,7 +91,7 @@ const ReflectionDrawer: React.FC<ReflectionDrawerProps> = ({ isOpen, onClose, ha
         />
 
         <div className="flex gap-2">
-          <Button variant="secondary" className="flex-1" onClick={handleClose}>
+          <Button variant="secondary" className="flex-1" onClick={handleClose} disabled={isSaving}>
             Skip
           </Button>
           <Button variant="primary" className="flex-1" onClick={handleSave} isLoading={isSaving}>
