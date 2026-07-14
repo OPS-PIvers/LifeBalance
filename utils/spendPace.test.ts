@@ -1,5 +1,28 @@
 import { describe, it, expect } from 'vitest';
-import { calculateDailyPace, calculateBucketDailyPace } from '@/utils/spendPace';
+import { calculateDailyPace, calculateBucketDailyPace, getDaysLeft } from '@/utils/spendPace';
+
+describe('getDaysLeft', () => {
+  it('returns null when nextPaycheckDate is null', () => {
+    expect(getDaysLeft(null, '2026-07-14')).toBeNull();
+  });
+
+  it('returns null when the next paycheck is today', () => {
+    expect(getDaysLeft('2026-07-14', '2026-07-14')).toBeNull();
+  });
+
+  it('returns null when the next paycheck is in the past', () => {
+    expect(getDaysLeft('2026-07-10', '2026-07-14')).toBeNull();
+  });
+
+  it('returns the correct number of days remaining', () => {
+    expect(getDaysLeft('2026-07-21', '2026-07-14')).toBe(7);
+  });
+
+  it('defaults `today` to the current local date when omitted', () => {
+    const result = getDaysLeft('2099-01-01');
+    expect(result).not.toBeNull();
+  });
+});
 
 describe('calculateDailyPace', () => {
   it('returns null when nextPaycheckDate is null', () => {
@@ -62,25 +85,15 @@ describe('calculateDailyPace', () => {
 });
 
 describe('calculateBucketDailyPace', () => {
-  it('returns null when nextPaycheckDate is null', () => {
-    expect(calculateBucketDailyPace(200, { nextPaycheckDate: null }, '2026-07-14')).toBeNull();
-  });
-
-  it('returns null when the window has already closed', () => {
-    expect(
-      calculateBucketDailyPace(200, { nextPaycheckDate: '2026-07-14' }, '2026-07-14')
-    ).toBeNull();
+  it('returns null when daysLeft is null', () => {
+    expect(calculateBucketDailyPace(200, null)).toBeNull();
   });
 
   it('divides bucket remaining by days remaining', () => {
-    expect(
-      calculateBucketDailyPace(140, { nextPaycheckDate: '2026-07-21' }, '2026-07-14')
-    ).toBe(20);
+    expect(calculateBucketDailyPace(140, 7)).toBe(20);
   });
 
   it('supports a negative (over-budget) remaining', () => {
-    expect(
-      calculateBucketDailyPace(-70, { nextPaycheckDate: '2026-07-21' }, '2026-07-14')
-    ).toBe(-10);
+    expect(calculateBucketDailyPace(-70, 7)).toBe(-10);
   });
 });

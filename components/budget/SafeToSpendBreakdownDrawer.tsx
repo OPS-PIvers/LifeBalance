@@ -6,7 +6,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
 import ProgressBar from '@/components/ui/ProgressBar';
 import { computeSafeToSpendDistribution } from '@/utils/safeToSpendDistribution';
-import { calculateDailyPace, calculateBucketDailyPace } from '@/utils/spendPace';
+import { calculateDailyPace, calculateBucketDailyPace, getDaysLeft } from '@/utils/spendPace';
 
 /** Fill color by spend ratio — same ramp as BudgetHistory's bucket drawer. */
 const progressColor = (spent: number, limit: number) => {
@@ -44,6 +44,11 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
   const distribution = useMemo(
     () => (breakdown ? computeSafeToSpendDistribution(breakdown, buckets, bucketSpentMap) : null),
     [breakdown, buckets, bucketSpentMap]
+  );
+
+  const daysLeft = useMemo(
+    () => (breakdown ? getDaysLeft(breakdown.nextPaycheckDate) : null),
+    [breakdown]
   );
 
   const dailyPace = useMemo(
@@ -106,7 +111,7 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
             {rows.map(row => {
               const percent =
                 row.limit > 0 ? Math.max(0, (row.spent / row.limit) * 100) : 100;
-              const bucketPace = calculateBucketDailyPace(row.remaining, breakdown);
+              const bucketPace = calculateBucketDailyPace(row.remaining, daysLeft);
               return (
                 <Row key={row.id} className="flex-col items-stretch gap-1.5">
                   <div className="flex items-baseline justify-between gap-3">
