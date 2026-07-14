@@ -1,4 +1,4 @@
-import React, { useMemo, memo, useRef } from 'react';
+import React, { useMemo, memo, useRef, useState } from 'react';
 import {
   CalendarClock, Receipt, Check, Trash2, Clock, ListTodo, AlertCircle, Pencil, Tag
 } from 'lucide-react';
@@ -12,6 +12,7 @@ import {
 import { HouseholdMember, BudgetBucket, Transaction, ToDo } from '@/types/schema';
 import { suggestCategoryForTransaction } from '@/utils/actionQueueSmart';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
+import { roundMoney } from '@/utils/money';
 import { cn } from '@/utils/cn';
 import { haptic } from '@/utils/haptics';
 import { Button } from '@/components/ui/Button';
@@ -26,7 +27,8 @@ interface ActionQueueItemProps {
   item: ActionQueueItem;
   isExpanded: boolean;
   setExpandedId: (id: string | null) => void;
-  setPayModalItemId: (id: string | null) => void;
+  /** Open the pay confirmation sheet with the (possibly edited) amount. */
+  openPaySheet: (id: string, amount: number) => void;
 
   // Mobile triage: multi-select mode (bulk approve/defer/delete)
   selectionMode: boolean;
@@ -66,7 +68,7 @@ const areActionQueueItemPropsEqual = (
   // Check if expanded state or handlers changed
   if (prev.isExpanded !== next.isExpanded ||
       prev.setExpandedId !== next.setExpandedId ||
-      prev.setPayModalItemId !== next.setPayModalItemId) {
+      prev.openPaySheet !== next.openPaySheet) {
     return false;
   }
 
@@ -143,7 +145,7 @@ const areActionQueueItemPropsEqual = (
 // We use isExpanded boolean instead of passing expandedId string to ensure stable props for unexpanded items.
 // Updated 2026-02-19: Accepts context values as props to avoid re-rendering on unrelated context updates.
 export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
-  item, isExpanded, setExpandedId, setPayModalItemId,
+  item, isExpanded, setExpandedId, openPaySheet,
   selectionMode,
   isSelected,
   onToggleSelect,
@@ -274,6 +276,19 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
   const handleExpand = () => setExpandedId(item.id);
 
   const handleClose = () => setExpandedId(null);
+
+  // Editable pay amount for calendar items — lives HERE, before any decision,
+  // so a variable bill can be corrected first and then approved. Kept as the
+  // raw input string (partial entries like "12." shouldn't fight the user) and
+  // re-seeded on each expand via render-time derived state.
+  const [payAmountInput, setPayAmountInput] = useState('');
+  const [wasExpanded, setWasExpanded] = useState(false);
+  if (isExpanded !== wasExpanded) {
+    setWasExpanded(isExpanded);
+    if (isExpanded && isCalendarQueueItem(item)) setPayAmountInput(String(item.amount));
+  }
+  const parsedPayAmount = roundMoney(parseFloat(payAmountInput));
+  const payAmountValid = Number.isFinite(parsedPayAmount) && parsedPayAmount > 0;
 
   // Compute icon and styles only when item type changes
   const { iconComponent, iconClasses } = useMemo(() => {
@@ -440,11 +455,47 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
             <p className="text-xs text-brand-500 dark:text-brand-400 mb-3">
               {item.type === 'expense' ? 'Confirm this expense' : 'Confirm this income'} has hit your account:
             </p>
+
+            {/* Editable amount — fix a variable bill's real charge BEFORE
+                deciding what to do with it. */}
+            <div className="mb-3">
+              <label
+                htmlFor={`queue-pay-amount-${item.id}`}
+                className="block text-xs font-semibold text-brand-500 dark:text-brand-400 uppercase tracking-wider mb-1.5"
+              >
+                Amount
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-brand-400 dark:text-brand-450">
+                  $
+                </span>
+                <input
+                  id={`queue-pay-amount-${item.id}`}
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  value={payAmountInput}
+                  onChange={e => setPayAmountInput(e.target.value)}
+                  className="w-full pl-7 pr-3 py-2.5 font-mono tabular-nums text-sm font-semibold rounded-card border border-brand-200 dark:border-brand-600 bg-white dark:bg-brand-800 text-brand-900 dark:text-brand-50 focus:outline-hidden focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500"
+                />
+              </div>
+              {!payAmountValid && (
+                <p className="mt-1 text-xs text-money-neg dark:text-money-negDark">Enter an amount above $0.</p>
+              )}
+              {payAmountValid && parsedPayAmount !== item.amount && (
+                <p className="mt-1 text-xs text-brand-400 dark:text-brand-450">
+                  Scheduled for {fmt(item.amount)} — {item.type === 'expense' ? 'paying' : 'receiving'} {fmt(parsedPayAmount)}.
+                </p>
+              )}
+            </div>
+
             <div className="flex flex-col sm:flex-row gap-2">
               <Button
                 variant="success"
+                disabled={!payAmountValid}
                 onClick={() => {
-                  setPayModalItemId(item.id);
+                  openPaySheet(item.id, parsedPayAmount);
                   setExpandedId(null);
                 }}
                 className="w-full sm:flex-1"
