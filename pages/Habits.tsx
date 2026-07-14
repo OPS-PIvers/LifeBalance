@@ -28,9 +28,10 @@ import { useDeepLinkHighlight } from '@/hooks/useDeepLinkHighlight';
 import { useScrollToHighlight } from '@/hooks/useScrollToHighlight';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { isHabitCompletedInCurrentPeriod, signedHabitPoints } from '@/utils/habitLogic';
+import { getCatchUpEligibleHabits } from '@/utils/catchUpHabits';
 import { generateCsvExport } from '@/utils/exportUtils';
 import toast from 'react-hot-toast';
-import { format } from 'date-fns';
+import { format, subDays } from 'date-fns';
 
 // Allowed Habits sub-tabs. Module-level so the array identity is stable and
 // other screens can deep-link via `navigate('/habits', { state: { tab } })`.
@@ -174,7 +175,7 @@ const KidChoresGroup: React.FC<{ kid: HouseholdMember; chores: Habit[] }> = ({ k
 };
 
 const Habits: React.FC = () => {
-  const { habits } = useGamification();
+  const { habits, toggleHabit } = useGamification();
   const { isLoading, members } = useHouseholdCore();
   const kidModeEnabled = useKidModeEnabled();
   const powerToolsEnabled = usePowerToolsEnabled();
@@ -189,6 +190,7 @@ const Habits: React.FC = () => {
   // habit row selected in SearchOverlay, on top of the tab-level jump above.
   const highlightHabitId = useDeepLinkHighlight();
   useScrollToHighlight(highlightHabitId);
+  const [isCatchingUp, setIsCatchingUp] = useState(false);
 
   // Group Habits by Category (with Sorting)
   // Sort habits by order first. Exclude kid chores (assignedTo set) up front so the
@@ -202,6 +204,15 @@ const Habits: React.FC = () => {
       .sort((a, b) => (a.order ?? 999) - (b.order ?? 999)),
     [habits]
   );
+
+  // F-HABITS-09: habits eligible for the "Catch up yesterday" bulk action —
+  // derived from the same parent-visible/unassigned set as `sortedHabits` so
+  // kid chores (assigned to a managed member) are never bulk-completed here.
+  const catchUpEligibleHabits = useMemo(() => {
+    const today = getLocalDateString();
+    const yesterday = getLocalDateString(subDays(new Date(), 1));
+    return getCatchUpEligibleHabits(sortedHabits, today, yesterday);
+  }, [sortedHabits]);
 
   // Extract categories from sorted habits (Set preserves insertion order which is now sorted order)
   const categories = useMemo<string[]>(
@@ -279,6 +290,29 @@ const Habits: React.FC = () => {
     }
   };
 
+  // Sequentially (not Promise.all) so we don't fire a burst of concurrent
+  // writeBatches — mirrors the per-habit toggleHabit atomicity guarantee
+  // without racing multiple batches against the same household points doc.
+  const handleCatchUpYesterday = async () => {
+    if (isCatchingUp || catchUpEligibleHabits.length === 0) return;
+    setIsCatchingUp(true);
+    let caughtUp = 0;
+    try {
+      for (const habit of catchUpEligibleHabits) {
+        await toggleHabit(habit.id, 'up');
+        caughtUp += 1;
+      }
+      if (caughtUp > 0) {
+        toast.success(`Caught up ${caughtUp} habit${caughtUp === 1 ? '' : 's'} from yesterday`);
+      }
+    } catch (error) {
+      console.error('[handleCatchUpYesterday] Failed:', error);
+      toast.error('Failed to catch up all habits');
+    } finally {
+      setIsCatchingUp(false);
+    }
+  };
+
   const hasNoHabits = habits.length === 0;
 
   return (
@@ -319,7 +353,9 @@ const Habits: React.FC = () => {
                 onAdjust={() => setIsSmartAdjustOpen(true)}
                 onReorder={() => setIsSmartReorderOpen(true)}
                 onManage={() => setIsWizardOpen(true)}
+                onCatchUpYesterday={handleCatchUpYesterday}
                 actionsDisabled={hasNoHabits}
+                catchUpDisabled={catchUpEligibleHabits.length === 0 || isCatchingUp}
                 showSmartTools={powerToolsEnabled}
               />
             </div>
