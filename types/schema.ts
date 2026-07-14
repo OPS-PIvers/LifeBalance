@@ -123,6 +123,11 @@ export interface Account {
   plaidBalanceAvailable?: number;
   /** ISO timestamp of the last successful balance read for this account. */
   plaidBalanceUpdatedAt?: string;
+  /** Soft-delete flag (F-MONEY-08). An archived account is hidden from active
+   *  lists, net worth, and Safe-to-Spend eligibility, but historical
+   *  transactions keep resolving to it correctly (unlike a hard delete, which
+   *  falls back to the checking account via `resolveTargetAccount`). */
+  archived?: boolean;
 }
 
 /**
