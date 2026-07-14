@@ -6,6 +6,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
 import ProgressBar from '@/components/ui/ProgressBar';
 import { computeSafeToSpendDistribution } from '@/utils/safeToSpendDistribution';
+import { calculateDailyPace, calculateBucketDailyPace } from '@/utils/spendPace';
 
 /** Fill color by spend ratio — same ramp as BudgetHistory's bucket drawer. */
 const progressColor = (spent: number, limit: number) => {
@@ -43,6 +44,11 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
   const distribution = useMemo(
     () => (breakdown ? computeSafeToSpendDistribution(breakdown, buckets, bucketSpentMap) : null),
     [breakdown, buckets, bucketSpentMap]
+  );
+
+  const dailyPace = useMemo(
+    () => (breakdown ? calculateDailyPace(breakdown) : null),
+    [breakdown]
   );
 
   // Guard: no breakdown yet (cold load) → render nothing (mirrors SafeToSpendDetail).
@@ -87,6 +93,11 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
               </span>
             </Row>
           </SurfaceList>
+          {dailyPace !== null && (
+            <p className="px-1 pt-2 text-xs font-semibold text-brand-700 dark:text-brand-200">
+              ≈ {fmt(dailyPace)}/day until payday
+            </p>
+          )}
         </Section>
 
         {/* 2. Distribution across buckets + leftover. */}
@@ -95,6 +106,7 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
             {rows.map(row => {
               const percent =
                 row.limit > 0 ? Math.max(0, (row.spent / row.limit) * 100) : 100;
+              const bucketPace = calculateBucketDailyPace(row.remaining, breakdown);
               return (
                 <Row key={row.id} className="flex-col items-stretch gap-1.5">
                   <div className="flex items-baseline justify-between gap-3">
@@ -122,7 +134,11 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
                       {fmt(row.spent)} of {fmt(row.limit)} spent
                     </span>
                     <span className={row.isOver ? 'text-money-neg dark:text-money-negDark' : ''}>
-                      {row.isOver ? 'Over budget' : 'Remaining'}
+                      {row.isOver
+                        ? 'Over budget'
+                        : bucketPace !== null
+                          ? `${fmt(bucketPace)}/day until payday`
+                          : 'Remaining'}
                     </span>
                   </div>
                 </Row>
