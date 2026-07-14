@@ -10,7 +10,8 @@ const UPCOMING_DAYS_WINDOW = 14;
 const MAX_BILLS_TO_SHOW = 3;
 
 interface UpcomingBillsWidgetProps {
-  onPay: (id: string) => void;
+  /** `amount` is the bill's budgeted amount — it seeds the pay sheet's editable field. */
+  onPay: (id: string, amount: number) => void;
 }
 
 export const UpcomingBillsWidget: React.FC<UpcomingBillsWidgetProps> = ({ onPay }) => {
@@ -74,7 +75,7 @@ export const UpcomingBillsWidget: React.FC<UpcomingBillsWidgetProps> = ({ onPay 
                 {fmt(bill.amount, { decimals: 0 })}
               </span>
               <button
-                onClick={() => onPay(bill.id)}
+                onClick={() => onPay(bill.id, bill.amount)}
                 className="p-2 text-money-pos dark:text-money-posDark bg-money-bgPos hover:brightness-95 dark:bg-money-pos/15 dark:hover:bg-money-pos/25 rounded-btn transition-[filter,colors] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
                 title="Pay Bill"
                 aria-label={`Pay ${bill.title}`}

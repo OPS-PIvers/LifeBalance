@@ -23,22 +23,30 @@ import { SafeToSpendDetail } from '@/components/budget/SafeToSpendDetail';
  */
 const MoneyOverview: React.FC = () => {
   const { payCalendarItem } = useFinance();
-  const [payModalItemId, setPayModalItemId] = useState<string | null>(null);
+  const [payModalItem, setPayModalItem] = useState<{ id: string; amount: number } | null>(null);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-(--duration-base)">
-      <UpcomingBillsWidget onPay={setPayModalItemId} />
+      <UpcomingBillsWidget onPay={(id, amount) => setPayModalItem({ id, amount })} />
       <MoneyPulseWidget />
       <CategorySpendWidget />
       <SafeToSpendDetail />
 
-      {/* Pay sheet for calendar items (from the Upcoming bills widget) */}
+      {/* Pay sheet for calendar items (from the Upcoming bills widget) — the
+          amount is editable at pay-time for variable bills. */}
       <AccountPicker
-        isOpen={!!payModalItemId}
-        onClose={() => setPayModalItemId(null)}
-        onSelect={(accountId) => {
-          if (payModalItemId) payCalendarItem(payModalItemId, accountId);
-          setPayModalItemId(null);
+        isOpen={!!payModalItem}
+        onClose={() => setPayModalItem(null)}
+        editableAmount={payModalItem?.amount}
+        onSelect={(accountId, amount) => {
+          if (payModalItem) {
+            payCalendarItem(
+              payModalItem.id,
+              accountId,
+              amount !== undefined ? { actualAmount: amount } : undefined
+            );
+          }
+          setPayModalItem(null);
         }}
       />
     </div>

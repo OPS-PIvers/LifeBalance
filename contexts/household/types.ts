@@ -164,7 +164,11 @@ export interface HouseholdContextType {
   addCalendarItem: (item: CalendarItem) => Promise<void>;
   updateCalendarItem: (item: CalendarItem) => Promise<void>;
   deleteCalendarItem: (id: string, opts?: MutationOpts) => Promise<void>;
-  payCalendarItem: (itemId: string, accountId: string, opts?: MutationOpts) => Promise<void>;
+  /** Mark a calendar item paid/received. Optional `actualAmount` records what
+   *  was really paid (variable bills) — it drives the balance delta and the
+   *  created transaction (and the paid instance record) instead of the item's
+   *  budgeted `amount`; a recurring template's own amount is left untouched. */
+  payCalendarItem: (itemId: string, accountId: string, opts?: MutationOpts & { actualAmount?: number }) => Promise<void>;
   deferCalendarItem: (itemId: string, opts?: MutationOpts) => Promise<void>;
 
   // Transaction Actions

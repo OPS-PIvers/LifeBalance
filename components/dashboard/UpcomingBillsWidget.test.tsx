@@ -104,7 +104,8 @@ describe('UpcomingBillsWidget', () => {
     const payButton = screen.getByRole('button', { name: /Pay Rent/i });
     fireEvent.click(payButton);
 
-    expect(mockOnPay).toHaveBeenCalledWith('1');
+    // The budgeted amount rides along to seed the pay sheet's editable field.
+    expect(mockOnPay).toHaveBeenCalledWith('1', 1200);
   });
 
   it('filters out paid items and income', () => {

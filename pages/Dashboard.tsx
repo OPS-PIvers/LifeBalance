@@ -88,6 +88,13 @@ const Dashboard: React.FC = () => {
   // State for expansions/modals
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [payModalItemId, setPayModalItemId] = useState<string | null>(null);
+  // The calendar item behind the open pay sheet — seeds the sheet's editable
+  // amount field with the budgeted amount.
+  const payModalItem = useMemo(() => {
+    if (!payModalItemId) return null;
+    const queued = actionQueue.find(i => i.id === payModalItemId);
+    return queued && isCalendarQueueItem(queued) ? queued : null;
+  }, [actionQueue, payModalItemId]);
   // The credit card targeted by the "Pay down" quick action (opens the capture
   // form pre-tagged as a payment toward that card).
   const [payDownAccountId, setPayDownAccountId] = useState<string | null>(null);
@@ -521,12 +528,20 @@ const Dashboard: React.FC = () => {
         )}
       </Suspense>
 
-      {/* Pay sheet for calendar items */}
+      {/* Pay sheet for calendar items — the amount is editable at pay-time so a
+          variable bill can be approved with what was actually charged. */}
       <AccountPicker
         isOpen={!!payModalItemId}
         onClose={() => setPayModalItemId(null)}
-        onSelect={(accountId) => {
-          if (payModalItemId) payCalendarItem(payModalItemId, accountId);
+        editableAmount={payModalItem?.amount}
+        onSelect={(accountId, amount) => {
+          if (payModalItemId) {
+            payCalendarItem(
+              payModalItemId,
+              accountId,
+              amount !== undefined ? { actualAmount: amount } : undefined
+            );
+          }
           setPayModalItemId(null);
         }}
       />
