@@ -166,9 +166,12 @@ export function isHabitStale(
 ): boolean {
   try {
     // F-HABITS-01: a habit on a planned break is never stale (no reset penalty).
-    // Only decidable when a caller-local `today` is supplied (Cloud Functions run
-    // in UTC); without it, fall through to the legacy staleness check.
-    if (today && isHabitPaused(habit.pausedUntil, today)) return false;
+    // `pausedUntil` is a plain yyyy-MM-dd string comparison, so falling back to
+    // the UTC server date here (rather than skipping the check entirely) is
+    // safe even though Cloud Functions run in UTC — it can only be off by the
+    // pause boundary day, never cause a paused habit to be treated as active.
+    const activeToday = today || format(new Date(), "yyyy-MM-dd");
+    if (isHabitPaused(habit.pausedUntil, activeToday)) return false;
 
     if (!habit.lastUpdated) return true;
 
