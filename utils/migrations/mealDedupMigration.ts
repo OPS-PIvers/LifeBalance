@@ -118,6 +118,7 @@ export function mergeFormIntoMeal(existing: Meal, form: Partial<Meal>): Meal {
     ingredients: form.ingredients?.length ? form.ingredients : existing.ingredients,
     instructions: form.instructions?.length ? form.instructions : existing.instructions,
     recipeUrl: form.recipeUrl || existing.recipeUrl,
+    estimatedCost: form.estimatedCost ?? existing.estimatedCost,
     tags: form.tags?.length ? form.tags : existing.tags,
   };
 }

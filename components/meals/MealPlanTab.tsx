@@ -5,6 +5,7 @@ import { Plus, Trash2, Edit2, ChevronRight, ShoppingCart, Copy, CheckCircle2, Mo
 import { toastIcon } from '@/components/ui/toastIcon';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import { normalizeMealName, mergeFormIntoMeal } from '@/utils/migrations/mealDedupMigration';
+import { calculateWeeklyMealCost } from '@/utils/mealCost';
 import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
 import { IngredientSelectorModal } from './IngredientSelectorModal';
@@ -50,6 +51,7 @@ const mealToFormState = (meal: Meal, isClone: boolean = false): Partial<Meal> =>
   ingredients: meal.ingredients || [],
   instructions: meal.instructions || [],
   recipeUrl: meal.recipeUrl || '',
+  estimatedCost: meal.estimatedCost,
   tags: meal.tags || []
 });
 
@@ -475,6 +477,7 @@ const MealPlanTab: React.FC = () => {
                ingredients: currentMeal.ingredients || [],
                instructions: currentMeal.instructions || [],
                recipeUrl: currentMeal.recipeUrl || '',
+               estimatedCost: currentMeal.estimatedCost,
                tags: currentMeal.tags || [],
                rating: existingMeal?.rating ?? 0
            } as Meal);
@@ -505,6 +508,7 @@ const MealPlanTab: React.FC = () => {
                     ingredients: currentMeal.ingredients || [],
                     instructions: currentMeal.instructions || [],
                     recipeUrl: currentMeal.recipeUrl || '',
+                    estimatedCost: currentMeal.estimatedCost,
                     tags: currentMeal.tags || [],
                     rating: 0
                 });
@@ -704,6 +708,15 @@ const MealPlanTab: React.FC = () => {
     scrollStripTo(todayDateStr);
   }, [scrollStripTo, selectedDateStr]);
 
+  // Weekly dinner cost rollup (F-MEALS-01) — informational only, skips
+  // planned dinners without a linked meal or without an estimatedCost rather
+  // than blocking or counting them as $0.
+  const weekEndStr = useMemo(() => format(addDays(weekStart, 6), 'yyyy-MM-dd'), [weekStart]);
+  const weeklyDinnerCost = useMemo(
+    () => calculateWeeklyMealCost(mealPlan || [], meals, weekStartStr, weekEndStr, 'dinner'),
+    [mealPlan, meals, weekStartStr, weekEndStr]
+  );
+
   // Filtered + sorted meals for the selected day.
   const dayMeals = useMemo(
     () =>
@@ -858,6 +871,29 @@ const MealPlanTab: React.FC = () => {
             })}
         </div>
       </div>
+
+      {/* Weekly dinner cost rollup — shown only once at least one planned
+          dinner this week has an estimated cost set (owner-approved
+          zero-friction design: skip meals without a cost rather than block). */}
+      {weeklyDinnerCost.countWithCost > 0 && (
+          <div className="surface-section px-4 py-3 flex items-center gap-2 text-sm">
+              <span className="text-brand-600 dark:text-brand-300">
+                  Your dinners this week averaged{' '}
+                  <span className="font-bold text-brand-900 dark:text-brand-50 font-mono tabular-nums">
+                      ${weeklyDinnerCost.average!.toFixed(2)}
+                  </span>{' '}
+                  each
+                  {weeklyDinnerCost.countWithCost < weeklyDinnerCost.countTotal && (
+                      <span className="text-brand-400 dark:text-brand-450"> ({weeklyDinnerCost.countWithCost} of {weeklyDinnerCost.countTotal} priced)</span>
+                  )}
+                  {' · '}
+                  <span className="font-bold text-brand-900 dark:text-brand-50 font-mono tabular-nums">
+                      ${weeklyDinnerCost.total.toFixed(2)}
+                  </span>{' '}
+                  total
+              </span>
+          </div>
+      )}
 
       {/* Selected day agenda */}
       <div className="space-y-3">
