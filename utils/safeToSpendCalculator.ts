@@ -159,7 +159,7 @@ export const sumPendingSpend = (
   accounts: Account[] = []
 ): number => {
   const checkingIds = new Set(
-    accounts.filter(a => a.type === 'checking').map(a => a.id)
+    accounts.filter(a => a.type === 'checking' && !a.archived).map(a => a.id)
   );
   return sumMoney(
     transactions
@@ -196,9 +196,11 @@ export const calculateSafeToSpendBreakdownFromExpanded = (
   transactions: Transaction[] = []
 ): SafeToSpendBreakdown => {
   // 1. Available Checking Balance (Assets)
-  // STRICT: Only Checking. No Savings, No Credit.
+  // STRICT: Only Checking. No Savings, No Credit. Archived accounts (F-MONEY-08)
+  // are excluded too — a stale archived-checking balance must not keep
+  // counting toward Safe-to-Spend.
   const checkingBalance = sumMoney(
-    accounts.filter(a => a.type === 'checking').map(a => a.balance)
+    accounts.filter(a => a.type === 'checking' && !a.archived).map(a => a.balance)
   );
 
   // 2. Pending spend: current-period pending_review spend (income excluded,

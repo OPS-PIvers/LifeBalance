@@ -1559,6 +1559,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeAccountMutations({ db, householdId, user }).deleteAccount(id);
   }, [householdId, user]);
 
+  const archiveAccount = useCallback(async (id: string) => {
+    await makeAccountMutations({ db, householdId, user }).archiveAccount(id);
+  }, [householdId, user]);
+
+  const unarchiveAccount = useCallback(async (id: string) => {
+    await makeAccountMutations({ db, householdId, user }).unarchiveAccount(id);
+  }, [householdId, user]);
+
   const updateAccountOrder = useCallback(async (accountId: string, newOrder: number) => {
     await makeAccountMutations({ db, householdId, user }).updateAccountOrder(accountId, newOrder);
   }, [householdId, user]);
@@ -2111,6 +2119,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setAccountGoal,
     setAccountCardLast4,
     deleteAccount,
+    archiveAccount,
+    unarchiveAccount,
     updateAccountOrder,
     reorderAccounts,
     addSavingsGoal,
@@ -2141,7 +2151,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     safeToSpend, safeToSpendBreakdown, accounts, buckets, savingsGoals, netWorthHistory, calendarItems, transactions, currentPeriodId, bucketSpentMap, bucketHistory,
     transactionWindowStart, isLoadingOlderTransactions, hasMoreTransactions, loadOlderTransactions, loadAllTransactions,
     isLoadingOlderBucketHistory, hasMoreBucketHistory, loadAllBucketHistory,
-    addAccount, updateAccountBalance, setAccountGoal, setAccountCardLast4, deleteAccount, updateAccountOrder, reorderAccounts,
+    addAccount, updateAccountBalance, setAccountGoal, setAccountCardLast4, deleteAccount, archiveAccount, unarchiveAccount, updateAccountOrder, reorderAccounts,
     addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, contributeToGoal,
     addBucket, updateBucket, deleteBucket, updateBucketLimit, reallocateBucket,
     addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem,

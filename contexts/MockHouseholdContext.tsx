@@ -472,6 +472,16 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Account deleted');
   }, []);
 
+  const archiveAccount = useCallback(async (id: string) => {
+    setAccounts(prev => prev.map(a => (a.id === id ? { ...a, archived: true } : a)));
+    toast.success('Mock: Account archived');
+  }, []);
+
+  const unarchiveAccount = useCallback(async (id: string) => {
+    setAccounts(prev => prev.map(a => (a.id === id ? { ...a, archived: false } : a)));
+    toast.success('Mock: Account unarchived');
+  }, []);
+
   // Savings goal operations (Plan 24) — v1 manual contributions only, mirrors
   // savingsGoalMutations.ts's cents-safe math and completedAt transition.
   const addSavingsGoal = useCallback(async (goal: Omit<SavingsGoal, 'id' | 'createdAt' | 'completedAt'>) => {
@@ -1377,6 +1387,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     // Operations
     addAccount,
     deleteAccount,
+    archiveAccount,
+    unarchiveAccount,
     updateAccountBalance,
     setAccountGoal: noOp,
     setAccountCardLast4: noOp,

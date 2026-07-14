@@ -147,6 +147,10 @@ export interface HouseholdContextType {
    *  auto-route incoming Shortcut/Wells-Fargo-email transactions to this account. */
   setAccountCardLast4: (id: string, cardLast4: string) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
+  /** Soft-delete: hide from active lists/net worth/Safe-to-Spend while keeping
+   *  the account doc so historical transactions keep resolving to it. */
+  archiveAccount: (id: string) => Promise<void>;
+  unarchiveAccount: (id: string) => Promise<void>;
   updateAccountOrder: (accountId: string, newOrder: number) => Promise<void>;
   reorderAccounts: (orderedIds: string[]) => Promise<void>;
 
@@ -373,6 +377,7 @@ export type FinanceContextValue = Pick<HouseholdContextType,
   | 'loadOlderTransactions' | 'loadAllTransactions'
   | 'isLoadingOlderBucketHistory' | 'hasMoreBucketHistory' | 'loadAllBucketHistory'
   | 'addAccount' | 'updateAccountBalance' | 'setAccountGoal' | 'setAccountCardLast4' | 'deleteAccount'
+  | 'archiveAccount' | 'unarchiveAccount'
   | 'updateAccountOrder' | 'reorderAccounts'
   | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal'
   | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'reallocateBucket'
