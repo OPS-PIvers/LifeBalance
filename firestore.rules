@@ -636,6 +636,7 @@ service cloud.firestore {
                               request.resource.data.keys().hasOnly([
                                 'text', 'completeByDate', 'isCompleted', 'completedAt',
                                 'assignedTo', 'priority', 'notes', 'source',
+                                'isImportant', 'points',
                                 'createdBy', 'createdAt'
                               ]) &&
                               isValidString(request.resource.data.text, 500) &&
@@ -646,6 +647,10 @@ service cloud.firestore {
                               isValidOptionalString(request.resource.data.get('priority', null), 10) &&
                               isValidOptionalString(request.resource.data.get('notes', null), 1000) &&
                               isValidOptionalString(request.resource.data.get('source', null), 20) &&
+                              // Eisenhower importance flag (star toggle) — optional boolean
+                              (request.resource.data.get('isImportant', null) == null || isValidBoolean(request.resource.data.isImportant)) &&
+                              // Managed-kid completion credit (Plan 080c) — optional number
+                              isValidOptionalNumber(request.resource.data.get('points', null)) &&
                               // Metadata
                               (request.resource.data.get('createdBy', null) == null || request.resource.data.createdBy is string);
         allow delete: if isMemberOf(householdId);
