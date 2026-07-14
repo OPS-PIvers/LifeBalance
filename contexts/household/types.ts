@@ -228,6 +228,10 @@ export interface HouseholdContextType {
   reorderHabits: (updates: { id: string; order: number; category?: string }[]) => Promise<void>;
   toggleHabit: (id: string, direction: 'up' | 'down') => Promise<void>;
   resetHabit: (id: string) => Promise<void>;
+  /** F-HABITS-01: set (yyyy-MM-dd) or clear (null) a habit's planned-break end
+   *  date. A paused habit skips the auto-reset penalty and freeze-token
+   *  consumption, and its streak bridges the break. */
+  setHabitPause: (id: string, pausedUntil: string | null) => Promise<void>;
 
   // Habit Submission Actions
   addHabitSubmission: (habitId: string, count: number, timestamp?: string) => Promise<void>;
@@ -383,7 +387,7 @@ export type GamificationContextValue = Pick<HouseholdContextType,
   | 'activeChallenge' | 'challenges'
   | 'yearlyGoals' | 'activeYearlyGoals' | 'primaryYearlyGoal'
   | 'rewardsInventory' | 'freezeBank'
-  | 'addHabit' | 'updateHabit' | 'deleteHabit' | 'reorderHabits' | 'toggleHabit' | 'resetHabit'
+  | 'addHabit' | 'updateHabit' | 'deleteHabit' | 'reorderHabits' | 'toggleHabit' | 'resetHabit' | 'setHabitPause'
   | 'addHabitSubmission' | 'updateHabitSubmission' | 'deleteHabitSubmission' | 'getHabitSubmissions'
   | 'resetHabitDay'
   | 'updateChallenge' | 'addChallenge' | 'markChallengeComplete' | 'redeemReward'

@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Habit } from '@/types/schema';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
-import { X, Edit2, Trash2, Target, Calendar, Snowflake } from 'lucide-react';
+import { X, Edit2, Trash2, Target, Calendar, Snowflake, Pause, Play } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import HabitFormModal from '@/components/modals/HabitFormModal';
 import HabitSubmissionLogModal from '@/components/modals/HabitSubmissionLogModal';
@@ -16,7 +16,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { subDays } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { haptic } from '@/utils/haptics';
-import { getMultiplier, signedHabitPoints } from '@/utils/habitLogic';
+import { getMultiplier, signedHabitPoints, isHabitPaused } from '@/utils/habitLogic';
 import StreakFlame from './StreakFlame';
 import CountUp from './CountUp';
 
@@ -27,7 +27,7 @@ interface HabitCardProps {
 }
 
 const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDown }) => {
-  const { toggleHabit, deleteHabit, resetHabit, activeChallenge } = useGamification();
+  const { toggleHabit, deleteHabit, resetHabit, setHabitPause, activeChallenge } = useGamification();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
@@ -81,6 +81,9 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
   const yesterday = getLocalDateString(subDays(new Date(), 1));
   const isProtectedByFreeze = (habit.frozenDates ?? []).includes(yesterday);
 
+  // F-HABITS-01: while paused, the toggle is disabled and a badge shows the break.
+  const isPaused = isHabitPaused(habit);
+
   // Grouped-flat ROW: borderless and hairline-separated by the parent
   // SurfaceList (HabitCategoryList) — never a floating, individually-bordered
   // card. Hierarchy comes from spacing + a quiet active tint (money-pos /
@@ -103,6 +106,8 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
   );
 
   const handleCardClick = () => {
+    // F-HABITS-01: a paused habit is inert — taps don't increment it.
+    if (isPaused) return;
     // Fire tactile feedback based on whether this tap completes the habit.
     // Reaching (or staying at) the target counts as a "success"; otherwise it
     // is a light increment nudge. Negative habits always use the light pattern.
@@ -126,9 +131,17 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
     setIsMenuOpen(false);
   };
 
+  const handleResume = () => {
+    setHabitPause(habit.id, null);
+    setIsMenuOpen(false);
+  };
+
   // Shared action set for the desktop dropdown (Menu) and mobile Drawer.
   const menuItems: MenuItem[] = [
     { key: 'edit', label: 'Edit', icon: <Edit2 size={14} />, onSelect: handleEdit },
+    ...(isPaused
+      ? [{ key: 'resume', label: 'Resume', icon: <Play size={14} />, onSelect: handleResume } as MenuItem]
+      : []),
     { key: 'log', label: 'View Log', icon: <Calendar size={14} />, onSelect: handleViewLog },
     { key: 'delete', label: 'Delete', icon: <Trash2 size={14} />, tone: 'danger', onSelect: handleDelete },
   ];
@@ -230,6 +243,13 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
               </Badge>
             )}
 
+            {/* F-HABITS-01: planned break in effect */}
+            {isPaused && (
+              <Badge variant="default" size="sm" className="gap-1 text-habit-blue">
+                <Pause size={10} /> Paused until {habit.pausedUntil}
+              </Badge>
+            )}
+
             {/* Plan 25: yesterday's miss was absorbed by an auto-applied freeze */}
             {isProtectedByFreeze && (
               <Badge variant="default" size="sm" className="gap-1 text-habit-blue">
@@ -283,6 +303,16 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
           >
             Edit Habit
           </Button>
+          {isPaused && (
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-lg py-4"
+              leftIcon={<Play className="text-brand-400" />}
+              onClick={handleResume}
+            >
+              Resume Habit
+            </Button>
+          )}
           <Button
             variant="ghost"
             className="w-full justify-start text-lg py-4"
@@ -335,7 +365,9 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
   prev.habit.targetCount === next.habit.targetCount &&
   // Content compare (the provider rebuilds arrays each snapshot): drives the
   // "Protected" freeze badge.
-  (prev.habit.frozenDates ?? []).join(',') === (next.habit.frozenDates ?? []).join(',')
+  (prev.habit.frozenDates ?? []).join(',') === (next.habit.frozenDates ?? []).join(',') &&
+  // Drives the "Paused" badge, disabled toggle, and Resume action (F-HABITS-01).
+  prev.habit.pausedUntil === next.habit.pausedUntil
 );
 
 HabitCard.displayName = 'HabitCard';

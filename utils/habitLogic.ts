@@ -58,8 +58,14 @@ export const signedHabitPoints = (
  * @param habit - The habit to check (must contain id, period, and lastUpdated)
  * @returns true if the habit needs to be reset, false otherwise
  */
-export const isHabitStale = (habit: Pick<Habit, 'id' | 'period' | 'lastUpdated'>): boolean => {
+export const isHabitStale = (
+  habit: Pick<Habit, 'id' | 'period' | 'lastUpdated' | 'pausedUntil'>
+): boolean => {
   try {
+    // F-HABITS-01: a habit on a planned break is never stale — it's excluded
+    // from the auto-reset-to-0 penalty for the duration of the pause.
+    if (isHabitPaused(habit)) return false;
+
     // 1. Handle missing date
     if (!habit.lastUpdated) return true;
 
@@ -307,6 +313,82 @@ export const streakEndingOnWeek = (
 };
 
 /**
+ * F-HABITS-01 — safety cap on the number of synthesized pause-bridge dates, so a
+ * pause set implausibly far in the future can never build an unbounded array.
+ * ~13 months comfortably exceeds any realistic planned break.
+ */
+export const MAX_PAUSE_BRIDGE_DAYS = 400;
+
+/**
+ * True while a habit's planned break is still in effect (`pausedUntil >= today`).
+ * A paused habit is skipped by the auto-reset penalty and never burns a freeze
+ * token. `today` defaults to the caller's local date.
+ */
+export const isHabitPaused = (
+  habit: Pick<Habit, 'pausedUntil'>,
+  today: string = getLocalDateString(),
+): boolean => !!habit.pausedUntil && habit.pausedUntil >= today;
+
+/**
+ * F-HABITS-01 — synthesize the frozen-style bridge dates for a planned pause.
+ *
+ * Rather than duplicate streak math, a pause is expressed as extra "frozen"
+ * dates fed into the existing `calculateStreak`/`calculateWeeklyStreak` bridging
+ * mechanism: every day from just after the last pre-pause completion through
+ * `pausedUntil` is a bridge day (continuity preserved, but never a completion and
+ * never scored). This makes the streak survive the break and resume cleanly when
+ * the user completes the habit again afterward.
+ *
+ * The anchor is the latest completion STRICTLY BEFORE `today` (the last pre-pause
+ * completion) — never a completion made today, so completing the habit again on
+ * the pause-end day doesn't collapse the bridge and re-orphan the pre-pause
+ * streak. The bridge covers `(lastPre, pausedUntil]`, so it never extends below
+ * `lastPre` and therefore can't link an older, unrelated gap into the streak.
+ * Returns [] when there is nothing to bridge.
+ *
+ * MUST stay in lockstep with functions/src/quickAdd/streakLogic.ts.
+ *
+ * @param habit - Only `completedDates` and `pausedUntil` are read
+ * @param today - "Today" (YYYY-MM-DD, caller-local); defaults to the local date
+ * @returns Bridge dates (YYYY-MM-DD), newest first, bounded by MAX_PAUSE_BRIDGE_DAYS
+ */
+export const pauseBridgeDates = (
+  habit: Pick<Habit, 'completedDates' | 'pausedUntil'>,
+  today: string = getLocalDateString(),
+): string[] => {
+  const { pausedUntil } = habit;
+  if (!pausedUntil || habit.completedDates.length === 0) return [];
+
+  // Anchor on the last completion made BEFORE today — a resume completion on the
+  // pause-end day must not become the anchor (it would empty the bridge).
+  const prior = habit.completedDates.filter(d => d < today);
+  if (prior.length === 0) return [];
+  const lastPre = prior.reduce((a, b) => (a > b ? a : b));
+  if (pausedUntil <= lastPre) return []; // nothing to bridge
+
+  const out: string[] = [];
+  let d = parseISO(pausedUntil);
+  while (out.length < MAX_PAUSE_BRIDGE_DAYS) {
+    const ds = format(d, 'yyyy-MM-dd');
+    if (ds <= lastPre) break; // reached the pre-pause completion; gap is bridged
+    out.push(ds);
+    d = subDays(d, 1);
+  }
+  return out;
+};
+
+/**
+ * The bridging dates a habit's streak walk should treat as frozen: its stored
+ * auto-freeze `frozenDates` PLUS the synthesized pause bridge (F-HABITS-01). All
+ * period-aware streak helpers below route through this so pause and freeze share
+ * one bridging path.
+ */
+export const effectiveFrozenDates = (
+  habit: Pick<Habit, 'completedDates' | 'frozenDates' | 'pausedUntil'>,
+  today: string = getLocalDateString(),
+): string[] => [...(habit.frozenDates ?? []), ...pauseBridgeDates(habit, today)];
+
+/**
  * Period-aware streak helper: returns the current streak in the correct unit
  * (days for daily habits, ISO weeks for weekly habits).
  *
@@ -314,11 +396,13 @@ export const streakEndingOnWeek = (
  * earn week-based streaks while daily habit behaviour is completely unchanged.
  */
 export const streakForHabit = (
-  habit: Pick<Habit, 'period' | 'completedDates' | 'frozenDates'>
-): number =>
-  habit.period === 'weekly'
-    ? calculateWeeklyStreak(habit.completedDates, getLocalDateString(), habit.frozenDates ?? [])
-    : calculateStreak(habit.completedDates, getLocalDateString(), habit.frozenDates ?? []);
+  habit: Pick<Habit, 'period' | 'completedDates' | 'frozenDates' | 'pausedUntil'>
+): number => {
+  const bridged = effectiveFrozenDates(habit);
+  return habit.period === 'weekly'
+    ? calculateWeeklyStreak(habit.completedDates, getLocalDateString(), bridged)
+    : calculateStreak(habit.completedDates, getLocalDateString(), bridged);
+};
 
 /**
  * Period-aware historical streak helper: the streak (in days or weeks) that
@@ -328,12 +412,14 @@ export const streakForHabit = (
  * actually applied at the time, not today's streak.
  */
 export const streakEndingOnForHabit = (
-  habit: Pick<Habit, 'period' | 'completedDates' | 'frozenDates'>,
+  habit: Pick<Habit, 'period' | 'completedDates' | 'frozenDates' | 'pausedUntil'>,
   date: string
-): number =>
-  habit.period === 'weekly'
-    ? streakEndingOnWeek(habit.completedDates, date, habit.frozenDates ?? [])
-    : streakEndingOn(habit.completedDates, date, habit.frozenDates ?? []);
+): number => {
+  const bridged = effectiveFrozenDates(habit);
+  return habit.period === 'weekly'
+    ? streakEndingOnWeek(habit.completedDates, date, bridged)
+    : streakEndingOn(habit.completedDates, date, bridged);
+};
 
 /**
  * Period-aware "is this habit completed in the current period?" check.
@@ -443,10 +529,13 @@ export const processToggleHabit = (
 
   // Helper: compute the streak for a set of dates using the period-correct
   // algorithm. Frozen dates bridge the chain (continuity) without counting.
-  const streakFor = (dates: string[]): number =>
-    habit.period === 'weekly'
-      ? calculateWeeklyStreak(dates, today, habit.frozenDates ?? [])
-      : calculateStreak(dates, today, habit.frozenDates ?? []);
+  const streakFor = (dates: string[]): number => {
+    // Bridge across both auto-freezes and any active planned pause (F-HABITS-01).
+    const bridged = effectiveFrozenDates({ ...habit, completedDates: dates }, today);
+    return habit.period === 'weekly'
+      ? calculateWeeklyStreak(dates, today, bridged)
+      : calculateStreak(dates, today, bridged);
+  };
 
   // Logic Split by Scoring Type
   if (habit.scoringType === 'incremental') {
@@ -589,7 +678,7 @@ export const calculateResetPoints = (habit: Habit): number => {
  *          and the recomputed (period-aware) streak
  */
 export const getHabitResetUpdate = (
-  habit: Pick<Habit, 'completedDates' | 'period' | 'frozenDates'>,
+  habit: Pick<Habit, 'completedDates' | 'period' | 'frozenDates' | 'pausedUntil'>,
   today: string
 ): { count: 0; completedDates: string[]; streakDays: number } => {
   const completedDates = habit.completedDates.filter(date => date !== today);
@@ -599,8 +688,9 @@ export const getHabitResetUpdate = (
     // Period-aware: daily habits get a day-based streak, weekly habits an
     // ISO-week-based streak — so a weekly habit isn't reset to ~0 at midnight.
     // Frozen-aware: an auto-applied freeze on yesterday keeps the streak alive
-    // across the midnight reset instead of visually collapsing it.
-    streakDays: streakForHabit({ period: habit.period, completedDates, frozenDates: habit.frozenDates }),
+    // across the midnight reset instead of visually collapsing it. Pause-aware:
+    // a planned break (pausedUntil) bridges the streak too (F-HABITS-01).
+    streakDays: streakForHabit({ period: habit.period, completedDates, frozenDates: habit.frozenDates, pausedUntil: habit.pausedUntil }),
   };
 };
 
