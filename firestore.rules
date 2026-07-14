@@ -848,6 +848,18 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Monthly money recaps — written ONLY by Cloud Functions (Admin SDK bypasses rules).
+      match /moneyRecaps/{recapId} {
+        allow read: if isMemberOf(householdId);
+        allow write: if false;
+      }
+
+      // Daily net-worth snapshots — written ONLY by Cloud Functions (Admin SDK bypasses rules).
+      match /netWorthSnapshots/{snapshotId} {
+        allow read: if isMemberOf(householdId);
+        allow write: if false;
+      }
+
       // 🛡️ Plan 24: Explicit rules for Savings Goals (sinking funds).
       // Manual-contribution-only entity, deliberately decoupled from Account
       // balances and Transactions — see CLAUDE.md's Safe-to-Spend section for
@@ -931,7 +943,9 @@ service cloud.firestore {
                      subcollection != 'yearlyGoals' &&
                      subcollection != 'rewards' &&
                      subcollection != 'savingsGoals' &&
-                     subcollection != 'recaps';
+                     subcollection != 'recaps' &&
+                     subcollection != 'moneyRecaps' &&
+                     subcollection != 'netWorthSnapshots';
       }
     }
 

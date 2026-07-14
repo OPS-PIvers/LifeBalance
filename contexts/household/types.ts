@@ -24,6 +24,7 @@ import {
   HouseholdApiKey,
   ModuleKey,
   WeeklyRecap,
+  NetWorthSnapshot,
   TransactionComment,
   SplitParticipant
 } from '@/types/schema';
@@ -80,6 +81,9 @@ export interface HouseholdContextType {
   bucketHistory: BucketPeriodSnapshot[];
   /** Weekly recaps (Plan 02) — newest first, bounded live window (RECAPS_LIMIT). */
   recaps: WeeklyRecap[];
+  /** Net worth history (F-MONEY-09) — newest first, bounded live window
+   *  (NET_WORTH_HISTORY_LIMIT). Server-written daily; clients only read. */
+  netWorthHistory: NetWorthSnapshot[];
 
   // --- Listener windowing / pagination ---
   // The high-cardinality collections below are windowed on cold load (see
@@ -144,6 +148,10 @@ export interface HouseholdContextType {
    *  auto-route incoming Shortcut/Wells-Fargo-email transactions to this account. */
   setAccountCardLast4: (id: string, cardLast4: string) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
+  /** Soft-delete: hide from active lists/net worth/Safe-to-Spend while keeping
+   *  the account doc so historical transactions keep resolving to it. */
+  archiveAccount: (id: string) => Promise<void>;
+  unarchiveAccount: (id: string) => Promise<void>;
   updateAccountOrder: (accountId: string, newOrder: number) => Promise<void>;
   reorderAccounts: (orderedIds: string[]) => Promise<void>;
 
@@ -373,11 +381,12 @@ export interface HouseholdContextType {
 
 export type FinanceContextValue = Pick<HouseholdContextType,
   | 'safeToSpend' | 'safeToSpendBreakdown' | 'accounts' | 'buckets' | 'savingsGoals' | 'calendarItems' | 'transactions'
-  | 'currentPeriodId' | 'bucketSpentMap' | 'bucketHistory'
+  | 'currentPeriodId' | 'bucketSpentMap' | 'bucketHistory' | 'netWorthHistory'
   | 'transactionWindowStart' | 'isLoadingOlderTransactions' | 'hasMoreTransactions'
   | 'loadOlderTransactions' | 'loadAllTransactions'
   | 'isLoadingOlderBucketHistory' | 'hasMoreBucketHistory' | 'loadAllBucketHistory'
   | 'addAccount' | 'updateAccountBalance' | 'setAccountGoal' | 'setAccountCardLast4' | 'deleteAccount'
+  | 'archiveAccount' | 'unarchiveAccount'
   | 'updateAccountOrder' | 'reorderAccounts'
   | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal'
   | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'reallocateBucket'

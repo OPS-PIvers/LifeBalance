@@ -302,24 +302,20 @@ const BudgetCalendar: React.FC = () => {
     }
   };
 
+  // Duplicate pre-fills the Add form from the currently-edited item — title,
+  // amount, type, account — and leaves date/recurrence for the user to review
+  // before submitting (F-MONEY-12). It does NOT auto-save: `editingItem` is
+  // cleared so pressing "Add Event" creates a new item via the normal
+  // `addCalendarItem` path in `handleSave`, rather than a second writeBatch
+  // path here. Recurrence is intentionally stripped so a duplicate doesn't
+  // silently spin up a second overlapping recurring template.
   const handleDuplicate = () => {
     if (!title || !amount || !date) return;
 
-    const newItem: CalendarItem = {
-      id: crypto.randomUUID(),
-      title: `${title} (Copy)`,
-      amount: parseFloat(amount),
-      date: date,
-      type,
-      isPaid: false, // Reset status for duplicate
-      isRecurring,
-      frequency: isRecurring ? frequency : undefined,
-      accountId: accountId || undefined
-    };
-
-    addCalendarItem(newItem);
-    toast.success('Event duplicated');
-    setIsAddModalOpen(false);
+    setEditingItem(null);
+    setIsRecurring(false);
+    setFrequency('monthly');
+    toast.success('Review the duplicate, then tap Add Event');
   };
 
   const handleExport = () => {
