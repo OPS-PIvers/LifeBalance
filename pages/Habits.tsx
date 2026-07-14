@@ -297,20 +297,25 @@ const Habits: React.FC = () => {
     if (isCatchingUp || catchUpEligibleHabits.length === 0) return;
     setIsCatchingUp(true);
     let caughtUp = 0;
-    try {
-      for (const habit of catchUpEligibleHabits) {
+    let failed = 0;
+    for (const habit of catchUpEligibleHabits) {
+      try {
         await toggleHabit(habit.id, 'up');
         caughtUp += 1;
+      } catch (error) {
+        // toggleHabit doesn't surface its own error toast, so a single
+        // habit failing here must not abort the rest of the queue.
+        failed += 1;
+        console.error(`[handleCatchUpYesterday] Failed for habit ${habit.id}:`, error);
       }
-      if (caughtUp > 0) {
-        toast.success(`Caught up ${caughtUp} habit${caughtUp === 1 ? '' : 's'} from yesterday`);
-      }
-    } catch (error) {
-      console.error('[handleCatchUpYesterday] Failed:', error);
-      toast.error('Failed to catch up all habits');
-    } finally {
-      setIsCatchingUp(false);
     }
+    if (caughtUp > 0) {
+      toast.success(`Caught up ${caughtUp} habit${caughtUp === 1 ? '' : 's'} from yesterday`);
+    }
+    if (failed > 0) {
+      toast.error(`Failed to catch up ${failed} habit${failed === 1 ? '' : 's'}`);
+    }
+    setIsCatchingUp(false);
   };
 
   const hasNoHabits = habits.length === 0;
