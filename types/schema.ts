@@ -543,6 +543,7 @@ export interface Meal {
   ingredients: MealIngredient[];
   instructions?: string[]; // Step-by-step cooking instructions
   recipeUrl?: string; // Link to external recipe
+  servings?: number; // Base servings this recipe's ingredient quantities are written for; defaults to 1 when unset
   tags: string[]; // "cheap", "quick", "favorite", "new"
   rating?: number;
   lastCooked?: string; // YYYY-MM-DD

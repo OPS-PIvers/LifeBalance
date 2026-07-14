@@ -1054,6 +1054,7 @@ const MealPlanTab: React.FC = () => {
             meal={viewingMeal.meal}
             planItem={viewingMeal.planItem}
             onMarkCooked={handleMarkCooked}
+            onShopIngredients={handleOpenIngredientSelector}
         />
       )}
 
