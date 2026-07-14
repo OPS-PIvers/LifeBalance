@@ -6,7 +6,7 @@ import {
   ResponsiveContainer,
   AreaChart, Area, CartesianGrid,
 } from 'recharts';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { PiggyBank } from 'lucide-react';
 import { CustomTooltip } from '@/components/analytics/CustomTooltip';
 
@@ -29,10 +29,15 @@ const NetWorthTrendChart: React.FC = () => {
     () =>
       [...netWorthHistory]
         .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
-        .map(snapshot => ({
-          day: format(parseISO(snapshot.date), 'MMM d'),
-          netWorth: snapshot.netWorth,
-        })),
+        .map(snapshot => {
+          // Parse the yyyy-MM-dd string as a local date (not UTC via parseISO)
+          // to avoid shifting the displayed day back for users west of UTC.
+          const [year, month, day] = snapshot.date.split('-').map(Number);
+          return {
+            day: format(new Date(year ?? 1970, (month ?? 1) - 1, day ?? 1), 'MMM d'),
+            netWorth: snapshot.netWorth,
+          };
+        }),
     [netWorthHistory]
   );
 
