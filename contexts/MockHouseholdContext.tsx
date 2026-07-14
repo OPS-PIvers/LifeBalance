@@ -826,6 +826,20 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Habit deleted');
   }, []);
 
+  const archiveHabit = useCallback(async (id: string) => {
+    setHabits(prev => prev.map(h => h.id === id ? { ...h, archivedAt: getLocalDateString() } : h));
+    toast.success('Mock: Habit archived');
+  }, []);
+
+  const unarchiveHabit = useCallback(async (id: string) => {
+    setHabits(prev => prev.map(h => {
+      if (h.id !== id) return h;
+      const { archivedAt: _archivedAt, ...rest } = h;
+      return rest;
+    }));
+    toast.success('Mock: Habit restored');
+  }, []);
+
   const reorderHabits = useCallback(async (updates: { id: string; order: number; category?: string }[]) => {
     setHabits(prev => prev.map(h => {
       const update = updates.find(u => u.id === h.id);
@@ -1384,6 +1398,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     addHabit,
     updateHabit,
     deleteHabit,
+    archiveHabit,
+    unarchiveHabit,
     reorderHabits,
     toggleHabit,
     resetHabit,

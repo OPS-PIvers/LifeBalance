@@ -349,6 +349,11 @@ export interface Habit {
 
   // Submission Tracking
   hasSubmissionTracking?: boolean; // true = uses submissions subcollection
+
+  // F-HABITS-05: ISO timestamp when the habit was archived (soft-retire —
+  // hides it from the Track tab / reminders while keeping streak/points
+  // history intact for Insights/export). Undefined/absent = active.
+  archivedAt?: string;
 }
 
 export interface HabitSubmission {
