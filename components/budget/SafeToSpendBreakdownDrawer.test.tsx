@@ -111,23 +111,32 @@ describe('SafeToSpendBreakdownDrawer', () => {
     expect(screen.queryByText('Pending transactions')).not.toBeInTheDocument();
   });
 
-  it('renders one distribution row per bucket with left / over labels and the Unallocated leftover', () => {
+  it('renders one distribution row per bucket with remaining, spent-of-limit, and the Unallocated leftover', () => {
     setFinance({
       safeToSpendBreakdown: {
         checkingBalance: 2000, unpaidBills: 300, pendingSpend: 0, safeToSpend: 1700, nextPaycheckDate: null,
       },
       buckets: [bucket('groc', 'Groceries', 200), bucket('gas', 'Gas', 100)],
       bucketSpentMap: new Map<string, BucketSpent>([
-        ['groc', { verified: 50, pending: 0 }], // remaining 150 → "$150.00 left"
-        ['gas', { verified: 150, pending: 0 }], // remaining -50 → "$50.00 over"
+        ['groc', { verified: 50, pending: 0 }], // remaining 150
+        ['gas', { verified: 150, pending: 0 }], // remaining -50 (over budget)
       ]),
     });
     render(<SafeToSpendBreakdownDrawer open={true} onClose={() => {}} />);
 
     expect(screen.getByText('Groceries')).toBeInTheDocument();
-    expect(screen.getByText('$150.00 left')).toBeInTheDocument();
+    expect(screen.getByText('$150.00')).toBeInTheDocument();
+    expect(screen.getByText('$50.00 of $200.00 spent')).toBeInTheDocument();
     expect(screen.getByText('Gas')).toBeInTheDocument();
-    expect(screen.getByText('- $50.00 over')).toBeInTheDocument();
+    expect(screen.getByText('-$50.00')).toBeInTheDocument();
+    expect(screen.getByText('$150.00 of $100.00 spent')).toBeInTheDocument();
+    expect(screen.getByText('Over budget')).toBeInTheDocument();
+    // Progress bars: Groceries at 25%, Gas at 150% (ProgressBar reports the
+    // true unclamped percentage via aria and clips the fill visually).
+    const bars = screen.getAllByRole('progressbar');
+    expect(bars).toHaveLength(2);
+    expect(bars[0]).toHaveAttribute('aria-valuenow', '25');
+    expect(bars[1]).toHaveAttribute('aria-valuenow', '150');
 
     // Unallocated leftover = 1700 − 150 (gas over contributes 0) = 1550.
     expect(screen.getByText('Unallocated')).toBeInTheDocument();

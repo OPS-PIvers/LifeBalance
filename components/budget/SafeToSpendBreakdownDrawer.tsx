@@ -4,7 +4,17 @@ import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { Drawer } from '@/components/ui/Drawer';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
+import ProgressBar from '@/components/ui/ProgressBar';
 import { computeSafeToSpendDistribution } from '@/utils/safeToSpendDistribution';
+
+/** Fill color by spend ratio — same ramp as BudgetHistory's bucket drawer. */
+const progressColor = (spent: number, limit: number) => {
+  if (limit === 0) return 'bg-money-neg';
+  const ratio = spent / limit;
+  if (ratio >= 1) return 'bg-money-neg';
+  if (ratio >= 0.85) return 'bg-warm-500';
+  return 'bg-money-pos';
+};
 
 /**
  * Plan 016 — Safe-to-Spend breakdown drawer, opened by tapping the toolbar
@@ -82,24 +92,42 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
         {/* 2. Distribution across buckets + leftover. */}
         <Section title="Where it's allocated">
           <SurfaceList>
-            {rows.map(row => (
-              <Row key={row.id} className="justify-between">
-                <span className="min-w-0 truncate text-sm font-medium text-brand-800 dark:text-brand-100">
-                  {row.name}
-                </span>
-                <span
-                  className={`font-mono text-sm font-semibold tabular-nums shrink-0 ${
-                    row.isOver
-                      ? 'text-money-neg dark:text-money-negDark'
-                      : 'text-brand-700 dark:text-brand-200'
-                  }`}
-                >
-                  {row.isOver
-                    ? `- ${fmt(Math.abs(row.remaining))} over`
-                    : `${fmt(row.remaining)} left`}
-                </span>
-              </Row>
-            ))}
+            {rows.map(row => {
+              const percent =
+                row.limit > 0 ? Math.max(0, (row.spent / row.limit) * 100) : 100;
+              return (
+                <Row key={row.id} className="flex-col items-stretch gap-1.5">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="min-w-0 truncate text-sm font-medium text-brand-800 dark:text-brand-100">
+                      {row.name}
+                    </span>
+                    <span
+                      className={`font-mono text-sm font-semibold tabular-nums shrink-0 ${
+                        row.isOver
+                          ? 'text-money-neg dark:text-money-negDark'
+                          : 'text-brand-700 dark:text-brand-200'
+                      }`}
+                    >
+                      {fmt(row.remaining)}
+                    </span>
+                  </div>
+                  <ProgressBar
+                    value={percent}
+                    className="h-1.5 bg-brand-100 dark:bg-brand-700"
+                    barClassName={progressColor(row.spent, row.limit)}
+                    ariaLabel={`${row.name}: ${Math.round(percent)}% of ${fmt(row.limit)} spent`}
+                  />
+                  <div className="flex justify-between text-xxs text-brand-400 dark:text-brand-450">
+                    <span>
+                      {fmt(row.spent)} of {fmt(row.limit)} spent
+                    </span>
+                    <span className={row.isOver ? 'text-money-neg dark:text-money-negDark' : ''}>
+                      {row.isOver ? 'Over budget' : 'Remaining'}
+                    </span>
+                  </div>
+                </Row>
+              );
+            })}
 
             {/* Leftover / over-allocated row. */}
             <Row className="justify-between">
