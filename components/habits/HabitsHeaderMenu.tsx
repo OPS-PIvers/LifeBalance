@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MoreVertical, Download, Sparkles, ListOrdered, Settings } from 'lucide-react';
+import { MoreVertical, Download, Sparkles, ListOrdered, Settings, Archive } from 'lucide-react';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 
 /**
@@ -25,6 +25,9 @@ export interface HabitsHeaderMenuProps {
    * only surfaces Manage/Export.
    */
   showSmartTools?: boolean;
+  /** F-HABITS-05: toggles the Track tab between active and archived habits. */
+  onToggleArchived?: () => void;
+  showingArchived?: boolean;
 }
 
 const HabitsHeaderMenu: React.FC<HabitsHeaderMenuProps> = ({
@@ -34,6 +37,8 @@ const HabitsHeaderMenu: React.FC<HabitsHeaderMenuProps> = ({
   onManage,
   actionsDisabled = false,
   showSmartTools = true,
+  onToggleArchived,
+  showingArchived = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -53,6 +58,16 @@ const HabitsHeaderMenu: React.FC<HabitsHeaderMenuProps> = ({
       disabled: actionsDisabled,
       ariaLabel: 'Export habits to CSV',
     },
+    ...(onToggleArchived
+      ? [
+          {
+            key: 'archived',
+            label: showingArchived ? 'Show active habits' : 'Show archived habits',
+            icon: <Archive size={16} />,
+            onSelect: onToggleArchived,
+          },
+        ]
+      : []),
   ];
 
   return (

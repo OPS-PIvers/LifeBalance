@@ -157,6 +157,36 @@ export const useHabitActions = (
     }
   }, [householdId]);
 
+  const archiveHabit = useCallback(async (id: string) => {
+    if (!householdId) return;
+    try {
+      await updateDoc(doc(db, `households/${householdId}/habits`, id), {
+        archivedAt: getLocalDateString(),
+        lastUpdated: serverTimestamp(),
+      });
+      toast.success('Habit archived');
+    } catch (error) {
+      console.error('[archiveHabit] Failed to archive habit:', error);
+      toast.error('Failed to archive habit. Please try again.');
+      throw error;
+    }
+  }, [householdId]);
+
+  const unarchiveHabit = useCallback(async (id: string) => {
+    if (!householdId) return;
+    try {
+      await updateDoc(doc(db, `households/${householdId}/habits`, id), {
+        archivedAt: null,
+        lastUpdated: serverTimestamp(),
+      });
+      toast.success('Habit restored');
+    } catch (error) {
+      console.error('[unarchiveHabit] Failed to unarchive habit:', error);
+      toast.error('Failed to restore habit. Please try again.');
+      throw error;
+    }
+  }, [householdId]);
+
   const reorderHabits = useCallback(async (updates: { id: string; order: number; category?: string }[]) => {
     if (!householdId) return;
     try {
@@ -877,6 +907,8 @@ export const useHabitActions = (
     addHabit,
     updateHabit,
     deleteHabit,
+    archiveHabit,
+    unarchiveHabit,
     reorderHabits,
     toggleHabit,
     resetHabit,
@@ -889,6 +921,8 @@ export const useHabitActions = (
     addHabit,
     updateHabit,
     deleteHabit,
+    archiveHabit,
+    unarchiveHabit,
     reorderHabits,
     toggleHabit,
     resetHabit,

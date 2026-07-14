@@ -242,6 +242,9 @@ export interface HouseholdContextType {
   addHabit: (habit: Habit) => Promise<string>;
   updateHabit: (habit: Habit) => Promise<void>;
   deleteHabit: (id: string) => Promise<void>;
+  /** F-HABITS-05: soft-retire — sets `archivedAt`, no points change, no batch. */
+  archiveHabit: (id: string) => Promise<void>;
+  unarchiveHabit: (id: string) => Promise<void>;
   reorderHabits: (updates: { id: string; order: number; category?: string }[]) => Promise<void>;
   toggleHabit: (id: string, direction: 'up' | 'down') => Promise<void>;
   resetHabit: (id: string) => Promise<void>;
@@ -402,7 +405,7 @@ export type GamificationContextValue = Pick<HouseholdContextType,
   | 'activeChallenge' | 'challenges'
   | 'yearlyGoals' | 'activeYearlyGoals' | 'primaryYearlyGoal'
   | 'rewardsInventory' | 'freezeBank'
-  | 'addHabit' | 'updateHabit' | 'deleteHabit' | 'reorderHabits' | 'toggleHabit' | 'resetHabit'
+  | 'addHabit' | 'updateHabit' | 'deleteHabit' | 'archiveHabit' | 'unarchiveHabit' | 'reorderHabits' | 'toggleHabit' | 'resetHabit'
   | 'addHabitSubmission' | 'updateHabitSubmission' | 'deleteHabitSubmission' | 'getHabitSubmissions'
   | 'resetHabitDay'
   | 'updateChallenge' | 'addChallenge' | 'markChallengeComplete' | 'redeemReward'

@@ -10,6 +10,8 @@ const { mockHouseholdContext } = vi.hoisted(() => ({
   mockHouseholdContext: {
     toggleHabit: vi.fn(),
     deleteHabit: vi.fn(),
+    archiveHabit: vi.fn(),
+    unarchiveHabit: vi.fn(),
     resetHabit: vi.fn(),
     activeChallenge: null as unknown,
   }
@@ -58,6 +60,8 @@ vi.mock('lucide-react', () => ({
   Target: () => <span data-testid="icon-target" />,
   Calendar: () => <span data-testid="icon-calendar" />,
   Snowflake: () => <span data-testid="icon-snowflake" />,
+  Archive: () => <span data-testid="icon-archive" />,
+  ArchiveRestore: () => <span data-testid="icon-archive-restore" />,
 }));
 
 // Mock date-fns with controlled dates. `mockedYesterday.current` is mutable so
