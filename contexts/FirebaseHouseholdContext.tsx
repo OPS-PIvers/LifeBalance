@@ -52,7 +52,8 @@ import {
   PendingItem,
   ModuleKey,
   WeeklyRecap,
-  SavingsGoal
+  SavingsGoal,
+  NetWorthSnapshot
 } from '@/types/schema';
 import { calculateSafeToSpendBreakdownFromExpanded } from '@/utils/safeToSpendCalculator';
 import { calculatePointsForDate, calculatePointsForDateRange, computeManagedMemberPointsReset, isHabitStale, getHabitResetUpdate } from '@/utils/habitLogic';
@@ -377,6 +378,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [buckets, setBuckets] = useState<BudgetBucket[]>([]);
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
+  const [netWorthHistory, setNetWorthHistory] = useState<NetWorthSnapshot[]>([]);
   const bucketsRef = useRef(buckets); // Ref to access latest buckets in listeners
 
   useEffect(() => {
@@ -617,6 +619,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setAccounts([]);
     setBuckets([]);
     setSavingsGoals([]);
+    setNetWorthHistory([]);
     setRecentTransactions([]);
     setOlderTransactions([]);
     recentTransactionsRef.current = [];
@@ -688,6 +691,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       bucketHistoryLoadedAllRef,
       setCalendarItems: (data) => setCalendarItems(data),
       setSavingsGoals: (data) => setSavingsGoals(data),
+      setNetWorthHistory: (data) => setNetWorthHistory(data),
     }));
 
     // (Transactions are handled by their own effect below so the window can
@@ -2088,6 +2092,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     accounts,
     buckets,
     savingsGoals,
+    netWorthHistory,
     calendarItems,
     transactions,
     currentPeriodId,
@@ -2133,7 +2138,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addTransactionComment,
     deleteTransactionComment,
   }), [
-    safeToSpend, safeToSpendBreakdown, accounts, buckets, savingsGoals, calendarItems, transactions, currentPeriodId, bucketSpentMap, bucketHistory,
+    safeToSpend, safeToSpendBreakdown, accounts, buckets, savingsGoals, netWorthHistory, calendarItems, transactions, currentPeriodId, bucketSpentMap, bucketHistory,
     transactionWindowStart, isLoadingOlderTransactions, hasMoreTransactions, loadOlderTransactions, loadAllTransactions,
     isLoadingOlderBucketHistory, hasMoreBucketHistory, loadAllBucketHistory,
     addAccount, updateAccountBalance, setAccountGoal, setAccountCardLast4, deleteAccount, updateAccountOrder, reorderAccounts,
