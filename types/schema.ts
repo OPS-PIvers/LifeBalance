@@ -586,6 +586,20 @@ export interface QuickStockList {
   color?: string;
 }
 
+export interface TaskTemplateItem {
+  text: string; // The to-do text created for this item
+  assignedTo?: string; // uid of household member; falls back to the applying user when absent
+  points?: number; // Optional override for the created to-do's point value (kid-mode allowance-style credit)
+}
+
+export interface TaskTemplate {
+  id: string;
+  name: string; // e.g. "Trash day", "Guest prep"
+  items: TaskTemplateItem[];
+  icon?: string; // Lucide icon name (see data/templateIcons.ts)
+  color?: string; // Key from STORE_COLORS (reused for visual consistency with QuickStockList)
+}
+
 export interface GroceryCatalogItem {
   id: string;
   name: string;
@@ -603,6 +617,7 @@ export interface Household {
   groceryCategories?: string[]; // Custom categories
   stores?: Store[]; // User-defined stores
   quickStockLists?: QuickStockList[]; // User-defined shopping templates
+  taskTemplates?: TaskTemplate[]; // User-defined task-bundle templates ("Quick Task Lists", F-TODO-03)
   members: HouseholdMember[];
   points?: { daily: number; weekly: number; total: number }; // Shared household points
   lastDailyPointsReset?: string; // YYYY-MM-DD format

@@ -7,6 +7,7 @@ import { getLocalDateString } from '@/utils/dateHelpers';
 import { rollRecurringAnchorForward } from '@/utils/calendarRecurrence';
 import { hashKidPin } from '@/utils/kidPin';
 import { computeTodoCompletionCredit } from '@/utils/todoPoints';
+import { buildToDosFromTemplate } from '@/utils/taskTemplates';
 import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
 import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
@@ -40,6 +41,7 @@ import {
   GroceryCatalogItem,
   Store,
   QuickStockList,
+  TaskTemplate,
   YearlyGoal,
   BucketPeriodSnapshot,
   Household,
@@ -466,6 +468,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [stores, setStores] = useState<Store[]>(SEED_STORES);
   const [groceryCategories, setGroceryCategories] = useState<string[]>([]);
   const [quickStockLists, setQuickStockLists] = useState<QuickStockList[]>([]);
+  const [taskTemplates, setTaskTemplates] = useState<TaskTemplate[]>([]);
   const [currency, setCurrency] = useState<string>('USD');
   const [kidModePinHash, setKidModePinHash] = useState<string | undefined>(undefined);
   // Plan 090 — module visibility starts empty (fail-open => all-on), mirroring a
@@ -1115,6 +1118,36 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Template deleted');
   }, []);
 
+  // Task Templates (F-TODO-03 — "Quick Task Lists")
+  const addTaskTemplate = useCallback(async (template: Omit<TaskTemplate, 'id'>) => {
+    const newTemplate = { ...template, id: generateId() } as TaskTemplate;
+    setTaskTemplates(prev => [...prev, newTemplate]);
+    toast.success('Mock: Template created');
+  }, []);
+
+  const updateTaskTemplate = useCallback(async (template: TaskTemplate) => {
+    setTaskTemplates(prev => prev.map(t => t.id === template.id ? template : t));
+    toast.success('Mock: Template updated');
+  }, []);
+
+  const deleteTaskTemplate = useCallback(async (id: string) => {
+    setTaskTemplates(prev => prev.filter(t => t.id !== id));
+    toast.success('Mock: Template deleted');
+  }, []);
+
+  const applyTaskTemplate = useCallback(async (template: TaskTemplate): Promise<number> => {
+    const todosToCreate = buildToDosFromTemplate(template, getLocalDateString(), 'test-user-id');
+    const newTodos: ToDo[] = todosToCreate.map(todo => ({
+      ...todo,
+      id: generateId(),
+      createdAt: new Date().toISOString(),
+      createdBy: 'test-user-id',
+    }));
+    setTodos(prev => [...prev, ...newTodos]);
+    toast.success(`Mock: Added ${newTodos.length} tasks from ${template.name}`);
+    return newTodos.length;
+  }, []);
+
   const addGroceryCatalogItem = useCallback(async (item: Omit<GroceryCatalogItem, 'id'>): Promise<string> => {
     const id = generateId();
     const newItem = { ...item, id } as GroceryCatalogItem;
@@ -1401,6 +1434,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     stores,
     groceryCategories,
     quickStockLists,
+    taskTemplates,
     apiKeys: [], // iOS Shortcuts - empty in test mode
     pendingItemsCount: 0, // Voice commands - always 0 in test mode
 
@@ -1518,6 +1552,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       });
       toast.success('Mock: ToDo completed');
     }, []),
+    addTaskTemplate,
+    updateTaskTemplate,
+    deleteTaskTemplate,
+    applyTaskTemplate,
     addStore,
     updateStore,
     deleteStore,
