@@ -40,6 +40,15 @@ export { fetchrecipepage } from "./fetchRecipePage";
 //   export { createcheckoutsession } from "./stripe/checkout";
 //   export { stripewebhook } from "./stripe/webhook";
 
+// API-key reveal functions (Plan: iOS-Shortcut key copy) live in ./apiKeys and
+// are fully implemented and unit-tested, but are intentionally NOT exported here
+// yet — same reason as Stripe. Exporting binds the APIKEY_ENC_KEY secret, which
+// a non-interactive `firebase deploy` (our CI) REQUIRES to already exist in
+// Secret Manager, failing the whole deploy otherwise. ACTIVATION is a human step
+// (docs/APIKEY_REVEAL_RUNBOOK.md): set the secret, then wire them in here, set
+// VITE_APIKEY_REVEAL_ENABLED=true in the deploy workflow, and redeploy:
+//   export { attachapikeyencryption, revealapikey } from "./apiKeys/reveal";
+
 // Plaid bank-link functions (./plaid). ACTIVATED: the PLAID_CLIENT_ID /
 // PLAID_SECRET / PLAID_ENV secrets are now set in Secret Manager (sandbox), so
 // these secret-bound functions can deploy. The "Connect a bank" UI + the daily

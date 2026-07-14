@@ -1,24 +1,47 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { addDoc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import type { ApiKeyPermissions } from '@/types/schema';
 import {
   generateApiKey,
+  regenerateApiKey,
   revokeApiKey,
   updateApiKeyPermissions,
   updateApiKeyName,
   deleteApiKey,
   getQuickAddBaseUrl,
   getQuickAddEndpointUrl,
+  isApiKeyRevealEnabled,
+  attachApiKeyEncryption,
+  revealApiKey,
 } from '@/services/apiKeyService';
 
-vi.mock('@/firebase.config', () => ({ db: {} }));
+const { httpsCallableMock, callableInvokeMock } = vi.hoisted(() => ({
+  httpsCallableMock: vi.fn(),
+  callableInvokeMock: vi.fn(),
+}));
+
+// httpsCallable(functions, name) -> (req) => Promise<{ data }>
+vi.mock('firebase/functions', () => ({ httpsCallable: httpsCallableMock }));
+
+vi.mock('@/firebase.config', () => ({
+  db: {},
+  getFunctionsInstance: vi.fn().mockResolvedValue({ __isFunctions: true }),
+}));
 vi.mock('firebase/firestore', () => ({
-  collection: vi.fn(),
+  collection: vi.fn(() => ({ __collection: true })),
   addDoc: vi.fn(async () => ({ id: 'docId' })),
   updateDoc: vi.fn(),
   deleteDoc: vi.fn(),
-  doc: vi.fn((...a: unknown[]) => ({ path: a.join('/') })),
+  doc: vi.fn((...a: unknown[]) =>
+    // doc(collection) → new ref with a generated id; doc(db, path) → ref at path
+    a.length === 1 ? { id: 'newDocId' } : { path: a.join('/') }
+  ),
   serverTimestamp: vi.fn(() => 'TS'),
+  writeBatch: vi.fn(() => ({
+    set: vi.fn(),
+    delete: vi.fn(),
+    commit: vi.fn(async () => undefined),
+  })),
 }));
 
 const permissions: ApiKeyPermissions = {
@@ -39,6 +62,7 @@ async function sha256Hex(message: string): Promise<string> {
 describe('apiKeyService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    httpsCallableMock.mockReturnValue(callableInvokeMock);
   });
 
   afterEach(() => {
@@ -98,6 +122,75 @@ describe('apiKeyService', () => {
     });
   });
 
+  describe('regenerateApiKey', () => {
+    it('mints a fresh key in the lb_{prefix}_{32hex} format with a matching hash', async () => {
+      const result = await regenerateApiKey(
+        'household-abc',
+        'old-key-id',
+        'iPhone Shortcut',
+        permissions,
+        'creator-1'
+      );
+
+      expect(result.key).toMatch(/^lb_.{6}_[a-f0-9]{32}$/);
+      expect(result.key.startsWith('lb_househ_')).toBe(true);
+      expect(result.keyData.hashedKey).toBe(await sha256Hex(result.key));
+    });
+
+    it('carries over the name and permissions and resets usage metadata', async () => {
+      const result = await regenerateApiKey(
+        'household-abc',
+        'old-key-id',
+        '  iPhone Shortcut  ',
+        permissions,
+        'creator-1'
+      );
+
+      expect(result.keyData.name).toBe('iPhone Shortcut');
+      expect(result.keyData.permissions).toEqual(permissions);
+      expect(result.keyData.usageCount).toBe(0);
+      expect(result.keyData.status).toBe('active');
+      expect(result.keyData.lastUsedAt).toBeUndefined();
+      expect(result.keyData.createdBy).toBe('creator-1');
+      // Fresh doc id from doc(collection) — not the old key's id.
+      expect((result.keyData as { id?: string }).id).toBe('newDocId');
+    });
+
+    it('atomically creates the new key and deletes the old one in a single batch', async () => {
+      await regenerateApiKey('household-abc', 'old-key-id', 'Key', permissions, 'creator-1');
+
+      // One batch, committed exactly once.
+      expect(writeBatch).toHaveBeenCalledTimes(1);
+      const batch = vi.mocked(writeBatch).mock.results[0]!.value as {
+        set: ReturnType<typeof vi.fn>;
+        delete: ReturnType<typeof vi.fn>;
+        commit: ReturnType<typeof vi.fn>;
+      };
+      expect(batch.set).toHaveBeenCalledTimes(1);
+      expect(batch.delete).toHaveBeenCalledTimes(1);
+      expect(batch.commit).toHaveBeenCalledTimes(1);
+
+      // The deleted ref is the OLD key's document path.
+      const deletedRef = batch.delete.mock.calls[0]![0];
+      expect(deletedRef).toEqual({
+        path: expect.stringContaining('households/household-abc/apiKeys/old-key-id'),
+      });
+
+      // Never routes through addDoc/updateDoc — that would bypass the atomic
+      // swap and (for updates) hit the rules ban on mutating hashedKey.
+      expect(addDoc).not.toHaveBeenCalled();
+      expect(updateDoc).not.toHaveBeenCalled();
+    });
+
+    it('produces a different secret than the key it replaces', async () => {
+      const a = await regenerateApiKey('household-abc', 'k', 'Key', permissions, 'creator-1');
+      const b = await regenerateApiKey('household-abc', 'k', 'Key', permissions, 'creator-1');
+
+      expect(a.key).not.toBe(b.key);
+      expect(a.keyData.hashedKey).not.toBe(b.keyData.hashedKey);
+    });
+  });
+
   describe('revokeApiKey', () => {
     it('updates the key doc status to revoked', async () => {
       await revokeApiKey('hh', 'key-1');
@@ -134,6 +227,61 @@ describe('apiKeyService', () => {
       await deleteApiKey('hh', 'key-1');
 
       expect(deleteDoc).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('isApiKeyRevealEnabled', () => {
+    it('is true only when the flag is exactly "true"', () => {
+      vi.stubEnv('VITE_APIKEY_REVEAL_ENABLED', 'true');
+      expect(isApiKeyRevealEnabled()).toBe(true);
+      vi.stubEnv('VITE_APIKEY_REVEAL_ENABLED', 'false');
+      expect(isApiKeyRevealEnabled()).toBe(false);
+      vi.stubEnv('VITE_APIKEY_REVEAL_ENABLED', '');
+      expect(isApiKeyRevealEnabled()).toBe(false);
+      vi.unstubAllEnvs();
+    });
+  });
+
+  describe('attachApiKeyEncryption', () => {
+    it('invokes the attachapikeyencryption callable with the ids and plaintext key', async () => {
+      callableInvokeMock.mockResolvedValue({ data: { success: true } });
+
+      await attachApiKeyEncryption('hh', 'key-1', 'lb_househ_abc');
+
+      expect(httpsCallableMock).toHaveBeenCalledWith(
+        { __isFunctions: true },
+        'attachapikeyencryption'
+      );
+      expect(callableInvokeMock).toHaveBeenCalledWith({
+        householdId: 'hh',
+        keyId: 'key-1',
+        key: 'lb_househ_abc',
+      });
+    });
+
+    it('propagates callable failures (caller decides whether to swallow)', async () => {
+      callableInvokeMock.mockRejectedValue(new Error('functions/not-found'));
+      await expect(
+        attachApiKeyEncryption('hh', 'key-1', 'lb_x')
+      ).rejects.toThrow('functions/not-found');
+    });
+  });
+
+  describe('revealApiKey', () => {
+    it('returns the plaintext key from the revealapikey callable', async () => {
+      callableInvokeMock.mockResolvedValue({ data: { key: 'lb_househ_secret' } });
+
+      const key = await revealApiKey('hh', 'key-1');
+
+      expect(httpsCallableMock).toHaveBeenCalledWith(
+        { __isFunctions: true },
+        'revealapikey'
+      );
+      expect(callableInvokeMock).toHaveBeenCalledWith({
+        householdId: 'hh',
+        keyId: 'key-1',
+      });
+      expect(key).toBe('lb_househ_secret');
     });
   });
 

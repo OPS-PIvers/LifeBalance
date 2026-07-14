@@ -343,9 +343,12 @@ service cloud.firestore {
         allow create: if isAdminOf(householdId) &&
           request.resource.data.keys().hasAll(['hashedKey', 'keyPrefix', 'name', 'status', 'permissions', 'createdAt', 'createdBy', 'usageCount']);
 
-        // Only admins can update, but cannot modify the hashedKey or keyPrefix (security)
+        // Only admins can update, but cannot modify the hashedKey, keyPrefix, or
+        // encryptedKey (security). encryptedKey is the at-rest ciphertext used by the
+        // reveal flow — it is written ONLY by the attachapikeyencryption Cloud Function
+        // (Admin SDK, bypasses these rules), never by a client.
         allow update: if isAdminOf(householdId) &&
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['hashedKey', 'keyPrefix', 'createdAt', 'createdBy']);
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['hashedKey', 'keyPrefix', 'encryptedKey', 'createdAt', 'createdBy']);
 
         // Only admins can delete API keys
         allow delete: if isAdminOf(householdId);

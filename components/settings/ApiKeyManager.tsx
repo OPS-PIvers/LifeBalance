@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Key, Plus, Copy, Trash2, AlertTriangle, Clock, Shield } from 'lucide-react';
+import { Key, Plus, Copy, Trash2, AlertTriangle, Clock, Shield, RefreshCw, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { Switch } from '@/components/ui/Switch';
@@ -8,9 +8,13 @@ import { Drawer } from '@/components/ui/Drawer';
 import { HouseholdApiKey, ApiKeyPermissions } from '@/types/schema';
 import {
   generateApiKey,
+  regenerateApiKey,
   revokeApiKey,
   deleteApiKey,
   getQuickAddEndpointUrl,
+  isApiKeyRevealEnabled,
+  attachApiKeyEncryption,
+  revealApiKey,
 } from '@/services/apiKeyService';
 import toast from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
@@ -46,11 +50,32 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
     receiptScanning: false,  // Hidden until implemented
   });
   const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
+  // Whether the key banner is showing a re-revealed existing key (vs. a
+  // brand-new one) — flips the copy so it doesn't claim "only time you'll see it".
+  const [bannerIsReveal, setBannerIsReveal] = useState(false);
+  // Id of the key currently being revealed (drives the per-row spinner).
+  const [revealingKeyId, setRevealingKeyId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState<
-    { type: 'revoke' | 'delete'; keyId: string; keyName: string } | null
+    { type: 'revoke' | 'delete' | 'regenerate'; keyId: string; keyName: string } | null
   >(null);
   const [isActionPending, setIsActionPending] = useState(false);
+
+  const revealEnabled = isApiKeyRevealEnabled();
+
+  /**
+   * Best-effort: store an encrypted copy of a freshly created/regenerated key
+   * so it can be revealed later. Never fatal — if it fails (or the reveal flow
+   * isn't activated) the key still works, it just won't be copyable again.
+   */
+  const maybeAttachEncryption = async (keyId: string, key: string) => {
+    if (!revealEnabled) return;
+    try {
+      await attachApiKeyEncryption(householdId, keyId, key);
+    } catch (error) {
+      console.error('Failed to store encrypted copy of API key:', error);
+    }
+  };
 
   if (!isAdmin) {
     return (
@@ -76,16 +101,37 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
         userId
       );
 
+      await maybeAttachEncryption((result.keyData as HouseholdApiKey).id, result.key);
+      setBannerIsReveal(false);
       setNewlyCreatedKey(result.key);
       onKeyGenerated?.(result.key);
       setNewKeyName('');
       setIsCreating(false);
-      toast.success('API key created! Copy it now - it won\'t be shown again.');
+      toast.success(
+        revealEnabled
+          ? 'API key created! Copy it now, or reveal it again any time.'
+          : 'API key created! Copy it now - it won\'t be shown again.'
+      );
     } catch (error) {
       console.error('Failed to create API key:', error);
       toast.error('Failed to create API key');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleRevealKey = async (key: HouseholdApiKey) => {
+    setRevealingKeyId(key.id);
+    try {
+      const plain = await revealApiKey(householdId, key.id);
+      setBannerIsReveal(true);
+      setNewlyCreatedKey(plain);
+      onKeyGenerated?.(plain);
+    } catch (error) {
+      console.error('Failed to reveal API key:', error);
+      toast.error('Could not reveal this key');
+    } finally {
+      setRevealingKeyId(null);
     }
   };
 
@@ -112,6 +158,10 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
     setPendingAction({ type: 'delete', keyId, keyName });
   };
 
+  const handleRegenerateKey = (keyId: string, keyName: string) => {
+    setPendingAction({ type: 'regenerate', keyId, keyName });
+  };
+
   const handleConfirmAction = async () => {
     if (!pendingAction) return;
     const { type, keyId } = pendingAction;
@@ -120,6 +170,29 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
       if (type === 'revoke') {
         await revokeApiKey(householdId, keyId);
         toast.success('API key revoked');
+      } else if (type === 'regenerate') {
+        const existing = apiKeys.find((k) => k.id === keyId);
+        if (!existing) {
+          toast.error('Key not found');
+          setPendingAction(null);
+          return;
+        }
+        const result = await regenerateApiKey(
+          householdId,
+          keyId,
+          existing.name,
+          existing.permissions,
+          userId
+        );
+        await maybeAttachEncryption((result.keyData as HouseholdApiKey).id, result.key);
+        setBannerIsReveal(false);
+        setNewlyCreatedKey(result.key);
+        onKeyGenerated?.(result.key);
+        toast.success(
+          revealEnabled
+            ? 'Key regenerated! Copy the new key, or reveal it again any time.'
+            : 'Key regenerated! Copy the new key — it won\'t be shown again.'
+        );
       } else {
         await deleteApiKey(householdId, keyId);
         toast.success('API key deleted');
@@ -144,9 +217,13 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
           <div className="flex items-start gap-2">
             <AlertTriangle className="w-5 h-5 text-warm-600 dark:text-warm-300 shrink-0 mt-0.5" />
             <div>
-              <p className="font-bold text-warm-800 dark:text-warm-200">Copy your API key now!</p>
+              <p className="font-bold text-warm-800 dark:text-warm-200">
+                {bannerIsReveal ? 'Here\'s your API key' : 'Copy your API key now!'}
+              </p>
               <p className="text-sm text-warm-700 dark:text-warm-300">
-                This is the only time you will see this key. Store it securely.
+                {bannerIsReveal
+                  ? 'Copy it and paste it into your shortcut.'
+                  : 'This is the only time you will see this key. Store it securely.'}
               </p>
             </div>
           </div>
@@ -178,7 +255,10 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setNewlyCreatedKey(null)}
+            onClick={() => {
+              setNewlyCreatedKey(null);
+              setBannerIsReveal(false);
+            }}
             className="w-full"
           >
             Got it
@@ -190,6 +270,19 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
       {activeKeys.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 px-1">Active keys</p>
+          <p className="text-xs text-brand-500 dark:text-brand-400 px-1">
+            {revealEnabled ? (
+              <>
+                Tap <Eye className="inline w-3 h-3 -mt-0.5" aria-hidden="true" /> to reveal &amp; copy a key any time,
+                or <RefreshCw className="inline w-3 h-3 -mt-0.5" aria-hidden="true" /> to rotate it to a fresh secret.
+              </>
+            ) : (
+              <>
+                For security, keys are shown only once and can&apos;t be copied again. Lost a key or fumbled the setup? Tap
+                {' '}<RefreshCw className="inline w-3 h-3 -mt-0.5" aria-hidden="true" /> to regenerate a fresh one — the name and permissions carry over.
+              </>
+            )}
+          </p>
           <SurfaceList>
             {activeKeys.map((key) => (
               <Row key={key.id} className="items-start">
@@ -199,16 +292,39 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                 <div className="flex-1 min-w-0 space-y-1.5">
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-semibold text-brand-900 dark:text-brand-100 truncate">{key.name}</span>
-                    <Button
-                      variant="ghost-danger"
-                      size="icon"
-                      className="shrink-0 -my-1"
-                      onClick={() => handleRevokeKey(key.id, key.name)}
-                      title="Revoke key"
-                      aria-label={`Revoke key ${key.name}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center gap-1 shrink-0 -my-1">
+                      {revealEnabled && key.encryptedKey && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleRevealKey(key)}
+                          isLoading={revealingKeyId === key.id}
+                          disabled={revealingKeyId === key.id}
+                          title="Reveal & copy key"
+                          aria-label={`Reveal and copy key ${key.name}`}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRegenerateKey(key.id, key.name)}
+                        title="Regenerate key"
+                        aria-label={`Regenerate key ${key.name}`}
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost-danger"
+                        size="icon"
+                        onClick={() => handleRevokeKey(key.id, key.name)}
+                        title="Revoke key"
+                        aria-label={`Revoke key ${key.name}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-brand-500 dark:text-brand-400">
                     <code className="bg-brand-100 dark:bg-brand-700 px-2 py-0.5 rounded-sm font-mono text-brand-700 dark:text-brand-200">{key.keyPrefix}...</code>
@@ -408,12 +524,26 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
         onClose={() => setPendingAction(null)}
         onConfirm={handleConfirmAction}
         isConfirming={isActionPending}
-        title={pendingAction?.type === 'delete' ? 'Delete API key' : 'Revoke API key'}
-        confirmLabel={pendingAction?.type === 'delete' ? 'Delete' : 'Revoke'}
+        title={
+          pendingAction?.type === 'delete'
+            ? 'Delete API key'
+            : pendingAction?.type === 'regenerate'
+              ? 'Regenerate API key'
+              : 'Revoke API key'
+        }
+        confirmLabel={
+          pendingAction?.type === 'delete'
+            ? 'Delete'
+            : pendingAction?.type === 'regenerate'
+              ? 'Regenerate'
+              : 'Revoke'
+        }
         message={
           pendingAction?.type === 'delete'
             ? `Permanently delete "${pendingAction?.keyName}"? The key is removed forever and cannot be restored.`
-            : `Revoke "${pendingAction?.keyName}"? Shortcuts using this key will stop working immediately. The key stays listed under Revoked Keys until you delete it.`
+            : pendingAction?.type === 'regenerate'
+              ? `Regenerate "${pendingAction?.keyName}"? You'll get a fresh key to copy — its name and permissions stay the same. The current key stops working immediately, so update your shortcut with the new one.`
+              : `Revoke "${pendingAction?.keyName}"? Shortcuts using this key will stop working immediately. The key stays listed under Revoked Keys until you delete it.`
         }
       />
     </div>

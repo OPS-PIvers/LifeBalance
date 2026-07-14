@@ -11,6 +11,7 @@ interface ImportMetaEnv {
   readonly VITE_GEMINI_API_KEY: string
   readonly VITE_GEMINI_MODEL?: string
   readonly VITE_USE_GEMINI_PROXY?: string
+  readonly VITE_APIKEY_REVEAL_ENABLED?: string
   readonly VITE_FIREBASE_VAPID_KEY: string
   readonly VITE_ENABLE_TEST_MODE?: string
   readonly VITE_ADMIN_UID?: string
