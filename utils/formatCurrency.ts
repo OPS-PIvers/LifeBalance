@@ -34,7 +34,11 @@ export interface FormatCurrencyOptions {
  */
 export function formatCurrency(amount: number, options?: FormatCurrencyOptions): string {
   const { currency = DEFAULT_CURRENCY, decimals = 2 } = options ?? {};
-  const value = Number.isFinite(amount) ? amount : 0;
+  const raw = Number.isFinite(amount) ? amount : 0;
+  // Clamp anything that would *display* as zero to exactly 0, so callers never
+  // render a "-$0.00" (negative zero, or a tiny negative under the rounding
+  // threshold for the chosen decimals).
+  const value = Math.abs(raw) < (decimals === 2 ? 0.005 : 0.5) ? 0 : raw;
   try {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',

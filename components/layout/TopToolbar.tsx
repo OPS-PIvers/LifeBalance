@@ -73,7 +73,9 @@ const TopToolbar: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const isPositive = safeToSpend >= 0;
+  // Anything that *displays* as $0.00 (see formatCurrency's clamp) counts as
+  // non-negative, so a -$0.004 never renders a red "$0.00".
+  const isPositive = safeToSpend > -0.005;
 
   return (
     <>
@@ -92,7 +94,7 @@ const TopToolbar: React.FC = () => {
               <span
                 className={`text-2xl font-mono font-bold tracking-tight tabular-nums ${isPositive ? 'text-money-pos dark:text-money-posDark' : 'text-money-neg dark:text-money-negDark'}`}
               >
-                {fmt(Math.abs(safeToSpend))}
+                {fmt(safeToSpend)}
               </span>
               <span className="font-display text-xs text-brand-300 uppercase tracking-wider font-semibold leading-tight">
                 Safe to Spend
