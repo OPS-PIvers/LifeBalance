@@ -139,7 +139,7 @@ export function makeAccountMutations(deps: {
   const unarchiveAccount = async (id: string) => {
     if (!householdId) return;
     await updateDoc(doc(db, `households/${householdId}/accounts`, id), {
-      archived: false,
+      archived: deleteField(),
     });
     toast.success('Account unarchived');
   };
