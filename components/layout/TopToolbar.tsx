@@ -92,7 +92,7 @@ const TopToolbar: React.FC = () => {
               <span
                 className={`text-2xl font-mono font-bold tracking-tight tabular-nums ${isPositive ? 'text-money-pos dark:text-money-posDark' : 'text-money-neg dark:text-money-negDark'}`}
               >
-                {fmt(Math.abs(safeToSpend))}
+                {fmt(safeToSpend)}
               </span>
               <span className="font-display text-xs text-brand-300 uppercase tracking-wider font-semibold leading-tight">
                 Safe to Spend
