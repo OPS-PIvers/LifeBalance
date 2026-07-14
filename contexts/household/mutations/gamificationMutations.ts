@@ -496,6 +496,7 @@ export function makeRewardCrudMutations(deps: {
       active: reward.active,
       allowanceCents: reward.type === 'allowance' ? reward.allowanceCents : deleteField(),
       targetMemberId: reward.targetMemberId ? reward.targetMemberId : deleteField(),
+      unlockRequirement: reward.unlockRequirement ? reward.unlockRequirement : deleteField(),
     };
 
     try {

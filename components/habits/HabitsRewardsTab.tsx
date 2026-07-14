@@ -31,7 +31,7 @@ import { isRewardLocked } from '@/utils/habitMilestones';
  * opens in a `Drawer` regardless of the list's collapsed state.
  */
 const HabitsRewardsTab: React.FC = () => {
-  const { rewardsInventory, totalPoints, redeemReward } = useGamification();
+  const { rewardsInventory, habits, totalPoints, redeemReward } = useGamification();
   const { household, members } = useHouseholdCore();
   const kidModeEnabled = useKidModeEnabled();
   const [redeemingId, setRedeemingId] = useState<string | null>(null);
@@ -99,6 +99,9 @@ const HabitsRewardsTab: React.FC = () => {
                   {milestoneLocked && (
                     <p className="text-[11px] text-brand-500 dark:text-brand-400 text-center mb-2">
                       Unlocks at a {reward.unlockRequirement?.streakDays}-day streak
+                      {reward.unlockRequirement?.habitId
+                        ? ` on "${habits.find((h) => h.id === reward.unlockRequirement?.habitId)?.title ?? 'a habit'}"`
+                        : ''}
                     </p>
                   )}
                   <Button
