@@ -70,7 +70,7 @@ const MealPlanTab: React.FC = () => {
     shoppingList,
     groceryCatalog,
   } = useShopping();
-  const { householdId, isLoading } = useHouseholdCore();
+  const { householdId, isLoading, householdSettings } = useHouseholdCore();
 
   // Calendar State — `selectedDate` is the focused day; the visible week is derived from it.
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -598,7 +598,8 @@ const MealPlanTab: React.FC = () => {
             cheap: aiOptions.cheap,
             quick: aiOptions.quick,
             new: aiOptions.new,
-            previousMeals: meals
+            previousMeals: meals,
+            dietaryProfile: householdSettings?.dietaryProfile
         });
 
         setCurrentMeal({

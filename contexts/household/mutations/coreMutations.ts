@@ -9,7 +9,7 @@ import {
 import toast from 'react-hot-toast';
 import { Sparkles } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
-import { Habit, Insight, ModuleKey, Transaction } from '@/types/schema';
+import { DietaryProfile, Habit, Insight, ModuleKey, Transaction } from '@/types/schema';
 import { hashKidPin } from '@/utils/kidPin';
 import { track } from '@/services/analytics';
 
@@ -66,7 +66,15 @@ export function makeHouseholdSettingsMutations(deps: {
     await updateDoc(ref, { kidModePinHash });
   };
 
-  return { completeOnboarding, setHouseholdCurrency, setModuleVisibility, setKidModePin };
+  // F-MEALS-03: persist the household's standing dietary restrictions/allergens
+  // so AI meal calls and the recipe allergen badge can read it without a
+  // per-session prompt. A single-doc write (no cross-doc atomicity needed).
+  const setDietaryProfile = async (profile: DietaryProfile) => {
+    if (!householdId) return;
+    await updateDoc(doc(db, 'households', householdId), { dietaryProfile: profile });
+  };
+
+  return { completeOnboarding, setHouseholdCurrency, setModuleVisibility, setKidModePin, setDietaryProfile };
 }
 
 /**

@@ -52,7 +52,8 @@ import {
   PendingItem,
   ModuleKey,
   WeeklyRecap,
-  SavingsGoal
+  SavingsGoal,
+  DietaryProfile
 } from '@/types/schema';
 import { calculateSafeToSpendBreakdownFromExpanded } from '@/utils/safeToSpendCalculator';
 import { calculatePointsForDate, calculatePointsForDateRange, computeManagedMemberPointsReset, isHabitStale, getHabitResetUpdate } from '@/utils/habitLogic';
@@ -1866,6 +1867,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeHouseholdSettingsMutations({ db, householdId }).setModuleVisibility(key, value);
   }, [householdId]);
 
+  // F-MEALS-03: standing household dietary restrictions/allergens.
+  const setDietaryProfile = useCallback(async (profile: DietaryProfile) => {
+    await makeHouseholdSettingsMutations({ db, householdId }).setDietaryProfile(profile);
+  }, [householdId]);
+
   // Plan 080b: set/clear the Kid Mode exit PIN. A raw PIN is salted+hashed here
   // (never stored plaintext); passing null removes the PIN so exiting needs none.
   const setKidModePin = useCallback(async (pin: string | null): Promise<void> => {
@@ -2270,6 +2276,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setHouseholdCurrency,
     setModuleVisibility,
     setKidModePin,
+    setDietaryProfile,
     addKidProfile,
     updateKidProfile,
     removeKidProfile,
@@ -2281,7 +2288,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     isLoading, currentUser, members, insight, insightsHistory, isGeneratingInsight, hasMoreInsights, loadAllInsights,
     pendingItemsCount, apiKeys,
     householdId, householdSettings, refreshInsight, addMember, updateMember, removeMember, deleteHousehold,
-    completeOnboarding, setHouseholdCurrency, setModuleVisibility, setKidModePin,
+    completeOnboarding, setHouseholdCurrency, setModuleVisibility, setKidModePin, setDietaryProfile,
     addKidProfile, updateKidProfile, removeKidProfile, activeMemberId, actAs, exitToParent,
     recaps,
   ]);

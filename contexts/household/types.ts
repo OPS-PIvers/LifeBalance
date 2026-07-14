@@ -24,7 +24,8 @@ import {
   HouseholdApiKey,
   ModuleKey,
   WeeklyRecap,
-  TransactionComment
+  TransactionComment,
+  DietaryProfile
 } from '@/types/schema';
 import { type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { type BucketSpent } from '@/utils/bucketSpentCalculator';
@@ -306,6 +307,9 @@ export interface HouseholdContextType {
   /** Set (raw PIN, salted+hashed before write) or clear (null) the Kid Mode exit PIN. */
   setKidModePin: (pin: string | null) => Promise<void>;
 
+  /** F-MEALS-03: set the household's standing dietary restrictions/allergens. */
+  setDietaryProfile: (profile: DietaryProfile) => Promise<void>;
+
   // Meal Actions
   addMeal: (meal: Omit<Meal, 'id'>, options?: { suppressToast?: boolean }) => Promise<string>;
   updateMeal: (meal: Meal) => Promise<void>;
@@ -423,7 +427,7 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'pendingItemsCount' | 'apiKeys'
   | 'householdId' | 'householdSettings' | 'household'
   | 'refreshInsight' | 'addMember' | 'updateMember' | 'removeMember' | 'deleteHousehold'
-  | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'setKidModePin'
+  | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'setKidModePin' | 'setDietaryProfile'
   | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
   | 'activeMemberId' | 'actAs' | 'exitToParent'
   | 'recaps'

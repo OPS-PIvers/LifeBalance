@@ -495,6 +495,17 @@ export interface MealIngredient {
   quantity?: string; // Amount needed
 }
 
+/**
+ * F-MEALS-03: standing household dietary constraints. `allergens` are hard
+ * exclusions (never propose in any form) fed to `suggestMeal`/`generateWeeklyPlan`
+ * and matched against recipe ingredients for the warning badge; `restrictions`
+ * are softer preferences (e.g. "vegetarian") passed only to the AI, not badge-checked.
+ */
+export interface DietaryProfile {
+  restrictions: string[];
+  allergens: string[];
+}
+
 export interface Meal {
   id: string;
   name: string;
@@ -597,6 +608,11 @@ export interface Household {
   // migration needed). Only an explicit `false` hides a module. Read through
   // utils/moduleVisibility.ts — the single source of truth.
   moduleVisibility?: Partial<Record<ModuleKey, boolean>>;
+
+  // F-MEALS-03: standing household dietary restrictions/allergies. Absent means
+  // no constraints are recorded — AI meal calls (suggestMeal, generateWeeklyPlan)
+  // and the recipe allergen badge treat an absent/empty profile as "no restrictions".
+  dietaryProfile?: DietaryProfile;
 
   // Plan 080 (Kid Mode): salted hash of the parent PIN required to EXIT a kid
   // profile view back to a parent view (Netflix-Kids pattern). Absent until a

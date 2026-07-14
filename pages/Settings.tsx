@@ -29,6 +29,7 @@ import {
   Baby,
   Star,
   Upload,
+  Salad,
 } from 'lucide-react';
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
 import MemberModal from '@/components/modals/MemberModal';
@@ -73,6 +74,10 @@ const ConnectBankCard = lazy(() => import('@/components/settings/ConnectBankCard
 // Lazy so the CSV parser/dedup logic and its preview UI stay out of the
 // Settings page's own chunk until the user actually opens the import drawer.
 const CsvImportDrawer = lazy(() => import('@/components/settings/CsvImportDrawer'));
+
+// F-MEALS-03 — lazy so the meals-only DietaryProfileModal stays out of the
+// Settings page's boot chunk until first opened.
+const DietaryProfileModal = lazy(() => import('@/components/meals/DietaryProfileModal').then(m => ({ default: m.DietaryProfileModal })));
 
 const APP_VERSION = '0.8.0-alpha';
 
@@ -127,6 +132,7 @@ const Settings: React.FC = () => {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isKidModeOpen, setIsKidModeOpen] = useState(false);
   const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);
+  const [isDietaryProfileOpen, setIsDietaryProfileOpen] = useState(false);
 
   // Billing / upgrade (Plan 050b) — dormant until billingEnabled is turned on.
   const billingEnabled = useBillingEnabled();
@@ -411,6 +417,13 @@ const Settings: React.FC = () => {
       </div>
     );
   }
+
+  // F-MEALS-03 — one-line summary of the recorded dietary profile for the Meals row.
+  const dietaryProfileCount = (householdSettings.dietaryProfile?.allergens?.length ?? 0)
+    + (householdSettings.dietaryProfile?.restrictions?.length ?? 0);
+  const dietaryProfileSummary = dietaryProfileCount > 0
+    ? `${dietaryProfileCount} restriction${dietaryProfileCount === 1 ? '' : 's'} applied to AI meal suggestions`
+    : 'Applied automatically to AI meal suggestions';
 
   const sortedMembers = [...members].sort((a, b) => {
     // Sort admins first
@@ -792,6 +805,23 @@ const Settings: React.FC = () => {
             </SurfaceList>
           </div>
         </Section>
+
+        {/* F-MEALS-03 — standing household dietary restrictions/allergens,
+            auto-applied to every AI meal suggestion + weekly plan and matched
+            against recipe ingredients for the allergen warning badge. */}
+        <Section title="Meals">
+          <SurfaceList>
+            <DisclosureRow
+              icon={<Salad className="w-5 h-5" />}
+              title="Dietary profile"
+              subtitle={dietaryProfileSummary}
+              onClick={() => setIsDietaryProfileOpen(true)}
+            />
+          </SurfaceList>
+        </Section>
+        <LazyMount when={isDietaryProfileOpen}>
+          <DietaryProfileModal isOpen={isDietaryProfileOpen} onClose={() => setIsDietaryProfileOpen(false)} />
+        </LazyMount>
 
         {/* Kid Mode (Plan 080) — dormant until kidModeEnabled is flipped on. */}
         {kidModeEnabled && (

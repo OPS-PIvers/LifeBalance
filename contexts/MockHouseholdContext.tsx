@@ -42,6 +42,7 @@ import {
   Household,
   FreezeBank,
   ModuleKey,
+  DietaryProfile,
   WeeklyRecap,
   SavingsGoal,
   TransactionComment
@@ -435,6 +436,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // legacy household. Toggling a module mutates this in-memory map so the dynamic
   // footer / route guards / Plan-tab fallback are all walkable in Test Mode.
   const [moduleVisibility, setModuleVisibilityState] = useState<Partial<Record<ModuleKey, boolean>>>({});
+  // F-MEALS-03 — standing household dietary profile, undefined until set (mirrors
+  // a legacy household with no restrictions recorded).
+  const [dietaryProfile, setDietaryProfileState] = useState<DietaryProfile | undefined>(undefined);
 
   // Account operations
   const addAccount = useCallback(async (account: Omit<Account, 'id'>) => {
@@ -508,6 +512,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const setModuleVisibility = useCallback(async (key: ModuleKey, value: boolean) => {
     setModuleVisibilityState(prev => ({ ...prev, [key]: value }));
     toast.success(`Mock: ${key} ${value ? 'enabled' : 'disabled'}`);
+  }, []);
+
+  const setDietaryProfile = useCallback(async (profile: DietaryProfile) => {
+    setDietaryProfileState(profile);
+    toast.success('Mock: Dietary profile updated');
   }, []);
 
   const setKidModePin = useCallback(async (pin: string | null) => {
@@ -1273,6 +1282,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     pendingRedemptions,
     redemptionHistory,
     moduleVisibility,
+    dietaryProfile,
 
   } as unknown as Household;
   // Same derivation as the real Firebase context, so Test Mode's Budget page
@@ -1512,6 +1522,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     setHouseholdCurrency,
     setModuleVisibility,
     setKidModePin,
+    setDietaryProfile,
     addKidProfile,
     updateKidProfile,
     removeKidProfile,

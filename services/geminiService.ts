@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, Schema, Part } from "@google/genai";
-import { Meal, Transaction, Habit, InsightAction, Household } from "@/types/schema";
+import { Meal, Transaction, Habit, InsightAction, Household, DietaryProfile } from "@/types/schema";
 import { WeeklyPlan, WeeklyPlanConstraints, WeeklyPlanStore } from "@/types/weeklyPlan";
 import { GROCERY_CATEGORIES } from "@/data/groceryCategories";
 import { db, getFunctionsInstance } from "@/firebase.config";
@@ -894,6 +894,8 @@ export interface MealSuggestionRequest {
   quick: boolean;
   new: boolean;
   previousMeals: Meal[];
+  /** F-MEALS-03: standing household dietary restrictions/allergens to honor. */
+  dietaryProfile?: DietaryProfile;
 }
 
 export interface MealSuggestionResponse {
@@ -919,11 +921,15 @@ export const suggestMeal = async (
 ): Promise<MealSuggestionResponse> => {
   return withErrorHandling('Meal Suggestion', 'Failed to suggest meal.', async () => {
     const previousMealsList = sanitizeList(options.previousMeals.map(m => m.name));
+    const allergies = sanitizeList(options.dietaryProfile?.allergens);
+    const restrictions = sanitizeList(options.dietaryProfile?.restrictions);
 
     let prompt = `Suggest a REAL, existing meal plan idea based on the following criteria. The meal must be a real dish that people actually cook.\n`;
     if (options.cheap) prompt += `- Should be budget-friendly/cheap.\n`;
     if (options.quick) prompt += `- Should be quick to prepare (under 30 mins).\n`;
     if (options.new) prompt += `- Should be DIFFERENT from these previous meals: ${previousMealsList}\n`;
+    if (allergies) prompt += `- ALLERGY (obey silently, in every form including sauces/marinades): ${allergies}.\n`;
+    if (restrictions) prompt += `- Dietary restriction(s) to honor: ${restrictions}.\n`;
 
     prompt += `\nReturn a JSON object with:
     - name: Meal name (Real dish name)
@@ -2017,6 +2023,7 @@ export const generateWeeklyPlan = async (
     const servings = constraints.servings && constraints.servings > 0 ? constraints.servings : 4;
 
     const allergies = sanitizeList(constraints.allergies);
+    const restrictions = sanitizeList(constraints.restrictions);
     const outList = sanitizeList(constraints.outList);
     const inList = sanitizeList(constraints.inList);
     const stores = sanitizeList(constraints.stores);
@@ -2032,6 +2039,7 @@ export const generateWeeklyPlan = async (
       `- Plan the meals to be cooked IN ORDER so fresh/perishable ingredients carry from one night to the next; capture these hand-offs in each meal's "uses" (carried in) and "saves" (saved for later).`,
       `- Use-it-up: plan around full consumption of perishables and intentional leftovers.`,
       allergies ? `- ALLERGY (obey silently, in every form including sauces/marinades): ${allergies}.` : '',
+      restrictions ? `- Dietary restriction(s) to honor: ${restrictions}.` : '',
       outList ? `- NEVER propose these foods/cuisines: ${outList}.` : '',
       recent ? `- Avoid repeating these recently-cooked meals or their core proteins/methods: ${recent}.` : '',
       inList ? `- Reliable favorites you may draw from: ${inList}.` : '',
