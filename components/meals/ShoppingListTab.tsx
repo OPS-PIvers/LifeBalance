@@ -169,6 +169,17 @@ const ShoppingListTab: React.FC = () => {
       : [...GROCERY_CATEGORIES];
   }, [groceryCategories]);
 
+  // Store name (lowercased) -> household-configured visit order, for 'store'
+  // sort mode (F-MEALS-07). Stores without an explicit `order` are omitted so
+  // sortShoppingItems falls back to alphabetical for them.
+  const storeOrder = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const store of stores) {
+      if (store.order !== undefined) map.set(store.name.toLowerCase(), store.order);
+    }
+    return map;
+  }, [stores]);
+
   // Pre-calculate ALL quick-list memberships for each item name to avoid
   // expensive finds in each row. Maps lowercased name -> every QuickStockList
   // the item belongs to, in quickStockLists order.
@@ -237,7 +248,7 @@ const ShoppingListTab: React.FC = () => {
 
     // Sort per the persisted user preference ('entry' = order field, the
     // classic behavior); pure logic lives in utils/shoppingSort.ts.
-    let sorted = sortShoppingItems(shoppingList, sortMode, categories);
+    let sorted = sortShoppingItems(shoppingList, sortMode, categories, storeOrder);
 
     if (filterStore) {
       sorted = sorted.filter(item => item.store === filterStore);
@@ -245,7 +256,7 @@ const ShoppingListTab: React.FC = () => {
 
 
     setItems(sorted);
-  }, [shoppingList, filterStore, sortMode, categories]);
+  }, [shoppingList, filterStore, sortMode, categories, storeOrder]);
 
   // Input State
   const [newItemText, setNewItemText] = useState('');

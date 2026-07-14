@@ -540,6 +540,7 @@ export interface Store {
   name: string;
   icon?: string; // Lucide icon name
   color?: string; // Key from STORE_COLORS
+  order?: number; // Household's visit order, used by 'store' shopping sort mode (mirrors Account.order/Habit.order)
 }
 
 export interface QuickStockList {
