@@ -86,10 +86,7 @@ export const AccountPicker: React.FC<AccountPickerProps> = ({
               min="0"
               step="0.01"
               value={amountInput}
-              onChange={e => {
-                const value = e.target.value;
-                if (value === '' || parseFloat(value) >= 0) setAmountInput(value);
-              }}
+              onChange={e => setAmountInput(e.target.value)}
               className="w-full pl-7 pr-3 py-2.5 font-mono tabular-nums text-sm font-semibold rounded-card border border-brand-200 dark:border-brand-600 bg-white dark:bg-brand-800 text-brand-900 dark:text-brand-50 focus:outline-hidden focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500"
             />
           </div>
