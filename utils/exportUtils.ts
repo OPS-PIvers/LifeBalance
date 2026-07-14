@@ -159,19 +159,20 @@ export interface TransactionExportRow extends Record<string, unknown> {
  * Maps transactions to flat CSV-ready rows for the Money → Transactions export
  * (F-MONEY-10). Pure so it's unit-testable independently of the component.
  * Amount stays a raw decimal-dollar number (not a `useFormatCurrency()` string)
- * so spreadsheets can sum/filter it directly; `Currency` is a separate column
- * since the app is USD-only today.
+ * so spreadsheets can sum/filter it directly; `Currency` is a separate column,
+ * defaulting to 'USD' but overridable by the household's configured currency.
  */
 export const buildTransactionExportRows = (
   transactions: Transaction[],
-  accountsById: Map<string, string>
+  accountsById: Map<string, string>,
+  currency: string = 'USD'
 ): TransactionExportRow[] =>
   transactions.map(tx => ({
     Date: tx.date,
     Merchant: tx.merchant,
     Category: tx.category,
     Amount: tx.amount,
-    Currency: 'USD',
+    Currency: currency,
     Status: tx.status,
     Account: (tx.accountId && accountsById.get(tx.accountId)) || 'Unassigned',
     Source: tx.source,

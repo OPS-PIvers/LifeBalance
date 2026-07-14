@@ -50,7 +50,7 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
     loadAllTransactions,
     transactionWindowStart,
   } = useFinance();
-  const { householdId } = useHouseholdCore();
+  const { householdId, household } = useHouseholdCore();
   const { stores } = useShopping();
   const { habits } = useGamification();
   const fmt = useFormatCurrency();
@@ -344,7 +344,7 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
         return;
       }
 
-      const exportData = buildTransactionExportRows(filteredTransactions, accountsById);
+      const exportData = buildTransactionExportRows(filteredTransactions, accountsById, household?.currency);
       generateCsvExport(exportData, 'transactions-export');
       toast.success('Export started');
     } catch (error) {
@@ -367,7 +367,7 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
         return;
       }
 
-      const exportData = buildTransactionExportRows(scoped, accountsById);
+      const exportData = buildTransactionExportRows(scoped, accountsById, household?.currency);
       generateCsvExport(exportData, 'transactions-export-all');
       toast.success(`Exported ${scoped.length} transactions`);
     } catch (error) {

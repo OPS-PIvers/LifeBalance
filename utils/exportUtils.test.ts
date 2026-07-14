@@ -211,5 +211,13 @@ describe('exportUtils', () => {
       expect(row?.Amount).toBe(1234.56);
       expect(typeof row?.Amount).toBe('number');
     });
+
+    it('defaults to USD but respects an explicit household currency', () => {
+      const [defaultRow] = buildTransactionExportRows([makeTx()], new Map());
+      expect(defaultRow?.Currency).toBe('USD');
+
+      const [eurRow] = buildTransactionExportRows([makeTx()], new Map(), 'EUR');
+      expect(eurRow?.Currency).toBe('EUR');
+    });
   });
 });
