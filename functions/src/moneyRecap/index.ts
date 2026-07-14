@@ -84,20 +84,27 @@ export const sendmonthlymoneyrecap = onSchedule(
     const groups = await loadNotifiableMembersByHousehold(db);
     logger.info(`sendmonthlymoneyrecap: found ${groups.length} household(s) with notification-eligible members`);
 
-    for (const group of groups) {
-      try {
-        await processHousehold(db, group, billingEnabled);
-      } catch (error) {
-        logger.error(`sendmonthlymoneyrecap: failed processing household ${group.householdId}`, error);
-      }
-    }
+    // Capture a single logical execution timestamp up front so every
+    // household/member evaluation this run agrees on "now" (avoids clock
+    // drift across a long-running, many-household invocation).
+    const now = new Date();
+    await Promise.allSettled(
+      groups.map(async (group) => {
+        try {
+          await processHousehold(db, group, billingEnabled, now);
+        } catch (error) {
+          logger.error(`sendmonthlymoneyrecap: failed processing household ${group.householdId}`, error);
+        }
+      })
+    );
   }
 );
 
 async function processHousehold(
   db: admin.firestore.Firestore,
   group: NotifiableHouseholdGroup,
-  billingEnabled: boolean
+  billingEnabled: boolean,
+  now: Date
 ): Promise<void> {
   const householdId = group.householdId;
   const household = ((await group.getHouseholdData()) ?? {}) as MoneyRecapHouseholdDoc;
@@ -105,7 +112,6 @@ async function processHousehold(
 
   // Does ANY member's local clock currently read the 1st of the month at 09:00?
   // That member's timezone defines which month we generate the recap for.
-  const now = new Date();
   let triggeringTimezone: string | undefined;
   for (const memberDoc of memberDocs) {
     const member = memberDoc.data() as MoneyRecapMemberDoc;
