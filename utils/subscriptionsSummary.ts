@@ -1,5 +1,5 @@
 import { CalendarItem } from '@/types/schema';
-import { addMoney, roundMoney } from '@/utils/money';
+import { roundMoney, sumMoney } from '@/utils/money';
 
 /** Weeks and pay-cycles per month used to normalize cadence to a monthly-equivalent cost. */
 const WEEKS_PER_MONTH = 52 / 12;
@@ -7,7 +7,7 @@ const BIWEEKLY_CYCLES_PER_MONTH = 26 / 12;
 
 export interface RecurringSummaryItem {
   /** The recurring calendar item template (id, title, amount, frequency, etc.). */
-  item: CalendarItem;
+  item: CalendarItem & { frequency: NonNullable<CalendarItem['frequency']> };
   /** Cost normalized to a monthly-equivalent dollar amount, cent-safe. */
   monthlyEquivalent: number;
 }
@@ -64,7 +64,7 @@ export function summarizeRecurringItems(calendarItems: CalendarItem[]): Recurrin
     }))
     .sort((a, b) => b.monthlyEquivalent - a.monthlyEquivalent);
 
-  const totalMonthly = addMoney(...items.map(i => i.monthlyEquivalent));
+  const totalMonthly = sumMoney(items.map(i => i.monthlyEquivalent));
 
   return { items, totalMonthly };
 }

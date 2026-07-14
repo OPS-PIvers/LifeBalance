@@ -62,7 +62,7 @@ const SubscriptionsView: React.FC = () => {
                 </p>
                 <div className="mt-0.5 flex items-center gap-2">
                   <Badge variant="neutral" size="sm">
-                    {item.frequency ? FREQUENCY_LABEL[item.frequency] : ''}
+                    {FREQUENCY_LABEL[item.frequency]}
                   </Badge>
                   <span className="text-xs text-brand-450 dark:text-brand-400">
                     {fmt(item.amount)} per {item.frequency === 'monthly' ? 'month' : 'cycle'}
