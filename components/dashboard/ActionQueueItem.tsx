@@ -12,6 +12,7 @@ import {
 import { HouseholdMember, BudgetBucket, Transaction, ToDo } from '@/types/schema';
 import { suggestCategoryForTransaction } from '@/utils/actionQueueSmart';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
+import { roundMoney } from '@/utils/money';
 import { cn } from '@/utils/cn';
 import { haptic } from '@/utils/haptics';
 import { Button } from '@/components/ui/Button';
@@ -286,7 +287,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
     setWasExpanded(isExpanded);
     if (isExpanded && isCalendarQueueItem(item)) setPayAmountInput(String(item.amount));
   }
-  const parsedPayAmount = parseFloat(payAmountInput);
+  const parsedPayAmount = roundMoney(parseFloat(payAmountInput));
   const payAmountValid = Number.isFinite(parsedPayAmount) && parsedPayAmount > 0;
 
   // Compute icon and styles only when item type changes
