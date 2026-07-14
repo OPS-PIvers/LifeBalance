@@ -131,11 +131,12 @@ describe('SafeToSpendBreakdownDrawer', () => {
     expect(screen.getByText('-$50.00')).toBeInTheDocument();
     expect(screen.getByText('$150.00 of $100.00 spent')).toBeInTheDocument();
     expect(screen.getByText('Over budget')).toBeInTheDocument();
-    // Progress bars: Groceries at 25%, Gas clamped to 100%.
+    // Progress bars: Groceries at 25%, Gas at 150% (ProgressBar reports the
+    // true unclamped percentage via aria and clips the fill visually).
     const bars = screen.getAllByRole('progressbar');
     expect(bars).toHaveLength(2);
     expect(bars[0]).toHaveAttribute('aria-valuenow', '25');
-    expect(bars[1]).toHaveAttribute('aria-valuenow', '100');
+    expect(bars[1]).toHaveAttribute('aria-valuenow', '150');
 
     // Unallocated leftover = 1700 − 150 (gas over contributes 0) = 1550.
     expect(screen.getByText('Unallocated')).toBeInTheDocument();

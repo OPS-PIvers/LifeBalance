@@ -94,7 +94,7 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
           <SurfaceList>
             {rows.map(row => {
               const percent =
-                row.limit > 0 ? Math.min(100, Math.max(0, (row.spent / row.limit) * 100)) : 100;
+                row.limit > 0 ? Math.max(0, (row.spent / row.limit) * 100) : 100;
               return (
                 <Row key={row.id} className="flex-col items-stretch gap-1.5">
                   <div className="flex items-baseline justify-between gap-3">
