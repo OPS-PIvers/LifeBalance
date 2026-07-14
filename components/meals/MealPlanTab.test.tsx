@@ -33,6 +33,12 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   }),
   useHouseholdCore: () => ({
     householdId: 'test-household',
+    householdSettings: {},
+    setMealCookedHabitId: vi.fn(),
+  }),
+  useGamification: () => ({
+    habits: [],
+    toggleHabit: vi.fn(),
   }),
 }));
 

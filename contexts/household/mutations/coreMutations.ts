@@ -66,7 +66,15 @@ export function makeHouseholdSettingsMutations(deps: {
     await updateDoc(ref, { kidModePinHash });
   };
 
-  return { completeOnboarding, setHouseholdCurrency, setModuleVisibility, setKidModePin };
+  // F-MEALS-04: set/clear the habit auto-credited when a meal is marked cooked.
+  // `null` clears the link (deleteField, matching setKidModePin's clear semantics).
+  const setMealCookedHabitId = async (habitId: string | null): Promise<void> => {
+    if (!householdId) return;
+    const ref = doc(db, 'households', householdId);
+    await updateDoc(ref, { mealCookedHabitId: habitId === null ? deleteField() : habitId });
+  };
+
+  return { completeOnboarding, setHouseholdCurrency, setModuleVisibility, setKidModePin, setMealCookedHabitId };
 }
 
 /**

@@ -475,6 +475,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // legacy household. Toggling a module mutates this in-memory map so the dynamic
   // footer / route guards / Plan-tab fallback are all walkable in Test Mode.
   const [moduleVisibility, setModuleVisibilityState] = useState<Partial<Record<ModuleKey, boolean>>>({});
+  // F-MEALS-04 — habit auto-credited when a meal-plan item is marked cooked.
+  const [mealCookedHabitId, setMealCookedHabitIdState] = useState<string | undefined>(undefined);
 
   // Account operations
   const addAccount = useCallback(async (account: Omit<Account, 'id'>) => {
@@ -569,6 +571,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     // Hash for real so the Test-Mode exit-PIN flow verifies like production.
     setKidModePinHash(await hashKidPin(pin));
     toast.success('Mock: Kid Mode PIN set');
+  }, []);
+
+  const setMealCookedHabitId = useCallback(async (habitId: string | null) => {
+    setMealCookedHabitIdState(habitId ?? undefined);
+    toast.success(habitId ? 'Mock: Cook habit linked' : 'Mock: Cook habit unlinked');
   }, []);
 
   const updateAccountBalance = useCallback(async (id: string, newBalance: number) => {
@@ -1391,6 +1398,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     redemptionHistory,
     unlockedRewardIds,
     moduleVisibility,
+    mealCookedHabitId,
 
   } as unknown as Household;
   // Same derivation as the real Firebase context, so Test Mode's Budget page
@@ -1637,6 +1645,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     setHouseholdCurrency,
     setModuleVisibility,
     setKidModePin,
+    setMealCookedHabitId,
     addKidProfile,
     updateKidProfile,
     removeKidProfile,
