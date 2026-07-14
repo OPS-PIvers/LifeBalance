@@ -129,6 +129,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
         const existing = apiKeys.find((k) => k.id === keyId);
         if (!existing) {
           toast.error('Key not found');
+          setPendingAction(null);
           return;
         }
         const result = await regenerateApiKey(
