@@ -31,6 +31,9 @@ export const RECAPS_LIMIT = 4;
 /** Monthly money recaps: live listener keeps the most recent N months (F-MONEY-06). */
 export const MONEY_RECAPS_LIMIT = 4;
 
+/** Net worth history (F-MONEY-09): live listener keeps the most recent N daily snapshots (~6 months). */
+export const NET_WORTH_HISTORY_LIMIT = 180;
+
 /** To-dos: completed items are only kept live if completed within the last N days. */
 export const TODO_COMPLETED_WINDOW_DAYS = 30;
 

@@ -25,6 +25,7 @@ import {
   ModuleKey,
   WeeklyRecap,
   MonthlyMoneyRecap,
+  NetWorthSnapshot,
   TransactionComment
 } from '@/types/schema';
 import { type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
@@ -83,6 +84,9 @@ export interface HouseholdContextType {
   /** Monthly money recaps (F-MONEY-06) — newest first, bounded live window
    *  (MONEY_RECAPS_LIMIT). */
   moneyRecaps: MonthlyMoneyRecap[];
+  /** Net worth history (F-MONEY-09) — newest first, bounded live window
+   *  (NET_WORTH_HISTORY_LIMIT). Server-written daily; clients only read. */
+  netWorthHistory: NetWorthSnapshot[];
 
   // --- Listener windowing / pagination ---
   // The high-cardinality collections below are windowed on cold load (see
@@ -368,7 +372,7 @@ export interface HouseholdContextType {
 
 export type FinanceContextValue = Pick<HouseholdContextType,
   | 'safeToSpend' | 'safeToSpendBreakdown' | 'accounts' | 'buckets' | 'savingsGoals' | 'calendarItems' | 'transactions'
-  | 'currentPeriodId' | 'bucketSpentMap' | 'bucketHistory'
+  | 'currentPeriodId' | 'bucketSpentMap' | 'bucketHistory' | 'netWorthHistory'
   | 'transactionWindowStart' | 'isLoadingOlderTransactions' | 'hasMoreTransactions'
   | 'loadOlderTransactions' | 'loadAllTransactions'
   | 'isLoadingOlderBucketHistory' | 'hasMoreBucketHistory' | 'loadAllBucketHistory'

@@ -21,7 +21,7 @@ export { isTimeToSend } from "./shared/notifications";
 admin.initializeApp();
 
 // Export Quick Add HTTP functions for iOS Shortcuts
-export { quickAddHabit, quickAddExpense, quickAddShoppingItem, quickAddNaturalLanguage } from "./quickAdd";
+export { quickAddHabit, quickAddExpense, quickAddShoppingItem, quickAddNaturalLanguage, quickAddBillPay } from "./quickAdd";
 
 // Export the Gemini API proxy (holds the GEMINI_API_KEY secret server-side).
 export { geminiproxy } from "./geminiProxy";
@@ -66,6 +66,9 @@ export { sendweeklyrecap } from "./recap";
 // secret (already required by geminiproxy/sendweeklyrecap), so exporting it
 // adds no new secret dependency for CI deploys.
 export { sendmonthlymoneyrecap } from "./moneyRecap";
+
+// Daily net worth snapshot (F-MONEY-09). No secrets — safe to export/deploy.
+export { snapshotnetworth } from "./netWorth";
 
 // Managed kid-profile creation (Plan 080 / Plan 051): authoritatively enforces the
 // per-plan maxKidProfiles cap server-side. No secrets — safe to export/deploy.

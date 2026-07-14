@@ -31,6 +31,7 @@ import {
   insightConverter,
   weeklyRecapConverter,
   monthlyMoneyRecapConverter,
+  netWorthSnapshotConverter,
   transactionConverter,
   transactionCommentConverter,
   todoConverter,
@@ -823,6 +824,42 @@ describe('monthlyMoneyRecapConverter', () => {
     const result = monthlyMoneyRecapConverter.fromFirestore(fakeSnap('2026-05', partial));
     expect(result.id).toBe('2026-05');
     expect(result.premium).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// NetWorthSnapshot (F-MONEY-09) — no Timestamp fields; id is the date.
+// ---------------------------------------------------------------------------
+describe('netWorthSnapshotConverter', () => {
+  const wellFormed = {
+    date: '2026-07-14',
+    totalAssets: 5000,
+    totalLiabilities: 1200.5,
+    netWorth: 3799.5,
+  };
+
+  it('(a) well-formed doc: fromFirestore injects id (the date) and preserves fields', () => {
+    const result = netWorthSnapshotConverter.fromFirestore(fakeSnap('2026-07-14', wellFormed));
+    expect(result.id).toBe('2026-07-14');
+    expect(result.date).toBe('2026-07-14');
+    expect(result.totalAssets).toBe(5000);
+    expect(result.totalLiabilities).toBe(1200.5);
+    expect(result.netWorth).toBe(3799.5);
+  });
+
+  it('(a) well-formed doc: toFirestore strips id', () => {
+    const snap = { ...wellFormed, id: '2026-07-14' };
+    const out = callToFirestore(netWorthSnapshotConverter, snap);
+    expect('id' in out).toBe(false);
+    expect(out['date']).toBe('2026-07-14');
+  });
+
+  it('(b) partial doc with zeroed totals does not throw', () => {
+    const partial = { date: '2026-07-13', totalAssets: 0, totalLiabilities: 0, netWorth: 0 };
+    expect(() => netWorthSnapshotConverter.fromFirestore(fakeSnap('2026-07-13', partial))).not.toThrow();
+    const result = netWorthSnapshotConverter.fromFirestore(fakeSnap('2026-07-13', partial));
+    expect(result.id).toBe('2026-07-13');
+    expect(result.netWorth).toBe(0);
   });
 });
 

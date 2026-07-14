@@ -58,6 +58,7 @@ import type {
   ToDo,
   WeeklyRecap,
   MonthlyMoneyRecap,
+  NetWorthSnapshot,
   SavingsGoal,
 } from '@/types/schema';
 
@@ -362,6 +363,24 @@ export const monthlyMoneyRecapConverter: FirestoreDataConverter<MonthlyMoneyReca
           ? d['generatedAt'].toDate().toISOString()
           : d['generatedAt'],
     } as MonthlyMoneyRecap;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// NetWorthSnapshot (F-MONEY-09) — doc id IS the date (yyyy-MM-dd); no
+// Timestamp fields to normalise. Server-written (Admin SDK) but the
+// converter still strips the synthetic id defensively on any client write path.
+// ---------------------------------------------------------------------------
+export const netWorthSnapshotConverter: FirestoreDataConverter<NetWorthSnapshot> = {
+  toFirestore(snapshot: NetWorthSnapshot): DocumentData {
+    return omitKey(snapshot, 'id');
+  },
+  fromFirestore(snapshot: QueryDocumentSnapshot): NetWorthSnapshot {
+    const d = snapshot.data();
+    return {
+      ...d,
+      id: snapshot.id,
+    } as NetWorthSnapshot;
   },
 };
 
