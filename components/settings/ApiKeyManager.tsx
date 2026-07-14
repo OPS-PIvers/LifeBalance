@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Key, Plus, Copy, Trash2, AlertTriangle, Clock, Shield } from 'lucide-react';
+import { Key, Plus, Copy, Trash2, AlertTriangle, Clock, Shield, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { Switch } from '@/components/ui/Switch';
@@ -8,6 +8,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { HouseholdApiKey, ApiKeyPermissions } from '@/types/schema';
 import {
   generateApiKey,
+  regenerateApiKey,
   revokeApiKey,
   deleteApiKey,
   getQuickAddEndpointUrl,
@@ -48,7 +49,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
   const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState<
-    { type: 'revoke' | 'delete'; keyId: string; keyName: string } | null
+    { type: 'revoke' | 'delete' | 'regenerate'; keyId: string; keyName: string } | null
   >(null);
   const [isActionPending, setIsActionPending] = useState(false);
 
@@ -112,6 +113,10 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
     setPendingAction({ type: 'delete', keyId, keyName });
   };
 
+  const handleRegenerateKey = (keyId: string, keyName: string) => {
+    setPendingAction({ type: 'regenerate', keyId, keyName });
+  };
+
   const handleConfirmAction = async () => {
     if (!pendingAction) return;
     const { type, keyId } = pendingAction;
@@ -120,6 +125,22 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
       if (type === 'revoke') {
         await revokeApiKey(householdId, keyId);
         toast.success('API key revoked');
+      } else if (type === 'regenerate') {
+        const existing = apiKeys.find((k) => k.id === keyId);
+        if (!existing) {
+          toast.error('Key not found');
+          return;
+        }
+        const result = await regenerateApiKey(
+          householdId,
+          keyId,
+          existing.name,
+          existing.permissions,
+          userId
+        );
+        setNewlyCreatedKey(result.key);
+        onKeyGenerated?.(result.key);
+        toast.success('Key regenerated! Copy the new key — it won\'t be shown again.');
       } else {
         await deleteApiKey(householdId, keyId);
         toast.success('API key deleted');
@@ -190,6 +211,10 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
       {activeKeys.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 px-1">Active keys</p>
+          <p className="text-xs text-brand-500 dark:text-brand-400 px-1">
+            For security, keys are shown only once and can&apos;t be copied again. Lost a key or fumbled the setup? Tap
+            {' '}<RefreshCw className="inline w-3 h-3 -mt-0.5" aria-hidden="true" /> to regenerate a fresh one — the name and permissions carry over.
+          </p>
           <SurfaceList>
             {activeKeys.map((key) => (
               <Row key={key.id} className="items-start">
@@ -199,16 +224,26 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                 <div className="flex-1 min-w-0 space-y-1.5">
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-semibold text-brand-900 dark:text-brand-100 truncate">{key.name}</span>
-                    <Button
-                      variant="ghost-danger"
-                      size="icon"
-                      className="shrink-0 -my-1"
-                      onClick={() => handleRevokeKey(key.id, key.name)}
-                      title="Revoke key"
-                      aria-label={`Revoke key ${key.name}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center gap-1 shrink-0 -my-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRegenerateKey(key.id, key.name)}
+                        title="Regenerate key"
+                        aria-label={`Regenerate key ${key.name}`}
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost-danger"
+                        size="icon"
+                        onClick={() => handleRevokeKey(key.id, key.name)}
+                        title="Revoke key"
+                        aria-label={`Revoke key ${key.name}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-brand-500 dark:text-brand-400">
                     <code className="bg-brand-100 dark:bg-brand-700 px-2 py-0.5 rounded-sm font-mono text-brand-700 dark:text-brand-200">{key.keyPrefix}...</code>
@@ -408,12 +443,26 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
         onClose={() => setPendingAction(null)}
         onConfirm={handleConfirmAction}
         isConfirming={isActionPending}
-        title={pendingAction?.type === 'delete' ? 'Delete API key' : 'Revoke API key'}
-        confirmLabel={pendingAction?.type === 'delete' ? 'Delete' : 'Revoke'}
+        title={
+          pendingAction?.type === 'delete'
+            ? 'Delete API key'
+            : pendingAction?.type === 'regenerate'
+              ? 'Regenerate API key'
+              : 'Revoke API key'
+        }
+        confirmLabel={
+          pendingAction?.type === 'delete'
+            ? 'Delete'
+            : pendingAction?.type === 'regenerate'
+              ? 'Regenerate'
+              : 'Revoke'
+        }
         message={
           pendingAction?.type === 'delete'
             ? `Permanently delete "${pendingAction?.keyName}"? The key is removed forever and cannot be restored.`
-            : `Revoke "${pendingAction?.keyName}"? Shortcuts using this key will stop working immediately. The key stays listed under Revoked Keys until you delete it.`
+            : pendingAction?.type === 'regenerate'
+              ? `Regenerate "${pendingAction?.keyName}"? You'll get a fresh key to copy — its name and permissions stay the same. The current key stops working immediately, so update your shortcut with the new one.`
+              : `Revoke "${pendingAction?.keyName}"? Shortcuts using this key will stop working immediately. The key stays listed under Revoked Keys until you delete it.`
         }
       />
     </div>

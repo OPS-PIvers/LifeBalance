@@ -13,6 +13,7 @@ import {
   deleteDoc,
   doc,
   serverTimestamp,
+  writeBatch,
 } from "firebase/firestore";
 import { HouseholdApiKey, ApiKeyPermissions } from "@/types/schema";
 
@@ -42,22 +43,17 @@ export interface GenerateApiKeyResult {
 }
 
 /**
- * Generate a new API key for a household
+ * Mint a fresh key + its storable metadata (does NOT persist).
  *
- * IMPORTANT: The returned `key` is the only time the plain-text key will be available.
- * It must be shown to the user immediately and cannot be retrieved later.
- *
- * @param householdId - The household ID
- * @param name - User-provided name for the key (e.g., "iPhone Shortcut")
- * @param permissions - Which endpoints the key can access
- * @param createdBy - UID of the user creating the key
+ * Shared by generateApiKey (new key) and regenerateApiKey (rotate in place) so
+ * the key format, hashing, and default metadata stay identical across both.
  */
-export async function generateApiKey(
+async function buildKeyMaterial(
   householdId: string,
   name: string,
   permissions: ApiKeyPermissions,
   createdBy: string
-): Promise<GenerateApiKeyResult> {
+): Promise<{ key: string; keyData: Omit<HouseholdApiKey, "id"> }> {
   // Generate the key in format: lb_{householdPrefix}_{32hexChars}
   const householdPrefix = householdId.substring(0, 6);
   const randomPart = generateRandomHex(16); // 32 hex chars
@@ -80,6 +76,33 @@ export async function generateApiKey(
     permissions,
   };
 
+  return { key, keyData };
+}
+
+/**
+ * Generate a new API key for a household
+ *
+ * IMPORTANT: The returned `key` is the only time the plain-text key will be available.
+ * It must be shown to the user immediately and cannot be retrieved later.
+ *
+ * @param householdId - The household ID
+ * @param name - User-provided name for the key (e.g., "iPhone Shortcut")
+ * @param permissions - Which endpoints the key can access
+ * @param createdBy - UID of the user creating the key
+ */
+export async function generateApiKey(
+  householdId: string,
+  name: string,
+  permissions: ApiKeyPermissions,
+  createdBy: string
+): Promise<GenerateApiKeyResult> {
+  const { key, keyData } = await buildKeyMaterial(
+    householdId,
+    name,
+    permissions,
+    createdBy
+  );
+
   // Store in Firestore
   const keysCollection = collection(db, `households/${householdId}/apiKeys`);
   const docRef = await addDoc(keysCollection, {
@@ -92,6 +115,64 @@ export async function generateApiKey(
     keyData: {
       ...keyData,
       id: docRef.id,
+    } as HouseholdApiKey,
+  };
+}
+
+/**
+ * Rotate an existing API key's secret *in place*.
+ *
+ * Mints a brand-new secret that keeps the SAME name and permissions as the old
+ * key, then atomically swaps it in via a single writeBatch (create new + delete
+ * old) so a shortcut is never left pointing at a key that has already vanished.
+ *
+ * Because keys are stored only as a hash, the plain-text secret is
+ * unrecoverable once created — regeneration is the safe, one-tap alternative to
+ * the delete-then-recreate-and-reconfigure dance when a shortcut needs the key
+ * value again. Like generateApiKey, the returned `key` is the ONLY time the
+ * plain text is available.
+ *
+ * We create+delete rather than updating the doc in place because the Firestore
+ * rules deliberately forbid mutating `hashedKey`/`keyPrefix` on an existing doc;
+ * doing it this way preserves that immutability guarantee with no rules change.
+ *
+ * @param householdId - The household ID
+ * @param keyId - The document ID of the key being rotated
+ * @param name - Name to carry over to the new key
+ * @param permissions - Permissions to carry over to the new key
+ * @param createdBy - UID of the user performing the rotation
+ */
+export async function regenerateApiKey(
+  householdId: string,
+  keyId: string,
+  name: string,
+  permissions: ApiKeyPermissions,
+  createdBy: string
+): Promise<GenerateApiKeyResult> {
+  const { key, keyData } = await buildKeyMaterial(
+    householdId,
+    name,
+    permissions,
+    createdBy
+  );
+
+  const keysCollection = collection(db, `households/${householdId}/apiKeys`);
+  const newRef = doc(keysCollection);
+  const oldRef = doc(db, `households/${householdId}/apiKeys/${keyId}`);
+
+  const batch = writeBatch(db);
+  batch.set(newRef, {
+    ...keyData,
+    createdAt: serverTimestamp(), // Use server timestamp for actual storage
+  });
+  batch.delete(oldRef);
+  await batch.commit();
+
+  return {
+    key, // Return the plain-text key (only time it's available!)
+    keyData: {
+      ...keyData,
+      id: newRef.id,
     } as HouseholdApiKey,
   };
 }
