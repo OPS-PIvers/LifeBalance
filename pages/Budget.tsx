@@ -5,6 +5,7 @@ import BudgetBuckets from '@/components/budget/BudgetBuckets';
 import BudgetAccounts from '@/components/budget/BudgetAccounts';
 import TransactionMasterList from '@/components/budget/TransactionMasterList';
 import MoneyOverview from '@/components/budget/MoneyOverview';
+import SettleUpView from '@/components/transactions/SettleUpView';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import PageHeader from '@/components/ui/PageHeader';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
@@ -113,7 +114,10 @@ const Budget: React.FC = () => {
               <BudgetBuckets />
             </TabsContent>
             <TabsContent value="accounts">
-              <BudgetAccounts />
+              <div className="space-y-6">
+                <BudgetAccounts />
+                <SettleUpView />
+              </div>
             </TabsContent>
             <TabsContent value="transactions">
               <TransactionMasterList highlightId={highlightTransactionId} />

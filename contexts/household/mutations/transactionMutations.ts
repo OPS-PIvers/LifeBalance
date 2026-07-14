@@ -12,9 +12,10 @@ import toast from 'react-hot-toast';
 import React from 'react';
 import { Star } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
-import { Account, Habit, Household, Transaction } from '@/types/schema';
+import { Account, Habit, Household, SplitParticipant, Transaction } from '@/types/schema';
 import type { MutationOpts } from '@/contexts/household/types';
 import { effectiveAccountImpact, resolveTargetAccount } from '@/utils/accountImpact';
+import { splitParticipantKey } from '@/utils/settlement';
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
 import { processToggleHabit } from '@/utils/habitLogic';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
@@ -500,6 +501,18 @@ export function makeUpdateTransaction(deps: {
       } else if (typeof sanitizedUpdates.notes === 'string') {
         sanitizedUpdates.notes = sanitizedUpdates.notes.trim();
       }
+      // F-MONEY-13: an explicit `splitWith` key (present in `updates`, even as
+      // `null`/`[]`) co-commits the split overlay in this SAME write instead of
+      // a separate updateDoc — the overlay never touches a balance, but it does
+      // touch the SAME transaction doc, so folding it in here avoids a second
+      // sequential write to the same document. Sanitized/rounded exactly like
+      // makeSetTransactionSplit's `cleaned` path; a zero-or-negative share is
+      // dropped and an empty result clears the field via deleteField().
+      if ('splitWith' in updates) {
+        delete sanitizedUpdates.splitWith;
+        const cleaned = (updates.splitWith ?? []).filter(p => roundMoney(p.shareAmount) > 0);
+        sanitizedUpdates.splitWith = cleaned.length > 0 ? cleaned.map(sanitizeSplitParticipant) : deleteField();
+      }
 
       // Atomically commit the transaction update and the account balance deltas in
       // a single writeBatch so they can never partially apply.
@@ -781,4 +794,93 @@ export function makeSplitTransaction(deps: {
   };
 
   return { splitTransaction };
+}
+
+/**
+ * Strip a SplitParticipant down to only its defined fields, rounding the share
+ * to whole cents. Firestore rejects `undefined` field values, so optional keys
+ * are omitted rather than written as undefined.
+ */
+function sanitizeSplitParticipant(p: SplitParticipant): Record<string, unknown> {
+  const out: Record<string, unknown> = { shareAmount: roundMoney(p.shareAmount) };
+  if (p.memberId) out.memberId = p.memberId;
+  if (p.email && p.email.trim()) out.email = p.email.trim().toLowerCase();
+  if (p.name && p.name.trim()) out.name = p.name.trim();
+  if (p.settled === true) out.settled = true;
+  if (p.invitedAt) out.invitedAt = p.invitedAt;
+  return out;
+}
+
+/**
+ * setTransactionSplit — F-MONEY-13. Save (or clear) a transaction's split
+ * overlay. This is a BOOKKEEPING-ONLY write: it never touches any account
+ * balance (splitting is a display overlay like buckets), so a single `updateDoc`
+ * is sufficient — no writeBatch is needed. Passing an empty array or `null`
+ * removes the field entirely via `deleteField()`.
+ */
+export function makeSetTransactionSplit(deps: {
+  db: Firestore;
+  householdId: string | null;
+}) {
+  const { db, householdId } = deps;
+
+  const setTransactionSplit = async (
+    transactionId: string,
+    split: SplitParticipant[] | null,
+  ) => {
+    if (!householdId) return;
+    try {
+      const cleaned = (split ?? []).filter(p => roundMoney(p.shareAmount) > 0);
+      await updateDoc(doc(db, `households/${householdId}/transactions`, transactionId), {
+        splitWith: cleaned.length > 0 ? cleaned.map(sanitizeSplitParticipant) : deleteField(),
+      });
+    } catch (error) {
+      console.error('[setTransactionSplit] Failed:', error);
+      toast.error('Failed to save split');
+      throw error;
+    }
+  };
+
+  return { setTransactionSplit };
+}
+
+/**
+ * markSplitSettled — F-MONEY-13. Toggle the `settled` flag on ONE participant's
+ * share of a split transaction (addressed by its `splitParticipantKey`). No
+ * balance change (a split is an overlay), so this is a single `updateDoc` that
+ * rewrites the whole `splitWith` array with the one participant flipped.
+ */
+export function makeMarkSplitSettled(deps: {
+  db: Firestore;
+  householdId: string | null;
+  transactions: Transaction[];
+}) {
+  const { db, householdId, transactions } = deps;
+
+  const markSplitSettled = async (
+    transactionId: string,
+    participantKey: string,
+    settled: boolean = true,
+  ) => {
+    if (!householdId) return;
+    const tx = transactions.find(t => t.id === transactionId);
+    if (!tx || !tx.splitWith) {
+      toast.error('Split not found');
+      return;
+    }
+    try {
+      const next = tx.splitWith.map(p =>
+        splitParticipantKey(p) === participantKey ? { ...p, settled } : p,
+      );
+      await updateDoc(doc(db, `households/${householdId}/transactions`, transactionId), {
+        splitWith: next.map(sanitizeSplitParticipant),
+      });
+    } catch (error) {
+      console.error('[markSplitSettled] Failed:', error);
+      toast.error('Failed to update split');
+      throw error;
+    }
+  };
+
+  return { markSplitSettled };
 }

@@ -31,6 +31,7 @@ import {
   Account,
   BudgetBucket,
   Transaction,
+  SplitParticipant,
   CalendarItem,
   Habit,
   Challenge,
@@ -111,6 +112,8 @@ import {
   makeMergeTransactions,
   makeKeepBothTransactions,
   makeSplitTransaction,
+  makeSetTransactionSplit,
+  makeMarkSplitSettled,
 } from '@/contexts/household/mutations/transactionMutations';
 import {
   makeGetTransactionComments,
@@ -1710,6 +1713,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }).splitTransaction(originalTransactionId, newTransactions);
   }, [householdId, user, transactions, householdSettings, accounts]);
 
+  const setTransactionSplit = useCallback(async (transactionId: string, split: SplitParticipant[] | null) => {
+    await makeSetTransactionSplit({ db, householdId }).setTransactionSplit(transactionId, split);
+  }, [householdId]);
+
+  const markSplitSettled = useCallback(async (transactionId: string, participantKey: string, settled?: boolean) => {
+    await makeMarkSplitSettled({ db, householdId, transactions }).markSplitSettled(transactionId, participantKey, settled);
+  }, [householdId, transactions]);
+
   // Plan 23 — transaction comments. ON-DEMAND fetch (no listener); the
   // households/{id}/transactions/{txnId}/comments subcollection has no
   // firestore.rules entry yet (separate human-watched PR) so these reject
@@ -2142,6 +2153,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateTransaction,
     deleteTransaction,
     splitTransaction,
+    setTransactionSplit,
+    markSplitSettled,
     mergeTransactions,
     keepBothTransactions,
     getTransactionComments,
@@ -2156,6 +2169,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addBucket, updateBucket, deleteBucket, updateBucketLimit, reallocateBucket,
     addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem,
     addTransaction, updateTransactionCategory, updateTransaction, deleteTransaction, splitTransaction,
+    setTransactionSplit, markSplitSettled,
     mergeTransactions, keepBothTransactions, getTransactionComments, addTransactionComment, deleteTransactionComment,
   ]);
 

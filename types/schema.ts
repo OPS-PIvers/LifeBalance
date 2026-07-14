@@ -257,6 +257,42 @@ export interface Transaction {
    *  display field — never derived client-side from a fetched list, since
    *  comments are loaded on demand (no standing listener). */
   commentCount?: number;
+  /** uid of the member who created (and, for splitting, PAID FOR) this
+   *  transaction. Written server-authoritatively by `addTransaction`
+   *  (`createdBy: user.uid`); the converter passes it through. Used by the
+   *  F-MONEY-13 Settle-Up math as the "payer" each split share is owed to. */
+  createdBy?: string;
+  /** F-MONEY-13: shared-expense splitting overlay. A bookkeeping-only list of
+   *  the OTHER people's shares of this expense (the payer keeps the remainder).
+   *  It NEVER alters the payer's account balance — splitting is a display/
+   *  tracking overlay exactly like budget buckets, so `utils/accountImpact.ts`
+   *  ignores it entirely. Settle-Up (`utils/settlement.ts`) nets the unsettled
+   *  shares into a who-owes-whom balance. Absent ⇒ not a split expense. */
+  splitWith?: SplitParticipant[];
+}
+
+/**
+ * SplitParticipant — F-MONEY-13. One person's share of a split transaction.
+ * A participant is EITHER a household member (`memberId` set) or an external
+ * person without an account (`email` set — the owner-note invite path). The
+ * `shareAmount` is what this person owes the payer (the transaction's
+ * `createdBy`), in decimal dollars. `settled` toggles when they pay it back —
+ * a pure overlay flag with NO balance effect.
+ */
+export interface SplitParticipant {
+  /** Household member uid this share belongs to (in-household split). */
+  memberId?: string;
+  /** Email of a non-member the expense is split with (external invite path). */
+  email?: string;
+  /** Optional display label for an external (non-member) participant. */
+  name?: string;
+  /** Decimal-dollar amount this participant owes the payer. */
+  shareAmount: number;
+  /** True once this share has been paid back / settled up. No balance effect. */
+  settled?: boolean;
+  /** ISO timestamp when a split-invite email was (stub-)dispatched to `email`.
+   *  Present only for external participants that have been invited. */
+  invitedAt?: string;
 }
 
 /**
