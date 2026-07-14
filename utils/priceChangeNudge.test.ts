@@ -45,4 +45,12 @@ describe('computePriceChangeNudge', () => {
     expect(computePriceChangeNudge(100, 0)).toBeNull();
     expect(computePriceChangeNudge(100, -10)).toBeNull();
   });
+
+  it('respects the household-configured currency', () => {
+    const nudgeEur = computePriceChangeNudge(118, 100, 'EUR');
+    expect(nudgeEur?.message).toBe('Up €18.00 from last time');
+
+    const nudgeGbp = computePriceChangeNudge(118, 100, 'GBP');
+    expect(nudgeGbp?.message).toBe('Up £18.00 from last time');
+  });
 });

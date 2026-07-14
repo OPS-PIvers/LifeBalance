@@ -8,6 +8,7 @@
  * the comparison/formatting logic is unit-testable without Firestore.
  */
 import { roundMoney } from '@/utils/money';
+import { formatCurrency, DEFAULT_CURRENCY } from '@/utils/formatCurrency';
 
 /** Only nudge when the change is both non-trivial in dollars AND exceeds
  *  this fraction of the reference amount — a $0.50 wobble on a $2 bill is
@@ -33,7 +34,8 @@ export interface PriceChangeNudge {
  */
 export function computePriceChangeNudge(
   paidAmount: number,
-  referenceAmount: number | undefined
+  referenceAmount: number | undefined,
+  currency: string = DEFAULT_CURRENCY
 ): PriceChangeNudge | null {
   if (referenceAmount === undefined || !Number.isFinite(referenceAmount) || referenceAmount <= 0) {
     return null;
@@ -46,10 +48,10 @@ export function computePriceChangeNudge(
   const relativeChange = Math.abs(delta) / Math.max(referenceAmount, MIN_REFERENCE_AMOUNT);
   if (relativeChange <= RELATIVE_THRESHOLD) return null;
 
-  const absDelta = Math.abs(delta).toFixed(2);
+  const formattedDelta = formatCurrency(Math.abs(delta), { currency });
   const direction = delta > 0 ? 'Up' : 'Down';
   return {
     delta,
-    message: `${direction} $${absDelta} from last time`,
+    message: `${direction} ${formattedDelta} from last time`,
   };
 }

@@ -421,7 +421,7 @@ export function makePayCalendarItem(deps: {
               .sort((a, b) => (a.date < b.date ? 1 : -1))[0]
           : undefined;
         const referenceAmount = lastPaidInstance?.amount ?? item.amount;
-        const nudge = computePriceChangeNudge(paidAmount, referenceAmount);
+        const nudge = computePriceChangeNudge(paidAmount, referenceAmount, householdSettings?.currency);
         if (nudge) toast(nudge.message, { icon: nudge.delta > 0 ? '📈' : '📉' });
       }
     } catch (error) {
