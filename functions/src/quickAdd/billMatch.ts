@@ -24,6 +24,8 @@ import {
   differenceInCalendarWeeks,
   differenceInCalendarMonths,
   startOfDay,
+  addDays,
+  subDays,
 } from "date-fns";
 
 const MONDAY = 1;
@@ -265,12 +267,8 @@ export function findBillToPay(
   if (!search) return null;
 
   const todayDate = startOfDay(parseISO(today));
-  const rangeStart = startOfDay(
-    new Date(todayDate.getTime() - windowStartDays * 24 * 60 * 60 * 1000)
-  );
-  const rangeEnd = startOfDay(
-    new Date(todayDate.getTime() + windowEndDays * 24 * 60 * 60 * 1000)
-  );
+  const rangeStart = startOfDay(subDays(todayDate, windowStartDays));
+  const rangeEnd = startOfDay(addDays(todayDate, windowEndDays));
 
   const expanded = expandCalendarItems(items, rangeStart, rangeEnd).filter(
     (i) => i.type === "expense" && !i.isPaid
