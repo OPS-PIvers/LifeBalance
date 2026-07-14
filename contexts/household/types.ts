@@ -24,7 +24,9 @@ import {
   HouseholdApiKey,
   ModuleKey,
   WeeklyRecap,
-  TransactionComment
+  NetWorthSnapshot,
+  TransactionComment,
+  SplitParticipant
 } from '@/types/schema';
 import { type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { type BucketSpent } from '@/utils/bucketSpentCalculator';
@@ -79,6 +81,9 @@ export interface HouseholdContextType {
   bucketHistory: BucketPeriodSnapshot[];
   /** Weekly recaps (Plan 02) — newest first, bounded live window (RECAPS_LIMIT). */
   recaps: WeeklyRecap[];
+  /** Net worth history (F-MONEY-09) — newest first, bounded live window
+   *  (NET_WORTH_HISTORY_LIMIT). Server-written daily; clients only read. */
+  netWorthHistory: NetWorthSnapshot[];
 
   // --- Listener windowing / pagination ---
   // The high-cardinality collections below are windowed on cold load (see
@@ -143,6 +148,10 @@ export interface HouseholdContextType {
    *  auto-route incoming Shortcut/Wells-Fargo-email transactions to this account. */
   setAccountCardLast4: (id: string, cardLast4: string) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
+  /** Soft-delete: hide from active lists/net worth/Safe-to-Spend while keeping
+   *  the account doc so historical transactions keep resolving to it. */
+  archiveAccount: (id: string) => Promise<void>;
+  unarchiveAccount: (id: string) => Promise<void>;
   updateAccountOrder: (accountId: string, newOrder: number) => Promise<void>;
   reorderAccounts: (orderedIds: string[]) => Promise<void>;
 
@@ -195,6 +204,14 @@ export interface HouseholdContextType {
   updateTransaction: (id: string, updates: Partial<Transaction>, opts?: MutationOpts) => Promise<void>;
   deleteTransaction: (id: string, opts?: MutationOpts) => Promise<void>;
   splitTransaction: (originalTransactionId: string, newTransactions: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[]) => Promise<void>;
+  /** F-MONEY-13: save (or clear) a transaction's shared-expense split overlay.
+   *  Bookkeeping-only — NEVER touches an account balance — so it is a single
+   *  `updateDoc`, not a batch. Pass an empty array or `null` to remove the
+   *  split entirely. See `utils/settlement.ts`. */
+  setTransactionSplit: (transactionId: string, split: SplitParticipant[] | null) => Promise<void>;
+  /** F-MONEY-13: toggle one participant's `settled` flag on a split (addressed
+   *  by `splitParticipantKey`). No balance change; single `updateDoc`. */
+  markSplitSettled: (transactionId: string, participantKey: string, settled?: boolean) => Promise<void>;
   /** Merge a `possibleDuplicateOf`-flagged pair of transactions (plan 03 PR-3):
    *  applies `utils/transactionMerge`'s field-level winner set to the keeper,
    *  deletes the dupe, and reverses the dupe's account-balance impact if it
@@ -225,6 +242,9 @@ export interface HouseholdContextType {
   addHabit: (habit: Habit) => Promise<string>;
   updateHabit: (habit: Habit) => Promise<void>;
   deleteHabit: (id: string) => Promise<void>;
+  /** F-HABITS-05: soft-retire — sets `archivedAt`, no points change, no batch. */
+  archiveHabit: (id: string) => Promise<void>;
+  unarchiveHabit: (id: string) => Promise<void>;
   reorderHabits: (updates: { id: string; order: number; category?: string }[]) => Promise<void>;
   toggleHabit: (id: string, direction: 'up' | 'down') => Promise<void>;
   resetHabit: (id: string) => Promise<void>;
@@ -364,16 +384,18 @@ export interface HouseholdContextType {
 
 export type FinanceContextValue = Pick<HouseholdContextType,
   | 'safeToSpend' | 'safeToSpendBreakdown' | 'accounts' | 'buckets' | 'savingsGoals' | 'calendarItems' | 'transactions'
-  | 'currentPeriodId' | 'bucketSpentMap' | 'bucketHistory'
+  | 'currentPeriodId' | 'bucketSpentMap' | 'bucketHistory' | 'netWorthHistory'
   | 'transactionWindowStart' | 'isLoadingOlderTransactions' | 'hasMoreTransactions'
   | 'loadOlderTransactions' | 'loadAllTransactions'
   | 'isLoadingOlderBucketHistory' | 'hasMoreBucketHistory' | 'loadAllBucketHistory'
   | 'addAccount' | 'updateAccountBalance' | 'setAccountGoal' | 'setAccountCardLast4' | 'deleteAccount'
+  | 'archiveAccount' | 'unarchiveAccount'
   | 'updateAccountOrder' | 'reorderAccounts'
   | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal'
   | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'reallocateBucket'
   | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
   | 'addTransaction' | 'updateTransactionCategory' | 'updateTransaction' | 'deleteTransaction' | 'splitTransaction'
+  | 'setTransactionSplit' | 'markSplitSettled'
   | 'mergeTransactions' | 'keepBothTransactions'
   | 'getTransactionComments' | 'addTransactionComment' | 'deleteTransactionComment'
 >;
@@ -383,7 +405,7 @@ export type GamificationContextValue = Pick<HouseholdContextType,
   | 'activeChallenge' | 'challenges'
   | 'yearlyGoals' | 'activeYearlyGoals' | 'primaryYearlyGoal'
   | 'rewardsInventory' | 'freezeBank'
-  | 'addHabit' | 'updateHabit' | 'deleteHabit' | 'reorderHabits' | 'toggleHabit' | 'resetHabit'
+  | 'addHabit' | 'updateHabit' | 'deleteHabit' | 'archiveHabit' | 'unarchiveHabit' | 'reorderHabits' | 'toggleHabit' | 'resetHabit'
   | 'addHabitSubmission' | 'updateHabitSubmission' | 'deleteHabitSubmission' | 'getHabitSubmissions'
   | 'resetHabitDay'
   | 'updateChallenge' | 'addChallenge' | 'markChallengeComplete' | 'redeemReward'

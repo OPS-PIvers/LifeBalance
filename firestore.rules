@@ -636,6 +636,7 @@ service cloud.firestore {
                               request.resource.data.keys().hasOnly([
                                 'text', 'completeByDate', 'isCompleted', 'completedAt',
                                 'assignedTo', 'priority', 'notes', 'source',
+                                'isImportant', 'points',
                                 'createdBy', 'createdAt'
                               ]) &&
                               isValidString(request.resource.data.text, 500) &&
@@ -646,6 +647,10 @@ service cloud.firestore {
                               isValidOptionalString(request.resource.data.get('priority', null), 10) &&
                               isValidOptionalString(request.resource.data.get('notes', null), 1000) &&
                               isValidOptionalString(request.resource.data.get('source', null), 20) &&
+                              // Eisenhower importance flag (star toggle) — optional boolean
+                              (request.resource.data.get('isImportant', null) == null || isValidBoolean(request.resource.data.isImportant)) &&
+                              // Managed-kid completion credit (Plan 080c) — optional number
+                              isValidOptionalNumber(request.resource.data.get('points', null)) &&
                               // Metadata
                               (request.resource.data.get('createdBy', null) == null || request.resource.data.createdBy is string);
         allow delete: if isMemberOf(householdId);
@@ -848,6 +853,18 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Monthly money recaps — written ONLY by Cloud Functions (Admin SDK bypasses rules).
+      match /moneyRecaps/{recapId} {
+        allow read: if isMemberOf(householdId);
+        allow write: if false;
+      }
+
+      // Daily net-worth snapshots — written ONLY by Cloud Functions (Admin SDK bypasses rules).
+      match /netWorthSnapshots/{snapshotId} {
+        allow read: if isMemberOf(householdId);
+        allow write: if false;
+      }
+
       // 🛡️ Plan 24: Explicit rules for Savings Goals (sinking funds).
       // Manual-contribution-only entity, deliberately decoupled from Account
       // balances and Transactions — see CLAUDE.md's Safe-to-Spend section for
@@ -931,7 +948,9 @@ service cloud.firestore {
                      subcollection != 'yearlyGoals' &&
                      subcollection != 'rewards' &&
                      subcollection != 'savingsGoals' &&
-                     subcollection != 'recaps';
+                     subcollection != 'recaps' &&
+                     subcollection != 'moneyRecaps' &&
+                     subcollection != 'netWorthSnapshots';
       }
     }
 

@@ -40,6 +40,15 @@ import {
 } from "./accountMatch";
 import { parseTransactionEmail } from "./emailParser";
 import { DUPLICATE_WINDOW_DAYS, isLikelyDuplicate, type IdentityTransaction } from "./transactionIdentity";
+import {
+  findBillToPay,
+  isRecurringId,
+  parseRecurringId,
+  type BillCalendarItem,
+} from "./billMatch";
+
+/** The category new paid bills are filed under (mirrors utils/categories.ts). */
+const BUDGETED_IN_CALENDAR = "Budgeted in Calendar";
 
 const db = admin.firestore();
 
@@ -1474,6 +1483,258 @@ export const quickAddNaturalLanguage = onRequest(
       if (householdId && apiKey) {
         await logApiCall(householdId, apiKey.substring(0, 16), "shopping", req.body, 500);
       }
+      errorResponse(res, 500, "Internal server error", "INTERNAL_ERROR");
+    }
+  }
+);
+
+/**
+ * POST /quickAddBillPay
+ * Mark a matching upcoming calendar bill as paid ("Hey Siri, I paid rent").
+ *
+ * Accepts `{ title, today?, accountId? }`. Looks up the household's unpaid
+ * EXPENSE calendar items (expanding recurring templates server-side via
+ * billMatch.ts), matches by title (exact → contains → starts-with, earliest due
+ * date wins), then replicates the client's payCalendarItem writeBatch with the
+ * Admin SDK: it marks the bill paid (creating a paid-instance record for a
+ * recurring occurrence), decrements the paying account's balance, and writes a
+ * verified transaction — all in one atomic batch. Defaults to the household's
+ * first checking account.
+ */
+export const quickAddBillPay = onRequest(
+  { cors: false, region: "us-central1" },
+  async (req, res) => {
+    applyCorsHeaders(req, res);
+
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
+    if (req.method !== "POST") {
+      errorResponse(res, 405, "Method not allowed", "METHOD_NOT_ALLOWED");
+      return;
+    }
+
+    // 1. Validate API Key
+    const apiKey = extractApiKey(req.headers.authorization);
+    if (!apiKey) {
+      errorResponse(res, 401, "Missing or invalid Authorization header", "UNAUTHORIZED");
+      return;
+    }
+
+    const validation = await validateApiKey(apiKey);
+    if (!validation.valid || !validation.householdId) {
+      errorResponse(res, 401, validation.error || "Invalid API key", "UNAUTHORIZED");
+      return;
+    }
+
+    const { householdId, permissions } = validation;
+
+    // 2. Check permissions
+    if (!permissions?.bills) {
+      errorResponse(res, 403, "API key does not have bills permission", "FORBIDDEN");
+      return;
+    }
+
+    // 3. Check rate limit
+    const rateLimit = await checkRateLimit(householdId, "bill");
+    if (!rateLimit.allowed) {
+      res.set("Retry-After", String(Math.ceil((rateLimit.retryAfterMs || 3600000) / 1000)));
+      errorResponse(res, 429, "Rate limit exceeded. Try again later.", "RATE_LIMITED");
+      return;
+    }
+
+    // 4. Parse and validate the request body
+    const { title, accountId: rawAccountId, today: rawToday } = req.body || {};
+
+    if (!title || typeof title !== "string" || !title.trim()) {
+      errorResponse(res, 400, "title is required", "BAD_REQUEST");
+      return;
+    }
+    if (title.length > 100) {
+      errorResponse(res, 400, "title too long (max 100 chars)", "BAD_REQUEST");
+      return;
+    }
+
+    // Caller-local date (yyyy-MM-dd). Functions run in UTC, so the iOS Shortcut's
+    // local date anchors the due-date window (falls back to the server date).
+    const today =
+      typeof rawToday === "string" && /^\d{4}-\d{2}-\d{2}$/.test(rawToday)
+        ? rawToday
+        : format(new Date(), "yyyy-MM-dd");
+
+    if (rawAccountId !== undefined && rawAccountId !== null) {
+      if (typeof rawAccountId !== "string" || !isValidFirestoreId(rawAccountId)) {
+        errorResponse(res, 400, "accountId contains invalid characters", "BAD_REQUEST");
+        return;
+      }
+    }
+
+    try {
+      // 5. Load calendar items and find the matching unpaid bill.
+      const calendarSnap = await db
+        .collection(`households/${householdId}/calendarItems`)
+        .get();
+      const calendarItems: BillCalendarItem[] = calendarSnap.docs.map((d) => {
+        const data = d.data() as Record<string, unknown>;
+        return {
+          id: d.id,
+          title: typeof data.title === "string" ? data.title : "",
+          amount: typeof data.amount === "number" ? data.amount : 0,
+          date: typeof data.date === "string" ? data.date : "",
+          type: data.type === "income" ? "income" : "expense",
+          isPaid: data.isPaid === true,
+          isRecurring: data.isRecurring === true,
+          frequency:
+            data.frequency === "weekly" ||
+            data.frequency === "bi-weekly" ||
+            data.frequency === "monthly"
+              ? data.frequency
+              : undefined,
+          parentRecurringId:
+            typeof data.parentRecurringId === "string"
+              ? data.parentRecurringId
+              : undefined,
+          isDeleted: data.isDeleted === true,
+        };
+      });
+
+      const match = findBillToPay(calendarItems, title, today);
+      if (!match) {
+        // Do not echo the user-supplied title back (public endpoint, unvalidated).
+        errorResponse(res, 404, "No matching unpaid bill found", "NOT_FOUND");
+        await logApiCall(householdId, apiKey.substring(0, 16), "bill", req.body, 404);
+        return;
+      }
+
+      // 6. Resolve the paying account: explicit accountId (must be checking) →
+      //    the household's first checking account. Bills always draw from
+      //    checking (mirrors the Safe-to-Spend "checking is the pool" model).
+      const accountsSnap = await db
+        .collection(`households/${householdId}/accounts`)
+        .get();
+      const accounts = accountsSnap.docs.map((d) => {
+        const data = d.data() as Record<string, unknown>;
+        return {
+          id: d.id,
+          type: data.type,
+          order: typeof data.order === "number" ? data.order : Number.MAX_SAFE_INTEGER,
+        };
+      });
+      const checkingAccounts = accounts
+        .filter((a) => a.type === "checking")
+        .sort((a, b) => a.order - b.order);
+
+      let payingAccountId: string | undefined;
+      if (typeof rawAccountId === "string" && rawAccountId.trim()) {
+        const explicit = checkingAccounts.find((a) => a.id === rawAccountId.trim());
+        if (!explicit) {
+          errorResponse(res, 400, "accountId is not a checking account", "BAD_REQUEST");
+          await logApiCall(householdId, apiKey.substring(0, 16), "bill", req.body, 400);
+          return;
+        }
+        payingAccountId = explicit.id;
+      } else {
+        payingAccountId = checkingAccounts[0]?.id;
+      }
+
+      if (!payingAccountId) {
+        errorResponse(res, 400, "No checking account to pay from", "BAD_REQUEST");
+        await logApiCall(householdId, apiKey.substring(0, 16), "bill", req.body, 400);
+        return;
+      }
+
+      // 7. Read household for currency + pay-period calculation.
+      const householdRef = db.doc(`households/${householdId}`);
+      const householdDoc = await householdRef.get();
+      const householdData = householdDoc.data();
+      const currency = householdData?.currency || "USD";
+
+      const paidAmount = Math.round(match.amount * 100) / 100;
+      const specificDate = match.date;
+      const payPeriodId = getPayPeriodForTransaction(
+        specificDate,
+        householdData?.lastPaycheckDate
+      );
+
+      // 8. Atomic writeBatch mirroring the client's payCalendarItem: mark the
+      //    bill paid, decrement the account balance, write a verified txn.
+      const batch = db.batch();
+
+      if (isRecurringId(match.id)) {
+        // Recurring occurrence → create a paid-instance record (suppresses the
+        // synthetic occurrence on future expansions).
+        const parsed = parseRecurringId(match.id);
+        if (!parsed) {
+          errorResponse(res, 500, "Internal server error", "INTERNAL_ERROR");
+          await logApiCall(householdId, apiKey.substring(0, 16), "bill", req.body, 500);
+          return;
+        }
+        const newCalendarRef = db
+          .collection(`households/${householdId}/calendarItems`)
+          .doc();
+        batch.set(newCalendarRef, {
+          title: match.title,
+          amount: paidAmount,
+          date: specificDate,
+          type: "expense",
+          isPaid: true,
+          isRecurring: false,
+          parentRecurringId: parsed.templateId,
+          source: "shortcut",
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } else {
+        batch.update(
+          db.doc(`households/${householdId}/calendarItems/${match.id}`),
+          { isPaid: true, amount: paidAmount }
+        );
+      }
+
+      // Account balance delta (server-side increment avoids lost updates).
+      batch.update(db.doc(`households/${householdId}/accounts/${payingAccountId}`), {
+        balance: admin.firestore.FieldValue.increment(-paidAmount),
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // Verified transaction dated to the bill's due date.
+      const transactionRef = db
+        .collection(`households/${householdId}/transactions`)
+        .doc();
+      batch.set(transactionRef, {
+        amount: paidAmount,
+        merchant: match.title,
+        category: BUDGETED_IN_CALENDAR,
+        date: specificDate,
+        status: "verified",
+        isRecurring: !!match.isRecurring,
+        source: "shortcut" as const,
+        autoCategorized: true,
+        payPeriodId,
+        accountId: payingAccountId,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit();
+
+      // 9. Log + respond.
+      await logApiCall(householdId, apiKey.substring(0, 16), "bill", req.body, 200);
+      jsonResponse(res, 200, {
+        success: true,
+        message: `Paid ${match.title}: ${formatCurrency(paidAmount, { currency })}`,
+        data: {
+          transactionId: transactionRef.id,
+          title: match.title,
+          amount: paidAmount,
+          date: specificDate,
+          accountId: payingAccountId,
+          payPeriodId,
+        },
+      });
+    } catch (error) {
+      logger.error("Error in quickAddBillPay:", error);
+      await logApiCall(householdId, apiKey.substring(0, 16), "bill", req.body, 500);
       errorResponse(res, 500, "Internal server error", "INTERNAL_ERROR");
     }
   }

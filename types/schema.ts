@@ -123,6 +123,11 @@ export interface Account {
   plaidBalanceAvailable?: number;
   /** ISO timestamp of the last successful balance read for this account. */
   plaidBalanceUpdatedAt?: string;
+  /** Soft-delete flag (F-MONEY-08). An archived account is hidden from active
+   *  lists, net worth, and Safe-to-Spend eligibility, but historical
+   *  transactions keep resolving to it correctly (unlike a hard delete, which
+   *  falls back to the checking account via `resolveTargetAccount`). */
+  archived?: boolean;
 }
 
 /**
@@ -252,6 +257,42 @@ export interface Transaction {
    *  display field — never derived client-side from a fetched list, since
    *  comments are loaded on demand (no standing listener). */
   commentCount?: number;
+  /** uid of the member who created (and, for splitting, PAID FOR) this
+   *  transaction. Written server-authoritatively by `addTransaction`
+   *  (`createdBy: user.uid`); the converter passes it through. Used by the
+   *  F-MONEY-13 Settle-Up math as the "payer" each split share is owed to. */
+  createdBy?: string;
+  /** F-MONEY-13: shared-expense splitting overlay. A bookkeeping-only list of
+   *  the OTHER people's shares of this expense (the payer keeps the remainder).
+   *  It NEVER alters the payer's account balance — splitting is a display/
+   *  tracking overlay exactly like budget buckets, so `utils/accountImpact.ts`
+   *  ignores it entirely. Settle-Up (`utils/settlement.ts`) nets the unsettled
+   *  shares into a who-owes-whom balance. Absent ⇒ not a split expense. */
+  splitWith?: SplitParticipant[];
+}
+
+/**
+ * SplitParticipant — F-MONEY-13. One person's share of a split transaction.
+ * A participant is EITHER a household member (`memberId` set) or an external
+ * person without an account (`email` set — the owner-note invite path). The
+ * `shareAmount` is what this person owes the payer (the transaction's
+ * `createdBy`), in decimal dollars. `settled` toggles when they pay it back —
+ * a pure overlay flag with NO balance effect.
+ */
+export interface SplitParticipant {
+  /** Household member uid this share belongs to (in-household split). */
+  memberId?: string;
+  /** Email of a non-member the expense is split with (external invite path). */
+  email?: string;
+  /** Optional display label for an external (non-member) participant. */
+  name?: string;
+  /** Decimal-dollar amount this participant owes the payer. */
+  shareAmount: number;
+  /** True once this share has been paid back / settled up. No balance effect. */
+  settled?: boolean;
+  /** ISO timestamp when a split-invite email was (stub-)dispatched to `email`.
+   *  Present only for external participants that have been invited. */
+  invitedAt?: string;
 }
 
 /**
@@ -349,6 +390,11 @@ export interface Habit {
 
   // Submission Tracking
   hasSubmissionTracking?: boolean; // true = uses submissions subcollection
+
+  // F-HABITS-05: ISO timestamp when the habit was archived (soft-retire —
+  // hides it from the Track tab / reminders while keeping streak/points
+  // history intact for Insights/export). Undefined/absent = active.
+  archivedAt?: string;
 }
 
 export interface HabitSubmission {
@@ -381,6 +427,19 @@ export interface RewardItem {
   targetMemberId?: string;
   /** Whether the reward is shown in the store. Treated as true when absent. */
   active?: boolean;
+  // F-HABITS-02 (streak milestone celebrations): an optional milestone gate on
+  // this reward. When present, the reward renders locked in the store until a
+  // habit's streak crosses `streakDays` (one of utils/habitMilestones.ts's
+  // MILESTONES) — either a SPECIFIC habit (`habitId` set) or ANY habit
+  // (`habitId` absent). Unlocking is tracked separately via
+  // `Household.unlockedRewardIds` (crossing is a one-time event; a later streak
+  // reset must not re-lock an already-unlocked reward). Absent = no gate
+  // (always available, subject only to the existing point-cost affordability
+  // check).
+  unlockRequirement?: {
+    streakDays: number;
+    habitId?: string;
+  };
 }
 
 /**
@@ -628,6 +687,16 @@ export interface Household {
   // it rides on the field-permissive household-doc update rule (no rules change).
   redemptionHistory?: RewardRedemptionRecord[];
 
+  // F-HABITS-02 (streak milestone celebrations): reward ids that have been
+  // permanently unlocked by crossing their `RewardItem.unlockRequirement`
+  // streak milestone (see hooks/useHabitActions.tsx's toggleHabit, which
+  // arrayUnion-appends here in the SAME writeBatch as the triggering habit
+  // toggle). Once unlocked a reward stays unlocked even if the streak later
+  // resets. Absent on legacy/non-gated households (treat absent as empty).
+  // Rides on the same field-permissive household-doc update rule as
+  // pendingRedemptions/redemptionHistory — no rules change needed.
+  unlockedRewardIds?: string[];
+
   // Billing / subscription (Plan 050). Absent on every legacy + free-tier
   // household — treat absent as the free plan everywhere (see utils/entitlements.ts).
   // Only the Stripe webhook (Admin SDK) ever writes this block; clients read it for
@@ -805,6 +874,21 @@ export interface WeeklyRecap {
   premium: boolean;
 }
 
+/**
+ * Net worth snapshot (F-MONEY-09) — one doc per calendar day at
+ * `households/{id}/netWorthSnapshots/{yyyy-MM-dd}`, written server-side once
+ * daily by the scheduled `snapshotnetworth` function (Admin SDK; clients only
+ * read). The synthetic `id` equals the doc id, which equals `date`. Money
+ * fields are decimal dollars (see `utils/netWorth.ts`).
+ */
+export interface NetWorthSnapshot {
+  id: string;
+  date: string; // yyyy-MM-dd, local to the server's daily run
+  totalAssets: number;
+  totalLiabilities: number;
+  netWorth: number;
+}
+
 export interface BetaTester {
   email: string;
   addedAt: string;
@@ -828,6 +912,7 @@ export interface ApiKeyPermissions {
   habits: boolean;
   expenses: boolean;
   shoppingList: boolean;
+  bills?: boolean;  // Pay/mark a calendar bill via the quickAddBillPay endpoint (F-MONEY-11). Optional for backward-compat with keys minted before it existed.
   receiptScanning: boolean;  // Unused — receipt endpoint removed; kept for stored-doc shape
 }
 

@@ -17,6 +17,7 @@ import { calculateCategoryTrend } from '@/utils/analytics/analyticsHelper';
 import { Section } from '@/components/ui/Section';
 import { usePowerToolsEnabled } from '@/hooks/usePowerToolsEnabled';
 import BudgetHistory from './BudgetHistory';
+import NetWorthTrendChart from './NetWorthTrendChart';
 
 /**
  * The Wallet charts (burn-down + variable-expense trend), which now live in the
@@ -109,6 +110,9 @@ const BudgetTrends: React.FC = () => {
     <div className="space-y-6 animate-in fade-in duration-(--duration-base)">
       <Section title="Wallet trends">
       <div className="space-y-4">
+        {/* Chart: Net worth history (F-MONEY-09) */}
+        <NetWorthTrendChart />
+
         {/* Chart A: Burn Down */}
         <ChartCard title="Budget burn-down" icon={<Wallet size={16} />}>
           {burnDownData.length === 0 ? (
