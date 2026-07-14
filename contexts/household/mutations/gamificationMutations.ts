@@ -383,6 +383,19 @@ export function makeRedeemReward(deps: {
           throw new Error('Not enough points');
         }
 
+        // F-HABITS-02 (streak milestone celebrations): reject redemption of a
+        // milestone-gated reward that hasn't been unlocked yet, so the store's
+        // client-side lock state can't be bypassed by calling this mutation
+        // directly.
+        if (reward.unlockRequirement) {
+          const unlockedRewardIds: string[] = Array.isArray(data.unlockedRewardIds)
+            ? (data.unlockedRewardIds as string[])
+            : [];
+          if (!unlockedRewardIds.includes(reward.id)) {
+            throw new Error('Reward is still locked');
+          }
+        }
+
         const record: RewardRedemptionRecord = {
           id: crypto.randomUUID(),
           rewardId: reward.id,
