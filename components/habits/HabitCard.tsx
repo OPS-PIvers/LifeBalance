@@ -2,10 +2,11 @@
 import React, { useState } from 'react';
 import { Habit } from '@/types/schema';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
-import { X, Edit2, Trash2, Target, Calendar, Snowflake } from 'lucide-react';
+import { X, Edit2, Trash2, Target, Calendar, Snowflake, MessageSquarePlus } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import HabitFormModal from '@/components/modals/HabitFormModal';
 import HabitSubmissionLogModal from '@/components/modals/HabitSubmissionLogModal';
+import ReflectionDrawer from '@/components/habits/ReflectionDrawer';
 import { Drawer } from '@/components/ui/Drawer';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -31,6 +32,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
+  const [isReflectionOpen, setIsReflectionOpen] = useState(false);
   const isDesktop = useMediaQuery('(min-width: 640px)');
 
   // Logic helpers
@@ -252,6 +254,22 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
                 <Target size={10} /> Goal
               </Badge>
             )}
+
+            {/* F-HABITS-06 owner note (2): unobtrusive one-tap affordance to
+                jot a note/mood once the habit is active today. */}
+            {isActive && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsReflectionOpen(true);
+                }}
+                className="relative z-10 flex items-center gap-1 text-xxs font-semibold text-brand-400 dark:text-brand-450 hover:text-accent-600 dark:hover:text-accent-300 transition-colors"
+                aria-label={`Add a note or mood for ${habit.title}`}
+              >
+                <MessageSquarePlus size={12} /> Reflect
+              </button>
+            )}
           </div>
 
         {/* Action menu (desktop dropdown; mobile uses the Drawer below).
@@ -312,6 +330,12 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
         isOpen={isLogModalOpen}
         onClose={() => setIsLogModalOpen(false)}
         habit={habit}
+      />
+      <ReflectionDrawer
+        isOpen={isReflectionOpen}
+        onClose={() => setIsReflectionOpen(false)}
+        habitId={habit.id}
+        habitTitle={habit.title}
       />
     </>
   );

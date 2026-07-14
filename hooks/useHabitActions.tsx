@@ -345,7 +345,13 @@ export const useHabitActions = (
     toast('Reset', { icon: toastIcon(RotateCcw) });
   }, [householdId]);
 
-  const addHabitSubmission = useCallback(async (habitId: string, count: number, timestamp?: string) => {
+  const addHabitSubmission = useCallback(async (
+    habitId: string,
+    count: number,
+    timestamp?: string,
+    note?: string,
+    mood?: HabitSubmission['mood']
+  ) => {
     if (!householdId || !currentUser) return;
 
     const habit = habitsRef.current.find(h => h.id === habitId);
@@ -442,7 +448,8 @@ export const useHabitActions = (
         pointsEarned = signedHabitPoints(habit, multiplier);
       }
 
-      // Create submission document
+      // Create submission document. note/mood are only included when provided
+      // — Firestore rejects an explicit `undefined` field value on addDoc.
       const submission: Omit<HabitSubmission, 'id'> = {
         habitId,
         habitTitle: habit.title,
@@ -454,6 +461,8 @@ export const useHabitActions = (
         multiplierApplied: multiplier,
         createdBy: currentUser.uid,
         createdAt: new Date().toISOString(),
+        ...(note ? { note: note.slice(0, 280) } : {}),
+        ...(mood ? { mood } : {}),
       };
 
       // Atomically commit the submission doc, habit state, and points in a single
@@ -498,7 +507,9 @@ export const useHabitActions = (
 
       await addBatch.commit();
 
-      toast.success(`Logged +${count} submission(s)`);
+      // A count of 0 means this call only attached a note/mood (the one-tap
+      // reflection drawer) rather than logging a new completion — say so.
+      toast.success(count > 0 ? `Logged +${count} submission(s)` : 'Reflection saved');
     } catch (error) {
       console.error('[addHabitSubmission] Failed:', error);
       toast.error('Failed to add submission');

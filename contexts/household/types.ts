@@ -230,7 +230,7 @@ export interface HouseholdContextType {
   resetHabit: (id: string) => Promise<void>;
 
   // Habit Submission Actions
-  addHabitSubmission: (habitId: string, count: number, timestamp?: string) => Promise<void>;
+  addHabitSubmission: (habitId: string, count: number, timestamp?: string, note?: string, mood?: HabitSubmission['mood']) => Promise<void>;
   updateHabitSubmission: (habitId: string, submissionId: string, updates: Partial<HabitSubmission>) => Promise<void>;
   deleteHabitSubmission: (habitId: string, submissionId: string) => Promise<void>;
   getHabitSubmissions: (habitId: string, startDate?: string, endDate?: string) => Promise<HabitSubmission[]>;

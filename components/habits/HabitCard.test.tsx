@@ -58,6 +58,7 @@ vi.mock('lucide-react', () => ({
   Target: () => <span data-testid="icon-target" />,
   Calendar: () => <span data-testid="icon-calendar" />,
   Snowflake: () => <span data-testid="icon-snowflake" />,
+  MessageSquarePlus: () => <span data-testid="icon-message-square-plus" />,
 }));
 
 // Mock date-fns with controlled dates. `mockedYesterday.current` is mutable so

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { X, Plus, Edit2, Trash2, Calendar, TrendingUp, Award, Flame, BarChart3, ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react';
-import { Habit, HabitSubmission } from '@/types/schema';
+import { Habit, HabitMood, HabitSubmission } from '@/types/schema';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { format, parseISO, startOfWeek, endOfWeek, subWeeks, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -11,8 +11,14 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import EmptyState from '@/components/ui/EmptyState';
 import Input from '@/components/ui/Input';
+import Textarea from '@/components/ui/Textarea';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { Section, StatGroup, Stat } from '@/components/ui/Section';
+
+// F-HABITS-06: emoji shorthand for the 4 mood tags, shared by the Log tab's
+// add form and its per-submission history rows.
+const MOOD_EMOJI: Record<HabitMood, string> = { great: '😄', good: '🙂', meh: '😐', rough: '😣' };
+const NOTE_MAX_LENGTH = 280;
 
 interface HabitSubmissionLogModalProps {
   isOpen: boolean;
@@ -39,6 +45,8 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
   const [formDate, setFormDate] = useState('');
   const [formTime, setFormTime] = useState('');
   const [formCount, setFormCount] = useState('1');
+  const [formNote, setFormNote] = useState('');
+  const [formMood, setFormMood] = useState<HabitMood | undefined>(undefined);
 
   const loadSubmissions = useCallback(async () => {
     setIsLoading(true);
@@ -80,7 +88,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
     }
 
     const timestamp = `${formDate}T${formTime}:00`;
-    await addHabitSubmission(habit.id, count, timestamp);
+    await addHabitSubmission(habit.id, count, timestamp, formNote, formMood);
     await loadSubmissions();
 
     // Reset form
@@ -88,6 +96,8 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
     setFormDate('');
     setFormTime('');
     setFormCount('1');
+    setFormNote('');
+    setFormMood(undefined);
   };
 
   const handleUpdate = async () => {
@@ -495,6 +505,39 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                     min="1"
                   />
                 </div>
+
+                {/* F-HABITS-06: optional mood + note attached to this submission */}
+                <div className="mb-3">
+                  <p className="text-xs font-semibold text-brand-500 dark:text-brand-400 uppercase tracking-wider mb-1.5">Mood (optional)</p>
+                  <div className="flex gap-2">
+                    {(Object.keys(MOOD_EMOJI) as HabitMood[]).map((moodOption) => (
+                      <button
+                        key={moodOption}
+                        type="button"
+                        onClick={() => setFormMood(formMood === moodOption ? undefined : moodOption)}
+                        className={`flex-1 py-2 rounded-btn border text-lg transition-colors ${
+                          formMood === moodOption
+                            ? 'border-accent-500 bg-accent-50 dark:bg-accent-500/15 dark:border-accent-400'
+                            : 'border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800'
+                        }`}
+                        aria-pressed={formMood === moodOption}
+                        aria-label={moodOption}
+                      >
+                        {MOOD_EMOJI[moodOption]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <Textarea
+                  label="Note (optional)"
+                  value={formNote}
+                  onChange={(e) => setFormNote(e.target.value)}
+                  maxLength={NOTE_MAX_LENGTH}
+                  showCount
+                  rows={2}
+                  className="mb-3"
+                />
+
                 <div className="flex gap-2">
                   <Button
                     variant="secondary"
@@ -560,6 +603,11 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                                 <Badge variant={sub.pointsEarned > 0 ? 'success' : sub.pointsEarned < 0 ? 'danger' : 'neutral'} size="md">
                                   {sub.pointsEarned > 0 ? '+' : ''}{sub.pointsEarned} pts
                                 </Badge>
+                                {sub.mood && (
+                                  <span className="text-base" title={sub.mood} aria-label={`Mood: ${sub.mood}`}>
+                                    {MOOD_EMOJI[sub.mood]}
+                                  </span>
+                                )}
                               </div>
                               <div className="text-xxs text-brand-400 dark:text-brand-400 mt-1 flex items-center gap-2 flex-wrap">
                                 <span>{sub.multiplierApplied}x multiplier</span>
@@ -569,6 +617,11 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                                   {sub.streakDaysAtTime} day{sub.streakDaysAtTime !== 1 ? 's' : ''}
                                 </span>
                               </div>
+                              {sub.note && (
+                                <p className="text-xs text-brand-600 dark:text-brand-300 mt-1.5 italic break-words">
+                                  &ldquo;{sub.note}&rdquo;
+                                </p>
+                              )}
                             </div>
                             <div className="flex items-center gap-1 ml-3 shrink-0">
                               <Button
