@@ -141,3 +141,40 @@ export const generateCsvExport = (data: Record<string, unknown>[], filenamePrefi
   const content = convertToCSV(data);
   downloadFile(content, filename, 'text/csv');
 };
+
+/** One flattened, spreadsheet-friendly row of the transactions CSV export (F-MONEY-10). */
+export interface TransactionExportRow extends Record<string, unknown> {
+  Date: string;
+  Merchant: string;
+  Category: string;
+  Amount: number;
+  Currency: string;
+  Status: Transaction['status'];
+  Account: string;
+  Source: Transaction['source'];
+  'Pay Period': string;
+}
+
+/**
+ * Maps transactions to flat CSV-ready rows for the Money → Transactions export
+ * (F-MONEY-10). Pure so it's unit-testable independently of the component.
+ * Amount stays a raw decimal-dollar number (not a `useFormatCurrency()` string)
+ * so spreadsheets can sum/filter it directly; `Currency` is a separate column,
+ * defaulting to 'USD' but overridable by the household's configured currency.
+ */
+export const buildTransactionExportRows = (
+  transactions: Transaction[],
+  accountsById: Map<string, string>,
+  currency: string = 'USD'
+): TransactionExportRow[] =>
+  transactions.map(tx => ({
+    Date: tx.date,
+    Merchant: tx.merchant,
+    Category: tx.category,
+    Amount: tx.amount,
+    Currency: currency,
+    Status: tx.status,
+    Account: (tx.accountId && accountsById.get(tx.accountId)) || 'Unassigned',
+    Source: tx.source,
+    'Pay Period': tx.payPeriodId || 'N/A',
+  }));
