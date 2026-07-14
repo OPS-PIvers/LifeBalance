@@ -41,6 +41,7 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
     updateTransaction: mockUpdateTransaction,
     deleteTransaction: mockDeleteTransaction,
     addTransaction: mockAddTransaction,
+    setTransactionSplit: vi.fn(),
     buckets: [
       { id: '1', name: 'Groceries', limit: 500, color: 'green', isVariable: true, isCore: true },
       { id: '2', name: 'Utilities', limit: 200, color: 'blue', isVariable: false, isCore: true },
@@ -76,6 +77,8 @@ vi.mock('lucide-react', () => ({
   ChevronDown: () => <div data-testid="icon-chevron-down" />,
   MessageSquare: () => <div data-testid="icon-message-square" />,
   Send: () => <div data-testid="icon-send" />,
+  Users: () => <div data-testid="icon-users" />,
+  Plus: () => <div data-testid="icon-plus" />,
 }));
 
 // Mock Modal component

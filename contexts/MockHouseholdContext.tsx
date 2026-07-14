@@ -16,11 +16,13 @@ import { accountImpactOf, effectiveAccountImpact, resolveTargetAccount } from '@
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
 import { MAX_COMMENT_LENGTH } from '@/contexts/household/mutations/commentMutations';
 import { roundMoney } from '@/utils/money';
+import { splitParticipantKey } from '@/utils/settlement';
 import { track } from '@/services/analytics';
 import {
   Account,
   BudgetBucket,
   Transaction,
+  SplitParticipant,
   CalendarItem,
   Habit,
   HabitSubmission,
@@ -139,6 +141,10 @@ const SEED_TRANSACTIONS: Transaction[] = [
     // Plan 23: seeded with one comment (see SEED_TRANSACTION_COMMENTS below)
     // so the thread + row count-badge are visible without any user action.
     commentCount: 1,
+    // F-MONEY-13: paid by the test user and split evenly with Jordan, so the
+    // Settle-Up view shows "Jordan owes you $22.75" out of the box in Test Mode.
+    createdBy: 'test-user-id',
+    splitWith: [{ memberId: 'test-partner-id', shareAmount: 22.75 }],
   },
   {
     id: 'tx2', amount: 120.00, merchant: 'PG&E', category: 'Utilities',
@@ -207,6 +213,13 @@ const SEED_MEMBERS: HouseholdMember[] = [
   {
     uid: 'test-user-id', displayName: 'Test User', email: 'test@example.com',
     role: 'admin', points: { daily: 30, weekly: 150, total: 500 }
+  },
+  // Second adult so the F-MONEY-13 Settle-Up view is walkable in Test Mode
+  // (who-owes-whom needs 2+ adults). The seed transaction 't1' is split with
+  // this member below.
+  {
+    uid: 'test-partner-id', displayName: 'Jordan', email: 'jordan@example.com',
+    role: 'member', points: { daily: 0, weekly: 0, total: 0 }
   },
   // Plan 080 (Kid Mode) Test-Mode harness: one managed kid so the dormant kid
   // surfaces are walkable in Test Mode. Mirrors the EXACT object shape the mock's
@@ -734,6 +747,33 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       return [...filtered, ...newTxs];
     });
     toast.success('Mock: Transaction split');
+  }, []);
+
+  const setTransactionSplit = useCallback(async (transactionId: string, split: SplitParticipant[] | null) => {
+    setTransactions(prev => prev.map(t => {
+      if (t.id !== transactionId) return t;
+      const cleaned = (split ?? []).filter(p => p.shareAmount > 0);
+      const next = { ...t };
+      if (cleaned.length > 0) {
+        next.splitWith = cleaned;
+      } else {
+        delete next.splitWith;
+      }
+      return next;
+    }));
+    toast.success('Mock: Split saved');
+  }, []);
+
+  const markSplitSettled = useCallback(async (transactionId: string, participantKey: string, settled: boolean = true) => {
+    setTransactions(prev => prev.map(t => {
+      if (t.id !== transactionId || !t.splitWith) return t;
+      return {
+        ...t,
+        splitWith: t.splitWith.map(p =>
+          splitParticipantKey(p) === participantKey ? { ...p, settled } : p,
+        ),
+      };
+    }));
   }, []);
 
   // Plan 23 — transaction comments (Test-Mode parity, in-memory). Unlike prod
@@ -1371,6 +1411,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateTransactionCategory,
     deleteTransaction,
     splitTransaction,
+    setTransactionSplit,
+    markSplitSettled,
     mergeTransactions,
     keepBothTransactions,
     getTransactionComments,

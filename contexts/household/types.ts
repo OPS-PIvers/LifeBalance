@@ -24,7 +24,8 @@ import {
   HouseholdApiKey,
   ModuleKey,
   WeeklyRecap,
-  TransactionComment
+  TransactionComment,
+  SplitParticipant
 } from '@/types/schema';
 import { type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { type BucketSpent } from '@/utils/bucketSpentCalculator';
@@ -195,6 +196,14 @@ export interface HouseholdContextType {
   updateTransaction: (id: string, updates: Partial<Transaction>, opts?: MutationOpts) => Promise<void>;
   deleteTransaction: (id: string, opts?: MutationOpts) => Promise<void>;
   splitTransaction: (originalTransactionId: string, newTransactions: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[]) => Promise<void>;
+  /** F-MONEY-13: save (or clear) a transaction's shared-expense split overlay.
+   *  Bookkeeping-only — NEVER touches an account balance — so it is a single
+   *  `updateDoc`, not a batch. Pass an empty array or `null` to remove the
+   *  split entirely. See `utils/settlement.ts`. */
+  setTransactionSplit: (transactionId: string, split: SplitParticipant[] | null) => Promise<void>;
+  /** F-MONEY-13: toggle one participant's `settled` flag on a split (addressed
+   *  by `splitParticipantKey`). No balance change; single `updateDoc`. */
+  markSplitSettled: (transactionId: string, participantKey: string, settled?: boolean) => Promise<void>;
   /** Merge a `possibleDuplicateOf`-flagged pair of transactions (plan 03 PR-3):
    *  applies `utils/transactionMerge`'s field-level winner set to the keeper,
    *  deletes the dupe, and reverses the dupe's account-balance impact if it
@@ -374,6 +383,7 @@ export type FinanceContextValue = Pick<HouseholdContextType,
   | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'reallocateBucket'
   | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
   | 'addTransaction' | 'updateTransactionCategory' | 'updateTransaction' | 'deleteTransaction' | 'splitTransaction'
+  | 'setTransactionSplit' | 'markSplitSettled'
   | 'mergeTransactions' | 'keepBothTransactions'
   | 'getTransactionComments' | 'addTransactionComment' | 'deleteTransactionComment'
 >;

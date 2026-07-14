@@ -1,9 +1,11 @@
 
 import React, { useId, useState } from 'react';
 import { Trash2, Loader2, Copy, X } from 'lucide-react';
-import { Transaction, CREDIT_CARD_CATEGORY } from '@/types/schema';
-import { useFinance, useShopping } from '@/contexts/FirebaseHouseholdContext';
+import { Transaction, SplitParticipant, CREDIT_CARD_CATEGORY } from '@/types/schema';
+import { useFinance, useHouseholdCore, useShopping } from '@/contexts/FirebaseHouseholdContext';
 import { Drawer } from '@/components/ui/Drawer';
+import SplitExpenseEditor from '@/components/transactions/SplitExpenseEditor';
+import { validateSplit } from '@/utils/settlement';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
@@ -21,7 +23,8 @@ interface EditTransactionModalProps {
 }
 
 const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onClose, transaction }) => {
-  const { updateTransaction, deleteTransaction, addTransaction, buckets, accounts } = useFinance();
+  const { updateTransaction, deleteTransaction, addTransaction, setTransactionSplit, buckets, accounts } = useFinance();
+  const { members, currentUser } = useHouseholdCore();
   const { stores } = useShopping();
 
   // Datalist id for the Merchant field's store-name autocomplete (see below).
@@ -42,6 +45,9 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
   // stored Store; this flag (set by dismissing the store chip below) requests
   // an explicit clear on save, overriding the resolve/preserve fallback.
   const [storeCleared, setStoreCleared] = useState(false);
+  // F-MONEY-13: bookkeeping-only split overlay. `undefined` ⇒ not a split;
+  // saved separately from the balance-affecting fields via setTransactionSplit.
+  const [split, setSplit] = useState<SplitParticipant[] | undefined>(() => transaction?.splitWith);
 
   // Dynamic Categories from buckets
   const dynamicCategories = buildTransactionCategoryOptions(buckets);
@@ -79,6 +85,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
       setCreditPayment(transaction.creditPayment ?? false);
       setDate(transaction.date);
       setStoreCleared(false);
+      setSplit(transaction.splitWith);
     }
   }
 
@@ -111,6 +118,16 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
       return;
     }
 
+    // F-MONEY-13: block save on an over-total split (bookkeeping guard only).
+    const activeSplit = split && split.length > 0 ? split : undefined;
+    if (activeSplit) {
+      const v = validateSplit(amountNum, activeSplit);
+      if (!v.valid) {
+        toast.error(v.error);
+        return;
+      }
+    }
+
     setIsSaving(true);
     try {
       await updateTransaction(transaction.id, {
@@ -131,6 +148,15 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
         // habit-linking/points logic (and could force-verify a $0
         // needsAmount stub).
       });
+
+      // Persist the split overlay separately — it never touches a balance, so
+      // it isn't part of the updateTransaction money path. Only write when the
+      // split actually changed (added, edited, or cleared) to avoid a needless
+      // doc write on every save.
+      const splitChanged = JSON.stringify(activeSplit ?? null) !== JSON.stringify(transaction.splitWith ?? null);
+      if (splitChanged) {
+        await setTransactionSplit(transaction.id, activeSplit ?? null);
+      }
 
       onClose();
     } catch (error) {
@@ -347,6 +373,15 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
           disabled={isSaving}
           value={date}
           onChange={(e) => setDate(e.target.value)}
+        />
+
+        <SplitExpenseEditor
+          totalAmount={parseFloat(amount) || 0}
+          members={members}
+          payerUid={transaction.createdBy ?? currentUser?.uid}
+          value={split}
+          onChange={(next) => setSplit(next.length > 0 ? next : undefined)}
+          disabled={isSaving}
         />
 
         <div className="pt-2 border-t border-brand-100 dark:border-brand-700">
