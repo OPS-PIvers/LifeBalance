@@ -753,7 +753,7 @@ export interface ToDo {
   // New fields for natural language support
   priority?: 'low' | 'medium' | 'high'; // Priority level (defaults to 'medium')
   notes?: string; // Additional task details
-  source?: 'manual' | 'voice' | 'shortcut'; // How the todo was created
+  source?: 'manual' | 'voice' | 'shortcut' | 'photo'; // How the todo was created
 
   // Plan 080c (Kid Mode): points credited to a MANAGED-KID assignee on completion
   // (defaults to DEFAULT_TODO_POINTS, see utils/todoPoints.ts). Absent on every

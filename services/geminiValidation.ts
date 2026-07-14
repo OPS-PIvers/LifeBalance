@@ -26,6 +26,8 @@ import type {
   ParsedShoppingList,
   ParsedTodoList,
   ParsedExpense,
+  ParsedTaskList,
+  ParsedMealPlan,
   OptimizableItem,
   HabitPatternInsight,
   HabitReorganizationPlan,
@@ -371,6 +373,36 @@ export function validateParsedTodoList(raw: unknown): ParsedTodoList {
     }
   });
   return o as unknown as ParsedTodoList;
+}
+
+// ---------------------------------------------------------------------------
+// Photo-to-tasklist (F-TODO-06)
+// ---------------------------------------------------------------------------
+
+const MEAL_PLAN_SLOTS = ['breakfast', 'lunch', 'dinner', 'snack'];
+
+export function validateParsedTaskList(raw: unknown): ParsedTaskList {
+  const o = expectRecord(raw, 'taskList');
+  const tasks = expectArray(o['tasks'], 'taskList.tasks');
+  tasks.forEach((entry, i) => {
+    const t = expectRecord(entry, `taskList.tasks[${i}]`);
+    if (!isString(t['text'])) fail(`taskList.tasks[${i}]`, 'text must be a string');
+  });
+  return o as unknown as ParsedTaskList;
+}
+
+export function validateParsedMealPlan(raw: unknown): ParsedMealPlan {
+  const o = expectRecord(raw, 'mealPlan');
+  const meals = expectArray(o['meals'], 'mealPlan.meals');
+  meals.forEach((entry, i) => {
+    const m = expectRecord(entry, `mealPlan.meals[${i}]`);
+    if (!isString(m['mealName'])) fail(`mealPlan.meals[${i}]`, 'mealName must be a string');
+    if (!isString(m['type']) || !MEAL_PLAN_SLOTS.includes(m['type'])) {
+      fail(`mealPlan.meals[${i}]`, `type must be one of ${MEAL_PLAN_SLOTS.join(', ')}`);
+    }
+    if (!isOptString(m['day'])) fail(`mealPlan.meals[${i}]`, 'day must be a string');
+  });
+  return o as unknown as ParsedMealPlan;
 }
 
 export function validateParsedExpense(raw: unknown): ParsedExpense {

@@ -32,6 +32,8 @@ vi.mock('react-hot-toast', () => ({
 // Mock Lucide icons
 vi.mock('lucide-react', () => ({
   Plus: () => <div data-testid="plus-icon" />,
+  Camera: () => <div data-testid="camera-icon" />,
+  ImageUp: () => <div data-testid="imageup-icon" />,
   Calendar: () => <div data-testid="calendar-icon" />,
   Check: () => <div data-testid="check-icon" />,
   Trash2: () => <div data-testid="trash-icon" />,
