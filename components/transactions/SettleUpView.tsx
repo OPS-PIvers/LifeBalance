@@ -25,7 +25,7 @@ import { Transaction } from '@/types/schema';
  */
 const SettleUpView: React.FC = () => {
   const { transactions, markSplitSettled, setTransactionSplit } = useFinance();
-  const { members, currentUser } = useHouseholdCore();
+  const { members, currentUser, household } = useHouseholdCore();
   const fmt = useFormatCurrency();
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
@@ -58,9 +58,7 @@ const SettleUpView: React.FC = () => {
     setBusyKey(key);
     try {
       const shares = sharesForPair(a, b);
-      for (const s of shares) {
-        await markSplitSettled(s.txId, s.key, true);
-      }
+      await Promise.all(shares.map(s => markSplitSettled(s.txId, s.key, true)));
       toast.success('Settled up');
     } catch {
       // markSplitSettled already toasts on failure.
@@ -79,6 +77,7 @@ const SettleUpView: React.FC = () => {
         email,
         amount,
         payerName: currentUser?.displayName ?? 'A household member',
+        currency: household?.currency,
       });
       if (result.status === 'rejected') {
         toast.error(result.reason ?? 'Could not send invite');
@@ -86,14 +85,16 @@ const SettleUpView: React.FC = () => {
       }
       const nowIso = new Date().toISOString();
       const affected = transactions.filter(
-        (tx: Transaction) => tx.splitWith?.some(p => p.email?.toLowerCase() === email && !p.settled),
+        (tx: Transaction) => tx.splitWith?.some(p => p.email?.trim().toLowerCase() === email && !p.settled),
       );
-      for (const tx of affected) {
-        const next = (tx.splitWith ?? []).map(p =>
-          p.email?.toLowerCase() === email && !p.settled ? { ...p, invitedAt: nowIso } : p,
-        );
-        await setTransactionSplit(tx.id, next);
-      }
+      await Promise.all(
+        affected.map(tx => {
+          const next = (tx.splitWith ?? []).map(p =>
+            p.email?.trim().toLowerCase() === email && !p.settled ? { ...p, invitedAt: nowIso } : p,
+          );
+          return setTransactionSplit(tx.id, next);
+        }),
+      );
       toast.success(
         result.status === 'deferred'
           ? 'Invite recorded (email delivery not configured yet)'

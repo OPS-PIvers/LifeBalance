@@ -114,7 +114,7 @@ const SplitExpenseEditor: React.FC<SplitExpenseEditorProps> = ({
   const addExternal = () => {
     const email = externalEmail.trim().toLowerCase();
     if (!isValidInviteEmail(email)) return;
-    if (participants.some(p => p.email?.toLowerCase() === email)) return;
+    if (participants.some(p => p.email?.trim().toLowerCase() === email)) return;
     setParticipants([
       ...participants,
       { email, name: externalName.trim() || undefined, shareAmount: 0 },

@@ -23,7 +23,7 @@ interface EditTransactionModalProps {
 }
 
 const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onClose, transaction }) => {
-  const { updateTransaction, deleteTransaction, addTransaction, setTransactionSplit, buckets, accounts } = useFinance();
+  const { updateTransaction, deleteTransaction, addTransaction, buckets, accounts } = useFinance();
   const { members, currentUser } = useHouseholdCore();
   const { stores } = useShopping();
 
@@ -130,6 +130,13 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
 
     setIsSaving(true);
     try {
+      // Only include `splitWith` in the update payload when the split actually
+      // changed (added, edited, or cleared), to avoid a needless write on every
+      // save — but when it did change, fold it into the SAME updateTransaction
+      // batch (co-committed with the balance-affecting fields) rather than a
+      // second sequential write to the same doc.
+      const splitChanged = JSON.stringify(activeSplit ?? null) !== JSON.stringify(transaction.splitWith ?? null);
+
       await updateTransaction(transaction.id, {
         amount: amountNum,
         merchant: merchant.trim(),
@@ -147,16 +154,8 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
         // could flip a transaction to 'verified' without going through the
         // habit-linking/points logic (and could force-verify a $0
         // needsAmount stub).
+        ...(splitChanged ? { splitWith: activeSplit ?? [] } : {}),
       });
-
-      // Persist the split overlay separately — it never touches a balance, so
-      // it isn't part of the updateTransaction money path. Only write when the
-      // split actually changed (added, edited, or cleared) to avoid a needless
-      // doc write on every save.
-      const splitChanged = JSON.stringify(activeSplit ?? null) !== JSON.stringify(transaction.splitWith ?? null);
-      if (splitChanged) {
-        await setTransactionSplit(transaction.id, activeSplit ?? null);
-      }
 
       onClose();
     } catch (error) {

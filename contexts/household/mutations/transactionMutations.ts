@@ -501,6 +501,18 @@ export function makeUpdateTransaction(deps: {
       } else if (typeof sanitizedUpdates.notes === 'string') {
         sanitizedUpdates.notes = sanitizedUpdates.notes.trim();
       }
+      // F-MONEY-13: an explicit `splitWith` key (present in `updates`, even as
+      // `null`/`[]`) co-commits the split overlay in this SAME write instead of
+      // a separate updateDoc — the overlay never touches a balance, but it does
+      // touch the SAME transaction doc, so folding it in here avoids a second
+      // sequential write to the same document. Sanitized/rounded exactly like
+      // makeSetTransactionSplit's `cleaned` path; a zero-or-negative share is
+      // dropped and an empty result clears the field via deleteField().
+      if ('splitWith' in updates) {
+        delete sanitizedUpdates.splitWith;
+        const cleaned = (updates.splitWith ?? []).filter(p => roundMoney(p.shareAmount) > 0);
+        sanitizedUpdates.splitWith = cleaned.length > 0 ? cleaned.map(sanitizeSplitParticipant) : deleteField();
+      }
 
       // Atomically commit the transaction update and the account balance deltas in
       // a single writeBatch so they can never partially apply.
