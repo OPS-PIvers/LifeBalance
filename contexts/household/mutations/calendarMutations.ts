@@ -21,6 +21,7 @@ import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { parseRecurringId, isRecurringId, rollRecurringAnchorForward } from '@/utils/calendarRecurrence';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { roundMoney } from '@/utils/money';
+import { computePriceChangeNudge } from '@/utils/priceChangeNudge';
 
 // Pure-ish factories for the CALENDAR-ITEM mutation family (add/update/delete/
 // pay/defer) — moved verbatim out of FirebaseHouseholdContext. See
@@ -406,6 +407,23 @@ export function makePayCalendarItem(deps: {
       // DO NOT update bucket.spent - it's now calculated in real-time from transactions
 
       if (!opts?.silent) toast.success(item.type === 'expense' ? 'Bill Paid' : 'Income Received');
+
+      // Price-change nudge: only meaningful for an explicit at-pay-time override
+      // on an expense (income "actual amount" overrides aren't part of this
+      // flow's UI). Reference amount is the most recent PAID instance of this
+      // recurring bill when one exists (closer to "last time" than the
+      // template's budgeted figure), else the item/template's own amount.
+      if (item.type === 'expense' && opts?.actualAmount !== undefined && !opts?.silent) {
+        const recurringId = parentRecurringId ?? (item.isRecurring ? item.id : undefined);
+        const lastPaidInstance = recurringId
+          ? calendarItems
+              .filter(i => i.parentRecurringId === recurringId && i.isPaid && i.date < specificDate)
+              .sort((a, b) => (a.date < b.date ? 1 : -1))[0]
+          : undefined;
+        const referenceAmount = lastPaidInstance?.amount ?? item.amount;
+        const nudge = computePriceChangeNudge(paidAmount, referenceAmount);
+        if (nudge) toast(nudge.message, { icon: nudge.delta > 0 ? '📈' : '📉' });
+      }
     } catch (error) {
       console.error('[payCalendarItem] Failed:', error);
       toast.error('Failed to process payment. Please try again.');
