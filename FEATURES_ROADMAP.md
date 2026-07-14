@@ -39,7 +39,7 @@ paragraph for the existing examples to mirror).
 | F-MONEY-02 | Daily spend pace indicator | Money | small | high | "$X/day until payday" derived from Safe-to-Spend | |
 | F-MONEY-03 | Bucket rollover | Money | medium | high | Carry unspent bucket limit into next period | Optional, user settings flag |
 | F-MONEY-04 | Credit card due-date tracking + reminders | Money | medium | high | Push reminder before a card's statement due date | Optional, user settings flag like all push notifications|
-| F-MONEY-05 | Subscriptions / recurring-spend dashboard | Money | medium | high | "$X/month on subscriptions" rollup | |
+| F-MONEY-05 | Subscriptions / recurring-spend dashboard | Money | medium | high | "$X/month on subscriptions" rollup | Users will need a way to mark recurring bills as a subscription so that it's not just every single bill = subscription |
 | F-MONEY-06 | Monthly Money Recap | Money | suite | high | Budget-vs-actual close-out, Weekly Recap's money sibling | |
 | F-MONEY-07 | Sweep Safe-to-Spend leftover into a savings goal | Money | small | medium | One-tap move unallocated leftover to a goal | |
 | F-MONEY-08 | Archive an account instead of hard-deleting | Money | small | medium | Soft-delete preserves transaction history fidelity | |
