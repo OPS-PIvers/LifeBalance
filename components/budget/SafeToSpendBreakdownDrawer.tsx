@@ -56,8 +56,8 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
               icon={<Receipt size={16} />}
               label="Unpaid bills this period"
               sub="Due before your next paycheck"
-              value={breakdown.unpaidBills > 0 ? `- ${fmt(breakdown.unpaidBills)}` : fmt(0)}
-              negative={breakdown.unpaidBills > 0}
+              value={breakdown.unpaidBills >= 0.005 ? `- ${fmt(breakdown.unpaidBills)}` : fmt(0)}
+              negative={breakdown.unpaidBills >= 0.005}
             />
             {breakdown.pendingSpend > 0 && (
               <WaterfallRow

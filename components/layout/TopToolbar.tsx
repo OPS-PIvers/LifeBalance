@@ -73,7 +73,9 @@ const TopToolbar: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const isPositive = safeToSpend >= 0;
+  // Anything that *displays* as $0.00 (see formatCurrency's clamp) counts as
+  // non-negative, so a -$0.004 never renders a red "$0.00".
+  const isPositive = safeToSpend > -0.005;
 
   return (
     <>
