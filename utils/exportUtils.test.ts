@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import type { HouseholdMember } from '@/types/schema';
-import { convertToCSV, buildExportPayload, type ExportPayloadInput } from './exportUtils';
+import type { HouseholdMember, Transaction } from '@/types/schema';
+import { convertToCSV, buildExportPayload, buildTransactionExportRows, type ExportPayloadInput } from './exportUtils';
 
 describe('exportUtils', () => {
   describe('convertToCSV', () => {
@@ -151,6 +151,65 @@ describe('exportUtils', () => {
       expect(payload.meta.householdId).toBe('household-1');
       expect(payload.meta.exportedBy).toBe('uid-1');
       expect(typeof payload.meta.exportedAt).toBe('string');
+    });
+  });
+
+  describe('buildTransactionExportRows', () => {
+    const makeTx = (overrides: Partial<Transaction> = {}): Transaction => ({
+      id: 'tx-1',
+      date: '2026-07-01',
+      merchant: 'Coffee Shop',
+      amount: 4.5,
+      category: 'Dining',
+      status: 'verified',
+      source: 'manual',
+      isRecurring: false,
+      autoCategorized: false,
+      ...overrides,
+    });
+
+    it('maps core fields and resolves the account name by id', () => {
+      const accountsById = new Map([['acct-1', 'Checking']]);
+      const rows = buildTransactionExportRows([makeTx({ accountId: 'acct-1' })], accountsById);
+
+      expect(rows).toEqual([{
+        Date: '2026-07-01',
+        Merchant: 'Coffee Shop',
+        Category: 'Dining',
+        Amount: 4.5,
+        Currency: 'USD',
+        Status: 'verified',
+        Account: 'Checking',
+        Source: 'manual',
+        'Pay Period': 'N/A',
+      }]);
+    });
+
+    it('falls back to "Unassigned" when accountId is missing or unknown', () => {
+      const accountsById = new Map([['acct-1', 'Checking']]);
+
+      const [noAccountId] = buildTransactionExportRows([makeTx()], accountsById);
+      expect(noAccountId?.Account).toBe('Unassigned');
+
+      const [unknownAccountId] = buildTransactionExportRows(
+        [makeTx({ accountId: 'does-not-exist' })],
+        accountsById
+      );
+      expect(unknownAccountId?.Account).toBe('Unassigned');
+    });
+
+    it('carries the pay period id through when present', () => {
+      const [row] = buildTransactionExportRows(
+        [makeTx({ payPeriodId: 'period-42' })],
+        new Map()
+      );
+      expect(row?.['Pay Period']).toBe('period-42');
+    });
+
+    it('preserves raw decimal-dollar amounts (not formatted currency strings)', () => {
+      const [row] = buildTransactionExportRows([makeTx({ amount: 1234.56 })], new Map());
+      expect(row?.Amount).toBe(1234.56);
+      expect(typeof row?.Amount).toBe('number');
     });
   });
 });

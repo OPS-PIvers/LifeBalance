@@ -16,7 +16,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import { StatGroup, Stat } from '@/components/ui/Section';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import toast from 'react-hot-toast';
-import { generateCsvExport } from '@/utils/exportUtils';
+import { generateCsvExport, buildTransactionExportRows } from '@/utils/exportUtils';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { roundMoney } from '@/utils/money';
 import { usePowerToolsEnabled } from '@/hooks/usePowerToolsEnabled';
@@ -87,6 +87,11 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
   const [actionTransaction, setActionTransaction] = useState<Transaction | null>(null);
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
 
+  // Export State (F-MONEY-10) — "Export all" loads the full transaction
+  // history via loadAllTransactions() before generating the CSV, so it can
+  // take a moment on large households.
+  const [isExportingAll, setIsExportingAll] = useState(false);
+
   // Clear selection when mode is toggled off
   React.useEffect(() => {
     if (!isSelectionMode) {
@@ -101,36 +106,43 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
   }, [transactions]);
 
   // Derived State: Filtered & Sorted Transactions
+  // Shared predicate so "Export all" can apply the same active filters to the
+  // full loaded history, not just the live windowed `transactions` set.
+  const matchesActiveFilters = useCallback((tx: Transaction) => {
+    // Search Filter (Merchant or Amount)
+    const matchesSearch =
+      tx.merchant.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      tx.amount.toString().includes(searchTerm);
+
+    // Category Filter
+    const matchesCategory = categoryFilter === 'all' || tx.category === categoryFilter;
+
+    // Source Filter
+    const matchesSource = sourceFilter === 'all' ||
+      (sourceFilter === 'recurring' && tx.isRecurring) ||
+      (sourceFilter === 'manual' && tx.source === 'manual') ||
+      (sourceFilter === 'camera-scan' && tx.source === 'camera-scan') ||
+      (sourceFilter === 'file-upload' && tx.source === 'file-upload');
+
+    // Store Filter
+    const matchesStore = storeFilter === 'all' || tx.store === storeFilter;
+
+    return matchesSearch && matchesCategory && matchesSource && matchesStore;
+  }, [searchTerm, categoryFilter, sourceFilter, storeFilter]);
+
   const filteredTransactions = useMemo(() => {
     return transactions
-      .filter(tx => {
-        // Search Filter (Merchant or Amount)
-        const matchesSearch =
-          tx.merchant.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          tx.amount.toString().includes(searchTerm);
-
-        // Category Filter
-        const matchesCategory = categoryFilter === 'all' || tx.category === categoryFilter;
-
-        // Source Filter
-        const matchesSource = sourceFilter === 'all' ||
-          (sourceFilter === 'recurring' && tx.isRecurring) ||
-          (sourceFilter === 'manual' && tx.source === 'manual') ||
-          (sourceFilter === 'camera-scan' && tx.source === 'camera-scan') ||
-          (sourceFilter === 'file-upload' && tx.source === 'file-upload');
-
-        // Store Filter
-        const matchesStore = storeFilter === 'all' || tx.store === storeFilter;
-
-        return matchesSearch && matchesCategory && matchesSource && matchesStore;
-      })
+      .filter(matchesActiveFilters)
       // Optimize sort: String comparison of ISO dates is ~12x faster than parsing Date objects
       .sort((a, b) => {
         if (b.date > a.date) return 1;
         if (b.date < a.date) return -1;
         return 0;
       });
-  }, [transactions, searchTerm, categoryFilter, sourceFilter, storeFilter]);
+  }, [transactions, matchesActiveFilters]);
+
+  // Account id -> name lookup for the CSV export's Account column.
+  const accountsById = useMemo(() => new Map(accounts.map(a => [a.id, a.name])), [accounts]);
 
   const activeFilterCount = useMemo(() =>
     (categoryFilter !== 'all' ? 1 : 0) + (sourceFilter !== 'all' ? 1 : 0) + (storeFilter !== 'all' ? 1 : 0),
@@ -332,24 +344,37 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
         return;
       }
 
-      // Transform data for user-friendly export
-      const exportData = filteredTransactions.map(tx => ({
-        Date: tx.date,
-        Merchant: tx.merchant,
-        Amount: tx.amount,
-        Category: tx.category,
-        Status: tx.status,
-        Source: tx.source,
-        'Pay Period': tx.payPeriodId || 'N/A',
-        isRecurring: tx.isRecurring ?? false,
-        autoCategorized: tx.autoCategorized ?? false,
-      }));
-
+      const exportData = buildTransactionExportRows(filteredTransactions, accountsById);
       generateCsvExport(exportData, 'transactions-export');
       toast.success('Export started');
     } catch (error) {
       console.error('Export failed:', error);
       toast.error('Failed to export transactions');
+    }
+  };
+
+  // "Export all" (F-MONEY-10): loads the household's complete transaction
+  // history — beyond the live windowed `transactions` set — then applies the
+  // same active filters before generating the CSV.
+  const handleExportAll = async () => {
+    setIsExportingAll(true);
+    try {
+      const allTransactions = await loadAllTransactions();
+      const scoped = allTransactions.filter(matchesActiveFilters);
+
+      if (scoped.length === 0) {
+        toast.error('No transactions to export');
+        return;
+      }
+
+      const exportData = buildTransactionExportRows(scoped, accountsById);
+      generateCsvExport(exportData, 'transactions-export-all');
+      toast.success(`Exported ${scoped.length} transactions`);
+    } catch (error) {
+      console.error('Export all failed:', error);
+      toast.error('Failed to export transactions');
+    } finally {
+      setIsExportingAll(false);
     }
   };
 
@@ -518,7 +543,7 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
             <span className="hidden sm:inline">{isSelectionMode ? 'Done' : 'Select'}</span>
           </Button>
 
-          {/* Export Button */}
+          {/* Export Button (filtered / current window) */}
           <Button
             variant="primary"
             size="sm"
@@ -530,6 +555,20 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
             aria-label="Export filtered transactions to CSV"
           >
             <span className="hidden sm:inline">Export</span>
+          </Button>
+
+          {/* Export All Button (full history, F-MONEY-10) */}
+          <Button
+            variant="subtle"
+            size="sm"
+            onClick={handleExportAll}
+            disabled={isSelectionMode || isExportingAll}
+            leftIcon={isExportingAll ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+            className={isSelectionMode ? 'hidden sm:flex' : ''}
+            title="Export full transaction history to CSV"
+            aria-label="Export full transaction history to CSV"
+          >
+            <span className="hidden sm:inline">{isExportingAll ? 'Exporting…' : 'Export all'}</span>
           </Button>
         </div>
       </div>
@@ -872,6 +911,20 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
                disabled={filteredTransactions.length === 0}
             >
               Export to CSV
+            </Button>
+
+            {/* Export All Button (full history, F-MONEY-10) */}
+            <Button
+               variant="subtle"
+               className="w-full justify-center py-4"
+               leftIcon={isExportingAll ? <Loader2 className="animate-spin" /> : <Download />}
+               onClick={async () => {
+                 await handleExportAll();
+                 setIsFilterDrawerOpen(false);
+               }}
+               disabled={isExportingAll}
+            >
+              {isExportingAll ? 'Exporting…' : 'Export all history to CSV'}
             </Button>
 
             {/* Clear Filters */}
