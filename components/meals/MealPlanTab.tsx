@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useMealPlan, useShopping, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
-import { Plus, Trash2, Edit2, ChevronRight, ShoppingCart, Copy, CheckCircle2, MoreVertical, MoreHorizontal, BookOpen, CalendarDays, Eye, Info, Utensils } from 'lucide-react';
+import { Plus, Trash2, Edit2, ChevronRight, ShoppingCart, Copy, CheckCircle2, MoreVertical, MoreHorizontal, BookOpen, CalendarDays, Eye, Info, Utensils, Printer } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import { normalizeMealName, mergeFormIntoMeal } from '@/utils/migrations/mealDedupMigration';
@@ -25,6 +25,9 @@ import { SurfaceList, Row } from '@/components/ui/Section';
 import { Sparkles } from 'lucide-react';
 import { haptic } from '@/utils/haptics';
 import clsx from 'clsx';
+import { groupMealPlanByDay } from '@/utils/mealPlanFormatter';
+import { groupShoppingListByStore } from '@/utils/shoppingListFormatter';
+import { buildPrintWeekHtml } from '@/utils/printWeekHtml';
 
 // Scrollable date-strip range, in weeks either side of the current week. The
 // strip is one continuous run of days (not week pages), so navigation is a
@@ -302,6 +305,37 @@ const MealPlanTab: React.FC = () => {
     setShopWeekConfirm(null);
     // 3. Add to list
     await addIngredientsToShoppingList(ingredients);
+  };
+
+  const handlePrintWeek = () => {
+    const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+    const weekEndStr = format(addDays(weekStart, 6), 'yyyy-MM-dd');
+
+    const dayLabels = new Map(
+      Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)).map(date => [
+        format(date, 'yyyy-MM-dd'),
+        format(date, 'EEEE, MMM d'),
+      ])
+    );
+
+    const weekPlanItems = mealPlan.filter(item => item.date >= weekStartStr && item.date <= weekEndStr);
+    const mealDays = groupMealPlanByDay(weekPlanItems, mealsById, dayLabels);
+    const shoppingStores = groupShoppingListByStore(shoppingList.filter(item => !item.isPurchased));
+    const weekRangeLabel = `${format(weekStart, 'MMM d')} – ${format(addDays(weekStart, 6), 'MMM d, yyyy')}`;
+
+    const html = buildPrintWeekHtml(weekRangeLabel, mealDays, shoppingStores);
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error('Pop-up blocked — allow pop-ups to print the week');
+      return;
+    }
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    // Give the popup's fonts/layout a moment to settle before invoking print.
+    printWindow.onload = () => printWindow.print();
   };
 
   const handleCopyLastWeek = () => {
@@ -740,6 +774,12 @@ const MealPlanTab: React.FC = () => {
       label: 'Shop for this week',
       icon: <ShoppingCart size={16} />,
       onSelect: handleShopForWeek,
+    },
+    {
+      key: 'print-week',
+      label: 'Print week for the fridge',
+      icon: <Printer size={16} />,
+      onSelect: handlePrintWeek,
     },
   ];
 
