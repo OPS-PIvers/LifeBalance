@@ -11,6 +11,9 @@ export interface ApiKeyPermissions {
   // Pay/mark a calendar bill via quickAddBillPay (F-MONEY-11). Optional so keys
   // minted before this permission existed keep validating (bills defaults off).
   bills?: boolean;
+  // Create a to-do via quickAddTodo (F-TODO-07). Optional so keys minted
+  // before this permission existed keep validating (todos defaults off).
+  todos?: boolean;
   receiptScanning: boolean;
 }
 
@@ -42,6 +45,7 @@ const RATE_LIMITS = {
   expense: { limit: 50, windowMs: 60 * 60 * 1000 }, // 50/hour
   shopping: { limit: 100, windowMs: 60 * 60 * 1000 }, // 100/hour
   bill: { limit: 50, windowMs: 60 * 60 * 1000 }, // 50/hour
+  todo: { limit: 100, windowMs: 60 * 60 * 1000 }, // 100/hour
 };
 
 /**
@@ -142,7 +146,7 @@ export async function validateApiKey(
  */
 export async function checkRateLimit(
   householdId: string,
-  endpointType: "habit" | "expense" | "shopping" | "bill"
+  endpointType: "habit" | "expense" | "shopping" | "bill" | "todo"
 ): Promise<{ allowed: boolean; retryAfterMs?: number }> {
   const config = RATE_LIMITS[endpointType];
   const now = Date.now();

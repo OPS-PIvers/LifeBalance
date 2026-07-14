@@ -955,6 +955,7 @@ export interface ApiKeyPermissions {
   expenses: boolean;
   shoppingList: boolean;
   bills?: boolean;  // Pay/mark a calendar bill via the quickAddBillPay endpoint (F-MONEY-11). Optional for backward-compat with keys minted before it existed.
+  todos?: boolean;  // Create a to-do via the quickAddTodo endpoint (F-TODO-07). Optional for backward-compat with keys minted before it existed.
   receiptScanning: boolean;  // Unused — receipt endpoint removed; kept for stored-doc shape
 }
 
