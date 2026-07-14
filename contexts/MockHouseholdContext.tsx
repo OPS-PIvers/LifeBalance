@@ -7,6 +7,7 @@ import { getLocalDateString } from '@/utils/dateHelpers';
 import { rollRecurringAnchorForward } from '@/utils/calendarRecurrence';
 import { hashKidPin } from '@/utils/kidPin';
 import { computeTodoCompletionCredit } from '@/utils/todoPoints';
+import { buildNextRecurringTodo } from '@/utils/todoRecurrence';
 import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
 import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
@@ -1502,9 +1503,21 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       if (completedTodo.isCompleted) {
         return; // already completed — avoid duplicate points
       }
-      setTodos(prev => prev.map(t =>
-        t.id === id ? { ...t, isCompleted: true, completedAt: new Date().toISOString() } : t,
-      ));
+      // F-TODO-01: recurring todos spawn their next instance on completion,
+      // mirroring the atomic completion+spawn in makeCompleteToDo.
+      const nextInstance = buildNextRecurringTodo(completedTodo, getLocalDateString());
+      setTodos(prev => {
+        const updated = prev.map(t =>
+          t.id === id ? { ...t, isCompleted: true, completedAt: new Date().toISOString() } : t,
+        );
+        if (!nextInstance) return updated;
+        return [...updated, {
+          ...nextInstance,
+          id: generateId(),
+          createdAt: new Date().toISOString(),
+          createdBy: completedTodo.createdBy,
+        } as ToDo];
+      });
       setMembers(prev => {
         const credit = computeTodoCompletionCredit(completedTodo, prev);
         if (!credit) return prev;

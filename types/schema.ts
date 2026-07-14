@@ -765,6 +765,19 @@ export interface ToDo {
   // Absent/false = not important — no migration needed. Urgency is NOT stored;
   // it is derived from completeByDate (utils/eisenhower.ts).
   isImportant?: boolean;
+
+  // F-TODO-01: Recurring / repeating to-dos. Mirrors CalendarItem's
+  // frequency/parentRecurringId model. When present, completing the task
+  // auto-spawns the next instance (completeByDate advanced by `frequency`)
+  // in the SAME writeBatch as the completion (see makeCompleteToDo). Absent on
+  // every existing todo — non-recurring behavior is unchanged.
+  recurrence?: {
+    frequency: 'weekly' | 'bi-weekly' | 'monthly';
+    // Stable id of the FIRST todo in the recurring chain (denormalized onto each
+    // spawned instance, matching CalendarItem.parentRecurringId). Lets a household
+    // group / manage a chain of occurrences later without a separate parent doc.
+    parentRecurringId?: string;
+  };
 }
 
 export interface UpdateBucketPayload {
