@@ -43,6 +43,7 @@ import {
   FreezeBank,
   ModuleKey,
   WeeklyRecap,
+  MonthlyMoneyRecap,
   SavingsGoal,
   TransactionComment
 } from '@/types/schema';
@@ -424,6 +425,34 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     narrativeSource: 'template',
     premium: true,
   }]);
+  // One canned monthly money recap (F-MONEY-06) so Test Mode renders the
+  // Dashboard money-recap card + drawer. Anchored to the PRIOR calendar month
+  // with a fresh generatedAt so the card's freshness window always passes.
+  const [moneyRecaps] = useState<MonthlyMoneyRecap[]>(() => {
+    const priorMonth = new Date();
+    priorMonth.setDate(1);
+    priorMonth.setMonth(priorMonth.getMonth() - 1);
+    const month = format(priorMonth, 'yyyy-MM');
+    return [{
+      id: month,
+      month,
+      generatedAt: new Date().toISOString(),
+      totalIncome: 5200,
+      totalSpend: 3480.25,
+      priorMonthSpend: 3120.5,
+      bucketResults: [
+        { bucketId: 'groceries', bucketName: 'Groceries', limit: 600, spent: 645.1, overUnder: 45.1 },
+        { bucketId: 'dining', bucketName: 'Dining Out', limit: 250, spent: 198.4, overUnder: -51.6 },
+        { bucketId: 'gas', bucketName: 'Gas', limit: 200, spent: 210.0, overUnder: 10.0 },
+      ],
+      topExpense: { merchant: 'Costco', amount: 312.4, category: 'Groceries', date: `${month}-14` },
+      netWorthDelta: null,
+      narrative:
+        'Test Mode: You spent about 12% more than last month, with groceries running just over budget. Nice work keeping dining out well under — trim groceries next month and you\'ll land comfortably in the black.',
+      narrativeSource: 'template',
+      premium: true,
+    }];
+  });
   const [insightsHistory] = useState<Insight[]>([]);
   const [insight] = useState("Test Mode: This is mock data for AI testing");
   const [stores, setStores] = useState<Store[]>(SEED_STORES);
@@ -1321,6 +1350,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     groceryCatalog,
     bucketHistory,
     recaps,
+    moneyRecaps,
     insightsHistory,
     insight,
     stores,

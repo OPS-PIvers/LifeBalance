@@ -24,6 +24,7 @@ import {
   HouseholdApiKey,
   ModuleKey,
   WeeklyRecap,
+  MonthlyMoneyRecap,
   TransactionComment
 } from '@/types/schema';
 import { type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
@@ -79,6 +80,9 @@ export interface HouseholdContextType {
   bucketHistory: BucketPeriodSnapshot[];
   /** Weekly recaps (Plan 02) — newest first, bounded live window (RECAPS_LIMIT). */
   recaps: WeeklyRecap[];
+  /** Monthly money recaps (F-MONEY-06) — newest first, bounded live window
+   *  (MONEY_RECAPS_LIMIT). */
+  moneyRecaps: MonthlyMoneyRecap[];
 
   // --- Listener windowing / pagination ---
   // The high-cardinality collections below are windowed on cold load (see
@@ -426,5 +430,5 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'setKidModePin'
   | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
   | 'activeMemberId' | 'actAs' | 'exitToParent'
-  | 'recaps'
+  | 'recaps' | 'moneyRecaps'
 >;

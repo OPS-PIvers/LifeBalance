@@ -57,6 +57,7 @@ import type {
   TransactionComment,
   ToDo,
   WeeklyRecap,
+  MonthlyMoneyRecap,
   SavingsGoal,
 } from '@/types/schema';
 
@@ -338,6 +339,29 @@ export const weeklyRecapConverter: FirestoreDataConverter<WeeklyRecap> = {
           ? d['generatedAt'].toDate().toISOString()
           : d['generatedAt'],
     } as WeeklyRecap;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// MonthlyMoneyRecap (F-MONEY-06) — doc id IS the calendar month (yyyy-MM);
+// preserves Timestamp→ISO normalisation for generatedAt. Server-written (Admin
+// SDK) but the converter still strips the synthetic id defensively on any
+// client write path (mirrors weeklyRecapConverter).
+// ---------------------------------------------------------------------------
+export const monthlyMoneyRecapConverter: FirestoreDataConverter<MonthlyMoneyRecap> = {
+  toFirestore(recap: MonthlyMoneyRecap): DocumentData {
+    return omitKey(recap, 'id');
+  },
+  fromFirestore(snapshot: QueryDocumentSnapshot): MonthlyMoneyRecap {
+    const d = snapshot.data();
+    return {
+      ...d,
+      id: snapshot.id,
+      generatedAt:
+        d['generatedAt'] instanceof Timestamp
+          ? d['generatedAt'].toDate().toISOString()
+          : d['generatedAt'],
+    } as MonthlyMoneyRecap;
   },
 };
 

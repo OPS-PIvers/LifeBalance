@@ -30,6 +30,7 @@ import {
   householdApiKeyConverter,
   insightConverter,
   weeklyRecapConverter,
+  monthlyMoneyRecapConverter,
   transactionConverter,
   transactionCommentConverter,
   todoConverter,
@@ -756,6 +757,71 @@ describe('weeklyRecapConverter', () => {
     expect(() => weeklyRecapConverter.fromFirestore(fakeSnap('2026-W26', partial))).not.toThrow();
     const result = weeklyRecapConverter.fromFirestore(fakeSnap('2026-W26', partial));
     expect(result.id).toBe('2026-W26');
+    expect(result.premium).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// MonthlyMoneyRecap — Timestamp normalisation for generatedAt (F-MONEY-06)
+// ---------------------------------------------------------------------------
+describe('monthlyMoneyRecapConverter', () => {
+  const wellFormed = {
+    month: '2026-06',
+    generatedAt: '2026-07-01T13:00:00.000Z',
+    totalIncome: 5200,
+    totalSpend: 3480.25,
+    priorMonthSpend: 3120.5,
+    bucketResults: [
+      { bucketId: 'b1', bucketName: 'Groceries', limit: 600, spent: 645.1, overUnder: 45.1 },
+    ],
+    topExpense: { merchant: 'Costco', amount: 312.4, category: 'Groceries', date: '2026-06-14' },
+    netWorthDelta: null,
+    narrative: 'A steady month — groceries ran a touch over.',
+    narrativeSource: 'ai',
+    premium: true,
+  };
+
+  it('(a) well-formed doc: fromFirestore injects id (the month) and preserves fields', () => {
+    const result = monthlyMoneyRecapConverter.fromFirestore(fakeSnap('2026-06', wellFormed));
+    expect(result.id).toBe('2026-06');
+    expect(result.month).toBe('2026-06');
+    expect(result.totalSpend).toBe(3480.25);
+    expect(result.bucketResults[0]?.overUnder).toBe(45.1);
+    expect(result.topExpense?.merchant).toBe('Costco');
+  });
+
+  it('(a) well-formed doc: toFirestore strips id', () => {
+    const recap = { ...wellFormed, id: '2026-06' };
+    const out = callToFirestore(monthlyMoneyRecapConverter, recap);
+    expect('id' in out).toBe(false);
+    expect(out['month']).toBe('2026-06');
+  });
+
+  it('(a) Timestamp generatedAt is converted to ISO string', () => {
+    const ts = Timestamp.fromDate(new Date('2026-07-01T13:00:00.000Z'));
+    const result = monthlyMoneyRecapConverter.fromFirestore(
+      fakeSnap('2026-06', { ...wellFormed, generatedAt: ts })
+    );
+    expect(result.generatedAt).toBe('2026-07-01T13:00:00.000Z');
+  });
+
+  it('(b) partial doc with missing sections does not throw', () => {
+    const partial = {
+      month: '2026-05',
+      generatedAt: '2026-06-01T13:00:00.000Z',
+      totalIncome: 0,
+      totalSpend: 0,
+      priorMonthSpend: 0,
+      bucketResults: [],
+      topExpense: null,
+      netWorthDelta: null,
+      narrative: '',
+      narrativeSource: 'template',
+      premium: false,
+    };
+    expect(() => monthlyMoneyRecapConverter.fromFirestore(fakeSnap('2026-05', partial))).not.toThrow();
+    const result = monthlyMoneyRecapConverter.fromFirestore(fakeSnap('2026-05', partial));
+    expect(result.id).toBe('2026-05');
     expect(result.premium).toBe(false);
   });
 });

@@ -62,6 +62,11 @@ export { plaiddisconnectbank } from "./plaid/disconnect";
 // Weekly recap engine (Plan 02).
 export { sendweeklyrecap } from "./recap";
 
+// Monthly money recap engine (F-MONEY-06). Uses the shared GEMINI_API_KEY
+// secret (already required by geminiproxy/sendweeklyrecap), so exporting it
+// adds no new secret dependency for CI deploys.
+export { sendmonthlymoneyrecap } from "./moneyRecap";
+
 // Managed kid-profile creation (Plan 080 / Plan 051): authoritatively enforces the
 // per-plan maxKidProfiles cap server-side. No secrets — safe to export/deploy.
 export { createkidprofile } from "./kid/createKidProfile";

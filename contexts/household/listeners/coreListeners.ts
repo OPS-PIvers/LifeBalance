@@ -12,11 +12,12 @@ import {
   householdApiKeyConverter,
   insightConverter,
   weeklyRecapConverter,
+  monthlyMoneyRecapConverter,
 } from '@/utils/firestoreConverters';
-import { Household, FreezeBank, Insight, HouseholdApiKey, WeeklyRecap } from '@/types/schema';
+import { Household, FreezeBank, Insight, HouseholdApiKey, WeeklyRecap, MonthlyMoneyRecap } from '@/types/schema';
 import { migrateFreezeBankToEnhanced, needsFreezeBankMigration } from '@/utils/migrations/freezeBankMigration';
 import { getLocalDateString } from '@/utils/dateHelpers';
-import { RECAPS_LIMIT, INSIGHTS_LIMIT } from '@/utils/listenerWindows';
+import { RECAPS_LIMIT, MONEY_RECAPS_LIMIT, INSIGHTS_LIMIT } from '@/utils/listenerWindows';
 import { format } from 'date-fns';
 
 /**
@@ -41,6 +42,7 @@ export function attachCoreListeners({
   setLoadedHouseholdId,
   setFreezeBank,
   setRecaps,
+  setMoneyRecaps,
   setApiKeys,
   setInsightsWindow,
   setHasMoreInsights,
@@ -53,6 +55,7 @@ export function attachCoreListeners({
   setLoadedHouseholdId: (id: string) => void;
   setFreezeBank: (freezeBank: FreezeBank | null) => void;
   setRecaps: (recaps: WeeklyRecap[]) => void;
+  setMoneyRecaps: (moneyRecaps: MonthlyMoneyRecap[]) => void;
   setApiKeys: (apiKeys: HouseholdApiKey[]) => void;
   setInsightsWindow: (insights: Insight[]) => void;
   setHasMoreInsights: (hasMore: boolean) => void;
@@ -126,6 +129,22 @@ export function attachCoreListeners({
       setRecaps(snapshot.docs.map(doc => doc.data()));
     }, (error) => {
       console.error('Error listening to recaps:', error);
+    })
+  );
+
+  // Monthly money recaps listener (F-MONEY-06) — bounded live window of the
+  // most recent few months. Docs are keyed by calendar month ('2026-06'),
+  // which sorts chronologically as a string, so orderBy desc yields newest-first.
+  const moneyRecapsQuery = query(
+    collection(db, `households/${householdId}/moneyRecaps`).withConverter(monthlyMoneyRecapConverter),
+    orderBy('month', 'desc'),
+    limit(MONEY_RECAPS_LIMIT)
+  );
+  unsubscribers.push(
+    onSnapshot(moneyRecapsQuery, (snapshot) => {
+      setMoneyRecaps(snapshot.docs.map(doc => doc.data()));
+    }, (error) => {
+      console.error('Error listening to money recaps:', error);
     })
   );
 

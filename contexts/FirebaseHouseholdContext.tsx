@@ -52,6 +52,7 @@ import {
   PendingItem,
   ModuleKey,
   WeeklyRecap,
+  MonthlyMoneyRecap,
   SavingsGoal
 } from '@/types/schema';
 import { calculateSafeToSpendBreakdownFromExpanded } from '@/utils/safeToSpendCalculator';
@@ -501,6 +502,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // Bucket history: live window (most-recent N periods) merged with older history.
   // Weekly recaps (Plan 02) — bounded live window, newest first (see RECAPS_LIMIT).
   const [recaps, setRecaps] = useState<WeeklyRecap[]>([]);
+  // Monthly money recaps (F-MONEY-06) — bounded live window, newest first.
+  const [moneyRecaps, setMoneyRecaps] = useState<MonthlyMoneyRecap[]>([]);
   const [bucketHistoryWindow, setBucketHistoryWindow] = useState<BucketPeriodSnapshot[]>([]);
   const [bucketHistoryOlder, setBucketHistoryOlder] = useState<BucketPeriodSnapshot[]>([]);
   const bucketHistory = useMemo(
@@ -772,6 +775,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       setLoadedHouseholdId: (id) => setLoadedHouseholdId(id),
       setFreezeBank: (data) => setFreezeBank(data),
       setRecaps: (data) => setRecaps(data),
+      setMoneyRecaps: (data) => setMoneyRecaps(data),
       setApiKeys: (data) => setApiKeys(data),
       setInsightsWindow: (data) => setInsightsWindow(data),
       setHasMoreInsights: (data) => setHasMoreInsights(data),
@@ -2277,6 +2281,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     actAs,
     exitToParent,
     recaps,
+    moneyRecaps,
   }), [
     isLoading, currentUser, members, insight, insightsHistory, isGeneratingInsight, hasMoreInsights, loadAllInsights,
     pendingItemsCount, apiKeys,
@@ -2284,6 +2289,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     completeOnboarding, setHouseholdCurrency, setModuleVisibility, setKidModePin,
     addKidProfile, updateKidProfile, removeKidProfile, activeMemberId, actAs, exitToParent,
     recaps,
+    moneyRecaps,
   ]);
 
   return (
