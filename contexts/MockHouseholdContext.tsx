@@ -16,6 +16,7 @@ import { accountImpactOf, effectiveAccountImpact, resolveTargetAccount } from '@
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
 import { MAX_COMMENT_LENGTH } from '@/contexts/household/mutations/commentMutations';
 import { roundMoney } from '@/utils/money';
+import { computeNetWorth } from '@/utils/netWorth';
 import { track } from '@/services/analytics';
 import {
   Account,
@@ -43,6 +44,7 @@ import {
   FreezeBank,
   ModuleKey,
   WeeklyRecap,
+  NetWorthSnapshot,
   SavingsGoal,
   TransactionComment
 } from '@/types/schema';
@@ -394,6 +396,28 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   todosRef.current = todos;
   const [groceryCatalog, setGroceryCatalog] = useState<GroceryCatalogItem[]>(SEED_GROCERY_CATALOG);
   const [bucketHistory] = useState<BucketPeriodSnapshot[]>([]); // Mock empty history
+  // Net worth history (F-MONEY-09) — 30 deterministic daily snapshots ending
+  // at today's live SEED_ACCOUNTS total, drifting backward by a small fixed
+  // step per day so the Trends chart has a visible (non-flat) trend line in
+  // Test Mode without depending on Math.random (deterministic test seed).
+  const [netWorthHistory] = useState<NetWorthSnapshot[]>(() => {
+    if (isFresh) return [];
+    const { totalAssets, totalLiabilities, netWorth } = computeNetWorth(SEED_ACCOUNTS);
+    const days = 30;
+    const dailyDrift = 18.32; // decimal dollars/day, arbitrary but fixed
+    return Array.from({ length: days }, (_, i) => {
+      const daysAgo = days - 1 - i;
+      const date = getLocalDateString(new Date(Date.now() - daysAgo * 86400000));
+      const drift = dailyDrift * daysAgo;
+      return {
+        id: date,
+        date,
+        totalAssets: roundMoney(totalAssets - drift),
+        totalLiabilities,
+        netWorth: roundMoney(netWorth - drift),
+      };
+    });
+  });
   // One canned weekly recap (Plan 02) so Test Mode renders the Dashboard recap
   // card + drawer. Anchored to the CURRENT ISO week with a fresh generatedAt so
   // the card's 4-day freshness window always passes. Numbers stay consistent
@@ -1318,6 +1342,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     accounts,
     buckets,
     savingsGoals,
+    netWorthHistory,
     transactions,
     calendarItems,
     habits,

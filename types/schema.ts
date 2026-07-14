@@ -810,6 +810,21 @@ export interface WeeklyRecap {
   premium: boolean;
 }
 
+/**
+ * Net worth snapshot (F-MONEY-09) — one doc per calendar day at
+ * `households/{id}/netWorthSnapshots/{yyyy-MM-dd}`, written server-side once
+ * daily by the scheduled `snapshotnetworth` function (Admin SDK; clients only
+ * read). The synthetic `id` equals the doc id, which equals `date`. Money
+ * fields are decimal dollars (see `utils/netWorth.ts`).
+ */
+export interface NetWorthSnapshot {
+  id: string;
+  date: string; // yyyy-MM-dd, local to the server's daily run
+  totalAssets: number;
+  totalLiabilities: number;
+  netWorth: number;
+}
+
 export interface BetaTester {
   email: string;
   addedAt: string;
@@ -833,6 +848,7 @@ export interface ApiKeyPermissions {
   habits: boolean;
   expenses: boolean;
   shoppingList: boolean;
+  bills?: boolean;  // Pay/mark a calendar bill via the quickAddBillPay endpoint (F-MONEY-11). Optional for backward-compat with keys minted before it existed.
   receiptScanning: boolean;  // Unused — receipt endpoint removed; kept for stored-doc shape
 }
 

@@ -5,7 +5,8 @@ import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { Pencil, Check, Plus, Target, Star, GripVertical, Trash2, MoreVertical, Landmark, CreditCard, Banknote, Archive, ArchiveRestore, ChevronDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Account } from '@/types/schema';
-import { sumMoney, subtractMoney, roundMoney } from '@/utils/money';
+import { roundMoney } from '@/utils/money';
+import { computeNetWorth } from '@/utils/netWorth';
 import { shouldOfferBalanceAdoption } from '@/utils/plaidBalance';
 import { track } from '@/services/analytics';
 import { cn } from '@/utils/cn';
@@ -67,16 +68,15 @@ const BudgetAccounts: React.FC = () => {
       .filter(a => a.archived)
       .sort((a, b) => a.name.localeCompare(b.name));
 
-    const assetsTotal = sumMoney(assetAccts.map(a => a.balance));
-    const debtsTotal = sumMoney(liabilityAccts.map(a => a.balance));
+    const { totalAssets, totalLiabilities, netWorth: net } = computeNetWorth(activeAccounts);
 
     return {
       assetAccounts: assetAccts,
       liabilityAccounts: liabilityAccts,
       archivedAccounts: archivedAccts,
-      assets: assetsTotal,
-      debts: debtsTotal,
-      netWorth: subtractMoney(assetsTotal, debtsTotal)
+      assets: totalAssets,
+      debts: totalLiabilities,
+      netWorth: net
     };
   }, [accounts]);
 
