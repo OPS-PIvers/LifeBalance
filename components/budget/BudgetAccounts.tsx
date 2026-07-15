@@ -2,12 +2,14 @@
 import React, { useState, useMemo } from 'react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
-import { Pencil, Check, Plus, Target, Star, GripVertical, Trash2, MoreVertical, Landmark, CreditCard, Banknote } from 'lucide-react';
+import { Pencil, Check, Plus, Target, Star, GripVertical, Trash2, MoreVertical, Landmark, CreditCard, Banknote, Archive, ArchiveRestore, ChevronDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Account } from '@/types/schema';
-import { sumMoney, subtractMoney, roundMoney } from '@/utils/money';
+import { roundMoney } from '@/utils/money';
+import { computeNetWorth } from '@/utils/netWorth';
 import { shouldOfferBalanceAdoption } from '@/utils/plaidBalance';
 import { track } from '@/services/analytics';
+import { cn } from '@/utils/cn';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -20,7 +22,8 @@ import { SurfaceList, Row } from '@/components/ui/Section';
 import SavingsGoals from '@/components/budget/SavingsGoals';
 
 const BudgetAccounts: React.FC = () => {
-  const { accounts, updateAccountBalance, addAccount, setAccountGoal, setAccountCardLast4, deleteAccount, reorderAccounts } = useFinance();
+  const { accounts, updateAccountBalance, addAccount, setAccountGoal, setAccountCardLast4, deleteAccount, archiveAccount, unarchiveAccount, reorderAccounts } = useFinance();
+  const [showArchived, setShowArchived] = useState(false);
   const fmt = useFormatCurrency();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>('');
@@ -51,24 +54,29 @@ const BudgetAccounts: React.FC = () => {
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
 
-  // Group and sort accounts
-  const { assetAccounts, liabilityAccounts, assets, debts, netWorth } = useMemo(() => {
-    const assetAccts = accounts
+  // Group and sort accounts. Archived accounts (F-MONEY-08) are excluded from
+  // the active lists and net worth — they're a display-only history section.
+  const { assetAccounts, liabilityAccounts, archivedAccounts, assets, debts, netWorth } = useMemo(() => {
+    const activeAccounts = accounts.filter(a => !a.archived);
+    const assetAccts = activeAccounts
       .filter(a => a.type !== 'credit')
       .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
-    const liabilityAccts = accounts
+    const liabilityAccts = activeAccounts
       .filter(a => a.type === 'credit')
       .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+    const archivedAccts = accounts
+      .filter(a => a.archived)
+      .sort((a, b) => a.name.localeCompare(b.name));
 
-    const assetsTotal = sumMoney(assetAccts.map(a => a.balance));
-    const debtsTotal = sumMoney(liabilityAccts.map(a => a.balance));
+    const { totalAssets, totalLiabilities, netWorth: net } = computeNetWorth(activeAccounts);
 
     return {
       assetAccounts: assetAccts,
       liabilityAccounts: liabilityAccts,
-      assets: assetsTotal,
-      debts: debtsTotal,
-      netWorth: subtractMoney(assetsTotal, debtsTotal)
+      archivedAccounts: archivedAccts,
+      assets: totalAssets,
+      debts: totalLiabilities,
+      netWorth: net
     };
   }, [accounts]);
 
@@ -155,6 +163,24 @@ const BudgetAccounts: React.FC = () => {
       console.error('Failed to delete account', error);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleArchiveAccount = async (id: string) => {
+    try {
+      await archiveAccount(id);
+    } catch (error) {
+      console.error('Failed to archive account', error);
+      toast.error('Failed to archive account. Please try again.');
+    }
+  };
+
+  const handleUnarchiveAccount = async (id: string) => {
+    try {
+      await unarchiveAccount(id);
+    } catch (error) {
+      console.error('Failed to unarchive account', error);
+      toast.error('Failed to unarchive account. Please try again.');
     }
   };
 
@@ -290,6 +316,17 @@ const BudgetAccounts: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {/* Archive button (Desktop) */}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => handleArchiveAccount(account.id)}
+              className="text-brand-300 dark:text-brand-500 hidden sm:flex"
+              aria-label={`Archive ${account.name} account`}
+            >
+              <Archive size={14} />
+            </Button>
+
             {/* Delete button (Desktop) */}
             <Button
               variant="ghost-destructive"
@@ -429,8 +466,60 @@ const BudgetAccounts: React.FC = () => {
           affordance above, per the design spike. */}
       <SavingsGoals />
 
+      {/* Archived Accounts (F-MONEY-08) — collapsed history section. Hidden
+          from active lists/net worth/Safe-to-Spend, but transactions tagged
+          to these accounts still resolve correctly. */}
+      {archivedAccounts.length > 0 && (
+        <div className="space-y-3">
+          <button
+            type="button"
+            onClick={() => setShowArchived(v => !v)}
+            aria-expanded={showArchived}
+            aria-controls="archived-accounts-list"
+            className="flex w-full items-center gap-1.5 px-1 text-left text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-200 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-800 rounded-btn"
+          >
+            <Archive size={12} aria-hidden />
+            Archived accounts ({archivedAccounts.length})
+            <ChevronDown
+              size={14}
+              className={cn(
+                'transition-transform duration-(--duration-base) ease-(--ease-standard)',
+                showArchived && 'rotate-180'
+              )}
+            />
+          </button>
+          {showArchived && (
+            <SurfaceList id="archived-accounts-list">
+              {archivedAccounts.map(account => (
+                <Row key={account.id} className="items-center justify-between gap-3 opacity-70">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-brand-700 dark:text-brand-300 truncate">{account.name}</p>
+                    <Badge variant={account.type === 'credit' ? 'danger' : 'success'} size="sm" className="uppercase">
+                      {account.type}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <p className="font-mono tabular-nums font-bold text-sm text-brand-500 dark:text-brand-400">
+                      {fmt(account.balance)}
+                    </p>
+                    <Button
+                      variant="subtle"
+                      size="icon-sm"
+                      onClick={() => handleUnarchiveAccount(account.id)}
+                      aria-label={`Unarchive ${account.name} account`}
+                    >
+                      <ArchiveRestore size={14} />
+                    </Button>
+                  </div>
+                </Row>
+              ))}
+            </SurfaceList>
+          )}
+        </div>
+      )}
+
       {/* Empty State */}
-      {accounts.length === 0 && (
+      {assetAccounts.length === 0 && liabilityAccounts.length === 0 && (
         <EmptyState
           variant="surface"
           icon={<Landmark size={28} />}
@@ -619,6 +708,19 @@ const BudgetAccounts: React.FC = () => {
               )}
 
               <div className="h-px bg-brand-200 dark:bg-brand-700 my-2" />
+
+              {/* Archive Action */}
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={<Archive className="text-brand-500" />}
+                onClick={() => {
+                  handleArchiveAccount(actionAccount.id);
+                  setActionAccount(null);
+                }}
+              >
+                Archive Account
+              </Button>
 
               {/* Delete Action */}
               <Button

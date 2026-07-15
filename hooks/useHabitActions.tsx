@@ -13,13 +13,15 @@ import {
   increment,
   writeBatch,
   serverTimestamp,
+  arrayUnion,
 } from 'firebase/firestore';
 import { db } from '@/firebase.config';
 import {
   Habit,
   HabitSubmission,
   HouseholdMember,
-  Household
+  Household,
+  RewardItem
 } from '@/types/schema';
 import {
   processToggleHabit,
@@ -32,8 +34,9 @@ import {
   signedHabitPoints,
   pointsForHabitOnDate
 } from '@/utils/habitLogic';
+import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
 import toast from 'react-hot-toast';
-import { CalendarDays, RotateCcw, Star, TrendingDown } from 'lucide-react';
+import { CalendarDays, RotateCcw, Star, TrendingDown, PartyPopper, Gift } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { addDays, format, parseISO, startOfWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -64,7 +67,8 @@ export const useHabitActions = (
   householdId: string | null,
   currentUser: HouseholdMember | null,
   habits: Habit[],
-  householdSettings: Household | null
+  householdSettings: Household | null,
+  rewardsInventory: RewardItem[] = []
 ) => {
   // Keep mutable refs so callbacks can read the latest habits/settings without
   // including them in dep arrays.  This prevents every habit write from
@@ -74,6 +78,9 @@ export const useHabitActions = (
 
   const householdSettingsRef = useRef<Household | null>(householdSettings);
   useEffect(() => { householdSettingsRef.current = householdSettings; }, [householdSettings]);
+
+  const rewardsInventoryRef = useRef<RewardItem[]>(rewardsInventory);
+  useEffect(() => { rewardsInventoryRef.current = rewardsInventory; }, [rewardsInventory]);
 
   // Per-habit running total for the points toast (keyed by habit id). Lives
   // in a ref (not module scope, which would leak across tests/users, and not
@@ -146,6 +153,36 @@ export const useHabitActions = (
       await deleteDoc(doc(db, `households/${householdId}/habits`, id));
     } catch (error) {
       console.error('[deleteHabit] Failed to delete habit:', error);
+      throw error;
+    }
+  }, [householdId]);
+
+  const archiveHabit = useCallback(async (id: string) => {
+    if (!householdId) return;
+    try {
+      await updateDoc(doc(db, `households/${householdId}/habits`, id), {
+        archivedAt: getLocalDateString(),
+        lastUpdated: serverTimestamp(),
+      });
+      toast.success('Habit archived');
+    } catch (error) {
+      console.error('[archiveHabit] Failed to archive habit:', error);
+      toast.error('Failed to archive habit. Please try again.');
+      throw error;
+    }
+  }, [householdId]);
+
+  const unarchiveHabit = useCallback(async (id: string) => {
+    if (!householdId) return;
+    try {
+      await updateDoc(doc(db, `households/${householdId}/habits`, id), {
+        archivedAt: null,
+        lastUpdated: serverTimestamp(),
+      });
+      toast.success('Habit restored');
+    } catch (error) {
+      console.error('[unarchiveHabit] Failed to unarchive habit:', error);
+      toast.error('Failed to restore habit. Please try again.');
       throw error;
     }
   }, [householdId]);
@@ -234,11 +271,67 @@ export const useHabitActions = (
       });
     }
 
+    // F-HABITS-02 (streak milestone celebrations): a 'down' toggle can't cross
+    // a milestone (streak only grows on 'up'), so this only fires forward.
+    // Presentation-only per the feature spec — no bonus points are awarded
+    // here, just a distinct toast plus (optionally) unlocking gated rewards.
+    const nextStreakDays = result.updatedHabit.streakDays ?? effectiveHabit.streakDays;
+    const milestone = direction === 'up'
+      ? crossedMilestone(effectiveHabit.streakDays, nextStreakDays)
+      : null;
+
+    const newlyUnlockedRewards: RewardItem[] = [];
+    if (milestone !== null) {
+      const alreadyUnlocked = householdSettingsRef.current?.unlockedRewardIds ?? [];
+      newlyUnlockedRewards.push(
+        ...rewardsInventoryRef.current.filter(
+          (reward) =>
+            !alreadyUnlocked.includes(reward.id) &&
+            reward.unlockRequirement &&
+            rewardMilestoneSatisfied(reward, id, nextStreakDays)
+        )
+      );
+      if (newlyUnlockedRewards.length > 0) {
+        batch.update(doc(db, `households/${householdId}`), {
+          unlockedRewardIds: arrayUnion(...newlyUnlockedRewards.map((r) => r.id)),
+        });
+      }
+    }
+
     // Read BEFORE the commit so latency-compensated listeners can't already
     // reflect this write when we derive "was this the first completion ever".
     const wasFirstCompletion = direction === 'up' && !habitsRef.current.some(h => h.totalCount > 0);
 
     await batch.commit();
+
+    if (milestone !== null) {
+      track('habit_milestone_reached', { habitId: id, milestone });
+      toast(
+        <div className="flex items-center gap-2">
+          <span className="font-bold">{milestone}-day streak!</span>
+          <span className="text-sm opacity-80">{habit.title}</span>
+        </div>,
+        {
+          duration: 3500,
+          icon: toastIcon(PartyPopper, 'text-habit-streak dark:text-habit-streak'),
+          className: 'bg-habit-streak/10 text-habit-streak border border-habit-streak/25 font-medium rounded-btn shadow-raised',
+        }
+      );
+      newlyUnlockedRewards.forEach((reward) => {
+        track('habit_milestone_reward_unlocked', { habitId: id, milestone, rewardId: reward.id });
+        toast(
+          <div className="flex items-center gap-2">
+            <span className="font-bold">Reward unlocked!</span>
+            <span className="text-sm opacity-80">{reward.title}</span>
+          </div>,
+          {
+            duration: 3500,
+            icon: toastIcon(Gift, 'text-warm-600 dark:text-warm-300'),
+            className: 'bg-warm-100 text-warm-700 border border-warm-300/50 dark:bg-warm-900/30 dark:text-warm-200 dark:border-warm-700/40 font-medium rounded-btn shadow-raised',
+          }
+        );
+      });
+    }
 
     track('habit_toggled', { positive: habit.type === 'positive', direction });
     if (shouldTrackFirstTime(FIRST_HABIT_FLAG, wasFirstCompletion)) track('first_habit_completed');
@@ -825,6 +918,8 @@ export const useHabitActions = (
     addHabit,
     updateHabit,
     deleteHabit,
+    archiveHabit,
+    unarchiveHabit,
     reorderHabits,
     toggleHabit,
     resetHabit,
@@ -837,6 +932,8 @@ export const useHabitActions = (
     addHabit,
     updateHabit,
     deleteHabit,
+    archiveHabit,
+    unarchiveHabit,
     reorderHabits,
     toggleHabit,
     resetHabit,

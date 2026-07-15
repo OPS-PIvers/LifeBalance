@@ -14,6 +14,7 @@ import {
   calculatePulseData,
   calculateWeeklyComparison,
 } from '@/utils/analytics/analyticsHelper';
+import { calculateAggregateDayOfWeekPattern } from '@/utils/habitPatterns';
 
 /**
  * Recharts-backed chart body for the Habits → Insights tab. Split into its own
@@ -33,13 +34,14 @@ import {
  * this diff minimal and avoids re-computing on every tab switch.
  */
 
-type InsightsChartId = 'effort' | 'weekly' | 'balance' | 'consistency';
+type InsightsChartId = 'effort' | 'weekly' | 'balance' | 'consistency' | 'pattern';
 
 const CHART_OPTIONS: { value: InsightsChartId; label: string }[] = [
   { value: 'effort', label: 'Effort' },
   { value: 'weekly', label: 'Weekly' },
   { value: 'balance', label: 'Balance' },
   { value: 'consistency', label: 'Consistency' },
+  { value: 'pattern', label: 'Pattern' },
 ];
 
 // Evergreen heatmap ramp (replaces the generic slate→emerald set).
@@ -61,6 +63,7 @@ const HabitsInsightsCharts: React.FC = () => {
     [habits, transactions]
   );
   const weeklyComparisonData = useMemo(() => calculateWeeklyComparison(habits), [habits]);
+  const dayOfWeekData = useMemo(() => calculateAggregateDayOfWeekPattern(habits), [habits]);
 
   const totalCompletions = useMemo(
     () => heatmapData.reduce((sum, d) => sum + d.count, 0),
@@ -214,6 +217,28 @@ const HabitsInsightsCharts: React.FC = () => {
             ))}
           </div>
           <span>More</span>
+        </div>
+      </div>
+      )}
+
+      {/* Day-of-week completion pattern — deterministic, non-AI, always-on */}
+      {activeChart === 'pattern' && (
+      <div className="surface-section p-6">
+        <h3 className="font-display text-sm font-semibold text-brand-800 dark:text-brand-100 mb-1">
+          Day-of-week pattern
+        </h3>
+        <p className="text-xs text-brand-400 dark:text-brand-450 mb-4">
+          Which days you tend to get things done, across all habits.
+        </p>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={dayOfWeekData}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={GRID_STROKE} />
+              <XAxis dataKey="label" axisLine={false} tickLine={false} tick={AXIS_TICK} dy={10} />
+              <Tooltip content={<CustomTooltip suffix=" completions" />} />
+              <Bar dataKey="count" name="Completions" fill="var(--color-accent-600)" radius={[4, 4, 4, 4]} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </div>
       )}

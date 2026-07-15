@@ -5,7 +5,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import HabitCategoryList from '@/components/habits/HabitCategoryList';
 import {
   Sparkles, LayoutList, GraduationCap, Calendar, CalendarPlus,
-  ListChecks, Check, Flame, Star, BarChart2, Gift, Trophy,
+  ListChecks, Check, Flame, Star, BarChart2, Gift, Trophy, Archive,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
@@ -183,6 +183,8 @@ const Habits: React.FC = () => {
   const [isSmartReorderOpen, setIsSmartReorderOpen] = useState(false);
   const [isChallengeHubOpen, setIsChallengeHubOpen] = useState(false);
   const [isPastDayLogOpen, setIsPastDayLogOpen] = useState(false);
+  // F-HABITS-05: Track tab toggles between active and archived habits.
+  const [showArchived, setShowArchived] = useState(false);
   // Controlled so the toolbar points glance can deep-link straight to Rewards.
   const [activeTab, setActiveTab] = useDeepLinkTab('track', HABIT_TABS);
   // Global search deep-link (v1.1): scroll-to + briefly flash the specific
@@ -199,8 +201,9 @@ const Habits: React.FC = () => {
   const sortedHabits = useMemo(
     () => habits
       .filter(h => !h.assignedTo)
+      .filter(h => showArchived ? !!h.archivedAt : !h.archivedAt)
       .sort((a, b) => (a.order ?? 999) - (b.order ?? 999)),
-    [habits]
+    [habits, showArchived]
   );
 
   // Extract categories from sorted habits (Set preserves insertion order which is now sorted order)
@@ -215,10 +218,11 @@ const Habits: React.FC = () => {
       acc[category] = habits
         .filter(h => h.category === category)
         .filter(h => !h.assignedTo) // Hide kid chores from the parent tracker (assignedTo is set only for managed-kid chores; dormant by default)
+        .filter(h => showArchived ? !!h.archivedAt : !h.archivedAt)
         .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
       return acc;
     }, {} as Record<string, Habit[]>),
-    [categories, habits]
+    [categories, habits, showArchived]
   );
 
   // --- Kids chores (read-only parent view, Plan 080c-4) ---
@@ -321,6 +325,8 @@ const Habits: React.FC = () => {
                 onManage={() => setIsWizardOpen(true)}
                 actionsDisabled={hasNoHabits}
                 showSmartTools={powerToolsEnabled}
+                onToggleArchived={() => setShowArchived(prev => !prev)}
+                showingArchived={showArchived}
               />
             </div>
           }
@@ -363,7 +369,7 @@ const Habits: React.FC = () => {
         {/* Main Content */}
         <div className="px-4 pb-6">
           <TabsContent value="track" className="space-y-6">
-            {categories.length === 0 && (
+            {categories.length === 0 && !showArchived && (
               <EmptyState
                 variant="dashed"
                 icon={<ListChecks size={28} />}
@@ -382,6 +388,15 @@ const Habits: React.FC = () => {
               />
             )}
 
+            {categories.length === 0 && showArchived && (
+              <EmptyState
+                variant="dashed"
+                icon={<Archive size={28} />}
+                title="No archived habits"
+                description="Habits you archive will show up here, still tracked in Insights and history."
+              />
+            )}
+
             {categories.map((category) => (
               <div key={category}>
                 <Eyebrow as="h2" className="mb-2 px-1">
@@ -397,7 +412,7 @@ const Habits: React.FC = () => {
                 tracking view — see UX content audit Batch 4. Gated on Kid Mode
                 + at least one managed kid with at least one chore, so it stays
                 fully dormant in a normal household. */}
-            {kidModeEnabled && kidsWithChores.length > 0 && (
+            {!showArchived && kidModeEnabled && kidsWithChores.length > 0 && (
               <section aria-label="Kids chores">
                 <Eyebrow as="h2" tone="warm" className="flex items-center gap-2 mb-2 px-1">
                   <Star size={14} className="fill-current" />
