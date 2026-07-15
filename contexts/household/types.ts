@@ -27,7 +27,8 @@ import {
   MonthlyMoneyRecap,
   NetWorthSnapshot,
   TransactionComment,
-  SplitParticipant
+  SplitParticipant,
+  NotificationLogEntry
 } from '@/types/schema';
 import { type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { type BucketSpent } from '@/utils/bucketSpentCalculator';
@@ -88,6 +89,17 @@ export interface HouseholdContextType {
   /** Net worth history (F-MONEY-09) — newest first, bounded live window
    *  (NET_WORTH_HISTORY_LIMIT). Server-written daily; clients only read. */
   netWorthHistory: NetWorthSnapshot[];
+  /** In-app notification inbox (F-NOTIF-02) — the current member's own log
+   *  entries, newest first, already filtered from the bounded household-wide
+   *  fetch window (NOTIFICATION_LOG_FETCH_LIMIT). Server-written; clients only
+   *  read + mark read. */
+  notificationLog: NotificationLogEntry[];
+  /** Count of `notificationLog` entries not yet read by the current member. */
+  unreadNotificationCount: number;
+  /** Marks one notification-log entry as read by the current member. */
+  markNotificationRead: (entryId: string) => Promise<void>;
+  /** Marks every currently-loaded unread notification-log entry as read. */
+  markAllNotificationsRead: () => Promise<void>;
 
   // --- Listener windowing / pagination ---
   // The high-cardinality collections below are windowed on cold load (see
@@ -457,4 +469,5 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
   | 'activeMemberId' | 'actAs' | 'exitToParent'
   | 'recaps' | 'moneyRecaps'
+  | 'notificationLog' | 'unreadNotificationCount' | 'markNotificationRead' | 'markAllNotificationsRead'
 >;

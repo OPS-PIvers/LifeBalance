@@ -119,7 +119,8 @@ export const sendhabitreminders = onSchedule("every 1 hours", async () => {
             type: "habit_reminder",
             url: "/habits",
           },
-          memberDoc.ref
+          memberDoc.ref,
+          { householdId: group.householdId, recipientUid: member.uid, type: "habit_reminder" }
         );
       } else {
         logger.info(`Member ${member.uid}: not time to send yet (current check didn't match scheduled time)`);
@@ -193,7 +194,8 @@ export const sendactionqueuereminders = onSchedule(
                 type: "action_queue_reminder",
                 url: "/dashboard",
               },
-              memberDoc.ref
+              memberDoc.ref,
+              { householdId: group.householdId, recipientUid: member.uid, type: "action_queue_reminder" }
             );
           } else {
             logger.info(`Member ${member.uid}: no todos for today, skipping notification`);
@@ -271,7 +273,8 @@ export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
               type: "streak_warning",
               url: "/habits",
             },
-            memberDoc.ref
+            memberDoc.ref,
+            { householdId: group.householdId, recipientUid: member.uid, type: "streak_warning" }
           );
 
           // Proactive insight (plan 02 part C): "streak rescue". Piggybacks on
@@ -534,7 +537,8 @@ export const sendbillreminders = onSchedule(
                 type: "bill_reminder",
                 url: "/budget",
               },
-              memberDoc.ref
+              memberDoc.ref,
+              { householdId: group.householdId, recipientUid: member.uid, type: "bill_reminder" }
             );
           } else {
             logger.info(`Member ${member.uid}: no upcoming bills, skipping notification`);
@@ -606,7 +610,8 @@ export const sendbudgetalerts = onDocumentWritten(
             type: "budget_alert",
             url: "/budget",
           },
-          memberDoc.ref
+          memberDoc.ref,
+          { householdId, recipientUid: member.uid, type: "budget_alert" }
         );
       }
     }

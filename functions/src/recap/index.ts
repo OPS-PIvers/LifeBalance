@@ -172,7 +172,8 @@ async function processHousehold(
       "Your weekly recap is ready",
       "See how your spending, habits, and points stacked up this week.",
       { type: "weekly_recap", url: `/?recap=${memberIsoWeek}` },
-      memberDoc.ref
+      memberDoc.ref,
+      { householdId, recipientUid: member.uid ?? memberDoc.id, type: "weekly_recap" }
     );
 
     await memberDoc.ref.update({ lastRecapSentWeek: memberIsoWeek });

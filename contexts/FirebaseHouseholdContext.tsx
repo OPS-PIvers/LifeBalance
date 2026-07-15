@@ -55,7 +55,8 @@ import {
   WeeklyRecap,
   MonthlyMoneyRecap,
   SavingsGoal,
-  NetWorthSnapshot
+  NetWorthSnapshot,
+  NotificationLogEntry
 } from '@/types/schema';
 import { calculateSafeToSpendBreakdownFromExpanded } from '@/utils/safeToSpendCalculator';
 import { calculatePointsForDate, calculatePointsForDateRange, computeManagedMemberPointsReset, isHabitStale, getHabitResetUpdate } from '@/utils/habitLogic';
@@ -161,6 +162,7 @@ import {
   makeHouseholdSettingsMutations,
   makeRefreshInsight,
 } from '@/contexts/household/mutations/coreMutations';
+import { makeNotificationMutations } from '@/contexts/household/mutations/notificationMutations';
 import {
   makeAddMember,
   makeMemberCrudMutations,
@@ -519,6 +521,19 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [hasMoreBucketHistory, setHasMoreBucketHistory] = useState(false);
   const bucketHistoryLoadedAllRef = useRef(false);
   const [apiKeys, setApiKeys] = useState<HouseholdApiKey[]>([]);
+  // Notification inbox (F-NOTIF-02) — raw household-wide fetch window from the
+  // listener; filtered down to the current member's own entries below (see
+  // NOTIFICATION_LOG_FETCH_LIMIT doc comment for why filtering happens here
+  // rather than in the Firestore query).
+  const [notificationLogRaw, setNotificationLogRaw] = useState<NotificationLogEntry[]>([]);
+  const notificationLog = useMemo(
+    () => notificationLogRaw.filter((entry) => entry.recipientUid === currentUser?.uid),
+    [notificationLogRaw, currentUser?.uid]
+  );
+  const unreadNotificationCount = useMemo(
+    () => notificationLog.filter((entry) => !entry.readBy.includes(currentUser?.uid ?? '')).length,
+    [notificationLog, currentUser?.uid]
+  );
   const [pendingItemsCount, setPendingItemsCount] = useState<number>(0);
   // Tracks pendingItems currently being processed so a snapshot that re-fires
   // before the `processed: true` write settles can't double-process an item
@@ -673,6 +688,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     insightsLoadedAllRef.current = false;
     setHasMoreInsights(false);
     setApiKeys([]);
+    setNotificationLogRaw([]);
     setPendingItemsCount(0);
     // Drop any queued voice-command items from the previous household so the
     // drain loop never processes them against the new household's collection.
@@ -788,6 +804,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       setHasMoreInsights: (data) => setHasMoreInsights(data),
       setInsight: (text) => setInsight(text),
       insightsLoadedAllRef,
+      setNotificationLogRaw: (data) => setNotificationLogRaw(data),
     }));
 
     // Meals + Meal Plan listeners (contexts/household/listeners/mealListeners.ts)
@@ -1875,6 +1892,26 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   }, [activeMemberId]);
 
+  // --- ACTIONS: NOTIFICATION INBOX (F-NOTIF-02) ---
+
+  const markNotificationRead = useCallback(async (entryId: string) => {
+    await makeNotificationMutations({
+      db,
+      householdId,
+      currentUserUid: currentUser?.uid ?? null,
+      notificationLog,
+    }).markNotificationRead(entryId);
+  }, [householdId, currentUser?.uid, notificationLog]);
+
+  const markAllNotificationsRead = useCallback(async () => {
+    await makeNotificationMutations({
+      db,
+      householdId,
+      currentUserUid: currentUser?.uid ?? null,
+      notificationLog,
+    }).markAllNotificationsRead();
+  }, [householdId, currentUser?.uid, notificationLog]);
+
   // --- ACTIONS: ONBOARDING ---
 
   const completeOnboarding = useCallback(async () => {
@@ -2311,6 +2348,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     exitToParent,
     recaps,
     moneyRecaps,
+    notificationLog,
+    unreadNotificationCount,
+    markNotificationRead,
+    markAllNotificationsRead,
   }), [
     isLoading, currentUser, members, insight, insightsHistory, isGeneratingInsight, hasMoreInsights, loadAllInsights,
     pendingItemsCount, apiKeys,
@@ -2319,6 +2360,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addKidProfile, updateKidProfile, removeKidProfile, activeMemberId, actAs, exitToParent,
     recaps,
     moneyRecaps,
+    notificationLog,
+    unreadNotificationCount,
+    markNotificationRead,
+    markAllNotificationsRead,
   ]);
 
   return (
