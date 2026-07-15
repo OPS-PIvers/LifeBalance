@@ -40,6 +40,7 @@ export function computeAnyNotificationsEnabled(
     prefs.digestMode?.enabled === true ||
     prefs.streakWarnings?.enabled === true ||
     prefs.billReminders?.enabled === true ||
+    prefs.dailyBriefing?.enabled === true ||
     weeklyRecapEnabled
   );
 }
