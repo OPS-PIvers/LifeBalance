@@ -1946,6 +1946,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeHouseholdSettingsMutations({ db, householdId }).setModuleVisibility(key, value);
   }, [householdId]);
 
+  // F-PLAT-07 — apply a full module-visibility preset in one write.
+  const updateModuleVisibility = useCallback(async (patch: Partial<Record<ModuleKey, boolean>>) => {
+    await makeHouseholdSettingsMutations({ db, householdId }).updateModuleVisibility(patch);
+  }, [householdId]);
+
   // Plan 080b: set/clear the Kid Mode exit PIN. A raw PIN is salted+hashed here
   // (never stored plaintext); passing null removes the PIN so exiting needs none.
   const setKidModePin = useCallback(async (pin: string | null): Promise<void> => {
@@ -2385,6 +2390,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     completeOnboarding,
     setHouseholdCurrency,
     setModuleVisibility,
+    updateModuleVisibility,
     setKidModePin,
     addKidProfile,
     updateKidProfile,
@@ -2402,7 +2408,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     isLoading, currentUser, members, insight, insightsHistory, isGeneratingInsight, hasMoreInsights, loadAllInsights,
     pendingItemsCount, apiKeys,
     householdId, householdSettings, refreshInsight, addMember, updateMember, removeMember, deleteHousehold,
-    completeOnboarding, setHouseholdCurrency, setModuleVisibility, setKidModePin,
+    completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setKidModePin,
     addKidProfile, updateKidProfile, removeKidProfile, activeMemberId, actAs, exitToParent,
     recaps,
     moneyRecaps,
