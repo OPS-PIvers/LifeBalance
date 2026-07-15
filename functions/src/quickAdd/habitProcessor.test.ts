@@ -23,6 +23,8 @@ import {
   calculateWeeklyStreak,
   streakForPeriod,
   getMultiplier,
+  pauseBridgeDates,
+  isHabitPaused,
 } from "./streakLogic";
 import {
   processToggleHabit,
@@ -1248,5 +1250,68 @@ describe("processToggleHabit — negative habit sign canonicalization", () => {
       expect(result).not.toBeNull();
       expect(result!.pointsChange).toBe(2);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F-HABITS-01 — habit pause / vacation mode (server twin of the client table in
+// utils/habitLogic.test.ts; change both together)
+// ---------------------------------------------------------------------------
+
+describe("F-HABITS-01 — pause bridging (server)", () => {
+  const d = (n: number) => format(subDays(new Date(), n), "yyyy-MM-dd");
+  const dPlus = (n: number) => format(subDays(new Date(), -n), "yyyy-MM-dd");
+  const localToday = today;
+
+  describe("isHabitPaused", () => {
+    it("is true for today or a future pausedUntil, false otherwise", () => {
+      expect(isHabitPaused(localToday, localToday)).toBe(true);
+      expect(isHabitPaused(dPlus(3), localToday)).toBe(true);
+      expect(isHabitPaused(d(1), localToday)).toBe(false);
+      expect(isHabitPaused(undefined, localToday)).toBe(false);
+    });
+  });
+
+  describe("pauseBridgeDates", () => {
+    it("bridges the gap from the last pre-pause completion through pausedUntil", () => {
+      const bridge = pauseBridgeDates([d(6), d(5), d(4)], dPlus(2));
+      expect(bridge[0]).toBe(dPlus(2));
+      expect(bridge).toContain(localToday);
+      expect(bridge).toContain(d(3));
+      expect(bridge).not.toContain(d(4));
+    });
+    it("anchors on the last completion on/before the pause, ignoring later ones", () => {
+      const bridge = pauseBridgeDates([d(4), dPlus(3)], dPlus(1));
+      expect(bridge).toContain(dPlus(1));
+      expect(bridge).toContain(d(3));
+      expect(bridge).not.toContain(d(4));
+    });
+    it("returns [] when there is nothing to bridge", () => {
+      expect(pauseBridgeDates([], dPlus(2))).toEqual([]);
+      expect(pauseBridgeDates([d(2)], undefined)).toEqual([]);
+      expect(pauseBridgeDates([dPlus(3)], d(1))).toEqual([]);
+    });
+  });
+
+  it("processToggleHabit resumes the streak cleanly after a pause", () => {
+    // 3-day streak ending d(1); paused through today; completing today should
+    // continue to a 4-day streak across the synthesized bridge.
+    const habit: Habit = {
+      ...baseHabit,
+      completedDates: [d(3), d(2), d(1)],
+      streakDays: 3,
+      pausedUntil: localToday,
+    };
+    const result = processToggleHabit(habit, "up", localToday);
+    expect(result).not.toBeNull();
+    expect(result!.updatedHabit.streakDays).toBe(4);
+    expect(result!.multiplier).toBe(1.5); // 4-day streak → 1.5x
+  });
+
+  it("isHabitStale is false while paused, true once elapsed", () => {
+    const paused: Habit = { ...baseHabit, lastUpdated: d(3), pausedUntil: dPlus(3), completedDates: [d(3)] };
+    expect(isHabitStale(paused, localToday)).toBe(false);
+    const expired: Habit = { ...baseHabit, lastUpdated: d(3), pausedUntil: d(1), completedDates: [d(3)] };
+    expect(isHabitStale(expired, localToday)).toBe(true);
   });
 });

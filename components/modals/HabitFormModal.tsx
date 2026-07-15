@@ -6,6 +6,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import Input from '@/components/ui/Input';
+import { getLocalDateString } from '@/utils/dateHelpers';
 
 interface HabitFormModalProps {
   isOpen: boolean;
@@ -16,7 +17,7 @@ interface HabitFormModalProps {
 const CATEGORIES = ['Health', 'Finance', 'Personal', 'Home', 'Work'];
 
 const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editingHabit }) => {
-  const { addHabit, updateHabit } = useGamification();
+  const { addHabit, updateHabit, setHabitPause } = useGamification();
   const { members } = useHouseholdCore();
   const kidModeEnabled = useKidModeEnabled();
 
@@ -40,6 +41,9 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
   const [period, setPeriod] = useState<'daily' | 'weekly'>(() => editingHabit?.period ?? 'daily');
   const [basePoints, setBasePoints] = useState(() => editingHabit ? editingHabit.basePoints.toString() : '10');
   const [targetCount, setTargetCount] = useState(() => editingHabit ? editingHabit.targetCount.toString() : '1');
+  // F-HABITS-01: planned-break end date (yyyy-MM-dd) — editable only when editing
+  // an existing habit. Empty string means "not paused".
+  const [pausedUntil, setPausedUntil] = useState(() => editingHabit?.pausedUntil ?? '');
 
   // Kid assignment selection. CREATE mode is a multi-select (one chore per kid);
   // EDIT mode is a single-select (0 or 1 kid). We keep both states and read only
@@ -71,6 +75,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       setPeriod(editingHabit.period);
       setBasePoints(editingHabit.basePoints.toString());
       setTargetCount(editingHabit.targetCount.toString());
+      setPausedUntil(editingHabit.pausedUntil ?? '');
       setEditAssignedUid(seedEditAssignedUid(editingHabit));
       setAssignedKidUids([]);
     } else {
@@ -82,6 +87,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       setPeriod('daily');
       setBasePoints('10');
       setTargetCount('1');
+      setPausedUntil('');
       setEditAssignedUid(undefined);
       setAssignedKidUids([]);
     }
@@ -136,6 +142,13 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
           ? { ...baseHabitData, assignedTo: editAssignedUid }
           : baseHabitData;
         await updateHabit(updatePayload);
+        // F-HABITS-01: persist pause changes via the dedicated mutation (a clear
+        // needs deleteField, which updateHabit's whitelist can't express). Only
+        // write when it actually changed so an unrelated edit doesn't touch it.
+        const originalPause = editingHabit.pausedUntil ?? '';
+        if (pausedUntil !== originalPause) {
+          await setHabitPause(editingHabit.id, pausedUntil || null);
+        }
       } else if (showAssignControl && assignedKidUids.length >= 1) {
         // CREATE + at least one kid selected: spawn one chore per kid. Each is a
         // per-kid chore (assignedTo set, isShared:false), not a shared household
@@ -337,6 +350,42 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
             </div>
           </div>
         </div>
+
+        {/* Pause / vacation mode (F-HABITS-01) — edit mode only. A planned break
+            skips the auto-reset penalty and freeze-token use; the streak bridges
+            the gap and resumes when the break ends. */}
+        {editingHabit && (
+          <div>
+            <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase" htmlFor="habit-pause-until">
+              Pause until
+            </label>
+            <p className="text-xxs text-brand-400 dark:text-brand-400 mt-0.5 mb-2">
+              Planned break (vacation, injury). The streak is protected and resumes cleanly — no freeze tokens used.
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                id="habit-pause-until"
+                type="date"
+                value={pausedUntil}
+                min={getLocalDateString()}
+                onChange={e => setPausedUntil(e.target.value)}
+                disabled={isSaving}
+                className="flex-1 p-2 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-lg font-mono text-sm disabled:opacity-50"
+              />
+              {pausedUntil && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPausedUntil('')}
+                  disabled={isSaving}
+                >
+                  Clear
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
 
       </div>
 

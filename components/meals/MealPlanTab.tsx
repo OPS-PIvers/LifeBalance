@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useMealPlan, useShopping, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
-import { Plus, Trash2, Edit2, ChevronRight, ShoppingCart, Copy, CheckCircle2, MoreVertical, MoreHorizontal, BookOpen, CalendarDays, Eye, Info, Utensils } from 'lucide-react';
+import { Plus, Trash2, Edit2, ChevronRight, ShoppingCart, Copy, CheckCircle2, MoreVertical, MoreHorizontal, BookOpen, CalendarDays, Eye, Info, Utensils, Printer } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import { normalizeMealName, mergeFormIntoMeal } from '@/utils/migrations/mealDedupMigration';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { calculateWeeklyMealCost } from '@/utils/mealCost';
 import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
 import { IngredientSelectorModal } from './IngredientSelectorModal';
@@ -27,6 +28,9 @@ import { SurfaceList, Row } from '@/components/ui/Section';
 import { Sparkles } from 'lucide-react';
 import { haptic } from '@/utils/haptics';
 import clsx from 'clsx';
+import { groupMealPlanByDay } from '@/utils/mealPlanFormatter';
+import { groupShoppingListByStore } from '@/utils/shoppingListFormatter';
+import { buildPrintWeekHtml } from '@/utils/printWeekHtml';
 
 // Scrollable date-strip range, in weeks either side of the current week. The
 // strip is one continuous run of days (not week pages), so navigation is a
@@ -52,6 +56,7 @@ const mealToFormState = (meal: Meal, isClone: boolean = false): Partial<Meal> =>
   ingredients: meal.ingredients || [],
   instructions: meal.instructions || [],
   recipeUrl: meal.recipeUrl || '',
+  estimatedCost: meal.estimatedCost,
   tags: meal.tags || []
 });
 
@@ -306,6 +311,37 @@ const MealPlanTab: React.FC = () => {
     await addIngredientsToShoppingList(ingredients);
   };
 
+  const handlePrintWeek = () => {
+    const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+    const weekEndStr = format(addDays(weekStart, 6), 'yyyy-MM-dd');
+
+    const dayLabels = new Map(
+      Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)).map(date => [
+        format(date, 'yyyy-MM-dd'),
+        format(date, 'EEEE, MMM d'),
+      ])
+    );
+
+    const weekPlanItems = mealPlan.filter(item => item.date >= weekStartStr && item.date <= weekEndStr);
+    const mealDays = groupMealPlanByDay(weekPlanItems, mealsById, dayLabels);
+    const shoppingStores = groupShoppingListByStore(shoppingList.filter(item => !item.isPurchased));
+    const weekRangeLabel = `${format(weekStart, 'MMM d')} – ${format(addDays(weekStart, 6), 'MMM d, yyyy')}`;
+
+    const html = buildPrintWeekHtml(weekRangeLabel, mealDays, shoppingStores);
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error('Pop-up blocked — allow pop-ups to print the week');
+      return;
+    }
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    // Give the popup's fonts/layout a moment to settle before invoking print.
+    printWindow.onload = () => printWindow.print();
+  };
+
   const handleCopyLastWeek = () => {
     // 1. Identify source dates (last week)
     const lastWeekStart = addDays(weekStart, -7);
@@ -503,6 +539,7 @@ const MealPlanTab: React.FC = () => {
                ingredients: currentMeal.ingredients || [],
                instructions: currentMeal.instructions || [],
                recipeUrl: currentMeal.recipeUrl || '',
+               estimatedCost: currentMeal.estimatedCost,
                tags: currentMeal.tags || [],
                rating: existingMeal?.rating ?? 0
            } as Meal);
@@ -533,6 +570,7 @@ const MealPlanTab: React.FC = () => {
                     ingredients: currentMeal.ingredients || [],
                     instructions: currentMeal.instructions || [],
                     recipeUrl: currentMeal.recipeUrl || '',
+                    estimatedCost: currentMeal.estimatedCost,
                     tags: currentMeal.tags || [],
                     rating: 0
                 });
@@ -732,6 +770,15 @@ const MealPlanTab: React.FC = () => {
     scrollStripTo(todayDateStr);
   }, [scrollStripTo, selectedDateStr]);
 
+  // Weekly dinner cost rollup (F-MEALS-01) — informational only, skips
+  // planned dinners without a linked meal or without an estimatedCost rather
+  // than blocking or counting them as $0.
+  const weekEndStr = useMemo(() => format(addDays(weekStart, 6), 'yyyy-MM-dd'), [weekStart]);
+  const weeklyDinnerCost = useMemo(
+    () => calculateWeeklyMealCost(mealPlan || [], meals, weekStartStr, weekEndStr, 'dinner'),
+    [mealPlan, meals, weekStartStr, weekEndStr]
+  );
+
   // Filtered + sorted meals for the selected day.
   const dayMeals = useMemo(
     () =>
@@ -768,6 +815,12 @@ const MealPlanTab: React.FC = () => {
       label: 'Shop for this week',
       icon: <ShoppingCart size={16} />,
       onSelect: handleShopForWeek,
+    },
+    {
+      key: 'print-week',
+      label: 'Print week for the fridge',
+      icon: <Printer size={16} />,
+      onSelect: handlePrintWeek,
     },
   ];
 
@@ -886,6 +939,29 @@ const MealPlanTab: React.FC = () => {
             })}
         </div>
       </div>
+
+      {/* Weekly dinner cost rollup — shown only once at least one planned
+          dinner this week has an estimated cost set (owner-approved
+          zero-friction design: skip meals without a cost rather than block). */}
+      {weeklyDinnerCost.countWithCost > 0 && (
+          <div className="surface-section px-4 py-3 flex items-center gap-2 text-sm">
+              <span className="text-brand-600 dark:text-brand-300">
+                  Your dinners this week averaged{' '}
+                  <span className="font-bold text-brand-900 dark:text-brand-50 font-mono tabular-nums">
+                      ${weeklyDinnerCost.average!.toFixed(2)}
+                  </span>{' '}
+                  each
+                  {weeklyDinnerCost.countWithCost < weeklyDinnerCost.countTotal && (
+                      <span className="text-brand-400 dark:text-brand-450"> ({weeklyDinnerCost.countWithCost} of {weeklyDinnerCost.countTotal} priced)</span>
+                  )}
+                  {' · '}
+                  <span className="font-bold text-brand-900 dark:text-brand-50 font-mono tabular-nums">
+                      ${weeklyDinnerCost.total.toFixed(2)}
+                  </span>{' '}
+                  total
+              </span>
+          </div>
+      )}
 
       {/* Selected day agenda */}
       <div className="space-y-3">

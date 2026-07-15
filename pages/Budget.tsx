@@ -1,9 +1,11 @@
 import React, { Suspense, useEffect } from 'react';
 import BudgetCalendar from '@/components/budget/BudgetCalendar';
+import SubscriptionsView from '@/components/budget/SubscriptionsView';
 import BudgetBuckets from '@/components/budget/BudgetBuckets';
 import BudgetAccounts from '@/components/budget/BudgetAccounts';
 import TransactionMasterList from '@/components/budget/TransactionMasterList';
 import MoneyOverview from '@/components/budget/MoneyOverview';
+import SettleUpView from '@/components/transactions/SettleUpView';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import PageHeader from '@/components/ui/PageHeader';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
@@ -20,7 +22,7 @@ const BudgetTrends = React.lazy(loadBudgetTrends);
 
 // Allowed Money sub-tabs. Module-level so the array identity is stable and
 // other screens can deep-link via `navigate('/budget', { state: { tab } })`.
-const MONEY_TABS = ['overview', 'calendar', 'buckets', 'accounts', 'transactions', 'trends'] as const;
+const MONEY_TABS = ['overview', 'calendar', 'subscriptions', 'buckets', 'accounts', 'transactions', 'trends'] as const;
 
 const BudgetSkeleton: React.FC = () => (
   <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe" aria-busy="true" aria-live="polite">
@@ -90,6 +92,7 @@ const Budget: React.FC = () => {
           <TabsList size="sm" className="mb-6">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="calendar">Calendar</TabsTrigger>
+            <TabsTrigger value="subscriptions">Subscriptions</TabsTrigger>
             <TabsTrigger value="buckets">Buckets</TabsTrigger>
             <TabsTrigger value="accounts">Accounts</TabsTrigger>
             <TabsTrigger value="transactions">Transactions</TabsTrigger>
@@ -104,11 +107,17 @@ const Budget: React.FC = () => {
             <TabsContent value="calendar">
               <BudgetCalendar />
             </TabsContent>
+            <TabsContent value="subscriptions">
+              <SubscriptionsView />
+            </TabsContent>
             <TabsContent value="buckets">
               <BudgetBuckets />
             </TabsContent>
             <TabsContent value="accounts">
-              <BudgetAccounts />
+              <div className="space-y-6">
+                <BudgetAccounts />
+                <SettleUpView />
+              </div>
             </TabsContent>
             <TabsContent value="transactions">
               <TransactionMasterList highlightId={highlightTransactionId} />

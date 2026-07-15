@@ -12,9 +12,10 @@ import toast from 'react-hot-toast';
 import React from 'react';
 import { Star } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
-import { Account, Habit, Household, Transaction } from '@/types/schema';
+import { Account, Habit, Household, SplitParticipant, Transaction } from '@/types/schema';
 import type { MutationOpts } from '@/contexts/household/types';
 import { effectiveAccountImpact, resolveTargetAccount } from '@/utils/accountImpact';
+import { splitParticipantKey } from '@/utils/settlement';
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
 import { processToggleHabit } from '@/utils/habitLogic';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
@@ -135,6 +136,10 @@ export function makeAddTransaction(deps: {
       if (tx.notes && tx.notes.trim()) {
         docData.notes = tx.notes.trim();
       }
+      // F-DASH-04: grouping key shared by all transactions split from one receipt.
+      if (tx.receiptGroupId && tx.receiptGroupId.trim()) {
+        docData.receiptGroupId = tx.receiptGroupId.trim();
+      }
 
       // VERIFIED-ONLY, ACCOUNT-ROUTED BALANCE: a new transaction touches a
       // balance only if it is created `verified`. A `pending_review` capture
@@ -184,6 +189,108 @@ export function makeAddTransaction(deps: {
   };
 
   return { addTransaction };
+}
+
+/**
+ * addTransactions (F-DASH-04) — write SEVERAL new transactions plus their
+ * combined per-account balance effects in a SINGLE writeBatch, so a receipt
+ * split into N categorized transactions can never partially apply (owner note:
+ * keep the atomic-batch convention). Mirrors `makeAddTransaction`'s field
+ * building and verified-only balance routing, accumulated per-account (a batch
+ * must not write the same account doc twice). An empty list is a no-op.
+ */
+export function makeAddTransactions(deps: {
+  db: Firestore;
+  householdId: string | null;
+  user: { uid: string } | null;
+  householdSettings: Household | null;
+  accounts: Account[];
+}) {
+  const { db, householdId, user, householdSettings, accounts } = deps;
+
+  const addTransactions = async (
+    txs: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[],
+  ) => {
+    if (!householdId) throw new Error('No household selected');
+    if (!user) throw new Error('Not authenticated');
+    if (txs.length === 0) return;
+
+    // Validate every row up front so one bad item fails the whole batch cleanly
+    // (all-or-nothing, matching the single-transaction validation in addTransaction).
+    for (const tx of txs) {
+      if (typeof tx.amount !== 'number' || isNaN(tx.amount)) throw new Error('Invalid amount');
+      if (!tx.merchant || typeof tx.merchant !== 'string' || !tx.merchant.trim()) throw new Error('Invalid merchant');
+      if (!tx.category || typeof tx.category !== 'string') throw new Error('Invalid category');
+      if (!tx.date || typeof tx.date !== 'string') throw new Error('Invalid date');
+      if (!['verified', 'pending_review'].includes(tx.status)) throw new Error('Invalid status');
+    }
+
+    try {
+      const batch = writeBatch(db);
+      const deltasByAccountId = new Map<string, number>();
+
+      for (const tx of txs) {
+        const roundedAmount = roundMoney(tx.amount);
+        const payPeriodId = getPayPeriodForTransaction(tx.date, householdSettings?.lastPaycheckDate);
+
+        const docData: Record<string, unknown> = {
+          amount: roundedAmount,
+          merchant: tx.merchant.trim(),
+          category: tx.category,
+          date: tx.date,
+          status: tx.status,
+          isRecurring: tx.isRecurring ?? false,
+          source: tx.source || 'camera-scan',
+          autoCategorized: tx.autoCategorized ?? true,
+          payPeriodId: payPeriodId || null,
+          createdBy: user.uid,
+          createdAt: serverTimestamp(),
+        };
+        if (tx.relatedHabitIds && tx.relatedHabitIds.length > 0) docData.relatedHabitIds = tx.relatedHabitIds;
+        if (tx.store && tx.store.trim()) docData.store = tx.store.trim();
+        const trimmedAccountId = tx.accountId && tx.accountId.trim() ? tx.accountId.trim() : undefined;
+        if (trimmedAccountId) docData.accountId = trimmedAccountId;
+        if (tx.creditPayment === true) docData.creditPayment = true;
+        if (tx.notes && tx.notes.trim()) docData.notes = tx.notes.trim();
+        if (tx.receiptGroupId && tx.receiptGroupId.trim()) docData.receiptGroupId = tx.receiptGroupId.trim();
+
+        const txRef = doc(collection(db, `households/${householdId}/transactions`));
+        batch.set(txRef, docData);
+
+        // VERIFIED-ONLY, ACCOUNT-ROUTED BALANCE (see addTransaction): a
+        // pending_review row moves no balance; a verified row applies its
+        // account-aware impact. Accumulate per-account so the batch writes each
+        // account doc at most once.
+        const target = resolveTargetAccount(trimmedAccountId, accounts);
+        const balanceDelta = effectiveAccountImpact(
+          { amount: roundedAmount, category: tx.category, creditPayment: tx.creditPayment, status: tx.status },
+          target,
+        );
+        if (balanceDelta !== 0 && target) {
+          deltasByAccountId.set(target.id, (deltasByAccountId.get(target.id) ?? 0) + balanceDelta);
+        }
+      }
+
+      for (const [accId, delta] of deltasByAccountId) {
+        const rounded = roundMoney(delta);
+        if (rounded !== 0) {
+          batch.update(doc(db, `households/${householdId}/accounts`, accId), {
+            balance: increment(rounded),
+            lastUpdated: serverTimestamp(),
+          });
+        }
+      }
+
+      await batch.commit();
+
+      for (const tx of txs) track('transaction_added', { source: tx.source || 'camera-scan' });
+    } catch (error) {
+      console.error('[addTransactions] Failed:', error);
+      throw error;
+    }
+  };
+
+  return { addTransactions };
 }
 
 /**
@@ -500,6 +607,18 @@ export function makeUpdateTransaction(deps: {
       } else if (typeof sanitizedUpdates.notes === 'string') {
         sanitizedUpdates.notes = sanitizedUpdates.notes.trim();
       }
+      // F-MONEY-13: an explicit `splitWith` key (present in `updates`, even as
+      // `null`/`[]`) co-commits the split overlay in this SAME write instead of
+      // a separate updateDoc — the overlay never touches a balance, but it does
+      // touch the SAME transaction doc, so folding it in here avoids a second
+      // sequential write to the same document. Sanitized/rounded exactly like
+      // makeSetTransactionSplit's `cleaned` path; a zero-or-negative share is
+      // dropped and an empty result clears the field via deleteField().
+      if ('splitWith' in updates) {
+        delete sanitizedUpdates.splitWith;
+        const cleaned = (updates.splitWith ?? []).filter(p => roundMoney(p.shareAmount) > 0);
+        sanitizedUpdates.splitWith = cleaned.length > 0 ? cleaned.map(sanitizeSplitParticipant) : deleteField();
+      }
 
       // Atomically commit the transaction update and the account balance deltas in
       // a single writeBatch so they can never partially apply.
@@ -781,4 +900,93 @@ export function makeSplitTransaction(deps: {
   };
 
   return { splitTransaction };
+}
+
+/**
+ * Strip a SplitParticipant down to only its defined fields, rounding the share
+ * to whole cents. Firestore rejects `undefined` field values, so optional keys
+ * are omitted rather than written as undefined.
+ */
+function sanitizeSplitParticipant(p: SplitParticipant): Record<string, unknown> {
+  const out: Record<string, unknown> = { shareAmount: roundMoney(p.shareAmount) };
+  if (p.memberId) out.memberId = p.memberId;
+  if (p.email && p.email.trim()) out.email = p.email.trim().toLowerCase();
+  if (p.name && p.name.trim()) out.name = p.name.trim();
+  if (p.settled === true) out.settled = true;
+  if (p.invitedAt) out.invitedAt = p.invitedAt;
+  return out;
+}
+
+/**
+ * setTransactionSplit — F-MONEY-13. Save (or clear) a transaction's split
+ * overlay. This is a BOOKKEEPING-ONLY write: it never touches any account
+ * balance (splitting is a display overlay like buckets), so a single `updateDoc`
+ * is sufficient — no writeBatch is needed. Passing an empty array or `null`
+ * removes the field entirely via `deleteField()`.
+ */
+export function makeSetTransactionSplit(deps: {
+  db: Firestore;
+  householdId: string | null;
+}) {
+  const { db, householdId } = deps;
+
+  const setTransactionSplit = async (
+    transactionId: string,
+    split: SplitParticipant[] | null,
+  ) => {
+    if (!householdId) return;
+    try {
+      const cleaned = (split ?? []).filter(p => roundMoney(p.shareAmount) > 0);
+      await updateDoc(doc(db, `households/${householdId}/transactions`, transactionId), {
+        splitWith: cleaned.length > 0 ? cleaned.map(sanitizeSplitParticipant) : deleteField(),
+      });
+    } catch (error) {
+      console.error('[setTransactionSplit] Failed:', error);
+      toast.error('Failed to save split');
+      throw error;
+    }
+  };
+
+  return { setTransactionSplit };
+}
+
+/**
+ * markSplitSettled — F-MONEY-13. Toggle the `settled` flag on ONE participant's
+ * share of a split transaction (addressed by its `splitParticipantKey`). No
+ * balance change (a split is an overlay), so this is a single `updateDoc` that
+ * rewrites the whole `splitWith` array with the one participant flipped.
+ */
+export function makeMarkSplitSettled(deps: {
+  db: Firestore;
+  householdId: string | null;
+  transactions: Transaction[];
+}) {
+  const { db, householdId, transactions } = deps;
+
+  const markSplitSettled = async (
+    transactionId: string,
+    participantKey: string,
+    settled: boolean = true,
+  ) => {
+    if (!householdId) return;
+    const tx = transactions.find(t => t.id === transactionId);
+    if (!tx || !tx.splitWith) {
+      toast.error('Split not found');
+      return;
+    }
+    try {
+      const next = tx.splitWith.map(p =>
+        splitParticipantKey(p) === participantKey ? { ...p, settled } : p,
+      );
+      await updateDoc(doc(db, `households/${householdId}/transactions`, transactionId), {
+        splitWith: next.map(sanitizeSplitParticipant),
+      });
+    } catch (error) {
+      console.error('[markSplitSettled] Failed:', error);
+      toast.error('Failed to update split');
+      throw error;
+    }
+  };
+
+  return { markSplitSettled };
 }
