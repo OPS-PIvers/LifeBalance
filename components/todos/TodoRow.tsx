@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Trash2, Edit2, AlertCircle, Clock, User, Copy, MoreVertical, Calendar, Star, CheckSquare } from 'lucide-react';
+import { Check, Trash2, Edit2, AlertCircle, Clock, User, Copy, MoreVertical, Calendar, Star, CheckSquare, FileText } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, startOfToday } from 'date-fns';
 import { ToDo, HouseholdMember } from '@/types/schema';
 import { DEFAULT_TODO_POINTS } from '@/utils/todoPoints';
@@ -54,6 +54,11 @@ export const TodoRow = React.memo(function TodoRow({
   // Parse the due date once per row render to avoid repeated parseISO calls
   const dueDate = parseISO(item.completeByDate);
   const isOverdue = isBefore(dueDate, startOfToday());
+
+  // Inline notes preview toggle (F-TODO-13) — expands a truncated notes
+  // excerpt without opening the full edit drawer.
+  const [notesOpen, setNotesOpen] = React.useState(false);
+  const hasNotes = Boolean(item.notes && item.notes.trim().length > 0);
 
   // Shared by the checkbox control and the right-swipe action.
   const handleComplete = async () => {
@@ -153,7 +158,32 @@ export const TodoRow = React.memo(function TodoRow({
                 +{item.points ?? DEFAULT_TODO_POINTS} pts
               </span>
             )}
+
+            {hasNotes && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setNotesOpen((open) => !open);
+                }}
+                className="flex items-center gap-1 text-brand-500 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-200 transition-colors"
+                aria-expanded={notesOpen}
+                aria-label={notesOpen ? 'Hide note' : 'Show note'}
+                title={notesOpen ? 'Hide note' : 'Show note'}
+              >
+                <FileText size={11} />
+              </button>
+            )}
           </div>
+
+          {hasNotes && notesOpen && (
+            <p
+              onClick={(e) => e.stopPropagation()}
+              className="mt-1.5 text-xs text-brand-500 dark:text-brand-400 line-clamp-2"
+            >
+              {item.notes}
+            </p>
+          )}
         </div>
 
         {/* Actions */}
