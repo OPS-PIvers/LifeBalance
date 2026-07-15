@@ -13,6 +13,7 @@ import {
   increment,
   writeBatch,
   serverTimestamp,
+  deleteField,
   arrayUnion,
 } from 'firebase/firestore';
 import { db } from '@/firebase.config';
@@ -903,6 +904,24 @@ export const useHabitActions = (
     }
   }, [householdId]);
 
+  // F-HABITS-01: set or clear a habit's planned-break end date. Passing a date
+  // pauses the habit until that day (inclusive); passing null resumes it (the
+  // field is removed via deleteField so isHabitPaused reads false immediately).
+  const setHabitPause = useCallback(async (id: string, pausedUntil: string | null) => {
+    if (!householdId) return;
+    try {
+      await updateDoc(doc(db, `households/${householdId}/habits`, id), {
+        pausedUntil: pausedUntil ?? deleteField(),
+        lastUpdated: serverTimestamp(),
+      });
+      toast.success(pausedUntil ? 'Habit paused' : 'Habit resumed');
+    } catch (error) {
+      console.error('[setHabitPause] Failed to update pause:', error);
+      toast.error('Failed to update pause');
+      throw error;
+    }
+  }, [householdId]);
+
   return useMemo(() => ({
     addHabit,
     updateHabit,
@@ -912,6 +931,7 @@ export const useHabitActions = (
     reorderHabits,
     toggleHabit,
     resetHabit,
+    setHabitPause,
     addHabitSubmission,
     updateHabitSubmission,
     deleteHabitSubmission,
@@ -926,6 +946,7 @@ export const useHabitActions = (
     reorderHabits,
     toggleHabit,
     resetHabit,
+    setHabitPause,
     addHabitSubmission,
     updateHabitSubmission,
     deleteHabitSubmission,
