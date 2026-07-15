@@ -1,19 +1,24 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { useMealPlan, useShopping, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
+import { useMealPlan, useShopping, useHouseholdCore, useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
-import { Plus, Trash2, Edit2, ChevronRight, ShoppingCart, Copy, CheckCircle2, MoreVertical, MoreHorizontal, BookOpen, CalendarDays, Eye, Info, Utensils } from 'lucide-react';
+import { Plus, Trash2, Edit2, ChevronRight, ShoppingCart, Copy, CheckCircle2, MoreVertical, MoreHorizontal, BookOpen, CalendarDays, Eye, Info, Utensils, ChefHat, Printer } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import { normalizeMealName, mergeFormIntoMeal } from '@/utils/migrations/mealDedupMigration';
+import { decideMealCookedHabitToggle } from '@/utils/mealCookedHabit';
+import { getLocalDateString } from '@/utils/dateHelpers';
+import { calculateWeeklyMealCost } from '@/utils/mealCost';
 import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
 import { IngredientSelectorModal } from './IngredientSelectorModal';
 import { CookbookModal } from './CookbookModal';
 import { RecipeModal } from './RecipeModal';
+import { RecipeRateToast } from './RecipeRateToast';
 import { AddMealModal } from './AddMealModal';
 import { AISuggestModal } from './AISuggestModal';
 import { RecipeImportModal } from './RecipeImportModal';
 import { WeeklyPlanModal } from './WeeklyPlanModal';
+import { CookHabitPickerDrawer } from './CookHabitPickerDrawer';
 import { Drawer } from '@/components/ui/Drawer';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -25,6 +30,9 @@ import { SurfaceList, Row } from '@/components/ui/Section';
 import { Sparkles } from 'lucide-react';
 import { haptic } from '@/utils/haptics';
 import clsx from 'clsx';
+import { groupMealPlanByDay } from '@/utils/mealPlanFormatter';
+import { groupShoppingListByStore } from '@/utils/shoppingListFormatter';
+import { buildPrintWeekHtml } from '@/utils/printWeekHtml';
 
 // Scrollable date-strip range, in weeks either side of the current week. The
 // strip is one continuous run of days (not week pages), so navigation is a
@@ -50,6 +58,7 @@ const mealToFormState = (meal: Meal, isClone: boolean = false): Partial<Meal> =>
   ingredients: meal.ingredients || [],
   instructions: meal.instructions || [],
   recipeUrl: meal.recipeUrl || '',
+  estimatedCost: meal.estimatedCost,
   tags: meal.tags || []
 });
 
@@ -70,7 +79,8 @@ const MealPlanTab: React.FC = () => {
     shoppingList,
     groceryCatalog,
   } = useShopping();
-  const { householdId, isLoading } = useHouseholdCore();
+  const { householdId, isLoading, householdSettings, setMealCookedHabitId } = useHouseholdCore();
+  const { habits, toggleHabit } = useGamification();
 
   // Calendar State — `selectedDate` is the focused day; the visible week is derived from it.
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -91,6 +101,9 @@ const MealPlanTab: React.FC = () => {
 
   // "Plan my week" (AI generate / import weekly-meals plan)
   const [isWeeklyPlanOpen, setIsWeeklyPlanOpen] = useState(false);
+
+  // F-MEALS-04: cook-at-home habit picker (linked via the week overflow menu)
+  const [isCookHabitPickerOpen, setIsCookHabitPickerOpen] = useState(false);
 
   // Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -304,6 +317,37 @@ const MealPlanTab: React.FC = () => {
     await addIngredientsToShoppingList(ingredients);
   };
 
+  const handlePrintWeek = () => {
+    const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+    const weekEndStr = format(addDays(weekStart, 6), 'yyyy-MM-dd');
+
+    const dayLabels = new Map(
+      Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)).map(date => [
+        format(date, 'yyyy-MM-dd'),
+        format(date, 'EEEE, MMM d'),
+      ])
+    );
+
+    const weekPlanItems = mealPlan.filter(item => item.date >= weekStartStr && item.date <= weekEndStr);
+    const mealDays = groupMealPlanByDay(weekPlanItems, mealsById, dayLabels);
+    const shoppingStores = groupShoppingListByStore(shoppingList.filter(item => !item.isPurchased));
+    const weekRangeLabel = `${format(weekStart, 'MMM d')} – ${format(addDays(weekStart, 6), 'MMM d, yyyy')}`;
+
+    const html = buildPrintWeekHtml(weekRangeLabel, mealDays, shoppingStores);
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error('Pop-up blocked — allow pop-ups to print the week');
+      return;
+    }
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    // Give the popup's fonts/layout a moment to settle before invoking print.
+    printWindow.onload = () => printWindow.print();
+  };
+
   const handleCopyLastWeek = () => {
     // 1. Identify source dates (last week)
     const lastWeekStart = addDays(weekStart, -7);
@@ -442,12 +486,52 @@ const MealPlanTab: React.FC = () => {
       if (meal.id) {
         await updateMeal({
             ...meal,
-            lastCooked: new Date().toISOString()
+            lastCooked: getLocalDateString()
         });
+      }
+
+      // 3. Auto-credit the linked "cook at home" habit (F-MEALS-04), if any.
+      // toggleHabit always operates on TODAY, so this only fires when the plan
+      // item's date is today — see utils/mealCookedHabit.ts for the full rule.
+      const habitDecision = decideMealCookedHabitToggle({
+        mealCookedHabitId: householdSettings?.mealCookedHabitId,
+        habits,
+        planItemDate: planItem.date,
+        today: getLocalDateString(),
+        isCooked: true,
+      });
+      if (habitDecision) {
+        await toggleHabit(habitDecision.habitId, habitDecision.direction);
       }
 
       setViewingMeal(null);
       toast.success('Bon Appétit! Marked as cooked.');
+
+      // 3. Quick-rate prompt — only when this recipe has never been rated.
+      // `rating` defaults to 0 (not undefined) for app-created meals — see
+      // CookbookModal's `meal.rating > 0` "is rated" check — so a falsy
+      // check (covers both `undefined` and `0`) matches that convention and
+      // avoids re-nagging on every subsequent cook once rated.
+      if (meal.id && !meal.rating) {
+        const mealId = meal.id;
+        toast(
+          (t) => (
+            <RecipeRateToast
+              mealName={meal.name}
+              onRate={(rating) => {
+                toast.dismiss(t.id);
+                void updateMeal({
+                  ...meal,
+                  id: mealId,
+                  rating,
+                  lastCooked: getLocalDateString()
+                });
+              }}
+            />
+          ),
+          { duration: 8000, icon: toastIcon(Sparkles) }
+        );
+      }
     } catch (error) {
       console.error('Failed to mark cooked:', error);
       toast.error('Failed to update status');
@@ -475,6 +559,7 @@ const MealPlanTab: React.FC = () => {
                ingredients: currentMeal.ingredients || [],
                instructions: currentMeal.instructions || [],
                recipeUrl: currentMeal.recipeUrl || '',
+               estimatedCost: currentMeal.estimatedCost,
                tags: currentMeal.tags || [],
                rating: existingMeal?.rating ?? 0
            } as Meal);
@@ -505,6 +590,7 @@ const MealPlanTab: React.FC = () => {
                     ingredients: currentMeal.ingredients || [],
                     instructions: currentMeal.instructions || [],
                     recipeUrl: currentMeal.recipeUrl || '',
+                    estimatedCost: currentMeal.estimatedCost,
                     tags: currentMeal.tags || [],
                     rating: 0
                 });
@@ -704,6 +790,15 @@ const MealPlanTab: React.FC = () => {
     scrollStripTo(todayDateStr);
   }, [scrollStripTo, selectedDateStr]);
 
+  // Weekly dinner cost rollup (F-MEALS-01) — informational only, skips
+  // planned dinners without a linked meal or without an estimatedCost rather
+  // than blocking or counting them as $0.
+  const weekEndStr = useMemo(() => format(addDays(weekStart, 6), 'yyyy-MM-dd'), [weekStart]);
+  const weeklyDinnerCost = useMemo(
+    () => calculateWeeklyMealCost(mealPlan || [], meals, weekStartStr, weekEndStr, 'dinner'),
+    [mealPlan, meals, weekStartStr, weekEndStr]
+  );
+
   // Filtered + sorted meals for the selected day.
   const dayMeals = useMemo(
     () =>
@@ -740,6 +835,18 @@ const MealPlanTab: React.FC = () => {
       label: 'Shop for this week',
       icon: <ShoppingCart size={16} />,
       onSelect: handleShopForWeek,
+    },
+    {
+      key: 'cook-habit',
+      label: 'Cook-at-home habit',
+      icon: <ChefHat size={16} />,
+      onSelect: () => setIsCookHabitPickerOpen(true),
+    },
+    {
+      key: 'print-week',
+      label: 'Print week for the fridge',
+      icon: <Printer size={16} />,
+      onSelect: handlePrintWeek,
     },
   ];
 
@@ -858,6 +965,29 @@ const MealPlanTab: React.FC = () => {
             })}
         </div>
       </div>
+
+      {/* Weekly dinner cost rollup — shown only once at least one planned
+          dinner this week has an estimated cost set (owner-approved
+          zero-friction design: skip meals without a cost rather than block). */}
+      {weeklyDinnerCost.countWithCost > 0 && (
+          <div className="surface-section px-4 py-3 flex items-center gap-2 text-sm">
+              <span className="text-brand-600 dark:text-brand-300">
+                  Your dinners this week averaged{' '}
+                  <span className="font-bold text-brand-900 dark:text-brand-50 font-mono tabular-nums">
+                      ${weeklyDinnerCost.average!.toFixed(2)}
+                  </span>{' '}
+                  each
+                  {weeklyDinnerCost.countWithCost < weeklyDinnerCost.countTotal && (
+                      <span className="text-brand-400 dark:text-brand-450"> ({weeklyDinnerCost.countWithCost} of {weeklyDinnerCost.countTotal} priced)</span>
+                  )}
+                  {' · '}
+                  <span className="font-bold text-brand-900 dark:text-brand-50 font-mono tabular-nums">
+                      ${weeklyDinnerCost.total.toFixed(2)}
+                  </span>{' '}
+                  total
+              </span>
+          </div>
+      )}
 
       {/* Selected day agenda */}
       <div className="space-y-3">
@@ -1020,6 +1150,15 @@ const MealPlanTab: React.FC = () => {
         weekStart={weekStartStr}
       />
 
+      {/* Cook-at-home habit picker (F-MEALS-04) */}
+      <CookHabitPickerDrawer
+        isOpen={isCookHabitPickerOpen}
+        onClose={() => setIsCookHabitPickerOpen(false)}
+        habits={habits}
+        mealCookedHabitId={householdSettings?.mealCookedHabitId}
+        onSelect={(habitId) => { void setMealCookedHabitId(habitId); }}
+      />
+
       {/* Add Meal Modal */}
       <AddMealModal
         isOpen={isAddModalOpen}
@@ -1054,6 +1193,7 @@ const MealPlanTab: React.FC = () => {
             meal={viewingMeal.meal}
             planItem={viewingMeal.planItem}
             onMarkCooked={handleMarkCooked}
+            onShopIngredients={handleOpenIngredientSelector}
         />
       )}
 

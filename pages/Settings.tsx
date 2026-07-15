@@ -36,11 +36,15 @@ import MemberModal from '@/components/modals/MemberModal';
 import PointsBreakdownModal from '@/components/modals/PointsBreakdownModal';
 import NotificationSettings from '@/components/settings/NotificationSettings';
 import { ThemeToggle } from '@/components/settings/ThemeToggle';
+import { useTheme, type FontScale } from '@/contexts/ThemeContext';
+import { SegmentedControl, type SegmentedControlOption } from '@/components/ui/SegmentedControl';
+import { haptic } from '@/utils/haptics';
 import ApiKeyManager from '@/components/settings/ApiKeyManager';
 import CalendarFeedCard from '@/components/settings/CalendarFeedCard';
 import ShortcutSetupGuide from '@/components/settings/ShortcutSetupGuide';
 import { ChangelogDrawer } from '@/components/settings/ChangelogDrawer';
 import { CHANGELOG } from '@/data/changelog';
+import { DashboardWidgetSettings } from '@/components/settings/DashboardWidgetSettings';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
@@ -53,10 +57,11 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { LazyMount } from '@/components/ui/LazyMount';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { isModuleEnabled } from '@/utils/moduleVisibility';
+import { MODULE_PRESETS, type ModulePreset } from '@/utils/modulePresets';
 import type { ModuleKey } from '@/types/schema';
 import { requestNotificationPermission, setupForegroundNotificationListener } from '@/services/notificationService';
 import { generateJsonBackup, generateCsvExport, buildExportPayload } from '@/utils/exportUtils';
-import { HouseholdMember, NotificationPreferences, Transaction } from '@/types/schema';
+import { HouseholdMember, NotificationPreferences, Transaction, Meal } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { doc, updateDoc } from 'firebase/firestore';
 import { computeAnyNotificationsEnabled } from '@/utils/notificationFlags';
@@ -67,7 +72,7 @@ import { useBillingEnabled } from '@/hooks/useBillingEnabled';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { usePlaidEnabled } from '@/hooks/usePlaidEnabled';
 import { isValidPinFormat } from '@/utils/kidPin';
-import { getPlan } from '@/utils/entitlements';
+import { getPlan, getLimits } from '@/utils/entitlements';
 
 // Lazy so react-plaid-link stays out of the boot bundle — the chunk only loads
 // when plaidEnabled is on AND this renders (dormant by default → never loads).
@@ -94,8 +99,15 @@ const CURRENCY_OPTIONS: { code: string; symbol: string; label: string }[] = [
   { code: 'JPY', symbol: '¥', label: 'Japanese Yen' },
 ];
 
+const FONT_SCALE_OPTIONS: SegmentedControlOption<FontScale>[] = [
+  { value: '100', label: <span className="text-xs">A</span>, ariaLabel: 'Default text size' },
+  { value: '115', label: <span className="text-sm">A</span>, ariaLabel: 'Larger text size' },
+  { value: '130', label: <span className="text-base">A</span>, ariaLabel: 'Largest text size' },
+];
+
 const Settings: React.FC = () => {
   const { user, householdId } = useAuth();
+  const { fontScale, setFontScale, highContrast, setHighContrast } = useTheme();
   const {
     members,
     currentUser,
@@ -103,9 +115,11 @@ const Settings: React.FC = () => {
     updateMember,
     removeMember,
     deleteHousehold,
+    household,
     householdSettings,
     setHouseholdCurrency,
     setModuleVisibility,
+    updateModuleVisibility,
     setKidModePin,
     apiKeys,
   } = useHouseholdCore();
@@ -118,7 +132,7 @@ const Settings: React.FC = () => {
     isLoadingOlderTransactions,
     loadAllTransactions,
   } = useFinance();
-  const { meals, mealPlan } = useMealPlan();
+  const { mealPlan, loadAllMeals } = useMealPlan();
   const { shoppingList, stores } = useShopping();
   const { todos } = useTodos();
   const navigate = useNavigate();
@@ -164,8 +178,8 @@ const Settings: React.FC = () => {
 
   // Kid Mode (Plan 080) — dormant until kidModeEnabled is turned on. Manages the
   // parent PIN required to EXIT a kid's scoped view.
-  const kidModeEnabled = useKidModeEnabled();
-  const plaidEnabled = usePlaidEnabled();
+  const kidModeEnabled = useKidModeEnabled(householdId);
+  const plaidEnabled = usePlaidEnabled(householdId);
   const [pinDraft, setPinDraft] = useState('');
   const [pinConfirm, setPinConfirm] = useState('');
   const [isSavingPin, setIsSavingPin] = useState(false);
@@ -173,6 +187,12 @@ const Settings: React.FC = () => {
   // Danger zone: delete household
   const [isDeleteHouseholdOpen, setIsDeleteHouseholdOpen] = useState(false);
   const [isDeletingHousehold, setIsDeletingHousehold] = useState(false);
+
+  // Self-serve leave household (F-XCUT-05) — any member can remove themselves,
+  // except the last remaining admin (they must promote someone else or use
+  // Delete Household instead).
+  const [isLeaveHouseholdOpen, setIsLeaveHouseholdOpen] = useState(false);
+  const [isLeavingHousehold, setIsLeavingHousehold] = useState(false);
 
   // Points Breakdown Modal
   const [activePointsView, setActivePointsView] = useState<'daily' | 'weekly' | 'total' | null>(null);
@@ -200,6 +220,31 @@ const Settings: React.FC = () => {
     } catch (error) {
       console.error('[Settings] Failed to update module visibility:', error);
       toast.error('Failed to update modules');
+    }
+  };
+
+  // F-PLAT-07 — module presets. Tapping a preset chip expands it in place to
+  // show exactly what it will turn on/off before committing; a second tap
+  // (Apply) does the batched write. Manual per-module toggles below remain
+  // the escape hatch for anything a preset doesn't cover exactly.
+  const [previewPresetId, setPreviewPresetId] = useState<string | null>(null);
+  const [isApplyingPreset, setIsApplyingPreset] = useState(false);
+
+  const handlePresetChipClick = (presetId: string) => {
+    setPreviewPresetId(prev => (prev === presetId ? null : presetId));
+  };
+
+  const handleApplyPreset = async (preset: ModulePreset) => {
+    setIsApplyingPreset(true);
+    try {
+      await updateModuleVisibility(preset.visibility);
+      toast.success(`Applied "${preset.label}"`);
+      setPreviewPresetId(null);
+    } catch (error) {
+      console.error('[Settings] Failed to apply module preset:', error);
+      toast.error('Failed to apply preset');
+    } finally {
+      setIsApplyingPreset(false);
     }
   };
 
@@ -304,6 +349,23 @@ const Settings: React.FC = () => {
     }
   };
 
+  const handleConfirmLeaveHousehold = async () => {
+    if (!currentUser) return;
+    setIsLeavingHousehold(true);
+    try {
+      await removeMember(currentUser.uid);
+      toast.success('You left the household');
+      // Hard reload so AuthContext re-resolves (no household -> routes to
+      // /setup), matching deleteHousehold's flow above.
+      window.location.reload();
+    } catch (error) {
+      console.error('Error leaving household:', error);
+      toast.error('Failed to leave household');
+      setIsLeavingHousehold(false);
+      setIsLeaveHouseholdOpen(false);
+    }
+  };
+
   const handleSaveMember = async (memberData: Partial<HouseholdMember>) => {
     try {
       if (selectedMember) {
@@ -358,7 +420,7 @@ const Settings: React.FC = () => {
     }
   };
 
-  const doExportJson = (txList: Transaction[]) => {
+  const doExportJson = (txList: Transaction[], mealsList: Meal[]) => {
     try {
       const exportData = buildExportPayload({
         householdId,
@@ -369,7 +431,7 @@ const Settings: React.FC = () => {
         transactions: txList,
         buckets,
         calendarItems,
-        meals,
+        meals: mealsList,
         shoppingList,
         todos,
         mealPlan,
@@ -414,9 +476,11 @@ const Settings: React.FC = () => {
     }
   };
 
-  // Exports must include the FULL transaction history, but the household context
-  // only keeps the recent window live. Pull every older transaction first (a
-  // no-op when nothing is windowed), then export the complete list it returns.
+  // Exports must include the FULL transaction history (and, for the JSON
+  // backup, the full recipe cookbook), but the household context only keeps
+  // bounded live windows for both (see utils/listenerWindows.ts). Pull every
+  // older transaction / recipe first (a no-op when nothing is windowed), then
+  // export the complete lists.
   const requestExport = async (kind: 'json' | 'csv') => {
     let txList = transactions;
     if (hasMoreTransactions) {
@@ -424,8 +488,12 @@ const Settings: React.FC = () => {
       txList = await loadAllTransactions();
       toast.dismiss('export-load');
     }
-    if (kind === 'json') doExportJson(txList);
-    else doExportCsv(txList);
+    if (kind === 'json') {
+      const mealsList = await loadAllMeals();
+      doExportJson(txList, mealsList);
+    } else {
+      doExportCsv(txList);
+    }
   };
 
   if (!householdSettings) {
@@ -449,6 +517,14 @@ const Settings: React.FC = () => {
     // Legacy member docs can lack displayName despite the schema type — sort them safely.
     return (a.displayName || '').localeCompare(b.displayName || '');
   });
+
+  // Self-serve leave household: block the LAST admin from leaving via this
+  // path — they'd orphan the household. They must promote another member to
+  // admin first, or use Delete Household instead.
+  const adminCount = members.filter((m) => m.role === 'admin').length;
+  const canLeaveHousehold = Boolean(
+    currentUser && !(currentUser.role === 'admin' && adminCount <= 1)
+  );
 
   return (
     <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe">
@@ -505,6 +581,36 @@ const Settings: React.FC = () => {
               <Row className="flex-col items-stretch gap-3">
                 <span className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">Appearance</span>
                 <ThemeToggle />
+              </Row>
+
+              {/* Text size */}
+              <Row className="flex-col items-stretch gap-3">
+                <span className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">Text Size</span>
+                <SegmentedControl
+                  name="Text size"
+                  options={FONT_SCALE_OPTIONS}
+                  value={fontScale}
+                  onChange={(value) => {
+                    setFontScale(value);
+                    haptic('light');
+                  }}
+                />
+              </Row>
+
+              {/* High contrast */}
+              <Row>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">High Contrast</p>
+                  <p className="text-xs text-brand-500 dark:text-brand-400">Stronger text and border contrast</p>
+                </div>
+                <Switch
+                  aria-label="Toggle high contrast"
+                  checked={highContrast}
+                  onCheckedChange={(value) => {
+                    setHighContrast(value);
+                    haptic('light');
+                  }}
+                />
               </Row>
 
               {/* Currency */}
@@ -751,6 +857,67 @@ const Settings: React.FC = () => {
               everyone in the household. Your data is kept and comes back when you re-enable a module.
             </p>
 
+            {/* Presets — one tap sets several modules at once. Manual toggles
+                below remain the escape hatch for anything a preset doesn't
+                cover exactly. */}
+            <div className="px-1">
+              <p className="text-xs font-semibold text-brand-600 dark:text-brand-300 mb-2 uppercase tracking-wide">
+                Quick presets
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {MODULE_PRESETS.map((preset) => (
+                  <Button
+                    key={preset.id}
+                    type="button"
+                    variant={previewPresetId === preset.id ? 'primary' : 'outline'}
+                    size="sm"
+                    onClick={() => handlePresetChipClick(preset.id)}
+                    aria-pressed={previewPresetId === preset.id}
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
+              </div>
+
+              {previewPresetId && (() => {
+                const preset = MODULE_PRESETS.find(p => p.id === previewPresetId);
+                if (!preset) return null;
+                const onKeys = (Object.keys(preset.visibility) as ModuleKey[]).filter(k => preset.visibility[k]);
+                const offKeys = (Object.keys(preset.visibility) as ModuleKey[]).filter(k => !preset.visibility[k]);
+                return (
+                  <div className="mt-2 rounded-xl border border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-800/50 p-3 space-y-2 animate-in fade-in slide-in-from-top-1">
+                    <p className="text-sm text-brand-700 dark:text-brand-300">{preset.description}</p>
+                    <div className="flex flex-wrap gap-1.5 text-xs">
+                      {onKeys.map(k => (
+                        <span key={k} className="px-2 py-0.5 rounded-full bg-accent-100 text-accent-700 dark:bg-accent-900/40 dark:text-accent-300 font-medium capitalize">
+                          {k} on
+                        </span>
+                      ))}
+                      {offKeys.map(k => (
+                        <span key={k} className="px-2 py-0.5 rounded-full bg-brand-200 text-brand-600 dark:bg-brand-700 dark:text-brand-400 font-medium capitalize">
+                          {k} off
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex justify-end gap-2 pt-1">
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setPreviewPresetId(null)}>
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        isLoading={isApplyingPreset}
+                        onClick={() => handleApplyPreset(preset)}
+                      >
+                        Apply
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
             <SurfaceList>
               {/* Top-level pages */}
               <Row>
@@ -822,6 +989,16 @@ const Settings: React.FC = () => {
             </SurfaceList>
           </div>
         </Section>
+
+        {/* Dashboard widgets (F-XCUT-02) — per-member reorder/hide, own view only. */}
+        {currentUser && (
+          <Section title="Dashboard Widgets">
+            <DashboardWidgetSettings
+              member={currentUser}
+              onSave={(updates) => void updateMember(currentUser.uid, updates)}
+            />
+          </Section>
+        )}
 
         {/* Kid Mode (Plan 080) — dormant until kidModeEnabled is flipped on. */}
         {kidModeEnabled && (
@@ -974,11 +1151,42 @@ const Settings: React.FC = () => {
             The delete row keeps its exact admin-only guard. */}
         <Section title="Account">
           <SurfaceList>
+            {billingEnabled && household && (
+              <Row className="flex-col items-stretch gap-1">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={
+                      getPlan(household) === 'premium'
+                        ? 'inline-flex items-center gap-1.5 text-xs font-bold text-warm-700 bg-warm-50 border border-warm-200 px-2.5 py-0.5 rounded-full dark:bg-warm-500/15 dark:text-warm-300 dark:border-warm-500/30'
+                        : 'inline-flex items-center gap-1.5 text-xs font-bold text-brand-600 bg-brand-100 border border-brand-200 px-2.5 py-0.5 rounded-full dark:bg-brand-700/50 dark:text-brand-300 dark:border-brand-600'
+                    }
+                  >
+                    {getPlan(household) === 'premium' ? 'Premium plan' : 'Free plan'}
+                  </span>
+                </div>
+                <p className="text-xs text-brand-500 dark:text-brand-400">
+                  {members.length} of {getLimits(household).maxMembers} members
+                  {' · '}
+                  {getLimits(household).aiDailyCap} AI actions/day
+                  {' · '}
+                  {getLimits(household).historyMonths} mo history
+                </p>
+              </Row>
+            )}
             <DisclosureRow
               icon={<LogOut className="w-5 h-5" />}
               title="Sign Out"
               onClick={handleSignOut}
             />
+            {canLeaveHousehold && (
+              <DisclosureRow
+                destructive
+                icon={<Users className="w-5 h-5" />}
+                title="Leave Household"
+                subtitle="Remove yourself from this household — you'll lose access to shared budgets, habits, and history"
+                onClick={() => setIsLeaveHouseholdOpen(true)}
+              />
+            )}
             {currentUser?.role === 'admin' && (
               <DisclosureRow
                 destructive
@@ -1142,6 +1350,16 @@ const Settings: React.FC = () => {
             This action cannot be undone. Only household admins can do this.
           </>
         }
+      />
+
+      <ConfirmDialog
+        isOpen={isLeaveHouseholdOpen}
+        onClose={() => setIsLeaveHouseholdOpen(false)}
+        onConfirm={handleConfirmLeaveHousehold}
+        isConfirming={isLeavingHousehold}
+        title="Leave household?"
+        confirmLabel="Leave"
+        message={`Leave ${householdSettings.name}? You'll lose access to all shared household data — budgets, habits, and history. This cannot be undone.`}
       />
 
       {householdId && (

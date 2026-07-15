@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Star, TrendingUp, User, Search } from 'lucide-react';
+import { Star, TrendingUp, User } from 'lucide-react';
 import { useFinance, useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
@@ -9,7 +9,6 @@ import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { LazyMount } from '@/components/ui/LazyMount';
 import CountBadge from '@/components/ui/CountBadge';
-import { Button } from '@/components/ui/Button';
 import { preloadOnIdle } from '@/utils/preloadOnIdle';
 import ProfileMenu from './ProfileMenu';
 
@@ -23,7 +22,8 @@ const FeedbackModal = React.lazy(loadFeedbackModal);
 // Plan 14: global search overlay — lazy for the same boot-bundle reason as
 // FeedbackModal above. It owns its own slice consumption (transactions,
 // habits, meals, todos, shopping items) so this always-mounted toolbar is not
-// re-coupled to that state.
+// re-coupled to that state. Triggered from the Profile menu's Search row
+// (moved off the header bar to declutter the mobile toolbar).
 const loadSearchOverlay = () => import('@/components/search/SearchOverlay');
 const SearchOverlay = React.lazy(loadSearchOverlay);
 
@@ -33,13 +33,20 @@ const SearchOverlay = React.lazy(loadSearchOverlay);
 const loadSafeToSpendBreakdownDrawer = () => import('@/components/budget/SafeToSpendBreakdownDrawer');
 const SafeToSpendBreakdownDrawer = React.lazy(loadSafeToSpendBreakdownDrawer);
 
+// F-NOTIF-02: notification inbox drawer, opened via the Profile menu's
+// Notifications row (moved off the header bell icon to declutter the mobile
+// toolbar). Lazy for the same boot-bundle reason as the other Drawer-based
+// modals above.
+const loadNotificationInboxDrawer = () => import('@/components/layout/NotificationInboxDrawer');
+const NotificationInboxDrawer = React.lazy(loadNotificationInboxDrawer);
+
 const TopToolbar: React.FC = () => {
   const { safeToSpendBreakdown } = useFinance();
   // Fall back to 0 while the breakdown hasn't been computed yet (matches the
   // toolbar's prior initial render with the raw `safeToSpend` field).
   const safeToSpend = safeToSpendBreakdown?.safeToSpend ?? 0;
   const { dailyPoints, weeklyPoints } = useGamification();
-  const { household } = useHouseholdCore();
+  const { household, unreadNotificationCount } = useHouseholdCore();
   const { currentUser } = useAuth();
   const kidModeEnabled = useKidModeEnabled();
   const { isModuleEnabled } = useModuleVisibility();
@@ -55,10 +62,12 @@ const TopToolbar: React.FC = () => {
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [stsOpen, setStsOpen] = useState(false);
+  const [isInboxOpen, setIsInboxOpen] = useState(false);
 
   useEffect(() => preloadOnIdle(loadFeedbackModal), []);
   useEffect(() => preloadOnIdle(loadSearchOverlay), []);
   useEffect(() => preloadOnIdle(loadSafeToSpendBreakdownDrawer), []);
+  useEffect(() => preloadOnIdle(loadNotificationInboxDrawer), []);
 
   // Cmd/Ctrl+K opens search — a lightweight keydown listener only; no slice
   // consumption is added here (SearchOverlay owns its own data).
@@ -148,23 +157,20 @@ const TopToolbar: React.FC = () => {
               </button>
             )}
 
-            {/* Search entry point (Plan 14) — opens the lazy global search overlay. */}
-            <Button
-              type="button"
-              variant="ghost-inverted"
-              size="icon"
-              aria-label="Search"
-              onClick={() => setIsSearchOpen(true)}
-            >
-              <Search className="w-5 h-5" />
-            </Button>
-
-            {/* Profile Icon */}
+            {/* Profile Icon — also carries Search + Notifications now that those
+                triggers have moved into the Profile menu (declutters the mobile
+                header, which was crowding the points cluster against Safe-to-
+                Spend). A small unread dot substitutes for the removed bell badge
+                so the unread signal isn't lost when the menu is closed. */}
             <button
               type="button"
               onClick={() => setIsProfileOpen(!isProfileOpen)}
-              className="ml-1 w-9 h-9 rounded-full bg-brand-700 flex items-center justify-center text-brand-200 border border-brand-600 active:bg-brand-600 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-400"
-              aria-label="Open Profile Menu"
+              className="relative ml-1 w-9 h-9 rounded-full bg-brand-700 flex items-center justify-center text-brand-200 border border-brand-600 active:bg-brand-600 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-400"
+              aria-label={
+                unreadNotificationCount > 0
+                  ? `Open Profile Menu, ${unreadNotificationCount} unread notification${unreadNotificationCount === 1 ? '' : 's'}`
+                  : 'Open Profile Menu'
+              }
               aria-expanded={isProfileOpen}
               aria-haspopup="menu"
             >
@@ -177,6 +183,12 @@ const TopToolbar: React.FC = () => {
               ) : (
                 <User className="w-5 h-5" />
               )}
+              {unreadNotificationCount > 0 && (
+                <span
+                  className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-money-neg ring-2 ring-brand-800"
+                  aria-hidden="true"
+                />
+              )}
             </button>
           </div>
         </header>
@@ -185,6 +197,9 @@ const TopToolbar: React.FC = () => {
           isOpen={isProfileOpen}
           onClose={() => setIsProfileOpen(false)}
           onSendFeedback={() => setIsFeedbackOpen(true)}
+          onOpenSearch={() => setIsSearchOpen(true)}
+          onOpenNotifications={() => setIsInboxOpen(true)}
+          unreadNotificationCount={unreadNotificationCount}
         />
       </div>
 
@@ -198,6 +213,10 @@ const TopToolbar: React.FC = () => {
 
       <LazyMount when={stsOpen}>
         <SafeToSpendBreakdownDrawer open={stsOpen} onClose={() => setStsOpen(false)} />
+      </LazyMount>
+
+      <LazyMount when={isInboxOpen}>
+        <NotificationInboxDrawer open={isInboxOpen} onClose={() => setIsInboxOpen(false)} />
       </LazyMount>
     </>
   );

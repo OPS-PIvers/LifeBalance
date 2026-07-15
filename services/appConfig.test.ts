@@ -6,6 +6,8 @@ vi.mock('firebase/firestore', () => ({
   doc: vi.fn((...a: unknown[]) => ({ path: a.join('/') })),
   getDoc: vi.fn(),
   setDoc: vi.fn().mockResolvedValue(undefined),
+  arrayUnion: vi.fn((...items: unknown[]) => ({ __op: 'arrayUnion', items })),
+  arrayRemove: vi.fn((...items: unknown[]) => ({ __op: 'arrayRemove', items })),
 }));
 
 /** Build a Firestore-doc-snapshot stand-in. */
@@ -252,6 +254,117 @@ describe('setAppFlag', () => {
     // The next read performs a FRESH getDoc and reflects the new value.
     await expect(mod.getBillingEnabled()).resolves.toBe(true);
     expect(getDoc).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('household allowlist targeting (F-PLAT-09)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  describe('getKidModeEnabled(householdId)', () => {
+    const importFresh = async () => (await import('./appConfig')).getKidModeEnabled;
+
+    it('resolves true when the global flag is on, regardless of householdId', async () => {
+      vi.mocked(getDoc).mockResolvedValue(snapshot(true, { kidModeEnabled: true }));
+      const getKidModeEnabled = await importFresh();
+      await expect(getKidModeEnabled('household-a')).resolves.toBe(true);
+    });
+
+    it('resolves true when the global flag is off but householdId is on the allowlist', async () => {
+      vi.mocked(getDoc).mockResolvedValue(
+        snapshot(true, { kidModeEnabled: false, kidModeEnabledHouseholds: ['household-a', 'household-b'] })
+      );
+      const getKidModeEnabled = await importFresh();
+      await expect(getKidModeEnabled('household-a')).resolves.toBe(true);
+    });
+
+    it('resolves false when householdId is not on the allowlist', async () => {
+      vi.mocked(getDoc).mockResolvedValue(
+        snapshot(true, { kidModeEnabled: false, kidModeEnabledHouseholds: ['household-b'] })
+      );
+      const getKidModeEnabled = await importFresh();
+      await expect(getKidModeEnabled('household-a')).resolves.toBe(false);
+    });
+
+    it('falls back to global-only (false) when no householdId is passed, even with a populated allowlist', async () => {
+      vi.mocked(getDoc).mockResolvedValue(
+        snapshot(true, { kidModeEnabled: false, kidModeEnabledHouseholds: ['household-a'] })
+      );
+      const getKidModeEnabled = await importFresh();
+      await expect(getKidModeEnabled()).resolves.toBe(false);
+    });
+
+    it('fails closed when the allowlist field is malformed (not an array)', async () => {
+      vi.mocked(getDoc).mockResolvedValue(
+        snapshot(true, { kidModeEnabled: false, kidModeEnabledHouseholds: 'household-a' })
+      );
+      const getKidModeEnabled = await importFresh();
+      await expect(getKidModeEnabled('household-a')).resolves.toBe(false);
+    });
+  });
+
+  describe('getPlaidEnabled(householdId)', () => {
+    const importFresh = async () => (await import('./appConfig')).getPlaidEnabled;
+
+    it('resolves true when the global flag is off but householdId is on the allowlist', async () => {
+      vi.mocked(getDoc).mockResolvedValue(
+        snapshot(true, { plaidEnabled: false, plaidEnabledHouseholds: ['household-a'] })
+      );
+      const getPlaidEnabled = await importFresh();
+      await expect(getPlaidEnabled('household-a')).resolves.toBe(true);
+    });
+
+    it('resolves false when householdId is not on the allowlist', async () => {
+      vi.mocked(getDoc).mockResolvedValue(snapshot(true, { plaidEnabled: false, plaidEnabledHouseholds: [] }));
+      const getPlaidEnabled = await importFresh();
+      await expect(getPlaidEnabled('household-a')).resolves.toBe(false);
+    });
+  });
+
+  describe('getFlagTargetHouseholds / addFlagTargetHousehold / removeFlagTargetHousehold', () => {
+    it('reads back the current allowlist for a targetable flag', async () => {
+      vi.mocked(getDoc).mockResolvedValue(snapshot(true, { kidModeEnabledHouseholds: ['h1', 'h2'] }));
+      const { getFlagTargetHouseholds } = await import('./appConfig');
+      await expect(getFlagTargetHouseholds('kidModeEnabled')).resolves.toEqual(['h1', 'h2']);
+    });
+
+    it('returns an empty array for a non-targetable flag key', async () => {
+      const { getFlagTargetHouseholds } = await import('./appConfig');
+      await expect(getFlagTargetHouseholds('billingEnabled')).resolves.toEqual([]);
+      expect(getDoc).not.toHaveBeenCalled();
+    });
+
+    it('adds a household via arrayUnion on the flag-specific field, with merge', async () => {
+      const { addFlagTargetHousehold } = await import('./appConfig');
+      await addFlagTargetHousehold('kidModeEnabled', 'household-a');
+
+      expect(setDoc).toHaveBeenCalledTimes(1);
+      const [, data, options] = vi.mocked(setDoc).mock.calls[0]!;
+      expect(data).toEqual({ kidModeEnabledHouseholds: { __op: 'arrayUnion', items: ['household-a'] } });
+      expect(options).toEqual({ merge: true });
+    });
+
+    it('removes a household via arrayRemove on the flag-specific field, with merge', async () => {
+      const { removeFlagTargetHousehold } = await import('./appConfig');
+      await removeFlagTargetHousehold('plaidEnabled', 'household-a');
+
+      expect(setDoc).toHaveBeenCalledTimes(1);
+      const [, data, options] = vi.mocked(setDoc).mock.calls[0]!;
+      expect(data).toEqual({ plaidEnabledHouseholds: { __op: 'arrayRemove', items: ['household-a'] } });
+      expect(options).toEqual({ merge: true });
+    });
+
+    it('rejects targeting a flag that does not support the allowlist', async () => {
+      const { addFlagTargetHousehold } = await import('./appConfig');
+      await expect(addFlagTargetHousehold('billingEnabled', 'household-a')).rejects.toThrow();
+    });
   });
 });
 

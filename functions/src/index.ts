@@ -4,7 +4,6 @@ import {onCall, HttpsError} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { formatInTimeZone } from "date-fns-tz";
-import { addMonths, differenceInCalendarDays, format, parseISO } from "date-fns";
 import { formatCurrency } from "./utils/formatCurrency";
 import {
   isTimeToSend,
@@ -12,16 +11,30 @@ import {
   loadNotifiableMembersByHousehold,
   type HouseholdMember,
 } from "./shared/notifications";
+import { findBillsDueOnDate, type BillCalendarItem } from "./shared/bills";
 import { writeProactiveInsight, type ProactiveCapHouseholdDoc } from "./insights/writeProactiveInsight";
+import {
+  computeHabitsPending,
+  computeStreaksAtRisk,
+  computeTodosToday,
+  buildDigestMessage,
+  type DigestHabit,
+  type DigestTodo,
+} from "./shared/digest";
+import { buildActionsDataField, isBillReminderSnoozed } from "./shared/notificationActions";
 
 // Re-export for consumers that imported this from index.ts before the
 // extraction to shared/notifications.ts.
 export { isTimeToSend } from "./shared/notifications";
 
+// Re-export the bill-recurrence helpers moved to shared/bills.ts, so existing
+// importers (and index.test.ts) that referenced them from index.ts keep working.
+export { findBillsDueOnDate, type BillCalendarItem } from "./shared/bills";
+
 admin.initializeApp();
 
 // Export Quick Add HTTP functions for iOS Shortcuts
-export { quickAddHabit, quickAddExpense, quickAddShoppingItem, quickAddNaturalLanguage, quickAddBillPay } from "./quickAdd";
+export { quickAddHabit, quickAddExpense, quickAddShoppingItem, quickAddNaturalLanguage, quickAddBillPay, quickAddTodo } from "./quickAdd";
 
 // Export the Gemini API proxy (holds the GEMINI_API_KEY secret server-side).
 export { geminiproxy } from "./geminiProxy";
@@ -67,6 +80,11 @@ export { sendweeklyrecap } from "./recap";
 // adds no new secret dependency for CI deploys.
 export { sendmonthlymoneyrecap } from "./moneyRecap";
 
+// AI Daily Briefing engine (F-DASH-02). Uses the shared GEMINI_API_KEY secret
+// (already required by geminiproxy/sendweeklyrecap/sendmonthlymoneyrecap), so
+// exporting it adds no new secret dependency for CI deploys.
+export { senddailybriefing } from "./dailyBriefing";
+
 // Daily net worth snapshot (F-MONEY-09). No secrets — safe to export/deploy.
 export { snapshotnetworth } from "./netWorth";
 
@@ -96,6 +114,11 @@ export const sendhabitreminders = onSchedule("every 1 hours", async () => {
       const member = memberDoc.data() as HouseholdMember;
       const prefs = member.notificationPreferences;
 
+      if (prefs?.digestMode?.enabled) {
+        logger.info(`Member ${member.uid}: digest mode active, skipping per-type habit reminder`);
+        continue;
+      }
+
       if (!prefs?.habitReminders?.enabled) {
         logger.info(`Member ${member.uid}: habit reminders not enabled`);
         continue;
@@ -119,7 +142,8 @@ export const sendhabitreminders = onSchedule("every 1 hours", async () => {
             type: "habit_reminder",
             url: "/habits",
           },
-          memberDoc.ref
+          memberDoc.ref,
+          { householdId: group.householdId, recipientUid: member.uid, type: "habit_reminder" }
         );
       } else {
         logger.info(`Member ${member.uid}: not time to send yet (current check didn't match scheduled time)`);
@@ -145,6 +169,11 @@ export const sendactionqueuereminders = onSchedule(
       for (const memberDoc of group.memberDocs) {
         const member = memberDoc.data() as HouseholdMember;
         const prefs = member.notificationPreferences;
+
+        if (prefs?.digestMode?.enabled) {
+          logger.info(`Member ${member.uid}: digest mode active, skipping per-type action queue reminder`);
+          continue;
+        }
 
         if (!prefs?.actionQueueReminders?.enabled) {
           logger.info(`Member ${member.uid}: action queue reminders not enabled`);
@@ -193,7 +222,8 @@ export const sendactionqueuereminders = onSchedule(
                 type: "action_queue_reminder",
                 url: "/dashboard",
               },
-              memberDoc.ref
+              memberDoc.ref,
+              { householdId: group.householdId, recipientUid: member.uid, type: "action_queue_reminder" }
             );
           } else {
             logger.info(`Member ${member.uid}: no todos for today, skipping notification`);
@@ -221,6 +251,11 @@ export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
     for (const memberDoc of group.memberDocs) {
       const member = memberDoc.data() as HouseholdMember;
       const prefs = member.notificationPreferences;
+
+      if (prefs?.digestMode?.enabled) {
+        logger.info(`Member ${member.uid}: digest mode active, skipping per-type streak warning`);
+        continue;
+      }
 
       if (!prefs?.streakWarnings?.enabled) {
         logger.info(`Member ${member.uid}: streak warnings not enabled`);
@@ -271,7 +306,8 @@ export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
               type: "streak_warning",
               url: "/habits",
             },
-            memberDoc.ref
+            memberDoc.ref,
+            { householdId: group.householdId, recipientUid: member.uid, type: "streak_warning" }
           );
 
           // Proactive insight (plan 02 part C): "streak rescue". Piggybacks on
@@ -347,93 +383,6 @@ export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
 });
 
 /**
- * Shape of the calendarItems docs the bill-reminder job cares about. Recurring
- * bills are stored as a single TEMPLATE doc whose `date` is the original anchor
- * occurrence and is never advanced — future occurrences are derived from it
- * (see utils/calendarRecurrence.ts client-side). Paying or deleting a single
- * occurrence writes a separate INSTANCE doc carrying `parentRecurringId` plus
- * `isPaid`/`isDeleted`, rather than mutating the template.
- */
-export interface BillCalendarItem {
-  id: string;
-  date: string;
-  isRecurring?: boolean;
-  frequency?: string;
-  isPaid?: boolean;
-  isDeleted?: boolean;
-  parentRecurringId?: string;
-  amount?: number;
-}
-
-/**
- * Whether a recurring series anchored at `anchorDateStr` has an occurrence
- * exactly on `targetDateStr`. Monthly occurrences are derived from the anchor
- * with independent month-end clamping (Jan 31 -> Feb 28 -> Mar 31), matching
- * the client's getOccurrenceDate in utils/calendarRecurrence.ts.
- */
-function recurrenceFallsOn(
-  anchorDateStr: string,
-  frequency: string,
-  targetDateStr: string
-): boolean {
-  // Lexicographic order matches chronological order for yyyy-MM-dd strings.
-  if (targetDateStr < anchorDateStr) return false;
-  if (targetDateStr === anchorDateStr) return true;
-
-  const anchor = parseISO(anchorDateStr);
-  const target = parseISO(targetDateStr);
-
-  if (frequency === "weekly" || frequency === "bi-weekly") {
-    const dayDiff = differenceInCalendarDays(target, anchor);
-    return dayDiff % (frequency === "weekly" ? 7 : 14) === 0;
-  }
-  if (frequency === "monthly") {
-    const monthDiff =
-      (target.getFullYear() - anchor.getFullYear()) * 12 +
-      (target.getMonth() - anchor.getMonth());
-    if (monthDiff <= 0) return false;
-    return format(addMonths(anchor, monthDiff), "yyyy-MM-dd") === targetDateStr;
-  }
-  // Unknown frequency: only the anchor date itself matches.
-  return false;
-}
-
-/**
- * Server-side port of the client's recurring-calendar expansion
- * (expandCalendarItems in utils/calendarRecurrence.ts), specialized to answer
- * "which bills are due on exactly this date?". Expands recurring templates to
- * the target date and suppresses occurrences already covered by a paid or
- * per-occurrence-deleted instance doc; non-recurring bills match on their
- * stored date when still unpaid.
- */
-export function findBillsDueOnDate(
-  items: BillCalendarItem[],
-  targetDateStr: string
-): BillCalendarItem[] {
-  // Dates already covered by a paid/deleted instance doc, keyed by template id.
-  const coveredDates = new Map<string, Set<string>>();
-  for (const item of items) {
-    if (item.parentRecurringId && (item.isPaid || item.isDeleted)) {
-      const dates = coveredDates.get(item.parentRecurringId) ?? new Set<string>();
-      dates.add(item.date);
-      coveredDates.set(item.parentRecurringId, dates);
-    }
-  }
-
-  return items.filter((item) => {
-    // Instance docs only exist to mark an occurrence paid/deleted — never due.
-    if (item.parentRecurringId || item.isDeleted) return false;
-    if (item.isRecurring && item.frequency) {
-      return (
-        recurrenceFallsOn(item.date, item.frequency, targetDateStr) &&
-        !coveredDates.get(item.id)?.has(targetDateStr)
-      );
-    }
-    return !item.isPaid && item.date === targetDateStr;
-  });
-}
-
-/**
  * Scheduled function: Runs every hour to check for bill reminders
  */
 export const sendbillreminders = onSchedule(
@@ -456,6 +405,11 @@ export const sendbillreminders = onSchedule(
       for (const memberDoc of group.memberDocs) {
         const member = memberDoc.data() as HouseholdMember;
         const prefs = member.notificationPreferences;
+
+        if (prefs?.digestMode?.enabled) {
+          logger.info(`Member ${member.uid}: digest mode active, skipping per-type bill reminder`);
+          continue;
+        }
 
         if (!prefs?.billReminders?.enabled) {
           logger.info(`Member ${member.uid}: bill reminders not enabled`);
@@ -496,6 +450,15 @@ export const sendbillreminders = onSchedule(
             prefs.timezone || "UTC",
             "yyyy-MM-dd"
           );
+
+          // F-NOTIF-05: honor a "Snooze 1 day" push action. The client wrote
+          // billReminders.snoozedUntil (yyyy-MM-dd local); suppress the reminder
+          // while today is on or before that date.
+          if (isBillReminderSnoozed(prefs.billReminders.snoozedUntil, localToday)) {
+            logger.info(`Member ${member.uid}: bill reminders snoozed until ${prefs.billReminders.snoozedUntil}, skipping`);
+            continue;
+          }
+
           const [ly, lm, ld] = localToday.split("-").map(Number);
           const targetDateObj = new Date(
             Date.UTC(ly ?? 2000, (lm ?? 1) - 1, (ld ?? 1) + daysAhead)
@@ -533,8 +496,16 @@ export const sendbillreminders = onSchedule(
               {
                 type: "bill_reminder",
                 url: "/budget",
+                // F-NOTIF-05: inline action buttons ("Pay bill"/"Snooze 1 day").
+                // JSON string (FCM data values must be strings); the SW renders
+                // them and deep-links back with ?nact=<action>. Undefined key is
+                // dropped by the spread so non-action types are unaffected.
+                ...(buildActionsDataField("bill_reminder")
+                  ? { actions: buildActionsDataField("bill_reminder") as string }
+                  : {}),
               },
-              memberDoc.ref
+              memberDoc.ref,
+              { householdId: group.householdId, recipientUid: member.uid, type: "bill_reminder" }
             );
           } else {
             logger.info(`Member ${member.uid}: no upcoming bills, skipping notification`);
@@ -546,6 +517,154 @@ export const sendbillreminders = onSchedule(
     }
   }
 );
+
+/**
+ * Scheduled function (F-NOTIF-03): runs every hour to send the consolidated
+ * digest push to members with `digestMode.enabled`. The four per-type hourly
+ * jobs above skip their own send for such a member (see the `digestMode?.enabled`
+ * early-continue in each), so this is the only push they receive.
+ *
+ * The digest only reports on categories the member has individually enabled
+ * (habitReminders/actionQueueReminders/streakWarnings/billReminders) — turning
+ * on digest mode changes *delivery* (one push instead of several) without
+ * silently opting a member into categories they never turned on.
+ *
+ * Habit/todo/calendar collections are fetched once per household (not once per
+ * digest-eligible member) since the underlying docs are shared; only the
+ * per-member "today" (member's own timezone) and per-member filtering
+ * (todos' assignedTo, which sub-preferences are enabled) vary per member.
+ */
+export const senddigest = onSchedule("every 1 hours", async () => {
+  logger.info("Checking for digest pushes to send");
+
+  const groups = await loadNotifiableMembersByHousehold(db);
+  logger.info(`Found ${groups.length} household(s) with notification-eligible members`);
+
+  for (const group of groups) {
+    const digestMembers = group.memberDocs.filter((memberDoc) => {
+      const member = memberDoc.data() as HouseholdMember;
+      return member.notificationPreferences?.digestMode?.enabled === true;
+    });
+
+    if (digestMembers.length === 0) continue;
+
+    logger.info(`Household ${group.householdId}: ${digestMembers.length} digest-mode member(s)`);
+
+    // Lazily loaded, once per household, and reused across every digest
+    // member in it.
+    let habitsPromise: Promise<DigestHabit[]> | undefined;
+    let todosPromise: Promise<DigestTodo[]> | undefined;
+    let calendarItemsPromise: Promise<BillCalendarItem[]> | undefined;
+    let currencyPromise: Promise<string> | undefined;
+
+    const getHabits = () => {
+      habitsPromise ??= group.householdRef
+        .collection("habits")
+        .get()
+        .then((snap) => snap.docs.map((d) => d.data() as DigestHabit));
+      return habitsPromise;
+    };
+    const getTodos = () => {
+      todosPromise ??= group.householdRef
+        .collection("todos")
+        .where("isCompleted", "==", false)
+        .get()
+        .then((snap) => snap.docs.map((d) => d.data() as DigestTodo));
+      return todosPromise;
+    };
+    const getCalendarItems = () => {
+      calendarItemsPromise ??= group.householdRef
+        .collection("calendarItems")
+        .where("type", "==", "expense")
+        .get()
+        .then((snap) =>
+          snap.docs.map((d) => ({
+            ...(d.data() as Omit<BillCalendarItem, "id">),
+            id: d.id,
+          }))
+        );
+      return calendarItemsPromise;
+    };
+    const getCurrency = () => {
+      currencyPromise ??= group.getHouseholdData().then((data) => data?.currency || "USD");
+      return currencyPromise;
+    };
+
+    for (const memberDoc of digestMembers) {
+      const member = memberDoc.data() as HouseholdMember;
+      const prefs = member.notificationPreferences;
+      const digestPrefs = prefs?.digestMode;
+
+      if (!digestPrefs || !member.fcmTokens || member.fcmTokens.length === 0) {
+        logger.info(`Member ${member.uid}: no FCM tokens found, skipping digest`);
+        continue;
+      }
+
+      if (!isTimeToSend(digestPrefs.time, prefs?.timezone)) {
+        logger.info(`Member ${member.uid}: not time to send digest yet`);
+        continue;
+      }
+
+      const today = formatInTimeZone(new Date(), prefs?.timezone || "UTC", "yyyy-MM-dd");
+
+      const enabled = {
+        habits: prefs?.habitReminders?.enabled === true,
+        todos: prefs?.actionQueueReminders?.enabled === true,
+        streaks: prefs?.streakWarnings?.enabled === true,
+        bills: prefs?.billReminders?.enabled === true,
+      };
+
+      const habits = enabled.habits || enabled.streaks ? await getHabits() : [];
+      const todos = enabled.todos ? await getTodos() : [];
+
+      let billsDueCount = 0;
+      let billsDueTotalFormatted = "$0.00";
+      if (enabled.bills && prefs?.billReminders) {
+        const daysAhead = prefs.billReminders.daysBeforeDue;
+        const [ly, lm, ld] = today.split("-").map(Number);
+        const targetDateObj = new Date(
+          Date.UTC(ly ?? 2000, (lm ?? 1) - 1, (ld ?? 1) + daysAhead)
+        );
+        const targetDateStr = formatInTimeZone(targetDateObj, "UTC", "yyyy-MM-dd");
+
+        const calendarItems = await getCalendarItems();
+        const upcomingBills = findBillsDueOnDate(calendarItems, targetDateStr);
+        billsDueCount = upcomingBills.length;
+        if (billsDueCount > 0) {
+          const totalAmount = upcomingBills.reduce((sum, bill) => sum + (bill.amount || 0), 0);
+          const currency = await getCurrency();
+          billsDueTotalFormatted = formatCurrency(totalAmount, { currency });
+        }
+      }
+
+      const counts = {
+        habitsPending: enabled.habits ? computeHabitsPending(habits, today) : 0,
+        todosToday: enabled.todos ? computeTodosToday(todos, member.uid, today) : 0,
+        streaksAtRisk: enabled.streaks ? computeStreaksAtRisk(habits, today) : 0,
+        billsDueCount,
+        billsDueTotalFormatted,
+      };
+
+      const message = buildDigestMessage(counts, enabled);
+      if (!message) {
+        logger.info(`Member ${member.uid}: nothing to report, skipping digest`);
+        continue;
+      }
+
+      logger.info(`Member ${member.uid}: sending digest — ${message.body}`);
+      await sendNotificationToUser(
+        member.fcmTokens,
+        message.title,
+        message.body,
+        {
+          type: "digest",
+          url: "/",
+        },
+        memberDoc.ref
+      );
+    }
+  }
+});
 
 /**
  * Firestore trigger: Monitor account balance changes and send budget alerts.
@@ -606,7 +725,8 @@ export const sendbudgetalerts = onDocumentWritten(
             type: "budget_alert",
             url: "/budget",
           },
-          memberDoc.ref
+          memberDoc.ref,
+          { householdId, recipientUid: member.uid, type: "budget_alert" }
         );
       }
     }
