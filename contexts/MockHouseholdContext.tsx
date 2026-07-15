@@ -678,6 +678,33 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Transaction added');
   }, [accounts]);
 
+  // F-DASH-04 parity: add several transactions (e.g. a receipt split into
+  // category transactions) with their combined verified-only balance effects.
+  const addTransactions = useCallback(async (
+    txs: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[],
+  ) => {
+    if (txs.length === 0) return;
+    const newTxs = txs.map(tx => ({ ...tx, id: generateId(), payPeriodId: MOCK_PAY_PERIOD_ID } as Transaction));
+    // Accumulate per-account balance deltas (verified-only, account-routed),
+    // computed OUTSIDE the setState updaters (StrictMode double-invokes them).
+    const deltas = new Map<string, number>();
+    for (const tx of newTxs) {
+      const target = resolveTargetAccount(tx.accountId, accounts);
+      const delta = effectiveAccountImpact(
+        { amount: tx.amount, category: tx.category, creditPayment: tx.creditPayment, status: tx.status },
+        target,
+      );
+      if (delta !== 0 && target) deltas.set(target.id, (deltas.get(target.id) ?? 0) + delta);
+    }
+    setTransactions(prev => [...prev, ...newTxs]);
+    if (deltas.size > 0) {
+      setAccounts(prev => prev.map(a => deltas.has(a.id)
+        ? { ...a, balance: roundMoney(a.balance + (deltas.get(a.id) ?? 0)), lastUpdated: new Date().toISOString() }
+        : a));
+    }
+    toast.success(`Mock: ${newTxs.length} transaction(s) added`);
+  }, [accounts]);
+
   const updateTransaction = useCallback(async (id: string, updates: Partial<Transaction>) => {
     setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
     toast.success('Mock: Transaction updated');
@@ -1574,6 +1601,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateBucketLimit: noOp,
     reallocateBucket,
     addTransaction,
+    addTransactions,
     updateTransaction,
     updateTransactionCategory,
     deleteTransaction,

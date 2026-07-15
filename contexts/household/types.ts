@@ -189,6 +189,10 @@ export interface HouseholdContextType {
 
   // Transaction Actions
   addTransaction: (tx: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>) => Promise<void>;
+  /** F-DASH-04: add SEVERAL transactions (e.g. an itemized receipt split into
+   *  category transactions) with their combined balance effects in ONE
+   *  writeBatch — atomic, so a partial split can never land. */
+  addTransactions: (txs: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[]) => Promise<void>;
   /** Verify a pending transaction under `category`. Optional `accountId`
    *  additionally (re)tags the transaction so the verify-time balance impact
    *  lands on that account (used by the Action Queue's smart approve); pass
@@ -414,7 +418,7 @@ export type FinanceContextValue = Pick<HouseholdContextType,
   | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal'
   | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'reallocateBucket'
   | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
-  | 'addTransaction' | 'updateTransactionCategory' | 'updateTransaction' | 'deleteTransaction' | 'splitTransaction'
+  | 'addTransaction' | 'addTransactions' | 'updateTransactionCategory' | 'updateTransaction' | 'deleteTransaction' | 'splitTransaction'
   | 'setTransactionSplit' | 'markSplitSettled'
   | 'mergeTransactions' | 'keepBothTransactions'
   | 'getTransactionComments' | 'addTransactionComment' | 'deleteTransactionComment'
