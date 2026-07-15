@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { format, parseISO, subDays } from 'date-fns';
-import { Sparkles } from 'lucide-react';
+import { RotateCcw, Sparkles } from 'lucide-react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { Drawer } from '@/components/ui/Drawer';
@@ -182,15 +182,29 @@ const PayPeriodCeremonyDrawer: React.FC<PayPeriodCeremonyDrawerProps> = ({ event
         )}
 
         <Section
-          title="Set your budgets for this period"
+          title="This period's budgets"
           action={
-            <div className="flex gap-3">
-              <Button variant="link" size="sm" onClick={resetToLast}>
-                Reset to last
-              </Button>
-              <Button variant="link" size="sm" leftIcon={<Sparkles size={14} />} onClick={applySuggestions}>
-                Use suggestions
-              </Button>
+            /* Match the app's Section-header action convention (see
+               HabitsChallengesTab / SectionActionLink): compact text-xs
+               font-semibold text buttons with a 12px icon, never wrapped.
+               "Reset to last" only appears once something changed. */
+            <div className="flex items-center gap-3">
+              {changedUpdates.length > 0 && (
+                <button
+                  type="button"
+                  onClick={resetToLast}
+                  className="text-xs font-semibold whitespace-nowrap text-brand-500 dark:text-brand-400 hover:text-accent-700 dark:hover:text-accent-300 flex items-center gap-1 transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-sm"
+                >
+                  <RotateCcw size={12} className="shrink-0" /> Reset to last
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={applySuggestions}
+                className="text-xs font-semibold whitespace-nowrap text-brand-500 dark:text-brand-400 hover:text-accent-700 dark:hover:text-accent-300 flex items-center gap-1 transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-sm"
+              >
+                <Sparkles size={12} className="shrink-0" /> Use suggestions
+              </button>
             </div>
           }
         >
