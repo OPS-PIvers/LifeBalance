@@ -29,6 +29,7 @@ import {
   Baby,
   Star,
   Upload,
+  RotateCcw,
   Salad,
   Newspaper,
 } from 'lucide-react';
@@ -83,6 +84,8 @@ const ConnectBankCard = lazy(() => import('@/components/settings/ConnectBankCard
 // Lazy so the CSV parser/dedup logic and its preview UI stay out of the
 // Settings page's own chunk until the user actually opens the import drawer.
 const CsvImportDrawer = lazy(() => import('@/components/settings/CsvImportDrawer'));
+// Lazy so the Recently Deleted list UI stays out of the Settings chunk until opened.
+const RecentlyDeletedDrawer = lazy(() => import('@/components/settings/RecentlyDeletedDrawer'));
 
 // F-MEALS-03 — lazy so the meals-only DietaryProfileModal stays out of the
 // Settings page's boot chunk until first opened.
@@ -155,6 +158,7 @@ const Settings: React.FC = () => {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isKidModeOpen, setIsKidModeOpen] = useState(false);
   const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);
+  const [isRecentlyDeletedOpen, setIsRecentlyDeletedOpen] = useState(false);
   const [isDietaryProfileOpen, setIsDietaryProfileOpen] = useState(false);
   const [isChangelogOpen, setIsChangelogOpen] = useState(false);
   // One-time "new version" badge: compare the last-seen version stashed in
@@ -1135,6 +1139,28 @@ const Settings: React.FC = () => {
                   <p className="text-xs text-brand-500 dark:text-brand-400">From a bank, YNAB, or Mint CSV export</p>
                 </div>
               </Row>
+
+              <Row
+                interactive
+                role="button"
+                tabIndex={0}
+                onClick={() => setIsRecentlyDeletedOpen(true)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setIsRecentlyDeletedOpen(true);
+                  }
+                }}
+                aria-label="Open recently deleted items to restore them"
+              >
+                <div className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-800 flex items-center justify-center shrink-0">
+                  <RotateCcw size={18} className="text-brand-600 dark:text-brand-300" />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">Recently Deleted</p>
+                  <p className="text-xs text-brand-500 dark:text-brand-400">Restore items deleted in the last 30 days</p>
+                </div>
+              </Row>
             </SurfaceList>
           </div>
 
@@ -1147,6 +1173,12 @@ const Settings: React.FC = () => {
             mounted after that so the drawer's exit animation still plays. */}
         <LazyMount when={isCsvImportOpen}>
           <CsvImportDrawer isOpen={isCsvImportOpen} onClose={() => setIsCsvImportOpen(false)} />
+        </LazyMount>
+
+        {/* Recently Deleted (F-XCUT-03) — lazy + mount-on-first-open so the
+            recovery list UI stays out of the Settings chunk until needed. */}
+        <LazyMount when={isRecentlyDeletedOpen}>
+          <RecentlyDeletedDrawer isOpen={isRecentlyDeletedOpen} onClose={() => setIsRecentlyDeletedOpen(false)} />
         </LazyMount>
 
         <ChangelogDrawer isOpen={isChangelogOpen} onClose={() => setIsChangelogOpen(false)} />

@@ -134,6 +134,13 @@ import {
   makeLoadOlderCompletedTodos,
 } from '@/contexts/household/mutations/todoMutations';
 import {
+  softDeleteDoc,
+  restoreTrashedItem as restoreTrashedItemMutation,
+  purgeTrashedItem as purgeTrashedItemMutation,
+  attachTrashListener,
+} from '@/contexts/household/mutations/trashMutations';
+import { type TrashedItem } from '@/utils/trash';
+import {
   makeTaskTemplateMutations,
   makeTaskTemplateSettingsMutations,
   makeApplyTaskTemplate,
@@ -533,6 +540,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [recaps, setRecaps] = useState<WeeklyRecap[]>([]);
   // Monthly money recaps (F-MONEY-06) — bounded live window, newest first.
   const [moneyRecaps, setMoneyRecaps] = useState<MonthlyMoneyRecap[]>([]);
+  // Unified trash / recently-deleted recovery (F-XCUT-03) — newest first, bounded.
+  const [trashedItems, setTrashedItems] = useState<TrashedItem[]>([]);
   // Household activity log (F-XCUT-01) — bounded live window, newest first.
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
   const [bucketHistoryWindow, setBucketHistoryWindow] = useState<BucketPeriodSnapshot[]>([]);
@@ -702,6 +711,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     completedTodoWindowStartRef.current = null;
     setHasMoreCompletedTodos(true);
     setIsLoadingOlderTodos(false);
+    setTrashedItems([]);
     setRecaps([]);
     setActivityLog([]);
     setBucketHistoryWindow([]);
@@ -851,6 +861,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       householdId,
       setShoppingList: (data) => setShoppingList(data),
       setGroceryCatalogWindow: (data) => setGroceryCatalogWindow(data),
+    }));
+
+    // Unified trash listener (F-XCUT-03) — recently-deleted records across
+    // trash-enabled domains. Degrades to empty until the trash rules PR ships.
+    unsubscribers.push(attachTrashListener({
+      db,
+      householdId,
+      setTrashedItems: (data) => setTrashedItems(data),
     }));
 
     // To-Do listeners (contexts/household/listeners/todoListeners.ts)
@@ -2007,8 +2025,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }, [householdId]);
 
   const deleteMeal = useCallback(async (id: string) => {
-    await makeMealCrudMutations({ db, householdId }).deleteMeal(id);
-  }, [householdId]);
+    // F-XCUT-03: soft-delete into the unified trash (recoverable for 30 days).
+    await softDeleteDoc({ db, householdId, deletedBy: user?.uid ?? null }, 'meal', id);
+  }, [householdId, user]);
 
   // --- ACTIONS: SHOPPING LIST ---
 
@@ -2029,8 +2048,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }, [householdId]);
 
   const deleteShoppingItem = useCallback(async (id: string) => {
-    await makeShoppingListMutations({ db, householdId }).deleteShoppingItem(id);
-  }, [householdId]);
+    // F-XCUT-03: soft-delete into the unified trash (recoverable for 30 days).
+    await softDeleteDoc({ db, householdId, deletedBy: user?.uid ?? null }, 'shoppingItem', id);
+  }, [householdId, user]);
 
   const toggleShoppingItemPurchased = useCallback(async (id: string) => {
     await makeToggleShoppingItemPurchased({ db, householdId, shoppingList, groceryCatalog }).toggleShoppingItemPurchased(id);
@@ -2109,8 +2129,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }, [householdId, refreshMealPlanWeek]);
 
   const deleteMealPlanItem = useCallback(async (id: string) => {
-    await makeMealPlanItemEditMutations({ db, householdId, mealPlanRef, refreshMealPlanWeek }).deleteMealPlanItem(id);
-  }, [householdId, refreshMealPlanWeek]);
+    // F-XCUT-03: soft-delete into the unified trash (recoverable for 30 days).
+    // Refresh the affected week afterwards, matching the old hard-delete path,
+    // so an item deleted outside the live window disappears immediately.
+    const previous = mealPlanRef.current.find(i => i.id === id);
+    await softDeleteDoc({ db, householdId, deletedBy: user?.uid ?? null }, 'mealPlanItem', id);
+    if (previous?.date) await refreshMealPlanWeek(parseISO(previous.date));
+  }, [householdId, user, refreshMealPlanWeek]);
 
   // --- ACTIONS: TO-DOS ---
 
@@ -2148,8 +2173,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
   const deleteToDo = useCallback(async (id: string) => {
-    await makeTodoCrudMutations({ db, householdId }).deleteToDo(id);
-  }, [householdId]);
+    // F-XCUT-03: soft-delete into the unified trash (recoverable for 30 days).
+    await softDeleteDoc({ db, householdId, deletedBy: user?.uid ?? null }, 'todo', id);
+  }, [householdId, user]);
 
   /**
    * Marks a to-do item as completed.
@@ -2162,6 +2188,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
    */
   const completeToDo = useCallback(async (id: string) => {
     await makeCompleteToDo({ db, householdId, membersRef }).completeToDo(id);
+  }, [householdId]);
+
+  // --- ACTIONS: UNIFIED TRASH (F-XCUT-03) ---
+
+  const restoreTrashedItem = useCallback(async (item: TrashedItem) => {
+    await restoreTrashedItemMutation({ db, householdId }, item);
+  }, [householdId]);
+
+  const purgeTrashedItem = useCallback(async (item: TrashedItem) => {
+    await purgeTrashedItemMutation({ db, householdId }, item);
   }, [householdId]);
 
   // F-TODO-03 — Task templates ("Quick Task Lists"). Mirrors QuickStockList's
@@ -2459,6 +2495,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     exitToParent,
     recaps,
     moneyRecaps,
+    trashedItems,
+    restoreTrashedItem,
+    purgeTrashedItem,
     activityLog,
     notificationLog,
     unreadNotificationCount,
@@ -2472,6 +2511,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addKidProfile, updateKidProfile, removeKidProfile, activeMemberId, actAs, exitToParent,
     recaps,
     moneyRecaps,
+    trashedItems, restoreTrashedItem, purgeTrashedItem,
     activityLog,
     notificationLog,
     unreadNotificationCount,

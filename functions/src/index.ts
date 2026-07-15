@@ -96,6 +96,11 @@ export { createkidprofile } from "./kid/createKidProfile";
 // HTTP feed. No secrets — safe to export/deploy unconditionally.
 export { generatecalendarfeedtoken, calendarfeed } from "./calendarFeed";
 
+// Unified trash purge (F-XCUT-03): daily scheduled job that permanently removes
+// soft-deleted records older than the 30-day retention window. No secrets, and
+// fails-soft if the collection-group index isn't present yet — safe to export.
+export { purgetrash } from "./purgeTrash";
+
 const db = admin.firestore();
 
 /**
