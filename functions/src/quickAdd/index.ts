@@ -465,7 +465,7 @@ export const quickAddExpense = onRequest(
         400,
         "emailText was empty — the automation ran but no email body reached the " +
           "server. Most often the email body hadn't downloaded yet (Gmail/" +
-          "Workspace accounts are fetch-only): add a Wait action of 10–60 seconds " +
+          "Workspace accounts are fetch-only): add a Wait action of 10–20 seconds " +
           "before “Get Text from Input”. Also check emailText is set to that " +
           "action's Text output and its input is Shortcut Input.",
         "BAD_REQUEST"
