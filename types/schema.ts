@@ -963,6 +963,12 @@ export interface Insight {
   generatedAt: string; // ISO timestamp
   type: 'general' | 'spending' | 'habits';
   actions?: InsightAction[];
+  // F-DASH-11 — quality signal on this specific insight. Undefined = unrated.
+  // Fed back into the next `generateInsight` prompt (see `rateInsight` /
+  // `makeRefreshInsight`) so disliked insights steer future generations away
+  // from the same style/topic, and liked ones reinforce it.
+  feedback?: 'up' | 'down';
+  feedbackAt?: string; // ISO timestamp of the rating, if any
 }
 
 /**

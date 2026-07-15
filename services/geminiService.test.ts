@@ -192,6 +192,43 @@ describe('geminiService', () => {
     expect(promptText).toContain("Old insight 2");
   });
 
+  it('generateInsight includes disliked/liked feedback signals in prompt (F-DASH-11)', async () => {
+    const { generateInsight } = await import('./geminiService');
+
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify({ text: 'New insight.', actions: [] }),
+    });
+
+    await generateInsight('test-household-id', [], [], [], {
+      dislikedInsights: ['You overspent on Dining again.'],
+      likedInsights: ['Nice job cutting grocery spend this week!'],
+    });
+
+    const callArgs = generateContentMock.mock.calls[0]![0];
+    const promptText = callArgs.contents.parts[0].text;
+
+    expect(promptText).toContain('DISLIKED');
+    expect(promptText).toContain('You overspent on Dining again.');
+    expect(promptText).toContain('LIKED');
+    expect(promptText).toContain('Nice job cutting grocery spend this week!');
+  });
+
+  it('generateInsight omits feedback sections when no feedback provided', async () => {
+    const { generateInsight } = await import('./geminiService');
+
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify({ text: 'New insight.', actions: [] }),
+    });
+
+    await generateInsight('test-household-id', [], []);
+
+    const callArgs = generateContentMock.mock.calls[0]![0];
+    const promptText = callArgs.contents.parts[0].text;
+
+    expect(promptText).not.toContain('DISLIKED');
+    expect(promptText).not.toContain('LIKED');
+  });
+
   it('parseMagicAction correctly parses transaction', async () => {
     const { parseMagicAction } = await import('./geminiService');
 

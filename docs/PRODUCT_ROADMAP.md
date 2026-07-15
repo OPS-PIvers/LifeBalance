@@ -374,6 +374,7 @@ explorations against this table.
 | `habit_past_day_logged` | A habit is backfilled for a past day from the Habits header calendar (`components/modals/PastDayLogModal.tsx`) | `daysAgo` — how many days back the logged date is; `positive` — habit type is positive |
 | `insight_generated` | AI insight doc written (`refreshInsight`) | — |
 | `insight_action_executed` | An insight's suggested action runs successfully (`hooks/useInsightActions.ts`) | `type` — `update_bucket` \| `create_habit` \| `create_todo` |
+| `insight_rated` | Thumbs up/down tapped on an insight (`rateInsight`, `components/dashboard/InsightWidget.tsx`) | `feedback` — `up` \| `down` |
 | `receipt_scanned` | Camera receipt OCR succeeds (`CaptureModal`) | — |
 | `statement_scanned` | Bank-statement/receipt file parse succeeds (`CaptureModal`) | `count` — transactions extracted |
 | `meal_planned` | Meal added to the weekly plan (`addMealPlanItem`) | — |
