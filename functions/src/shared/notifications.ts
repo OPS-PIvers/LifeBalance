@@ -24,6 +24,9 @@ export interface NotificationPreferences {
     enabled: boolean;
     daysBeforeDue: number;
     time: string;
+    // F-NOTIF-05: yyyy-MM-dd local date set by the "Snooze 1 day" push action.
+    // Reminders are suppressed while localToday <= snoozedUntil.
+    snoozedUntil?: string;
   };
   // Plan 02 (weekly recap engine): per-member opt-out for the weekly recap
   // push notification. Absent/undefined is treated as enabled (fail-open,
@@ -37,6 +40,14 @@ export interface NotificationPreferences {
   // explicit `enabled: false` suppresses the push.
   monthlyMoneyRecap?: {
     enabled: boolean;
+  };
+  // F-DASH-02 (AI daily briefing): per-member opt-IN for the morning briefing
+  // push. Unlike the recaps this defaults OFF (a new, higher-frequency channel)
+  // — the senddailybriefing job requires an explicit `enabled: true`. `time` is
+  // the member-local HH:MM the briefing is sent at (default 08:00).
+  dailyBriefing?: {
+    enabled: boolean;
+    time: string;
   };
   timezone?: string;
 }
@@ -89,8 +100,33 @@ export function computeAnyNotificationsEnabled(
     prefs.actionQueueReminders?.enabled === true ||
     prefs.streakWarnings?.enabled === true ||
     prefs.billReminders?.enabled === true ||
+    prefs.dailyBriefing?.enabled === true ||
     weeklyRecapEnabled
   );
+}
+
+/**
+ * F-NOTIF-02 (in-app notification inbox) — when provided, `sendNotificationToUser`
+ * also writes a durable log entry to `households/{householdId}/notificationLog/{id}`
+ * so the recipient can revisit the notification later even if the push was missed,
+ * swiped away, or the device was offline. This is a flat household-level
+ * subcollection (not nested under the member doc) so it works with the existing
+ * generic member-write Firestore rule without a rules change; each entry carries
+ * `recipientUid` and the client filters/queries by it. See CLAUDE.md / the PR
+ * description for the composite-index follow-up this implies at scale.
+ */
+export interface NotificationLogContext {
+  householdId: string;
+  recipientUid: string;
+  /** Coarse category so the inbox UI can group/icon entries. */
+  type:
+    | "habit_reminder"
+    | "action_queue_reminder"
+    | "streak_warning"
+    | "bill_reminder"
+    | "budget_alert"
+    | "weekly_recap"
+    | "monthly_money_recap";
 }
 
 /**
@@ -99,17 +135,41 @@ export function computeAnyNotificationsEnabled(
  *   provided, any permanently-invalid FCM tokens detected in the multicast response
  *   are removed from the member's `fcmTokens` array via arrayRemove so they are
  *   not retried on future sends.
+ * @param logContext - Optional (F-NOTIF-02). When provided, also persists a
+ *   notification-log entry for the in-app inbox. Omitted for ad-hoc/test sends
+ *   (e.g. `sendtestnotification`) that shouldn't clutter the inbox.
  */
 export async function sendNotificationToUser(
   fcmTokens: string[],
   title: string,
   body: string,
   data?: Record<string, string>,
-  memberRef?: admin.firestore.DocumentReference
+  memberRef?: admin.firestore.DocumentReference,
+  logContext?: NotificationLogContext
 ): Promise<void> {
   if (!fcmTokens || fcmTokens.length === 0) {
     logger.info("No FCM tokens available for user");
     return;
+  }
+
+  if (logContext) {
+    try {
+      await admin
+        .firestore()
+        .collection(`households/${logContext.householdId}/notificationLog`)
+        .add({
+          type: logContext.type,
+          recipientUid: logContext.recipientUid,
+          title,
+          body,
+          data: data || {},
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          readBy: [],
+        });
+    } catch (logError) {
+      // A logging failure must never block push delivery.
+      logger.error("Failed to write notification log entry:", logError);
+    }
   }
 
   const message = {

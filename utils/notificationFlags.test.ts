@@ -45,6 +45,11 @@ describe('computeAnyNotificationsEnabled', () => {
     expect(computeAnyNotificationsEnabled(prefs, ['token1'])).toBe(true);
   });
 
+  it('is true when dailyBriefing is enabled and a token exists', () => {
+    const prefs = { ...basePrefs, dailyBriefing: { enabled: true, time: '08:00' } };
+    expect(computeAnyNotificationsEnabled(prefs, ['token1'])).toBe(true);
+  });
+
   it('budgetAlerts alone does not count (not one of the four scan categories)', () => {
     const prefs = { ...basePrefs, budgetAlerts: { enabled: true } };
     expect(computeAnyNotificationsEnabled(prefs, ['token1'])).toBe(false);
