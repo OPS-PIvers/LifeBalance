@@ -7,6 +7,7 @@ import {
   validateReceiptData,
   validateBankTransactions,
   validateMealSuggestion,
+  validateSubtaskSuggestions,
   validateGroceryItems,
   validateOptimizableItems,
   validateInsight,
@@ -121,6 +122,23 @@ describe('geminiValidation - validateMealSuggestion', () => {
   it('rejects when instructions are not string[]', () => {
     expect(() => validateMealSuggestion({ ...valid, instructions: [1, 2] }))
       .toThrow(/instructions must be string\[\]/);
+  });
+});
+
+describe('geminiValidation - validateSubtaskSuggestions', () => {
+  it('extracts trimmed non-empty subtasks', () => {
+    expect(validateSubtaskSuggestions({ subtasks: ['  Book venue ', 'Order cake', '  '] }))
+      .toEqual(['Book venue', 'Order cake']);
+  });
+  it('accepts an empty array (atomic task)', () => {
+    expect(validateSubtaskSuggestions({ subtasks: [] })).toEqual([]);
+  });
+  it('rejects a non-object / missing subtasks', () => {
+    expect(() => validateSubtaskSuggestions({})).toThrow(/subtasks/);
+    expect(() => validateSubtaskSuggestions([])).toThrow(/subtaskBreakdown/);
+  });
+  it('rejects a non-string element', () => {
+    expect(() => validateSubtaskSuggestions({ subtasks: ['ok', 3] })).toThrow(/must be a string/);
   });
 });
 

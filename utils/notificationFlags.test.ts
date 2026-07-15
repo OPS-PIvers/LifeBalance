@@ -45,6 +45,11 @@ describe('computeAnyNotificationsEnabled', () => {
     expect(computeAnyNotificationsEnabled(prefs, ['token1'])).toBe(true);
   });
 
+  it('is true when dailyBriefing is enabled and a token exists', () => {
+    const prefs = { ...basePrefs, dailyBriefing: { enabled: true, time: '08:00' } };
+    expect(computeAnyNotificationsEnabled(prefs, ['token1'])).toBe(true);
+  });
+
   it('budgetAlerts alone does not count (not one of the four scan categories)', () => {
     const prefs = { ...basePrefs, budgetAlerts: { enabled: true } };
     expect(computeAnyNotificationsEnabled(prefs, ['token1'])).toBe(false);
@@ -62,5 +67,23 @@ describe('computeAnyNotificationsEnabled', () => {
 
   it('is false when weeklyRecap is explicitly disabled and every other category is off', () => {
     expect(computeAnyNotificationsEnabled({ ...basePrefs, weeklyRecap: { enabled: false } }, ['token1'])).toBe(false);
+  });
+
+  it('is true when digestMode is enabled even if every per-type category and weeklyRecap are off', () => {
+    const prefs = {
+      ...basePrefs,
+      weeklyRecap: { enabled: false },
+      digestMode: { enabled: true, time: '07:00' },
+    };
+    expect(computeAnyNotificationsEnabled(prefs, ['token1'])).toBe(true);
+  });
+
+  it('digestMode alone with enabled: false does not count', () => {
+    const prefs = {
+      ...basePrefs,
+      weeklyRecap: { enabled: false },
+      digestMode: { enabled: false, time: '07:00' },
+    };
+    expect(computeAnyNotificationsEnabled(prefs, ['token1'])).toBe(false);
   });
 });

@@ -2,7 +2,8 @@ import React from 'react';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { useInsightActions } from '@/hooks/useInsightActions';
-import { Sparkles, Wand2, ArrowRight, Wallet, CheckCircle2, Plus, Trophy } from 'lucide-react';
+import { useAiUsageToday } from '@/hooks/useAiUsageToday';
+import { Sparkles, Wand2, ArrowRight, Wallet, CheckCircle2, Plus, Trophy, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { CreateChallengePayload, Insight, InsightAction } from '@/types/schema';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
@@ -43,10 +44,12 @@ export const InsightWidget: React.FC<InsightWidgetProps> = React.memo(({ onOpenA
     refreshInsight,
     isGeneratingInsight,
     insightsHistory,
+    rateInsight,
   } = useHouseholdCore();
   const { isModuleEnabled, isPlanTabVisible } = useModuleVisibility();
 
   const { handleAction } = useInsightActions();
+  const aiUsage = useAiUsageToday();
 
   const normalizeInsightText = (text: string | null | undefined): string =>
     (text ?? '').replace(/\s+/g, ' ').trim();
@@ -111,6 +114,11 @@ export const InsightWidget: React.FC<InsightWidgetProps> = React.memo(({ onOpenA
         </div>
       }
     >
+      {aiUsage && (
+        <p className="text-xxs text-brand-400 dark:text-brand-500 text-right -mt-2 mb-1">
+          {aiUsage.used} of {aiUsage.cap} AI requests used today
+        </p>
+      )}
       {/* A hairline-edged BAND on the canvas — mirrors PulseStripWidget's
           "distinct but not boxed" treatment (border-y, no side border, no
           rounded panel, no background) instead of a full `surface-section`.
@@ -133,6 +141,42 @@ export const InsightWidget: React.FC<InsightWidgetProps> = React.memo(({ onOpenA
             <p className="font-display text-brand-800 dark:text-brand-100 leading-relaxed mb-3">
               &ldquo;{insight}&rdquo;
             </p>
+          )}
+
+          {/* F-DASH-11: thumbs up/down on the currently-shown insight. Only
+              rateable when it's the latest history entry (we need its doc id);
+              the placeholder/legacy string insight has no id to attach to. */}
+          {!isGeneratingInsight && isLatestShown && (
+            <div className="flex items-center gap-1 mb-3 -ml-1.5" role="group" aria-label="Rate this insight">
+              <Button
+                variant="ghost"
+                size="icon"
+                className={
+                  latestInsight.feedback === 'up'
+                    ? 'text-accent-600 dark:text-accent-400'
+                    : 'text-brand-400 hover:text-accent-600 dark:text-brand-500 dark:hover:text-accent-400'
+                }
+                onClick={() => rateInsight(latestInsight.id, 'up')}
+                aria-label="This insight was helpful"
+                aria-pressed={latestInsight.feedback === 'up'}
+              >
+                <ThumbsUp size={15} fill={latestInsight.feedback === 'up' ? 'currentColor' : 'none'} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={
+                  latestInsight.feedback === 'down'
+                    ? 'text-money-neg dark:text-money-negDark'
+                    : 'text-brand-400 hover:text-money-neg dark:text-brand-500 dark:hover:text-money-negDark'
+                }
+                onClick={() => rateInsight(latestInsight.id, 'down')}
+                aria-label="This insight was not helpful"
+                aria-pressed={latestInsight.feedback === 'down'}
+              >
+                <ThumbsDown size={15} fill={latestInsight.feedback === 'down' ? 'currentColor' : 'none'} />
+              </Button>
+            </div>
           )}
 
           {/* Action Pills */}

@@ -46,6 +46,7 @@ import {
   parseRecurringId,
   type BillCalendarItem,
 } from "./billMatch";
+import { fuzzyMatchMember, type MemberLike } from "./todoMatch";
 
 /** The category new paid bills are filed under (mirrors utils/categories.ts). */
 const BUDGETED_IN_CALENDAR = "Budgeted in Calendar";
@@ -1735,6 +1736,185 @@ export const quickAddBillPay = onRequest(
     } catch (error) {
       logger.error("Error in quickAddBillPay:", error);
       await logApiCall(householdId, apiKey.substring(0, 16), "bill", req.body, 500);
+      errorResponse(res, 500, "Internal server error", "INTERNAL_ERROR");
+    }
+  }
+);
+
+/**
+ * POST /quickAddTodo
+ * Create a shared household to-do via iOS Shortcuts / Siri (F-TODO-07).
+ *
+ * Accepts `{ text, dueDate?, assignedTo?, isImportant?, today? }`. `dueDate`
+ * defaults to the caller-local "today" (forwarded the same way
+ * quickAddExpense/quickAddHabit already do — Cloud Functions run in UTC).
+ * `assignedTo` is resolved against the household's members: an exact uid
+ * match wins, otherwise a fuzzy display-name match (same tiering as
+ * habitProcessor's fuzzyMatchHabit / todoMatch's fuzzyMatchMember). Writes
+ * with `source: 'shortcut'` — already a valid `ToDo.source` value, so no
+ * schema/rules change is needed.
+ */
+export const quickAddTodo = onRequest(
+  { cors: false, region: "us-central1" },
+  async (req, res) => {
+    applyCorsHeaders(req, res);
+
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
+    if (req.method !== "POST") {
+      errorResponse(res, 405, "Method not allowed", "METHOD_NOT_ALLOWED");
+      return;
+    }
+
+    // 1. Validate API Key
+    const apiKey = extractApiKey(req.headers.authorization);
+    if (!apiKey) {
+      errorResponse(res, 401, "Missing or invalid Authorization header", "UNAUTHORIZED");
+      return;
+    }
+
+    const validation = await validateApiKey(apiKey);
+    if (!validation.valid || !validation.householdId) {
+      errorResponse(res, 401, validation.error || "Invalid API key", "UNAUTHORIZED");
+      return;
+    }
+
+    const { householdId, permissions } = validation;
+
+    // 2. Check permissions
+    if (!permissions?.todos) {
+      errorResponse(res, 403, "API key does not have todos permission", "FORBIDDEN");
+      return;
+    }
+
+    // 3. Check rate limit
+    const rateLimit = await checkRateLimit(householdId, "todo");
+    if (!rateLimit.allowed) {
+      res.set("Retry-After", String(Math.ceil((rateLimit.retryAfterMs || 3600000) / 1000)));
+      errorResponse(res, 429, "Rate limit exceeded. Try again later.", "RATE_LIMITED");
+      return;
+    }
+
+    // 4. Parse and validate the request body
+    const {
+      text,
+      dueDate: rawDueDate,
+      assignedTo: rawAssignedTo,
+      isImportant: rawIsImportant,
+      today: rawToday,
+    } = req.body || {};
+
+    if (!text || typeof text !== "string" || !text.trim()) {
+      errorResponse(res, 400, "text is required", "BAD_REQUEST");
+      return;
+    }
+    if (text.length > 500) {
+      errorResponse(res, 400, "text too long (max 500 chars)", "BAD_REQUEST");
+      return;
+    }
+
+    // Caller-local date (yyyy-MM-dd). Functions run in UTC, so the iOS Shortcut's
+    // local date anchors the default due date (falls back to the server date) —
+    // same pattern as quickAddHabit/quickAddExpense/quickAddBillPay.
+    const today =
+      typeof rawToday === "string" && /^\d{4}-\d{2}-\d{2}$/.test(rawToday)
+        ? rawToday
+        : format(new Date(), "yyyy-MM-dd");
+
+    let dueDate: string;
+    if (rawDueDate !== undefined && rawDueDate !== null && rawDueDate !== "") {
+      if (typeof rawDueDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(rawDueDate)) {
+        errorResponse(res, 400, "dueDate must be in YYYY-MM-DD format", "BAD_REQUEST");
+        return;
+      }
+      dueDate = rawDueDate;
+    } else {
+      dueDate = today;
+    }
+
+    if (rawIsImportant !== undefined && rawIsImportant !== null) {
+      if (typeof rawIsImportant !== "boolean") {
+        errorResponse(res, 400, "isImportant must be a boolean", "BAD_REQUEST");
+        return;
+      }
+    }
+    const isImportant = rawIsImportant === true;
+
+    if (rawAssignedTo !== undefined && rawAssignedTo !== null && rawAssignedTo !== "") {
+      if (typeof rawAssignedTo !== "string" || rawAssignedTo.length > 100) {
+        errorResponse(res, 400, "assignedTo must be a string (max 100 chars)", "BAD_REQUEST");
+        return;
+      }
+    }
+
+    try {
+      // 5. Resolve assignedTo (uid or fuzzy display-name match) against the
+      //    household's members. Absent when not provided — the client's
+      //    ToDo form treats an unassigned todo the same way.
+      let assignedTo: string | undefined;
+      if (typeof rawAssignedTo === "string" && rawAssignedTo.trim()) {
+        const membersSnap = await db
+          .collection(`households/${householdId}/members`)
+          .get();
+        const members: MemberLike[] = membersSnap.docs.map((d) => {
+          const data = d.data() as Record<string, unknown>;
+          return {
+            uid: d.id,
+            displayName: typeof data.displayName === "string" ? data.displayName : "",
+          };
+        });
+
+        const trimmed = rawAssignedTo.trim();
+        // An explicit uid always wins over the fuzzy name match.
+        const byUid = members.find((m) => m.uid === trimmed);
+        const matched = byUid ?? fuzzyMatchMember(members, trimmed);
+        if (!matched) {
+          // Do not echo the user-supplied assignedTo back (public endpoint,
+          // unvalidated input).
+          errorResponse(res, 404, "No matching household member for assignedTo", "NOT_FOUND");
+          await logApiCall(householdId, apiKey.substring(0, 16), "todo", req.body, 404);
+          return;
+        }
+        assignedTo = matched.uid;
+      }
+
+      // 6. Create the to-do document.
+      const todoData: Record<string, unknown> = {
+        text: text.trim(),
+        completeByDate: dueDate,
+        isCompleted: false,
+        source: "shortcut",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        ...(assignedTo ? { assignedTo } : {}),
+        ...(isImportant ? { isImportant: true } : {}),
+        ...(validation.keyCreatedBy ? { createdBy: validation.keyCreatedBy } : {}),
+      };
+
+      const todoRef = await db
+        .collection(`households/${householdId}/todos`)
+        .add(todoData);
+
+      // 7. Log API call
+      await logApiCall(householdId, apiKey.substring(0, 16), "todo", req.body, 200);
+
+      // 8. Return success
+      jsonResponse(res, 200, {
+        success: true,
+        message: `Added to-do: ${text.trim()}`,
+        data: {
+          todoId: todoRef.id,
+          text: text.trim(),
+          completeByDate: dueDate,
+          assignedTo: assignedTo ?? null,
+          isImportant,
+        },
+      });
+    } catch (error) {
+      logger.error("Error in quickAddTodo:", error);
+      await logApiCall(householdId, apiKey.substring(0, 16), "todo", req.body, 500);
       errorResponse(res, 500, "Internal server error", "INTERNAL_ERROR");
     }
   }

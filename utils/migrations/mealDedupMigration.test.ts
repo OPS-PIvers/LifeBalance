@@ -83,6 +83,7 @@ describe('planMealMerge', () => {
       rating: 4,
       lastCooked: '2026-07-01T00:00:00.000Z',
       tags: ['easy', 'Quick'],
+      estimatedCost: 12.5,
     });
     const plan = planMealMerge([survivor, loser]);
     expect(plan.survivor.id).toBe('a');
@@ -93,6 +94,21 @@ describe('planMealMerge', () => {
     // 'easy' is a case-duplicate of 'Easy' and must not be added twice
     expect(plan.patch.tags).toEqual(['Easy', 'Quick']);
     expect(plan.patch.ingredients).toBeUndefined(); // survivor already has them
+    expect(plan.patch.estimatedCost).toBe(12.5);
+  });
+
+  it('merges estimatedCost from a loser, including a loser cost of exactly 0', () => {
+    const survivor = meal({ id: 'a', name: 'Hello Fresh' });
+    const loser = meal({ id: 'b', name: 'HelloFresh', estimatedCost: 0 });
+    const plan = planMealMerge([survivor, loser]);
+    expect(plan.patch.estimatedCost).toBe(0);
+  });
+
+  it('keeps the survivor estimatedCost of 0 rather than overwriting from a loser', () => {
+    const survivor = meal({ id: 'a', name: 'Hello Fresh', estimatedCost: 0 });
+    const loser = meal({ id: 'b', name: 'HelloFresh', estimatedCost: 9.99 });
+    const plan = planMealMerge([survivor, loser]);
+    expect(plan.patch.estimatedCost).toBeUndefined();
   });
 
   it('emits an empty patch when the survivor already has everything', () => {

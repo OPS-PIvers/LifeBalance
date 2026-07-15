@@ -13,11 +13,12 @@ import {
   insightConverter,
   weeklyRecapConverter,
   monthlyMoneyRecapConverter,
+  notificationLogConverter,
 } from '@/utils/firestoreConverters';
-import { Household, FreezeBank, Insight, HouseholdApiKey, WeeklyRecap, MonthlyMoneyRecap } from '@/types/schema';
+import { Household, FreezeBank, Insight, HouseholdApiKey, WeeklyRecap, MonthlyMoneyRecap, NotificationLogEntry } from '@/types/schema';
 import { migrateFreezeBankToEnhanced, needsFreezeBankMigration } from '@/utils/migrations/freezeBankMigration';
 import { getLocalDateString } from '@/utils/dateHelpers';
-import { RECAPS_LIMIT, MONEY_RECAPS_LIMIT, INSIGHTS_LIMIT } from '@/utils/listenerWindows';
+import { RECAPS_LIMIT, MONEY_RECAPS_LIMIT, INSIGHTS_LIMIT, NOTIFICATION_LOG_FETCH_LIMIT } from '@/utils/listenerWindows';
 import { format } from 'date-fns';
 
 /**
@@ -48,6 +49,7 @@ export function attachCoreListeners({
   setHasMoreInsights,
   setInsight,
   insightsLoadedAllRef,
+  setNotificationLogRaw,
 }: {
   db: Firestore;
   householdId: string;
@@ -61,6 +63,10 @@ export function attachCoreListeners({
   setHasMoreInsights: (hasMore: boolean) => void;
   setInsight: (text: string) => void;
   insightsLoadedAllRef: { current: boolean };
+  /** F-NOTIF-02 — receives the raw, unfiltered household-wide fetch window;
+   *  the provider filters to the current member's own entries (see the
+   *  flat-subcollection note on `NotificationLogEntry`). */
+  setNotificationLogRaw: (entries: NotificationLogEntry[]) => void;
 }): Unsubscribe[] {
   const unsubscribers: Unsubscribe[] = [];
 
@@ -187,6 +193,24 @@ export function attachCoreListeners({
         // Don't show error toast to user as this is non-critical data
       }
     )
+  );
+
+  // Notification inbox listener (F-NOTIF-02) — bounded, newest-first window
+  // across the whole household (no `recipientUid` equality filter, see the
+  // NOTIFICATION_LOG_FETCH_LIMIT doc comment); the provider filters this raw
+  // window down to the current member's own entries.
+  const notificationLogQuery = query(
+    collection(db, `households/${householdId}/notificationLog`).withConverter(notificationLogConverter),
+    orderBy('createdAt', 'desc'),
+    limit(NOTIFICATION_LOG_FETCH_LIMIT)
+  );
+  unsubscribers.push(
+    onSnapshot(notificationLogQuery, (snapshot) => {
+      setNotificationLogRaw(snapshot.docs.map(doc => doc.data()));
+    }, (error) => {
+      // Non-critical: the inbox degrades to empty rather than blocking the app.
+      console.error('Error listening to notification log:', error);
+    })
   );
 
   return unsubscribers;

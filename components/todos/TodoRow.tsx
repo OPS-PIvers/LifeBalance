@@ -1,14 +1,17 @@
 import React from 'react';
-import { Check, Trash2, Edit2, AlertCircle, Clock, User, Copy, MoreVertical, Calendar, Star, CheckSquare } from 'lucide-react';
+import { Check, Trash2, Edit2, AlertCircle, Clock, User, Copy, MoreVertical, Calendar, Star, CheckSquare, ChevronDown, ListChecks, Repeat, FileText } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, startOfToday } from 'date-fns';
 import { ToDo, HouseholdMember } from '@/types/schema';
 import { DEFAULT_TODO_POINTS } from '@/utils/todoPoints';
+import { subtaskProgress } from '@/utils/subtasks';
 import toast from 'react-hot-toast';
+import { toastIcon } from '@/components/ui/toastIcon';
 import { haptic } from '@/utils/haptics';
 import { HapticCheck } from '@/components/ui/HapticCheck';
 import { SwipeActionRow } from '@/components/ui/SwipeActionRow';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import { Button } from '@/components/ui/Button';
+import { UndoToast } from '@/components/ui/UndoToast';
 import { cn } from '@/utils/cn';
 import { type SectionColor, dateColorMap } from './todoDisplay';
 
@@ -24,6 +27,7 @@ export interface TodoRowProps {
   isSelected: boolean;
   isSelectionMode: boolean;
   onComplete: (id: string) => void;
+  onUncomplete: (id: string) => void;
   onEdit: (todo: ToDo) => void;
   onDelete: (id: string) => void;
   onDuplicate: (todo: ToDo) => void;
@@ -31,6 +35,8 @@ export interface TodoRowProps {
   onToggleImportant: (todo: ToDo) => void;
   onMore: (todo: ToDo) => void;
   onToggleSelection: (id: string) => void;
+  // F-TODO-08: toggle a single subtask's done state from the expanded checklist.
+  onToggleSubtask: (todo: ToDo, subtaskId: string) => void;
 }
 
 // Memoized row for a single active to-do.
@@ -43,6 +49,7 @@ export const TodoRow = React.memo(function TodoRow({
   isSelected,
   isSelectionMode,
   onComplete,
+  onUncomplete,
   onEdit,
   onDelete,
   onDuplicate,
@@ -50,16 +57,51 @@ export const TodoRow = React.memo(function TodoRow({
   onToggleImportant,
   onMore,
   onToggleSelection,
+  onToggleSubtask,
 }: TodoRowProps) {
   // Parse the due date once per row render to avoid repeated parseISO calls
   const dueDate = parseISO(item.completeByDate);
   const isOverdue = isBefore(dueDate, startOfToday());
 
+  // F-TODO-08: subtask checklist progress + expand/collapse state.
+  const progress = subtaskProgress(item.subtasks);
+  const hasSubtasks = progress.total > 0;
+  const [subtasksExpanded, setSubtasksExpanded] = React.useState(false);
+
+  // Inline notes preview toggle (F-TODO-13) — expands a truncated notes
+  // excerpt without opening the full edit drawer.
+  const [notesOpen, setNotesOpen] = React.useState(false);
+  const hasNotes = Boolean(item.notes && item.notes.trim().length > 0);
+
   // Shared by the checkbox control and the right-swipe action.
+  //
+  // Undo toast (F-TODO-11, mirrors ShoppingListTab's DeleteUndoToast):
+  // completing a to-do assigned to a MANAGED KID credits that kid's
+  // member.points in the same writeBatch as the completion (see
+  // `completeToDo` / `computeTodoCompletionCredit` in todoMutations.ts). A
+  // plain `onUncomplete` (updateToDo) only flips `isCompleted` back — it does
+  // NOT reverse that points credit, so offering "Undo" there would silently
+  // leave the kid over-credited. Suppress the undo action (plain success
+  // toast) for kid-assigned tasks; every other assignee gets Undo.
   const handleComplete = async () => {
     try {
       await onComplete(item.id);
-      toast.success('To-Do completed!');
+      if (assignee?.isManaged === true) {
+        toast.success('To-Do completed!');
+      } else {
+        toast(
+          (t) => (
+            <UndoToast
+              message="To-Do completed"
+              onUndo={() => {
+                toast.dismiss(t.id);
+                onUncomplete(item.id);
+              }}
+            />
+          ),
+          { duration: 5000, icon: toastIcon(Check) }
+        );
+      }
     } catch (error) {
       console.error('Failed to complete task:', error);
       toast.error('Failed to complete to-do');
@@ -129,6 +171,19 @@ export const TodoRow = React.memo(function TodoRow({
               </span>
             )}
 
+            {/* F-TODO-01: repeat badge — signals a recurring chore that
+                auto-spawns its next instance on completion. */}
+            {item.recurrence?.frequency && (
+              <span
+                className="flex items-center gap-1 text-accent-600 dark:text-accent-300 font-semibold"
+                title={`Repeats ${item.recurrence.frequency}`}
+              >
+                <Repeat size={11} aria-hidden="true" />
+                {item.recurrence.frequency === 'bi-weekly' ? 'Bi-weekly' :
+                 item.recurrence.frequency === 'monthly' ? 'Monthly' : 'Weekly'}
+              </span>
+            )}
+
             {assignee && (
               <span className="flex items-center gap-1 text-brand-500 dark:text-brand-400">
                 {assignee.photoURL ? (
@@ -153,7 +208,84 @@ export const TodoRow = React.memo(function TodoRow({
                 +{item.points ?? DEFAULT_TODO_POINTS} pts
               </span>
             )}
+
+            {/* F-TODO-08: subtask progress chip — expands the checklist inline. */}
+            {hasSubtasks && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setSubtasksExpanded(v => !v); }}
+                aria-expanded={subtasksExpanded}
+                aria-label={`${subtasksExpanded ? 'Hide' : 'Show'} subtasks — ${progress.done} of ${progress.total} done`}
+                className={cn(
+                  'flex items-center gap-1 font-semibold transition-colors',
+                  progress.allDone
+                    ? 'text-accent-600 dark:text-accent-300'
+                    : 'text-brand-500 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-200'
+                )}
+              >
+                <ListChecks size={12} aria-hidden="true" />
+                {progress.done}/{progress.total}
+                <ChevronDown
+                  size={12}
+                  aria-hidden="true"
+                  className={cn('transition-transform duration-(--duration-fast)', subtasksExpanded && 'rotate-180')}
+                />
+              </button>
+            )}
+
+            {hasNotes && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setNotesOpen((open) => !open);
+                }}
+                className="flex items-center gap-1 text-brand-500 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-200 transition-colors"
+                aria-expanded={notesOpen}
+                aria-label={notesOpen ? 'Hide note' : 'Show note'}
+                title={notesOpen ? 'Hide note' : 'Show note'}
+              >
+                <FileText size={11} />
+              </button>
+            )}
           </div>
+
+          {/* F-TODO-08: expandable checkable subtask list. Toggling never touches
+              points, so it is a plain updateToDo in the parent handler. */}
+          {hasSubtasks && subtasksExpanded && !isSelectionMode && (
+            <ul className="mt-2.5 space-y-1" aria-label={`Subtasks for ${item.text}`}>
+              {(item.subtasks ?? []).map(sub => (
+                <li key={sub.id}>
+                  <label className="flex items-start gap-2 py-1 cursor-pointer group/sub">
+                    <input
+                      type="checkbox"
+                      checked={sub.isDone}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => { e.stopPropagation(); onToggleSubtask(item, sub.id); }}
+                      className="mt-0.5 w-4 h-4 shrink-0 rounded-sm border-brand-300 text-accent-600 focus-visible:ring-2 focus-visible:ring-accent-500 dark:border-brand-600 dark:bg-brand-700"
+                    />
+                    <span className={cn(
+                      'text-sm leading-snug',
+                      sub.isDone
+                        ? 'line-through text-brand-400 dark:text-brand-500'
+                        : 'text-brand-700 dark:text-brand-200'
+                    )}>
+                      {sub.text}
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {hasNotes && notesOpen && (
+            <p
+              onClick={(e) => e.stopPropagation()}
+              className="mt-1.5 text-xs text-brand-500 dark:text-brand-400 line-clamp-2"
+            >
+              {item.notes}
+            </p>
+          )}
         </div>
 
         {/* Actions */}

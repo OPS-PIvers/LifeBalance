@@ -33,6 +33,12 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   }),
   useHouseholdCore: () => ({
     householdId: 'test-household',
+    householdSettings: {},
+    setMealCookedHabitId: vi.fn(),
+  }),
+  useGamification: () => ({
+    habits: [],
+    toggleHabit: vi.fn(),
   }),
 }));
 
@@ -82,6 +88,7 @@ vi.mock('lucide-react', () => ({
   MoreHorizontal: () => <div data-testid="more-horizontal-icon" />,
   Eye: () => <div data-testid="eye-icon" />,
   Utensils: () => <div data-testid="utensils-icon" />,
+  Printer: () => <div data-testid="printer-icon" />,
   // Weekly Plan modal + Meal Guide icons
   FileJson: () => <div data-testid="file-json-icon" />,
   ClipboardPaste: () => <div data-testid="clipboard-paste-icon" />,
