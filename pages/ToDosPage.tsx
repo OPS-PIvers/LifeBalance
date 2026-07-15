@@ -27,6 +27,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Section } from '@/components/todos/Section';
 import { EisenhowerMatrixView } from '@/components/todos/EisenhowerMatrixView';
 import { EisenhowerGridView } from '@/components/todos/EisenhowerGridView';
+import { TaskTemplateDrawer } from '@/components/todos/TaskTemplateDrawer';
 
 // localStorage key for the per-device arrangement choice.
 const ARRANGEMENT_KEY = 'lifebalance:todos-view';
@@ -112,6 +113,9 @@ const ToDosPage: React.FC = () => {
 
   // Mobile Action Drawer State
   const [actionTodo, setActionTodo] = useState<ToDo | null>(null);
+
+  // F-TODO-03 — Task templates ("Quick Task Lists") drawer.
+  const [isTemplateDrawerOpen, setIsTemplateDrawerOpen] = useState(false);
 
   // Batch Mode State
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -728,6 +732,18 @@ const ToDosPage: React.FC = () => {
             submitLabel="Add task"
           />
 
+          {/* Task templates — one-tap creation of a bundle of recurring tasks
+              from a saved template (F-TODO-03, "Quick Task Lists"). */}
+          <button
+            type="button"
+            onClick={() => setIsTemplateDrawerOpen(true)}
+            aria-label="Task templates"
+            title="Add tasks from a template"
+            className="flex-none flex items-center justify-center p-3 rounded-btn text-brand-600 hover:text-brand-900 hover:bg-brand-100 dark:text-brand-300 dark:hover:text-brand-50 dark:hover:bg-brand-700/50 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
+          >
+            <ClipboardList className="w-5 h-5" />
+          </button>
+
           {/* Details — opens the full form to set a custom due date / assignee /
               importance. Retains aria-label "Add new task" so it is the page's
               full-add entry point. */}
@@ -1260,6 +1276,11 @@ const ToDosPage: React.FC = () => {
           )}
         </div>
       </Drawer>
+
+      <TaskTemplateDrawer
+        isOpen={isTemplateDrawerOpen}
+        onClose={() => setIsTemplateDrawerOpen(false)}
+      />
 
     </div>
   );

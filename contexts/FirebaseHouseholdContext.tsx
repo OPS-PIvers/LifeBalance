@@ -49,6 +49,7 @@ import {
   GroceryCatalogItem,
   Store,
   QuickStockList,
+  TaskTemplate,
   HouseholdApiKey,
   PendingItem,
   ModuleKey,
@@ -127,6 +128,11 @@ import {
   makeCompleteToDo,
   makeLoadOlderCompletedTodos,
 } from '@/contexts/household/mutations/todoMutations';
+import {
+  makeTaskTemplateMutations,
+  makeTaskTemplateSettingsMutations,
+  makeApplyTaskTemplate,
+} from '@/contexts/household/mutations/taskTemplateMutations';
 import {
   makeAddMeal,
   makeMealCrudMutations,
@@ -603,6 +609,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const stores = useMemo(() => householdSettings?.stores || [], [householdSettings?.stores]);
   const groceryCategories = useMemo(() => householdSettings?.groceryCategories || [], [householdSettings?.groceryCategories]);
   const quickStockLists = useMemo(() => householdSettings?.quickStockLists || [], [householdSettings?.quickStockLists]);
+  const taskTemplates = useMemo(() => householdSettings?.taskTemplates || [], [householdSettings?.taskTemplates]);
 
   // Tracks the household for which the missing-member-document recovery has
   // already been attempted, so the recovery getDoc runs at most once per
@@ -2067,6 +2074,24 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeCompleteToDo({ db, householdId, membersRef }).completeToDo(id);
   }, [householdId]);
 
+  // F-TODO-03 — Task templates ("Quick Task Lists"). Mirrors QuickStockList's
+  // add/update/delete-on-the-household-doc pattern.
+  const addTaskTemplate = useCallback(async (template: Omit<TaskTemplate, 'id'>) => {
+    await makeTaskTemplateMutations({ db, householdId }).addTaskTemplate(template);
+  }, [householdId]);
+
+  const updateTaskTemplate = useCallback(async (template: TaskTemplate) => {
+    await makeTaskTemplateSettingsMutations({ db, householdId, householdSettings }).updateTaskTemplate(template);
+  }, [householdId, householdSettings]);
+
+  const deleteTaskTemplate = useCallback(async (id: string) => {
+    await makeTaskTemplateSettingsMutations({ db, householdId, householdSettings }).deleteTaskTemplate(id);
+  }, [householdId, householdSettings]);
+
+  const applyTaskTemplate = useCallback(async (template: TaskTemplate) => {
+    return await makeApplyTaskTemplate({ db, householdId, user }).applyTaskTemplate(template);
+  }, [householdId, user]);
+
 
   const refreshInsight = useCallback(async () => {
     await makeRefreshInsight({
@@ -2280,9 +2305,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateToDo,
     deleteToDo,
     completeToDo,
+    taskTemplates,
+    addTaskTemplate,
+    updateTaskTemplate,
+    deleteTaskTemplate,
+    applyTaskTemplate,
   }), [
     todos, isLoadingOlderTodos, hasMoreCompletedTodos, loadOlderCompletedTodos,
     addToDo, updateToDo, deleteToDo, completeToDo,
+    taskTemplates, addTaskTemplate, updateTaskTemplate, deleteTaskTemplate, applyTaskTemplate,
   ]);
 
   const coreValue = useMemo<HouseholdCoreContextValue>(() => ({

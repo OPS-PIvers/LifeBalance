@@ -21,6 +21,7 @@ import {
   GroceryCatalogItem,
   Store,
   QuickStockList,
+  TaskTemplate,
   HouseholdApiKey,
   ModuleKey,
   WeeklyRecap,
@@ -78,6 +79,8 @@ export interface HouseholdContextType {
   shoppingList: ShoppingItem[];
   mealPlan: MealPlanItem[];
   todos: ToDo[];
+  /** F-TODO-03 — task-bundle templates ("Quick Task Lists"). */
+  taskTemplates: TaskTemplate[];
   groceryCatalog: GroceryCatalogItem[];
   bucketHistory: BucketPeriodSnapshot[];
   /** Weekly recaps (Plan 02) — newest first, bounded live window (RECAPS_LIMIT). */
@@ -382,6 +385,13 @@ export interface HouseholdContextType {
   updateToDo: (id: string, updates: Partial<ToDo>) => Promise<void>;
   deleteToDo: (id: string) => Promise<void>;
   completeToDo: (id: string) => Promise<void>;
+  /** F-TODO-03 — Task templates ("Quick Task Lists"). */
+  addTaskTemplate: (template: Omit<TaskTemplate, 'id'>) => Promise<void>;
+  updateTaskTemplate: (template: TaskTemplate) => Promise<void>;
+  deleteTaskTemplate: (id: string) => Promise<void>;
+  /** One-tap creation of a bundle of to-dos from a saved template. Resolves
+   *  with the number of to-dos created. */
+  applyTaskTemplate: (template: TaskTemplate) => Promise<number>;
 }
 
 // --- DOMAIN CONTEXT SLICES ---
@@ -446,6 +456,7 @@ export type MealsContextValue = MealPlanContextValue & ShoppingContextValue;
 export type TodosContextValue = Pick<HouseholdContextType,
   | 'todos' | 'addToDo' | 'updateToDo' | 'deleteToDo' | 'completeToDo'
   | 'isLoadingOlderTodos' | 'hasMoreCompletedTodos' | 'loadOlderCompletedTodos'
+  | 'taskTemplates' | 'addTaskTemplate' | 'updateTaskTemplate' | 'deleteTaskTemplate' | 'applyTaskTemplate'
 >;
 
 export type HouseholdCoreContextValue = Pick<HouseholdContextType,
