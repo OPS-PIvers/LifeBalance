@@ -13,6 +13,7 @@ import {
   Sparkles,
   Pencil,
   MousePointerClick,
+  ReceiptText,
 } from 'lucide-react';
 import { getQuickAddEndpointUrl } from '@/services/apiKeyService';
 import { SurfaceList, DisclosureRow } from '@/components/ui/Section';
@@ -55,7 +56,7 @@ interface ShortcutExample {
   title: string;
   icon: React.ReactNode;
   description: string;
-  endpoint: 'habit' | 'expense' | 'shopping' | 'naturalLanguage';
+  endpoint: 'habit' | 'expense' | 'shopping' | 'naturalLanguage' | 'bill';
   isAutomation?: boolean;
   isRecommended?: boolean;
   /** Short bullets shown before the steps (prep work, what to expect). */
@@ -387,6 +388,43 @@ const EXAMPLES: ShortcutExample[] = [
       {
         text: 'Say **“Hey Siri, Add to Shopping List”**. Saying an item that’s already on the list bumps its quantity instead of duplicating it.',
       },
+    ],
+  },
+  {
+    id: 'bill-pay',
+    title: 'Voice Bill Pay',
+    icon: <ReceiptText className="w-5 h-5" />,
+    description: 'Say “Hey Siri, I paid rent” and the matching upcoming bill is marked paid from your checking account.',
+    endpoint: 'bill',
+    before: [
+      'This marks an existing **calendar bill** as paid — it doesn’t create a new bill. Add your recurring bills in the **Budget** tab first.',
+      'It draws from your **first checking account** and records a paid transaction dated to when the bill was due.',
+    ],
+    setupSteps: [
+      { text: NEW_SHORTCUT_STEP },
+      { text: 'Add **Ask for Input**. Tap **Prompt** and type **Which bill did you pay?** (leave its type as **Text**).' },
+      { text: 'Add **Set Variable** → tap **Variable Name** → call it **Bill**.' },
+    ],
+    fields: [
+      {
+        key: 'title',
+        type: 'Text',
+        mode: 'variable',
+        value: 'Bill',
+        hint: 'Match the bill’s name from your Budget calendar — close spelling still matches (e.g. “rent”, “electric”).',
+      },
+    ],
+    finishSteps: [
+      { text: SHOW_RESPONSE_STEP },
+      { text: 'Tap the shortcut’s name at the top → **Rename** → call it **Pay Bill**.' },
+      {
+        text: 'Say **“Hey Siri, Pay Bill”**, name the bill, and it’s marked paid — your checking balance and the calendar update instantly.',
+      },
+    ],
+    after: [
+      'Only **unpaid** bills due within about six weeks (past or upcoming) are matched, so an old paid bill is never re-charged.',
+      'If two bills share a name, the soonest-due one is paid first.',
+      'No match? You’ll get a “no matching unpaid bill” notification and nothing changes.',
     ],
   },
   {

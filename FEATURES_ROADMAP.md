@@ -34,12 +34,12 @@ paragraph for the existing examples to mirror).
 ## Index
 
 | ID | Title | Domain | Size | Value | Hook | Human Notes for AI agent (if empty, no notes / ready to implement) |
-|---|---|---|---|---|---|
+|---|---|---|---|---|---|---|
 | F-MONEY-01 | Pay a bill with the actual amount | Money | small | high | Enter real amount at pay-time for variable bills | |
 | F-MONEY-02 | Daily spend pace indicator | Money | small | high | "$X/day until payday" derived from Safe-to-Spend | |
 | F-MONEY-03 | Bucket rollover | Money | medium | high | Carry unspent bucket limit into next period | Optional, user settings flag |
 | F-MONEY-04 | Credit card due-date tracking + reminders | Money | medium | high | Push reminder before a card's statement due date | Optional, user settings flag like all push notifications|
-| F-MONEY-05 | Subscriptions / recurring-spend dashboard | Money | medium | high | "$X/month on subscriptions" rollup | |
+| F-MONEY-05 | Subscriptions / recurring-spend dashboard | Money | medium | high | "$X/month on subscriptions" rollup | Users will need a way to mark recurring bills as a subscription so that it's not just every single bill = subscription |
 | F-MONEY-06 | Monthly Money Recap | Money | suite | high | Budget-vs-actual close-out, Weekly Recap's money sibling | |
 | F-MONEY-07 | Sweep Safe-to-Spend leftover into a savings goal | Money | small | medium | One-tap move unallocated leftover to a goal | |
 | F-MONEY-08 | Archive an account instead of hard-deleting | Money | small | medium | Soft-delete preserves transaction history fidelity | |
@@ -48,8 +48,8 @@ paragraph for the existing examples to mirror).
 | F-MONEY-11 | quickAddBillPay | Money | medium | medium | "Hey Siri, I paid rent" voice bill-pay | |
 | F-MONEY-12 | Duplicate a calendar item | Money | tweak | low | Pre-fill add-form from an existing bill/item | |
 | F-MONEY-13 | Shared expense splitting / IOU tracking | Money | large | high | Adult↔adult "who owes whom" Settle-Up view | Tie into email for users without accounts to get them to create an account (e.g. User enters an expense, taps split bill option, email goes to non-user letting them know the split amount and hten providing a one tap way to create an account |
-| F-HABITS-01 | Habit pause / vacation mode | Habits & Gamification | medium | high | Planned multi-day break without burning freeze tokens |
-| F-HABITS-02 | Streak milestone celebrations | Habits & Gamification | medium | high | Distinct toast at 7/30/100/365-day streaks | Tie these into specific rewards (e.g. 30 day streak milestone = unlock reward, etc.)
+| F-HABITS-01 | Habit pause / vacation mode | Habits & Gamification | medium | high | Planned multi-day break without burning freeze tokens | |
+| F-HABITS-02 | Streak milestone celebrations | Habits & Gamification | medium | high | Distinct toast at 7/30/100/365-day streaks | Tie these into specific rewards (e.g. 30 day streak milestone = unlock reward, etc.) |
 | F-HABITS-03 | Content-aware per-habit reminder push | Habits & Gamification | medium | high | List actual incomplete habits + per-habit mute | Off by default for habits, user an toggle on for specific habits |
 | F-HABITS-04 | Export habit history to CSV | Habits & Gamification | small | low | Same pattern as F-MONEY-10, habit data | |
 | F-HABITS-05 | Archive a habit | Habits & Gamification | small | medium | Retire a habit without losing streak/points history | |

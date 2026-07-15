@@ -1,5 +1,5 @@
 import React, { useState, ReactNode, useCallback, useMemo, useRef } from 'react';
-import { Info } from 'lucide-react';
+import { Info, PartyPopper, Gift } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { format, addDays, subDays } from 'date-fns';
 import { HouseholdContextType, HouseholdSliceProviders } from './FirebaseHouseholdContext';
@@ -11,16 +11,20 @@ import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redempt
 import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { processToggleHabit, calculateResetPoints, streakForHabit } from '@/utils/habitLogic';
+import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
 import { selectAutoFreezeCandidates } from '@/utils/freezeBank';
 import { accountImpactOf, effectiveAccountImpact, resolveTargetAccount } from '@/utils/accountImpact';
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
 import { MAX_COMMENT_LENGTH } from '@/contexts/household/mutations/commentMutations';
 import { roundMoney } from '@/utils/money';
+import { splitParticipantKey } from '@/utils/settlement';
+import { computeNetWorth } from '@/utils/netWorth';
 import { track } from '@/services/analytics';
 import {
   Account,
   BudgetBucket,
   Transaction,
+  SplitParticipant,
   CalendarItem,
   Habit,
   HabitSubmission,
@@ -43,6 +47,7 @@ import {
   FreezeBank,
   ModuleKey,
   WeeklyRecap,
+  NetWorthSnapshot,
   SavingsGoal,
   TransactionComment
 } from '@/types/schema';
@@ -139,6 +144,10 @@ const SEED_TRANSACTIONS: Transaction[] = [
     // Plan 23: seeded with one comment (see SEED_TRANSACTION_COMMENTS below)
     // so the thread + row count-badge are visible without any user action.
     commentCount: 1,
+    // F-MONEY-13: paid by the test user and split evenly with Jordan, so the
+    // Settle-Up view shows "Jordan owes you $22.75" out of the box in Test Mode.
+    createdBy: 'test-user-id',
+    splitWith: [{ memberId: 'test-partner-id', shareAmount: 22.75 }],
   },
   {
     id: 'tx2', amount: 120.00, merchant: 'PG&E', category: 'Utilities',
@@ -207,6 +216,13 @@ const SEED_MEMBERS: HouseholdMember[] = [
   {
     uid: 'test-user-id', displayName: 'Test User', email: 'test@example.com',
     role: 'admin', points: { daily: 30, weekly: 150, total: 500 }
+  },
+  // Second adult so the F-MONEY-13 Settle-Up view is walkable in Test Mode
+  // (who-owes-whom needs 2+ adults). The seed transaction 't1' is split with
+  // this member below.
+  {
+    uid: 'test-partner-id', displayName: 'Jordan', email: 'jordan@example.com',
+    role: 'member', points: { daily: 0, weekly: 0, total: 0 }
   },
   // Plan 080 (Kid Mode) Test-Mode harness: one managed kid so the dormant kid
   // surfaces are walkable in Test Mode. Mirrors the EXACT object shape the mock's
@@ -321,6 +337,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [rewards, setRewards] = useState<RewardItem[]>(SEED_REWARDS);
   const [pendingRedemptions, setPendingRedemptions] = useState<RewardRedemption[]>(SEED_PENDING_REDEMPTIONS);
   const [redemptionHistory, setRedemptionHistory] = useState<RewardRedemptionRecord[]>(SEED_REDEMPTION_HISTORY);
+  // F-HABITS-02 (streak milestone celebrations): mirrors Household.unlockedRewardIds.
+  const [unlockedRewardIds, setUnlockedRewardIds] = useState<string[]>([]);
   // Stateful so an instant redeem in Test Mode actually deducts the shared total
   // (production deducts household.points.total). dailyPoints/weeklyPoints stay
   // fixed — only the redeemable lifetime total moves.
@@ -394,6 +412,28 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   todosRef.current = todos;
   const [groceryCatalog, setGroceryCatalog] = useState<GroceryCatalogItem[]>(SEED_GROCERY_CATALOG);
   const [bucketHistory] = useState<BucketPeriodSnapshot[]>([]); // Mock empty history
+  // Net worth history (F-MONEY-09) — 30 deterministic daily snapshots ending
+  // at today's live SEED_ACCOUNTS total, drifting backward by a small fixed
+  // step per day so the Trends chart has a visible (non-flat) trend line in
+  // Test Mode without depending on Math.random (deterministic test seed).
+  const [netWorthHistory] = useState<NetWorthSnapshot[]>(() => {
+    if (isFresh) return [];
+    const { totalAssets, totalLiabilities, netWorth } = computeNetWorth(SEED_ACCOUNTS);
+    const days = 30;
+    const dailyDrift = 18.32; // decimal dollars/day, arbitrary but fixed
+    return Array.from({ length: days }, (_, i) => {
+      const daysAgo = days - 1 - i;
+      const date = getLocalDateString(new Date(Date.now() - daysAgo * 86400000));
+      const drift = dailyDrift * daysAgo;
+      return {
+        id: date,
+        date,
+        totalAssets: roundMoney(totalAssets - drift),
+        totalLiabilities,
+        netWorth: roundMoney(netWorth - drift),
+      };
+    });
+  });
   // One canned weekly recap (Plan 02) so Test Mode renders the Dashboard recap
   // card + drawer. Anchored to the CURRENT ISO week with a fresh generatedAt so
   // the card's 4-day freshness window always passes. Numbers stay consistent
@@ -446,6 +486,16 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const deleteAccount = useCallback(async (id: string) => {
     setAccounts(prev => prev.filter(a => a.id !== id));
     toast.success('Mock: Account deleted');
+  }, []);
+
+  const archiveAccount = useCallback(async (id: string) => {
+    setAccounts(prev => prev.map(a => (a.id === id ? { ...a, archived: true } : a)));
+    toast.success('Mock: Account archived');
+  }, []);
+
+  const unarchiveAccount = useCallback(async (id: string) => {
+    setAccounts(prev => prev.map(a => (a.id === id ? { ...a, archived: false } : a)));
+    toast.success('Mock: Account unarchived');
   }, []);
 
   // Savings goal operations (Plan 24) — v1 manual contributions only, mirrors
@@ -736,6 +786,33 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Transaction split');
   }, []);
 
+  const setTransactionSplit = useCallback(async (transactionId: string, split: SplitParticipant[] | null) => {
+    setTransactions(prev => prev.map(t => {
+      if (t.id !== transactionId) return t;
+      const cleaned = (split ?? []).filter(p => p.shareAmount > 0);
+      const next = { ...t };
+      if (cleaned.length > 0) {
+        next.splitWith = cleaned;
+      } else {
+        delete next.splitWith;
+      }
+      return next;
+    }));
+    toast.success('Mock: Split saved');
+  }, []);
+
+  const markSplitSettled = useCallback(async (transactionId: string, participantKey: string, settled: boolean = true) => {
+    setTransactions(prev => prev.map(t => {
+      if (t.id !== transactionId || !t.splitWith) return t;
+      return {
+        ...t,
+        splitWith: t.splitWith.map(p =>
+          splitParticipantKey(p) === participantKey ? { ...p, settled } : p,
+        ),
+      };
+    }));
+  }, []);
+
   // Plan 23 — transaction comments (Test-Mode parity, in-memory). Unlike prod
   // (where the comments subcollection has no firestore.rules entry yet), Test
   // Mode never touches Firestore, so these work fully today — the orchestrator
@@ -838,6 +915,20 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success(pausedUntil ? 'Mock: Habit paused' : 'Mock: Habit resumed');
   }, []);
 
+  const archiveHabit = useCallback(async (id: string) => {
+    setHabits(prev => prev.map(h => h.id === id ? { ...h, archivedAt: getLocalDateString() } : h));
+    toast.success('Mock: Habit archived');
+  }, []);
+
+  const unarchiveHabit = useCallback(async (id: string) => {
+    setHabits(prev => prev.map(h => {
+      if (h.id !== id) return h;
+      const { archivedAt: _archivedAt, ...rest } = h;
+      return rest;
+    }));
+    toast.success('Mock: Habit restored');
+  }, []);
+
   const reorderHabits = useCallback(async (updates: { id: string; order: number; category?: string }[]) => {
     setHabits(prev => prev.map(h => {
       const update = updates.find(u => u.id === h.id);
@@ -872,7 +963,29 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     setHabits(prev => prev.map(h => h.id === id ? { ...h, ...result.updatedHabit } : h));
     creditPoints(result.pointsChange);
     toast.success(`Mock: Habit ${direction === 'up' ? 'incremented' : 'decremented'}`);
-  }, [habits, creditPoints]);
+
+    // F-HABITS-02 (streak milestone celebrations): mirrors the real
+    // toggleHabit's presentation-only milestone toast + reward unlock.
+    const nextStreakDays = result.updatedHabit.streakDays ?? habit.streakDays;
+    const milestone = direction === 'up'
+      ? crossedMilestone(habit.streakDays, nextStreakDays)
+      : null;
+    if (milestone !== null) {
+      toast(`${milestone}-day streak! ${habit.title}`, { icon: toastIcon(PartyPopper, 'text-habit-streak') });
+      const newlyUnlocked = rewards.filter(
+        (reward) =>
+          !unlockedRewardIds.includes(reward.id) &&
+          reward.unlockRequirement &&
+          rewardMilestoneSatisfied(reward, id, nextStreakDays)
+      );
+      if (newlyUnlocked.length > 0) {
+        setUnlockedRewardIds(prev => [...prev, ...newlyUnlocked.map(r => r.id)]);
+        newlyUnlocked.forEach((reward) => {
+          toast(`Reward unlocked! ${reward.title}`, { icon: toastIcon(Gift, 'text-warm-600') });
+        });
+      }
+    }
+  }, [habits, creditPoints, rewards, unlockedRewardIds]);
 
   // Manual reset (the card's X button): zero the period counter, drop today
   // from completedDates, and reverse today's awarded points — mirroring the
@@ -1103,6 +1216,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       toast.error('Mock: Not enough points');
       return;
     }
+    if (reward.unlockRequirement && !unlockedRewardIds.includes(reward.id)) {
+      toast.error('Mock: Reward is still locked');
+      return;
+    }
     const record: RewardRedemptionRecord = {
       id: generateId(),
       rewardId: reward.id,
@@ -1115,7 +1232,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     setTotalPoints(prev => prev - reward.cost);
     setRedemptionHistory(prev => [record, ...prev].slice(0, REDEMPTION_HISTORY_LIMIT));
     toast.success(`Mock: Redeemed ${reward.title}`);
-  }, [rewards, totalPoints]);
+  }, [rewards, totalPoints, unlockedRewardIds]);
 
   // Reward CRUD operations (Plan 080d) — mutate the stateful rewards store so the
   // parent-facing "Manage rewards" UI is walkable in Test Mode.
@@ -1284,6 +1401,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     kidModePinHash,
     pendingRedemptions,
     redemptionHistory,
+    unlockedRewardIds,
     moduleVisibility,
 
   } as unknown as Household;
@@ -1320,6 +1438,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     accounts,
     buckets,
     savingsGoals,
+    netWorthHistory,
     transactions,
     calendarItems,
     habits,
@@ -1364,6 +1483,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     // Operations
     addAccount,
     deleteAccount,
+    archiveAccount,
+    unarchiveAccount,
     updateAccountBalance,
     setAccountGoal: noOp,
     setAccountCardLast4: noOp,
@@ -1383,6 +1504,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateTransactionCategory,
     deleteTransaction,
     splitTransaction,
+    setTransactionSplit,
+    markSplitSettled,
     mergeTransactions,
     keepBothTransactions,
     getTransactionComments,
@@ -1396,6 +1519,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     addHabit,
     updateHabit,
     deleteHabit,
+    archiveHabit,
+    unarchiveHabit,
     reorderHabits,
     toggleHabit,
     resetHabit,

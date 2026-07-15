@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Lock } from 'lucide-react';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
+import { MILESTONES } from '@/utils/habitMilestones';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { Button } from '@/components/ui/Button';
@@ -50,7 +51,7 @@ export interface RewardManagerPanelProps {
 }
 
 const RewardManagerPanel: React.FC<RewardManagerPanelProps> = ({ kids, kidModeEnabled }) => {
-  const { rewardsInventory, addReward, updateReward, deleteReward } = useGamification();
+  const { rewardsInventory, habits, addReward, updateReward, deleteReward } = useGamification();
   const [draft, setDraft] = useState<RewardDraft>(EMPTY_REWARD_DRAFT);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -158,6 +159,11 @@ const RewardManagerPanel: React.FC<RewardManagerPanelProps> = ({ kids, kidModeEn
                       ? ` · $${(reward.allowanceCents / 100).toFixed(2)}`
                       : ''}
                     {reward.active === false ? ' · inactive' : ''}
+                    {reward.unlockRequirement ? (
+                      <span className="inline-flex items-center gap-0.5 ml-1">
+                        <Lock size={10} /> {reward.unlockRequirement.streakDays}-day streak
+                      </span>
+                    ) : ''}
                   </p>
                 </div>
                 <button
@@ -269,6 +275,34 @@ const RewardManagerPanel: React.FC<RewardManagerPanelProps> = ({ kids, kidModeEn
               ))}
             </Select>
           )}
+
+          {/* F-HABITS-02: optional streak-milestone unlock gate. */}
+          <div>
+            <span className={labelClass}>Unlock at streak milestone (optional)</span>
+            <div className="grid grid-cols-2 gap-3">
+              <Select
+                aria-label="Milestone streak days"
+                value={draft.milestoneStreakDays}
+                onChange={(e) => setDraft((d) => ({ ...d, milestoneStreakDays: e.target.value }))}
+              >
+                <option value="">No milestone gate</option>
+                {MILESTONES.map((m) => (
+                  <option key={m} value={m}>{m} days</option>
+                ))}
+              </Select>
+              <Select
+                aria-label="Milestone habit"
+                value={draft.milestoneHabitId}
+                onChange={(e) => setDraft((d) => ({ ...d, milestoneHabitId: e.target.value }))}
+                disabled={!draft.milestoneStreakDays}
+              >
+                <option value="">Any habit</option>
+                {habits.map((habit) => (
+                  <option key={habit.id} value={habit.id}>{habit.title}</option>
+                ))}
+              </Select>
+            </div>
+          </div>
 
           <div className="flex items-center gap-2 text-sm font-medium text-brand-700 dark:text-brand-200">
             <Switch

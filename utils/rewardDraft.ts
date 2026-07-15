@@ -18,6 +18,13 @@ export interface RewardDraft {
   allowanceDollars: string;
   targetMemberId: string;
   active: boolean;
+  // F-HABITS-02 (streak milestone celebrations): milestoneStreakDays is a
+  // MILESTONES value (utils/habitMilestones.ts) as a string, or '' for "no
+  // milestone gate" (the reward is always available, subject only to cost).
+  // milestoneHabitId is a habit id, or '' for "any habit" once
+  // milestoneStreakDays is set.
+  milestoneStreakDays: string;
+  milestoneHabitId: string;
 }
 
 /** A fresh, empty draft for the "add reward" form. */
@@ -29,6 +36,8 @@ export const EMPTY_REWARD_DRAFT: RewardDraft = {
   allowanceDollars: '',
   targetMemberId: '',
   active: true,
+  milestoneStreakDays: '',
+  milestoneHabitId: '',
 };
 
 /**
@@ -48,6 +57,9 @@ export function draftFromReward(reward: RewardItem): RewardDraft {
       reward.allowanceCents !== undefined ? (reward.allowanceCents / 100).toFixed(2) : '',
     targetMemberId: reward.targetMemberId ?? '',
     active: reward.active ?? true,
+    milestoneStreakDays:
+      reward.unlockRequirement !== undefined ? String(reward.unlockRequirement.streakDays) : '',
+    milestoneHabitId: reward.unlockRequirement?.habitId ?? '',
   };
 }
 
@@ -88,6 +100,16 @@ export function buildRewardPayload(draft: RewardDraft): Omit<RewardItem, 'id' | 
   }
   if (draft.targetMemberId) {
     payload.targetMemberId = draft.targetMemberId;
+  }
+  // F-HABITS-02: a blank milestoneStreakDays means "no gate" (field omitted
+  // entirely). A non-blank value must parse to a positive integer or the
+  // submit is aborted, mirroring the cost/allowance validation above.
+  if (draft.milestoneStreakDays.trim()) {
+    const streakDays = Number(draft.milestoneStreakDays);
+    if (!Number.isFinite(streakDays) || streakDays <= 0) return null;
+    payload.unlockRequirement = draft.milestoneHabitId
+      ? { streakDays, habitId: draft.milestoneHabitId }
+      : { streakDays };
   }
   return payload;
 }

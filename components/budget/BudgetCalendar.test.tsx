@@ -205,7 +205,7 @@ describe('BudgetCalendar', () => {
     });
   });
 
-  it('duplicates a calendar item', async () => {
+  it('duplicates a calendar item by pre-filling the add form for review', async () => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const item = {
       id: 'item-1',
@@ -213,7 +213,9 @@ describe('BudgetCalendar', () => {
       amount: 1000,
       date: todayStr,
       type: 'expense',
-      isPaid: false
+      isPaid: false,
+      isRecurring: true,
+      frequency: 'monthly' as const,
     };
 
     (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
@@ -233,16 +235,33 @@ describe('BudgetCalendar', () => {
     const editButton = screen.getByLabelText('Edit Rent');
     fireEvent.click(editButton);
 
-    // Click Duplicate
+    // Click Duplicate — this does NOT save immediately. It clears
+    // `editingItem` (so the drawer becomes "Add Calendar Item" / the primary
+    // button reads "Add Event") and strips recurrence, leaving title/amount/
+    // type/date pre-filled for the user to review before submitting.
     fireEvent.click(screen.getByText('Duplicate'));
 
     await waitFor(() => {
+      expect(screen.getByText('Add Calendar Item')).toBeInTheDocument();
+    });
+    expect(mockAddCalendarItem).not.toHaveBeenCalled();
+
+    const titleInput = screen.getByPlaceholderText('Title (e.g. Rent)') as HTMLInputElement;
+    expect(titleInput.value).toBe('Rent');
+
+    // Submitting now creates a brand-new item (not an update to item-1).
+    const addEventButtons = screen.getAllByText('Add Event');
+    fireEvent.click(addEventButtons[addEventButtons.length - 1]!);
+
+    await waitFor(() => {
       expect(mockAddCalendarItem).toHaveBeenCalledWith(expect.objectContaining({
-        title: 'Rent (Copy)',
+        title: 'Rent',
         amount: 1000,
-        type: 'expense'
+        type: 'expense',
+        isRecurring: false,
       }));
     });
+    expect(mockUpdateCalendarItem).not.toHaveBeenCalled();
   });
 
   it('edits an existing calendar item', async () => {

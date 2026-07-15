@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Habit } from '@/types/schema';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
-import { X, Edit2, Trash2, Target, Calendar, Snowflake, Pause, Play } from 'lucide-react';
+import { X, Edit2, Trash2, Target, Calendar, Snowflake, Pause, Play, Archive, ArchiveRestore } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import HabitFormModal from '@/components/modals/HabitFormModal';
 import HabitSubmissionLogModal from '@/components/modals/HabitSubmissionLogModal';
@@ -27,7 +27,7 @@ interface HabitCardProps {
 }
 
 const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDown }) => {
-  const { toggleHabit, deleteHabit, resetHabit, setHabitPause, activeChallenge } = useGamification();
+  const { toggleHabit, deleteHabit, archiveHabit, unarchiveHabit, resetHabit, setHabitPause, activeChallenge } = useGamification();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
@@ -136,6 +136,17 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
     setIsMenuOpen(false);
   };
 
+  const isArchived = !!habit.archivedAt;
+
+  const handleArchiveToggle = () => {
+    if (isArchived) {
+      unarchiveHabit(habit.id);
+    } else {
+      archiveHabit(habit.id);
+    }
+    setIsMenuOpen(false);
+  };
+
   // Shared action set for the desktop dropdown (Menu) and mobile Drawer.
   const menuItems: MenuItem[] = [
     { key: 'edit', label: 'Edit', icon: <Edit2 size={14} />, onSelect: handleEdit },
@@ -143,6 +154,12 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
       ? [{ key: 'resume', label: 'Resume', icon: <Play size={14} />, onSelect: handleResume } as MenuItem]
       : []),
     { key: 'log', label: 'View Log', icon: <Calendar size={14} />, onSelect: handleViewLog },
+    {
+      key: 'archive',
+      label: isArchived ? 'Unarchive' : 'Archive',
+      icon: isArchived ? <ArchiveRestore size={14} /> : <Archive size={14} />,
+      onSelect: handleArchiveToggle,
+    },
     { key: 'delete', label: 'Delete', icon: <Trash2 size={14} />, tone: 'danger', onSelect: handleDelete },
   ];
 
@@ -321,6 +338,14 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
           >
             View History Log
           </Button>
+          <Button
+            variant="ghost"
+            className="w-full justify-start text-lg py-4"
+            leftIcon={isArchived ? <ArchiveRestore className="text-brand-400" /> : <Archive className="text-brand-400" />}
+            onClick={handleArchiveToggle}
+          >
+            {isArchived ? 'Unarchive Habit' : 'Archive Habit'}
+          </Button>
           <div className="h-px bg-brand-200 dark:bg-brand-700 my-2" />
           <Button
             variant="ghost-destructive"
@@ -363,6 +388,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
   prev.habit.period === next.habit.period &&
   prev.habit.basePoints === next.habit.basePoints &&
   prev.habit.targetCount === next.habit.targetCount &&
+  prev.habit.archivedAt === next.habit.archivedAt &&
   // Content compare (the provider rebuilds arrays each snapshot): drives the
   // "Protected" freeze badge.
   (prev.habit.frozenDates ?? []).join(',') === (next.habit.frozenDates ?? []).join(',') &&
