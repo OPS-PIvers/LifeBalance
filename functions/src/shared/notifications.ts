@@ -32,6 +32,12 @@ export interface NotificationPreferences {
   weeklyRecap?: {
     enabled: boolean;
   };
+  // F-MONEY-06 (monthly money recap): per-member opt-out for the monthly money
+  // recap push. Absent/undefined is treated as enabled (fail-open) — only an
+  // explicit `enabled: false` suppresses the push.
+  monthlyMoneyRecap?: {
+    enabled: boolean;
+  };
   timezone?: string;
 }
 
