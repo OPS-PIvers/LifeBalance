@@ -197,6 +197,25 @@ export function validateGroceryItems(raw: unknown): GroceryItemLike[] {
 }
 
 // ---------------------------------------------------------------------------
+// Subtask breakdown (F-TODO-08)
+// ---------------------------------------------------------------------------
+
+/**
+ * Validates the "break a task into steps" response: an object `{ subtasks: string[] }`.
+ * Returns the trimmed, non-empty subtask strings.
+ */
+export function validateSubtaskSuggestions(raw: unknown): string[] {
+  const o = expectRecord(raw, 'subtaskBreakdown');
+  const arr = expectArray(o['subtasks'], 'subtaskBreakdown.subtasks');
+  return arr
+    .map((entry, i): string => {
+      if (!isString(entry)) fail(`subtaskBreakdown.subtasks[${i}]`, 'must be a string');
+      return (entry as string).trim();
+    })
+    .filter(s => s.length > 0);
+}
+
+// ---------------------------------------------------------------------------
 // Itemized receipt line items (F-DASH-04)
 // ---------------------------------------------------------------------------
 
