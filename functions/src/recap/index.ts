@@ -7,6 +7,7 @@ import { isTimeToSend, sendNotificationToUser, loadNotifiableMembersByHousehold,
 import { isoWeekId } from "../shared/isoWeek";
 import { assembleWeeklyRecap, type RecapCalendarItem, type RecapHabit, type RecapMember, type RecapTransaction } from "./dataAssembly";
 import { buildTemplateNarrative, generateNarrative } from "./narrative";
+import { buildRecapHeadline } from "./headline";
 import { WeeklyRecap } from "./types";
 
 /** The Gemini API key, shared with the geminiproxy function's secret binding. */
@@ -156,6 +157,20 @@ async function processHousehold(
     return;
   }
 
+  // F-NOTIF-09: the push body includes a real headline stat pulled from the
+  // just-(or previously-)generated recap doc rather than a static message.
+  // Cache the headline per isoWeek since most runs only ever touch one week
+  // across all members (per-member timezones only diverge across the ISO
+  // week boundary in rare edge cases).
+  const headlineByWeek = new Map<string, string>();
+  const getHeadline = async (week: string): Promise<string> => {
+    const cached = headlineByWeek.get(week);
+    if (cached) return cached;
+    const headline = await computeRecapHeadline(db, householdId, week, household.currency);
+    headlineByWeek.set(week, headline);
+    return headline;
+  };
+
   for (const memberDoc of memberDocs) {
     const member = memberDoc.data() as RecapMemberDoc;
     const tz = member.notificationPreferences?.timezone || "UTC";
@@ -167,15 +182,43 @@ async function processHousehold(
     if (member.notificationPreferences?.weeklyRecap?.enabled === false) continue;
     if (!member.fcmTokens || member.fcmTokens.length === 0) continue;
 
+    const headline = await getHeadline(memberIsoWeek);
+
     await sendNotificationToUser(
       member.fcmTokens,
       "Your weekly recap is ready",
-      "See how your spending, habits, and points stacked up this week.",
+      headline,
       { type: "weekly_recap", url: `/?recap=${memberIsoWeek}` },
       memberDoc.ref
     );
 
     await memberDoc.ref.update({ lastRecapSentWeek: memberIsoWeek });
+  }
+}
+
+/**
+ * Reads the generated `WeeklyRecap` doc for `isoWeek` and computes its push
+ * headline via `buildRecapHeadline`. Degrades gracefully to the old generic
+ * copy if the doc is missing (e.g. a member's own ISO week diverged from the
+ * triggering timezone's week and that week's recap hasn't been generated) or
+ * the read fails for any reason — a missing headline must never block the
+ * push itself.
+ */
+async function computeRecapHeadline(
+  db: admin.firestore.Firestore,
+  householdId: string,
+  isoWeek: string,
+  currency?: string
+): Promise<string> {
+  const fallback = "See how your spending, habits, and points stacked up this week.";
+  try {
+    const snap = await db.doc(`households/${householdId}/recaps/${isoWeek}`).get();
+    if (!snap.exists) return fallback;
+    const recap = snap.data() as WeeklyRecap;
+    return buildRecapHeadline(recap, currency);
+  } catch (error) {
+    logger.error(`sendweeklyrecap: failed to compute push headline for household ${householdId} week ${isoWeek}`, error);
+    return fallback;
   }
 }
 
