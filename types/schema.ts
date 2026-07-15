@@ -386,6 +386,16 @@ export interface Habit {
   // functions/src/quickAdd/habitProcessor.ts.
   frozenDates?: string[];
 
+  // F-HABITS-01 (habit pause / vacation mode): a planned break end date
+  // (YYYY-MM-DD, local). While `pausedUntil >= today` the habit is excluded from
+  // the auto-reset-to-0 penalty AND from freeze-token consumption, and the paused
+  // range BRIDGES streak continuity the same way `frozenDates` does — so the
+  // streak resumes cleanly when the break ends. The bridge is synthesized at read
+  // time from `completedDates` + `pausedUntil` (utils/habitLogic.ts
+  // `pauseBridgeDates`), so no per-day docs are written. Absent on a habit that
+  // has never been paused. Mirrored in functions/src/quickAdd/habitProcessor.ts.
+  pausedUntil?: string;
+
   // Ownership (for Firebase multi-user support)
   isShared?: boolean; // true = household-wide, false/undefined = personal
   ownerId?: string; // uid if personal habit

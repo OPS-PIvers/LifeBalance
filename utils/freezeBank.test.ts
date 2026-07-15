@@ -58,6 +58,14 @@ describe('selectAutoFreezeCandidates', () => {
     expect(selectAutoFreezeCandidates([frozen], TODAY)).toEqual([]);
   });
 
+  it('skips a paused habit (F-HABITS-01: a planned break never burns a token)', () => {
+    const paused = habit({ pausedUntil: '2026-07-20' }); // pausedUntil >= TODAY
+    expect(selectAutoFreezeCandidates([paused], TODAY)).toEqual([]);
+    // A pause that has already elapsed no longer excludes it.
+    const expired = habit({ pausedUntil: '2026-07-01' });
+    expect(selectAutoFreezeCandidates([expired], TODAY)).toHaveLength(1);
+  });
+
   it('skips negative and weekly habits', () => {
     const negative = habit({ id: 'neg', type: 'negative' });
     const weekly = habit({ id: 'wk', period: 'weekly' });

@@ -932,6 +932,18 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Habit deleted');
   }, []);
 
+  // F-HABITS-01: mock pause/resume so the "Pause until" field and paused badge
+  // are walkable in Test Mode. Passing null strips pausedUntil (resume).
+  const setHabitPause = useCallback(async (id: string, pausedUntil: string | null) => {
+    setHabits(prev => prev.map(h => {
+      if (h.id !== id) return h;
+      if (pausedUntil) return { ...h, pausedUntil };
+      const { pausedUntil: _dropped, ...rest } = h;
+      return rest;
+    }));
+    toast.success(pausedUntil ? 'Mock: Habit paused' : 'Mock: Habit resumed');
+  }, []);
+
   const archiveHabit = useCallback(async (id: string) => {
     setHabits(prev => prev.map(h => h.id === id ? { ...h, archivedAt: getLocalDateString() } : h));
     toast.success('Mock: Habit archived');
@@ -1542,6 +1554,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     reorderHabits,
     toggleHabit,
     resetHabit,
+    setHabitPause,
     addHabitSubmission: noOp,
     resetHabitDay: noOp,
     updateHabitSubmission: noOp,
