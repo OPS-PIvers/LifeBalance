@@ -293,6 +293,8 @@ export interface HouseholdContextType {
   approveRedemption: (redemptionId: string) => Promise<void>;
   denyRedemption: (redemptionId: string) => Promise<void>;
   refreshInsight: () => Promise<void>;
+  // F-DASH-11 — thumbs up/down feedback on a single insight doc.
+  rateInsight: (insightId: string, feedback: 'up' | 'down') => Promise<void>;
 
   // Yearly Goal Actions
   createYearlyGoal: (goal: Omit<YearlyGoal, 'id'>) => Promise<void>;
@@ -452,7 +454,7 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'hasMoreInsights' | 'loadAllInsights'
   | 'pendingItemsCount' | 'apiKeys'
   | 'householdId' | 'householdSettings' | 'household'
-  | 'refreshInsight' | 'addMember' | 'updateMember' | 'removeMember' | 'deleteHousehold'
+  | 'refreshInsight' | 'rateInsight' | 'addMember' | 'updateMember' | 'removeMember' | 'deleteHousehold'
   | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'setKidModePin'
   | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
   | 'activeMemberId' | 'actAs' | 'exitToParent'

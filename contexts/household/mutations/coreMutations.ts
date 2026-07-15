@@ -114,7 +114,23 @@ export function makeRefreshInsight(deps: {
         .slice(0, 3)
         .map(i => i.text);
 
-      const { text, actions } = await generateInsight(householdId, transactions, habits, previousInsightsTexts);
+      // F-DASH-11 — bounded recent feedback signals fed back into the prompt
+      // so generation adapts: a few most-recent 'down'-rated insight texts
+      // (avoid repeating that style/topic) and 'up'-rated ones (lean into it).
+      // Bounded to 3 each so the prompt doesn't grow unbounded over time.
+      const dislikedInsightsTexts = insightsHistory
+        .filter(i => i.feedback === 'down')
+        .slice(0, 3)
+        .map(i => i.text);
+      const likedInsightsTexts = insightsHistory
+        .filter(i => i.feedback === 'up')
+        .slice(0, 3)
+        .map(i => i.text);
+
+      const { text, actions } = await generateInsight(householdId, transactions, habits, previousInsightsTexts, {
+        dislikedInsights: dislikedInsightsTexts,
+        likedInsights: likedInsightsTexts,
+      });
 
       const newInsight: Omit<Insight, 'id'> = {
         text,
@@ -136,4 +152,27 @@ export function makeRefreshInsight(deps: {
   };
 
   return { refreshInsight };
+}
+
+/**
+ * rateInsight (F-DASH-11) — thumbs up/down on a single insight doc. Plain
+ * `updateDoc`, no batch needed: it only ever touches the one insight doc.
+ * Original closure captures only `householdId`.
+ */
+export function makeRateInsight(deps: {
+  db: Firestore;
+  householdId: string | null;
+}) {
+  const { db, householdId } = deps;
+
+  const rateInsight = async (insightId: string, feedback: 'up' | 'down') => {
+    if (!householdId) return;
+    await updateDoc(doc(db, `households/${householdId}/insights`, insightId), {
+      feedback,
+      feedbackAt: new Date().toISOString(),
+    });
+    track('insight_rated', { feedback });
+  };
+
+  return { rateInsight };
 }

@@ -493,7 +493,15 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       premium: true,
     }];
   });
-  const [insightsHistory] = useState<Insight[]>([]);
+  // F-DASH-11 — seeded with one entry so the thumbs up/down feedback UI is
+  // walkable in Test Mode; rateInsight below mutates it in-memory like the
+  // real household context.
+  const [insightsHistory, setInsightsHistory] = useState<Insight[]>([{
+    id: 'mock-insight-1',
+    text: 'Test Mode: This is mock data for AI testing',
+    generatedAt: new Date().toISOString(),
+    type: 'general',
+  }]);
   const [insight] = useState("Test Mode: This is mock data for AI testing");
   const [stores, setStores] = useState<Store[]>(SEED_STORES);
   const [groceryCategories, setGroceryCategories] = useState<string[]>([]);
@@ -1629,6 +1637,15 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     approveRedemption,
     denyRedemption,
     refreshInsight: noOp,
+    // F-DASH-11 — mirrors makeRateInsight's shape (updates the doc + a
+    // feedbackAt timestamp) but in-memory.
+    rateInsight: useCallback(async (insightId: string, feedback: 'up' | 'down') => {
+      setInsightsHistory(prev => prev.map(i =>
+        i.id === insightId ? { ...i, feedback, feedbackAt: new Date().toISOString() } : i
+      ));
+      track('insight_rated', { feedback });
+      toast.success(`Mock: Insight marked ${feedback === 'up' ? 'helpful' : 'not helpful'}`);
+    }, []),
     createYearlyGoal: noOp,
     updateYearlyGoal: noOp,
     updateYearlyGoalProgress: noOp,

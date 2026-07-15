@@ -394,7 +394,13 @@ async function withTimeoutAndRetry<T>(
  * AI Prompt template for generating household insights.
  * This can be easily modified or A/B tested without changing function logic.
  */
-const INSIGHT_GENERATION_PROMPT = (transactions: string, habits: string, previousInsights: string = "") => `Analyze this household data to provide ONE concise, helpful, and digestible insight.
+const INSIGHT_GENERATION_PROMPT = (
+  transactions: string,
+  habits: string,
+  previousInsights: string = "",
+  dislikedInsights: string = "",
+  likedInsights: string = "",
+) => `Analyze this household data to provide ONE concise, helpful, and digestible insight.
 The insight should be deep and actionable, not just a basic observation.
 Focus on patterns between spending and habits if possible, or interesting trends in either.
 Keep the 'text' under 30 words.
@@ -402,6 +408,14 @@ Keep the 'text' under 30 words.
 ${previousInsights ? `
 PREVIOUS INSIGHTS (Do not repeat these. Instead, expand on them with new analysis, look for different patterns, or provide a completely new insight):
 ${previousInsights}
+` : ''}
+${dislikedInsights ? `
+USER FEEDBACK — DISLIKED (the household gave these a thumbs down; avoid this topic/style/tone, try a genuinely different angle):
+${dislikedInsights}
+` : ''}
+${likedInsights ? `
+USER FEEDBACK — LIKED (the household gave these a thumbs up; lean into this topic/style/tone when the data supports it):
+${likedInsights}
 ` : ''}
 
 Also suggest 0-2 actionable 'actions' the user can take to improve their situation.
@@ -1128,6 +1142,10 @@ export const optimizeGroceryList = async (
  * @param previousInsights - List of previous insight texts to avoid repetition
  * @param options - Optional configuration for insight generation
  * @param options.includeMerchantNames - If true, includes merchant names in the data sent to AI (default: true)
+ * @param options.dislikedInsights - F-DASH-11: bounded list of recent insight texts the
+ *   household thumbed down; fed back into the prompt as "avoid this style/topic".
+ * @param options.likedInsights - F-DASH-11: bounded list of recent insight texts the
+ *   household thumbed up; fed back into the prompt as "lean into this style/topic".
  * @param _aiClient - Optional injected AI client for testing purposes.
  */
 export const generateInsight = async (
@@ -1135,7 +1153,7 @@ export const generateInsight = async (
   transactions: Transaction[],
   habits: Habit[],
   previousInsights: string[] = [],
-  options?: { includeMerchantNames?: boolean },
+  options?: { includeMerchantNames?: boolean; dislikedInsights?: string[]; likedInsights?: string[] },
   _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<{ text: string, actions?: InsightAction[] }> => {
   return withErrorHandling('Insight Generation', 'Failed to generate insight.', async () => {
@@ -1158,11 +1176,19 @@ export const generateInsight = async (
     const previousInsightsStr = previousInsights.length > 0
       ? previousInsights.map(t => `- "${t}"`).join('\n')
       : '';
+    const dislikedInsightsStr = (options?.dislikedInsights ?? []).length > 0
+      ? (options?.dislikedInsights ?? []).map(t => `- "${t}"`).join('\n')
+      : '';
+    const likedInsightsStr = (options?.likedInsights ?? []).length > 0
+      ? (options?.likedInsights ?? []).map(t => `- "${t}"`).join('\n')
+      : '';
 
     const prompt = INSIGHT_GENERATION_PROMPT(
       JSON.stringify(simplifiedTransactions),
       JSON.stringify(simplifiedHabits),
-      previousInsightsStr
+      previousInsightsStr,
+      dislikedInsightsStr,
+      likedInsightsStr
     );
 
     return await generateJsonContent<{ text: string, actions?: InsightAction[] }>(

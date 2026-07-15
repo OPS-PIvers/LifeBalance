@@ -160,6 +160,7 @@ import {
 import {
   makeHouseholdSettingsMutations,
   makeRefreshInsight,
+  makeRateInsight,
 } from '@/contexts/household/mutations/coreMutations';
 import {
   makeAddMember,
@@ -2076,6 +2077,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }).refreshInsight();
   }, [householdId, isGeneratingInsight, transactions, habits, insightsHistory]);
 
+  const rateInsight = useCallback(async (insightId: string, feedback: 'up' | 'down') => {
+    await makeRateInsight({ db, householdId }).rateInsight(insightId, feedback);
+  }, [householdId]);
+
   // Freeze-bank maintenance at midnight / first login (Plan 25): refill to the
   // fixed max on a new month, otherwise auto-apply freezes to yesterday's
   // missed streaks.
@@ -2295,6 +2300,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     householdSettings,
     household: householdSettings, // Provide alias
     refreshInsight,
+    rateInsight,
     addMember,
     updateMember,
     removeMember,
@@ -2314,7 +2320,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }), [
     isLoading, currentUser, members, insight, insightsHistory, isGeneratingInsight, hasMoreInsights, loadAllInsights,
     pendingItemsCount, apiKeys,
-    householdId, householdSettings, refreshInsight, addMember, updateMember, removeMember, deleteHousehold,
+    householdId, householdSettings, refreshInsight, rateInsight, addMember, updateMember, removeMember, deleteHousehold,
     completeOnboarding, setHouseholdCurrency, setModuleVisibility, setKidModePin,
     addKidProfile, updateKidProfile, removeKidProfile, activeMemberId, actAs, exitToParent,
     recaps,
