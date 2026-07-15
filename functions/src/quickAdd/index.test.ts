@@ -72,6 +72,7 @@ import {
   quickAddExpense,
   quickAddShoppingItem,
   quickAddNaturalLanguage,
+  quickAddBillPay,
 } from "./index";
 
 // ---------------------------------------------------------------------------
@@ -1297,5 +1298,116 @@ describe("quickAddNaturalLanguage", () => {
     );
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatchObject({ success: true, data: { type: "shopping" } });
+  });
+});
+
+// ===========================================================================
+// quickAddBillPay (F-MONEY-11)
+// ===========================================================================
+
+/** A raw Firestore-style doc: { id, data() }. */
+function docOf(id: string, data: Record<string, unknown>): unknown {
+  return { id, data: () => data };
+}
+
+describe("quickAddBillPay", () => {
+  const BILL_TODAY = "2026-07-14";
+
+  function configureBillWorld(opts: {
+    calendarDocs: unknown[];
+    accountDocs: unknown[];
+    household?: Record<string, unknown>;
+  }): void {
+    collectionOverrides[`households/${HOUSEHOLD_ID}/calendarItems`] = {
+      getDocs: opts.calendarDocs,
+    };
+    collectionOverrides[`households/${HOUSEHOLD_ID}/accounts`] = {
+      getDocs: opts.accountDocs,
+    };
+    configureCollections();
+    docOverrides[`households/${HOUSEHOLD_ID}`] = {
+      get: vi.fn(() =>
+        Promise.resolve({
+          data: () => opts.household ?? { currency: "USD", lastPaycheckDate: "2026-07-01" },
+        })
+      ),
+    };
+    configureDocs();
+  }
+
+  it("returns 403 when the key lacks the bills permission", async () => {
+    configureValidKey({ habits: true, expenses: true, shoppingList: true, bills: false });
+    const res = makeRes();
+    await asHandler(quickAddBillPay)(makeReq({ body: { title: "Rent" } }), res);
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toMatchObject({ error: { code: "FORBIDDEN" } });
+  });
+
+  it("returns 400 when title is missing", async () => {
+    configureValidKey({ habits: false, expenses: false, shoppingList: false, bills: true });
+    const res = makeRes();
+    await asHandler(quickAddBillPay)(makeReq({ body: {} }), res);
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+  });
+
+  it("returns 404 when no unpaid bill matches", async () => {
+    configureValidKey({ habits: false, expenses: false, shoppingList: false, bills: true });
+    configureBillWorld({
+      calendarDocs: [
+        docOf("rent", { title: "Rent", amount: 1200, date: "2026-07-20", type: "expense", isPaid: true }),
+      ],
+      accountDocs: [docOf("chk", { type: "checking", order: 0 })],
+    });
+    const res = makeRes();
+    await asHandler(quickAddBillPay)(
+      makeReq({ body: { title: "Rent", today: BILL_TODAY } }),
+      res
+    );
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toMatchObject({ error: { code: "NOT_FOUND" } });
+  });
+
+  it("pays a matching non-recurring bill from the first checking account (200 + atomic batch)", async () => {
+    configureValidKey({ habits: false, expenses: false, shoppingList: false, bills: true });
+    configureBillWorld({
+      calendarDocs: [
+        docOf("rent", { title: "Rent", amount: 1200, date: "2026-07-20", type: "expense", isPaid: false }),
+      ],
+      accountDocs: [
+        docOf("sav", { type: "savings", order: 0 }),
+        docOf("chk", { type: "checking", order: 1 }),
+      ],
+    });
+    const res = makeRes();
+    await asHandler(quickAddBillPay)(
+      makeReq({ body: { title: "rent", today: BILL_TODAY } }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      success: true,
+      data: { title: "Rent", amount: 1200, accountId: "chk", date: "2026-07-20" },
+    });
+    // One atomic batch: bill update + account decrement + transaction set, committed once.
+    expect(lastBatch.commit).toHaveBeenCalledTimes(1);
+    expect(lastBatch.update).toHaveBeenCalledTimes(2); // calendar item + account balance
+    expect(lastBatch.set).toHaveBeenCalledTimes(1); // transaction
+  });
+
+  it("returns 400 when there is no checking account", async () => {
+    configureValidKey({ habits: false, expenses: false, shoppingList: false, bills: true });
+    configureBillWorld({
+      calendarDocs: [
+        docOf("rent", { title: "Rent", amount: 1200, date: "2026-07-20", type: "expense", isPaid: false }),
+      ],
+      accountDocs: [docOf("sav", { type: "savings", order: 0 })],
+    });
+    const res = makeRes();
+    await asHandler(quickAddBillPay)(
+      makeReq({ body: { title: "Rent", today: BILL_TODAY } }),
+      res
+    );
+    expect(res.statusCode).toBe(400);
   });
 });

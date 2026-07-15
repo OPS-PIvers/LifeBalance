@@ -5,7 +5,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import HabitCategoryList from '@/components/habits/HabitCategoryList';
 import {
   Sparkles, LayoutList, GraduationCap, Calendar, CalendarPlus,
-  ListChecks, Check, Flame, Star, BarChart2, Gift, Trophy,
+  ListChecks, Check, Flame, Star, BarChart2, Gift, Trophy, Archive,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
@@ -28,9 +28,10 @@ import { useDeepLinkHighlight } from '@/hooks/useDeepLinkHighlight';
 import { useScrollToHighlight } from '@/hooks/useScrollToHighlight';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { isHabitCompletedInCurrentPeriod, signedHabitPoints } from '@/utils/habitLogic';
+import { getCatchUpEligibleHabits } from '@/utils/catchUpHabits';
 import { generateCsvExport } from '@/utils/exportUtils';
 import toast from 'react-hot-toast';
-import { format } from 'date-fns';
+import { format, subDays } from 'date-fns';
 
 // Allowed Habits sub-tabs. Module-level so the array identity is stable and
 // other screens can deep-link via `navigate('/habits', { state: { tab } })`.
@@ -174,7 +175,7 @@ const KidChoresGroup: React.FC<{ kid: HouseholdMember; chores: Habit[] }> = ({ k
 };
 
 const Habits: React.FC = () => {
-  const { habits } = useGamification();
+  const { habits, toggleHabit } = useGamification();
   const { isLoading, members } = useHouseholdCore();
   const kidModeEnabled = useKidModeEnabled();
   const powerToolsEnabled = usePowerToolsEnabled();
@@ -183,12 +184,15 @@ const Habits: React.FC = () => {
   const [isSmartReorderOpen, setIsSmartReorderOpen] = useState(false);
   const [isChallengeHubOpen, setIsChallengeHubOpen] = useState(false);
   const [isPastDayLogOpen, setIsPastDayLogOpen] = useState(false);
+  // F-HABITS-05: Track tab toggles between active and archived habits.
+  const [showArchived, setShowArchived] = useState(false);
   // Controlled so the toolbar points glance can deep-link straight to Rewards.
   const [activeTab, setActiveTab] = useDeepLinkTab('track', HABIT_TABS);
   // Global search deep-link (v1.1): scroll-to + briefly flash the specific
   // habit row selected in SearchOverlay, on top of the tab-level jump above.
   const highlightHabitId = useDeepLinkHighlight();
   useScrollToHighlight(highlightHabitId);
+  const [isCatchingUp, setIsCatchingUp] = useState(false);
 
   // Group Habits by Category (with Sorting)
   // Sort habits by order first. Exclude kid chores (assignedTo set) up front so the
@@ -199,9 +203,19 @@ const Habits: React.FC = () => {
   const sortedHabits = useMemo(
     () => habits
       .filter(h => !h.assignedTo)
+      .filter(h => showArchived ? !!h.archivedAt : !h.archivedAt)
       .sort((a, b) => (a.order ?? 999) - (b.order ?? 999)),
-    [habits]
+    [habits, showArchived]
   );
+
+  // F-HABITS-09: habits eligible for the "Catch up yesterday" bulk action —
+  // derived from the same parent-visible/unassigned set as `sortedHabits` so
+  // kid chores (assigned to a managed member) are never bulk-completed here.
+  const catchUpEligibleHabits = useMemo(() => {
+    const today = getLocalDateString();
+    const yesterday = getLocalDateString(subDays(new Date(), 1));
+    return getCatchUpEligibleHabits(sortedHabits, today, yesterday);
+  }, [sortedHabits]);
 
   // Extract categories from sorted habits (Set preserves insertion order which is now sorted order)
   const categories = useMemo<string[]>(
@@ -215,10 +229,11 @@ const Habits: React.FC = () => {
       acc[category] = habits
         .filter(h => h.category === category)
         .filter(h => !h.assignedTo) // Hide kid chores from the parent tracker (assignedTo is set only for managed-kid chores; dormant by default)
+        .filter(h => showArchived ? !!h.archivedAt : !h.archivedAt)
         .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
       return acc;
     }, {} as Record<string, Habit[]>),
-    [categories, habits]
+    [categories, habits, showArchived]
   );
 
   // --- Kids chores (read-only parent view, Plan 080c-4) ---
@@ -279,6 +294,34 @@ const Habits: React.FC = () => {
     }
   };
 
+  // Sequentially (not Promise.all) so we don't fire a burst of concurrent
+  // writeBatches — mirrors the per-habit toggleHabit atomicity guarantee
+  // without racing multiple batches against the same household points doc.
+  const handleCatchUpYesterday = async () => {
+    if (isCatchingUp || catchUpEligibleHabits.length === 0) return;
+    setIsCatchingUp(true);
+    let caughtUp = 0;
+    let failed = 0;
+    for (const habit of catchUpEligibleHabits) {
+      try {
+        await toggleHabit(habit.id, 'up');
+        caughtUp += 1;
+      } catch (error) {
+        // toggleHabit doesn't surface its own error toast, so a single
+        // habit failing here must not abort the rest of the queue.
+        failed += 1;
+        console.error(`[handleCatchUpYesterday] Failed for habit ${habit.id}:`, error);
+      }
+    }
+    if (caughtUp > 0) {
+      toast.success(`Caught up ${caughtUp} habit${caughtUp === 1 ? '' : 's'} from yesterday`);
+    }
+    if (failed > 0) {
+      toast.error(`Failed to catch up ${failed} habit${failed === 1 ? '' : 's'}`);
+    }
+    setIsCatchingUp(false);
+  };
+
   const hasNoHabits = habits.length === 0;
 
   return (
@@ -319,8 +362,12 @@ const Habits: React.FC = () => {
                 onAdjust={() => setIsSmartAdjustOpen(true)}
                 onReorder={() => setIsSmartReorderOpen(true)}
                 onManage={() => setIsWizardOpen(true)}
+                onCatchUpYesterday={handleCatchUpYesterday}
                 actionsDisabled={hasNoHabits}
+                catchUpDisabled={catchUpEligibleHabits.length === 0 || isCatchingUp}
                 showSmartTools={powerToolsEnabled}
+                onToggleArchived={() => setShowArchived(prev => !prev)}
+                showingArchived={showArchived}
               />
             </div>
           }
@@ -363,7 +410,7 @@ const Habits: React.FC = () => {
         {/* Main Content */}
         <div className="px-4 pb-6">
           <TabsContent value="track" className="space-y-6">
-            {categories.length === 0 && (
+            {categories.length === 0 && !showArchived && (
               <EmptyState
                 variant="dashed"
                 icon={<ListChecks size={28} />}
@@ -382,6 +429,15 @@ const Habits: React.FC = () => {
               />
             )}
 
+            {categories.length === 0 && showArchived && (
+              <EmptyState
+                variant="dashed"
+                icon={<Archive size={28} />}
+                title="No archived habits"
+                description="Habits you archive will show up here, still tracked in Insights and history."
+              />
+            )}
+
             {categories.map((category) => (
               <div key={category}>
                 <Eyebrow as="h2" className="mb-2 px-1">
@@ -397,7 +453,7 @@ const Habits: React.FC = () => {
                 tracking view — see UX content audit Batch 4. Gated on Kid Mode
                 + at least one managed kid with at least one chore, so it stays
                 fully dormant in a normal household. */}
-            {kidModeEnabled && kidsWithChores.length > 0 && (
+            {!showArchived && kidModeEnabled && kidsWithChores.length > 0 && (
               <section aria-label="Kids chores">
                 <Eyebrow as="h2" tone="warm" className="flex items-center gap-2 mb-2 px-1">
                   <Star size={14} className="fill-current" />

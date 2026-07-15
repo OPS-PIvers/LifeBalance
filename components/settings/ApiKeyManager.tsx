@@ -47,6 +47,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
     habits: true,
     expenses: true,
     shoppingList: true,
+    bills: true,  // Pay a calendar bill via the quickAddBillPay endpoint (F-MONEY-11)
     receiptScanning: false,  // Hidden until implemented
   });
   const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
@@ -352,6 +353,11 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                         Shopping
                       </span>
                     )}
+                    {key.permissions.bills && (
+                      <Badge variant="success" size="md">
+                        Bills
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </Row>
@@ -512,6 +518,17 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                     setPermissions({ ...permissions, shoppingList: checked })
                   }
                   aria-label="Shopping List (add items)"
+                />
+              </Row>
+              <Row>
+                <label htmlFor="perm-bills" className="flex-1 text-sm text-brand-700 dark:text-brand-200 cursor-pointer">Bills (pay a calendar bill)</label>
+                <Switch
+                  id="perm-bills"
+                  checked={permissions.bills ?? false}
+                  onCheckedChange={(checked) =>
+                    setPermissions({ ...permissions, bills: checked })
+                  }
+                  aria-label="Bills (pay a calendar bill)"
                 />
               </Row>
             </SurfaceList>
