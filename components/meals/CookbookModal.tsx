@@ -10,6 +10,8 @@ import { FIELD_BASE } from '@/components/ui/fieldStyles';
 import { cn } from '@/utils/cn';
 import { Search, ChevronRight, ChevronDown, Copy, X, Star, ChefHat, Check } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import { SMART_COLLECTIONS, SmartCollectionId } from '@/utils/recipeCollections';
+import { getLocalDateString } from '@/utils/dateHelpers';
 
 interface CookbookModalProps {
   isOpen: boolean;
@@ -32,6 +34,7 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<SortOption>('name');
   const [tagsOpen, setTagsOpen] = useState(false);
+  const [activeCollection, setActiveCollection] = useState<SmartCollectionId | null>(null);
 
   // Derive unique tags from all meals
   const allTags = useMemo(() => {
@@ -48,15 +51,22 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
     if (!isOpen) return []; // Short-circuit if closed
 
     const lowerCaseSearchTerm = searchTerm.trim().toLowerCase();
+    const today = getLocalDateString();
+    const collection = activeCollection
+      ? SMART_COLLECTIONS.find(c => c.id === activeCollection)
+      : undefined;
 
     const filtered = meals.filter(meal => {
-      // 1. Tag Filter (Fail fast)
+      // 1. Smart collection filter
+      if (collection && !collection.predicate(meal, today)) return false;
+
+      // 2. Tag Filter (Fail fast)
       if (selectedTags.length > 0) {
         const hasAllTags = selectedTags.every(tag => meal.tags?.includes(tag));
         if (!hasAllTags) return false;
       }
 
-      // 2. Search Filter
+      // 3. Search Filter
       if (lowerCaseSearchTerm) {
         const matchesName = meal.name.toLowerCase().includes(lowerCaseSearchTerm);
         const matchesDesc = meal.description?.toLowerCase().includes(lowerCaseSearchTerm);
@@ -68,7 +78,7 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
       return true;
     });
 
-    // 3. Sort
+    // 4. Sort
     return filtered.sort((a, b) => {
       switch (sortBy) {
         case 'name':
@@ -84,7 +94,7 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
           return 0;
       }
     });
-  }, [meals, searchTerm, selectedTags, sortBy, isOpen]);
+  }, [meals, searchTerm, selectedTags, sortBy, isOpen, activeCollection]);
 
   const toggleTag = (tag: string) => {
     setSelectedTags(prev =>
@@ -92,6 +102,10 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
         ? prev.filter(t => t !== tag)
         : [...prev, tag]
     );
+  };
+
+  const toggleCollection = (id: SmartCollectionId) => {
+    setActiveCollection(prev => (prev === id ? null : id));
   };
 
   return (
@@ -132,6 +146,29 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
             icon={<Search size={16} />}
             className="bg-white dark:bg-brand-700/50"
           />
+
+          {/* Smart collection chips */}
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Smart collections">
+            {SMART_COLLECTIONS.map(collection => {
+              const isActive = activeCollection === collection.id;
+              return (
+                <button
+                  key={collection.id}
+                  type="button"
+                  onClick={() => toggleCollection(collection.id)}
+                  aria-pressed={isActive}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors whitespace-nowrap inline-flex items-center gap-1 ${
+                    isActive
+                      ? 'bg-accent-600 text-white border-accent-600'
+                      : 'bg-white text-brand-600 border-brand-200 hover:border-brand-300 dark:bg-brand-700/50 dark:text-brand-300 dark:border-brand-600 dark:hover:border-brand-500/50'
+                  }`}
+                >
+                  {isActive && <Check size={12} aria-hidden="true" />}
+                  {collection.label}
+                </button>
+              );
+            })}
+          </div>
 
           {/* Sort + tag-filter dropdowns (owner request — replaces the tiny
               icon toggles and the horizontally scrolling chip row). */}
@@ -208,9 +245,9 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
           {filteredMeals.length === 0 ? (
             <div className="text-center py-12 text-brand-400 dark:text-brand-450">
                 <p>No matching recipes found.</p>
-                {(searchTerm || selectedTags.length > 0) && (
+                {(searchTerm || selectedTags.length > 0 || activeCollection) && (
                     <button
-                        onClick={() => { setSearchTerm(''); setSelectedTags([]); }}
+                        onClick={() => { setSearchTerm(''); setSelectedTags([]); setActiveCollection(null); }}
                         className="text-brand-600 font-bold text-sm mt-2 hover:underline dark:text-brand-300"
                     >
                         Clear filters
