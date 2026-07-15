@@ -48,6 +48,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
     expenses: true,
     shoppingList: true,
     bills: true,  // Pay a calendar bill via the quickAddBillPay endpoint (F-MONEY-11)
+    todos: true,  // Create a to-do via the quickAddTodo endpoint (F-TODO-07)
     receiptScanning: false,  // Hidden until implemented
   });
   const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
@@ -358,6 +359,11 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                         Bills
                       </Badge>
                     )}
+                    {key.permissions.todos && (
+                      <Badge variant="neutral" size="md">
+                        To-Dos
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </Row>
@@ -529,6 +535,17 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                     setPermissions({ ...permissions, bills: checked })
                   }
                   aria-label="Bills (pay a calendar bill)"
+                />
+              </Row>
+              <Row>
+                <label htmlFor="perm-todos" className="flex-1 text-sm text-brand-700 dark:text-brand-200 cursor-pointer">To-Dos (add a task)</label>
+                <Switch
+                  id="perm-todos"
+                  checked={permissions.todos ?? false}
+                  onCheckedChange={(checked) =>
+                    setPermissions({ ...permissions, todos: checked })
+                  }
+                  aria-label="To-Dos (add a task)"
                 />
               </Row>
             </SurfaceList>

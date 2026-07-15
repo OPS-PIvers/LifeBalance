@@ -158,7 +158,8 @@ async function processHousehold(
       "Your monthly money recap is ready",
       "See how your budget, spending, and income closed out last month.",
       { type: "monthly_money_recap", url: `/?moneyrecap=${memberMonth}` },
-      memberDoc.ref
+      memberDoc.ref,
+      { householdId, recipientUid: member.uid ?? memberDoc.id, type: "monthly_money_recap" }
     );
 
     await memberDoc.ref.update({ lastMoneyRecapSentMonth: memberMonth });

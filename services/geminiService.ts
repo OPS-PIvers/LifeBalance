@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type, Schema, Part } from "@google/genai";
 import { Meal, Transaction, Habit, InsightAction, Household, DietaryProfile } from "@/types/schema";
+import type { ReflectionSnippet } from "@/utils/habitReflections";
 import { WeeklyPlan, WeeklyPlanConstraints, WeeklyPlanStore } from "@/types/weeklyPlan";
 import { GROCERY_CATEGORIES } from "@/data/groceryCategories";
 import { db, getFunctionsInstance } from "@/firebase.config";
@@ -16,7 +17,7 @@ import {
 import { getLocalDateString } from "@/utils/dateHelpers";
 import { getLimits, LEGACY_AI_DAILY_QUOTA } from "@/utils/entitlements";
 import { getBillingEnabled } from "./appConfig";
-import type { ReceiptData } from './geminiService.types';
+import type { ReceiptData, ReceiptLineItemsData } from './geminiService.types';
 import {
   GeminiValidationError,
   InvalidImageError,
@@ -37,6 +38,7 @@ import {
   validateNaturalLanguageUnknown,
   validateRecipe,
   validateGeneratedWeeklyPlan,
+  validateReceiptLineItems,
 } from './geminiValidation';
 
 // Re-export image/validation error types and the image guard so callers/tests
@@ -46,6 +48,8 @@ export { GeminiValidationError, InvalidImageError, validateBase64Image };
 // Re-export plain types so existing importers keep compiling unchanged.
 export type {
   ReceiptData,
+  ReceiptLineItem,
+  ReceiptLineItemsData,
   ParsedShoppingList,
   ParsedTodoList,
   ParsedExpense,
@@ -394,7 +398,7 @@ async function withTimeoutAndRetry<T>(
  * AI Prompt template for generating household insights.
  * This can be easily modified or A/B tested without changing function logic.
  */
-const INSIGHT_GENERATION_PROMPT = (transactions: string, habits: string, previousInsights: string = "") => `Analyze this household data to provide ONE concise, helpful, and digestible insight.
+const INSIGHT_GENERATION_PROMPT = (transactions: string, habits: string, previousInsights: string = "", reflections: string = "") => `Analyze this household data to provide ONE concise, helpful, and digestible insight.
 The insight should be deep and actionable, not just a basic observation.
 Focus on patterns between spending and habits if possible, or interesting trends in either.
 Keep the 'text' under 30 words.
@@ -402,6 +406,11 @@ Keep the 'text' under 30 words.
 ${previousInsights ? `
 PREVIOUS INSIGHTS (Do not repeat these. Instead, expand on them with new analysis, look for different patterns, or provide a completely new insight):
 ${previousInsights}
+` : ''}
+
+${reflections ? `
+Recent self-reported notes/moods on habit completions (use these only if they add real signal — never quote them verbatim):
+${reflections}
 ` : ''}
 
 Also suggest 0-2 actionable 'actions' the user can take to improve their situation.
@@ -824,6 +833,85 @@ export const analyzeReceipt = async (
 };
 
 /**
+ * F-DASH-04 — Extracts INDIVIDUAL line items from an itemized receipt so a
+ * single mixed-category purchase (e.g. a Target run) can be split into several
+ * categorized transactions instead of one lump. Modeled on `parseGroceryReceipt`
+ * (line-item OCR) but returns a per-receipt header (merchant/date/store) plus
+ * each item's `{description, amount, category}`, where category is clamped to the
+ * household's actual budget categories.
+ *
+ * @param householdId - The household ID for quota tracking
+ * @param base64Image - Base64 encoded receipt image
+ * @param availableCategories - Household budget categories to choose from
+ * @param availableStores - Existing store names to prefer for the receipt's store
+ * @param _aiClient - Optional injected AI client for testing purposes.
+ */
+export const parseReceiptLineItems = async (
+  householdId: string,
+  base64Image: string,
+  availableCategories?: string[],
+  availableStores?: string[],
+  _aiClient?: Pick<typeof ai, 'models'>
+): Promise<ReceiptLineItemsData> => {
+  return withErrorHandling('Receipt Line-Item Parse', 'Failed to itemize receipt. Please try manual entry.', async () => {
+    const resolvedCategories = availableCategories?.length ? availableCategories : DEFAULT_FINANCE_CATEGORIES;
+    const categoryList = sanitizeList(resolvedCategories);
+
+    const today = getLocalDateString();
+    const prompt = [
+      `Analyze this itemized receipt. Extract the merchant name, the purchase date (YYYY-MM-DD), and EVERY individual purchased line item.`,
+      `For each item, provide:`,
+      `- description: the product name, normalized to be readable (fix typos, expand abbreviations).`,
+      `- amount: the item's price in US dollars as a POSITIVE decimal number (e.g. 12.34). Parse "1,234.56" as 1234.56 ("." = decimal, "," = thousands separator). Multiply unit price by quantity if the receipt lists them separately.`,
+      `- category: choose exactly one of these strings: ${categoryList}. If none fits, use "${FALLBACK_CATEGORY}". Do not invent a new category.`,
+      `Ignore subtotal, tax, total, discounts, and non-product lines. If the image has no itemized products, return an empty items array [].`,
+      availableStores?.length
+        ? `Extract the store name if visible. Prefer one of these existing stores when it's the same place: ${sanitizeList(availableStores)}. Only return a different name if it is clearly a different store; otherwise leave it blank.`
+        : `Extract the store name if visible; otherwise leave it blank.`,
+      `Today's date is ${today}. If the year is missing, infer it.`,
+    ].filter(Boolean).join('\n');
+
+    const data = await generateJsonContent<ReceiptLineItemsData>(
+      householdId,
+      prepareImageContent(base64Image, prompt),
+      {
+        type: Type.OBJECT,
+        properties: {
+          merchant: { type: Type.STRING },
+          date: { type: Type.STRING },
+          store: { type: Type.STRING },
+          items: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                description: { type: Type.STRING },
+                amount: { type: Type.NUMBER },
+                category: { type: Type.STRING },
+              },
+              required: ["description", "amount", "category"],
+            },
+          },
+        },
+        required: ["merchant", "items"],
+      },
+      _aiClient,
+      GEMINI_MODEL,
+      validateReceiptLineItems
+    );
+
+    // Force positive amounts and clamp each item's category to the household's
+    // real set (the schema only constrains the type, not membership).
+    data.items = data.items.map(item => ({
+      ...item,
+      amount: Math.abs(item.amount),
+      category: clampToAllowed(item.category, resolvedCategories),
+    }));
+    return data;
+  });
+};
+
+/**
  * Analyzes a bank statement screenshot and extracts multiple transactions
  * @param householdId - The household ID for quota tracking
  * @param base64Image - Base64 encoded image of bank statement/transaction list
@@ -1134,6 +1222,9 @@ export const optimizeGroceryList = async (
  * @param previousInsights - List of previous insight texts to avoid repetition
  * @param options - Optional configuration for insight generation
  * @param options.includeMerchantNames - If true, includes merchant names in the data sent to AI (default: true)
+ * @param recentReflections - F-HABITS-06: a small, bounded list of recent habit note/mood
+ *   snippets (see `selectRecentReflections`) so insights can reference how a habit *felt*,
+ *   not just whether it was completed.
  * @param _aiClient - Optional injected AI client for testing purposes.
  */
 export const generateInsight = async (
@@ -1142,7 +1233,8 @@ export const generateInsight = async (
   habits: Habit[],
   previousInsights: string[] = [],
   options?: { includeMerchantNames?: boolean },
-  _aiClient?: Pick<typeof ai, 'models'>
+  _aiClient?: Pick<typeof ai, 'models'>,
+  recentReflections: ReflectionSnippet[] = []
 ): Promise<{ text: string, actions?: InsightAction[] }> => {
   return withErrorHandling('Insight Generation', 'Failed to generate insight.', async () => {
     // Anonymize and simplify data
@@ -1165,10 +1257,19 @@ export const generateInsight = async (
       ? previousInsights.map(t => `- "${t}"`).join('\n')
       : '';
 
+    // Small, bounded, already-truncated by selectRecentReflections — sanitized
+    // the same way habit titles are, since notes are free text.
+    const reflectionsStr = recentReflections.length > 0
+      ? recentReflections
+          .map(r => `- ${sanitizeForPrompt(r.habitTitle)}: ${[r.mood, r.note ? sanitizeForPrompt(r.note) : undefined].filter(Boolean).join(' — ')}`)
+          .join('\n')
+      : '';
+
     const prompt = INSIGHT_GENERATION_PROMPT(
       JSON.stringify(simplifiedTransactions),
       JSON.stringify(simplifiedHabits),
-      previousInsightsStr
+      previousInsightsStr,
+      reflectionsStr
     );
 
     return await generateJsonContent<{ text: string, actions?: InsightAction[] }>(

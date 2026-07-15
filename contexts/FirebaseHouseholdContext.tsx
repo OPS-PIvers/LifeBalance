@@ -49,6 +49,7 @@ import {
   GroceryCatalogItem,
   Store,
   QuickStockList,
+  TaskTemplate,
   HouseholdApiKey,
   PendingItem,
   ModuleKey,
@@ -56,7 +57,8 @@ import {
   MonthlyMoneyRecap,
   SavingsGoal,
   NetWorthSnapshot,
-  DietaryProfile
+  DietaryProfile,
+  NotificationLogEntry
 } from '@/types/schema';
 import { calculateSafeToSpendBreakdownFromExpanded } from '@/utils/safeToSpendCalculator';
 import { calculatePointsForDate, calculatePointsForDateRange, computeManagedMemberPointsReset, isHabitStale, getHabitResetUpdate } from '@/utils/habitLogic';
@@ -108,6 +110,7 @@ import {
 } from '@/contexts/household/mutations/calendarMutations';
 import {
   makeAddTransaction,
+  makeAddTransactions,
   makeUpdateTransactionCategory,
   makeUpdateTransaction,
   makeDeleteTransaction,
@@ -128,6 +131,11 @@ import {
   makeCompleteToDo,
   makeLoadOlderCompletedTodos,
 } from '@/contexts/household/mutations/todoMutations';
+import {
+  makeTaskTemplateMutations,
+  makeTaskTemplateSettingsMutations,
+  makeApplyTaskTemplate,
+} from '@/contexts/household/mutations/taskTemplateMutations';
 import {
   makeAddMeal,
   makeMealCrudMutations,
@@ -162,6 +170,7 @@ import {
   makeHouseholdSettingsMutations,
   makeRefreshInsight,
 } from '@/contexts/household/mutations/coreMutations';
+import { makeNotificationMutations } from '@/contexts/household/mutations/notificationMutations';
 import {
   makeAddMember,
   makeMemberCrudMutations,
@@ -520,6 +529,19 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [hasMoreBucketHistory, setHasMoreBucketHistory] = useState(false);
   const bucketHistoryLoadedAllRef = useRef(false);
   const [apiKeys, setApiKeys] = useState<HouseholdApiKey[]>([]);
+  // Notification inbox (F-NOTIF-02) — raw household-wide fetch window from the
+  // listener; filtered down to the current member's own entries below (see
+  // NOTIFICATION_LOG_FETCH_LIMIT doc comment for why filtering happens here
+  // rather than in the Firestore query).
+  const [notificationLogRaw, setNotificationLogRaw] = useState<NotificationLogEntry[]>([]);
+  const notificationLog = useMemo(
+    () => notificationLogRaw.filter((entry) => entry.recipientUid === currentUser?.uid),
+    [notificationLogRaw, currentUser?.uid]
+  );
+  const unreadNotificationCount = useMemo(
+    () => notificationLog.filter((entry) => !entry.readBy.includes(currentUser?.uid ?? '')).length,
+    [notificationLog, currentUser?.uid]
+  );
   const [pendingItemsCount, setPendingItemsCount] = useState<number>(0);
   // Tracks pendingItems currently being processed so a snapshot that re-fires
   // before the `processed: true` write settles can't double-process an item
@@ -604,6 +626,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const stores = useMemo(() => householdSettings?.stores || [], [householdSettings?.stores]);
   const groceryCategories = useMemo(() => householdSettings?.groceryCategories || [], [householdSettings?.groceryCategories]);
   const quickStockLists = useMemo(() => householdSettings?.quickStockLists || [], [householdSettings?.quickStockLists]);
+  const taskTemplates = useMemo(() => householdSettings?.taskTemplates || [], [householdSettings?.taskTemplates]);
 
   // Tracks the household for which the missing-member-document recovery has
   // already been attempted, so the recovery getDoc runs at most once per
@@ -674,6 +697,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     insightsLoadedAllRef.current = false;
     setHasMoreInsights(false);
     setApiKeys([]);
+    setNotificationLogRaw([]);
     setPendingItemsCount(0);
     // Drop any queued voice-command items from the previous household so the
     // drain loop never processes them against the new household's collection.
@@ -789,6 +813,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       setHasMoreInsights: (data) => setHasMoreInsights(data),
       setInsight: (text) => setInsight(text),
       insightsLoadedAllRef,
+      setNotificationLogRaw: (data) => setNotificationLogRaw(data),
     }));
 
     // Meals + Meal Plan listeners (contexts/household/listeners/mealListeners.ts)
@@ -1682,6 +1707,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }).addTransaction(tx);
   }, [householdId, user, householdSettings, accounts]);
 
+  const addTransactions = useCallback(async (
+    txs: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[],
+  ) => {
+    await makeAddTransactions({
+      db, householdId, user, householdSettings, accounts,
+    }).addTransactions(txs);
+  }, [householdId, user, householdSettings, accounts]);
+
   const updateTransactionCategory = useCallback(async (
     id: string,
     category: string,
@@ -1876,6 +1909,26 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   }, [activeMemberId]);
 
+  // --- ACTIONS: NOTIFICATION INBOX (F-NOTIF-02) ---
+
+  const markNotificationRead = useCallback(async (entryId: string) => {
+    await makeNotificationMutations({
+      db,
+      householdId,
+      currentUserUid: currentUser?.uid ?? null,
+      notificationLog,
+    }).markNotificationRead(entryId);
+  }, [householdId, currentUser?.uid, notificationLog]);
+
+  const markAllNotificationsRead = useCallback(async () => {
+    await makeNotificationMutations({
+      db,
+      householdId,
+      currentUserUid: currentUser?.uid ?? null,
+      notificationLog,
+    }).markAllNotificationsRead();
+  }, [householdId, currentUser?.uid, notificationLog]);
+
   // --- ACTIONS: ONBOARDING ---
 
   const completeOnboarding = useCallback(async () => {
@@ -1897,6 +1950,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // F-MEALS-03: standing household dietary restrictions/allergens.
   const setDietaryProfile = useCallback(async (profile: DietaryProfile) => {
     await makeHouseholdSettingsMutations({ db, householdId }).setDietaryProfile(profile);
+  }, [householdId]);
+
+  // F-PLAT-07 — apply a full module-visibility preset in one write.
+  const updateModuleVisibility = useCallback(async (patch: Partial<Record<ModuleKey, boolean>>) => {
+    await makeHouseholdSettingsMutations({ db, householdId }).updateModuleVisibility(patch);
   }, [householdId]);
 
   // Plan 080b: set/clear the Kid Mode exit PIN. A raw PIN is salted+hashed here
@@ -1962,6 +2020,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const deleteStore = useCallback(async (id: string) => {
     await makeDeleteStore({ db, householdId, householdSettings, shoppingList }).deleteStore(id);
   }, [householdId, householdSettings, shoppingList]);
+
+  const reorderStores = useCallback(async (orderedIds: string[]) => {
+    await makeStoreSettingsMutations({ db, householdId, householdSettings }).reorderStores(orderedIds);
+  }, [householdId, householdSettings]);
 
   const updateGroceryCategories = useCallback(async (categories: string[]) => {
     await makeShoppingListMutations({ db, householdId }).updateGroceryCategories(categories);
@@ -2069,6 +2131,24 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeCompleteToDo({ db, householdId, membersRef }).completeToDo(id);
   }, [householdId]);
 
+  // F-TODO-03 — Task templates ("Quick Task Lists"). Mirrors QuickStockList's
+  // add/update/delete-on-the-household-doc pattern.
+  const addTaskTemplate = useCallback(async (template: Omit<TaskTemplate, 'id'>) => {
+    await makeTaskTemplateMutations({ db, householdId }).addTaskTemplate(template);
+  }, [householdId]);
+
+  const updateTaskTemplate = useCallback(async (template: TaskTemplate) => {
+    await makeTaskTemplateSettingsMutations({ db, householdId, householdSettings }).updateTaskTemplate(template);
+  }, [householdId, householdSettings]);
+
+  const deleteTaskTemplate = useCallback(async (id: string) => {
+    await makeTaskTemplateSettingsMutations({ db, householdId, householdSettings }).deleteTaskTemplate(id);
+  }, [householdId, householdSettings]);
+
+  const applyTaskTemplate = useCallback(async (template: TaskTemplate) => {
+    return await makeApplyTaskTemplate({ db, householdId, user }).applyTaskTemplate(template);
+  }, [householdId, user]);
+
 
   const refreshInsight = useCallback(async () => {
     await makeRefreshInsight({
@@ -2159,6 +2239,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     payCalendarItem,
     deferCalendarItem,
     addTransaction,
+    addTransactions,
     updateTransactionCategory,
     updateTransaction,
     deleteTransaction,
@@ -2178,7 +2259,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, contributeToGoal,
     addBucket, updateBucket, deleteBucket, updateBucketLimit, reallocateBucket,
     addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem,
-    addTransaction, updateTransactionCategory, updateTransaction, deleteTransaction, splitTransaction,
+    addTransaction, addTransactions, updateTransactionCategory, updateTransaction, deleteTransaction, splitTransaction,
     setTransactionSplit, markSplitSettled,
     mergeTransactions, keepBothTransactions, getTransactionComments, addTransactionComment, deleteTransactionComment,
   ]);
@@ -2256,6 +2337,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addStore,
     updateStore,
     deleteStore,
+    reorderStores,
     updateGroceryCategories,
     addQuickStockList,
     updateQuickStockList,
@@ -2267,7 +2349,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }), [
     shoppingList, groceryCatalog, loadFullGroceryCatalog, stores, groceryCategories, quickStockLists,
     addShoppingItem, addShoppingItems, updateShoppingItem, reorderShoppingItems, deleteShoppingItem, toggleShoppingItemPurchased, clearPurchasedShoppingItems,
-    addStore, updateStore, deleteStore, updateGroceryCategories,
+    addStore, updateStore, deleteStore, reorderStores, updateGroceryCategories,
     addQuickStockList, updateQuickStockList, updateQuickStockLists, deleteQuickStockList,
     addGroceryCatalogItem, updateGroceryCatalogItem, deleteGroceryCatalogItem,
   ]);
@@ -2281,9 +2363,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateToDo,
     deleteToDo,
     completeToDo,
+    taskTemplates,
+    addTaskTemplate,
+    updateTaskTemplate,
+    deleteTaskTemplate,
+    applyTaskTemplate,
   }), [
     todos, isLoadingOlderTodos, hasMoreCompletedTodos, loadOlderCompletedTodos,
     addToDo, updateToDo, deleteToDo, completeToDo,
+    taskTemplates, addTaskTemplate, updateTaskTemplate, deleteTaskTemplate, applyTaskTemplate,
   ]);
 
   const coreValue = useMemo<HouseholdCoreContextValue>(() => ({
@@ -2308,6 +2396,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     completeOnboarding,
     setHouseholdCurrency,
     setModuleVisibility,
+    updateModuleVisibility,
     setKidModePin,
     setDietaryProfile,
     addKidProfile,
@@ -2318,14 +2407,22 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     exitToParent,
     recaps,
     moneyRecaps,
+    notificationLog,
+    unreadNotificationCount,
+    markNotificationRead,
+    markAllNotificationsRead,
   }), [
     isLoading, currentUser, members, insight, insightsHistory, isGeneratingInsight, hasMoreInsights, loadAllInsights,
     pendingItemsCount, apiKeys,
     householdId, householdSettings, refreshInsight, addMember, updateMember, removeMember, deleteHousehold,
-    completeOnboarding, setHouseholdCurrency, setModuleVisibility, setKidModePin, setDietaryProfile,
+    completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setKidModePin, setDietaryProfile,
     addKidProfile, updateKidProfile, removeKidProfile, activeMemberId, actAs, exitToParent,
     recaps,
     moneyRecaps,
+    notificationLog,
+    unreadNotificationCount,
+    markNotificationRead,
+    markAllNotificationsRead,
   ]);
 
   return (
