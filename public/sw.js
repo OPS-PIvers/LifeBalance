@@ -78,6 +78,37 @@ try {
 // References:
 // - https://github.com/firebase/firebase-js-sdk/issues/8010
 // - https://developer.apple.com/documentation/usernotifications/sending_web_push_notifications_in_web_apps_and_browsers
+// F-NOTIF-10 — per-notification-type vibration patterns.
+//
+// Platform reality check: `vibrate` on showNotification() options is honored
+// ONLY by Android Chrome/Edge (Chromium). iOS Safari/PWAs ignore it completely
+// (no Vibration API support at all on WebKit/iOS), and desktop browsers have
+// no vibration hardware so it's a silent no-op there too. Passing an
+// unsupported pattern is harmless (browsers that don't support it simply
+// don't vibrate), so we ship this for the Android slice without any feature
+// detection needed.
+//
+// Kept in sync with utils/notificationVibration.ts's VIBRATE_PATTERNS table —
+// a service worker can't `import` from the app bundle, so this is a
+// deliberate duplication (same pattern as the frozen-date streak table
+// documented in CLAUDE.md). Update both together.
+const DEFAULT_VIBRATE_PATTERN = [100, 50, 100];
+const PUSH_VIBRATE_PATTERNS = {
+  streak_warning: [200, 80, 200, 80, 200],
+  budget_alert: [200, 80, 200, 80, 200],
+  bill_reminder: [150, 60, 150],
+  habit_reminder: [80, 60, 80],
+  action_queue_reminder: [80, 60, 80],
+  weekly_recap: [100],
+  monthly_money_recap: [100],
+  test_notification: [100, 50, 100]
+};
+
+function getVibratePattern(type) {
+  if (!type || typeof type !== 'string') return DEFAULT_VIBRATE_PATTERN;
+  return PUSH_VIBRATE_PATTERNS[type] || DEFAULT_VIBRATE_PATTERN;
+}
+
 self.addEventListener('push', (event) => {
   console.log('[SW] Push event received:', event);
 
@@ -133,8 +164,10 @@ self.addEventListener('push', (event) => {
       ...data,
       url: safeUrl
     },
-    // Vibration pattern for mobile devices
-    vibrate: [100, 50, 100]
+    // Vibration pattern for mobile devices — per-type where the caller sent
+    // one (data.type), else the generic default. Only honored by Android
+    // Chrome/Edge in practice; see the comment on getVibratePattern above.
+    vibrate: getVibratePattern(data.type)
   };
 
   // CRITICAL: event.waitUntil() ensures Safari doesn't treat this as a silent push
