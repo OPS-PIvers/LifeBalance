@@ -648,6 +648,9 @@ const EXAMPLES: ShortcutExample[] = [
       },
       { text: 'Select **Run Immediately** → **Next** → **New Blank Automation**.' },
       {
+        text: 'Add **Wait** and set it to **10 seconds**. Gmail / Google Workspace accounts in Apple Mail are fetch-only — the automation can fire before the message body has downloaded, and without this pause the next step turns the email into empty text (“emailText was empty”).',
+      },
+      {
         text: 'Add **Get Text from Input** — this turns the incoming email into plain text. **Important:** tap the pale **Input** word inside that action and set it to **Shortcut Input** (the incoming email). If it’s left empty or auto-fills with something else, the action produces nothing and the server rejects the run with an “emailText was empty” error. That’s the only preparation: LifeBalance reads the amount, merchant, card, and date out of the email on the server, so there are no patterns to copy.',
       },
     ],
@@ -673,6 +676,7 @@ const EXAMPLES: ShortcutExample[] = [
       '**No Email trigger on your iOS?** Build the exact same actions as a regular shortcut, tap ⓘ → turn on **Show in Share Sheet**, then open an alert email → **Share** → run the shortcut.',
       'Email alerts automatically fill a matching Apple Pay **$0 hold** instead of adding a duplicate — no extra field needed.',
       'Gmail / Google Workspace accounts in Apple **Mail** are fetch-only, so the automation may run several minutes after the purchase — whenever Mail actually downloads the message.',
+      '**Getting “emailText was empty”?** Add a **Show Notification** right after “Get Text from Input” showing both **Shortcut Input** and the **Text** variable, then trigger with a real matching email (tapping ▶︎ on an automation runs it with NO input — it will always fail that way). Both blank → the trigger isn’t passing the email (filter mismatch, or manual run). Shortcut Input filled but Text blank → the coercion broke: set the emailText field directly to **Shortcut Input** (works on iOS 27). Neither → the body hadn’t downloaded; raise the **Wait** to 15–20 s (no more — iOS kills background automations past ~30 s).',
       'If Wells Fargo rewords its emails, there’s nothing to fix on your phone — the server-side parser is updated centrally.',
       '**Plaid** (Budget tab) is the zero-maintenance alternative for settled amounts.',
     ],

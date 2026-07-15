@@ -453,16 +453,21 @@ export const quickAddExpense = onRequest(
         return;
       }
       // The email Shortcut ran but the body never made it into the request.
-      // The usual mis-wiring is the emailText field not pointing at the "Get
-      // Text from Input" output — say so precisely, because this message is
-      // exactly what the Shortcut's own notification shows the user.
+      // Two real-world causes, in observed order of likelihood: (1) fetch-only
+      // mail accounts (Gmail/Workspace in Apple Mail) trigger the automation
+      // before the message body has downloaded, so "Get Text from Input"
+      // coerces the email to "" — a Wait action fixes it; (2) the emailText
+      // field isn't pointing at the "Get Text from Input" output. This message
+      // is exactly what the Shortcut's own notification shows the user.
       await logApiCall(householdId, apiKey.substring(0, 16), "expense", req.body, 400);
       errorResponse(
         res,
         400,
         "emailText was empty — the automation ran but no email body reached the " +
-          "server. In the Shortcut, set emailText to the Text output of " +
-          "“Get Text from Input” and set that action's input to Shortcut Input.",
+          "server. Most often the email body hadn't downloaded yet (Gmail/" +
+          "Workspace accounts are fetch-only): add a Wait action of 10–60 seconds " +
+          "before “Get Text from Input”. Also check emailText is set to that " +
+          "action's Text output and its input is Shortcut Input.",
         "BAD_REQUEST"
       );
       return;
