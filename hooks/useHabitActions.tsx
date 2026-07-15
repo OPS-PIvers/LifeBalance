@@ -4,7 +4,6 @@ import {
   doc,
   addDoc,
   updateDoc,
-  deleteDoc,
   getDocs,
   getDoc,
   query,
@@ -44,6 +43,7 @@ import { getLocalDateString } from '@/utils/dateHelpers';
 import { track } from '@/services/analytics';
 import { shouldTrackFirstTime, FIRST_HABIT_FLAG } from '@/utils/firstTimeFlags';
 import { accumulate, ToastAccumulatorState } from '@/utils/toastAccumulator';
+import { softDeleteDoc } from '@/contexts/household/mutations/trashMutations';
 
 /**
  * Window for folding rapid same-habit toggles into a single cumulative toast
@@ -151,12 +151,15 @@ export const useHabitActions = (
   const deleteHabit = useCallback(async (id: string) => {
     if (!householdId) return;
     try {
-      await deleteDoc(doc(db, `households/${householdId}/habits`, id));
+      // F-XCUT-03: soft-delete into the unified trash (recoverable for 30 days).
+      // Points already credited are NOT reversed on delete, so restoring the
+      // habit doc verbatim never double-counts.
+      await softDeleteDoc({ db, householdId, deletedBy: currentUser?.uid ?? null }, 'habit', id);
     } catch (error) {
       console.error('[deleteHabit] Failed to delete habit:', error);
       throw error;
     }
-  }, [householdId]);
+  }, [householdId, currentUser]);
 
   const archiveHabit = useCallback(async (id: string) => {
     if (!householdId) return;

@@ -31,6 +31,7 @@ import {
 } from '@/types/schema';
 import { type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { type BucketSpent } from '@/utils/bucketSpentCalculator';
+import { type TrashedItem } from '@/utils/trash';
 
 /** Options accepted by mutations that normally toast per call. `silent: true`
  *  suppresses the per-item success toast so BULK flows (Action Queue
@@ -321,6 +322,17 @@ export interface HouseholdContextType {
   actAs: (memberId: string) => void;
   exitToParent: () => void;
 
+  // Unified trash / recently-deleted recovery (F-XCUT-03)
+  /** Soft-deleted records across the trash-enabled domains (todos, shopping
+   *  items, meals, planned meals, habits), newest-first and bounded. Empty when
+   *  the `trash` rules PR hasn't shipped yet (reads permission-deny). */
+  trashedItems: TrashedItem[];
+  /** Restore a soft-deleted record: re-creates the original doc and clears the
+   *  trash entry, atomically. */
+  restoreTrashedItem: (item: TrashedItem) => Promise<void>;
+  /** Permanently delete a trashed record now (no recovery). */
+  purgeTrashedItem: (item: TrashedItem) => Promise<void>;
+
   // Onboarding
   /** Mark the first-run onboarding wizard as finished so it is never shown again. */
   completeOnboarding: () => Promise<void>;
@@ -457,4 +469,5 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
   | 'activeMemberId' | 'actAs' | 'exitToParent'
   | 'recaps' | 'moneyRecaps'
+  | 'trashedItems' | 'restoreTrashedItem' | 'purgeTrashedItem'
 >;

@@ -18,6 +18,7 @@ import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge
 import { MAX_COMMENT_LENGTH } from '@/contexts/household/mutations/commentMutations';
 import { roundMoney } from '@/utils/money';
 import { splitParticipantKey } from '@/utils/settlement';
+import { trashDocId, type TrashDomain, type TrashedItem } from '@/utils/trash';
 import { computeNetWorth } from '@/utils/netWorth';
 import { track } from '@/services/analytics';
 import {
@@ -495,6 +496,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   });
   const [insightsHistory] = useState<Insight[]>([]);
   const [insight] = useState("Test Mode: This is mock data for AI testing");
+  // F-XCUT-03: unified trash mirror (in-memory parity for the real listener).
+  const [trashedItems, setTrashedItems] = useState<TrashedItem[]>([]);
   const [stores, setStores] = useState<Store[]>(SEED_STORES);
   const [groceryCategories, setGroceryCategories] = useState<string[]>([]);
   const [quickStockLists, setQuickStockLists] = useState<QuickStockList[]>([]);
@@ -927,10 +930,30 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Family challenge created');
   }, []);
 
-  const deleteHabit = useCallback(async (id: string) => {
-    setHabits(prev => prev.filter(h => h.id !== id));
-    toast.success('Mock: Habit deleted');
+  // F-XCUT-03: push a soft-deleted record into the in-memory trash mirror so
+  // Test Mode exercises the same restore/purge flow as the real listener.
+  const pushToTrash = useCallback((domain: TrashDomain, item: { id: string } & Record<string, unknown>) => {
+    setTrashedItems(prev => [
+      {
+        id: trashDocId(domain, item.id),
+        domain,
+        originalId: item.id,
+        data: { ...item },
+        deletedAt: new Date().toISOString(),
+        deletedBy: 'test-user-id',
+      },
+      ...prev.filter(t => t.id !== trashDocId(domain, item.id)),
+    ]);
   }, []);
+
+  const deleteHabit = useCallback(async (id: string) => {
+    setHabits(prev => {
+      const target = prev.find(h => h.id === id);
+      if (target) pushToTrash('habit', target as unknown as { id: string } & Record<string, unknown>);
+      return prev.filter(h => h.id !== id);
+    });
+    toast.success('Mock: Habit deleted');
+  }, [pushToTrash]);
 
   // F-HABITS-01: mock pause/resume so the "Pause until" field and paused badge
   // are walkable in Test Mode. Passing null strips pausedUntil (resume).
@@ -1078,9 +1101,13 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   }, []);
 
   const deleteMeal = useCallback(async (id: string) => {
-    setMeals(prev => prev.filter(m => m.id !== id));
+    setMeals(prev => {
+      const target = prev.find(m => m.id === id);
+      if (target) pushToTrash('meal', target as unknown as { id: string } & Record<string, unknown>);
+      return prev.filter(m => m.id !== id);
+    });
     toast.success('Mock: Meal deleted');
-  }, []);
+  }, [pushToTrash]);
 
   // Shopping list operations
   const addShoppingItem = useCallback(async (item: Omit<ShoppingItem, 'id'>) => {
@@ -1106,9 +1133,13 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   }, []);
 
   const deleteShoppingItem = useCallback(async (id: string) => {
-    setShoppingList(prev => prev.filter(s => s.id !== id));
+    setShoppingList(prev => {
+      const target = prev.find(s => s.id === id);
+      if (target) pushToTrash('shoppingItem', target as unknown as { id: string } & Record<string, unknown>);
+      return prev.filter(s => s.id !== id);
+    });
     toast.success('Mock: Shopping item deleted');
-  }, []);
+  }, [pushToTrash]);
 
   // Meal plan operations
   const addMealPlan = useCallback(async (plan: Omit<MealPlanItem, 'id'>) => {
@@ -1123,9 +1154,13 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   }, []);
 
   const deleteMealPlan = useCallback(async (id: string) => {
-    setMealPlan(prev => prev.filter(p => p.id !== id));
+    setMealPlan(prev => {
+      const target = prev.find(p => p.id === id);
+      if (target) pushToTrash('mealPlanItem', target as unknown as { id: string } & Record<string, unknown>);
+      return prev.filter(p => p.id !== id);
+    });
     toast.success('Mock: Meal plan deleted');
-  }, []);
+  }, [pushToTrash]);
 
   // ToDo operations
   const addToDo = useCallback(async (todo: Omit<ToDo, 'id' | 'createdAt' | 'createdBy'>) => {
@@ -1145,8 +1180,31 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   }, []);
 
   const deleteToDo = useCallback(async (id: string) => {
-    setTodos(prev => prev.filter(t => t.id !== id));
+    setTodos(prev => {
+      const target = prev.find(t => t.id === id);
+      if (target) pushToTrash('todo', target as unknown as { id: string } & Record<string, unknown>);
+      return prev.filter(t => t.id !== id);
+    });
     toast.success('Mock: ToDo deleted');
+  }, [pushToTrash]);
+
+  // F-XCUT-03: restore/purge for the in-memory trash mirror.
+  const restoreTrashedItem = useCallback(async (item: TrashedItem) => {
+    const data = { ...item.data, id: item.originalId };
+    switch (item.domain) {
+      case 'todo': setTodos(prev => [...prev.filter(t => t.id !== item.originalId), data as unknown as ToDo]); break;
+      case 'shoppingItem': setShoppingList(prev => [...prev.filter(s => s.id !== item.originalId), data as unknown as ShoppingItem]); break;
+      case 'meal': setMeals(prev => [...prev.filter(m => m.id !== item.originalId), data as unknown as Meal]); break;
+      case 'mealPlanItem': setMealPlan(prev => [...prev.filter(p => p.id !== item.originalId), data as unknown as MealPlanItem]); break;
+      case 'habit': setHabits(prev => [...prev.filter(h => h.id !== item.originalId), data as unknown as Habit]); break;
+    }
+    setTrashedItems(prev => prev.filter(t => t.id !== item.id));
+    toast.success('Mock: Item restored');
+  }, []);
+
+  const purgeTrashedItem = useCallback(async (item: TrashedItem) => {
+    setTrashedItems(prev => prev.filter(t => t.id !== item.id));
+    toast.success('Mock: Permanently deleted');
   }, []);
 
   // Store operations
@@ -1482,6 +1540,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     bucketHistory,
     recaps,
     moneyRecaps,
+    trashedItems,
+    restoreTrashedItem,
+    purgeTrashedItem,
     insightsHistory,
     insight,
     stores,
