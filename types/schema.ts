@@ -46,12 +46,31 @@ export interface NotificationPreferences {
     enabled: boolean;
     daysBeforeDue: number; // How many days before due date to remind
     time: string; // HH:MM format (24-hour)
+    // F-NOTIF-05: temporary snooze set by tapping "Snooze 1 day" on a bill
+    // reminder push. yyyy-MM-dd (local). The scheduled sendbillreminders job
+    // skips sending while today <= snoozedUntil. Absent/past = not snoozed.
+    snoozedUntil?: string;
   };
 
   // Weekly recap push (Plan 02). Sent server-side Sundays ~17:00 in the
   // member's timezone; no time selection needed, so it's a bare toggle.
   // Optional so legacy docs deserialize — treat absent as enabled (default ON).
   weeklyRecap?: {
+    enabled: boolean;
+  };
+
+  // F-HABITS-06: opt-in evening nudge to jot a quick note/mood on today's
+  // habit completions. Preference only — the scheduled sending job is a
+  // follow-up (see TODO.md / roadmap concerns).
+  reflectionReminder?: {
+    enabled: boolean;
+    time: string; // HH:MM format (24-hour)
+  };
+
+  // Monthly money recap push (F-MONEY-06). Sent server-side on the 1st of the
+  // month ~09:00 in the member's timezone; a bare toggle like weeklyRecap.
+  // Optional so legacy docs deserialize — treat absent as enabled (default ON).
+  monthlyMoneyRecap?: {
     enabled: boolean;
   };
 
@@ -97,6 +116,15 @@ export interface HouseholdMember {
   // Functions can query via a collection-group index instead of scanning
   // every household/member (see functions/src/shared/notifications.ts).
   anyNotificationsEnabled?: boolean;
+
+  // F-XCUT-02: per-member Dashboard widget customization. `dashboardLayout`
+  // is the widget-id order (see utils/dashboardLayout.ts DASHBOARD_WIDGET_IDS
+  // for valid ids); missing/unknown ids fall back to the default order.
+  // `dashboardHidden` lists widget ids the member has hidden. Both are
+  // optional — an un-customized member renders every widget in the default
+  // order.
+  dashboardLayout?: string[];
+  dashboardHidden?: string[];
 }
 
 export interface Account {
@@ -257,6 +285,13 @@ export interface Transaction {
    *  display field — never derived client-side from a fetched list, since
    *  comments are loaded on demand (no standing listener). */
   commentCount?: number;
+  /** F-DASH-04: itemized receipt line-item split. When one physical receipt is
+   *  split into several categorized transactions (e.g. a Target run → a
+   *  Groceries row + a Household row), every resulting transaction shares this
+   *  generated id so the list UI can visually group them back into one purchase.
+   *  Purely a display/grouping key — it never affects balances or Safe-to-Spend.
+   *  Absent on ordinary single-transaction captures. */
+  receiptGroupId?: string;
   /** uid of the member who created (and, for splitting, PAID FOR) this
    *  transaction. Written server-authoritatively by `addTransaction`
    *  (`createdBy: user.uid`); the converter passes it through. Used by the
@@ -371,6 +406,16 @@ export interface Habit {
   // functions/src/quickAdd/habitProcessor.ts.
   frozenDates?: string[];
 
+  // F-HABITS-01 (habit pause / vacation mode): a planned break end date
+  // (YYYY-MM-DD, local). While `pausedUntil >= today` the habit is excluded from
+  // the auto-reset-to-0 penalty AND from freeze-token consumption, and the paused
+  // range BRIDGES streak continuity the same way `frozenDates` does — so the
+  // streak resumes cleanly when the break ends. The bridge is synthesized at read
+  // time from `completedDates` + `pausedUntil` (utils/habitLogic.ts
+  // `pauseBridgeDates`), so no per-day docs are written. Absent on a habit that
+  // has never been paused. Mirrored in functions/src/quickAdd/habitProcessor.ts.
+  pausedUntil?: string;
+
   // Ownership (for Firebase multi-user support)
   isShared?: boolean; // true = household-wide, false/undefined = personal
   ownerId?: string; // uid if personal habit
@@ -390,7 +435,15 @@ export interface Habit {
 
   // Submission Tracking
   hasSubmissionTracking?: boolean; // true = uses submissions subcollection
+
+  // F-HABITS-05: ISO timestamp when the habit was archived (soft-retire —
+  // hides it from the Track tab / reminders while keeping streak/points
+  // history intact for Insights/export). Undefined/absent = active.
+  archivedAt?: string;
 }
+
+// F-HABITS-06: quick mood tag attachable to a habit completion submission.
+export type HabitMood = 'great' | 'good' | 'meh' | 'rough';
 
 export interface HabitSubmission {
   id: string;
@@ -405,6 +458,9 @@ export interface HabitSubmission {
   createdBy: string; // uid of member who submitted
   createdAt: string; // ISO timestamp
   updatedAt?: string; // ISO timestamp if edited
+  // F-HABITS-06: optional lightweight journal attached to a completion.
+  note?: string; // Free-text reflection, capped ~280 chars
+  mood?: HabitMood;
 }
 
 export interface RewardItem {
@@ -422,6 +478,19 @@ export interface RewardItem {
   targetMemberId?: string;
   /** Whether the reward is shown in the store. Treated as true when absent. */
   active?: boolean;
+  // F-HABITS-02 (streak milestone celebrations): an optional milestone gate on
+  // this reward. When present, the reward renders locked in the store until a
+  // habit's streak crosses `streakDays` (one of utils/habitMilestones.ts's
+  // MILESTONES) — either a SPECIFIC habit (`habitId` set) or ANY habit
+  // (`habitId` absent). Unlocking is tracked separately via
+  // `Household.unlockedRewardIds` (crossing is a one-time event; a later streak
+  // reset must not re-lock an already-unlocked reward). Absent = no gate
+  // (always available, subject only to the existing point-cost affordability
+  // check).
+  unlockRequirement?: {
+    streakDays: number;
+    habitId?: string;
+  };
 }
 
 /**
@@ -544,6 +613,7 @@ export interface Meal {
   instructions?: string[]; // Step-by-step cooking instructions
   recipeUrl?: string; // Link to external recipe
   servings?: number; // Base servings this recipe's ingredient quantities are written for; defaults to 1 when unset
+  estimatedCost?: number; // Decimal dollars; optional, manually entered (F-MEALS-01)
   tags: string[]; // "cheap", "quick", "favorite", "new"
   rating?: number;
   lastCooked?: string; // YYYY-MM-DD
@@ -577,6 +647,7 @@ export interface Store {
   name: string;
   icon?: string; // Lucide icon name
   color?: string; // Key from STORE_COLORS
+  order?: number; // Household's visit order, used by 'store' shopping sort mode (mirrors Account.order/Habit.order)
 }
 
 export interface QuickStockList {
@@ -585,6 +656,20 @@ export interface QuickStockList {
   items: string[]; // List of catalog item IDs (reference to GroceryCatalogItem.id)
   icon?: string;
   color?: string;
+}
+
+export interface TaskTemplateItem {
+  text: string; // The to-do text created for this item
+  assignedTo?: string; // uid of household member; falls back to the applying user when absent
+  points?: number; // Optional override for the created to-do's point value (kid-mode allowance-style credit)
+}
+
+export interface TaskTemplate {
+  id: string;
+  name: string; // e.g. "Trash day", "Guest prep"
+  items: TaskTemplateItem[];
+  icon?: string; // Lucide icon name (see data/templateIcons.ts)
+  color?: string; // Key from STORE_COLORS (reused for visual consistency with QuickStockList)
 }
 
 export interface GroceryCatalogItem {
@@ -604,6 +689,7 @@ export interface Household {
   groceryCategories?: string[]; // Custom categories
   stores?: Store[]; // User-defined stores
   quickStockLists?: QuickStockList[]; // User-defined shopping templates
+  taskTemplates?: TaskTemplate[]; // User-defined task-bundle templates ("Quick Task Lists", F-TODO-03)
   members: HouseholdMember[];
   points?: { daily: number; weekly: number; total: number }; // Shared household points
   lastDailyPointsReset?: string; // YYYY-MM-DD format
@@ -669,6 +755,16 @@ export interface Household {
   // Absent on legacy households (treat absent as empty). Like pendingRedemptions,
   // it rides on the field-permissive household-doc update rule (no rules change).
   redemptionHistory?: RewardRedemptionRecord[];
+
+  // F-HABITS-02 (streak milestone celebrations): reward ids that have been
+  // permanently unlocked by crossing their `RewardItem.unlockRequirement`
+  // streak milestone (see hooks/useHabitActions.tsx's toggleHabit, which
+  // arrayUnion-appends here in the SAME writeBatch as the triggering habit
+  // toggle). Once unlocked a reward stays unlocked even if the streak later
+  // resets. Absent on legacy/non-gated households (treat absent as empty).
+  // Rides on the same field-permissive household-doc update rule as
+  // pendingRedemptions/redemptionHistory — no rules change needed.
+  unlockedRewardIds?: string[];
 
   // Billing / subscription (Plan 050). Absent on every legacy + free-tier
   // household — treat absent as the free plan everywhere (see utils/entitlements.ts).
@@ -848,6 +944,74 @@ export interface WeeklyRecap {
 }
 
 /**
+ * Monthly money recap (F-MONEY-06) — the Weekly Recap's money-focused sibling.
+ * One doc per calendar month at `households/{id}/moneyRecaps/{month}`, written
+ * server-side on the 1st by the scheduled `sendmonthlymoneyrecap` function
+ * (Admin SDK; clients only read). The synthetic `id` equals the doc id, which
+ * equals `month` (yyyy-MM). Money fields are decimal dollars (per house
+ * convention — summed in integer cents internally, stored as dollars).
+ */
+export interface MonthlyMoneyRecap {
+  id: string;
+  month: string; // e.g. '2026-06' (calendar month the recap covers)
+  generatedAt: string; // ISO timestamp
+  totalIncome: number; // decimal dollars — verified income for the month
+  totalSpend: number; // decimal dollars — verified, non-income spend for the month
+  priorMonthSpend: number; // decimal dollars — verified, non-income spend for the prior month
+  /** Per-bucket over/under close-out, grouped from BucketPeriodSnapshot docs. */
+  bucketResults: Array<{
+    bucketId: string;
+    bucketName: string;
+    limit: number; // decimal dollars — total limit across the month's periods
+    spent: number; // decimal dollars — total verified spend across the month's periods
+    overUnder: number; // decimal dollars — spent - limit (positive = over budget)
+  }>;
+  /** The single biggest verified, non-income expense of the month (or null). */
+  topExpense: { merchant: string; amount: number; category: string; date: string } | null;
+  /** Change in net worth over the month (decimal dollars), or null when the
+   *  Net Worth History feature (F-MONEY-07 family) has not populated snapshots. */
+  netWorthDelta: number | null;
+  /** 2-3 sentence warm summary, either AI-generated or a deterministic template. */
+  narrative: string;
+  narrativeSource: 'ai' | 'template';
+  /** Whether this household saw the premium experience (AI narrative + push). */
+  premium: boolean;
+}
+
+/** Coarse category for a logged push notification (F-NOTIF-02 inbox). */
+export type NotificationLogType =
+  | 'habit_reminder'
+  | 'action_queue_reminder'
+  | 'streak_warning'
+  | 'bill_reminder'
+  | 'budget_alert'
+  | 'weekly_recap'
+  | 'monthly_money_recap';
+
+/**
+ * In-app notification inbox entry (F-NOTIF-02) — one doc per push sent, at
+ * `households/{id}/notificationLog/{id}`, written server-side by
+ * `sendNotificationToUser` (Admin SDK) alongside the FCM send. This is a
+ * FLAT household-level subcollection (not nested under the member doc) so it
+ * degrades gracefully under today's generic member-write Firestore rule
+ * without a rules change; each entry carries `recipientUid` and the client
+ * filters to the signed-in member's own entries. `readBy` accumulates member
+ * uids that have opened the inbox item (a household-wide log entry can in
+ * principle be marked read by multiple viewers, though in practice only
+ * `recipientUid` ever sees it in their own feed).
+ */
+export interface NotificationLogEntry {
+  id: string;
+  type: NotificationLogType;
+  recipientUid: string;
+  title: string;
+  body: string;
+  data?: Record<string, string>;
+  createdAt: string; // ISO timestamp
+  readBy: string[];
+}
+
+/**
  * Net worth snapshot (F-MONEY-09) — one doc per calendar day at
  * `households/{id}/netWorthSnapshots/{yyyy-MM-dd}`, written server-side once
  * daily by the scheduled `snapshotnetworth` function (Admin SDK; clients only
@@ -886,6 +1050,7 @@ export interface ApiKeyPermissions {
   expenses: boolean;
   shoppingList: boolean;
   bills?: boolean;  // Pay/mark a calendar bill via the quickAddBillPay endpoint (F-MONEY-11). Optional for backward-compat with keys minted before it existed.
+  todos?: boolean;  // Create a to-do via the quickAddTodo endpoint (F-TODO-07). Optional for backward-compat with keys minted before it existed.
   receiptScanning: boolean;  // Unused — receipt endpoint removed; kept for stored-doc shape
 }
 

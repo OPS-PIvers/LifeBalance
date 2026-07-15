@@ -1,10 +1,16 @@
-import React from 'react';
-import { Lock, Flame, TrendingDown, TrendingUp } from 'lucide-react';
+import React, { useCallback, useState } from 'react';
+import toast from 'react-hot-toast';
+import { Lock, Flame, TrendingDown, TrendingUp, Share2 } from 'lucide-react';
 import { Drawer } from '@/components/ui/Drawer';
 import Eyebrow from '@/components/ui/Eyebrow';
+import { Button } from '@/components/ui/Button';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
+import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { roundMoney } from '@/utils/money';
 import { cn } from '@/utils/cn';
+import { DEFAULT_CURRENCY } from '@/utils/formatCurrency';
+import { shareRecapCard } from '@/utils/recapShareCard';
+import { track } from '@/services/analytics';
 import type { WeeklyRecap } from '@/types/schema';
 
 /**
@@ -34,6 +40,27 @@ const SectionBlock: React.FC<{ label: string; children: React.ReactNode }> = ({ 
 
 export const WeeklyRecapDrawer: React.FC<WeeklyRecapDrawerProps> = ({ recap, isOpen, onClose }) => {
   const fmt = useFormatCurrency();
+  const { householdSettings } = useHouseholdCore();
+  const [isSharing, setIsSharing] = useState(false);
+
+  const handleShare = useCallback(async () => {
+    if (!recap) return;
+    setIsSharing(true);
+    try {
+      const currency = householdSettings?.currency || DEFAULT_CURRENCY;
+      const result = await shareRecapCard(recap, currency);
+      track('recap_shared', { isoWeek: recap.isoWeek, method: result });
+      if (result === 'downloaded') {
+        toast.success('Recap card downloaded — share it from your photos.');
+      }
+    } catch (err) {
+      // AbortError fires when the user cancels the native share sheet — not a failure.
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      toast.error("Couldn't create your recap card. Try again in a bit.");
+    } finally {
+      setIsSharing(false);
+    }
+  }, [recap, householdSettings]);
 
   if (!recap) return null;
 
@@ -44,6 +71,18 @@ export const WeeklyRecapDrawer: React.FC<WeeklyRecapDrawerProps> = ({ recap, isO
   return (
     <Drawer isOpen={isOpen} onClose={onClose} title={`Week in review · ${recap.isoWeek}`}>
       <div className="space-y-6 pb-2">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          leftIcon={<Share2 size={15} aria-hidden="true" />}
+          isLoading={isSharing}
+          onClick={handleShare}
+          className="w-full"
+        >
+          Share your recap
+        </Button>
+
         {/* Spend vs prior week */}
         <SectionBlock label="Spending">
           <div className="flex items-baseline gap-3">

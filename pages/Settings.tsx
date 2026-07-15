@@ -38,6 +38,7 @@ import { ThemeToggle } from '@/components/settings/ThemeToggle';
 import ApiKeyManager from '@/components/settings/ApiKeyManager';
 import CalendarFeedCard from '@/components/settings/CalendarFeedCard';
 import ShortcutSetupGuide from '@/components/settings/ShortcutSetupGuide';
+import { DashboardWidgetSettings } from '@/components/settings/DashboardWidgetSettings';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
@@ -50,6 +51,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { LazyMount } from '@/components/ui/LazyMount';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { isModuleEnabled } from '@/utils/moduleVisibility';
+import { MODULE_PRESETS, type ModulePreset } from '@/utils/modulePresets';
 import type { ModuleKey } from '@/types/schema';
 import { requestNotificationPermission, setupForegroundNotificationListener } from '@/services/notificationService';
 import { generateJsonBackup, generateCsvExport, buildExportPayload } from '@/utils/exportUtils';
@@ -64,7 +66,7 @@ import { useBillingEnabled } from '@/hooks/useBillingEnabled';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { usePlaidEnabled } from '@/hooks/usePlaidEnabled';
 import { isValidPinFormat } from '@/utils/kidPin';
-import { getPlan } from '@/utils/entitlements';
+import { getPlan, getLimits } from '@/utils/entitlements';
 
 // Lazy so react-plaid-link stays out of the boot bundle — the chunk only loads
 // when plaidEnabled is on AND this renders (dormant by default → never loads).
@@ -96,9 +98,11 @@ const Settings: React.FC = () => {
     updateMember,
     removeMember,
     deleteHousehold,
+    household,
     householdSettings,
     setHouseholdCurrency,
     setModuleVisibility,
+    updateModuleVisibility,
     setKidModePin,
     apiKeys,
   } = useHouseholdCore();
@@ -170,6 +174,31 @@ const Settings: React.FC = () => {
     } catch (error) {
       console.error('[Settings] Failed to update module visibility:', error);
       toast.error('Failed to update modules');
+    }
+  };
+
+  // F-PLAT-07 — module presets. Tapping a preset chip expands it in place to
+  // show exactly what it will turn on/off before committing; a second tap
+  // (Apply) does the batched write. Manual per-module toggles below remain
+  // the escape hatch for anything a preset doesn't cover exactly.
+  const [previewPresetId, setPreviewPresetId] = useState<string | null>(null);
+  const [isApplyingPreset, setIsApplyingPreset] = useState(false);
+
+  const handlePresetChipClick = (presetId: string) => {
+    setPreviewPresetId(prev => (prev === presetId ? null : presetId));
+  };
+
+  const handleApplyPreset = async (preset: ModulePreset) => {
+    setIsApplyingPreset(true);
+    try {
+      await updateModuleVisibility(preset.visibility);
+      toast.success(`Applied "${preset.label}"`);
+      setPreviewPresetId(null);
+    } catch (error) {
+      console.error('[Settings] Failed to apply module preset:', error);
+      toast.error('Failed to apply preset');
+    } finally {
+      setIsApplyingPreset(false);
     }
   };
 
@@ -721,6 +750,67 @@ const Settings: React.FC = () => {
               everyone in the household. Your data is kept and comes back when you re-enable a module.
             </p>
 
+            {/* Presets — one tap sets several modules at once. Manual toggles
+                below remain the escape hatch for anything a preset doesn't
+                cover exactly. */}
+            <div className="px-1">
+              <p className="text-xs font-semibold text-brand-600 dark:text-brand-300 mb-2 uppercase tracking-wide">
+                Quick presets
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {MODULE_PRESETS.map((preset) => (
+                  <Button
+                    key={preset.id}
+                    type="button"
+                    variant={previewPresetId === preset.id ? 'primary' : 'outline'}
+                    size="sm"
+                    onClick={() => handlePresetChipClick(preset.id)}
+                    aria-pressed={previewPresetId === preset.id}
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
+              </div>
+
+              {previewPresetId && (() => {
+                const preset = MODULE_PRESETS.find(p => p.id === previewPresetId);
+                if (!preset) return null;
+                const onKeys = (Object.keys(preset.visibility) as ModuleKey[]).filter(k => preset.visibility[k]);
+                const offKeys = (Object.keys(preset.visibility) as ModuleKey[]).filter(k => !preset.visibility[k]);
+                return (
+                  <div className="mt-2 rounded-xl border border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-800/50 p-3 space-y-2 animate-in fade-in slide-in-from-top-1">
+                    <p className="text-sm text-brand-700 dark:text-brand-300">{preset.description}</p>
+                    <div className="flex flex-wrap gap-1.5 text-xs">
+                      {onKeys.map(k => (
+                        <span key={k} className="px-2 py-0.5 rounded-full bg-accent-100 text-accent-700 dark:bg-accent-900/40 dark:text-accent-300 font-medium capitalize">
+                          {k} on
+                        </span>
+                      ))}
+                      {offKeys.map(k => (
+                        <span key={k} className="px-2 py-0.5 rounded-full bg-brand-200 text-brand-600 dark:bg-brand-700 dark:text-brand-400 font-medium capitalize">
+                          {k} off
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex justify-end gap-2 pt-1">
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setPreviewPresetId(null)}>
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        isLoading={isApplyingPreset}
+                        onClick={() => handleApplyPreset(preset)}
+                      >
+                        Apply
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
             <SurfaceList>
               {/* Top-level pages */}
               <Row>
@@ -792,6 +882,16 @@ const Settings: React.FC = () => {
             </SurfaceList>
           </div>
         </Section>
+
+        {/* Dashboard widgets (F-XCUT-02) — per-member reorder/hide, own view only. */}
+        {currentUser && (
+          <Section title="Dashboard Widgets">
+            <DashboardWidgetSettings
+              member={currentUser}
+              onSave={(updates) => void updateMember(currentUser.uid, updates)}
+            />
+          </Section>
+        )}
 
         {/* Kid Mode (Plan 080) — dormant until kidModeEnabled is flipped on. */}
         {kidModeEnabled && (
@@ -942,6 +1042,28 @@ const Settings: React.FC = () => {
             The delete row keeps its exact admin-only guard. */}
         <Section title="Account">
           <SurfaceList>
+            {billingEnabled && household && (
+              <Row className="flex-col items-stretch gap-1">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={
+                      getPlan(household) === 'premium'
+                        ? 'inline-flex items-center gap-1.5 text-xs font-bold text-warm-700 bg-warm-50 border border-warm-200 px-2.5 py-0.5 rounded-full dark:bg-warm-500/15 dark:text-warm-300 dark:border-warm-500/30'
+                        : 'inline-flex items-center gap-1.5 text-xs font-bold text-brand-600 bg-brand-100 border border-brand-200 px-2.5 py-0.5 rounded-full dark:bg-brand-700/50 dark:text-brand-300 dark:border-brand-600'
+                    }
+                  >
+                    {getPlan(household) === 'premium' ? 'Premium plan' : 'Free plan'}
+                  </span>
+                </div>
+                <p className="text-xs text-brand-500 dark:text-brand-400">
+                  {members.length} of {getLimits(household).maxMembers} members
+                  {' · '}
+                  {getLimits(household).aiDailyCap} AI actions/day
+                  {' · '}
+                  {getLimits(household).historyMonths} mo history
+                </p>
+              </Row>
+            )}
             <DisclosureRow
               icon={<LogOut className="w-5 h-5" />}
               title="Sign Out"

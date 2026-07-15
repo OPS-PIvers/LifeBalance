@@ -8,6 +8,7 @@ import PendingRedemptionsPanel from '@/components/habits/PendingRedemptionsPanel
 import RedemptionHistoryPanel from '@/components/habits/RedemptionHistoryPanel';
 import RewardManagerPanel from '@/components/habits/RewardManagerPanel';
 import EmptyState from '@/components/ui/EmptyState';
+import { isRewardLocked } from '@/utils/habitMilestones';
 
 /**
  * HabitsRewardsTab — the Rewards sub-tab of the Habits page, and the app's single
@@ -30,7 +31,7 @@ import EmptyState from '@/components/ui/EmptyState';
  * opens in a `Drawer` regardless of the list's collapsed state.
  */
 const HabitsRewardsTab: React.FC = () => {
-  const { rewardsInventory, totalPoints, redeemReward } = useGamification();
+  const { rewardsInventory, habits, totalPoints, redeemReward } = useGamification();
   const { household, members } = useHouseholdCore();
   const kidModeEnabled = useKidModeEnabled();
   const [redeemingId, setRedeemingId] = useState<string | null>(null);
@@ -76,30 +77,42 @@ const HabitsRewardsTab: React.FC = () => {
           <div className="grid grid-cols-2 gap-3">
             {activeRewards.map((reward) => {
               const canAfford = totalPoints >= reward.cost;
+              // F-HABITS-02: a milestone-gated reward is locked until its
+              // streak requirement has been crossed, independent of affordability.
+              const milestoneLocked = isRewardLocked(reward, household?.unlockedRewardIds);
+              const canRedeem = canAfford && !milestoneLocked;
               const busy = redeemingId === reward.id;
               return (
                 <div
                   key={reward.id}
                   className={`flex flex-col p-4 surface-section transition-opacity ${
-                    canAfford ? '' : 'opacity-60'
+                    canRedeem ? '' : 'opacity-60'
                   }`}
                 >
                   <div className="text-2xl mb-3 self-center" aria-hidden="true">{reward.icon}</div>
                   <h3 className="font-semibold text-brand-900 dark:text-brand-50 text-sm text-center mb-1">
                     {reward.title}
                   </h3>
-                  <p className="font-mono text-xs font-bold tabular-nums text-warm-600 dark:text-warm-300 text-center mb-4">
+                  <p className="font-mono text-xs font-bold tabular-nums text-warm-600 dark:text-warm-300 text-center mb-1">
                     {reward.cost} pts
                   </p>
+                  {milestoneLocked && (
+                    <p className="text-[11px] text-brand-500 dark:text-brand-400 text-center mb-2">
+                      Unlocks at a {reward.unlockRequirement?.streakDays}-day streak
+                      {reward.unlockRequirement?.habitId
+                        ? ` on "${habits.find((h) => h.id === reward.unlockRequirement?.habitId)?.title ?? 'a habit'}"`
+                        : ''}
+                    </p>
+                  )}
                   <Button
                     variant="warning"
                     size="sm"
                     className="w-full mt-auto"
-                    onClick={() => canAfford && !busy && handleRedeem(reward.id)}
-                    disabled={!canAfford}
+                    onClick={() => canRedeem && !busy && handleRedeem(reward.id)}
+                    disabled={!canRedeem}
                     isLoading={busy}
                   >
-                    {canAfford ? 'Redeem' : (
+                    {canRedeem ? 'Redeem' : (
                       <span className="inline-flex items-center gap-1">
                         <Lock size={11} /> Locked
                       </span>

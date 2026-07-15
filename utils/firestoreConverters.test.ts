@@ -30,6 +30,8 @@ import {
   householdApiKeyConverter,
   insightConverter,
   weeklyRecapConverter,
+  monthlyMoneyRecapConverter,
+  notificationLogConverter,
   netWorthSnapshotConverter,
   transactionConverter,
   transactionCommentConverter,
@@ -758,6 +760,124 @@ describe('weeklyRecapConverter', () => {
     const result = weeklyRecapConverter.fromFirestore(fakeSnap('2026-W26', partial));
     expect(result.id).toBe('2026-W26');
     expect(result.premium).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// MonthlyMoneyRecap — Timestamp normalisation for generatedAt (F-MONEY-06)
+// ---------------------------------------------------------------------------
+describe('monthlyMoneyRecapConverter', () => {
+  const wellFormed = {
+    month: '2026-06',
+    generatedAt: '2026-07-01T13:00:00.000Z',
+    totalIncome: 5200,
+    totalSpend: 3480.25,
+    priorMonthSpend: 3120.5,
+    bucketResults: [
+      { bucketId: 'b1', bucketName: 'Groceries', limit: 600, spent: 645.1, overUnder: 45.1 },
+    ],
+    topExpense: { merchant: 'Costco', amount: 312.4, category: 'Groceries', date: '2026-06-14' },
+    netWorthDelta: null,
+    narrative: 'A steady month — groceries ran a touch over.',
+    narrativeSource: 'ai',
+    premium: true,
+  };
+
+  it('(a) well-formed doc: fromFirestore injects id (the month) and preserves fields', () => {
+    const result = monthlyMoneyRecapConverter.fromFirestore(fakeSnap('2026-06', wellFormed));
+    expect(result.id).toBe('2026-06');
+    expect(result.month).toBe('2026-06');
+    expect(result.totalSpend).toBe(3480.25);
+    expect(result.bucketResults[0]?.overUnder).toBe(45.1);
+    expect(result.topExpense?.merchant).toBe('Costco');
+  });
+
+  it('(a) well-formed doc: toFirestore strips id', () => {
+    const recap = { ...wellFormed, id: '2026-06' };
+    const out = callToFirestore(monthlyMoneyRecapConverter, recap);
+    expect('id' in out).toBe(false);
+    expect(out['month']).toBe('2026-06');
+  });
+
+  it('(a) Timestamp generatedAt is converted to ISO string', () => {
+    const ts = Timestamp.fromDate(new Date('2026-07-01T13:00:00.000Z'));
+    const result = monthlyMoneyRecapConverter.fromFirestore(
+      fakeSnap('2026-06', { ...wellFormed, generatedAt: ts })
+    );
+    expect(result.generatedAt).toBe('2026-07-01T13:00:00.000Z');
+  });
+
+  it('(b) partial doc with missing sections does not throw', () => {
+    const partial = {
+      month: '2026-05',
+      generatedAt: '2026-06-01T13:00:00.000Z',
+      totalIncome: 0,
+      totalSpend: 0,
+      priorMonthSpend: 0,
+      bucketResults: [],
+      topExpense: null,
+      netWorthDelta: null,
+      narrative: '',
+      narrativeSource: 'template',
+      premium: false,
+    };
+    expect(() => monthlyMoneyRecapConverter.fromFirestore(fakeSnap('2026-05', partial))).not.toThrow();
+    const result = monthlyMoneyRecapConverter.fromFirestore(fakeSnap('2026-05', partial));
+    expect(result.id).toBe('2026-05');
+    expect(result.premium).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// NotificationLogEntry (F-NOTIF-02) — Timestamp normalisation for createdAt,
+// readBy defensively coerced to an array.
+// ---------------------------------------------------------------------------
+describe('notificationLogConverter', () => {
+  const wellFormed = {
+    type: 'bill_reminder',
+    recipientUid: 'user-1',
+    title: 'Bills due in 3 days',
+    body: '2 bills totaling $180.00 coming up',
+    data: { url: '/budget' },
+    createdAt: '2026-07-10T13:00:00.000Z',
+    readBy: [],
+  };
+
+  it('(a) well-formed doc: fromFirestore injects id and preserves fields', () => {
+    const result = notificationLogConverter.fromFirestore(fakeSnap('log-1', wellFormed));
+    expect(result.id).toBe('log-1');
+    expect(result.type).toBe('bill_reminder');
+    expect(result.recipientUid).toBe('user-1');
+    expect(result.readBy).toEqual([]);
+  });
+
+  it('(a) well-formed doc: toFirestore strips id', () => {
+    const entry = { ...wellFormed, id: 'log-1' };
+    const out = callToFirestore(notificationLogConverter, entry);
+    expect('id' in out).toBe(false);
+    expect(out['title']).toBe('Bills due in 3 days');
+  });
+
+  it('(a) Timestamp createdAt is converted to ISO string', () => {
+    const ts = Timestamp.fromDate(new Date('2026-07-10T13:00:00.000Z'));
+    const result = notificationLogConverter.fromFirestore(
+      fakeSnap('log-1', { ...wellFormed, createdAt: ts })
+    );
+    expect(result.createdAt).toBe('2026-07-10T13:00:00.000Z');
+  });
+
+  it('(b) partial/legacy doc with missing readBy does not throw and defaults to []', () => {
+    const partial = {
+      type: 'streak_warning',
+      recipientUid: 'user-2',
+      title: "Don't break your streak!",
+      body: 'You have 1 habit at risk.',
+      createdAt: '2026-07-10T13:00:00.000Z',
+    };
+    expect(() => notificationLogConverter.fromFirestore(fakeSnap('log-2', partial))).not.toThrow();
+    const result = notificationLogConverter.fromFirestore(fakeSnap('log-2', partial));
+    expect(result.id).toBe('log-2');
+    expect(result.readBy).toEqual([]);
   });
 });
 

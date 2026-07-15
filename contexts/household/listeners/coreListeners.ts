@@ -12,11 +12,13 @@ import {
   householdApiKeyConverter,
   insightConverter,
   weeklyRecapConverter,
+  monthlyMoneyRecapConverter,
+  notificationLogConverter,
 } from '@/utils/firestoreConverters';
-import { Household, FreezeBank, Insight, HouseholdApiKey, WeeklyRecap } from '@/types/schema';
+import { Household, FreezeBank, Insight, HouseholdApiKey, WeeklyRecap, MonthlyMoneyRecap, NotificationLogEntry } from '@/types/schema';
 import { migrateFreezeBankToEnhanced, needsFreezeBankMigration } from '@/utils/migrations/freezeBankMigration';
 import { getLocalDateString } from '@/utils/dateHelpers';
-import { RECAPS_LIMIT, INSIGHTS_LIMIT } from '@/utils/listenerWindows';
+import { RECAPS_LIMIT, MONEY_RECAPS_LIMIT, INSIGHTS_LIMIT, NOTIFICATION_LOG_FETCH_LIMIT } from '@/utils/listenerWindows';
 import { format } from 'date-fns';
 
 /**
@@ -41,11 +43,13 @@ export function attachCoreListeners({
   setLoadedHouseholdId,
   setFreezeBank,
   setRecaps,
+  setMoneyRecaps,
   setApiKeys,
   setInsightsWindow,
   setHasMoreInsights,
   setInsight,
   insightsLoadedAllRef,
+  setNotificationLogRaw,
 }: {
   db: Firestore;
   householdId: string;
@@ -53,11 +57,16 @@ export function attachCoreListeners({
   setLoadedHouseholdId: (id: string) => void;
   setFreezeBank: (freezeBank: FreezeBank | null) => void;
   setRecaps: (recaps: WeeklyRecap[]) => void;
+  setMoneyRecaps: (moneyRecaps: MonthlyMoneyRecap[]) => void;
   setApiKeys: (apiKeys: HouseholdApiKey[]) => void;
   setInsightsWindow: (insights: Insight[]) => void;
   setHasMoreInsights: (hasMore: boolean) => void;
   setInsight: (text: string) => void;
   insightsLoadedAllRef: { current: boolean };
+  /** F-NOTIF-02 — receives the raw, unfiltered household-wide fetch window;
+   *  the provider filters to the current member's own entries (see the
+   *  flat-subcollection note on `NotificationLogEntry`). */
+  setNotificationLogRaw: (entries: NotificationLogEntry[]) => void;
 }): Unsubscribe[] {
   const unsubscribers: Unsubscribe[] = [];
 
@@ -129,6 +138,22 @@ export function attachCoreListeners({
     })
   );
 
+  // Monthly money recaps listener (F-MONEY-06) — bounded live window of the
+  // most recent few months. Docs are keyed by calendar month ('2026-06'),
+  // which sorts chronologically as a string, so orderBy desc yields newest-first.
+  const moneyRecapsQuery = query(
+    collection(db, `households/${householdId}/moneyRecaps`).withConverter(monthlyMoneyRecapConverter),
+    orderBy('month', 'desc'),
+    limit(MONEY_RECAPS_LIMIT)
+  );
+  unsubscribers.push(
+    onSnapshot(moneyRecapsQuery, (snapshot) => {
+      setMoneyRecaps(snapshot.docs.map(doc => doc.data()));
+    }, (error) => {
+      console.error('Error listening to money recaps:', error);
+    })
+  );
+
   // API Keys listener (for iOS Shortcuts)
   const apiKeysQuery = query(collection(db, `households/${householdId}/apiKeys`).withConverter(householdApiKeyConverter));
   unsubscribers.push(
@@ -168,6 +193,24 @@ export function attachCoreListeners({
         // Don't show error toast to user as this is non-critical data
       }
     )
+  );
+
+  // Notification inbox listener (F-NOTIF-02) — bounded, newest-first window
+  // across the whole household (no `recipientUid` equality filter, see the
+  // NOTIFICATION_LOG_FETCH_LIMIT doc comment); the provider filters this raw
+  // window down to the current member's own entries.
+  const notificationLogQuery = query(
+    collection(db, `households/${householdId}/notificationLog`).withConverter(notificationLogConverter),
+    orderBy('createdAt', 'desc'),
+    limit(NOTIFICATION_LOG_FETCH_LIMIT)
+  );
+  unsubscribers.push(
+    onSnapshot(notificationLogQuery, (snapshot) => {
+      setNotificationLogRaw(snapshot.docs.map(doc => doc.data()));
+    }, (error) => {
+      // Non-critical: the inbox degrades to empty rather than blocking the app.
+      console.error('Error listening to notification log:', error);
+    })
   );
 
   return unsubscribers;

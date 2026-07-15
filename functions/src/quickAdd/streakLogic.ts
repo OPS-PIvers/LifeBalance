@@ -158,6 +158,63 @@ export function streakForPeriod(
 }
 
 // ---------------------------------------------------------------------------
+// Pause / vacation-mode bridging (F-HABITS-01)
+// ---------------------------------------------------------------------------
+
+/**
+ * Safety cap on synthesized pause-bridge dates (mirrors MAX_PAUSE_BRIDGE_DAYS in
+ * utils/habitLogic.ts).
+ */
+export const MAX_PAUSE_BRIDGE_DAYS = 400;
+
+/**
+ * Synthesize the frozen-style bridge dates for a planned pause (F-HABITS-01).
+ *
+ * MUST stay in lockstep with `pauseBridgeDates` in utils/habitLogic.ts: the
+ * bridge covers `(lastPre, pausedUntil]` where `lastPre` is the last completion
+ * STRICTLY BEFORE `today`, so a resume completion on the pause-end day doesn't
+ * collapse the bridge and the bridge never links an older, unrelated gap.
+ * Returns [] when there is nothing to bridge.
+ *
+ * @param completedDates - The habit's completion dates (YYYY-MM-DD)
+ * @param pausedUntil - The planned-break end date (YYYY-MM-DD) or undefined
+ * @param today - "Today" (YYYY-MM-DD, caller-local)
+ */
+export function pauseBridgeDates(
+  completedDates: string[],
+  pausedUntil: string | undefined,
+  today: string = format(new Date(), "yyyy-MM-dd")
+): string[] {
+  if (!pausedUntil || completedDates.length === 0) return [];
+
+  const prior = completedDates.filter((d) => d < today);
+  if (prior.length === 0) return [];
+  const lastPre = prior.reduce((a, b) => (a > b ? a : b));
+  if (pausedUntil <= lastPre) return [];
+
+  const out: string[] = [];
+  let d = parseISO(pausedUntil);
+  while (out.length < MAX_PAUSE_BRIDGE_DAYS) {
+    const ds = format(d, "yyyy-MM-dd");
+    if (ds <= lastPre) break;
+    out.push(ds);
+    d = subDays(d, 1);
+  }
+  return out;
+}
+
+/**
+ * True while a planned break is in effect (`pausedUntil >= today`). Mirrors
+ * `isHabitPaused` in utils/habitLogic.ts.
+ */
+export function isHabitPaused(
+  pausedUntil: string | undefined,
+  today: string
+): boolean {
+  return !!pausedUntil && pausedUntil >= today;
+}
+
+// ---------------------------------------------------------------------------
 // Multiplier
 // ---------------------------------------------------------------------------
 
