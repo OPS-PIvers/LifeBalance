@@ -612,6 +612,7 @@ export interface Meal {
   ingredients: MealIngredient[];
   instructions?: string[]; // Step-by-step cooking instructions
   recipeUrl?: string; // Link to external recipe
+  servings?: number; // Base servings this recipe's ingredient quantities are written for; defaults to 1 when unset
   estimatedCost?: number; // Decimal dollars; optional, manually entered (F-MEALS-01)
   tags: string[]; // "cheap", "quick", "favorite", "new"
   rating?: number;
