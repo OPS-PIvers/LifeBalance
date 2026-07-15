@@ -35,6 +35,8 @@ vi.mock('firebase/firestore', () => {
     }),
     collection: vi.fn((_db: unknown, path: string) => ({ __path: path })),
     increment: (n: number) => incrementMock(n),
+    arrayUnion: (...values: unknown[]) => ({ __arrayUnion: values }),
+    arrayRemove: (...values: unknown[]) => ({ __arrayRemove: values }),
     serverTimestamp: vi.fn(() => '__serverTimestamp'),
     writeBatch: vi.fn(() => ({
       set: (ref: { __path: string }, data: Record<string, unknown>) => {
@@ -502,7 +504,8 @@ describe('useHabitActions.resetHabitDay', () => {
     expect(hh!.data['points.daily']).toBeUndefined();
 
     const hu = habitUpdate();
-    expect(hu!.data['completedDates']).toEqual([]);
+    // arrayRemove delta, not a locally-computed array (stale-cache clobber guard).
+    expect(hu!.data['completedDates']).toEqual({ __arrayRemove: [yesterday()] });
     expect(hu!.data['totalCount']).toBe(0);
     expect(hu!.data['streakDays']).toBe(0);
     expect(commitCount).toBe(1);
@@ -529,7 +532,8 @@ describe('useHabitActions.resetHabitDay', () => {
     expect(hh).toBeDefined();
     // Yesterday's threshold completion earned floor(10 * 1.0) = +10 → reverse it.
     expect(hh!.data['points.total']).toEqual({ __increment: -10 });
-    expect(habitUpdate()!.data['completedDates']).toEqual([]);
+    // arrayRemove delta, not a locally-computed array (stale-cache clobber guard).
+    expect(habitUpdate()!.data['completedDates']).toEqual({ __arrayRemove: [yesterday()] });
   });
 
   it('does nothing when the day has no submissions and no completion', async () => {
