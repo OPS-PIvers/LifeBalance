@@ -36,6 +36,7 @@ export function computeAnyNotificationsEnabled(
     prefs.actionQueueReminders?.enabled === true ||
     prefs.streakWarnings?.enabled === true ||
     prefs.billReminders?.enabled === true ||
+    prefs.dailyBriefing?.enabled === true ||
     weeklyRecapEnabled
   );
 }

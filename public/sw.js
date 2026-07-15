@@ -50,6 +50,37 @@ function sanitizeUrl(url) {
   return isValidUrl(url) ? url : '/';
 }
 
+// F-NOTIF-05: inline notification action buttons.
+// The sending job serializes an array of {action, title} to the `actions` field
+// of the FCM data payload (JSON string, since data values must be strings). We
+// parse + validate it here into the `options.actions` array the OS renders.
+// Kept intentionally strict — bad/foreign entries are dropped, capped at 2 (the
+// practical limit most platforms display), and each action id is echoed into the
+// deep link on click (see notificationclick) rather than trusted to do anything
+// on its own. Keep the action ids in sync with utils/notificationActions.ts and
+// functions/src/shared/notificationActions.ts.
+function parseNotificationActions(rawActions) {
+  if (typeof rawActions !== 'string' || rawActions.length === 0) return [];
+  let parsed;
+  try {
+    parsed = JSON.parse(rawActions);
+  } catch (e) {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .filter(
+      (a) =>
+        a &&
+        typeof a.action === 'string' &&
+        a.action.length > 0 &&
+        typeof a.title === 'string' &&
+        a.title.length > 0
+    )
+    .slice(0, 2)
+    .map((a) => ({ action: a.action, title: a.title }));
+}
+
 try {
   firebase.initializeApp({
     messagingSenderId: MESSAGING_SENDER_ID
@@ -78,6 +109,37 @@ try {
 // References:
 // - https://github.com/firebase/firebase-js-sdk/issues/8010
 // - https://developer.apple.com/documentation/usernotifications/sending_web_push_notifications_in_web_apps_and_browsers
+// F-NOTIF-10 — per-notification-type vibration patterns.
+//
+// Platform reality check: `vibrate` on showNotification() options is honored
+// ONLY by Android Chrome/Edge (Chromium). iOS Safari/PWAs ignore it completely
+// (no Vibration API support at all on WebKit/iOS), and desktop browsers have
+// no vibration hardware so it's a silent no-op there too. Passing an
+// unsupported pattern is harmless (browsers that don't support it simply
+// don't vibrate), so we ship this for the Android slice without any feature
+// detection needed.
+//
+// Kept in sync with utils/notificationVibration.ts's VIBRATE_PATTERNS table —
+// a service worker can't `import` from the app bundle, so this is a
+// deliberate duplication (same pattern as the frozen-date streak table
+// documented in CLAUDE.md). Update both together.
+const DEFAULT_VIBRATE_PATTERN = [100, 50, 100];
+const PUSH_VIBRATE_PATTERNS = {
+  streak_warning: [200, 80, 200, 80, 200],
+  budget_alert: [200, 80, 200, 80, 200],
+  bill_reminder: [150, 60, 150],
+  habit_reminder: [80, 60, 80],
+  action_queue_reminder: [80, 60, 80],
+  weekly_recap: [100],
+  monthly_money_recap: [100],
+  test_notification: [100, 50, 100]
+};
+
+function getVibratePattern(type) {
+  if (!type || typeof type !== 'string') return DEFAULT_VIBRATE_PATTERN;
+  return PUSH_VIBRATE_PATTERNS[type] || DEFAULT_VIBRATE_PATTERN;
+}
+
 self.addEventListener('push', (event) => {
   console.log('[SW] Push event received:', event);
 
@@ -133,9 +195,17 @@ self.addEventListener('push', (event) => {
       ...data,
       url: safeUrl
     },
-    // Vibration pattern for mobile devices
-    vibrate: [100, 50, 100]
+    // Vibration pattern for mobile devices — per-type where the caller sent
+    // one (data.type), else the generic default. Only honored by Android
+    // Chrome/Edge in practice; see the comment on getVibratePattern above.
+    vibrate: getVibratePattern(data.type)
   };
+
+  // F-NOTIF-05: attach inline action buttons if the payload carried any.
+  const notificationActions = parseNotificationActions(data.actions);
+  if (notificationActions.length > 0) {
+    options.actions = notificationActions;
+  }
 
   // F-NOTIF-07: mirror an app-icon badge count for background pushes (the
   // client's useAppBadge hook only runs while a tab is open). The server
@@ -181,9 +251,19 @@ self.addEventListener('notificationclick', (event) => {
   const notificationType = typeof event.notification.data?.type === 'string'
     ? event.notification.data.type
     : '';
-  const taggedPath = notificationType
+  let taggedPath = notificationType
     ? targetPath + (targetPath.includes('?') ? '&' : '?') + 'nsrc=' + encodeURIComponent(notificationType)
     : targetPath;
+
+  // F-NOTIF-05: when the user tapped an inline ACTION button (not the body),
+  // echo the action id into the deep link as `nact=<action>`. The app reads +
+  // strips it on boot and dispatches the action from an authenticated session
+  // (see utils/notificationActions.ts). Body taps have event.action === ''.
+  const actionId = typeof event.action === 'string' ? event.action : '';
+  if (actionId) {
+    taggedPath = taggedPath + (taggedPath.includes('?') ? '&' : '?') + 'nact=' + encodeURIComponent(actionId);
+  }
+
   const fullTaggedUrlToOpen = new URL(taggedPath, self.location.origin).href;
 
   event.waitUntil(

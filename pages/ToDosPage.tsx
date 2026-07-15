@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef, useId } from 'react';
 import { useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Rows3, Grid2x2, List } from 'lucide-react';
+import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Rows3, Grid2x2, List, Repeat } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { quadrantForTodo, QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhower';
+import { TODO_FREQUENCIES, TODO_FREQUENCY_LABELS, type TodoFrequency } from '@/utils/todoRecurrence';
 import { ToDo, HouseholdMember } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { haptic } from '@/utils/haptics';
@@ -27,6 +28,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Section } from '@/components/todos/Section';
 import { EisenhowerMatrixView } from '@/components/todos/EisenhowerMatrixView';
 import { EisenhowerGridView } from '@/components/todos/EisenhowerGridView';
+import { TaskTemplateDrawer } from '@/components/todos/TaskTemplateDrawer';
 
 // localStorage key for the per-device arrangement choice.
 const ARRANGEMENT_KEY = 'lifebalance:todos-view';
@@ -76,6 +78,10 @@ const ToDosPage: React.FC = () => {
   // View Mode State
   const [viewMode, setViewMode] = useState<'active' | 'completed'>('active');
 
+  // Assignee filter chips — session-only, transient (not persisted). `null`
+  // means "All". Filters every visible section/quadrant to one member's tasks.
+  const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null);
+
   // Active-view arrangement: chronological list, Eisenhower sections, or 2×2 grid.
   // Persisted per-device — this is a personal lens on shared data.
   const [arrangement, setArrangement] = useState<Arrangement>(() => {
@@ -112,6 +118,9 @@ const ToDosPage: React.FC = () => {
 
   // Mobile Action Drawer State
   const [actionTodo, setActionTodo] = useState<ToDo | null>(null);
+
+  // F-TODO-03 — Task templates ("Quick Task Lists") drawer.
+  const [isTemplateDrawerOpen, setIsTemplateDrawerOpen] = useState(false);
 
   // Batch Mode State
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -166,6 +175,8 @@ const ToDosPage: React.FC = () => {
   const [completeByDate, setCompleteByDate] = useState(getLocalDateString());
   const [assignedTo, setAssignedTo] = useState('');
   const [isImportant, setIsImportant] = useState(false);
+  // F-TODO-01: recurrence cadence for the full add/edit form. 'none' = one-off.
+  const [recurrence, setRecurrence] = useState<'none' | TodoFrequency>('none');
   // Shared notes surfaced in the editor drawer — visible to all household members
   // (to-dos are already shared). Capped to match the firestore.rules validator.
   const [notes, setNotes] = useState('');
@@ -184,7 +195,7 @@ const ToDosPage: React.FC = () => {
 
   // Categorize To-Dos (Active)
   const { immediate, upcoming, radar, allActiveCount, allActiveIds } = useMemo(() => {
-    const active = todos.filter(t => !t.isCompleted);
+    const active = todos.filter(t => !t.isCompleted && (assigneeFilter === null || t.assignedTo === assigneeFilter));
     const today = currentDate;
     const endOfCurrentWeek = endOfWeek(today, { weekStartsOn: 1 }); // Monday start
 
@@ -223,7 +234,7 @@ const ToDosPage: React.FC = () => {
       allActiveCount: active.length,
       allActiveIds: active.map(t => t.id)
     };
-  }, [todos, currentDate]);
+  }, [todos, currentDate, assigneeFilter]);
 
   // Eisenhower buckets — computed unconditionally (hooks rule) but only
   // rendered in the matrix arrangement. Urgency uses the same midnight-
@@ -232,12 +243,13 @@ const ToDosPage: React.FC = () => {
     const buckets: Record<Quadrant, ToDo[]> = { do: [], schedule: [], delegate: [], later: [] };
     todos.forEach(todo => {
       if (todo.isCompleted) return;
+      if (assigneeFilter !== null && todo.assignedTo !== assigneeFilter) return;
       buckets[quadrantForTodo(todo, currentDate)].push(todo);
     });
     const byDueDate = (a: ToDo, b: ToDo) => a.completeByDate.localeCompare(b.completeByDate);
     QUADRANT_ORDER.forEach(q => buckets[q].sort(byDueDate));
     return buckets;
-  }, [todos, currentDate]);
+  }, [todos, currentDate, assigneeFilter]);
 
   // Categorize To-Dos (Completed)
   const { completedToday, completedYesterday, completedWeek, completedOlder } = useMemo(() => {
@@ -304,6 +316,7 @@ const ToDosPage: React.FC = () => {
     const defaultAssignee = currentUser?.uid ?? (members.length > 0 ? members[0]!.uid : ''); // members[0] is defined: guarded by members.length > 0
     setAssignedTo(defaultAssignee);
     setIsImportant(false);
+    setRecurrence('none');
     setNotes('');
     setEditingId(null);
     setIsAddModalOpen(true);
@@ -349,6 +362,7 @@ const ToDosPage: React.FC = () => {
     setCompleteByDate(todo.completeByDate);
     setAssignedTo(todo.assignedTo);
     setIsImportant(todo.isImportant === true);
+    setRecurrence(todo.recurrence?.frequency ?? 'none');
     setNotes(todo.notes ?? '');
     setEditingId(todo.id);
     setIsAddModalOpen(true);
@@ -562,15 +576,34 @@ const ToDosPage: React.FC = () => {
     setIsSaving(true);
     try {
       const trimmedText = text.trim();
+      const editingTodo = editingId ? todos.find(t => t.id === editingId) : undefined;
+      // F-TODO-01: recurrence template. Preserve an existing chain root across
+      // edits; a fresh recurring task has no parentRecurringId yet (the first
+      // spawn on completion anchors it).
+      const recurrenceValue: ToDo['recurrence'] | undefined =
+        recurrence === 'none'
+          ? undefined
+          : { frequency: recurrence, ...(editingTodo?.recurrence?.parentRecurringId
+              ? { parentRecurringId: editingTodo.recurrence.parentRecurringId }
+              : {}) };
       const trimmedNotes = notes.trim();
       if (editingId) {
-        await updateToDo(editingId, {
+        const updates: Partial<ToDo> = {
           text: trimmedText,
           completeByDate,
           assignedTo,
           isImportant,
           notes: trimmedNotes
-        });
+        };
+        // Only touch the recurrence field when it is set now, or when it was
+        // previously set and is being turned off — so plain (never-recurring)
+        // edits stay byte-identical to today's write.
+        if (recurrenceValue) {
+          updates.recurrence = recurrenceValue;
+        } else if (editingTodo?.recurrence) {
+          updates.recurrence = undefined; // sanitizer writes null → inert
+        }
+        await updateToDo(editingId, updates);
         toast.success('Task updated');
       } else {
         haptic('success'); // at gesture time — dead after the await on iOS
@@ -580,7 +613,8 @@ const ToDosPage: React.FC = () => {
           assignedTo,
           isCompleted: false,
           isImportant,
-          notes: trimmedNotes
+          notes: trimmedNotes,
+          ...(recurrenceValue ? { recurrence: recurrenceValue } : {})
         });
         toast.success('Task added');
         setQuickText(''); // the detailed form consumed the carried-over text
@@ -712,6 +746,51 @@ const ToDosPage: React.FC = () => {
   // strip via --lists-sticky-top (0px fallback when the strip is hidden).
   // Shared by the list and matrix arrangements; hidden in selection mode (adding
   // has no context there) and in the grid arrangement (landscape-immersive).
+  // Assignee filter chips — 'All' plus one avatar-chip per member, using the
+  // same visual pattern as the assign-to fieldset in the add/edit drawer.
+  // Skipped entirely for single-member households where filtering is moot.
+  const assigneeFilterChips = !isSelectionMode && members.length > 1 ? (
+    <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Filter by assignee">
+      <button
+        type="button"
+        onClick={() => setAssigneeFilter(null)}
+        aria-pressed={assigneeFilter === null}
+        className={cn(
+          'flex items-center px-3 py-1.5 rounded-btn border text-sm font-medium whitespace-nowrap transition-colors duration-(--duration-fast) ease-(--ease-standard)',
+          assigneeFilter === null
+            ? 'bg-accent-600 text-white border-accent-600 dark:bg-accent-600 dark:border-accent-600'
+            : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50 dark:bg-brand-700/50 dark:text-brand-200 dark:border-brand-600 dark:hover:bg-brand-700'
+        )}
+      >
+        All
+      </button>
+      {members.map(member => (
+        <button
+          key={member.uid}
+          type="button"
+          onClick={() => setAssigneeFilter(prev => (prev === member.uid ? null : member.uid))}
+          aria-label={`Filter to ${member.displayName || 'User'}`}
+          aria-pressed={assigneeFilter === member.uid}
+          className={cn(
+            'flex items-center gap-2 px-3 py-1.5 rounded-btn border transition-colors duration-(--duration-fast) ease-(--ease-standard) whitespace-nowrap',
+            assigneeFilter === member.uid
+              ? 'bg-accent-600 text-white border-accent-600 dark:bg-accent-600 dark:border-accent-600'
+              : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50 dark:bg-brand-700/50 dark:text-brand-200 dark:border-brand-600 dark:hover:bg-brand-700'
+          )}
+        >
+          {member.photoURL ? (
+            <img src={member.photoURL} alt={member.displayName ?? 'User'} className="w-5 h-5 rounded-full" />
+          ) : (
+            <div className="w-5 h-5 rounded-full bg-brand-200 dark:bg-brand-600 flex items-center justify-center text-xxs font-bold text-brand-600 dark:text-brand-200">
+              {member.displayName?.charAt(0) ?? 'U'}
+            </div>
+          )}
+          <span className="text-sm font-medium">{member.displayName?.split(' ')[0] ?? 'User'}</span>
+        </button>
+      ))}
+    </div>
+  ) : null;
+
   const stickyQuickAdd = !isSelectionMode && effectiveArrangement !== 'grid' ? (
     <div className="sticky top-[var(--lists-sticky-top,0px)] z-20 bg-brand-50 dark:bg-brand-900">
       <SurfaceList>
@@ -727,6 +806,18 @@ const ToDosPage: React.FC = () => {
             disabled={!quickText.trim()}
             submitLabel="Add task"
           />
+
+          {/* Task templates — one-tap creation of a bundle of recurring tasks
+              from a saved template (F-TODO-03, "Quick Task Lists"). */}
+          <button
+            type="button"
+            onClick={() => setIsTemplateDrawerOpen(true)}
+            aria-label="Task templates"
+            title="Add tasks from a template"
+            className="flex-none flex items-center justify-center p-3 rounded-btn text-brand-600 hover:text-brand-900 hover:bg-brand-100 dark:text-brand-300 dark:hover:text-brand-50 dark:hover:bg-brand-700/50 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
+          >
+            <ClipboardList className="w-5 h-5" />
+          </button>
 
           {/* Details — opens the full form to set a custom due date / assignee /
               importance. Retains aria-label "Add new task" so it is the page's
@@ -839,6 +930,7 @@ const ToDosPage: React.FC = () => {
                 the add bar stays visible while a long list scrolls beneath it
                 (reused from the Shopping list). Precedes the sections in both
                 the list and matrix arrangements. */}
+            {assigneeFilterChips}
             {stickyQuickAdd}
             {effectiveArrangement === 'list' ? (
             <>
@@ -851,6 +943,7 @@ const ToDosPage: React.FC = () => {
                 items={immediate}
                 color="rose"
                 onComplete={completeToDo}
+                onUncomplete={handleUncomplete}
                 onEdit={openEditModal}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
@@ -871,6 +964,7 @@ const ToDosPage: React.FC = () => {
                 color="amber"
                 maxVisible={5}
                 onComplete={completeToDo}
+                onUncomplete={handleUncomplete}
                 onEdit={openEditModal}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
@@ -891,6 +985,7 @@ const ToDosPage: React.FC = () => {
                 color="blue"
                 maxVisible={5}
                 onComplete={completeToDo}
+                onUncomplete={handleUncomplete}
                 onEdit={openEditModal}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
@@ -914,6 +1009,7 @@ const ToDosPage: React.FC = () => {
               isSelectionMode={isSelectionMode}
               selectedIds={selectedIds}
               onComplete={completeToDo}
+              onUncomplete={handleUncomplete}
               onEdit={openEditModal}
               onDelete={deleteToDo}
               onDuplicate={handleDuplicate}
@@ -1097,6 +1193,41 @@ const ToDosPage: React.FC = () => {
             className="appearance-none"
           />
 
+          {/* F-TODO-01: recurrence picker — mirrors CalendarItem's weekly/
+              bi-weekly/monthly cadence. 'None' = a one-off task (default). */}
+          <fieldset>
+            <legend className="flex items-center gap-1.5 text-xs font-bold text-brand-400 dark:text-brand-450 uppercase tracking-wider mb-1">
+              <Repeat size={12} aria-hidden="true" />
+              Repeat
+            </legend>
+            <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Repeat cadence">
+              {(['none', ...TODO_FREQUENCIES] as const).map(option => {
+                const selected = recurrence === option;
+                const label = option === 'none' ? 'None' : TODO_FREQUENCY_LABELS[option];
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setRecurrence(option)}
+                    aria-pressed={selected}
+                    className={`px-3 py-2 rounded-btn border text-sm font-medium whitespace-nowrap transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
+                      selected
+                        ? 'bg-accent-600 text-white border-accent-600 dark:bg-accent-600 dark:border-accent-600'
+                        : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50 dark:bg-brand-700/50 dark:text-brand-200 dark:border-brand-600 dark:hover:bg-brand-700'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            {recurrence !== 'none' && (
+              <p className="mt-1.5 text-xs text-brand-400 dark:text-brand-450">
+                A fresh copy is created automatically each time you complete this task.
+              </p>
+            )}
+          </fieldset>
+
           <Textarea
             id="task-notes"
             label="Notes"
@@ -1260,6 +1391,11 @@ const ToDosPage: React.FC = () => {
           )}
         </div>
       </Drawer>
+
+      <TaskTemplateDrawer
+        isOpen={isTemplateDrawerOpen}
+        onClose={() => setIsTemplateDrawerOpen(false)}
+      />
 
     </div>
   );
