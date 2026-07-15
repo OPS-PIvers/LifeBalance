@@ -138,8 +138,8 @@ const Settings: React.FC = () => {
 
   // Kid Mode (Plan 080) — dormant until kidModeEnabled is turned on. Manages the
   // parent PIN required to EXIT a kid's scoped view.
-  const kidModeEnabled = useKidModeEnabled();
-  const plaidEnabled = usePlaidEnabled();
+  const kidModeEnabled = useKidModeEnabled(householdId);
+  const plaidEnabled = usePlaidEnabled(householdId);
   const [pinDraft, setPinDraft] = useState('');
   const [pinConfirm, setPinConfirm] = useState('');
   const [isSavingPin, setIsSavingPin] = useState(false);
