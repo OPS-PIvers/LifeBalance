@@ -71,6 +71,7 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 import { useHabitActions } from './useHabitActions';
+import { streakForHabit } from '@/utils/habitLogic';
 // The mocked updateDoc — updateHabit writes via updateDoc(ref, data), not a batch,
 // so we read its captured call args to assert on the whitelisted update payload.
 // getDocs backs the prior-submissions lookup for back-dated threshold submissions.
@@ -579,6 +580,139 @@ describe('useHabitActions.resetHabitDay', () => {
     expect(memberUpd).toBeDefined();
     expect(memberUpd!.data['points.total']).toEqual({ __increment: -5 });
     expect(capturedUpdates.find(u => u.ref.__path === householdPath)).toBeUndefined();
+  });
+});
+
+describe('useHabitActions.resetHabit (period-scoped date removal)', () => {
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    capturedDeletes.length = 0;
+    commitCount = 0;
+    incrementMock.mockClear();
+  });
+
+  const todayStr = () => format(new Date(), 'yyyy-MM-dd');
+  const weekStart = () => startOfWeek(new Date(), { weekStartsOn: 1 });
+  const weekStartStr = () => format(weekStart(), 'yyyy-MM-dd');
+  // Sunday of the PREVIOUS ISO week — must survive a current-week reset.
+  const lastWeekStr = () => format(subDays(weekStart(), 1), 'yyyy-MM-dd');
+  // All distinct current-ISO-week completion days used in the fixtures
+  // (weekStart + today collapse to one entry on Mondays).
+  const currentWeekDates = () => [...new Set([weekStartStr(), todayStr()])];
+
+  it('weekly mid-week reset removes ALL current-week dates but keeps prior weeks', async () => {
+    const habit = baseHabit({
+      period: 'weekly',
+      scoringType: 'threshold',
+      targetCount: 1,
+      count: 1,
+      completedDates: [lastWeekStr(), ...currentWeekDates()],
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.resetHabit('h1');
+    });
+
+    const hu = habitUpdate();
+    expect(hu).toBeDefined();
+    // arrayRemove delta covering the WHOLE current ISO week — leaving earlier-
+    // in-week dates behind would let calculatePointsForDateRange re-credit the
+    // points this reset reverses. Last week's date is NOT removed.
+    expect(hu!.data['completedDates']).toEqual({ __arrayRemove: currentWeekDates() });
+    expect(hu!.data['count']).toBe(0);
+    // Streak recomputed from the remainder (only last week's completion).
+    expect(hu!.data['streakDays']).toBe(
+      streakForHabit({ period: 'weekly', completedDates: [lastWeekStr()] })
+    );
+
+    // Points reversal matches what the week credited: the completing toggle was
+    // awarded at the 2-consecutive-week streak (1.5x) → floor(10 * 1.5) = 15.
+    const hh = householdUpdate();
+    expect(hh).toBeDefined();
+    expect(hh!.data['points.total']).toEqual({ __increment: -15 });
+    expect(hh!.data['points.daily']).toEqual({ __increment: -15 });
+    expect(hh!.data['points.weekly']).toEqual({ __increment: -15 });
+    expect(commitCount).toBe(1);
+  });
+
+  it('weekly reset with only current-week completions reverses the 1.0x award', async () => {
+    const habit = baseHabit({
+      period: 'weekly',
+      scoringType: 'threshold',
+      targetCount: 1,
+      count: 1,
+      completedDates: currentWeekDates(),
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.resetHabit('h1');
+    });
+
+    expect(habitUpdate()!.data['completedDates']).toEqual({
+      __arrayRemove: currentWeekDates(),
+    });
+    expect(habitUpdate()!.data['streakDays']).toBe(0);
+    // 1-week streak → 1.0x → floor(10 * 1.0) = 10 reversed.
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: -10 });
+  });
+
+  it('daily reset still removes only today', async () => {
+    const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+    const habit = baseHabit({
+      scoringType: 'threshold',
+      targetCount: 1,
+      count: 1,
+      completedDates: [yesterdayStr, todayStr()],
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.resetHabit('h1');
+    });
+
+    const hu = habitUpdate();
+    expect(hu!.data['completedDates']).toEqual({ __arrayRemove: [todayStr()] });
+    // 2-day streak reversed to yesterday-only.
+    expect(hu!.data['streakDays']).toBe(
+      streakForHabit({ period: 'daily', completedDates: [yesterdayStr] })
+    );
+    // Today's completing toggle was awarded at the 2-day streak (1.0x) → -10.
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: -10 });
+  });
+
+  it('omits completedDates entirely when there is nothing to remove', async () => {
+    // Threshold habit with partial progress: count > 0 but the target was never
+    // reached, so today never entered completedDates and no points were awarded.
+    const habit = baseHabit({
+      scoringType: 'threshold',
+      targetCount: 3,
+      count: 1,
+      completedDates: [],
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.resetHabit('h1');
+    });
+
+    const hu = habitUpdate();
+    expect(hu).toBeDefined();
+    expect(hu!.data['count']).toBe(0);
+    // arrayRemove needs >= 1 value; the field must be absent, not an empty delta.
+    expect('completedDates' in hu!.data).toBe(false);
+    // No points were credited, so none are reversed.
+    expect(householdUpdate()).toBeUndefined();
   });
 });
 
