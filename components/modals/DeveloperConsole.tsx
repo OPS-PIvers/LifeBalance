@@ -320,26 +320,42 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
       const householdsSnap = await getDocs(query(collection(db, 'households'), limit(50)));
       let repairedHabits = 0;
       let restoredDates = 0;
+      let failures = 0;
       for (const hh of householdsSnap.docs) {
-        const habitsSnap = await getDocs(collection(db, `households/${hh.id}/habits`));
-        for (const habitDoc of habitsSnap.docs) {
-          const habit = habitDoc.data() as Habit;
-          // Only habits flagged for submission tracking can have submission docs.
-          if (!habit.hasSubmissionTracking) continue;
-          const subsSnap = await getDocs(
-            collection(db, `households/${hh.id}/habits/${habitDoc.id}/submissions`)
-          );
-          const submissions = subsSnap.docs.map(d => d.data() as HabitSubmission);
-          const plan = computeHabitHistoryRepair(habit, submissions);
-          if (!plan) continue;
-          await updateDoc(doc(db, `households/${hh.id}/habits`, habitDoc.id), {
-            completedDates: arrayUnion(...plan.missingDates),
-            streakDays: plan.streakDays,
-            lastUpdated: serverTimestamp(),
-          });
-          repairedHabits++;
-          restoredDates += plan.missingDates.length;
-          log.push(`${habit.title ?? habitDoc.id}: restored ${plan.missingDates.length} day(s), streak → ${plan.streakDays}`);
+        // Per-household + per-habit error isolation: one bad document or a
+        // transient permission/network error must not abort the whole sweep
+        // (the run is additive/idempotent, so partial progress is safe).
+        try {
+          const habitsSnap = await getDocs(collection(db, `households/${hh.id}/habits`));
+          for (const habitDoc of habitsSnap.docs) {
+            try {
+              const habit = habitDoc.data() as Habit;
+              // Only habits flagged for submission tracking can have submission docs.
+              if (!habit.hasSubmissionTracking) continue;
+              const subsSnap = await getDocs(
+                collection(db, `households/${hh.id}/habits/${habitDoc.id}/submissions`)
+              );
+              const submissions = subsSnap.docs.map(d => d.data() as HabitSubmission);
+              const plan = computeHabitHistoryRepair(habit, submissions);
+              if (!plan) continue;
+              await updateDoc(doc(db, `households/${hh.id}/habits`, habitDoc.id), {
+                completedDates: arrayUnion(...plan.missingDates),
+                streakDays: plan.streakDays,
+                lastUpdated: serverTimestamp(),
+              });
+              repairedHabits++;
+              restoredDates += plan.missingDates.length;
+              log.push(`${habit.title ?? habitDoc.id}: restored ${plan.missingDates.length} day(s), streak → ${plan.streakDays}`);
+            } catch (error) {
+              failures++;
+              console.error(`[runHabitHistoryRepair] Habit ${hh.id}/${habitDoc.id} failed:`, error);
+              log.push(`SKIPPED habit ${habitDoc.id} (${hh.id}) — see console; re-run to retry.`);
+            }
+          }
+        } catch (error) {
+          failures++;
+          console.error(`[runHabitHistoryRepair] Household ${hh.id} failed:`, error);
+          log.push(`SKIPPED household ${hh.id} — see console; re-run to retry.`);
         }
       }
       log.push(
@@ -347,7 +363,12 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
           ? 'Nothing to repair — every submission-backed day is already present.'
           : `Done: ${restoredDates} day(s) restored across ${repairedHabits} habit(s). Points totals self-correct on next login/midnight recompute.`
       );
-      toast.success('Habit history repair complete');
+      if (failures > 0) {
+        log.push(`${failures} item(s) skipped on errors — safe to re-run (additive/idempotent).`);
+        toast.error(`Repair finished with ${failures} skipped item(s) — re-run to retry`);
+      } else {
+        toast.success('Habit history repair complete');
+      }
     } catch (error) {
       console.error('[runHabitHistoryRepair] Failed:', error);
       log.push('FAILED — see console. Partial progress is safe to re-run (additive/idempotent).');
