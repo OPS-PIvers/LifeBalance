@@ -331,6 +331,9 @@ export interface HouseholdContextType {
   /** Plan 090 — toggle a module on/off for the household (merge-writes moduleVisibility.<key>). */
   setModuleVisibility: (key: ModuleKey, value: boolean) => Promise<void>;
 
+  /** F-PLAT-07 — apply a full module-visibility preset in one write (merge-writes every key at once). */
+  updateModuleVisibility: (patch: Partial<Record<ModuleKey, boolean>>) => Promise<void>;
+
   /** Set (raw PIN, salted+hashed before write) or clear (null) the Kid Mode exit PIN. */
   setKidModePin: (pin: string | null) => Promise<void>;
 
@@ -453,7 +456,7 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'pendingItemsCount' | 'apiKeys'
   | 'householdId' | 'householdSettings' | 'household'
   | 'refreshInsight' | 'addMember' | 'updateMember' | 'removeMember' | 'deleteHousehold'
-  | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'setKidModePin'
+  | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'updateModuleVisibility' | 'setKidModePin'
   | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
   | 'activeMemberId' | 'actAs' | 'exitToParent'
   | 'recaps' | 'moneyRecaps'

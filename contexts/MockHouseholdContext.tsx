@@ -589,6 +589,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success(`Mock: ${key} ${value ? 'enabled' : 'disabled'}`);
   }, []);
 
+  const updateModuleVisibility = useCallback(async (patch: Partial<Record<ModuleKey, boolean>>) => {
+    setModuleVisibilityState(prev => ({ ...prev, ...patch }));
+    toast.success('Mock: modules updated');
+  }, []);
+
   const setKidModePin = useCallback(async (pin: string | null) => {
     if (pin === null) {
       setKidModePinHash(undefined);
@@ -1679,6 +1684,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     completeOnboarding,
     setHouseholdCurrency,
     setModuleVisibility,
+    updateModuleVisibility,
     setKidModePin,
     addKidProfile,
     updateKidProfile,

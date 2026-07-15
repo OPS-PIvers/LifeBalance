@@ -66,7 +66,21 @@ export function makeHouseholdSettingsMutations(deps: {
     await updateDoc(ref, { kidModePinHash });
   };
 
-  return { completeOnboarding, setHouseholdCurrency, setModuleVisibility, setKidModePin };
+  // F-PLAT-07 — apply an entire module preset (e.g. "Finance only") in one
+  // write. Same dotted-path-merge approach as setModuleVisibility, just N
+  // keys in a single updateDoc so the write is atomic and there's no
+  // flicker between individually-applied toggles.
+  const updateModuleVisibility = async (patch: Partial<Record<ModuleKey, boolean>>) => {
+    if (!householdId) return;
+    const entries = Object.entries(patch) as [ModuleKey, boolean][];
+    if (entries.length === 0) return;
+    const dottedPatch = Object.fromEntries(
+      entries.map(([key, value]) => [`moduleVisibility.${key}`, value]),
+    );
+    await updateDoc(doc(db, 'households', householdId), dottedPatch);
+  };
+
+  return { completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setKidModePin };
 }
 
 /**
