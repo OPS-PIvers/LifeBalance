@@ -39,6 +39,7 @@ import { KidsChoresWidget } from '@/components/dashboard/KidsChoresWidget';
 import { ActivityFeedWidget } from '@/components/dashboard/ActivityFeedWidget';
 import { PulseStripWidget } from '@/components/dashboard/PulseStripWidget';
 import { WeeklyRecapCard } from '@/components/dashboard/WeeklyRecapCard';
+import { SetupChecklistCard } from '@/components/dashboard/SetupChecklistCard';
 import { MoneyRecapCard } from '@/components/dashboard/MoneyRecapCard';
 import { PointRebalanceCard } from '@/components/dashboard/PointRebalanceCard';
 import { CreateChallengePayload, CREDIT_CARD_CATEGORY } from '@/types/schema';
@@ -511,6 +512,14 @@ const Dashboard: React.FC = () => {
               return null;
           }
         })}
+
+        {/* Setup checklist (F-PLAT-03) — nudges a few high-value setup actions
+            the onboarding wizard doesn't cover; self-clears once every item is
+            done, dismissed, or ~2 weeks old. Leads the widget stack so new
+            households see it before it's buried. Not part of the F-XCUT-02
+            customizable widgetOrder (it's a self-clearing onboarding nudge,
+            not a persistent widget a member would want to reorder/hide). */}
+        <SetupChecklistCard />
 
         {/* Point-rebalance nudge (F-DASH-08) — wires up the already-shipped
             `analyzeHabitPoints` AI helper: a dismissible, cadence-gated
