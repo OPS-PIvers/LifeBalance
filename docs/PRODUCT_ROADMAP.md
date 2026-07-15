@@ -383,6 +383,7 @@ explorations against this table.
 | `recap_viewed` | Weekly recap detail drawer opens (`components/dashboard/WeeklyRecapCard.tsx`) | `isoWeek` — the recap's ISO week; `source` — `card` \| `push` |
 | `recap_push_opened` | App arrives via the weekly recap push deep link (`?recap=<isoWeek>`, consumed by `utils/recapParam.ts`) | — |
 | `duplicate_merged` | A `possibleDuplicateOf`-flagged transaction pair is merged (`mergeTransactions` in the context, or the Merge action in `TransactionReviewForm`) | `source` — the deleted duplicate row's `Transaction.source` |
+| `setup_checklist_item_completed` | A post-onboarding setup checklist item (`components/dashboard/SetupChecklistCard.tsx`) transitions from undone to done | `item` — the item id (`bucket` \| `notifications` \| `invite` \| `bank`) |
 | `duplicate_kept_both` | A `possibleDuplicateOf` flag is dismissed without merging (`keepBothTransactions` / the Keep-both action) | — |
 | `bank_linked` | A Plaid Link flow completes and `plaidexchangepublictoken` succeeds (`components/settings/ConnectBankCard.tsx`) | — |
 | `plaid_balance_adopted` | The "Update to bank balance" chip is tapped on a budget account card (`components/budget/BudgetAccounts.tsx`) | — |

@@ -39,6 +39,7 @@ import { KidsChoresWidget } from '@/components/dashboard/KidsChoresWidget';
 import { ActivityFeedWidget } from '@/components/dashboard/ActivityFeedWidget';
 import { PulseStripWidget } from '@/components/dashboard/PulseStripWidget';
 import { WeeklyRecapCard } from '@/components/dashboard/WeeklyRecapCard';
+import { SetupChecklistCard } from '@/components/dashboard/SetupChecklistCard';
 import { MoneyRecapCard } from '@/components/dashboard/MoneyRecapCard';
 import { CreateChallengePayload, CREDIT_CARD_CATEGORY } from '@/types/schema';
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
@@ -450,6 +451,12 @@ const Dashboard: React.FC = () => {
         {/* The Pulse strip — "This week" at a glance (money + habits balance,
             the app's thesis metric). Leads the widgets, above credit + habits. */}
         <PulseStripWidget />
+
+        {/* Setup checklist (F-PLAT-03) — nudges a few high-value setup actions
+            the onboarding wizard doesn't cover; self-clears once every item is
+            done, dismissed, or ~2 weeks old. Leads the widget stack so new
+            households see it before it's buried. */}
+        <SetupChecklistCard />
 
         {/* Today's Habits — smart-ranked compact tracker (habits domain — Plan
             090). Kept high so active / at-risk streaks lead the page. */}
