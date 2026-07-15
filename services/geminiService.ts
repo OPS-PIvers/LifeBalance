@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, Schema, Part } from "@google/genai";
-import { Meal, Transaction, Habit, InsightAction, Household } from "@/types/schema";
+import { Meal, Transaction, Habit, InsightAction, Household, DietaryProfile } from "@/types/schema";
 import type { ReflectionSnippet } from "@/utils/habitReflections";
 import { WeeklyPlan, WeeklyPlanConstraints, WeeklyPlanStore } from "@/types/weeklyPlan";
 import { GROCERY_CATEGORIES } from "@/data/groceryCategories";
@@ -17,7 +17,7 @@ import {
 import { getLocalDateString } from "@/utils/dateHelpers";
 import { getLimits, LEGACY_AI_DAILY_QUOTA } from "@/utils/entitlements";
 import { getBillingEnabled } from "./appConfig";
-import type { ReceiptData, ReceiptLineItemsData } from './geminiService.types';
+import type { ReceiptData, ParsedTaskList, ParsedMealPlan, ReceiptLineItemsData } from './geminiService.types';
 import {
   GeminiValidationError,
   InvalidImageError,
@@ -25,6 +25,7 @@ import {
   validateReceiptData,
   validateBankTransactions,
   validateMealSuggestion,
+  validateSubtaskSuggestions,
   validateGroceryItems,
   validateOptimizableItems,
   validateInsight,
@@ -34,6 +35,8 @@ import {
   validateHabitReorganization,
   validateParsedShoppingList,
   validateParsedTodoList,
+  validateParsedTaskList,
+  validateParsedMealPlan,
   validateParsedExpense,
   validateNaturalLanguageUnknown,
   validateRecipe,
@@ -52,6 +55,9 @@ export type {
   ReceiptLineItemsData,
   ParsedShoppingList,
   ParsedTodoList,
+  ParsedTaskList,
+  ParsedMealPlan,
+  MealPlanSlot,
   ParsedExpense,
   OptimizableItem,
   HabitPatternInsight,
@@ -398,7 +404,14 @@ async function withTimeoutAndRetry<T>(
  * AI Prompt template for generating household insights.
  * This can be easily modified or A/B tested without changing function logic.
  */
-const INSIGHT_GENERATION_PROMPT = (transactions: string, habits: string, previousInsights: string = "", reflections: string = "") => `Analyze this household data to provide ONE concise, helpful, and digestible insight.
+const INSIGHT_GENERATION_PROMPT = (
+  transactions: string,
+  habits: string,
+  previousInsights: string = "",
+  dislikedInsights: string = "",
+  likedInsights: string = "",
+  reflections: string = "",
+) => `Analyze this household data to provide ONE concise, helpful, and digestible insight.
 The insight should be deep and actionable, not just a basic observation.
 Focus on patterns between spending and habits if possible, or interesting trends in either.
 Keep the 'text' under 30 words.
@@ -406,6 +419,14 @@ Keep the 'text' under 30 words.
 ${previousInsights ? `
 PREVIOUS INSIGHTS (Do not repeat these. Instead, expand on them with new analysis, look for different patterns, or provide a completely new insight):
 ${previousInsights}
+` : ''}
+${dislikedInsights ? `
+USER FEEDBACK — DISLIKED (the household gave these a thumbs down; avoid this topic/style/tone, try a genuinely different angle):
+${dislikedInsights}
+` : ''}
+${likedInsights ? `
+USER FEEDBACK — LIKED (the household gave these a thumbs up; lean into this topic/style/tone when the data supports it):
+${likedInsights}
 ` : ''}
 
 ${reflections ? `
@@ -982,6 +1003,8 @@ export interface MealSuggestionRequest {
   quick: boolean;
   new: boolean;
   previousMeals: Meal[];
+  /** F-MEALS-03: standing household dietary restrictions/allergens to honor. */
+  dietaryProfile?: DietaryProfile;
 }
 
 export interface MealSuggestionResponse {
@@ -1007,11 +1030,15 @@ export const suggestMeal = async (
 ): Promise<MealSuggestionResponse> => {
   return withErrorHandling('Meal Suggestion', 'Failed to suggest meal.', async () => {
     const previousMealsList = sanitizeList(options.previousMeals.map(m => m.name));
+    const allergies = sanitizeList(options.dietaryProfile?.allergens);
+    const restrictions = sanitizeList(options.dietaryProfile?.restrictions);
 
     let prompt = `Suggest a REAL, existing meal plan idea based on the following criteria. The meal must be a real dish that people actually cook.\n`;
     if (options.cheap) prompt += `- Should be budget-friendly/cheap.\n`;
     if (options.quick) prompt += `- Should be quick to prepare (under 30 mins).\n`;
     if (options.new) prompt += `- Should be DIFFERENT from these previous meals: ${previousMealsList}\n`;
+    if (allergies) prompt += `- ALLERGY (obey silently, in every form including sauces/marinades): ${allergies}.\n`;
+    if (restrictions) prompt += `- Dietary restriction(s) to honor: ${restrictions}.\n`;
 
     prompt += `\nReturn a JSON object with:
     - name: Meal name (Real dish name)
@@ -1056,6 +1083,62 @@ export const suggestMeal = async (
     // the dish name instead.
     suggestion.recipeUrl = `https://www.google.com/search?q=${encodeURIComponent(`${suggestion.name} recipe`)}`;
     return suggestion;
+  });
+};
+
+/** Upper bound on AI-suggested subtasks (keeps a checklist scannable). */
+const MAX_SUGGESTED_SUBTASKS = 8;
+
+/**
+ * Breaks a single to-do down into a short, ordered checklist of concrete steps
+ * (F-TODO-08 "Break down with AI"). Returns an ordered array of subtask strings;
+ * empty when the model can't produce a meaningful breakdown.
+ *
+ * The global `aiEnabled` kill-switch and daily quota are enforced by
+ * `generateJsonContent`, so a caller that hits a disabled switch receives the
+ * "AI features are temporarily disabled." error and can degrade gracefully.
+ *
+ * @param householdId - The household ID for quota tracking
+ * @param taskText - The parent task's text to decompose
+ * @param notes - Optional extra context (the task's notes field)
+ * @param _aiClient - Optional injected AI client for testing purposes.
+ */
+export const suggestSubtasks = async (
+  householdId: string,
+  taskText: string,
+  notes?: string,
+  _aiClient?: Pick<typeof ai, 'models'>
+): Promise<string[]> => {
+  return withErrorHandling('Subtask Breakdown', 'Failed to break down task.', async () => {
+    const trimmedTask = taskText.trim();
+    const trimmedNotes = (notes ?? '').trim();
+
+    let prompt = `Break this household to-do into a short, ordered checklist of concrete, actionable steps.
+Return between 2 and ${MAX_SUGGESTED_SUBTASKS} steps. Each step should be a brief imperative phrase
+(e.g. "Book venue", "Order cake"), not a full sentence, and specific to actually completing the task.
+Do NOT restate the task itself as a step. If the task is already atomic and cannot be sensibly broken
+down, return an empty array.
+
+Task: ${trimmedTask}`;
+    if (trimmedNotes) prompt += `\nNotes/context: ${trimmedNotes}`;
+    prompt += `\n\nReturn a JSON object: { "subtasks": string[] }`;
+
+    const result = await generateJsonContent<string[]>(
+      householdId,
+      prompt,
+      {
+        type: Type.OBJECT,
+        properties: {
+          subtasks: { type: Type.ARRAY, items: { type: Type.STRING } }
+        },
+        required: ["subtasks"]
+      },
+      _aiClient,
+      GEMINI_MODEL,
+      validateSubtaskSuggestions
+    );
+    // Clamp to a scannable length even if the model over-produces.
+    return result.slice(0, MAX_SUGGESTED_SUBTASKS);
   });
 };
 
@@ -1108,6 +1191,114 @@ export const parseGroceryReceipt = async (
       ...item,
       category: clampToAllowed(item.category, availableCategories, 'Uncategorized')
     }));
+  });
+};
+
+/**
+ * Parses a photo of a handwritten/whiteboard/paper task list into discrete task
+ * lines (F-TODO-06). Mirrors the receipt/grocery vision parse: image OCR routed
+ * through the shared timeout/retry helper (proxy or direct SDK per the flag) and
+ * gated by the same aiEnabled kill-switch + daily-quota transaction.
+ *
+ * @param householdId - The household ID for quota tracking
+ * @param base64Image - Base64 encoded image of the note/whiteboard
+ * @param _aiClient - Optional injected AI client for testing purposes.
+ */
+export const parseTaskList = async (
+  householdId: string,
+  base64Image: string,
+  _aiClient?: Pick<typeof ai, 'models'>
+): Promise<ParsedTaskList> => {
+  return withErrorHandling('Task List Parse', 'Failed to read the task list. Please try again.', async () => {
+    const prompt = [
+      `Analyze this photo of a handwritten, whiteboard, or paper to-do / task list.`,
+      `Extract each distinct task as a separate line. For each task, return a "text" field:`,
+      `- Transcribe the task faithfully, fixing obvious spelling and expanding shorthand into a clear, short task description.`,
+      `- Treat each bullet, checkbox, numbered item, or line as one task; split multiple tasks that share a line.`,
+      `- Ignore headings, dates, decorations, doodles, and struck-through (completed/crossed-out) items.`,
+      `If the image contains no legible tasks, return an empty array [].`,
+      `Return a JSON object with a "tasks" array of objects, each having a "text" string.`,
+    ].join('\n');
+
+    return generateJsonContent<ParsedTaskList>(
+      householdId,
+      prepareImageContent(base64Image, prompt),
+      {
+        type: Type.OBJECT,
+        properties: {
+          tasks: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                text: { type: Type.STRING },
+              },
+              required: ["text"],
+            },
+          },
+        },
+        required: ["tasks"],
+      },
+      _aiClient,
+      GEMINI_MODEL,
+      validateParsedTaskList
+    );
+  });
+};
+
+/**
+ * Parses a photo of a handwritten/whiteboard weekly menu into meal-plan entries
+ * (F-TODO-06 owner note — the meal-plan analogue of parseTaskList). Returns a
+ * weekday name per entry (Monday…Sunday) that the client maps onto the
+ * currently-displayed week, plus the meal slot and dish name. Same vision
+ * transport + quota gating as the receipt parse.
+ *
+ * @param householdId - The household ID for quota tracking
+ * @param base64Image - Base64 encoded image of the weekly menu
+ * @param _aiClient - Optional injected AI client for testing purposes.
+ */
+export const parseMealPlan = async (
+  householdId: string,
+  base64Image: string,
+  _aiClient?: Pick<typeof ai, 'models'>
+): Promise<ParsedMealPlan> => {
+  return withErrorHandling('Meal Plan Parse', 'Failed to read the meal plan. Please try again.', async () => {
+    const prompt = [
+      `Analyze this photo of a handwritten, whiteboard, or paper WEEKLY MEAL PLAN / menu.`,
+      `Extract each planned meal as a separate entry with these fields:`,
+      `- mealName: the dish/meal name, transcribed faithfully with obvious spelling fixed.`,
+      `- type: the meal slot, exactly one of "breakfast", "lunch", "dinner", or "snack". If the note doesn't say, infer the most likely slot (default to "dinner").`,
+      `- day: the weekday the meal is planned for, as a full English weekday name (Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, or Sunday). If a meal has no day column, leave "day" empty.`,
+      `Ignore headings, notes, shopping lists, decorations, and struck-through items.`,
+      `If the image contains no legible meals, return an empty array [].`,
+      `Return a JSON object with a "meals" array of objects, each having "mealName", "type", and "day".`,
+    ].join('\n');
+
+    return generateJsonContent<ParsedMealPlan>(
+      householdId,
+      prepareImageContent(base64Image, prompt),
+      {
+        type: Type.OBJECT,
+        properties: {
+          meals: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                mealName: { type: Type.STRING },
+                type: { type: Type.STRING },
+                day: { type: Type.STRING },
+              },
+              required: ["mealName", "type"],
+            },
+          },
+        },
+        required: ["meals"],
+      },
+      _aiClient,
+      GEMINI_MODEL,
+      validateParsedMealPlan
+    );
   });
 };
 
@@ -1216,6 +1407,10 @@ export const optimizeGroceryList = async (
  * @param previousInsights - List of previous insight texts to avoid repetition
  * @param options - Optional configuration for insight generation
  * @param options.includeMerchantNames - If true, includes merchant names in the data sent to AI (default: true)
+ * @param options.dislikedInsights - F-DASH-11: bounded list of recent insight texts the
+ *   household thumbed down; fed back into the prompt as "avoid this style/topic".
+ * @param options.likedInsights - F-DASH-11: bounded list of recent insight texts the
+ *   household thumbed up; fed back into the prompt as "lean into this style/topic".
  * @param recentReflections - F-HABITS-06: a small, bounded list of recent habit note/mood
  *   snippets (see `selectRecentReflections`) so insights can reference how a habit *felt*,
  *   not just whether it was completed.
@@ -1226,7 +1421,7 @@ export const generateInsight = async (
   transactions: Transaction[],
   habits: Habit[],
   previousInsights: string[] = [],
-  options?: { includeMerchantNames?: boolean },
+  options?: { includeMerchantNames?: boolean; dislikedInsights?: string[]; likedInsights?: string[] },
   _aiClient?: Pick<typeof ai, 'models'>,
   recentReflections: ReflectionSnippet[] = []
 ): Promise<{ text: string, actions?: InsightAction[] }> => {
@@ -1250,6 +1445,12 @@ export const generateInsight = async (
     const previousInsightsStr = previousInsights.length > 0
       ? previousInsights.map(t => `- "${t}"`).join('\n')
       : '';
+    const dislikedInsightsStr = (options?.dislikedInsights ?? []).length > 0
+      ? (options?.dislikedInsights ?? []).map(t => `- "${t}"`).join('\n')
+      : '';
+    const likedInsightsStr = (options?.likedInsights ?? []).length > 0
+      ? (options?.likedInsights ?? []).map(t => `- "${t}"`).join('\n')
+      : '';
 
     // Small, bounded, already-truncated by selectRecentReflections — sanitized
     // the same way habit titles are, since notes are free text.
@@ -1263,6 +1464,8 @@ export const generateInsight = async (
       JSON.stringify(simplifiedTransactions),
       JSON.stringify(simplifiedHabits),
       previousInsightsStr,
+      dislikedInsightsStr,
+      likedInsightsStr,
       reflectionsStr
     );
 
@@ -2118,6 +2321,7 @@ export const generateWeeklyPlan = async (
     const servings = constraints.servings && constraints.servings > 0 ? constraints.servings : 4;
 
     const allergies = sanitizeList(constraints.allergies);
+    const restrictions = sanitizeList(constraints.restrictions);
     const outList = sanitizeList(constraints.outList);
     const inList = sanitizeList(constraints.inList);
     const stores = sanitizeList(constraints.stores);
@@ -2133,6 +2337,7 @@ export const generateWeeklyPlan = async (
       `- Plan the meals to be cooked IN ORDER so fresh/perishable ingredients carry from one night to the next; capture these hand-offs in each meal's "uses" (carried in) and "saves" (saved for later).`,
       `- Use-it-up: plan around full consumption of perishables and intentional leftovers.`,
       allergies ? `- ALLERGY (obey silently, in every form including sauces/marinades): ${allergies}.` : '',
+      restrictions ? `- Dietary restriction(s) to honor: ${restrictions}.` : '',
       outList ? `- NEVER propose these foods/cuisines: ${outList}.` : '',
       recent ? `- Avoid repeating these recently-cooked meals or their core proteins/methods: ${recent}.` : '',
       inList ? `- Reliable favorites you may draw from: ${inList}.` : '',

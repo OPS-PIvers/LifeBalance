@@ -27,6 +27,8 @@ import type {
   ParsedShoppingList,
   ParsedTodoList,
   ParsedExpense,
+  ParsedTaskList,
+  ParsedMealPlan,
   OptimizableItem,
   HabitPatternInsight,
   HabitReorganizationPlan,
@@ -194,6 +196,25 @@ export function validateGroceryItems(raw: unknown): GroceryItemLike[] {
     if (!isOptString(o['store'])) fail(`groceryReceipt[${i}]`, 'store must be a string');
     return o as unknown as GroceryItemLike;
   });
+}
+
+// ---------------------------------------------------------------------------
+// Subtask breakdown (F-TODO-08)
+// ---------------------------------------------------------------------------
+
+/**
+ * Validates the "break a task into steps" response: an object `{ subtasks: string[] }`.
+ * Returns the trimmed, non-empty subtask strings.
+ */
+export function validateSubtaskSuggestions(raw: unknown): string[] {
+  const o = expectRecord(raw, 'subtaskBreakdown');
+  const arr = expectArray(o['subtasks'], 'subtaskBreakdown.subtasks');
+  return arr
+    .map((entry, i): string => {
+      if (!isString(entry)) fail(`subtaskBreakdown.subtasks[${i}]`, 'must be a string');
+      return (entry as string).trim();
+    })
+    .filter(s => s.length > 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -391,6 +412,36 @@ export function validateParsedTodoList(raw: unknown): ParsedTodoList {
     }
   });
   return o as unknown as ParsedTodoList;
+}
+
+// ---------------------------------------------------------------------------
+// Photo-to-tasklist (F-TODO-06)
+// ---------------------------------------------------------------------------
+
+const MEAL_PLAN_SLOTS = ['breakfast', 'lunch', 'dinner', 'snack'];
+
+export function validateParsedTaskList(raw: unknown): ParsedTaskList {
+  const o = expectRecord(raw, 'taskList');
+  const tasks = expectArray(o['tasks'], 'taskList.tasks');
+  tasks.forEach((entry, i) => {
+    const t = expectRecord(entry, `taskList.tasks[${i}]`);
+    if (!isString(t['text'])) fail(`taskList.tasks[${i}]`, 'text must be a string');
+  });
+  return o as unknown as ParsedTaskList;
+}
+
+export function validateParsedMealPlan(raw: unknown): ParsedMealPlan {
+  const o = expectRecord(raw, 'mealPlan');
+  const meals = expectArray(o['meals'], 'mealPlan.meals');
+  meals.forEach((entry, i) => {
+    const m = expectRecord(entry, `mealPlan.meals[${i}]`);
+    if (!isString(m['mealName'])) fail(`mealPlan.meals[${i}]`, 'mealName must be a string');
+    if (!isString(m['type']) || !MEAL_PLAN_SLOTS.includes(m['type'])) {
+      fail(`mealPlan.meals[${i}]`, `type must be one of ${MEAL_PLAN_SLOTS.join(', ')}`);
+    }
+    if (!isOptString(m['day'])) fail(`mealPlan.meals[${i}]`, 'day must be a string');
+  });
+  return o as unknown as ParsedMealPlan;
 }
 
 export function validateParsedExpense(raw: unknown): ParsedExpense {

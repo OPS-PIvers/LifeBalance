@@ -9,7 +9,7 @@ import type { ModuleKey } from '@/types/schema';
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useFinance: () => ({ safeToSpendBreakdown: { safeToSpend: 1234 } }),
   useGamification: () => ({ dailyPoints: 10, weeklyPoints: 50 }),
-  useHouseholdCore: () => ({ household: { pendingRedemptions: [] } }),
+  useHouseholdCore: () => ({ household: { pendingRedemptions: [] }, unreadNotificationCount: 0 }),
 }));
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ currentUser: { displayName: 'Test User', photoURL: null } }),
@@ -41,14 +41,21 @@ vi.mock('./ProfileMenu', () => ({
   default: ({
     isOpen,
     onSendFeedback,
+    onOpenSearch,
+    onOpenNotifications,
   }: {
     isOpen: boolean;
     onClose: () => void;
     onSendFeedback?: () => void;
+    onOpenSearch?: () => void;
+    onOpenNotifications?: () => void;
+    unreadNotificationCount?: number;
   }) =>
     isOpen ? (
       <div data-testid="profile-menu">
         <button onClick={onSendFeedback}>Send Feedback</button>
+        <button onClick={onOpenSearch}>Search</button>
+        <button onClick={onOpenNotifications}>Notifications</button>
       </div>
     ) : null,
 }));

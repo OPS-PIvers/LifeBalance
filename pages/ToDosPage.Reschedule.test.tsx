@@ -32,6 +32,8 @@ vi.mock('react-hot-toast', () => ({
 // Mock Lucide icons
 vi.mock('lucide-react', () => ({
   Plus: () => <div data-testid="plus-icon" />,
+  Camera: () => <div data-testid="camera-icon" />,
+  ImageUp: () => <div data-testid="imageup-icon" />,
   Calendar: () => <div data-testid="calendar-icon" />,
   Check: () => <div data-testid="check-icon" />,
   Trash2: () => <div data-testid="trash-icon" />,
@@ -58,6 +60,9 @@ vi.mock('lucide-react', () => ({
   Rows3: () => <div data-testid="rows3-icon" />,
   Grid2x2: () => <div data-testid="grid2x2-icon" />,
   Smartphone: () => <div data-testid="smartphone-icon" />,
+  Sparkles: () => <div data-testid="sparkles-icon" />,
+  ListChecks: () => <div data-testid="list-checks-icon" />,
+  Repeat: () => <div data-testid="repeat-icon" />,
   Info: () => <div data-testid="info-icon" />,
   // data/templateIcons.ts — pulled in transitively by TaskTemplateDrawer.
   ShoppingBag: () => <div data-testid="shoppingbag-icon" />,
@@ -74,7 +79,6 @@ vi.mock('lucide-react', () => ({
   Beer: () => <div data-testid="beer-icon" />,
   Book: () => <div data-testid="book-icon" />,
   Cake: () => <div data-testid="cake-icon" />,
-  Camera: () => <div data-testid="camera-icon" />,
   Cat: () => <div data-testid="cat-icon" />,
   CreditCard: () => <div data-testid="creditcard-icon" />,
   Dumbbell: () => <div data-testid="dumbbell-icon" />,

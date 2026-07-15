@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { useMealPlan, useShopping, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
+import { useMealPlan, useShopping, useHouseholdCore, useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
-import { Plus, Trash2, Edit2, ChevronRight, ShoppingCart, Copy, CheckCircle2, MoreVertical, MoreHorizontal, BookOpen, CalendarDays, Eye, Info, Utensils, Printer } from 'lucide-react';
+import { Plus, Trash2, Edit2, ChevronRight, ShoppingCart, Copy, CheckCircle2, MoreVertical, MoreHorizontal, BookOpen, CalendarDays, Eye, Info, Utensils, ChefHat, Printer } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import { normalizeMealName, mergeFormIntoMeal } from '@/utils/migrations/mealDedupMigration';
+import { decideMealCookedHabitToggle } from '@/utils/mealCookedHabit';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { calculateWeeklyMealCost } from '@/utils/mealCost';
 import toast from 'react-hot-toast';
@@ -17,6 +18,7 @@ import { AddMealModal } from './AddMealModal';
 import { AISuggestModal } from './AISuggestModal';
 import { RecipeImportModal } from './RecipeImportModal';
 import { WeeklyPlanModal } from './WeeklyPlanModal';
+import { CookHabitPickerDrawer } from './CookHabitPickerDrawer';
 import { Drawer } from '@/components/ui/Drawer';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -25,7 +27,8 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import EmptyState from '@/components/ui/EmptyState';
 import { SurfaceList, Row } from '@/components/ui/Section';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Camera } from 'lucide-react';
+import { MealPlanPhotoImportDrawer } from '@/components/modals/MealPlanPhotoImportDrawer';
 import { haptic } from '@/utils/haptics';
 import clsx from 'clsx';
 import { groupMealPlanByDay } from '@/utils/mealPlanFormatter';
@@ -77,7 +80,8 @@ const MealPlanTab: React.FC = () => {
     shoppingList,
     groceryCatalog,
   } = useShopping();
-  const { householdId, isLoading } = useHouseholdCore();
+  const { householdId, isLoading, householdSettings, setMealCookedHabitId } = useHouseholdCore();
+  const { habits, toggleHabit } = useGamification();
 
   // Calendar State — `selectedDate` is the focused day; the visible week is derived from it.
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -99,11 +103,16 @@ const MealPlanTab: React.FC = () => {
   // "Plan my week" (AI generate / import weekly-meals plan)
   const [isWeeklyPlanOpen, setIsWeeklyPlanOpen] = useState(false);
 
+  // F-MEALS-04: cook-at-home habit picker (linked via the week overflow menu)
+  const [isCookHabitPickerOpen, setIsCookHabitPickerOpen] = useState(false);
+
   // Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isPreviousMealsModalOpen, setIsPreviousMealsModalOpen] = useState(false);
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  // F-TODO-06: photo-to-meal-plan import drawer.
+  const [isPhotoImportOpen, setIsPhotoImportOpen] = useState(false);
   const [isIngredientSelectorOpen, setIsIngredientSelectorOpen] = useState(false);
   const [ingredientSelectorData, setIngredientSelectorData] = useState<{mealId?: string, name: string, ingredients: MealIngredient[]} | null>(null);
 
@@ -484,6 +493,20 @@ const MealPlanTab: React.FC = () => {
         });
       }
 
+      // 3. Auto-credit the linked "cook at home" habit (F-MEALS-04), if any.
+      // toggleHabit always operates on TODAY, so this only fires when the plan
+      // item's date is today — see utils/mealCookedHabit.ts for the full rule.
+      const habitDecision = decideMealCookedHabitToggle({
+        mealCookedHabitId: householdSettings?.mealCookedHabitId,
+        habits,
+        planItemDate: planItem.date,
+        today: getLocalDateString(),
+        isCooked: true,
+      });
+      if (habitDecision) {
+        await toggleHabit(habitDecision.habitId, habitDecision.direction);
+      }
+
       setViewingMeal(null);
       toast.success('Bon Appétit! Marked as cooked.');
 
@@ -664,7 +687,8 @@ const MealPlanTab: React.FC = () => {
             cheap: aiOptions.cheap,
             quick: aiOptions.quick,
             new: aiOptions.new,
-            previousMeals: meals
+            previousMeals: meals,
+            dietaryProfile: householdSettings?.dietaryProfile
         });
 
         setCurrentMeal({
@@ -805,6 +829,12 @@ const MealPlanTab: React.FC = () => {
 
   const weekMenuItems: MenuItem[] = [
     {
+      key: 'scan-menu',
+      label: 'Scan a meal plan',
+      icon: <Camera size={16} />,
+      onSelect: () => setIsPhotoImportOpen(true),
+    },
+    {
       key: 'copy-last-week',
       label: 'Copy last week',
       icon: <Copy size={16} />,
@@ -815,6 +845,12 @@ const MealPlanTab: React.FC = () => {
       label: 'Shop for this week',
       icon: <ShoppingCart size={16} />,
       onSelect: handleShopForWeek,
+    },
+    {
+      key: 'cook-habit',
+      label: 'Cook-at-home habit',
+      icon: <ChefHat size={16} />,
+      onSelect: () => setIsCookHabitPickerOpen(true),
     },
     {
       key: 'print-week',
@@ -1117,11 +1153,27 @@ const MealPlanTab: React.FC = () => {
         );
       })()}
 
+      {/* F-TODO-06: photo-to-meal-plan import */}
+      <MealPlanPhotoImportDrawer
+        isOpen={isPhotoImportOpen}
+        onClose={() => setIsPhotoImportOpen(false)}
+        weekStartStr={weekStartStr}
+      />
+
       {/* Weekly Plan Modal (AI generate / import weekly-meals) */}
       <WeeklyPlanModal
         isOpen={isWeeklyPlanOpen}
         onClose={() => setIsWeeklyPlanOpen(false)}
         weekStart={weekStartStr}
+      />
+
+      {/* Cook-at-home habit picker (F-MEALS-04) */}
+      <CookHabitPickerDrawer
+        isOpen={isCookHabitPickerOpen}
+        onClose={() => setIsCookHabitPickerOpen(false)}
+        habits={habits}
+        mealCookedHabitId={householdSettings?.mealCookedHabitId}
+        onSelect={(habitId) => { void setMealCookedHabitId(habitId); }}
       />
 
       {/* Add Meal Modal */}

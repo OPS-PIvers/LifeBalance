@@ -25,6 +25,7 @@ export interface EisenhowerMatrixViewProps {
   onToggleImportant: (todo: ToDo) => void;
   onMore: (todo: ToDo) => void;
   onToggleSelection: (id: string) => void;
+  onToggleSubtask: (todo: ToDo, subtaskId: string) => void;
 }
 
 export const EisenhowerMatrixView: React.FC<EisenhowerMatrixViewProps> = ({
@@ -41,6 +42,7 @@ export const EisenhowerMatrixView: React.FC<EisenhowerMatrixViewProps> = ({
   onToggleImportant,
   onMore,
   onToggleSelection,
+  onToggleSubtask,
 }) => (
   <>
     {QUADRANT_ORDER.map((q) => (
@@ -59,6 +61,7 @@ export const EisenhowerMatrixView: React.FC<EisenhowerMatrixViewProps> = ({
         onMoveToTomorrow={onMoveToTomorrow}
         onToggleImportant={onToggleImportant}
         onMore={onMore}
+        onToggleSubtask={onToggleSubtask}
         memberMap={memberMap}
         isSelectionMode={isSelectionMode}
         selectedIds={selectedIds}

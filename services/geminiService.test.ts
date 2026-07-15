@@ -192,6 +192,43 @@ describe('geminiService', () => {
     expect(promptText).toContain("Old insight 2");
   });
 
+  it('generateInsight includes disliked/liked feedback signals in prompt (F-DASH-11)', async () => {
+    const { generateInsight } = await import('./geminiService');
+
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify({ text: 'New insight.', actions: [] }),
+    });
+
+    await generateInsight('test-household-id', [], [], [], {
+      dislikedInsights: ['You overspent on Dining again.'],
+      likedInsights: ['Nice job cutting grocery spend this week!'],
+    });
+
+    const callArgs = generateContentMock.mock.calls[0]![0];
+    const promptText = callArgs.contents.parts[0].text;
+
+    expect(promptText).toContain('DISLIKED');
+    expect(promptText).toContain('You overspent on Dining again.');
+    expect(promptText).toContain('LIKED');
+    expect(promptText).toContain('Nice job cutting grocery spend this week!');
+  });
+
+  it('generateInsight omits feedback sections when no feedback provided', async () => {
+    const { generateInsight } = await import('./geminiService');
+
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify({ text: 'New insight.', actions: [] }),
+    });
+
+    await generateInsight('test-household-id', [], []);
+
+    const callArgs = generateContentMock.mock.calls[0]![0];
+    const promptText = callArgs.contents.parts[0].text;
+
+    expect(promptText).not.toContain('DISLIKED');
+    expect(promptText).not.toContain('LIKED');
+  });
+
   it('parseMagicAction correctly parses transaction', async () => {
     const { parseMagicAction } = await import('./geminiService');
 
@@ -488,6 +525,38 @@ describe('geminiService', () => {
       todayDate: '2025-01-01',
     });
     expect(result.data.category).toBe('Other');
+  });
+
+  it('parseTaskList returns the parsed task lines', async () => {
+    const { parseTaskList } = await import('./geminiService');
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify({ tasks: [{ text: 'Take out trash' }, { text: 'Pay rent' }] }),
+    });
+    const result = await parseTaskList('test-id', VALID_TEST_IMAGE);
+    expect(result.tasks.map((t) => t.text)).toEqual(['Take out trash', 'Pay rent']);
+  });
+
+  it('parseTaskList returns an empty array when nothing is legible', async () => {
+    const { parseTaskList } = await import('./geminiService');
+    generateContentMock.mockResolvedValue({ text: JSON.stringify({ tasks: [] }) });
+    const result = await parseTaskList('test-id', VALID_TEST_IMAGE);
+    expect(result.tasks).toHaveLength(0);
+  });
+
+  it('parseMealPlan returns the parsed meal entries', async () => {
+    const { parseMealPlan } = await import('./geminiService');
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify({
+        meals: [
+          { mealName: 'Tacos', type: 'dinner', day: 'Monday' },
+          { mealName: 'Oatmeal', type: 'breakfast', day: 'Tuesday' },
+        ],
+      }),
+    });
+    const result = await parseMealPlan('test-id', VALID_TEST_IMAGE);
+    expect(result.meals).toHaveLength(2);
+    expect(result.meals[0]!.mealName).toBe('Tacos');
+    expect(result.meals[0]!.type).toBe('dinner');
   });
 
   it('parseBankStatement prompt includes correct date from local time', async () => {

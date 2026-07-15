@@ -30,6 +30,7 @@ import {
   NetWorthSnapshot,
   TransactionComment,
   SplitParticipant,
+  DietaryProfile,
   NotificationLogEntry
 } from '@/types/schema';
 import { type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
@@ -318,6 +319,8 @@ export interface HouseholdContextType {
   approveRedemption: (redemptionId: string) => Promise<void>;
   denyRedemption: (redemptionId: string) => Promise<void>;
   refreshInsight: () => Promise<void>;
+  // F-DASH-11 — thumbs up/down feedback on a single insight doc.
+  rateInsight: (insightId: string, feedback: 'up' | 'down') => Promise<void>;
 
   // Yearly Goal Actions
   createYearlyGoal: (goal: Omit<YearlyGoal, 'id'>) => Promise<void>;
@@ -361,6 +364,12 @@ export interface HouseholdContextType {
 
   /** Set (raw PIN, salted+hashed before write) or clear (null) the Kid Mode exit PIN. */
   setKidModePin: (pin: string | null) => Promise<void>;
+
+  /** F-MEALS-03: set the household's standing dietary restrictions/allergens. */
+  setDietaryProfile: (profile: DietaryProfile) => Promise<void>;
+
+  /** F-MEALS-04: set (habit id) or clear (null) the habit auto-credited when a meal is marked cooked. */
+  setMealCookedHabitId: (habitId: string | null) => Promise<void>;
 
   // Meal Actions
   addMeal: (meal: Omit<Meal, 'id'>, options?: { suppressToast?: boolean }) => Promise<string>;
@@ -491,8 +500,8 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'hasMoreInsights' | 'loadAllInsights'
   | 'pendingItemsCount' | 'apiKeys'
   | 'householdId' | 'householdSettings' | 'household'
-  | 'refreshInsight' | 'addMember' | 'updateMember' | 'removeMember' | 'deleteHousehold'
-  | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'updateModuleVisibility' | 'setKidModePin'
+  | 'refreshInsight' | 'rateInsight' | 'addMember' | 'updateMember' | 'removeMember' | 'deleteHousehold'
+  | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'updateModuleVisibility' | 'setKidModePin' | 'setDietaryProfile' | 'setMealCookedHabitId'
   | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
   | 'activeMemberId' | 'actAs' | 'exitToParent'
   | 'recaps' | 'moneyRecaps'
