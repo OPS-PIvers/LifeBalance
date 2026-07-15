@@ -374,6 +374,7 @@ explorations against this table.
 | `habit_past_day_logged` | A habit is backfilled for a past day from the Habits header calendar (`components/modals/PastDayLogModal.tsx`) | `daysAgo` — how many days back the logged date is; `positive` — habit type is positive |
 | `insight_generated` | AI insight doc written (`refreshInsight`) | — |
 | `insight_action_executed` | An insight's suggested action runs successfully (`hooks/useInsightActions.ts`) | `type` — `update_bucket` \| `create_habit` \| `create_todo` |
+| `insight_rated` | Thumbs up/down tapped on an insight (`rateInsight`, `components/dashboard/InsightWidget.tsx`) | `feedback` — `up` \| `down` |
 | `receipt_scanned` | Camera receipt OCR succeeds (`CaptureModal`) | — |
 | `statement_scanned` | Bank-statement/receipt file parse succeeds (`CaptureModal`) | `count` — transactions extracted |
 | `meal_planned` | Meal added to the weekly plan (`addMealPlanItem`) | — |
@@ -384,6 +385,7 @@ explorations against this table.
 | `recap_push_opened` | App arrives via the weekly recap push deep link (`?recap=<isoWeek>`, consumed by `utils/recapParam.ts`) | — |
 | `recap_shared` | Share button in `WeeklyRecapDrawer` generates the canvas share card (`utils/recapShareCard.ts`) | `isoWeek`; `method` — `shared` (Web Share API) \| `downloaded` (fallback) |
 | `duplicate_merged` | A `possibleDuplicateOf`-flagged transaction pair is merged (`mergeTransactions` in the context, or the Merge action in `TransactionReviewForm`) | `source` — the deleted duplicate row's `Transaction.source` |
+| `setup_checklist_item_completed` | A post-onboarding setup checklist item (`components/dashboard/SetupChecklistCard.tsx`) transitions from undone to done | `item` — the item id (`bucket` \| `notifications` \| `invite` \| `bank`) |
 | `duplicate_kept_both` | A `possibleDuplicateOf` flag is dismissed without merging (`keepBothTransactions` / the Keep-both action) | — |
 | `bank_linked` | A Plaid Link flow completes and `plaidexchangepublictoken` succeeds (`components/settings/ConnectBankCard.tsx`) | — |
 | `plaid_balance_adopted` | The "Update to bank balance" chip is tapped on a budget account card (`components/budget/BudgetAccounts.tsx`) | — |

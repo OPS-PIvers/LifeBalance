@@ -79,6 +79,14 @@ export function makeHouseholdSettingsMutations(deps: {
     await updateDoc(doc(db, 'households', householdId), { dietaryProfile: profile });
   };
 
+  // F-MEALS-04: set/clear the habit auto-credited when a meal is marked cooked.
+  // `null` clears the link (deleteField, matching setKidModePin's clear semantics).
+  const setMealCookedHabitId = async (habitId: string | null): Promise<void> => {
+    if (!householdId) return;
+    const ref = doc(db, 'households', householdId);
+    await updateDoc(ref, { mealCookedHabitId: habitId === null ? deleteField() : habitId });
+  };
+
   // F-PLAT-07 — apply an entire module preset (e.g. "Finance only") in one
   // write. Same dotted-path-merge approach as setModuleVisibility, just N
   // keys in a single updateDoc so the write is atomic and there's no
@@ -93,7 +101,7 @@ export function makeHouseholdSettingsMutations(deps: {
     await updateDoc(doc(db, 'households', householdId), dottedPatch);
   };
 
-  return { completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setKidModePin, setDietaryProfile };
+  return { completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setKidModePin, setDietaryProfile, setMealCookedHabitId };
 }
 
 /**
@@ -141,6 +149,19 @@ export function makeRefreshInsight(deps: {
         .slice(0, 3)
         .map(i => i.text);
 
+      // F-DASH-11 — bounded recent feedback signals fed back into the prompt
+      // so generation adapts: a few most-recent 'down'-rated insight texts
+      // (avoid repeating that style/topic) and 'up'-rated ones (lean into it).
+      // Bounded to 3 each so the prompt doesn't grow unbounded over time.
+      const dislikedInsightsTexts = insightsHistory
+        .filter(i => i.feedback === 'down')
+        .slice(0, 3)
+        .map(i => i.text);
+      const likedInsightsTexts = insightsHistory
+        .filter(i => i.feedback === 'up')
+        .slice(0, 3)
+        .map(i => i.text);
+
       // F-HABITS-06 owner note (3): fan out to at most 3 submission-tracked
       // habits, 3 most-recent submissions each — a small, bounded read (never
       // more than 9 docs) so this stays cheap on every insight generation.
@@ -160,7 +181,10 @@ export function makeRefreshInsight(deps: {
         transactions,
         habits,
         previousInsightsTexts,
-        undefined,
+        {
+          dislikedInsights: dislikedInsightsTexts,
+          likedInsights: likedInsightsTexts,
+        },
         undefined,
         recentReflections
       );
@@ -185,4 +209,27 @@ export function makeRefreshInsight(deps: {
   };
 
   return { refreshInsight };
+}
+
+/**
+ * rateInsight (F-DASH-11) — thumbs up/down on a single insight doc. Plain
+ * `updateDoc`, no batch needed: it only ever touches the one insight doc.
+ * Original closure captures only `householdId`.
+ */
+export function makeRateInsight(deps: {
+  db: Firestore;
+  householdId: string | null;
+}) {
+  const { db, householdId } = deps;
+
+  const rateInsight = async (insightId: string, feedback: 'up' | 'down') => {
+    if (!householdId) return;
+    await updateDoc(doc(db, `households/${householdId}/insights`, insightId), {
+      feedback,
+      feedbackAt: new Date().toISOString(),
+    });
+    track('insight_rated', { feedback });
+  };
+
+  return { rateInsight };
 }

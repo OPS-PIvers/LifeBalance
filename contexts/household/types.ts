@@ -137,8 +137,8 @@ export interface HouseholdContextType {
   loadOlderCompletedTodos: () => Promise<void>;
   /** Ensure the meal-plan entries for the week containing `date` are loaded. */
   ensureMealPlanWeek: (date: Date) => Promise<void>;
-  /** Fetch every meal beyond the bounded live window (cookbook view). Idempotent per household. */
-  loadAllMeals: () => Promise<void>;
+  /** Fetch every meal beyond the bounded live window (cookbook view). Idempotent per household; resolves with the full, up-to-date meals list. */
+  loadAllMeals: () => Promise<Meal[]>;
   /** Fetch the full grocery catalog beyond the bounded live window (shopping-form search fallback). Idempotent per household. */
   loadFullGroceryCatalog: () => Promise<void>;
 
@@ -313,6 +313,8 @@ export interface HouseholdContextType {
   approveRedemption: (redemptionId: string) => Promise<void>;
   denyRedemption: (redemptionId: string) => Promise<void>;
   refreshInsight: () => Promise<void>;
+  // F-DASH-11 — thumbs up/down feedback on a single insight doc.
+  rateInsight: (insightId: string, feedback: 'up' | 'down') => Promise<void>;
 
   // Yearly Goal Actions
   createYearlyGoal: (goal: Omit<YearlyGoal, 'id'>) => Promise<void>;
@@ -359,6 +361,9 @@ export interface HouseholdContextType {
 
   /** F-MEALS-03: set the household's standing dietary restrictions/allergens. */
   setDietaryProfile: (profile: DietaryProfile) => Promise<void>;
+
+  /** F-MEALS-04: set (habit id) or clear (null) the habit auto-credited when a meal is marked cooked. */
+  setMealCookedHabitId: (habitId: string | null) => Promise<void>;
 
   // Meal Actions
   addMeal: (meal: Omit<Meal, 'id'>, options?: { suppressToast?: boolean }) => Promise<string>;
@@ -488,8 +493,8 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'hasMoreInsights' | 'loadAllInsights'
   | 'pendingItemsCount' | 'apiKeys'
   | 'householdId' | 'householdSettings' | 'household'
-  | 'refreshInsight' | 'addMember' | 'updateMember' | 'removeMember' | 'deleteHousehold'
-  | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'updateModuleVisibility' | 'setKidModePin' | 'setDietaryProfile'
+  | 'refreshInsight' | 'rateInsight' | 'addMember' | 'updateMember' | 'removeMember' | 'deleteHousehold'
+  | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'updateModuleVisibility' | 'setKidModePin' | 'setDietaryProfile' | 'setMealCookedHabitId'
   | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
   | 'activeMemberId' | 'actAs' | 'exitToParent'
   | 'recaps' | 'moneyRecaps'

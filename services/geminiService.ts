@@ -25,6 +25,7 @@ import {
   validateReceiptData,
   validateBankTransactions,
   validateMealSuggestion,
+  validateSubtaskSuggestions,
   validateGroceryItems,
   validateOptimizableItems,
   validateInsight,
@@ -398,7 +399,14 @@ async function withTimeoutAndRetry<T>(
  * AI Prompt template for generating household insights.
  * This can be easily modified or A/B tested without changing function logic.
  */
-const INSIGHT_GENERATION_PROMPT = (transactions: string, habits: string, previousInsights: string = "", reflections: string = "") => `Analyze this household data to provide ONE concise, helpful, and digestible insight.
+const INSIGHT_GENERATION_PROMPT = (
+  transactions: string,
+  habits: string,
+  previousInsights: string = "",
+  dislikedInsights: string = "",
+  likedInsights: string = "",
+  reflections: string = "",
+) => `Analyze this household data to provide ONE concise, helpful, and digestible insight.
 The insight should be deep and actionable, not just a basic observation.
 Focus on patterns between spending and habits if possible, or interesting trends in either.
 Keep the 'text' under 30 words.
@@ -406,6 +414,14 @@ Keep the 'text' under 30 words.
 ${previousInsights ? `
 PREVIOUS INSIGHTS (Do not repeat these. Instead, expand on them with new analysis, look for different patterns, or provide a completely new insight):
 ${previousInsights}
+` : ''}
+${dislikedInsights ? `
+USER FEEDBACK — DISLIKED (the household gave these a thumbs down; avoid this topic/style/tone, try a genuinely different angle):
+${dislikedInsights}
+` : ''}
+${likedInsights ? `
+USER FEEDBACK — LIKED (the household gave these a thumbs up; lean into this topic/style/tone when the data supports it):
+${likedInsights}
 ` : ''}
 
 ${reflections ? `
@@ -1065,6 +1081,62 @@ export const suggestMeal = async (
   });
 };
 
+/** Upper bound on AI-suggested subtasks (keeps a checklist scannable). */
+const MAX_SUGGESTED_SUBTASKS = 8;
+
+/**
+ * Breaks a single to-do down into a short, ordered checklist of concrete steps
+ * (F-TODO-08 "Break down with AI"). Returns an ordered array of subtask strings;
+ * empty when the model can't produce a meaningful breakdown.
+ *
+ * The global `aiEnabled` kill-switch and daily quota are enforced by
+ * `generateJsonContent`, so a caller that hits a disabled switch receives the
+ * "AI features are temporarily disabled." error and can degrade gracefully.
+ *
+ * @param householdId - The household ID for quota tracking
+ * @param taskText - The parent task's text to decompose
+ * @param notes - Optional extra context (the task's notes field)
+ * @param _aiClient - Optional injected AI client for testing purposes.
+ */
+export const suggestSubtasks = async (
+  householdId: string,
+  taskText: string,
+  notes?: string,
+  _aiClient?: Pick<typeof ai, 'models'>
+): Promise<string[]> => {
+  return withErrorHandling('Subtask Breakdown', 'Failed to break down task.', async () => {
+    const trimmedTask = taskText.trim();
+    const trimmedNotes = (notes ?? '').trim();
+
+    let prompt = `Break this household to-do into a short, ordered checklist of concrete, actionable steps.
+Return between 2 and ${MAX_SUGGESTED_SUBTASKS} steps. Each step should be a brief imperative phrase
+(e.g. "Book venue", "Order cake"), not a full sentence, and specific to actually completing the task.
+Do NOT restate the task itself as a step. If the task is already atomic and cannot be sensibly broken
+down, return an empty array.
+
+Task: ${trimmedTask}`;
+    if (trimmedNotes) prompt += `\nNotes/context: ${trimmedNotes}`;
+    prompt += `\n\nReturn a JSON object: { "subtasks": string[] }`;
+
+    const result = await generateJsonContent<string[]>(
+      householdId,
+      prompt,
+      {
+        type: Type.OBJECT,
+        properties: {
+          subtasks: { type: Type.ARRAY, items: { type: Type.STRING } }
+        },
+        required: ["subtasks"]
+      },
+      _aiClient,
+      GEMINI_MODEL,
+      validateSubtaskSuggestions
+    );
+    // Clamp to a scannable length even if the model over-produces.
+    return result.slice(0, MAX_SUGGESTED_SUBTASKS);
+  });
+};
+
 /**
  * Parses a grocery receipt to extract items
  * @param householdId - The household ID for quota tracking
@@ -1222,6 +1294,10 @@ export const optimizeGroceryList = async (
  * @param previousInsights - List of previous insight texts to avoid repetition
  * @param options - Optional configuration for insight generation
  * @param options.includeMerchantNames - If true, includes merchant names in the data sent to AI (default: true)
+ * @param options.dislikedInsights - F-DASH-11: bounded list of recent insight texts the
+ *   household thumbed down; fed back into the prompt as "avoid this style/topic".
+ * @param options.likedInsights - F-DASH-11: bounded list of recent insight texts the
+ *   household thumbed up; fed back into the prompt as "lean into this style/topic".
  * @param recentReflections - F-HABITS-06: a small, bounded list of recent habit note/mood
  *   snippets (see `selectRecentReflections`) so insights can reference how a habit *felt*,
  *   not just whether it was completed.
@@ -1232,7 +1308,7 @@ export const generateInsight = async (
   transactions: Transaction[],
   habits: Habit[],
   previousInsights: string[] = [],
-  options?: { includeMerchantNames?: boolean },
+  options?: { includeMerchantNames?: boolean; dislikedInsights?: string[]; likedInsights?: string[] },
   _aiClient?: Pick<typeof ai, 'models'>,
   recentReflections: ReflectionSnippet[] = []
 ): Promise<{ text: string, actions?: InsightAction[] }> => {
@@ -1256,6 +1332,12 @@ export const generateInsight = async (
     const previousInsightsStr = previousInsights.length > 0
       ? previousInsights.map(t => `- "${t}"`).join('\n')
       : '';
+    const dislikedInsightsStr = (options?.dislikedInsights ?? []).length > 0
+      ? (options?.dislikedInsights ?? []).map(t => `- "${t}"`).join('\n')
+      : '';
+    const likedInsightsStr = (options?.likedInsights ?? []).length > 0
+      ? (options?.likedInsights ?? []).map(t => `- "${t}"`).join('\n')
+      : '';
 
     // Small, bounded, already-truncated by selectRecentReflections — sanitized
     // the same way habit titles are, since notes are free text.
@@ -1269,6 +1351,8 @@ export const generateInsight = async (
       JSON.stringify(simplifiedTransactions),
       JSON.stringify(simplifiedHabits),
       previousInsightsStr,
+      dislikedInsightsStr,
+      likedInsightsStr,
       reflectionsStr
     );
 

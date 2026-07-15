@@ -30,15 +30,21 @@ import {
   Star,
   Upload,
   Salad,
+  Newspaper,
 } from 'lucide-react';
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
 import MemberModal from '@/components/modals/MemberModal';
 import PointsBreakdownModal from '@/components/modals/PointsBreakdownModal';
 import NotificationSettings from '@/components/settings/NotificationSettings';
 import { ThemeToggle } from '@/components/settings/ThemeToggle';
+import { useTheme, type FontScale } from '@/contexts/ThemeContext';
+import { SegmentedControl, type SegmentedControlOption } from '@/components/ui/SegmentedControl';
+import { haptic } from '@/utils/haptics';
 import ApiKeyManager from '@/components/settings/ApiKeyManager';
 import CalendarFeedCard from '@/components/settings/CalendarFeedCard';
 import ShortcutSetupGuide from '@/components/settings/ShortcutSetupGuide';
+import { ChangelogDrawer } from '@/components/settings/ChangelogDrawer';
+import { CHANGELOG } from '@/data/changelog';
 import { DashboardWidgetSettings } from '@/components/settings/DashboardWidgetSettings';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -56,7 +62,7 @@ import { MODULE_PRESETS, type ModulePreset } from '@/utils/modulePresets';
 import type { ModuleKey } from '@/types/schema';
 import { requestNotificationPermission, setupForegroundNotificationListener } from '@/services/notificationService';
 import { generateJsonBackup, generateCsvExport, buildExportPayload } from '@/utils/exportUtils';
-import { HouseholdMember, NotificationPreferences, Transaction } from '@/types/schema';
+import { HouseholdMember, NotificationPreferences, Transaction, Meal } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { doc, updateDoc } from 'firebase/firestore';
 import { computeAnyNotificationsEnabled } from '@/utils/notificationFlags';
@@ -83,6 +89,10 @@ const DietaryProfileModal = lazy(() => import('@/components/meals/DietaryProfile
 
 const APP_VERSION = '0.8.0-alpha';
 
+// localStorage key tracking the last app version the user has opened the
+// "What's New" drawer for — drives the one-time badge dot (F-PLAT-13).
+const LAST_SEEN_VERSION_KEY = 'lifebalance-last-seen-version';
+
 // Currencies offered in the household currency picker. `symbol` is shown in the
 // option label only; actual formatting is driven by the ISO code via `formatCurrency`.
 const CURRENCY_OPTIONS: { code: string; symbol: string; label: string }[] = [
@@ -94,8 +104,15 @@ const CURRENCY_OPTIONS: { code: string; symbol: string; label: string }[] = [
   { code: 'JPY', symbol: '¥', label: 'Japanese Yen' },
 ];
 
+const FONT_SCALE_OPTIONS: SegmentedControlOption<FontScale>[] = [
+  { value: '100', label: <span className="text-xs">A</span>, ariaLabel: 'Default text size' },
+  { value: '115', label: <span className="text-sm">A</span>, ariaLabel: 'Larger text size' },
+  { value: '130', label: <span className="text-base">A</span>, ariaLabel: 'Largest text size' },
+];
+
 const Settings: React.FC = () => {
   const { user, householdId } = useAuth();
+  const { fontScale, setFontScale, highContrast, setHighContrast } = useTheme();
   const {
     members,
     currentUser,
@@ -120,7 +137,7 @@ const Settings: React.FC = () => {
     isLoadingOlderTransactions,
     loadAllTransactions,
   } = useFinance();
-  const { meals, mealPlan } = useMealPlan();
+  const { mealPlan, loadAllMeals } = useMealPlan();
   const { shoppingList, stores } = useShopping();
   const { todos } = useTodos();
   const navigate = useNavigate();
@@ -137,6 +154,29 @@ const Settings: React.FC = () => {
   const [isKidModeOpen, setIsKidModeOpen] = useState(false);
   const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);
   const [isDietaryProfileOpen, setIsDietaryProfileOpen] = useState(false);
+  const [isChangelogOpen, setIsChangelogOpen] = useState(false);
+  // One-time "new version" badge: compare the last-seen version stashed in
+  // localStorage to APP_VERSION. Lazy initializer (not an effect) so there's
+  // no synchronous setState-in-effect cascading render — this page is never
+  // server-rendered, so reading localStorage during init is safe.
+  const [hasUnseenChangelog, setHasUnseenChangelog] = useState(() => {
+    try {
+      return window.localStorage.getItem(LAST_SEEN_VERSION_KEY) !== APP_VERSION;
+    } catch {
+      // localStorage unavailable (private browsing, etc.) — badge stays off.
+      return false;
+    }
+  });
+
+  const handleOpenChangelog = () => {
+    setIsChangelogOpen(true);
+    setHasUnseenChangelog(false);
+    try {
+      window.localStorage.setItem(LAST_SEEN_VERSION_KEY, APP_VERSION);
+    } catch {
+      // localStorage unavailable — badge will just reappear next visit.
+    }
+  };
 
   // Billing / upgrade (Plan 050b) — dormant until billingEnabled is turned on.
   const billingEnabled = useBillingEnabled();
@@ -144,8 +184,8 @@ const Settings: React.FC = () => {
 
   // Kid Mode (Plan 080) — dormant until kidModeEnabled is turned on. Manages the
   // parent PIN required to EXIT a kid's scoped view.
-  const kidModeEnabled = useKidModeEnabled();
-  const plaidEnabled = usePlaidEnabled();
+  const kidModeEnabled = useKidModeEnabled(householdId);
+  const plaidEnabled = usePlaidEnabled(householdId);
   const [pinDraft, setPinDraft] = useState('');
   const [pinConfirm, setPinConfirm] = useState('');
   const [isSavingPin, setIsSavingPin] = useState(false);
@@ -153,6 +193,12 @@ const Settings: React.FC = () => {
   // Danger zone: delete household
   const [isDeleteHouseholdOpen, setIsDeleteHouseholdOpen] = useState(false);
   const [isDeletingHousehold, setIsDeletingHousehold] = useState(false);
+
+  // Self-serve leave household (F-XCUT-05) — any member can remove themselves,
+  // except the last remaining admin (they must promote someone else or use
+  // Delete Household instead).
+  const [isLeaveHouseholdOpen, setIsLeaveHouseholdOpen] = useState(false);
+  const [isLeavingHousehold, setIsLeavingHousehold] = useState(false);
 
   // Points Breakdown Modal
   const [activePointsView, setActivePointsView] = useState<'daily' | 'weekly' | 'total' | null>(null);
@@ -309,6 +355,23 @@ const Settings: React.FC = () => {
     }
   };
 
+  const handleConfirmLeaveHousehold = async () => {
+    if (!currentUser) return;
+    setIsLeavingHousehold(true);
+    try {
+      await removeMember(currentUser.uid);
+      toast.success('You left the household');
+      // Hard reload so AuthContext re-resolves (no household -> routes to
+      // /setup), matching deleteHousehold's flow above.
+      window.location.reload();
+    } catch (error) {
+      console.error('Error leaving household:', error);
+      toast.error('Failed to leave household');
+      setIsLeavingHousehold(false);
+      setIsLeaveHouseholdOpen(false);
+    }
+  };
+
   const handleSaveMember = async (memberData: Partial<HouseholdMember>) => {
     try {
       if (selectedMember) {
@@ -363,7 +426,7 @@ const Settings: React.FC = () => {
     }
   };
 
-  const doExportJson = (txList: Transaction[]) => {
+  const doExportJson = (txList: Transaction[], mealsList: Meal[]) => {
     try {
       const exportData = buildExportPayload({
         householdId,
@@ -374,7 +437,7 @@ const Settings: React.FC = () => {
         transactions: txList,
         buckets,
         calendarItems,
-        meals,
+        meals: mealsList,
         shoppingList,
         todos,
         mealPlan,
@@ -419,9 +482,11 @@ const Settings: React.FC = () => {
     }
   };
 
-  // Exports must include the FULL transaction history, but the household context
-  // only keeps the recent window live. Pull every older transaction first (a
-  // no-op when nothing is windowed), then export the complete list it returns.
+  // Exports must include the FULL transaction history (and, for the JSON
+  // backup, the full recipe cookbook), but the household context only keeps
+  // bounded live windows for both (see utils/listenerWindows.ts). Pull every
+  // older transaction / recipe first (a no-op when nothing is windowed), then
+  // export the complete lists.
   const requestExport = async (kind: 'json' | 'csv') => {
     let txList = transactions;
     if (hasMoreTransactions) {
@@ -429,8 +494,12 @@ const Settings: React.FC = () => {
       txList = await loadAllTransactions();
       toast.dismiss('export-load');
     }
-    if (kind === 'json') doExportJson(txList);
-    else doExportCsv(txList);
+    if (kind === 'json') {
+      const mealsList = await loadAllMeals();
+      doExportJson(txList, mealsList);
+    } else {
+      doExportCsv(txList);
+    }
   };
 
   if (!householdSettings) {
@@ -461,6 +530,14 @@ const Settings: React.FC = () => {
     // Legacy member docs can lack displayName despite the schema type — sort them safely.
     return (a.displayName || '').localeCompare(b.displayName || '');
   });
+
+  // Self-serve leave household: block the LAST admin from leaving via this
+  // path — they'd orphan the household. They must promote another member to
+  // admin first, or use Delete Household instead.
+  const adminCount = members.filter((m) => m.role === 'admin').length;
+  const canLeaveHousehold = Boolean(
+    currentUser && !(currentUser.role === 'admin' && adminCount <= 1)
+  );
 
   return (
     <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe">
@@ -517,6 +594,36 @@ const Settings: React.FC = () => {
               <Row className="flex-col items-stretch gap-3">
                 <span className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">Appearance</span>
                 <ThemeToggle />
+              </Row>
+
+              {/* Text size */}
+              <Row className="flex-col items-stretch gap-3">
+                <span className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">Text Size</span>
+                <SegmentedControl
+                  name="Text size"
+                  options={FONT_SCALE_OPTIONS}
+                  value={fontScale}
+                  onChange={(value) => {
+                    setFontScale(value);
+                    haptic('light');
+                  }}
+                />
+              </Row>
+
+              {/* High contrast */}
+              <Row>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">High Contrast</p>
+                  <p className="text-xs text-brand-500 dark:text-brand-400">Stronger text and border contrast</p>
+                </div>
+                <Switch
+                  aria-label="Toggle high contrast"
+                  checked={highContrast}
+                  onCheckedChange={(value) => {
+                    setHighContrast(value);
+                    haptic('light');
+                  }}
+                />
               </Row>
 
               {/* Currency */}
@@ -1036,6 +1143,8 @@ const Settings: React.FC = () => {
           <CsvImportDrawer isOpen={isCsvImportOpen} onClose={() => setIsCsvImportOpen(false)} />
         </LazyMount>
 
+        <ChangelogDrawer isOpen={isChangelogOpen} onClose={() => setIsChangelogOpen(false)} />
+
         {/* Connect a bank (Plaid) — dormant until the plaidEnabled flag is on.
             Lazy + flag-gated so react-plaid-link never enters the boot bundle. */}
         {plaidEnabled && (
@@ -1099,6 +1208,15 @@ const Settings: React.FC = () => {
               title="Sign Out"
               onClick={handleSignOut}
             />
+            {canLeaveHousehold && (
+              <DisclosureRow
+                destructive
+                icon={<Users className="w-5 h-5" />}
+                title="Leave Household"
+                subtitle="Remove yourself from this household — you'll lose access to shared budgets, habits, and history"
+                onClick={() => setIsLeaveHouseholdOpen(true)}
+              />
+            )}
             {currentUser?.role === 'admin' && (
               <DisclosureRow
                 destructive
@@ -1108,6 +1226,18 @@ const Settings: React.FC = () => {
                 onClick={() => setIsDeleteHouseholdOpen(true)}
               />
             )}
+          </SurfaceList>
+        </Section>
+
+        <Section title="About">
+          <SurfaceList>
+            <DisclosureRow
+              icon={<Newspaper className="w-5 h-5" />}
+              title="What's New"
+              subtitle={`v${CHANGELOG[0]?.version ?? APP_VERSION}`}
+              value={hasUnseenChangelog ? <Badge variant="warning" size="sm">NEW</Badge> : undefined}
+              onClick={handleOpenChangelog}
+            />
           </SurfaceList>
         </Section>
 
@@ -1250,6 +1380,16 @@ const Settings: React.FC = () => {
             This action cannot be undone. Only household admins can do this.
           </>
         }
+      />
+
+      <ConfirmDialog
+        isOpen={isLeaveHouseholdOpen}
+        onClose={() => setIsLeaveHouseholdOpen(false)}
+        onConfirm={handleConfirmLeaveHousehold}
+        isConfirming={isLeavingHousehold}
+        title="Leave household?"
+        confirmLabel="Leave"
+        message={`Leave ${householdSettings.name}? You'll lose access to all shared household data — budgets, habits, and history. This cannot be undone.`}
       />
 
       {householdId && (

@@ -74,6 +74,27 @@ export interface NotificationPreferences {
     enabled: boolean;
   };
 
+  // Digest mode (F-NOTIF-03): one consolidated push at `time` instead of the
+  // separate habitReminders/actionQueueReminders/streakWarnings/billReminders
+  // pushes. When enabled, the four hourly jobs skip their per-type send for
+  // this member and `senddigest` aggregates across whichever of those four
+  // categories the member still has individually enabled. Optional so legacy
+  // docs deserialize — absent/undefined means digest mode is off (fail-closed,
+  // matching the per-type toggles' own default-off spirit).
+  digestMode?: {
+    enabled: boolean;
+    time: string; // HH:MM format (24-hour)
+  };
+
+  // AI daily briefing push (F-DASH-02). A proactive one/two-sentence morning
+  // summary (bills due, pending review, habits left, streaks at risk) sent
+  // server-side at `time` in the member's timezone. Unlike the recaps this
+  // defaults OFF — a new, higher-frequency channel the user opts into.
+  dailyBriefing?: {
+    enabled: boolean;
+    time: string; // HH:MM format (24-hour) — member-local send time
+  };
+
   // General notification settings
   timezone?: string; // IANA timezone (e.g., 'America/New_York')
 }
@@ -623,6 +644,7 @@ export interface Meal {
   ingredients: MealIngredient[];
   instructions?: string[]; // Step-by-step cooking instructions
   recipeUrl?: string; // Link to external recipe
+  servings?: number; // Base servings this recipe's ingredient quantities are written for; defaults to 1 when unset
   estimatedCost?: number; // Decimal dollars; optional, manually entered (F-MEALS-01)
   tags: string[]; // "cheap", "quick", "favorite", "new"
   rating?: number;
@@ -747,6 +769,12 @@ export interface Household {
   // app_config/global.kidModeEnabled flag is on.
   kidModePinHash?: string;
 
+  // F-MEALS-04: id of the habit auto-credited when a meal-plan item is marked
+  // `isCooked: true` (e.g. "Cooked dinner at home"). Absent means no linked
+  // habit — marking a meal cooked stays a meals-only action. Set via the
+  // "Cook habit" picker in MealPlanTab's overflow menu.
+  mealCookedHabitId?: string;
+
   // Plan 080d-2 (Kid Mode): kid reward-redemption requests awaiting parent
   // approval. Only PENDING requests live here — each is removed on approve/deny,
   // so the array stays bounded. Absent on every legacy + non-kid household
@@ -852,6 +880,17 @@ export interface PendingItem {
  * - completedAt: Uses ISO timestamp (with time) to record the exact moment of completion
  * This distinction allows date-based categorization while preserving precise completion history.
  */
+
+/**
+ * A single step within a to-do's optional subtask checklist (F-TODO-08).
+ * Stored as a plain array field on the parent `ToDo` document — no subcollection.
+ */
+export interface Subtask {
+  id: string; // stable client-generated id (see utils/subtasks.ts)
+  text: string; // short step description
+  isDone: boolean; // completion state
+}
+
 export interface ToDo {
   id: string;
   text: string;
@@ -877,6 +916,24 @@ export interface ToDo {
   // Absent/false = not important — no migration needed. Urgency is NOT stored;
   // it is derived from completeByDate (utils/eisenhower.ts).
   isImportant?: boolean;
+
+  // F-TODO-08: optional lightweight checklist of steps inside this task. A plain
+  // array field (no subcollection); the row shows an "n/m done" progress chip and
+  // an expandable checkable list. Absent on every existing todo — no migration.
+  subtasks?: Subtask[];
+
+  // F-TODO-01: Recurring / repeating to-dos. Mirrors CalendarItem's
+  // frequency/parentRecurringId model. When present, completing the task
+  // auto-spawns the next instance (completeByDate advanced by `frequency`)
+  // in the SAME writeBatch as the completion (see makeCompleteToDo). Absent on
+  // every existing todo — non-recurring behavior is unchanged.
+  recurrence?: {
+    frequency: 'weekly' | 'bi-weekly' | 'monthly';
+    // Stable id of the FIRST todo in the recurring chain (denormalized onto each
+    // spawned instance, matching CalendarItem.parentRecurringId). Lets a household
+    // group / manage a chain of occurrences later without a separate parent doc.
+    parentRecurringId?: string;
+  };
 }
 
 export interface UpdateBucketPayload {
@@ -934,6 +991,12 @@ export interface Insight {
   generatedAt: string; // ISO timestamp
   type: 'general' | 'spending' | 'habits';
   actions?: InsightAction[];
+  // F-DASH-11 — quality signal on this specific insight. Undefined = unrated.
+  // Fed back into the next `generateInsight` prompt (see `rateInsight` /
+  // `makeRefreshInsight`) so disliked insights steer future generations away
+  // from the same style/topic, and liked ones reinforce it.
+  feedback?: 'up' | 'down';
+  feedbackAt?: string; // ISO timestamp of the rating, if any
 }
 
 /**
