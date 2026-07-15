@@ -1168,6 +1168,16 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Store deleted');
   }, []);
 
+  const reorderStores = useCallback(async (orderedIds: string[]) => {
+    setStores(prev => {
+      const orderById = new Map(orderedIds.map((id, index) => [id, index]));
+      return prev.map(s => {
+        const order = orderById.get(s.id);
+        return order === undefined ? s : { ...s, order };
+      });
+    });
+  }, []);
+
   // Grocery categories
   const updateGroceryCategories = useCallback(async (categories: string[]) => {
     setGroceryCategories(categories);
@@ -1610,6 +1620,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     addStore,
     updateStore,
     deleteStore,
+    reorderStores,
     updateGroceryCategories,
     addQuickStockList,
     updateQuickStockList,

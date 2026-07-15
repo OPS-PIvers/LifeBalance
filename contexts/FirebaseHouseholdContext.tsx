@@ -1957,6 +1957,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeDeleteStore({ db, householdId, householdSettings, shoppingList }).deleteStore(id);
   }, [householdId, householdSettings, shoppingList]);
 
+  const reorderStores = useCallback(async (orderedIds: string[]) => {
+    await makeStoreSettingsMutations({ db, householdId, householdSettings }).reorderStores(orderedIds);
+  }, [householdId, householdSettings]);
+
   const updateGroceryCategories = useCallback(async (categories: string[]) => {
     await makeShoppingListMutations({ db, householdId }).updateGroceryCategories(categories);
   }, [householdId]);
@@ -2250,6 +2254,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addStore,
     updateStore,
     deleteStore,
+    reorderStores,
     updateGroceryCategories,
     addQuickStockList,
     updateQuickStockList,
@@ -2261,7 +2266,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }), [
     shoppingList, groceryCatalog, loadFullGroceryCatalog, stores, groceryCategories, quickStockLists,
     addShoppingItem, addShoppingItems, updateShoppingItem, reorderShoppingItems, deleteShoppingItem, toggleShoppingItemPurchased, clearPurchasedShoppingItems,
-    addStore, updateStore, deleteStore, updateGroceryCategories,
+    addStore, updateStore, deleteStore, reorderStores, updateGroceryCategories,
     addQuickStockList, updateQuickStockList, updateQuickStockLists, deleteQuickStockList,
     addGroceryCatalogItem, updateGroceryCatalogItem, deleteGroceryCatalogItem,
   ]);

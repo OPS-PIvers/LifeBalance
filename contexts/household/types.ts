@@ -352,6 +352,8 @@ export interface HouseholdContextType {
   addStore: (store: Omit<Store, 'id'>) => Promise<void>;
   updateStore: (store: Store) => Promise<void>;
   deleteStore: (id: string) => Promise<void>;
+  /** Persists `Store.order` for every store in `orderedIds` sequence (F-MEALS-07; mirrors reorderAccounts). */
+  reorderStores: (orderedIds: string[]) => Promise<void>;
   updateGroceryCategories: (categories: string[]) => Promise<void>;
   addQuickStockList: (list: Omit<QuickStockList, 'id'>) => Promise<void>;
   updateQuickStockList: (list: QuickStockList) => Promise<void>;
@@ -433,7 +435,7 @@ export type ShoppingContextValue = Pick<HouseholdContextType,
   | 'shoppingList' | 'groceryCatalog' | 'loadFullGroceryCatalog' | 'stores' | 'groceryCategories' | 'quickStockLists'
   | 'addShoppingItem' | 'addShoppingItems' | 'updateShoppingItem' | 'reorderShoppingItems'
   | 'deleteShoppingItem' | 'toggleShoppingItemPurchased' | 'clearPurchasedShoppingItems'
-  | 'addStore' | 'updateStore' | 'deleteStore' | 'updateGroceryCategories'
+  | 'addStore' | 'updateStore' | 'deleteStore' | 'reorderStores' | 'updateGroceryCategories'
   | 'addQuickStockList' | 'updateQuickStockList' | 'updateQuickStockLists' | 'deleteQuickStockList'
   | 'addGroceryCatalogItem' | 'updateGroceryCatalogItem' | 'deleteGroceryCatalogItem'
 >;
