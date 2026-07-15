@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clock, DollarSign, Flame, Calendar, ListTodo, Send, Info, Newspaper, Wallet, Sunrise } from 'lucide-react';
+import { Clock, DollarSign, Flame, Calendar, ListTodo, Send, Info, Newspaper, NotebookPen, Wallet, Sunrise } from 'lucide-react';
 import { NotificationPreferences } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { getFunctionsInstance } from '@/firebase.config';
@@ -41,6 +41,13 @@ const DEFAULT_PREFERENCES: NotificationPreferences = {
   // so the switch is the only control.
   weeklyRecap: {
     enabled: true
+  },
+  // F-HABITS-06: opt-in evening nudge to add a note/mood to today's habit
+  // completions. Preference only for now — see NotificationSettings' Row
+  // below and TODO.md for what the scheduled sending job still needs.
+  reflectionReminder: {
+    enabled: false,
+    time: '20:30'
   },
   // Monthly money recap defaults ON — a fixed 1st-of-month send (no time
   // selection), so the switch is the only control.
@@ -85,6 +92,7 @@ const mergePreferences = (current?: NotificationPreferences): NotificationPrefer
   streakWarnings: { ...DEFAULT_PREFERENCES.streakWarnings, ...current?.streakWarnings },
   billReminders: { ...DEFAULT_PREFERENCES.billReminders, ...current?.billReminders },
   weeklyRecap: { enabled: true, ...current?.weeklyRecap },
+  reflectionReminder: { enabled: false, time: '20:30', ...current?.reflectionReminder },
   monthlyMoneyRecap: { enabled: true, ...current?.monthlyMoneyRecap },
   dailyBriefing: { enabled: false, time: '08:00', ...current?.dailyBriefing },
   timezone: current?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -539,6 +547,44 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                 onCheckedChange={() => handleToggle('monthlyMoneyRecap')}
               />
             </div>
+          </div>
+        </Row>
+
+        {/* Reflection Reminder — F-HABITS-06 */}
+        <Row className="items-start">
+          <div className="w-10 h-10 bg-habit-blue/15 rounded-btn flex items-center justify-center shrink-0">
+            <NotebookPen className="w-5 h-5 text-habit-blue" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <h4 className="font-semibold text-brand-900 dark:text-brand-100">Reflection Reminder</h4>
+                <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">Nudge me to jot a quick note or mood on today&apos;s habits.</p>
+              </div>
+              <Switch
+                id="notif-reflection-reminder"
+                aria-label="Reflection reminder notifications"
+                checked={preferences.reflectionReminder?.enabled ?? false}
+                onCheckedChange={() => handleToggle('reflectionReminder')}
+              />
+            </div>
+            {preferences.reflectionReminder?.enabled && (
+              <div className="flex items-center gap-2 mt-3">
+                <Clock className="w-4 h-4 text-brand-500 dark:text-brand-400" />
+                <select
+                  value={preferences.reflectionReminder?.time ?? '20:30'}
+                  onChange={(e) => handleTimeChange('reflectionReminder', e.target.value)}
+                  className={inlineControlClass}
+                  aria-label="Reflection reminder time"
+                >
+                  {hourOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         </Row>
       </SurfaceList>

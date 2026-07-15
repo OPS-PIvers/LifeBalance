@@ -73,6 +73,7 @@ import {
   quickAddShoppingItem,
   quickAddNaturalLanguage,
   quickAddBillPay,
+  quickAddTodo,
 } from "./index";
 
 // ---------------------------------------------------------------------------
@@ -1409,5 +1410,188 @@ describe("quickAddBillPay", () => {
       res
     );
     expect(res.statusCode).toBe(400);
+  });
+});
+
+// ===========================================================================
+// quickAddTodo (F-TODO-07)
+// ===========================================================================
+
+describe("quickAddTodo", () => {
+  const TODO_TODAY = "2026-07-14";
+
+  it("returns 403 when the key lacks the todos permission", async () => {
+    configureValidKey({ habits: true, expenses: true, shoppingList: true, todos: false });
+    const res = makeRes();
+    await asHandler(quickAddTodo)(makeReq({ body: { text: "Take out trash" } }), res);
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toMatchObject({ error: { code: "FORBIDDEN" } });
+  });
+
+  it("returns 400 when text is missing", async () => {
+    configureValidKey({ habits: false, expenses: false, shoppingList: false, todos: true });
+    const res = makeRes();
+    await asHandler(quickAddTodo)(makeReq({ body: {} }), res);
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+  });
+
+  it("returns 400 when dueDate is not YYYY-MM-DD", async () => {
+    configureValidKey({ habits: false, expenses: false, shoppingList: false, todos: true });
+    const res = makeRes();
+    await asHandler(quickAddTodo)(
+      makeReq({ body: { text: "Take out trash", dueDate: "07/14/2026" } }),
+      res
+    );
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+  });
+
+  it("returns 400 when isImportant is not a boolean", async () => {
+    configureValidKey({ habits: false, expenses: false, shoppingList: false, todos: true });
+    const res = makeRes();
+    await asHandler(quickAddTodo)(
+      makeReq({ body: { text: "Take out trash", isImportant: "yes" } }),
+      res
+    );
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+  });
+
+  it("creates a to-do defaulting the due date to caller-local today (200)", async () => {
+    configureValidKey({ habits: false, expenses: false, shoppingList: false, todos: true });
+    const add = vi.fn(() => Promise.resolve({ id: "todo1" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/todos`] = { add };
+    configureCollections();
+
+    const res = makeRes();
+    await asHandler(quickAddTodo)(
+      makeReq({ body: { text: "Take out trash", today: TODO_TODAY } }),
+      res
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      success: true,
+      data: {
+        todoId: "todo1",
+        text: "Take out trash",
+        completeByDate: TODO_TODAY,
+        assignedTo: null,
+        isImportant: false,
+      },
+    });
+    expect(add).toHaveBeenCalledTimes(1);
+    const written = add.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(written).toMatchObject({
+      text: "Take out trash",
+      completeByDate: TODO_TODAY,
+      isCompleted: false,
+      source: "shortcut",
+    });
+    expect(written.assignedTo).toBeUndefined();
+  });
+
+  it("honors an explicit dueDate and isImportant flag", async () => {
+    configureValidKey({ habits: false, expenses: false, shoppingList: false, todos: true });
+    const add = vi.fn(() => Promise.resolve({ id: "todo2" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/todos`] = { add };
+    configureCollections();
+
+    const res = makeRes();
+    await asHandler(quickAddTodo)(
+      makeReq({
+        body: {
+          text: "Renew passport",
+          dueDate: "2026-08-01",
+          isImportant: true,
+          today: TODO_TODAY,
+        },
+      }),
+      res
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      success: true,
+      data: { completeByDate: "2026-08-01", isImportant: true },
+    });
+    const written = add.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(written).toMatchObject({ completeByDate: "2026-08-01", isImportant: true });
+  });
+
+  it("resolves assignedTo by exact uid", async () => {
+    configureValidKey({ habits: false, expenses: false, shoppingList: false, todos: true });
+    collectionOverrides[`households/${HOUSEHOLD_ID}/members`] = {
+      getDocs: [
+        docOf("uid-sam", { displayName: "Sam" }),
+        docOf("uid-jordan", { displayName: "Jordan" }),
+      ],
+    };
+    const add = vi.fn(() => Promise.resolve({ id: "todo3" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/todos`] = { add };
+    configureCollections();
+
+    const res = makeRes();
+    await asHandler(quickAddTodo)(
+      makeReq({ body: { text: "Water plants", assignedTo: "uid-sam", today: TODO_TODAY } }),
+      res
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ success: true, data: { assignedTo: "uid-sam" } });
+    const written = add.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(written.assignedTo).toBe("uid-sam");
+  });
+
+  it("resolves assignedTo by a unique fuzzy display-name match", async () => {
+    configureValidKey({ habits: false, expenses: false, shoppingList: false, todos: true });
+    collectionOverrides[`households/${HOUSEHOLD_ID}/members`] = {
+      getDocs: [
+        docOf("uid-sam", { displayName: "Sam" }),
+        docOf("uid-jordan", { displayName: "Jordan" }),
+      ],
+    };
+    const add = vi.fn(() => Promise.resolve({ id: "todo4" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/todos`] = { add };
+    configureCollections();
+
+    const res = makeRes();
+    await asHandler(quickAddTodo)(
+      makeReq({ body: { text: "Water plants", assignedTo: "jordan", today: TODO_TODAY } }),
+      res
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ success: true, data: { assignedTo: "uid-jordan" } });
+  });
+
+  it("returns 404 when assignedTo matches no member", async () => {
+    configureValidKey({ habits: false, expenses: false, shoppingList: false, todos: true });
+    collectionOverrides[`households/${HOUSEHOLD_ID}/members`] = {
+      getDocs: [docOf("uid-sam", { displayName: "Sam" })],
+    };
+    configureCollections();
+
+    const res = makeRes();
+    await asHandler(quickAddTodo)(
+      makeReq({ body: { text: "Water plants", assignedTo: "Zzyzx", today: TODO_TODAY } }),
+      res
+    );
+
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toMatchObject({ error: { code: "NOT_FOUND" } });
+  });
+
+  it("returns 429 when the rate limit is exceeded", async () => {
+    configureValidKey({ habits: false, expenses: false, shoppingList: false, todos: true });
+    configureRateLimit(false);
+    const res = makeRes();
+    await asHandler(quickAddTodo)(
+      makeReq({ body: { text: "Take out trash" } }),
+      res
+    );
+    expect(res.statusCode).toBe(429);
+    expect(res.headers["Retry-After"]).toBeDefined();
   });
 });

@@ -1,5 +1,5 @@
 import { db } from '@/firebase.config';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 
 /**
  * Reader for the shared `app_config/global` Firestore doc — the same operator
@@ -105,11 +105,39 @@ export const getBillingEnabled = (): Promise<boolean> => {
   return billingEnabledPromise;
 };
 
-/** How long (ms) to reuse a cached kid-mode-enabled value before re-fetching. */
+/** How long (ms) to reuse a cached kid-mode-enabled doc read before re-fetching. */
 const KID_MODE_ENABLED_CACHE_TTL_MS = 60_000;
 
-let kidModeEnabledPromise: Promise<boolean> | null = null;
+/** Field on `app_config/global` holding the per-household allowlist (Plan F-PLAT-09). */
+const KID_MODE_HOUSEHOLDS_FLAG_KEY = 'kidModeEnabledHouseholds' as const;
+
+// Caches the raw doc snapshot (not just the resolved boolean) so a per-household
+// allowlist check can be derived without a second Firestore read.
+let kidModeConfigPromise: Promise<Record<string, unknown>> | null = null;
 let kidModeEnabledFetchedAt = 0;
+
+const fetchKidModeConfig = (): Promise<Record<string, unknown>> => {
+  const now = Date.now();
+  if (kidModeConfigPromise !== null && now - kidModeEnabledFetchedAt < KID_MODE_ENABLED_CACHE_TTL_MS) {
+    return kidModeConfigPromise;
+  }
+
+  kidModeEnabledFetchedAt = now;
+  kidModeConfigPromise = (async (): Promise<Record<string, unknown>> => {
+    try {
+      const globalConfigRef = doc(db, 'app_config', 'global');
+      const snap = await getDoc(globalConfigRef);
+      return snap.exists() ? snap.data() : {};
+    } catch {
+      // Fail closed: keep Kid Mode dormant if config is unreachable. Clear the cache
+      // so the next call retries rather than caching the fallback.
+      kidModeConfigPromise = null;
+      return {};
+    }
+  })();
+
+  return kidModeConfigPromise;
+};
 
 /**
  * Returns the current `kidModeEnabled` flag from the global app config (Plan 080).
@@ -121,8 +149,15 @@ let kidModeEnabledFetchedAt = 0;
  * and households behave exactly as before. A human flips it WITHOUT a deploy in the
  * Firestore console, or live via Settings → Developer Console → Feature Flags
  * (effective within ~60 s).
+ *
+ * **Household allowlist (Plan F-PLAT-09):** when `householdId` is passed, the flag
+ * also resolves `true` if that id is present in the `kidModeEnabledHouseholds`
+ * array on the same doc — letting an operator soft-launch Kid Mode to specific
+ * households before flipping the global boolean. Omit `householdId` (or call from
+ * a context where none is available, e.g. the DEV/Test-Mode short-circuit below)
+ * to fall back to the global-only check — existing call sites are unaffected.
  */
-export const getKidModeEnabled = (): Promise<boolean> => {
+export const getKidModeEnabled = (householdId?: string | null): Promise<boolean> => {
   // DEV + TEST-MODE ONLY short-circuit. In Test Mode the mock backend can't reach
   // `app_config/global`, so the real read below would fail closed and the entire
   // Kid Mode surface would be unreachable for an AI agent walking the app. When we
@@ -140,33 +175,46 @@ export const getKidModeEnabled = (): Promise<boolean> => {
     return Promise.resolve(true);
   }
 
+  return fetchKidModeConfig().then((data) => {
+    if (data.kidModeEnabled === true) return true;
+    if (!householdId) return false;
+    const targets = data[KID_MODE_HOUSEHOLDS_FLAG_KEY];
+    return Array.isArray(targets) && targets.includes(householdId);
+  });
+};
+
+/** How long (ms) to reuse a cached plaid-enabled doc read before re-fetching. */
+const PLAID_ENABLED_CACHE_TTL_MS = 60_000;
+
+/** Field on `app_config/global` holding the per-household allowlist (Plan F-PLAT-09). */
+const PLAID_HOUSEHOLDS_FLAG_KEY = 'plaidEnabledHouseholds' as const;
+
+// Caches the raw doc snapshot (not just the resolved boolean) so a per-household
+// allowlist check can be derived without a second Firestore read.
+let plaidConfigPromise: Promise<Record<string, unknown>> | null = null;
+let plaidEnabledFetchedAt = 0;
+
+const fetchPlaidConfig = (): Promise<Record<string, unknown>> => {
   const now = Date.now();
-  if (kidModeEnabledPromise !== null && now - kidModeEnabledFetchedAt < KID_MODE_ENABLED_CACHE_TTL_MS) {
-    return kidModeEnabledPromise;
+  if (plaidConfigPromise !== null && now - plaidEnabledFetchedAt < PLAID_ENABLED_CACHE_TTL_MS) {
+    return plaidConfigPromise;
   }
 
-  kidModeEnabledFetchedAt = now;
-  kidModeEnabledPromise = (async (): Promise<boolean> => {
+  plaidEnabledFetchedAt = now;
+  plaidConfigPromise = (async (): Promise<Record<string, unknown>> => {
     try {
       const globalConfigRef = doc(db, 'app_config', 'global');
       const snap = await getDoc(globalConfigRef);
-      return snap.exists() ? snap.data().kidModeEnabled === true : false;
+      return snap.exists() ? snap.data() : {};
     } catch {
-      // Fail closed: keep Kid Mode dormant if config is unreachable. Clear the cache
-      // so the next call retries rather than caching the fallback.
-      kidModeEnabledPromise = null;
-      return false;
+      // Fail closed: keep Plaid dormant if config is unreachable.
+      plaidConfigPromise = null;
+      return {};
     }
   })();
 
-  return kidModeEnabledPromise;
+  return plaidConfigPromise;
 };
-
-/** How long (ms) to reuse a cached plaid-enabled value before re-fetching. */
-const PLAID_ENABLED_CACHE_TTL_MS = 60_000;
-
-let plaidEnabledPromise: Promise<boolean> | null = null;
-let plaidEnabledFetchedAt = 0;
 
 /**
  * Returns the current `plaidEnabled` flag from the global app config.
@@ -178,27 +226,19 @@ let plaidEnabledFetchedAt = 0;
  * deploy in the Firestore console, or live via Settings → Developer Console →
  * Feature Flags (effective within ~60 s). No Test-Mode short-circuit (like
  * `getBillingEnabled`): Plaid Link can't work against the mock backend.
+ *
+ * **Household allowlist (Plan F-PLAT-09):** when `householdId` is passed, the flag
+ * also resolves `true` if that id is present in the `plaidEnabledHouseholds` array
+ * on the same doc, letting an operator soft-launch bank linking to specific
+ * households first. Omit `householdId` to fall back to the global-only check.
  */
-export const getPlaidEnabled = (): Promise<boolean> => {
-  const now = Date.now();
-  if (plaidEnabledPromise !== null && now - plaidEnabledFetchedAt < PLAID_ENABLED_CACHE_TTL_MS) {
-    return plaidEnabledPromise;
-  }
-
-  plaidEnabledFetchedAt = now;
-  plaidEnabledPromise = (async (): Promise<boolean> => {
-    try {
-      const globalConfigRef = doc(db, 'app_config', 'global');
-      const snap = await getDoc(globalConfigRef);
-      return snap.exists() ? snap.data().plaidEnabled === true : false;
-    } catch {
-      // Fail closed: keep Plaid dormant if config is unreachable.
-      plaidEnabledPromise = null;
-      return false;
-    }
-  })();
-
-  return plaidEnabledPromise;
+export const getPlaidEnabled = (householdId?: string | null): Promise<boolean> => {
+  return fetchPlaidConfig().then((data) => {
+    if (data.plaidEnabled === true) return true;
+    if (!householdId) return false;
+    const targets = data[PLAID_HOUSEHOLDS_FLAG_KEY];
+    return Array.isArray(targets) && targets.includes(householdId);
+  });
 };
 
 /**
@@ -333,10 +373,60 @@ export const invalidateAppConfigCaches = (): void => {
   openSignupFetchedAt = 0;
   billingEnabledPromise = null;
   billingEnabledFetchedAt = 0;
-  kidModeEnabledPromise = null;
+  kidModeConfigPromise = null;
   kidModeEnabledFetchedAt = 0;
-  plaidEnabledPromise = null;
+  plaidConfigPromise = null;
   plaidEnabledFetchedAt = 0;
   powerToolsEnabledPromise = null;
   powerToolsEnabledFetchedAt = 0;
+};
+
+/**
+ * Flags that support the per-household allowlist targeting (Plan F-PLAT-09), and
+ * the exact `app_config/global` array field each one reads.
+ */
+export const ALLOWLIST_TARGETABLE_FLAGS: Readonly<Record<string, string>> = {
+  kidModeEnabled: KID_MODE_HOUSEHOLDS_FLAG_KEY,
+  plaidEnabled: PLAID_HOUSEHOLDS_FLAG_KEY,
+};
+
+/**
+ * Reads the current household-id allowlist for a targetable flag (empty array if
+ * the doc/field is missing or unreadable — fails closed, same direction as the
+ * flags themselves).
+ */
+export const getFlagTargetHouseholds = async (flagKey: string): Promise<string[]> => {
+  const field = ALLOWLIST_TARGETABLE_FLAGS[flagKey];
+  if (!field) return [];
+  try {
+    const snap = await getDoc(doc(db, 'app_config', 'global'));
+    if (!snap.exists()) return [];
+    const value = snap.data()[field];
+    return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * Adds a household id to a targetable flag's allowlist (merge write via
+ * `arrayUnion`, so it never clobbers the rest of the array or the doc), then
+ * invalidates the caches so the change is effective immediately for this session.
+ */
+export const addFlagTargetHousehold = async (flagKey: string, householdId: string): Promise<void> => {
+  const field = ALLOWLIST_TARGETABLE_FLAGS[flagKey];
+  if (!field) throw new Error(`Flag "${flagKey}" does not support household targeting`);
+  await setDoc(doc(db, 'app_config', 'global'), { [field]: arrayUnion(householdId) }, { merge: true });
+  invalidateAppConfigCaches();
+};
+
+/**
+ * Removes a household id from a targetable flag's allowlist (`arrayRemove`), then
+ * invalidates the caches so the change is effective immediately for this session.
+ */
+export const removeFlagTargetHousehold = async (flagKey: string, householdId: string): Promise<void> => {
+  const field = ALLOWLIST_TARGETABLE_FLAGS[flagKey];
+  if (!field) throw new Error(`Flag "${flagKey}" does not support household targeting`);
+  await setDoc(doc(db, 'app_config', 'global'), { [field]: arrayRemove(householdId) }, { merge: true });
+  invalidateAppConfigCaches();
 };
