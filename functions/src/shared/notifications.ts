@@ -41,6 +41,14 @@ export interface NotificationPreferences {
   monthlyMoneyRecap?: {
     enabled: boolean;
   };
+  // F-DASH-02 (AI daily briefing): per-member opt-IN for the morning briefing
+  // push. Unlike the recaps this defaults OFF (a new, higher-frequency channel)
+  // — the senddailybriefing job requires an explicit `enabled: true`. `time` is
+  // the member-local HH:MM the briefing is sent at (default 08:00).
+  dailyBriefing?: {
+    enabled: boolean;
+    time: string;
+  };
   timezone?: string;
 }
 
@@ -92,6 +100,7 @@ export function computeAnyNotificationsEnabled(
     prefs.actionQueueReminders?.enabled === true ||
     prefs.streakWarnings?.enabled === true ||
     prefs.billReminders?.enabled === true ||
+    prefs.dailyBriefing?.enabled === true ||
     weeklyRecapEnabled
   );
 }

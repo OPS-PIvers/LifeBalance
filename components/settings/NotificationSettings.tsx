@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clock, DollarSign, Flame, Calendar, ListTodo, Send, Info, Newspaper, NotebookPen, Wallet } from 'lucide-react';
+import { Clock, DollarSign, Flame, Calendar, ListTodo, Send, Info, Newspaper, NotebookPen, Wallet, Sunrise } from 'lucide-react';
 import { NotificationPreferences } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { getFunctionsInstance } from '@/firebase.config';
@@ -54,6 +54,12 @@ const DEFAULT_PREFERENCES: NotificationPreferences = {
   monthlyMoneyRecap: {
     enabled: true
   },
+  // AI daily briefing defaults OFF — a new, higher-frequency morning channel the
+  // user explicitly opts into. Has a time control (member-local send hour).
+  dailyBriefing: {
+    enabled: false,
+    time: '08:00'
+  },
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
 };
 
@@ -88,6 +94,7 @@ const mergePreferences = (current?: NotificationPreferences): NotificationPrefer
   weeklyRecap: { enabled: true, ...current?.weeklyRecap },
   reflectionReminder: { enabled: false, time: '20:30', ...current?.reflectionReminder },
   monthlyMoneyRecap: { enabled: true, ...current?.monthlyMoneyRecap },
+  dailyBriefing: { enabled: false, time: '08:00', ...current?.dailyBriefing },
   timezone: current?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
 });
 
@@ -458,6 +465,44 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                     ))}
                   </select>
                 </div>
+              </div>
+            )}
+          </div>
+        </Row>
+
+        {/* AI Daily Briefing — opt-in morning push, member-local time select */}
+        <Row className="items-start">
+          <div className="w-10 h-10 bg-warm-50 dark:bg-warm-500/15 rounded-btn flex items-center justify-center shrink-0">
+            <Sunrise className="w-5 h-5 text-warm-600 dark:text-warm-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <h4 className="font-semibold text-brand-900 dark:text-brand-100">Daily Briefing</h4>
+                <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">A proactive one-line morning summary — bills due, transactions to review, habits left, and streaks at risk.</p>
+              </div>
+              <Switch
+                id="notif-daily-briefing"
+                aria-label="Daily briefing notifications"
+                checked={preferences.dailyBriefing?.enabled ?? false}
+                onCheckedChange={() => handleToggle('dailyBriefing')}
+              />
+            </div>
+            {preferences.dailyBriefing?.enabled && (
+              <div className="flex items-center gap-2 mt-3">
+                <Clock className="w-4 h-4 text-brand-500 dark:text-brand-400" />
+                <select
+                  value={preferences.dailyBriefing.time}
+                  onChange={(e) => handleTimeChange('dailyBriefing', e.target.value)}
+                  className={inlineControlClass}
+                  aria-label="Daily briefing time"
+                >
+                  {hourOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
           </div>
