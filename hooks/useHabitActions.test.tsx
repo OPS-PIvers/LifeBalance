@@ -247,7 +247,9 @@ describe('useHabitActions.addHabitSubmission (threshold completion gating)', () 
     expect(householdUpdate()).toBeUndefined();
     const hu = habitUpdate();
     expect(hu).toBeDefined();
-    expect(hu!.data['completedDates']).toEqual([]);
+    // No delta written at all when the date isn't newly completed
+    // (stale-cache clobber guard: never the locally-computed array).
+    expect(hu!.data['completedDates']).toBeUndefined();
     expect(hu!.data['streakDays']).toBe(0);
     expect(hu!.data['count']).toBe(1);
   });
@@ -265,7 +267,8 @@ describe('useHabitActions.addHabitSubmission (threshold completion gating)', () 
     const today = format(new Date(), 'yyyy-MM-dd');
     const hu = habitUpdate();
     expect(hu).toBeDefined();
-    expect(hu!.data['completedDates']).toEqual([today]);
+    // arrayUnion delta, not a locally-computed array (stale-cache clobber guard).
+    expect(hu!.data['completedDates']).toEqual({ __arrayUnion: [today] });
     expect(hu!.data['count']).toBe(2);
     expect(householdUpdate()!.data['points.total']).toEqual({ __increment: 10 });
   });
@@ -301,7 +304,8 @@ describe('useHabitActions.addHabitSubmission (back-dated submissions)', () => {
     expect(hu).toBeDefined();
     expect(hu!.data['count']).toBe(0);
     expect(hu!.data['totalCount']).toBe(1);
-    expect(hu!.data['completedDates']).toEqual([yesterday()]);
+    // arrayUnion delta, not a locally-computed array (stale-cache clobber guard).
+    expect(hu!.data['completedDates']).toEqual({ __arrayUnion: [yesterday()] });
     expect(hu!.data['streakDays']).toBe(1);
 
     const hh = householdUpdate();
@@ -334,7 +338,8 @@ describe('useHabitActions.addHabitSubmission (back-dated submissions)', () => {
 
     const hu = habitUpdate();
     expect(hu!.data['count']).toBe(1);
-    expect(hu!.data['completedDates']).toEqual([today, yesterday()]);
+    // Only the newly-completed day is unioned; today was already present.
+    expect(hu!.data['completedDates']).toEqual({ __arrayUnion: [yesterday()] });
     expect(hu!.data['streakDays']).toBe(2);
   });
 
@@ -356,7 +361,8 @@ describe('useHabitActions.addHabitSubmission (back-dated submissions)', () => {
     });
 
     expect(householdUpdate()).toBeUndefined();
-    expect(habitUpdate()!.data['completedDates']).toEqual([yesterday()]);
+    // Already completed → unchanged → no completedDates field written at all.
+    expect(habitUpdate()!.data['completedDates']).toBeUndefined();
   });
 
   it("sums the back-dated day's prior submissions to decide target attainment", async () => {
@@ -375,7 +381,8 @@ describe('useHabitActions.addHabitSubmission (back-dated submissions)', () => {
     const hh = householdUpdate();
     expect(hh).toBeDefined();
     expect(hh!.data['points.total']).toEqual({ __increment: 10 });
-    expect(habitUpdate()!.data['completedDates']).toEqual([yesterday()]);
+    // arrayUnion delta, not a locally-computed array (stale-cache clobber guard).
+    expect(habitUpdate()!.data['completedDates']).toEqual({ __arrayUnion: [yesterday()] });
     expect(habitUpdate()!.data['count']).toBe(0);
   });
 });
@@ -602,6 +609,52 @@ describe('useHabitActions.toggleHabit (T1: single points write path)', () => {
     expect(householdUpdates[0]!.data['points.daily']).toEqual({ __increment: 10 });
     expect(householdUpdates[0]!.data['points.weekly']).toEqual({ __increment: 10 });
     expect(commitCount).toBe(1);
+  });
+
+  it('writes completedDates as an arrayUnion delta on an up-toggle', async () => {
+    const habit = baseHabit({ completedDates: [], count: 0 });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'up');
+    });
+
+    const today = format(new Date(), 'yyyy-MM-dd');
+    // arrayUnion delta, not a locally-computed array (stale-cache clobber guard).
+    expect(habitUpdate()!.data['completedDates']).toEqual({ __arrayUnion: [today] });
+  });
+
+  it('writes completedDates as an arrayRemove delta on a down-toggle that un-completes today', async () => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const habit = baseHabit({ completedDates: [today], count: 1, totalCount: 1 });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'down');
+    });
+
+    // arrayRemove delta, not a locally-computed array (stale-cache clobber guard).
+    expect(habitUpdate()!.data['completedDates']).toEqual({ __arrayRemove: [today] });
+  });
+
+  it('omits completedDates entirely when a toggle does not change it', async () => {
+    // Threshold habit with target 3: the first up-toggle (count 0→1) does not
+    // complete the day, so no completedDates delta may be written.
+    const habit = baseHabit({ scoringType: 'threshold', targetCount: 3, completedDates: [], count: 0 });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'up');
+    });
+
+    expect(habitUpdate()).toBeDefined();
+    expect(habitUpdate()!.data['completedDates']).toBeUndefined();
   });
 });
 
