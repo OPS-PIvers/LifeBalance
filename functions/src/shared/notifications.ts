@@ -24,6 +24,9 @@ export interface NotificationPreferences {
     enabled: boolean;
     daysBeforeDue: number;
     time: string;
+    // F-NOTIF-05: yyyy-MM-dd local date set by the "Snooze 1 day" push action.
+    // Reminders are suppressed while localToday <= snoozedUntil.
+    snoozedUntil?: string;
   };
   // Plan 02 (weekly recap engine): per-member opt-out for the weekly recap
   // push notification. Absent/undefined is treated as enabled (fail-open,

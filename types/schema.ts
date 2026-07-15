@@ -46,6 +46,10 @@ export interface NotificationPreferences {
     enabled: boolean;
     daysBeforeDue: number; // How many days before due date to remind
     time: string; // HH:MM format (24-hour)
+    // F-NOTIF-05: temporary snooze set by tapping "Snooze 1 day" on a bill
+    // reminder push. yyyy-MM-dd (local). The scheduled sendbillreminders job
+    // skips sending while today <= snoozedUntil. Absent/past = not snoozed.
+    snoozedUntil?: string;
   };
 
   // Weekly recap push (Plan 02). Sent server-side Sundays ~17:00 in the

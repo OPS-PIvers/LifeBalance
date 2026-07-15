@@ -50,6 +50,37 @@ function sanitizeUrl(url) {
   return isValidUrl(url) ? url : '/';
 }
 
+// F-NOTIF-05: inline notification action buttons.
+// The sending job serializes an array of {action, title} to the `actions` field
+// of the FCM data payload (JSON string, since data values must be strings). We
+// parse + validate it here into the `options.actions` array the OS renders.
+// Kept intentionally strict — bad/foreign entries are dropped, capped at 2 (the
+// practical limit most platforms display), and each action id is echoed into the
+// deep link on click (see notificationclick) rather than trusted to do anything
+// on its own. Keep the action ids in sync with utils/notificationActions.ts and
+// functions/src/shared/notificationActions.ts.
+function parseNotificationActions(rawActions) {
+  if (typeof rawActions !== 'string' || rawActions.length === 0) return [];
+  let parsed;
+  try {
+    parsed = JSON.parse(rawActions);
+  } catch (e) {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .filter(
+      (a) =>
+        a &&
+        typeof a.action === 'string' &&
+        a.action.length > 0 &&
+        typeof a.title === 'string' &&
+        a.title.length > 0
+    )
+    .slice(0, 2)
+    .map((a) => ({ action: a.action, title: a.title }));
+}
+
 try {
   firebase.initializeApp({
     messagingSenderId: MESSAGING_SENDER_ID
@@ -137,6 +168,12 @@ self.addEventListener('push', (event) => {
     vibrate: [100, 50, 100]
   };
 
+  // F-NOTIF-05: attach inline action buttons if the payload carried any.
+  const notificationActions = parseNotificationActions(data.actions);
+  if (notificationActions.length > 0) {
+    options.actions = notificationActions;
+  }
+
   // CRITICAL: event.waitUntil() ensures Safari doesn't treat this as a silent push
   // The Promise passed to waitUntil must resolve BEFORE the event handler completes
   event.waitUntil(
@@ -166,9 +203,19 @@ self.addEventListener('notificationclick', (event) => {
   const notificationType = typeof event.notification.data?.type === 'string'
     ? event.notification.data.type
     : '';
-  const taggedPath = notificationType
+  let taggedPath = notificationType
     ? targetPath + (targetPath.includes('?') ? '&' : '?') + 'nsrc=' + encodeURIComponent(notificationType)
     : targetPath;
+
+  // F-NOTIF-05: when the user tapped an inline ACTION button (not the body),
+  // echo the action id into the deep link as `nact=<action>`. The app reads +
+  // strips it on boot and dispatches the action from an authenticated session
+  // (see utils/notificationActions.ts). Body taps have event.action === ''.
+  const actionId = typeof event.action === 'string' ? event.action : '';
+  if (actionId) {
+    taggedPath = taggedPath + (taggedPath.includes('?') ? '&' : '?') + 'nact=' + encodeURIComponent(actionId);
+  }
+
   const fullTaggedUrlToOpen = new URL(taggedPath, self.location.origin).href;
 
   event.waitUntil(
