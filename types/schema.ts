@@ -62,6 +62,15 @@ export interface NotificationPreferences {
     enabled: boolean;
   };
 
+  // AI daily briefing push (F-DASH-02). A proactive one/two-sentence morning
+  // summary (bills due, pending review, habits left, streaks at risk) sent
+  // server-side at `time` in the member's timezone. Unlike the recaps this
+  // defaults OFF — a new, higher-frequency channel the user opts into.
+  dailyBriefing?: {
+    enabled: boolean;
+    time: string; // HH:MM format (24-hour) — member-local send time
+  };
+
   // General notification settings
   timezone?: string; // IANA timezone (e.g., 'America/New_York')
 }
