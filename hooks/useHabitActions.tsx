@@ -14,6 +14,7 @@ import {
   serverTimestamp,
   deleteField,
   arrayUnion,
+  arrayRemove,
 } from 'firebase/firestore';
 import { db } from '@/firebase.config';
 import {
@@ -437,7 +438,11 @@ export const useHabitActions = (
 
     resetBatch.update(doc(db, `households/${householdId}/habits`, id), {
       count: 0,
-      completedDates: newCompletedDates,
+      // Server-side delta: remove ONLY today. Writing the locally-computed
+      // array here lets a device with a stale offline cache wholesale-
+      // overwrite (wipe) the habit's completion history. streakDays is a
+      // self-correcting scalar, so local computation is safe.
+      completedDates: arrayRemove(today),
       streakDays: streakForHabit({ period: habit.period, completedDates: newCompletedDates, frozenDates: habit.frozenDates }),
       lastUpdated: serverTimestamp(),
     });
@@ -704,7 +709,9 @@ export const useHabitActions = (
       };
 
       if (isLastForDate) {
-        habitUpdates['completedDates'] = updatedCompletedDates;
+        // Server-side delta (never the locally-computed array — a stale local
+        // cache would wholesale-overwrite the habit's completion history).
+        habitUpdates['completedDates'] = arrayRemove(submission.date);
         habitUpdates['streakDays'] = streakForHabit({ period: habit.period, completedDates: updatedCompletedDates, frozenDates: habit.frozenDates });
       }
 
@@ -807,7 +814,9 @@ export const useHabitActions = (
 
       const updatedCompletedDates = habit.completedDates.filter(d => d !== date);
       const habitUpdates: Record<string, unknown> = {
-        completedDates: updatedCompletedDates,
+        // Server-side delta (never the locally-computed array — a stale local
+        // cache would wholesale-overwrite the habit's completion history).
+        completedDates: arrayRemove(date),
         streakDays: streakForHabit({ period: habit.period, completedDates: updatedCompletedDates, frozenDates: habit.frozenDates }),
         totalCount: Math.max(0, habit.totalCount - unitsRemoved),
         lastUpdated: serverTimestamp(),

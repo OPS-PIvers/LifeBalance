@@ -6,6 +6,7 @@ import {
   doc,
   addDoc,
   updateDoc,
+  arrayRemove,
   serverTimestamp,
   writeBatch,
   getDoc,
@@ -1283,7 +1284,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // Memoize habit reset data to avoid unnecessary callback re-creation
   // Only recreate when habit IDs, periods, or lastUpdated values change
   const habitResetData = useMemo(() =>
-    habits.map(h => ({ id: h.id, period: h.period, lastUpdated: h.lastUpdated, completedDates: h.completedDates })),
+    habits.map(h => ({
+      id: h.id,
+      period: h.period,
+      lastUpdated: h.lastUpdated,
+      completedDates: h.completedDates,
+      // Needed so the reset's streak recompute bridges frozen/paused days
+      // instead of collapsing a protected streak at midnight.
+      frozenDates: h.frozenDates,
+      pausedUntil: h.pausedUntil,
+    })),
     [habits]
   );
 
@@ -1317,15 +1327,25 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // (count === 0, today ∈ completedDates) state that desyncs the daily
     // points recalc from weekly/total. See utils/habitLogic.getHabitResetUpdate.
     // Use serverTimestamp() for consistency with the rest of the codebase.
+    //
+    // CRITICAL: completedDates is written as a server-side arrayRemove(today)
+    // delta, NEVER as the locally-computed array. This reset runs automatically
+    // on mount/midnight for every stale habit, so a device holding a stale
+    // offline cache would otherwise wholesale-overwrite (wipe) every habit's
+    // completion history with its old copy (2026-07-15 incident). streakDays
+    // is a self-correcting scalar, so computing it from local state is safe.
     await Promise.allSettled(
-      habitsToReset.map(habit =>
-        updateDoc(doc(db, `households/${householdId}/habits`, habit.id), {
-          ...getHabitResetUpdate(habit, today),
+      habitsToReset.map(habit => {
+        const { streakDays } = getHabitResetUpdate(habit, today);
+        return updateDoc(doc(db, `households/${householdId}/habits`, habit.id), {
+          count: 0,
+          streakDays,
+          completedDates: arrayRemove(today),
           lastUpdated: serverTimestamp(),
         }).catch(error => {
           console.error(`[checkHabitResets] Failed to reset habit ${habit.id}:`, error);
-        })
-      )
+        });
+      })
     );
   }, [householdId, habitResetData]);
 
