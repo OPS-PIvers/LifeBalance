@@ -27,9 +27,9 @@ interface MainLayoutProps {
 
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const { pathname } = useLocation();
-  const { members, activeMemberId, isLoading } = useHouseholdCore();
+  const { members, activeMemberId, isLoading, householdId } = useHouseholdCore();
   const { transactions } = useFinance();
-  const kidModeEnabled = useKidModeEnabled();
+  const kidModeEnabled = useKidModeEnabled(householdId);
   // Keeps the header and fixed overlays (toasts) anchored when the iOS
   // keyboard pans the window; the ref scopes it to in-page inputs (portal
   // Drawers/Modals keep WebKit's native pan). See the hook's doc comment.
