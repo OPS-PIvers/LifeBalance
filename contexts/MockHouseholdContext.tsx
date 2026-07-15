@@ -49,6 +49,7 @@ import {
   WeeklyRecap,
   MonthlyMoneyRecap,
   NetWorthSnapshot,
+  ActivityLogEntry,
   SavingsGoal,
   TransactionComment
 } from '@/types/schema';
@@ -493,6 +494,37 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       premium: true,
     }];
   });
+  // A few canned activity-log entries (F-XCUT-01) so Test Mode renders the
+  // admin-only Settings → Activity Log feed with cross-domain content.
+  const [activityLog] = useState<ActivityLogEntry[]>(() => [
+    {
+      id: 'act_1',
+      actorUid: 'test-user-id',
+      actorName: 'Test User',
+      domain: 'money',
+      action: 'bill_paid',
+      summary: 'Test User paid Internet ($65)',
+      timestamp: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 'act_2',
+      actorUid: 'kid_leo',
+      actorName: 'Leo',
+      domain: 'habit',
+      action: 'habit_completed',
+      summary: 'Leo completed Make your bed',
+      timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 'act_3',
+      actorUid: 'test-user-id',
+      actorName: 'Test User',
+      domain: 'habit',
+      action: 'habit_completed',
+      summary: 'Test User completed Exercise 30min',
+      timestamp: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(),
+    },
+  ]);
   const [insightsHistory] = useState<Insight[]>([]);
   const [insight] = useState("Test Mode: This is mock data for AI testing");
   const [stores, setStores] = useState<Store[]>(SEED_STORES);
@@ -1482,6 +1514,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     bucketHistory,
     recaps,
     moneyRecaps,
+    activityLog,
     insightsHistory,
     insight,
     stores,

@@ -941,6 +941,37 @@ export interface NetWorthSnapshot {
   netWorth: number;
 }
 
+/**
+ * Household activity log / audit trail (F-XCUT-01) — an append-only,
+ * cross-domain "who did what when" feed at
+ * `households/{id}/activityLog/{autoId}`. Written client-side by piggybacking
+ * on the same `writeBatch` each mutation family already commits, so an entry
+ * can never diverge from the mutation it describes. The live listener is
+ * bounded (ACTIVITY_LOG_LIMIT) to avoid an unbounded collection. Read
+ * visibility is gated to admins in the UI to respect member privacy.
+ *
+ * Deliberately EXCLUDES AI/quota-sensitive events to avoid clutter.
+ */
+export type ActivityDomain =
+  | 'habit'
+  | 'money'
+  | 'todo'
+  | 'shopping'
+  | 'meal'
+  | 'member';
+
+export interface ActivityLogEntry {
+  id: string;
+  actorUid: string;
+  actorName: string;
+  domain: ActivityDomain;
+  /** Machine-readable action slug, e.g. 'habit_completed', 'bill_paid'. */
+  action: string;
+  /** Human-readable one-liner, e.g. 'Paul paid Electric Bill ($142)'. */
+  summary: string;
+  timestamp: string; // ISO timestamp (normalised from a serverTimestamp on read)
+}
+
 export interface BetaTester {
   email: string;
   addedAt: string;

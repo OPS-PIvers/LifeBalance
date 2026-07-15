@@ -60,6 +60,7 @@ import type {
   MonthlyMoneyRecap,
   NetWorthSnapshot,
   SavingsGoal,
+  ActivityLogEntry,
 } from '@/types/schema';
 
 // ---------------------------------------------------------------------------
@@ -381,6 +382,28 @@ export const netWorthSnapshotConverter: FirestoreDataConverter<NetWorthSnapshot>
       ...d,
       id: snapshot.id,
     } as NetWorthSnapshot;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// ActivityLogEntry (F-XCUT-01) — append-only household audit trail. The
+// synthetic `id` equals the auto-generated doc id. `timestamp` is written as a
+// serverTimestamp and normalised to ISO on read (mirrors the recap converters).
+// ---------------------------------------------------------------------------
+export const activityLogConverter: FirestoreDataConverter<ActivityLogEntry> = {
+  toFirestore(entry: ActivityLogEntry): DocumentData {
+    return omitKey(entry, 'id');
+  },
+  fromFirestore(snapshot: QueryDocumentSnapshot): ActivityLogEntry {
+    const d = snapshot.data();
+    return {
+      ...d,
+      id: snapshot.id,
+      timestamp:
+        d['timestamp'] instanceof Timestamp
+          ? d['timestamp'].toDate().toISOString()
+          : d['timestamp'],
+    } as ActivityLogEntry;
   },
 };
 

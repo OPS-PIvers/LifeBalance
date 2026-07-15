@@ -34,6 +34,9 @@ export const MONEY_RECAPS_LIMIT = 4;
 /** Net worth history (F-MONEY-09): live listener keeps the most recent N daily snapshots (~6 months). */
 export const NET_WORTH_HISTORY_LIMIT = 180;
 
+/** Household activity log (F-XCUT-01): live listener keeps the most recent N entries. */
+export const ACTIVITY_LOG_LIMIT = 50;
+
 /** To-dos: completed items are only kept live if completed within the last N days. */
 export const TODO_COMPLETED_WINDOW_DAYS = 30;
 

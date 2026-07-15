@@ -30,6 +30,7 @@ import {
   householdApiKeyConverter,
   insightConverter,
   weeklyRecapConverter,
+  activityLogConverter,
   monthlyMoneyRecapConverter,
   netWorthSnapshotConverter,
   transactionConverter,
@@ -759,6 +760,48 @@ describe('weeklyRecapConverter', () => {
     const result = weeklyRecapConverter.fromFirestore(fakeSnap('2026-W26', partial));
     expect(result.id).toBe('2026-W26');
     expect(result.premium).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ActivityLogEntry — id injection + Timestamp normalisation (F-XCUT-01)
+// ---------------------------------------------------------------------------
+describe('activityLogConverter', () => {
+  const wellFormed = {
+    actorUid: 'u1',
+    actorName: 'Paul',
+    domain: 'money',
+    action: 'bill_paid',
+    summary: 'Paul paid Electric Bill ($142)',
+    timestamp: '2026-07-14T12:00:00.000Z',
+  };
+
+  it('(a) well-formed doc: fromFirestore injects the auto-id and preserves fields', () => {
+    const result = activityLogConverter.fromFirestore(fakeSnap('act_123', wellFormed));
+    expect(result.id).toBe('act_123');
+    expect(result.actorName).toBe('Paul');
+    expect(result.domain).toBe('money');
+    expect(result.summary).toBe('Paul paid Electric Bill ($142)');
+  });
+
+  it('(a) well-formed doc: toFirestore strips id', () => {
+    const out = callToFirestore(activityLogConverter, { ...wellFormed, id: 'act_123' });
+    expect('id' in out).toBe(false);
+    expect(out['action']).toBe('bill_paid');
+  });
+
+  it('(a) Timestamp timestamp is converted to ISO string', () => {
+    const ts = Timestamp.fromDate(new Date('2026-07-14T12:00:00.000Z'));
+    const result = activityLogConverter.fromFirestore(
+      fakeSnap('act_123', { ...wellFormed, timestamp: ts })
+    );
+    expect(result.timestamp).toBe('2026-07-14T12:00:00.000Z');
+  });
+
+  it('(b) partial doc does not throw', () => {
+    const partial = { actorUid: 'u2', domain: 'habit', action: 'habit_completed' };
+    expect(() => activityLogConverter.fromFirestore(fakeSnap('act_9', partial))).not.toThrow();
+    expect(activityLogConverter.fromFirestore(fakeSnap('act_9', partial)).id).toBe('act_9');
   });
 });
 

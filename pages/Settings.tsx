@@ -38,6 +38,7 @@ import { ThemeToggle } from '@/components/settings/ThemeToggle';
 import ApiKeyManager from '@/components/settings/ApiKeyManager';
 import CalendarFeedCard from '@/components/settings/CalendarFeedCard';
 import ShortcutSetupGuide from '@/components/settings/ShortcutSetupGuide';
+import ActivityLogCard from '@/components/settings/ActivityLogCard';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
@@ -101,6 +102,7 @@ const Settings: React.FC = () => {
     setModuleVisibility,
     setKidModePin,
     apiKeys,
+    activityLog,
   } = useHouseholdCore();
   const { habits, challenges, rewardsInventory } = useGamification();
   const {
@@ -711,6 +713,10 @@ const Settings: React.FC = () => {
             </div>
           </div>
         </Section>
+
+        {/* Household activity log / audit trail (F-XCUT-01) — admin-only, to
+            respect member privacy (mirrors the removeMember admin gate). */}
+        {currentUser?.role === 'admin' && <ActivityLogCard activityLog={activityLog} />}
 
         {/* App Modules (Plan 090) — per-household page/tab on-off toggles. Any
             member can edit (like the currency picker). Default all-on. */}

@@ -26,6 +26,7 @@ import {
   WeeklyRecap,
   MonthlyMoneyRecap,
   NetWorthSnapshot,
+  ActivityLogEntry,
   TransactionComment,
   SplitParticipant
 } from '@/types/schema';
@@ -88,6 +89,9 @@ export interface HouseholdContextType {
   /** Net worth history (F-MONEY-09) — newest first, bounded live window
    *  (NET_WORTH_HISTORY_LIMIT). Server-written daily; clients only read. */
   netWorthHistory: NetWorthSnapshot[];
+  /** Household activity log (F-XCUT-01) — newest first, bounded live window
+   *  (ACTIVITY_LOG_LIMIT). Read visibility is gated to admins in the UI. */
+  activityLog: ActivityLogEntry[];
 
   // --- Listener windowing / pagination ---
   // The high-cardinality collections below are windowed on cold load (see
@@ -456,5 +460,5 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'setKidModePin'
   | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
   | 'activeMemberId' | 'actAs' | 'exitToParent'
-  | 'recaps' | 'moneyRecaps'
+  | 'recaps' | 'moneyRecaps' | 'activityLog'
 >;
