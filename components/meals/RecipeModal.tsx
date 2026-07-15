@@ -1,12 +1,18 @@
-import React, { useState } from 'react';
-import { Meal, MealPlanItem } from '@/types/schema';
+import React, { useMemo, useState } from 'react';
+import { Meal, MealIngredient, MealPlanItem } from '@/types/schema';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { SurfaceList } from '@/components/ui/Section';
-import { Check, ExternalLink, ChefHat, Utensils, CheckCircle2 } from 'lucide-react';
+import { Check, ExternalLink, ChefHat, Utensils, CheckCircle2, Minus, Plus, ShoppingCart } from 'lucide-react';
 import { HapticCheck } from '@/components/ui/HapticCheck';
+import { scaleQuantity } from '@/utils/scaleQuantity';
+import { FIELD_BASE } from '@/components/ui/fieldStyles';
+import { cn } from '@/utils/cn';
 import clsx from 'clsx';
+
+const MIN_SERVINGS = 1;
+const MAX_SERVINGS = 50;
 
 interface RecipeModalProps {
   isOpen: boolean;
@@ -14,6 +20,7 @@ interface RecipeModalProps {
   meal: Meal;
   planItem?: MealPlanItem;
   onMarkCooked?: () => void;
+  onShopIngredients?: (mealName: string, ingredients: MealIngredient[], mealId?: string) => void;
 }
 
 export const RecipeModal: React.FC<RecipeModalProps> = ({
@@ -21,10 +28,29 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
   onClose,
   meal,
   planItem,
-  onMarkCooked
+  onMarkCooked,
+  onShopIngredients
 }) => {
   const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(new Set());
   const [checkedInstructions, setCheckedInstructions] = useState<Set<number>>(new Set());
+
+  // Base servings this recipe's stored quantities are written for; the
+  // stepper's initial value. Purely a view-time/transient scale factor —
+  // `meal.ingredients` is never mutated by adjusting it.
+  const baseServings = meal.servings && meal.servings > 0 ? meal.servings : 1;
+  const [servings, setServings] = useState(baseServings);
+
+  const scaleFactor = servings / baseServings;
+  const isScaled = scaleFactor !== 1;
+
+  const scaledIngredients = useMemo(
+    () =>
+      meal.ingredients?.map(ing => ({
+        ...ing,
+        quantity: scaleQuantity(ing.quantity, scaleFactor)
+      })) ?? [],
+    [meal.ingredients, scaleFactor]
+  );
 
   // Haptics come from the HapticCheck rows themselves (native iOS tick +
   // Android vibrate), so the toggles are pure state updates.
@@ -85,11 +111,49 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
           {/* Ingredients */}
           {meal.ingredients && meal.ingredients.length > 0 && (
             <section>
-              <h4 className="flex items-center gap-2 text-sm font-bold text-brand-900 dark:text-brand-100 uppercase tracking-wider mb-4">
-                <Utensils size={16} className="text-brand-600 dark:text-brand-300" /> Ingredients
-              </h4>
+              <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+                <h4 className="flex items-center gap-2 text-sm font-bold text-brand-900 dark:text-brand-100 uppercase tracking-wider">
+                  <Utensils size={16} className="text-brand-600 dark:text-brand-300" /> Ingredients
+                </h4>
+
+                {/* Servings stepper — scales the displayed/shopped quantities only;
+                    the stored recipe (meal.ingredients) is never mutated. */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-brand-500 dark:text-brand-400 uppercase tracking-wider">
+                    Servings
+                  </span>
+                  <div
+                    className={cn(
+                      FIELD_BASE,
+                      "flex items-stretch p-0 overflow-hidden w-auto"
+                    )}
+                  >
+                    <button
+                      type="button"
+                      aria-label="Decrease servings"
+                      onClick={() => setServings(s => Math.max(MIN_SERVINGS, s - 1))}
+                      disabled={servings <= MIN_SERVINGS}
+                      className="px-2 self-stretch text-brand-500 hover:bg-brand-100 dark:text-brand-400 dark:hover:bg-brand-700/50 transition-colors shrink-0 disabled:opacity-40 disabled:pointer-events-none"
+                    >
+                      <Minus size={14} />
+                    </button>
+                    <span className="self-center font-bold min-w-[1.5rem] text-center tabular-nums px-1 text-brand-900 dark:text-brand-100">
+                      {servings}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Increase servings"
+                      onClick={() => setServings(s => Math.min(MAX_SERVINGS, s + 1))}
+                      disabled={servings >= MAX_SERVINGS}
+                      className="px-2 self-stretch text-brand-500 hover:bg-brand-100 dark:text-brand-400 dark:hover:bg-brand-700/50 transition-colors shrink-0 disabled:opacity-40 disabled:pointer-events-none"
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
+                </div>
+              </div>
               <SurfaceList>
-                {meal.ingredients.map((ing, idx) => {
+                {scaledIngredients.map((ing, idx) => {
                   const isChecked = checkedIngredients.has(idx);
                   return (
                     <HapticCheck
@@ -175,6 +239,16 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
           <Button variant="ghost" onClick={onClose} className="flex-1">
             Close
           </Button>
+          {onShopIngredients && meal.ingredients && meal.ingredients.length > 0 && (
+            <Button
+              variant="secondary"
+              onClick={() => onShopIngredients(meal.name, scaledIngredients, meal.id)}
+              className="flex-2"
+              leftIcon={<ShoppingCart size={18} />}
+            >
+              {isScaled ? `Shop for ${servings} servings` : 'Shop ingredients'}
+            </Button>
+          )}
           {planItem && onMarkCooked && !isCooked && (
             <Button
               variant="primary"
