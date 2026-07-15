@@ -1,10 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { Meal, MealIngredient, MealPlanItem } from '@/types/schema';
+import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { SurfaceList } from '@/components/ui/Section';
-import { Check, ExternalLink, ChefHat, Utensils, CheckCircle2, Minus, Plus, ShoppingCart } from 'lucide-react';
+import { matchAllergens } from '@/utils/allergenCheck';
+import { Check, ExternalLink, ChefHat, Utensils, CheckCircle2, ShieldAlert, Minus, Plus, ShoppingCart } from 'lucide-react';
 import { HapticCheck } from '@/components/ui/HapticCheck';
 import { scaleQuantity } from '@/utils/scaleQuantity';
 import { FIELD_BASE } from '@/components/ui/fieldStyles';
@@ -31,6 +33,9 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
   onMarkCooked,
   onShopIngredients
 }) => {
+  const { householdSettings } = useHouseholdCore();
+  const matchedAllergens = matchAllergens(meal, householdSettings?.dietaryProfile?.allergens);
+
   const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(new Set());
   const [checkedInstructions, setCheckedInstructions] = useState<Set<number>>(new Set());
 
@@ -88,6 +93,11 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
             {isCooked && (
               <Badge variant="success" className="gap-1">
                 <CheckCircle2 size={12} /> Cooked
+              </Badge>
+            )}
+            {matchedAllergens.length > 0 && (
+              <Badge variant="danger" className="gap-1">
+                <ShieldAlert size={12} /> Contains {matchedAllergens.join(', ')}
               </Badge>
             )}
             {meal.tags?.map(tag => (

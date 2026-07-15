@@ -684,7 +684,8 @@ const MealPlanTab: React.FC = () => {
             cheap: aiOptions.cheap,
             quick: aiOptions.quick,
             new: aiOptions.new,
-            previousMeals: meals
+            previousMeals: meals,
+            dietaryProfile: householdSettings?.dietaryProfile
         });
 
         setCurrentMeal({

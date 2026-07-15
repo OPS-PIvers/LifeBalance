@@ -29,6 +29,7 @@ import {
   NetWorthSnapshot,
   TransactionComment,
   SplitParticipant,
+  DietaryProfile,
   NotificationLogEntry
 } from '@/types/schema';
 import { type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
@@ -358,6 +359,9 @@ export interface HouseholdContextType {
   /** Set (raw PIN, salted+hashed before write) or clear (null) the Kid Mode exit PIN. */
   setKidModePin: (pin: string | null) => Promise<void>;
 
+  /** F-MEALS-03: set the household's standing dietary restrictions/allergens. */
+  setDietaryProfile: (profile: DietaryProfile) => Promise<void>;
+
   /** F-MEALS-04: set (habit id) or clear (null) the habit auto-credited when a meal is marked cooked. */
   setMealCookedHabitId: (habitId: string | null) => Promise<void>;
 
@@ -490,7 +494,7 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'pendingItemsCount' | 'apiKeys'
   | 'householdId' | 'householdSettings' | 'household'
   | 'refreshInsight' | 'rateInsight' | 'addMember' | 'updateMember' | 'removeMember' | 'deleteHousehold'
-  | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'updateModuleVisibility' | 'setKidModePin' | 'setMealCookedHabitId'
+  | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'updateModuleVisibility' | 'setKidModePin' | 'setDietaryProfile' | 'setMealCookedHabitId'
   | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
   | 'activeMemberId' | 'actAs' | 'exitToParent'
   | 'recaps' | 'moneyRecaps'
