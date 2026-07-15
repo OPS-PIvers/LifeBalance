@@ -56,6 +56,7 @@ import {
   ModuleKey,
   WeeklyRecap,
   MonthlyMoneyRecap,
+  ActivityLogEntry,
   SavingsGoal,
   NetWorthSnapshot,
   DietaryProfile,
@@ -532,6 +533,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [recaps, setRecaps] = useState<WeeklyRecap[]>([]);
   // Monthly money recaps (F-MONEY-06) — bounded live window, newest first.
   const [moneyRecaps, setMoneyRecaps] = useState<MonthlyMoneyRecap[]>([]);
+  // Household activity log (F-XCUT-01) — bounded live window, newest first.
+  const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
   const [bucketHistoryWindow, setBucketHistoryWindow] = useState<BucketPeriodSnapshot[]>([]);
   const [bucketHistoryOlder, setBucketHistoryOlder] = useState<BucketPeriodSnapshot[]>([]);
   const bucketHistory = useMemo(
@@ -700,6 +703,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setHasMoreCompletedTodos(true);
     setIsLoadingOlderTodos(false);
     setRecaps([]);
+    setActivityLog([]);
     setBucketHistoryWindow([]);
     setBucketHistoryOlder([]);
     bucketHistoryLoadedAllRef.current = false;
@@ -822,6 +826,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       setFreezeBank: (data) => setFreezeBank(data),
       setRecaps: (data) => setRecaps(data),
       setMoneyRecaps: (data) => setMoneyRecaps(data),
+      setActivityLog: (data) => setActivityLog(data),
       setApiKeys: (data) => setApiKeys(data),
       setInsightsWindow: (data) => setInsightsWindow(data),
       setHasMoreInsights: (data) => setHasMoreInsights(data),
@@ -1712,9 +1717,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   const payCalendarItem = useCallback(async (itemId: string, accountId: string, opts?: MutationOpts) => {
     await makePayCalendarItem({
-      db, householdId, user, accounts, calendarItems, householdSettings, handlePaycheckApproval,
+      db, householdId, user, actorName: currentUser?.displayName ?? user?.displayName ?? null,
+      accounts, calendarItems, householdSettings, handlePaycheckApproval,
     }).payCalendarItem(itemId, accountId, opts);
-  }, [householdId, user, accounts, calendarItems, householdSettings, handlePaycheckApproval]);
+  }, [householdId, user, currentUser, accounts, calendarItems, householdSettings, handlePaycheckApproval]);
 
   const deferCalendarItem = useCallback(async (itemId: string, opts?: MutationOpts) => {
     await makeDeferCalendarItem({ db, householdId, user, calendarItems }).deferCalendarItem(itemId, opts);
@@ -2453,6 +2459,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     exitToParent,
     recaps,
     moneyRecaps,
+    activityLog,
     notificationLog,
     unreadNotificationCount,
     markNotificationRead,
@@ -2465,6 +2472,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addKidProfile, updateKidProfile, removeKidProfile, activeMemberId, actAs, exitToParent,
     recaps,
     moneyRecaps,
+    activityLog,
     notificationLog,
     unreadNotificationCount,
     markNotificationRead,

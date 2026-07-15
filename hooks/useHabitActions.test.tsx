@@ -23,9 +23,16 @@ const incrementMock = vi.fn((n: number) => ({ __increment: n }));
 vi.mock('firebase/firestore', () => {
   return {
     // doc(db, path, id?) -> a ref object carrying its path for assertions.
-    doc: vi.fn((_db: unknown, path?: string, id?: string) => ({
-      __path: id ? `${path}/${id}` : (path ?? '__autoId'),
-    })),
+    doc: vi.fn((_db: unknown, path?: string, id?: string) => {
+      const ref: Record<string, unknown> = {
+        __path: id ? `${path}/${id}` : (path ?? '__autoId'),
+        id: id ?? '__autoId',
+      };
+      // appendActivityLog (F-XCUT-01) chains .withConverter() on a fresh
+      // auto-id ref; return the same ref so path/id assertions still hold.
+      ref.withConverter = () => ref;
+      return ref;
+    }),
     collection: vi.fn((_db: unknown, path: string) => ({ __path: path })),
     increment: (n: number) => incrementMock(n),
     serverTimestamp: vi.fn(() => '__serverTimestamp'),

@@ -13,12 +13,13 @@ import {
   insightConverter,
   weeklyRecapConverter,
   monthlyMoneyRecapConverter,
+  activityLogConverter,
   notificationLogConverter,
 } from '@/utils/firestoreConverters';
-import { Household, FreezeBank, Insight, HouseholdApiKey, WeeklyRecap, MonthlyMoneyRecap, HabitInsightsDoc, NotificationLogEntry } from '@/types/schema';
+import { Household, FreezeBank, Insight, HouseholdApiKey, WeeklyRecap, MonthlyMoneyRecap, ActivityLogEntry, HabitInsightsDoc, NotificationLogEntry } from '@/types/schema';
 import { migrateFreezeBankToEnhanced, needsFreezeBankMigration } from '@/utils/migrations/freezeBankMigration';
 import { getLocalDateString } from '@/utils/dateHelpers';
-import { RECAPS_LIMIT, MONEY_RECAPS_LIMIT, INSIGHTS_LIMIT, NOTIFICATION_LOG_FETCH_LIMIT } from '@/utils/listenerWindows';
+import { RECAPS_LIMIT, MONEY_RECAPS_LIMIT, INSIGHTS_LIMIT, ACTIVITY_LOG_LIMIT, NOTIFICATION_LOG_FETCH_LIMIT } from '@/utils/listenerWindows';
 import { format } from 'date-fns';
 
 /**
@@ -44,6 +45,7 @@ export function attachCoreListeners({
   setFreezeBank,
   setRecaps,
   setMoneyRecaps,
+  setActivityLog,
   setApiKeys,
   setInsightsWindow,
   setHasMoreInsights,
@@ -59,6 +61,7 @@ export function attachCoreListeners({
   setFreezeBank: (freezeBank: FreezeBank | null) => void;
   setRecaps: (recaps: WeeklyRecap[]) => void;
   setMoneyRecaps: (moneyRecaps: MonthlyMoneyRecap[]) => void;
+  setActivityLog: (entries: ActivityLogEntry[]) => void;
   setApiKeys: (apiKeys: HouseholdApiKey[]) => void;
   setInsightsWindow: (insights: Insight[]) => void;
   setHasMoreInsights: (hasMore: boolean) => void;
@@ -153,6 +156,25 @@ export function attachCoreListeners({
       setMoneyRecaps(snapshot.docs.map(doc => doc.data()));
     }, (error) => {
       console.error('Error listening to money recaps:', error);
+    })
+  );
+
+  // Activity log listener (F-XCUT-01) — bounded live window of the most recent
+  // N entries, newest first. Read visibility is gated to admins in the UI; a
+  // non-admin household may hit a permission error once rules are tightened
+  // (see the PR's "concerns"), which is swallowed so the feed degrades to empty.
+  const activityLogQuery = query(
+    collection(db, `households/${householdId}/activityLog`).withConverter(activityLogConverter),
+    orderBy('timestamp', 'desc'),
+    limit(ACTIVITY_LOG_LIMIT)
+  );
+  unsubscribers.push(
+    onSnapshot(activityLogQuery, (snapshot) => {
+      setActivityLog(snapshot.docs.map(doc => doc.data()));
+    }, (error) => {
+      if (error.code !== 'permission-denied') {
+        console.error('Error listening to activity log:', error);
+      }
     })
   );
 

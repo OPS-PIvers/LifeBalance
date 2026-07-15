@@ -20,6 +20,7 @@ import { BUDGETED_IN_CALENDAR } from '@/utils/categories';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { parseRecurringId, isRecurringId, rollRecurringAnchorForward } from '@/utils/calendarRecurrence';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { appendActivityLog, composeSummary } from '@/utils/activityLog';
 import { roundMoney } from '@/utils/money';
 import { computePriceChangeNudge } from '@/utils/priceChangeNudge';
 
@@ -245,12 +246,14 @@ export function makePayCalendarItem(deps: {
   db: Firestore;
   householdId: string | null;
   user: { uid: string } | null;
+  /** Display name for the F-XCUT-01 activity-log actor (resolved by the provider). */
+  actorName?: string | null;
   accounts: Account[];
   calendarItems: CalendarItem[];
   householdSettings: Household | null;
   handlePaycheckApproval: (paycheckDate: string, externalBatch?: WriteBatch) => Promise<void>;
 }) {
-  const { db, householdId, user, accounts, calendarItems, householdSettings, handlePaycheckApproval } = deps;
+  const { db, householdId, user, actorName, accounts, calendarItems, householdSettings, handlePaycheckApproval } = deps;
 
   const payCalendarItem = async (
     itemId: string,
@@ -400,6 +403,19 @@ export function makePayCalendarItem(deps: {
         accountId,
         createdBy: user.uid,
         createdAt: serverTimestamp(),
+      });
+
+      // F-XCUT-01: log the payment INSIDE the same batch so the audit entry
+      // co-commits atomically with the balance/calendar/transaction writes.
+      appendActivityLog(payBatch, db, householdId, { uid: user.uid, name: actorName ?? '' }, {
+        domain: 'money',
+        action: item.type === 'expense' ? 'bill_paid' : 'income_received',
+        summary: composeSummary(
+          actorName ?? '',
+          item.type === 'expense' ? 'paid' : 'received',
+          item.title,
+          paidAmount
+        ),
       });
 
       await payBatch.commit();

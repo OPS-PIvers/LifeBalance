@@ -28,6 +28,7 @@ import {
   WeeklyRecap,
   MonthlyMoneyRecap,
   NetWorthSnapshot,
+  ActivityLogEntry,
   TransactionComment,
   SplitParticipant,
   DietaryProfile,
@@ -99,6 +100,9 @@ export interface HouseholdContextType {
   /** Net worth history (F-MONEY-09) — newest first, bounded live window
    *  (NET_WORTH_HISTORY_LIMIT). Server-written daily; clients only read. */
   netWorthHistory: NetWorthSnapshot[];
+  /** Household activity log (F-XCUT-01) — newest first, bounded live window
+   *  (ACTIVITY_LOG_LIMIT). Read visibility is gated to admins in the UI. */
+  activityLog: ActivityLogEntry[];
   /** In-app notification inbox (F-NOTIF-02) — the current member's own log
    *  entries, newest first, already filtered from the bounded household-wide
    *  fetch window (NOTIFICATION_LOG_FETCH_LIMIT). Server-written; clients only
@@ -504,6 +508,6 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'updateModuleVisibility' | 'setKidModePin' | 'setDietaryProfile' | 'setMealCookedHabitId'
   | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
   | 'activeMemberId' | 'actAs' | 'exitToParent'
-  | 'recaps' | 'moneyRecaps'
+  | 'recaps' | 'moneyRecaps' | 'activityLog'
   | 'notificationLog' | 'unreadNotificationCount' | 'markNotificationRead' | 'markAllNotificationsRead'
 >;
