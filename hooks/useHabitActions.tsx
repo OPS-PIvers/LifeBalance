@@ -256,10 +256,22 @@ export const useHabitActions = (
     // succeed together or neither does (prevents points/habit desync on crash).
     const batch = writeBatch(db);
 
+    // completedDates is written as a server-side arrayUnion/arrayRemove delta,
+    // NEVER as the locally-computed array processToggleHabit returns — a device
+    // with a stale offline cache would otherwise wholesale-overwrite (wipe) the
+    // habit's completion history (2026-07-15 incident). Diff old vs new at the
+    // write site: a toggle changes at most one date. Scalars (count/streak)
+    // are self-correcting, so local computation stays safe.
+    const prevDates = effectiveHabit.completedDates;
+    const nextDates = result.updatedHabit.completedDates ?? prevDates;
+    const addedDate = nextDates.find(d => !prevDates.includes(d));
+    const removedDate = prevDates.find(d => !nextDates.includes(d));
+
     batch.update(doc(db, `households/${householdId}/habits`, id), {
       count: result.updatedHabit.count,
       totalCount: result.updatedHabit.totalCount,
-      completedDates: result.updatedHabit.completedDates,
+      ...(addedDate !== undefined ? { completedDates: arrayUnion(addedDate) } : {}),
+      ...(removedDate !== undefined ? { completedDates: arrayRemove(removedDate) } : {}),
       streakDays: result.updatedHabit.streakDays,
       lastUpdated: serverTimestamp(),
     });
@@ -530,7 +542,8 @@ export const useHabitActions = (
       // streak. For "today" this equals streakForHabit(updatedCompletedDates); for
       // a back-dated submission it's the streak ending on that day.
       const updatedCompletedDates = [...habit.completedDates];
-      if (marksDateComplete && !updatedCompletedDates.includes(submissionDate)) {
+      const dateNewlyCompleted = marksDateComplete && !updatedCompletedDates.includes(submissionDate);
+      if (dateNewlyCompleted) {
         updatedCompletedDates.push(submissionDate);
         updatedCompletedDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
       }
@@ -594,7 +607,11 @@ export const useHabitActions = (
         // absorbs the count.
         count: isCurrentPeriod ? liveCount + count : liveCount,
         totalCount: habit.totalCount + count,
-        completedDates: updatedCompletedDates,
+        // Server-side arrayUnion delta, only when this submission newly
+        // completes the date — never the locally-computed array (a stale
+        // offline cache would wholesale-overwrite the habit's completion
+        // history; 2026-07-15 incident).
+        ...(dateNewlyCompleted ? { completedDates: arrayUnion(submissionDate) } : {}),
         streakDays: streakForHabit({ period: habit.period, completedDates: updatedCompletedDates, frozenDates: habit.frozenDates }),
         hasSubmissionTracking: true,
         lastUpdated: serverTimestamp(),
