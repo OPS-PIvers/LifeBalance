@@ -35,6 +35,9 @@ import MemberModal from '@/components/modals/MemberModal';
 import PointsBreakdownModal from '@/components/modals/PointsBreakdownModal';
 import NotificationSettings from '@/components/settings/NotificationSettings';
 import { ThemeToggle } from '@/components/settings/ThemeToggle';
+import { useTheme, type FontScale } from '@/contexts/ThemeContext';
+import { SegmentedControl, type SegmentedControlOption } from '@/components/ui/SegmentedControl';
+import { haptic } from '@/utils/haptics';
 import ApiKeyManager from '@/components/settings/ApiKeyManager';
 import CalendarFeedCard from '@/components/settings/CalendarFeedCard';
 import ShortcutSetupGuide from '@/components/settings/ShortcutSetupGuide';
@@ -89,8 +92,15 @@ const CURRENCY_OPTIONS: { code: string; symbol: string; label: string }[] = [
   { code: 'JPY', symbol: '¥', label: 'Japanese Yen' },
 ];
 
+const FONT_SCALE_OPTIONS: SegmentedControlOption<FontScale>[] = [
+  { value: '100', label: <span className="text-xs">A</span>, ariaLabel: 'Default text size' },
+  { value: '115', label: <span className="text-sm">A</span>, ariaLabel: 'Larger text size' },
+  { value: '130', label: <span className="text-base">A</span>, ariaLabel: 'Largest text size' },
+];
+
 const Settings: React.FC = () => {
   const { user, householdId } = useAuth();
+  const { fontScale, setFontScale, highContrast, setHighContrast } = useTheme();
   const {
     members,
     currentUser,
@@ -504,6 +514,36 @@ const Settings: React.FC = () => {
               <Row className="flex-col items-stretch gap-3">
                 <span className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">Appearance</span>
                 <ThemeToggle />
+              </Row>
+
+              {/* Text size */}
+              <Row className="flex-col items-stretch gap-3">
+                <span className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">Text Size</span>
+                <SegmentedControl
+                  name="Text size"
+                  options={FONT_SCALE_OPTIONS}
+                  value={fontScale}
+                  onChange={(value) => {
+                    setFontScale(value);
+                    haptic('light');
+                  }}
+                />
+              </Row>
+
+              {/* High contrast */}
+              <Row>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">High Contrast</p>
+                  <p className="text-xs text-brand-500 dark:text-brand-400">Stronger text and border contrast</p>
+                </div>
+                <Switch
+                  aria-label="Toggle high contrast"
+                  checked={highContrast}
+                  onCheckedChange={(value) => {
+                    setHighContrast(value);
+                    haptic('light');
+                  }}
+                />
               </Row>
 
               {/* Currency */}
