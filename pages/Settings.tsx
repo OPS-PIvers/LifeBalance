@@ -38,6 +38,7 @@ import { ThemeToggle } from '@/components/settings/ThemeToggle';
 import ApiKeyManager from '@/components/settings/ApiKeyManager';
 import CalendarFeedCard from '@/components/settings/CalendarFeedCard';
 import ShortcutSetupGuide from '@/components/settings/ShortcutSetupGuide';
+import { DashboardWidgetSettings } from '@/components/settings/DashboardWidgetSettings';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
@@ -880,6 +881,16 @@ const Settings: React.FC = () => {
             </SurfaceList>
           </div>
         </Section>
+
+        {/* Dashboard widgets (F-XCUT-02) — per-member reorder/hide, own view only. */}
+        {currentUser && (
+          <Section title="Dashboard Widgets">
+            <DashboardWidgetSettings
+              member={currentUser}
+              onSave={(updates) => void updateMember(currentUser.uid, updates)}
+            />
+          </Section>
+        )}
 
         {/* Kid Mode (Plan 080) — dormant until kidModeEnabled is flipped on. */}
         {kidModeEnabled && (

@@ -1815,7 +1815,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     }, [habits, freezeBank.tokens]),
     rolloverFreezeBankTokens: noOp,
     addMember: noOp,
-    updateMember: noOp,
+    updateMember: useCallback(async (memberId: string, updates: Partial<HouseholdMember>) => {
+      setMembers(prev => prev.map(m => (m.uid === memberId ? { ...m, ...updates } : m)));
+    }, []),
     removeMember: noOp,
     deleteHousehold,
     completeOnboarding,
