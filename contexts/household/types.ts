@@ -18,6 +18,7 @@ import {
   MealPlanItem,
   ToDo,
   Insight,
+  HabitInsightsDoc,
   GroceryCatalogItem,
   Store,
   QuickStockList,
@@ -74,6 +75,11 @@ export interface HouseholdContextType {
   primaryYearlyGoal: YearlyGoal | null;
   rewardsInventory: RewardItem[];
   freezeBank: FreezeBank | null;
+  /** F-DASH-03 — Habit Coach card. Latest `analyzeHabitPatterns()` output,
+   *  null until first generated for this household. */
+  habitPatterns: HabitInsightsDoc | null;
+  isGeneratingHabitPatterns: boolean;
+  refreshHabitPatterns: () => Promise<void>;
   insight: string;
   insightsHistory: Insight[];
   isGeneratingInsight: boolean;
@@ -453,6 +459,7 @@ export type GamificationContextValue = Pick<HouseholdContextType,
   | 'activeChallenge' | 'challenges'
   | 'yearlyGoals' | 'activeYearlyGoals' | 'primaryYearlyGoal'
   | 'rewardsInventory' | 'freezeBank'
+  | 'habitPatterns' | 'isGeneratingHabitPatterns' | 'refreshHabitPatterns'
   | 'addHabit' | 'updateHabit' | 'deleteHabit' | 'archiveHabit' | 'unarchiveHabit' | 'reorderHabits' | 'toggleHabit' | 'resetHabit' | 'setHabitPause'
   | 'addHabitSubmission' | 'updateHabitSubmission' | 'deleteHabitSubmission' | 'getHabitSubmissions'
   | 'resetHabitDay'

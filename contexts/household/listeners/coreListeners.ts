@@ -15,7 +15,7 @@ import {
   monthlyMoneyRecapConverter,
   notificationLogConverter,
 } from '@/utils/firestoreConverters';
-import { Household, FreezeBank, Insight, HouseholdApiKey, WeeklyRecap, MonthlyMoneyRecap, NotificationLogEntry } from '@/types/schema';
+import { Household, FreezeBank, Insight, HouseholdApiKey, WeeklyRecap, MonthlyMoneyRecap, HabitInsightsDoc, NotificationLogEntry } from '@/types/schema';
 import { migrateFreezeBankToEnhanced, needsFreezeBankMigration } from '@/utils/migrations/freezeBankMigration';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { RECAPS_LIMIT, MONEY_RECAPS_LIMIT, INSIGHTS_LIMIT, NOTIFICATION_LOG_FETCH_LIMIT } from '@/utils/listenerWindows';
@@ -49,6 +49,7 @@ export function attachCoreListeners({
   setHasMoreInsights,
   setInsight,
   insightsLoadedAllRef,
+  setHabitPatterns,
   setNotificationLogRaw,
 }: {
   db: Firestore;
@@ -63,6 +64,7 @@ export function attachCoreListeners({
   setHasMoreInsights: (hasMore: boolean) => void;
   setInsight: (text: string) => void;
   insightsLoadedAllRef: { current: boolean };
+  setHabitPatterns: (doc: HabitInsightsDoc | null) => void;
   /** F-NOTIF-02 — receives the raw, unfiltered household-wide fetch window;
    *  the provider filters to the current member's own entries (see the
    *  flat-subcollection note on `NotificationLogEntry`). */
@@ -193,6 +195,21 @@ export function attachCoreListeners({
         // Don't show error toast to user as this is non-critical data
       }
     )
+  );
+
+  // Habit Coach patterns listener (F-DASH-03) — single ephemeral doc, not a
+  // growing collection; regenerated in place by refreshHabitPatterns(). A
+  // missing doc (never generated yet, or the household predates this
+  // feature) is a normal empty state, not an error.
+  const habitInsightsDocRef = doc(db, `households/${householdId}/habitInsights/current`);
+  unsubscribers.push(
+    onSnapshot(habitInsightsDocRef, (snapshot) => {
+      const data = snapshot.data() as HabitInsightsDoc | undefined;
+      setHabitPatterns(data ?? null);
+    }, (error) => {
+      console.error('Error listening to habit patterns doc:', error);
+      // Non-critical: leave the widget in its manual-refresh empty state.
+    })
   );
 
   // Notification inbox listener (F-NOTIF-02) — bounded, newest-first window
