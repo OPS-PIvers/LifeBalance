@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useShopping, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem, QuickStockList } from '@/types/schema';
-import { Download, Sparkles, Loader2, Clock, Filter, Info, RotateCcw, X, Settings, Share2, Save, ShoppingCart, MoreHorizontal, Zap, ArrowUpDown, Check, Trash2 } from 'lucide-react';
+import { Download, Sparkles, Loader2, Clock, Filter, Info, RotateCcw, X, Settings, Share2, Save, ShoppingCart, MoreHorizontal, Zap, ArrowUpDown, Check, Trash2, ClipboardPaste } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { Reorder } from 'framer-motion';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
@@ -11,6 +11,7 @@ import GroceryCatalogModal from '@/components/modals/GroceryCatalogModal';
 import ShoppingSettingsModal from '@/components/meals/ShoppingSettingsModal';
 import { ShoppingItemRow } from '@/components/meals/ShoppingItemRow';
 import { QuickRestockDrawer } from '@/components/meals/QuickRestockDrawer';
+import { PasteImportDrawer } from '@/components/meals/PasteImportDrawer';
 import { ShoppingItemForm } from '@/components/meals/ShoppingItemForm';
 import { Drawer } from '@/components/ui/Drawer';
 import { Popover } from '@/components/ui/Popover';
@@ -233,6 +234,7 @@ const ShoppingListTab: React.FC = () => {
   // drawer (opened from the lightning-bolt icon in the title row).
   const [menuOpen, setMenuOpen] = useState(false);
   const [isRestockDrawerOpen, setIsRestockDrawerOpen] = useState(false);
+  const [isPasteImportOpen, setIsPasteImportOpen] = useState(false);
 
   // Use a ref for drag state to prevent re-renders and potential race conditions
   // caused by the dependency array in useEffect.
@@ -597,6 +599,12 @@ const ShoppingListTab: React.FC = () => {
         ]
       : []),
     {
+      key: 'import',
+      label: 'Import list',
+      icon: <ClipboardPaste size={16} />,
+      onSelect: () => setIsPasteImportOpen(true),
+    },
+    {
       key: 'history',
       label: 'History',
       icon: <Clock size={16} />,
@@ -895,6 +903,11 @@ const ShoppingListTab: React.FC = () => {
         <QuickRestockDrawer
             isOpen={isRestockDrawerOpen}
             onClose={() => setIsRestockDrawerOpen(false)}
+        />
+        <PasteImportDrawer
+            isOpen={isPasteImportOpen}
+            onClose={() => setIsPasteImportOpen(false)}
+            householdId={householdId}
         />
         <GroceryCatalogModal
             isOpen={isCatalogOpen}
