@@ -14,6 +14,7 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
     members: [],
     pendingItemsCount: 0,
     recaps: [],
+    moneyRecaps: [],
   }),
   useFinance: () => ({
     buckets: [],
