@@ -63,6 +63,13 @@ export interface NotificationPreferences {
     time: string; // HH:MM format (24-hour)
   };
 
+  // Monthly money recap push (F-MONEY-06). Sent server-side on the 1st of the
+  // month ~09:00 in the member's timezone; a bare toggle like weeklyRecap.
+  // Optional so legacy docs deserialize — treat absent as enabled (default ON).
+  monthlyMoneyRecap?: {
+    enabled: boolean;
+  };
+
   // General notification settings
   timezone?: string; // IANA timezone (e.g., 'America/New_York')
 }
@@ -885,6 +892,41 @@ export interface WeeklyRecap {
   upcomingBills: Array<{ title: string; amount: number; date: string }>;
   narrative: string;
   narrativeSource: 'ai' | 'template';
+  premium: boolean;
+}
+
+/**
+ * Monthly money recap (F-MONEY-06) — the Weekly Recap's money-focused sibling.
+ * One doc per calendar month at `households/{id}/moneyRecaps/{month}`, written
+ * server-side on the 1st by the scheduled `sendmonthlymoneyrecap` function
+ * (Admin SDK; clients only read). The synthetic `id` equals the doc id, which
+ * equals `month` (yyyy-MM). Money fields are decimal dollars (per house
+ * convention — summed in integer cents internally, stored as dollars).
+ */
+export interface MonthlyMoneyRecap {
+  id: string;
+  month: string; // e.g. '2026-06' (calendar month the recap covers)
+  generatedAt: string; // ISO timestamp
+  totalIncome: number; // decimal dollars — verified income for the month
+  totalSpend: number; // decimal dollars — verified, non-income spend for the month
+  priorMonthSpend: number; // decimal dollars — verified, non-income spend for the prior month
+  /** Per-bucket over/under close-out, grouped from BucketPeriodSnapshot docs. */
+  bucketResults: Array<{
+    bucketId: string;
+    bucketName: string;
+    limit: number; // decimal dollars — total limit across the month's periods
+    spent: number; // decimal dollars — total verified spend across the month's periods
+    overUnder: number; // decimal dollars — spent - limit (positive = over budget)
+  }>;
+  /** The single biggest verified, non-income expense of the month (or null). */
+  topExpense: { merchant: string; amount: number; category: string; date: string } | null;
+  /** Change in net worth over the month (decimal dollars), or null when the
+   *  Net Worth History feature (F-MONEY-07 family) has not populated snapshots. */
+  netWorthDelta: number | null;
+  /** 2-3 sentence warm summary, either AI-generated or a deterministic template. */
+  narrative: string;
+  narrativeSource: 'ai' | 'template';
+  /** Whether this household saw the premium experience (AI narrative + push). */
   premium: boolean;
 }
 

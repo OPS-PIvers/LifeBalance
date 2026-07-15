@@ -24,6 +24,7 @@ import {
   HouseholdApiKey,
   ModuleKey,
   WeeklyRecap,
+  MonthlyMoneyRecap,
   NetWorthSnapshot,
   TransactionComment,
   SplitParticipant
@@ -81,6 +82,9 @@ export interface HouseholdContextType {
   bucketHistory: BucketPeriodSnapshot[];
   /** Weekly recaps (Plan 02) — newest first, bounded live window (RECAPS_LIMIT). */
   recaps: WeeklyRecap[];
+  /** Monthly money recaps (F-MONEY-06) — newest first, bounded live window
+   *  (MONEY_RECAPS_LIMIT). */
+  moneyRecaps: MonthlyMoneyRecap[];
   /** Net worth history (F-MONEY-09) — newest first, bounded live window
    *  (NET_WORTH_HISTORY_LIMIT). Server-written daily; clients only read. */
   netWorthHistory: NetWorthSnapshot[];
@@ -448,5 +452,5 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'setKidModePin'
   | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
   | 'activeMemberId' | 'actAs' | 'exitToParent'
-  | 'recaps'
+  | 'recaps' | 'moneyRecaps'
 >;
