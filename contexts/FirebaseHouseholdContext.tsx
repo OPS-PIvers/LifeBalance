@@ -1971,6 +1971,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeHouseholdSettingsMutations({ db, householdId }).setKidModePin(pin);
   }, [householdId]);
 
+  // F-MEALS-04: set/clear the habit auto-credited when a meal is marked cooked.
+  const setMealCookedHabitId = useCallback(async (habitId: string | null): Promise<void> => {
+    await makeHouseholdSettingsMutations({ db, householdId }).setMealCookedHabitId(habitId);
+  }, [householdId]);
+
   // --- ACTIONS: MEALS ---
 
   const addMeal = useCallback(async (meal: Omit<Meal, 'id'>, options?: { suppressToast?: boolean }): Promise<string> => {
@@ -2406,6 +2411,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setModuleVisibility,
     updateModuleVisibility,
     setKidModePin,
+    setMealCookedHabitId,
     addKidProfile,
     updateKidProfile,
     removeKidProfile,
@@ -2422,7 +2428,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     isLoading, currentUser, members, insight, insightsHistory, isGeneratingInsight, hasMoreInsights, loadAllInsights,
     pendingItemsCount, apiKeys,
     householdId, householdSettings, refreshInsight, addMember, updateMember, removeMember, deleteHousehold,
-    completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setKidModePin,
+    completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setKidModePin, setMealCookedHabitId,
     addKidProfile, updateKidProfile, removeKidProfile, activeMemberId, actAs, exitToParent,
     recaps,
     moneyRecaps,

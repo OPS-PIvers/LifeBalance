@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Trash2, Edit2, AlertCircle, Clock, User, Copy, MoreVertical, Calendar, Star, CheckSquare, ChevronDown, ListChecks, FileText } from 'lucide-react';
+import { Check, Trash2, Edit2, AlertCircle, Clock, User, Copy, MoreVertical, Calendar, Star, CheckSquare, ChevronDown, ListChecks, Repeat, FileText } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, startOfToday } from 'date-fns';
 import { ToDo, HouseholdMember } from '@/types/schema';
 import { DEFAULT_TODO_POINTS } from '@/utils/todoPoints';
@@ -168,6 +168,19 @@ export const TodoRow = React.memo(function TodoRow({
                 {isToday(dueDate) ? 'Today' :
                  isTomorrow(dueDate) ? 'Tomorrow' :
                  format(dueDate, 'MMM d')}
+              </span>
+            )}
+
+            {/* F-TODO-01: repeat badge — signals a recurring chore that
+                auto-spawns its next instance on completion. */}
+            {item.recurrence?.frequency && (
+              <span
+                className="flex items-center gap-1 text-accent-600 dark:text-accent-300 font-semibold"
+                title={`Repeats ${item.recurrence.frequency}`}
+              >
+                <Repeat size={11} aria-hidden="true" />
+                {item.recurrence.frequency === 'bi-weekly' ? 'Bi-weekly' :
+                 item.recurrence.frequency === 'monthly' ? 'Monthly' : 'Weekly'}
               </span>
             )}
 

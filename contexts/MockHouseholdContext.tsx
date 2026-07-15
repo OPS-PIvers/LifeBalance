@@ -7,6 +7,7 @@ import { getLocalDateString } from '@/utils/dateHelpers';
 import { rollRecurringAnchorForward } from '@/utils/calendarRecurrence';
 import { hashKidPin } from '@/utils/kidPin';
 import { computeTodoCompletionCredit } from '@/utils/todoPoints';
+import { buildNextRecurringTodo } from '@/utils/todoRecurrence';
 import { buildToDosFromTemplate } from '@/utils/taskTemplates';
 import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
 import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
@@ -567,6 +568,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // legacy household. Toggling a module mutates this in-memory map so the dynamic
   // footer / route guards / Plan-tab fallback are all walkable in Test Mode.
   const [moduleVisibility, setModuleVisibilityState] = useState<Partial<Record<ModuleKey, boolean>>>({});
+  // F-MEALS-04 — habit auto-credited when a meal-plan item is marked cooked.
+  const [mealCookedHabitId, setMealCookedHabitIdState] = useState<string | undefined>(undefined);
 
   // Account operations
   const addAccount = useCallback(async (account: Omit<Account, 'id'>) => {
@@ -666,6 +669,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     // Hash for real so the Test-Mode exit-PIN flow verifies like production.
     setKidModePinHash(await hashKidPin(pin));
     toast.success('Mock: Kid Mode PIN set');
+  }, []);
+
+  const setMealCookedHabitId = useCallback(async (habitId: string | null) => {
+    setMealCookedHabitIdState(habitId ?? undefined);
+    toast.success(habitId ? 'Mock: Cook habit linked' : 'Mock: Cook habit unlinked');
   }, []);
 
   const updateAccountBalance = useCallback(async (id: string, newBalance: number) => {
@@ -1567,6 +1575,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     redemptionHistory,
     unlockedRewardIds,
     moduleVisibility,
+    mealCookedHabitId,
     // F-DASH-06: seed a nonzero today's usage so the InsightWidget AI-usage
     // caption is visible/walkable in Test Mode.
     aiUsage: { dailyCount: 1, lastResetDate: getLocalDateString() },
@@ -1735,9 +1744,21 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       if (completedTodo.isCompleted) {
         return; // already completed — avoid duplicate points
       }
-      setTodos(prev => prev.map(t =>
-        t.id === id ? { ...t, isCompleted: true, completedAt: new Date().toISOString() } : t,
-      ));
+      // F-TODO-01: recurring todos spawn their next instance on completion,
+      // mirroring the atomic completion+spawn in makeCompleteToDo.
+      const nextInstance = buildNextRecurringTodo(completedTodo, getLocalDateString());
+      setTodos(prev => {
+        const updated = prev.map(t =>
+          t.id === id ? { ...t, isCompleted: true, completedAt: new Date().toISOString() } : t,
+        );
+        if (!nextInstance) return updated;
+        return [...updated, {
+          ...nextInstance,
+          id: generateId(),
+          createdAt: new Date().toISOString(),
+          createdBy: completedTodo.createdBy,
+        } as ToDo];
+      });
       setMembers(prev => {
         const credit = computeTodoCompletionCredit(completedTodo, prev);
         if (!credit) return prev;
@@ -1832,6 +1853,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     setModuleVisibility,
     updateModuleVisibility,
     setKidModePin,
+    setMealCookedHabitId,
     addKidProfile,
     updateKidProfile,
     removeKidProfile,

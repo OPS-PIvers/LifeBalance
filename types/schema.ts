@@ -732,6 +732,12 @@ export interface Household {
   // app_config/global.kidModeEnabled flag is on.
   kidModePinHash?: string;
 
+  // F-MEALS-04: id of the habit auto-credited when a meal-plan item is marked
+  // `isCooked: true` (e.g. "Cooked dinner at home"). Absent means no linked
+  // habit — marking a meal cooked stays a meals-only action. Set via the
+  // "Cook habit" picker in MealPlanTab's overflow menu.
+  mealCookedHabitId?: string;
+
   // Plan 080d-2 (Kid Mode): kid reward-redemption requests awaiting parent
   // approval. Only PENDING requests live here — each is removed on approve/deny,
   // so the array stays bounded. Absent on every legacy + non-kid household
@@ -878,6 +884,19 @@ export interface ToDo {
   // array field (no subcollection); the row shows an "n/m done" progress chip and
   // an expandable checkable list. Absent on every existing todo — no migration.
   subtasks?: Subtask[];
+
+  // F-TODO-01: Recurring / repeating to-dos. Mirrors CalendarItem's
+  // frequency/parentRecurringId model. When present, completing the task
+  // auto-spawns the next instance (completeByDate advanced by `frequency`)
+  // in the SAME writeBatch as the completion (see makeCompleteToDo). Absent on
+  // every existing todo — non-recurring behavior is unchanged.
+  recurrence?: {
+    frequency: 'weekly' | 'bi-weekly' | 'monthly';
+    // Stable id of the FIRST todo in the recurring chain (denormalized onto each
+    // spawned instance, matching CalendarItem.parentRecurringId). Lets a household
+    // group / manage a chain of occurrences later without a separate parent doc.
+    parentRecurringId?: string;
+  };
 }
 
 export interface UpdateBucketPayload {
