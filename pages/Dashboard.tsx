@@ -39,6 +39,7 @@ import { KidsChoresWidget } from '@/components/dashboard/KidsChoresWidget';
 import { ActivityFeedWidget } from '@/components/dashboard/ActivityFeedWidget';
 import { PulseStripWidget } from '@/components/dashboard/PulseStripWidget';
 import { WeeklyRecapCard } from '@/components/dashboard/WeeklyRecapCard';
+import { MoneyRecapCard } from '@/components/dashboard/MoneyRecapCard';
 import { CreateChallengePayload, CREDIT_CARD_CATEGORY } from '@/types/schema';
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
 import { CreditCardActivityWidget } from '@/components/dashboard/CreditCardActivityWidget';
@@ -463,6 +464,12 @@ const Dashboard: React.FC = () => {
             must stay mounted for the ?recap= push deep link even when the
             card itself is hidden). */}
         <WeeklyRecapCard />
+
+        {/* Monthly money recap (F-MONEY-06) — budget-vs-actual close-out, fresh
+            for a few days after the 1st-of-month generation, dismissible; also
+            hosts the recap detail drawer (which must stay mounted for the
+            ?moneyrecap= push deep link even when the card itself is hidden). */}
+        <MoneyRecapCard />
 
         {/* Pending Voice Commands Banner — on the shared Section wrapper so it
             reads as the same idiom as every other widget, not a bespoke ad hoc
