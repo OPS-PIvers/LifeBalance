@@ -78,6 +78,13 @@ export function planMealMerge(group: Meal[]): MealMergePlan {
     if (!survivor.recipeUrl && !patch.recipeUrl && loser.recipeUrl) patch.recipeUrl = loser.recipeUrl;
     if (!survivor.ingredients?.length && !patch.ingredients && loser.ingredients?.length) patch.ingredients = loser.ingredients;
     if (!survivor.instructions?.length && !patch.instructions && loser.instructions?.length) patch.instructions = loser.instructions;
+    if (
+      typeof survivor.estimatedCost !== 'number' &&
+      typeof patch.estimatedCost !== 'number' &&
+      typeof loser.estimatedCost === 'number'
+    ) {
+      patch.estimatedCost = loser.estimatedCost;
+    }
   }
 
   const maxRating = Math.max(survivor.rating || 0, ...losers.map(m => m.rating || 0));

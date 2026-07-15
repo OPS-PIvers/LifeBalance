@@ -70,7 +70,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
       setIngredientQty('');
     } else {
       setMoreDetailsOpen(
-        !!(currentMeal.description || currentMeal.instructions?.length || currentMeal.recipeUrl || currentMeal.tags?.length || currentMeal.estimatedCost)
+        !!(currentMeal.description || currentMeal.instructions?.length || currentMeal.recipeUrl || currentMeal.tags?.length || typeof currentMeal.estimatedCost === 'number')
       );
     }
   }
@@ -243,7 +243,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                                 const raw = e.target.value;
                                 setCurrentMeal({
                                     ...currentMeal,
-                                    estimatedCost: raw === '' ? undefined : Math.max(0, parseFloat(raw)),
+                                    estimatedCost: raw === '' || Number.isNaN(parseFloat(raw)) ? undefined : Math.max(0, parseFloat(raw)),
                                 });
                             }}
                             placeholder="0.00"
