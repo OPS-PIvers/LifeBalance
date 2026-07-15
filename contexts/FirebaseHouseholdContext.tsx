@@ -46,6 +46,7 @@ import {
   MealPlanItem,
   ToDo,
   Insight,
+  HabitInsightsDoc,
   GroceryCatalogItem,
   Store,
   QuickStockList,
@@ -160,6 +161,7 @@ import {
 import {
   makeHouseholdSettingsMutations,
   makeRefreshInsight,
+  makeRefreshHabitPatterns,
 } from '@/contexts/household/mutations/coreMutations';
 import {
   makeAddMember,
@@ -447,6 +449,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [hasMoreInsights, setHasMoreInsights] = useState(false);
   const insightsLoadedAllRef = useRef(false);
   const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
+  // F-DASH-03 — Habit Coach card: single regenerable doc, not a history collection.
+  const [habitPatterns, setHabitPatterns] = useState<HabitInsightsDoc | null>(null);
+  const [isGeneratingHabitPatterns, setIsGeneratingHabitPatterns] = useState(false);
   const [yearlyGoals, setYearlyGoals] = useState<YearlyGoal[]>([]);
   const [freezeBank, setFreezeBank] = useState<FreezeBank | null>(null);
   // Meals: live window (most recently created MEALS_LIMIT recipes) merged with
@@ -672,6 +677,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setInsightsOlder([]);
     insightsLoadedAllRef.current = false;
     setHasMoreInsights(false);
+    setHabitPatterns(null);
     setApiKeys([]);
     setPendingItemsCount(0);
     // Drop any queued voice-command items from the previous household so the
@@ -788,6 +794,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       setHasMoreInsights: (data) => setHasMoreInsights(data),
       setInsight: (text) => setInsight(text),
       insightsLoadedAllRef,
+      setHabitPatterns: (data) => setHabitPatterns(data),
     }));
 
     // Meals + Meal Plan listeners (contexts/household/listeners/mealListeners.ts)
@@ -2076,6 +2083,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }).refreshInsight();
   }, [householdId, isGeneratingInsight, transactions, habits, insightsHistory]);
 
+  const refreshHabitPatterns = useCallback(async () => {
+    await makeRefreshHabitPatterns({
+      db,
+      householdId,
+      isGeneratingHabitPatterns,
+      habits,
+      setIsGeneratingHabitPatterns,
+    }).refreshHabitPatterns();
+  }, [householdId, isGeneratingHabitPatterns, habits]);
+
   // Freeze-bank maintenance at midnight / first login (Plan 25): refill to the
   // fixed max on a new month, otherwise auto-apply freezes to yesterday's
   // missed streaks.
@@ -2189,6 +2206,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     primaryYearlyGoal,
     rewardsInventory: rewards,
     freezeBank,
+    habitPatterns,
+    isGeneratingHabitPatterns,
+    refreshHabitPatterns,
     ...habitActions,
     updateChallenge,
     addChallenge,
@@ -2208,7 +2228,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     rolloverFreezeBankTokens,
   }), [
     dailyPoints, weeklyPoints, totalPoints, habits, activeChallenge, challenges, yearlyGoals, activeYearlyGoals,
-    primaryYearlyGoal, rewards, freezeBank, habitActions,
+    primaryYearlyGoal, rewards, freezeBank, habitPatterns, isGeneratingHabitPatterns, refreshHabitPatterns, habitActions,
     updateChallenge, addChallenge, markChallengeComplete, redeemReward,
     addReward, updateReward, deleteReward,
     requestRedemption, approveRedemption, denyRedemption,

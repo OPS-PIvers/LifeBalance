@@ -35,6 +35,7 @@ import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import { Button } from '@/components/ui/Button';
 import { InsightWidget } from '@/components/dashboard/InsightWidget';
 import { DailyHabitsWidget } from '@/components/dashboard/DailyHabitsWidget';
+import { HabitCoachWidget } from '@/components/dashboard/HabitCoachWidget';
 import { KidsChoresWidget } from '@/components/dashboard/KidsChoresWidget';
 import { ActivityFeedWidget } from '@/components/dashboard/ActivityFeedWidget';
 import { PulseStripWidget } from '@/components/dashboard/PulseStripWidget';
@@ -454,6 +455,10 @@ const Dashboard: React.FC = () => {
         {/* Today's Habits — smart-ranked compact tracker (habits domain — Plan
             090). Kept high so active / at-risk streaks lead the page. */}
         {isModuleEnabled('habits') && <DailyHabitsWidget />}
+
+        {/* Habit Coach (F-DASH-03) — wires up analyzeHabitPatterns(), a fully
+            built but previously unwired AI coaching surface (habits domain). */}
+        {isModuleEnabled('habits') && <HabitCoachWidget />}
 
         {/* Credit card activity — charges vs. paydowns this period so balances
             don't balloon (money domain). Self-nulls without any credit cards. */}

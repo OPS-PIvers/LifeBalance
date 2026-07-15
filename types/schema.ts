@@ -870,6 +870,19 @@ export interface Insight {
 }
 
 /**
+ * F-DASH-03 — Habit Coach card. Single ephemeral/regenerable doc at
+ * `households/{id}/habitInsights/current` (not a growing collection) holding
+ * the latest `analyzeHabitPatterns()` output. `HabitPatternInsight` itself
+ * lives in services/geminiService.types.ts (the AI response schema) and is
+ * imported here as a type-only reference so this file stays free of runtime
+ * AI-SDK coupling.
+ */
+export interface HabitInsightsDoc {
+  patterns: import('@/services/geminiService.types').HabitPatternInsight[];
+  generatedAt: string; // ISO timestamp
+}
+
+/**
  * Weekly recap (Plan 02) — one doc per ISO week at
  * `households/{id}/recaps/{isoWeek}`, written server-side Sundays by the
  * scheduled recap function (Admin SDK; clients only read). The synthetic `id`

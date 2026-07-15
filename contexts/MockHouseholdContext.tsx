@@ -1,5 +1,5 @@
 import React, { useState, ReactNode, useCallback, useMemo, useRef } from 'react';
-import { Info, PartyPopper, Gift } from 'lucide-react';
+import { Info, PartyPopper, Gift, Sparkles } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { format, addDays, subDays } from 'date-fns';
 import { HouseholdContextType, HouseholdSliceProviders } from './FirebaseHouseholdContext';
@@ -38,6 +38,7 @@ import {
   MealPlanItem,
   ToDo,
   Insight,
+  HabitInsightsDoc,
   GroceryCatalogItem,
   Store,
   QuickStockList,
@@ -1415,6 +1416,37 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     history: [],
   });
   const isGeneratingInsight = false;
+  // F-DASH-03 — Habit Coach: simulate the generate/store round-trip in memory
+  // so Test Mode can exercise the widget's loading + populated states without
+  // hitting Firestore or Gemini.
+  const [habitPatterns, setHabitPatterns] = useState<HabitInsightsDoc | null>(null);
+  const [isGeneratingHabitPatterns, setIsGeneratingHabitPatterns] = useState(false);
+  const refreshHabitPatterns = useCallback(async () => {
+    if (habits.length === 0) {
+      toast.error('Add some habits first to get coaching insights.');
+      return;
+    }
+    setIsGeneratingHabitPatterns(true);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    setHabitPatterns({
+      patterns: [
+        {
+          title: 'On Fire!',
+          description: `${habits[0]?.title ?? 'Your top habit'} has a strong recent streak — keep the momentum going.`,
+          type: 'praise',
+          relatedHabitId: habits[0]?.id,
+        },
+        {
+          title: 'Weekend Slump Detected',
+          description: 'Completions tend to drop off on Saturdays and Sundays — consider a lighter weekend target.',
+          type: 'suggestion',
+        },
+      ],
+      generatedAt: new Date().toISOString(),
+    });
+    setIsGeneratingHabitPatterns(false);
+    toast.success('Habit coach updated!', { icon: toastIcon(Sparkles) });
+  }, [habits]);
   const householdSettings = {
     id: 'test-household-id',
     name: 'Test Household',
@@ -1456,6 +1488,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     primaryYearlyGoal,
     rewardsInventory,
     freezeBank,
+    habitPatterns,
+    isGeneratingHabitPatterns,
+    refreshHabitPatterns,
     isGeneratingInsight,
     householdId: 'test-household-id',
     currentPeriodId,

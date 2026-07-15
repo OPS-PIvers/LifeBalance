@@ -4,6 +4,7 @@ import {
   deleteField,
   addDoc,
   collection,
+  setDoc,
   type Firestore,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
@@ -136,4 +137,59 @@ export function makeRefreshInsight(deps: {
   };
 
   return { refreshInsight };
+}
+
+/**
+ * refreshHabitPatterns (F-DASH-03) — modeled directly on `makeRefreshInsight`
+ * above. Writes to a single household-scoped doc
+ * (`households/{id}/habitInsights/current`, not a growing collection since
+ * these are ephemeral/regenerable) rather than appending to a history.
+ */
+export function makeRefreshHabitPatterns(deps: {
+  db: Firestore;
+  householdId: string | null;
+  isGeneratingHabitPatterns: boolean;
+  habits: Habit[];
+  setIsGeneratingHabitPatterns: (value: boolean) => void;
+}) {
+  const { db, householdId, isGeneratingHabitPatterns, habits, setIsGeneratingHabitPatterns } = deps;
+
+  const refreshHabitPatterns = async () => {
+    if (!householdId) return;
+
+    if (isGeneratingHabitPatterns) {
+      toast.error('Habit patterns are already being analyzed. Please wait.');
+      return;
+    }
+
+    if (!Array.isArray(habits) || habits.length === 0) {
+      toast.error('Add some habits first to get coaching insights.');
+      return;
+    }
+
+    try {
+      setIsGeneratingHabitPatterns(true);
+      toast.loading('Analyzing your habits...', { id: 'habit-patterns-loading' });
+
+      // Dynamically load Gemini service only when needed (keeps the SDK off boot).
+      const { analyzeHabitPatterns } = await import('@/services/geminiService');
+
+      const patterns = await analyzeHabitPatterns(householdId, habits);
+
+      await setDoc(doc(db, `households/${householdId}/habitInsights/current`), {
+        patterns,
+        generatedAt: new Date().toISOString(),
+      });
+
+      track('habit_patterns_generated');
+      toast.success('Habit coach updated!', { id: 'habit-patterns-loading', icon: toastIcon(Sparkles) });
+    } catch (error) {
+      console.error('Failed to analyze habit patterns:', error);
+      toast.error('Failed to analyze habit patterns', { id: 'habit-patterns-loading' });
+    } finally {
+      setIsGeneratingHabitPatterns(false);
+    }
+  };
+
+  return { refreshHabitPatterns };
 }
