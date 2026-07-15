@@ -224,7 +224,31 @@ export function makeBucketCrudMutations(deps: {
     toast.success('Limit updated');
   };
 
-  return { addBucket, updateBucket, deleteBucket, updateBucketLimit };
+  // Pay-period ceremony "set your budgets" save: updates several bucket
+  // limits in ONE writeBatch so a partial write can never apply only some of
+  // the user's chosen plan. Invalid entries (negative / non-finite) are
+  // dropped rather than corrupting a limit.
+  const setBucketLimits = async (updates: { id: string; limit: number }[]) => {
+    if (!householdId) return;
+    const valid = updates.filter(u => Number.isFinite(u.limit) && u.limit >= 0);
+    if (valid.length === 0) return;
+    try {
+      const batch = writeBatch(db);
+      for (const u of valid) {
+        batch.update(doc(db, `households/${householdId}/buckets`, u.id), {
+          limit: roundMoney(u.limit),
+        });
+      }
+      await batch.commit();
+      toast.success('Bucket budgets set');
+    } catch (error) {
+      console.error('[setBucketLimits] Failed:', error);
+      toast.error('Failed to update bucket budgets. Please try again.');
+      throw error;
+    }
+  };
+
+  return { addBucket, updateBucket, deleteBucket, updateBucketLimit, setBucketLimits };
 }
 
 /**

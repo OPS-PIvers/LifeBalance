@@ -746,6 +746,18 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Bucket updated');
   }, []);
 
+  // Pay-period ceremony save — functional so "Save budgets" is walkable in
+  // Test Mode (limits are decimal dollars; roundMoney only, never cents).
+  const setBucketLimits = useCallback(async (updates: { id: string; limit: number }[]) => {
+    setBuckets(prev => prev.map(b => {
+      const update = updates.find(u => u.id === b.id);
+      return update && Number.isFinite(update.limit) && update.limit >= 0
+        ? { ...b, limit: roundMoney(update.limit) }
+        : b;
+    }));
+    toast.success('Mock: Bucket budgets set');
+  }, []);
+
   const deleteBucket = useCallback(async (id: string) => {
     setBuckets(prev => prev.filter(b => b.id !== id));
     toast.success('Mock: Bucket deleted');
@@ -1827,6 +1839,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateBucket,
     deleteBucket,
     updateBucketLimit: noOp,
+    setBucketLimits,
     reallocateBucket,
     addTransaction,
     addTransactions,
