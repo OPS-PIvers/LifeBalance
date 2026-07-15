@@ -11,7 +11,12 @@ import {
   isValid,
   startOfISOWeek,
 } from "date-fns";
-import { streakForPeriod, getMultiplier } from "./streakLogic";
+import {
+  streakForPeriod,
+  getMultiplier,
+  pauseBridgeDates,
+  isHabitPaused,
+} from "./streakLogic";
 
 export interface Habit {
   id: string;
@@ -37,6 +42,12 @@ export interface Habit {
    */
   frozenDates?: string[];
   /**
+   * F-HABITS-01: planned-break end date (YYYY-MM-DD). While `pausedUntil >=
+   * today` the habit is excluded from the stale-reset penalty and its streak
+   * bridges the break. Mirrors `Habit.pausedUntil` in types/schema.ts.
+   */
+  pausedUntil?: string;
+  /**
    * Denormalized lowercased/trimmed `title` (see `normalizeHabitTitle` below),
    * written by the client's addHabit/updateHabit. Mirrors `Habit.titleLower`
    * in types/schema.ts. Optional/absent on un-backfilled docs.
@@ -52,6 +63,23 @@ export interface Habit {
  */
 export function normalizeHabitTitle(title: string): string {
   return title.toLowerCase().trim();
+}
+
+/**
+ * F-HABITS-01: the bridging dates a streak walk should treat as frozen — stored
+ * auto-freeze `frozenDates` PLUS the synthesized pause bridge. Mirrors
+ * `effectiveFrozenDates` in utils/habitLogic.ts.
+ */
+function effectiveFrozenDates(
+  completedDates: string[],
+  frozenDates: string[] | undefined,
+  pausedUntil: string | undefined,
+  today: string
+): string[] {
+  return [
+    ...(frozenDates ?? []),
+    ...pauseBridgeDates(completedDates, pausedUntil, today),
+  ];
 }
 
 export interface ToggleHabitResult {
@@ -133,10 +161,18 @@ function normalizeLastUpdated(
  */
 export function isHabitStale(
   habit: Pick<Habit, "id" | "period" | "lastUpdated"> &
-    Partial<Pick<Habit, "completedDates">>,
+    Partial<Pick<Habit, "completedDates" | "pausedUntil">>,
   today?: string
 ): boolean {
   try {
+    // F-HABITS-01: a habit on a planned break is never stale (no reset penalty).
+    // `pausedUntil` is a plain yyyy-MM-dd string comparison, so falling back to
+    // the UTC server date here (rather than skipping the check entirely) is
+    // safe even though Cloud Functions run in UTC — it can only be off by the
+    // pause boundary day, never cause a paused habit to be treated as active.
+    const activeToday = today || format(new Date(), "yyyy-MM-dd");
+    if (isHabitPaused(habit.pausedUntil, activeToday)) return false;
+
     if (!habit.lastUpdated) return true;
 
     const hasLocalToday = !!today && /^\d{4}-\d{2}-\d{2}$/.test(today);
@@ -233,7 +269,12 @@ export function processToggleHabit(
   let wasCompletedBefore = false;
 
   const streakFor = (dates: string[]): number =>
-    streakForPeriod(dates, habit.period, today, habit.frozenDates ?? []);
+    streakForPeriod(
+      dates,
+      habit.period,
+      today,
+      effectiveFrozenDates(dates, habit.frozenDates, habit.pausedUntil, today)
+    );
 
   if (habit.scoringType === "incremental") {
     const target = habit.targetCount > 0 ? habit.targetCount : 1;
@@ -306,7 +347,12 @@ export function processToggleHabit(
       count: newCount,
       totalCount: newTotalCount,
       completedDates: newCompletedDates,
-      streakDays: streakForPeriod(newCompletedDates, habit.period, today, habit.frozenDates ?? []),
+      streakDays: streakForPeriod(
+        newCompletedDates,
+        habit.period,
+        today,
+        effectiveFrozenDates(newCompletedDates, habit.frozenDates, habit.pausedUntil, today)
+      ),
       lastUpdated: new Date().toISOString(),
     },
     pointsChange,
@@ -342,8 +388,14 @@ export function resetStaleHabit(habit: Habit, today?: string): Partial<Habit> {
       count: 0,
       completedDates,
       // Period-aware: daily → day-based streak, weekly → ISO-week-based streak
-      // (so a weekly habit isn't collapsed to ~0 on reset).
-      streakDays: streakForPeriod(completedDates, habit.period, today, habit.frozenDates ?? []),
+      // (so a weekly habit isn't collapsed to ~0 on reset). Pause-aware bridging
+      // via effectiveFrozenDates (F-HABITS-01).
+      streakDays: streakForPeriod(
+        completedDates,
+        habit.period,
+        today,
+        effectiveFrozenDates(completedDates, habit.frozenDates, habit.pausedUntil, today)
+      ),
       lastUpdated: new Date().toISOString(),
     };
   }

@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useShopping } from '@/contexts/FirebaseHouseholdContext';
-import { Store as StoreIcon, Plus, Trash2, Edit2, Save, RotateCcw, Search, Check, ShoppingBag, Sparkles, X } from 'lucide-react';
+import { Store as StoreIcon, Plus, Trash2, Edit2, Save, RotateCcw, Search, Check, ShoppingBag, Sparkles, X, GripVertical } from 'lucide-react';
+import { Reorder, useDragControls } from 'framer-motion';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
-import { QuickStockList } from '@/types/schema';
+import { QuickStockList, Store } from '@/types/schema';
 import { STORE_COLORS, DEFAULT_STORE_COLOR } from '@/data/storeColors';
 import { TEMPLATE_ICONS } from '@/data/templateIcons';
 import toast from 'react-hot-toast';
@@ -25,6 +26,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
     addStore,
     updateStore,
     deleteStore,
+    reorderStores,
     groceryCategories,
     updateGroceryCategories,
     groceryCatalog,
@@ -66,6 +68,33 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
   const [editingStoreId, setEditingStoreId] = useState<string | null>(null);
   const [editStoreName, setEditStoreName] = useState('');
   const [editStoreColor, setEditStoreColor] = useState(DEFAULT_STORE_COLOR);
+
+  // Household visit order (F-MEALS-07): stores sorted by `order` (unset last,
+  // alpha fallback), drag-reordered via Reorder.Group. Same optimistic-local-
+  // state-while-dragging pattern as HabitCategoryList — dragItems is shown
+  // only mid-drag, then we persist and fall back to the Firestore-synced
+  // `stores` prop so there's no synchronizing useEffect.
+  const sortedStores = useMemo(() => {
+    return [...stores].sort((a, b) => {
+      const orderA = a.order ?? Number.MAX_SAFE_INTEGER;
+      const orderB = b.order ?? Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    });
+  }, [stores]);
+  const [dragStores, setDragStores] = useState<Store[]>([]);
+  const [isDraggingStores, setIsDraggingStores] = useState(false);
+  const storeItems = isDraggingStores ? dragStores : sortedStores;
+
+  const handleStoreReorder = (newOrder: Store[]) => {
+    setIsDraggingStores(true);
+    setDragStores(newOrder);
+  };
+
+  const handleStoreReorderSave = useCallback(() => {
+    setIsDraggingStores(false);
+    void reorderStores(dragStores.map(s => s.id));
+  }, [dragStores, reorderStores]);
 
   // Category Form State
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -387,77 +416,44 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                 </form>
               </Section>
 
-              {/* Store List */}
-              <Section title="My stores">
+              {/* Store List — drag the grip to set the household's shop-by-store
+                  visit order (F-MEALS-07), persisted as Store.order and
+                  consumed by the shopping list's 'store' sort mode. */}
+              <Section title="My stores" action={storeItems.length > 1 && (
+                <span className="text-xxs text-brand-400 dark:text-brand-450">Drag to reorder</span>
+              )}>
                 {stores.length === 0 ? (
                   <p className="text-sm text-brand-400 dark:text-brand-450 italic pl-1">No stores added yet.</p>
                 ) : (
-                  <SurfaceList>
-                    {stores.map(store => (
-                      editingStoreId === store.id ? (
-                        <Row key={store.id} className="flex-col items-stretch gap-2">
-                          <div className="flex gap-2 overflow-x-auto pb-1">
-                            {Object.values(STORE_COLORS).map((color) => (
-                              <button
-                                key={color.id}
-                                type="button"
-                                onClick={() => setEditStoreColor(color.id)}
-                                className={`w-6 h-6 rounded-full border-2 transition-colors duration-(--duration-fast) ease-(--ease-standard) shrink-0 ${color.bg} ${
-                                  editStoreColor === color.id ? 'border-brand-600 scale-110' : 'border-transparent hover:scale-105'
-                                }`}
-                                title={color.label}
-                                aria-label={`Select color ${color.label}`}
-                              />
-                            ))}
-                          </div>
-                          <div className="flex gap-2">
-                            <input
-                              autoFocus
-                              type="text"
-                              value={editStoreName}
-                              onChange={e => setEditStoreName(e.target.value)}
-                              className="flex-1 p-1.5 border border-brand-300 rounded-sm text-base outline-hidden dark:bg-brand-700/50 dark:border-brand-500/40 dark:text-brand-200"
-                            />
-                            <Button variant="ghost" size="icon-sm" onClick={handleUpdateStore} className="text-money-pos hover:text-money-pos hover:bg-money-bgPos dark:text-money-posDark dark:hover:text-money-posDark dark:hover:bg-money-pos/15" aria-label="Save store name"><Save className="w-4 h-4"/></Button>
-                            <Button variant="ghost" size="icon-sm" onClick={() => setEditingStoreId(null)} className="text-brand-400 hover:bg-brand-100/50 dark:hover:bg-brand-700/50" aria-label="Cancel editing"><X className="w-4 h-4"/></Button>
-                          </div>
-                        </Row>
-                      ) : (
-                        <Row key={store.id} className="justify-between">
-                          <div className="flex items-center gap-3 min-w-0">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${(STORE_COLORS[store.color || DEFAULT_STORE_COLOR] ?? STORE_COLORS[DEFAULT_STORE_COLOR]!).iconBg}`}>
-                                  <StoreIcon className="w-4 h-4" />
-                              </div>
-                              <span className="font-medium text-brand-800 dark:text-brand-200 truncate">{store.name}</span>
-                          </div>
-
-                          <div className="flex items-center gap-1 shrink-0">
-                              <Button
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  onClick={() => {
-                                      setEditingStoreId(store.id);
-                                      setEditStoreName(store.name);
-                                      setEditStoreColor(store.color || DEFAULT_STORE_COLOR);
-                                  }}
-                                  className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 dark:text-brand-450 dark:hover:text-brand-300 dark:hover:bg-brand-700/30"
-                                  aria-label={`Edit store ${store.name}`}
-                              >
-                                  <Edit2 className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                  variant="ghost-destructive"
-                                  size="icon-sm"
-                                  onClick={() => handleDeleteStore(store.id)}
-                                  aria-label={`Delete store ${store.name}`}
-                              >
-                                  <Trash2 className="w-4 h-4" />
-                              </Button>
-                          </div>
-                        </Row>
-                      )
+                  <Reorder.Group
+                    axis="y"
+                    values={storeItems}
+                    onReorder={handleStoreReorder}
+                    as="ul"
+                    className="surface-section overflow-hidden [&>*:first-child]:border-t-0 list-none"
+                    aria-label="My stores, in shopping visit order"
+                  >
+                    {storeItems.map(store => (
+                      <StoreRow
+                        key={store.id}
+                        store={store}
+                        isEditing={editingStoreId === store.id}
+                        editStoreName={editStoreName}
+                        editStoreColor={editStoreColor}
+                        onEditStoreNameChange={setEditStoreName}
+                        onEditStoreColorChange={setEditStoreColor}
+                        onStartEdit={() => {
+                          setEditingStoreId(store.id);
+                          setEditStoreName(store.name);
+                          setEditStoreColor(store.color || DEFAULT_STORE_COLOR);
+                        }}
+                        onCancelEdit={() => setEditingStoreId(null)}
+                        onSaveEdit={handleUpdateStore}
+                        onDelete={() => handleDeleteStore(store.id)}
+                        onReorderDragEnd={handleStoreReorderSave}
+                      />
                     ))}
-                  </SurfaceList>
+                  </Reorder.Group>
                 )}
               </Section>
             </div>
@@ -710,6 +706,111 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
           confirmVariant="destructive"
         />
     </Drawer>
+  );
+};
+
+interface StoreRowProps {
+  store: Store;
+  isEditing: boolean;
+  editStoreName: string;
+  editStoreColor: string;
+  onEditStoreNameChange: (value: string) => void;
+  onEditStoreColorChange: (value: string) => void;
+  onStartEdit: () => void;
+  onCancelEdit: () => void;
+  onSaveEdit: () => void;
+  onDelete: () => void;
+  onReorderDragEnd: () => void;
+}
+
+/**
+ * A single draggable store row (F-MEALS-07). Split out of the inline `.map`
+ * so the grip's `useDragControls` instance is stable per store rather than
+ * being re-created every render of the parent list.
+ */
+const StoreRow: React.FC<StoreRowProps> = ({
+  store, isEditing, editStoreName, editStoreColor,
+  onEditStoreNameChange, onEditStoreColorChange,
+  onStartEdit, onCancelEdit, onSaveEdit, onDelete, onReorderDragEnd,
+}) => {
+  const dragControls = useDragControls();
+
+  return (
+    <Reorder.Item
+      value={store}
+      dragListener={false}
+      dragControls={dragControls}
+      onDragEnd={onReorderDragEnd}
+      style={{ position: 'relative' }}
+    >
+      {isEditing ? (
+        <Row className="flex-col items-stretch gap-2">
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {Object.values(STORE_COLORS).map((color) => (
+              <button
+                key={color.id}
+                type="button"
+                onClick={() => onEditStoreColorChange(color.id)}
+                className={`w-6 h-6 rounded-full border-2 transition-colors duration-(--duration-fast) ease-(--ease-standard) shrink-0 ${color.bg} ${
+                  editStoreColor === color.id ? 'border-brand-600 scale-110' : 'border-transparent hover:scale-105'
+                }`}
+                title={color.label}
+                aria-label={`Select color ${color.label}`}
+              />
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input
+              autoFocus
+              type="text"
+              value={editStoreName}
+              onChange={e => onEditStoreNameChange(e.target.value)}
+              className="flex-1 p-1.5 border border-brand-300 rounded-sm text-base outline-hidden dark:bg-brand-700/50 dark:border-brand-500/40 dark:text-brand-200"
+            />
+            <Button variant="ghost" size="icon-sm" onClick={onSaveEdit} className="text-money-pos hover:text-money-pos hover:bg-money-bgPos dark:text-money-posDark dark:hover:text-money-posDark dark:hover:bg-money-pos/15" aria-label="Save store name"><Save className="w-4 h-4"/></Button>
+            <Button variant="ghost" size="icon-sm" onClick={onCancelEdit} className="text-brand-400 hover:bg-brand-100/50 dark:hover:bg-brand-700/50" aria-label="Cancel editing"><X className="w-4 h-4"/></Button>
+          </div>
+        </Row>
+      ) : (
+        <Row className="justify-between">
+          <div className="flex items-center gap-1 min-w-0">
+            {/* Pointer-only decoration (mirrors ListRow's grip): keyboard/AT
+                users don't get drag-reordering here, matching HabitCategoryList. */}
+            <div
+              onPointerDown={(e) => dragControls.start(e)}
+              className="touch-none cursor-grab active:cursor-grabbing p-1.5 -ml-1.5 text-brand-300 hover:text-brand-600 dark:text-brand-500 dark:hover:text-brand-300 rounded-sm shrink-0"
+              aria-hidden="true"
+            >
+              <GripVertical className="w-4 h-4" />
+            </div>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${(STORE_COLORS[store.color || DEFAULT_STORE_COLOR] ?? STORE_COLORS[DEFAULT_STORE_COLOR]!).iconBg}`}>
+                <StoreIcon className="w-4 h-4" />
+            </div>
+            <span className="font-medium text-brand-800 dark:text-brand-200 truncate">{store.name}</span>
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0">
+              <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={onStartEdit}
+                  className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 dark:text-brand-450 dark:hover:text-brand-300 dark:hover:bg-brand-700/30"
+                  aria-label={`Edit store ${store.name}`}
+              >
+                  <Edit2 className="w-4 h-4" />
+              </Button>
+              <Button
+                  variant="ghost-destructive"
+                  size="icon-sm"
+                  onClick={onDelete}
+                  aria-label={`Delete store ${store.name}`}
+              >
+                  <Trash2 className="w-4 h-4" />
+              </Button>
+          </div>
+        </Row>
+      )}
+    </Reorder.Item>
   );
 };
 

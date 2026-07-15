@@ -14,6 +14,7 @@ import {
   Pencil,
   MousePointerClick,
   ReceiptText,
+  ListTodo,
 } from 'lucide-react';
 import { getQuickAddEndpointUrl } from '@/services/apiKeyService';
 import { SurfaceList, DisclosureRow } from '@/components/ui/Section';
@@ -56,7 +57,7 @@ interface ShortcutExample {
   title: string;
   icon: React.ReactNode;
   description: string;
-  endpoint: 'habit' | 'expense' | 'shopping' | 'naturalLanguage' | 'bill';
+  endpoint: 'habit' | 'expense' | 'shopping' | 'naturalLanguage' | 'bill' | 'todo';
   isAutomation?: boolean;
   isRecommended?: boolean;
   /** Short bullets shown before the steps (prep work, what to expect). */
@@ -388,6 +389,39 @@ const EXAMPLES: ShortcutExample[] = [
       {
         text: 'Say **“Hey Siri, Add to Shopping List”**. Saying an item that’s already on the list bumps its quantity instead of duplicating it.',
       },
+    ],
+  },
+  {
+    id: 'todo',
+    title: 'Voice To-Do',
+    icon: <ListTodo className="w-5 h-5" />,
+    description: 'Say “Hey Siri, Add To-Do” and it lands on your shared LifeBalance list.',
+    endpoint: 'todo',
+    setupSteps: [
+      { text: NEW_SHORTCUT_STEP },
+      { text: 'Add **Ask for Input**. Tap **Prompt** and type **What do you need to do?**' },
+      { text: 'Add **Set Variable** → tap **Variable Name** → call it **Task**.' },
+    ],
+    fields: [
+      { key: 'text', type: 'Text', mode: 'variable', value: 'Task' },
+      {
+        key: 'assignedTo',
+        type: 'Text',
+        mode: 'typeIn',
+        value: 'Sam',
+        hint: 'Optional — a household member’s name; close spelling still matches. Skip this field for unassigned.',
+      },
+    ],
+    finishSteps: [
+      { text: SHOW_RESPONSE_STEP },
+      { text: 'Tap the shortcut’s name at the top → **Rename** → call it **Add To-Do**.' },
+      {
+        text: 'Say **“Hey Siri, Add To-Do”**, speak the task, and it appears on the To-Dos tab.',
+      },
+    ],
+    after: [
+      'No due date? It defaults to today — edit it later from the To-Dos tab.',
+      'An **assignedTo** name that matches two members (or none) is rejected rather than guessed — leave it blank to skip assignment.',
     ],
   },
   {
