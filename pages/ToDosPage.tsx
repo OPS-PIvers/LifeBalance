@@ -918,6 +918,7 @@ const ToDosPage: React.FC = () => {
                 items={immediate}
                 color="rose"
                 onComplete={completeToDo}
+                onUncomplete={handleUncomplete}
                 onEdit={openEditModal}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
@@ -938,6 +939,7 @@ const ToDosPage: React.FC = () => {
                 color="amber"
                 maxVisible={5}
                 onComplete={completeToDo}
+                onUncomplete={handleUncomplete}
                 onEdit={openEditModal}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
@@ -958,6 +960,7 @@ const ToDosPage: React.FC = () => {
                 color="blue"
                 maxVisible={5}
                 onComplete={completeToDo}
+                onUncomplete={handleUncomplete}
                 onEdit={openEditModal}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
@@ -981,6 +984,7 @@ const ToDosPage: React.FC = () => {
               isSelectionMode={isSelectionMode}
               selectedIds={selectedIds}
               onComplete={completeToDo}
+              onUncomplete={handleUncomplete}
               onEdit={openEditModal}
               onDelete={deleteToDo}
               onDuplicate={handleDuplicate}

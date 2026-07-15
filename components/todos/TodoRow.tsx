@@ -4,11 +4,13 @@ import { format, isToday, isTomorrow, parseISO, isBefore, startOfToday } from 'd
 import { ToDo, HouseholdMember } from '@/types/schema';
 import { DEFAULT_TODO_POINTS } from '@/utils/todoPoints';
 import toast from 'react-hot-toast';
+import { toastIcon } from '@/components/ui/toastIcon';
 import { haptic } from '@/utils/haptics';
 import { HapticCheck } from '@/components/ui/HapticCheck';
 import { SwipeActionRow } from '@/components/ui/SwipeActionRow';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import { Button } from '@/components/ui/Button';
+import { UndoToast } from '@/components/ui/UndoToast';
 import { cn } from '@/utils/cn';
 import { type SectionColor, dateColorMap } from './todoDisplay';
 
@@ -24,6 +26,7 @@ export interface TodoRowProps {
   isSelected: boolean;
   isSelectionMode: boolean;
   onComplete: (id: string) => void;
+  onUncomplete: (id: string) => void;
   onEdit: (todo: ToDo) => void;
   onDelete: (id: string) => void;
   onDuplicate: (todo: ToDo) => void;
@@ -43,6 +46,7 @@ export const TodoRow = React.memo(function TodoRow({
   isSelected,
   isSelectionMode,
   onComplete,
+  onUncomplete,
   onEdit,
   onDelete,
   onDuplicate,
@@ -61,10 +65,34 @@ export const TodoRow = React.memo(function TodoRow({
   const hasNotes = Boolean(item.notes && item.notes.trim().length > 0);
 
   // Shared by the checkbox control and the right-swipe action.
+  //
+  // Undo toast (F-TODO-11, mirrors ShoppingListTab's DeleteUndoToast):
+  // completing a to-do assigned to a MANAGED KID credits that kid's
+  // member.points in the same writeBatch as the completion (see
+  // `completeToDo` / `computeTodoCompletionCredit` in todoMutations.ts). A
+  // plain `onUncomplete` (updateToDo) only flips `isCompleted` back — it does
+  // NOT reverse that points credit, so offering "Undo" there would silently
+  // leave the kid over-credited. Suppress the undo action (plain success
+  // toast) for kid-assigned tasks; every other assignee gets Undo.
   const handleComplete = async () => {
     try {
       await onComplete(item.id);
-      toast.success('To-Do completed!');
+      if (assignee?.isManaged === true) {
+        toast.success('To-Do completed!');
+      } else {
+        toast(
+          (t) => (
+            <UndoToast
+              message="To-Do completed"
+              onUndo={() => {
+                toast.dismiss(t.id);
+                onUncomplete(item.id);
+              }}
+            />
+          ),
+          { duration: 5000, icon: toastIcon(Check) }
+        );
+      }
     } catch (error) {
       console.error('Failed to complete task:', error);
       toast.error('Failed to complete to-do');
