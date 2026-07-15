@@ -41,6 +41,20 @@ export interface NotificationPreferences {
   monthlyMoneyRecap?: {
     enabled: boolean;
   };
+  // F-NOTIF-03 (digest mode): one consolidated push at `time` instead of the
+  // four separate hourly-job pushes. Mirrors types/schema.ts NotificationPreferences.
+  digestMode?: {
+    enabled: boolean;
+    time: string;
+  };
+  // F-DASH-02 (AI daily briefing): per-member opt-IN for the morning briefing
+  // push. Unlike the recaps this defaults OFF (a new, higher-frequency channel)
+  // — the senddailybriefing job requires an explicit `enabled: true`. `time` is
+  // the member-local HH:MM the briefing is sent at (default 08:00).
+  dailyBriefing?: {
+    enabled: boolean;
+    time: string;
+  };
   timezone?: string;
 }
 
@@ -72,6 +86,9 @@ export interface HouseholdMember {
  *     matching that fail-open spirit. Note the weekly recap job additionally
  *     gates on premium status server-side — that's a separate check the recap
  *     job still performs; this flag only answers "is a push category live".
+ *   - digestMode: counted enabled only when `.enabled === true`, same as the
+ *     four per-type toggles — a member relying solely on the digest (all four
+ *     per-type toggles off) must still match the collection-group query.
  *
  * Kept in perfect parity with the client copy in utils/notificationFlags.ts —
  * mirror any change there.
@@ -90,8 +107,10 @@ export function computeAnyNotificationsEnabled(
   return (
     prefs.habitReminders?.enabled === true ||
     prefs.actionQueueReminders?.enabled === true ||
+    prefs.digestMode?.enabled === true ||
     prefs.streakWarnings?.enabled === true ||
     prefs.billReminders?.enabled === true ||
+    prefs.dailyBriefing?.enabled === true ||
     weeklyRecapEnabled
   );
 }

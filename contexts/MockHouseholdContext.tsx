@@ -7,6 +7,7 @@ import { getLocalDateString } from '@/utils/dateHelpers';
 import { rollRecurringAnchorForward } from '@/utils/calendarRecurrence';
 import { hashKidPin } from '@/utils/kidPin';
 import { computeTodoCompletionCredit } from '@/utils/todoPoints';
+import { buildNextRecurringTodo } from '@/utils/todoRecurrence';
 import { buildToDosFromTemplate } from '@/utils/taskTemplates';
 import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
 import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
@@ -48,6 +49,7 @@ import {
   Household,
   FreezeBank,
   ModuleKey,
+  DietaryProfile,
   WeeklyRecap,
   MonthlyMoneyRecap,
   NotificationLogEntry,
@@ -396,6 +398,13 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       isImportant: true,
       createdBy: 'test-user-id',
       createdAt: new Date().toISOString(),
+      // F-TODO-08: seed a subtask checklist so the progress chip + expandable
+      // list are walkable in Test Mode.
+      subtasks: [
+        { id: 'st_vac_1', text: 'Pick destination', isDone: true },
+        { id: 'st_vac_2', text: 'Book flights', isDone: false },
+        { id: 'st_vac_3', text: 'Reserve hotel', isDone: false },
+      ],
     },
     {
       id: 'todo_later_1',
@@ -548,7 +557,15 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       premium: true,
     }];
   });
-  const [insightsHistory] = useState<Insight[]>([]);
+  // F-DASH-11 — seeded with one entry so the thumbs up/down feedback UI is
+  // walkable in Test Mode; rateInsight below mutates it in-memory like the
+  // real household context.
+  const [insightsHistory, setInsightsHistory] = useState<Insight[]>([{
+    id: 'mock-insight-1',
+    text: 'Test Mode: This is mock data for AI testing',
+    generatedAt: new Date().toISOString(),
+    type: 'general',
+  }]);
   const [insight] = useState("Test Mode: This is mock data for AI testing");
   const [stores, setStores] = useState<Store[]>(SEED_STORES);
   const [groceryCategories, setGroceryCategories] = useState<string[]>([]);
@@ -560,6 +577,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // legacy household. Toggling a module mutates this in-memory map so the dynamic
   // footer / route guards / Plan-tab fallback are all walkable in Test Mode.
   const [moduleVisibility, setModuleVisibilityState] = useState<Partial<Record<ModuleKey, boolean>>>({});
+  // F-MEALS-03 — standing household dietary profile, undefined until set (mirrors
+  // a legacy household with no restrictions recorded).
+  const [dietaryProfile, setDietaryProfileState] = useState<DietaryProfile | undefined>(undefined);
+  // F-MEALS-04 — habit auto-credited when a meal-plan item is marked cooked.
+  const [mealCookedHabitId, setMealCookedHabitIdState] = useState<string | undefined>(undefined);
 
   // Account operations
   const addAccount = useCallback(async (account: Omit<Account, 'id'>) => {
@@ -645,6 +667,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success(`Mock: ${key} ${value ? 'enabled' : 'disabled'}`);
   }, []);
 
+  const setDietaryProfile = useCallback(async (profile: DietaryProfile) => {
+    setDietaryProfileState(profile);
+    toast.success('Mock: Dietary profile updated');
+  }, []);
+
   const updateModuleVisibility = useCallback(async (patch: Partial<Record<ModuleKey, boolean>>) => {
     setModuleVisibilityState(prev => ({ ...prev, ...patch }));
     toast.success('Mock: modules updated');
@@ -659,6 +686,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     // Hash for real so the Test-Mode exit-PIN flow verifies like production.
     setKidModePinHash(await hashKidPin(pin));
     toast.success('Mock: Kid Mode PIN set');
+  }, []);
+
+  const setMealCookedHabitId = useCallback(async (habitId: string | null) => {
+    setMealCookedHabitIdState(habitId ?? undefined);
+    toast.success(habitId ? 'Mock: Cook habit linked' : 'Mock: Cook habit unlinked');
   }, []);
 
   const updateAccountBalance = useCallback(async (id: string, newBalance: number) => {
@@ -1560,6 +1592,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     redemptionHistory,
     unlockedRewardIds,
     moduleVisibility,
+    dietaryProfile,
+    mealCookedHabitId,
     // F-DASH-06: seed a nonzero today's usage so the InsightWidget AI-usage
     // caption is visible/walkable in Test Mode.
     aiUsage: { dailyCount: 1, lastResetDate: getLocalDateString() },
@@ -1728,9 +1762,21 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       if (completedTodo.isCompleted) {
         return; // already completed — avoid duplicate points
       }
-      setTodos(prev => prev.map(t =>
-        t.id === id ? { ...t, isCompleted: true, completedAt: new Date().toISOString() } : t,
-      ));
+      // F-TODO-01: recurring todos spawn their next instance on completion,
+      // mirroring the atomic completion+spawn in makeCompleteToDo.
+      const nextInstance = buildNextRecurringTodo(completedTodo, getLocalDateString());
+      setTodos(prev => {
+        const updated = prev.map(t =>
+          t.id === id ? { ...t, isCompleted: true, completedAt: new Date().toISOString() } : t,
+        );
+        if (!nextInstance) return updated;
+        return [...updated, {
+          ...nextInstance,
+          id: generateId(),
+          createdAt: new Date().toISOString(),
+          createdBy: completedTodo.createdBy,
+        } as ToDo];
+      });
       setMembers(prev => {
         const credit = computeTodoCompletionCredit(completedTodo, prev);
         if (!credit) return prev;
@@ -1771,6 +1817,15 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     approveRedemption,
     denyRedemption,
     refreshInsight: noOp,
+    // F-DASH-11 — mirrors makeRateInsight's shape (updates the doc + a
+    // feedbackAt timestamp) but in-memory.
+    rateInsight: useCallback(async (insightId: string, feedback: 'up' | 'down') => {
+      setInsightsHistory(prev => prev.map(i =>
+        i.id === insightId ? { ...i, feedback, feedbackAt: new Date().toISOString() } : i
+      ));
+      track('insight_rated', { feedback });
+      toast.success(`Mock: Insight marked ${feedback === 'up' ? 'helpful' : 'not helpful'}`);
+    }, []),
     createYearlyGoal: noOp,
     updateYearlyGoal: noOp,
     updateYearlyGoalProgress: noOp,
@@ -1825,6 +1880,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     setModuleVisibility,
     updateModuleVisibility,
     setKidModePin,
+    setDietaryProfile,
+    setMealCookedHabitId,
     addKidProfile,
     updateKidProfile,
     removeKidProfile,
