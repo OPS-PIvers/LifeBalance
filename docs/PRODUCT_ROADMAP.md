@@ -382,6 +382,7 @@ explorations against this table.
 | `notification_opened` | App boots from a push-notification click — the SW tags the URL with `?nsrc=<type>`, the client reads + strips it (`utils/notificationSource.ts`, `public/sw.js`) | `type` — `habit_reminder` \| `action_queue_reminder` \| `streak_warning` \| `bill_reminder` \| `budget_alert` \| `test_notification` |
 | `recap_viewed` | Weekly recap detail drawer opens (`components/dashboard/WeeklyRecapCard.tsx`) | `isoWeek` — the recap's ISO week; `source` — `card` \| `push` |
 | `recap_push_opened` | App arrives via the weekly recap push deep link (`?recap=<isoWeek>`, consumed by `utils/recapParam.ts`) | — |
+| `recap_shared` | Share button in `WeeklyRecapDrawer` generates the canvas share card (`utils/recapShareCard.ts`) | `isoWeek`; `method` — `shared` (Web Share API) \| `downloaded` (fallback) |
 | `duplicate_merged` | A `possibleDuplicateOf`-flagged transaction pair is merged (`mergeTransactions` in the context, or the Merge action in `TransactionReviewForm`) | `source` — the deleted duplicate row's `Transaction.source` |
 | `setup_checklist_item_completed` | A post-onboarding setup checklist item (`components/dashboard/SetupChecklistCard.tsx`) transitions from undone to done | `item` — the item id (`bucket` \| `notifications` \| `invite` \| `bank`) |
 | `duplicate_kept_both` | A `possibleDuplicateOf` flag is dismissed without merging (`keepBothTransactions` / the Keep-both action) | — |

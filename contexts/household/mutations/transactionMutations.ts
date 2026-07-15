@@ -136,6 +136,10 @@ export function makeAddTransaction(deps: {
       if (tx.notes && tx.notes.trim()) {
         docData.notes = tx.notes.trim();
       }
+      // F-DASH-04: grouping key shared by all transactions split from one receipt.
+      if (tx.receiptGroupId && tx.receiptGroupId.trim()) {
+        docData.receiptGroupId = tx.receiptGroupId.trim();
+      }
 
       // VERIFIED-ONLY, ACCOUNT-ROUTED BALANCE: a new transaction touches a
       // balance only if it is created `verified`. A `pending_review` capture
@@ -185,6 +189,108 @@ export function makeAddTransaction(deps: {
   };
 
   return { addTransaction };
+}
+
+/**
+ * addTransactions (F-DASH-04) — write SEVERAL new transactions plus their
+ * combined per-account balance effects in a SINGLE writeBatch, so a receipt
+ * split into N categorized transactions can never partially apply (owner note:
+ * keep the atomic-batch convention). Mirrors `makeAddTransaction`'s field
+ * building and verified-only balance routing, accumulated per-account (a batch
+ * must not write the same account doc twice). An empty list is a no-op.
+ */
+export function makeAddTransactions(deps: {
+  db: Firestore;
+  householdId: string | null;
+  user: { uid: string } | null;
+  householdSettings: Household | null;
+  accounts: Account[];
+}) {
+  const { db, householdId, user, householdSettings, accounts } = deps;
+
+  const addTransactions = async (
+    txs: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[],
+  ) => {
+    if (!householdId) throw new Error('No household selected');
+    if (!user) throw new Error('Not authenticated');
+    if (txs.length === 0) return;
+
+    // Validate every row up front so one bad item fails the whole batch cleanly
+    // (all-or-nothing, matching the single-transaction validation in addTransaction).
+    for (const tx of txs) {
+      if (typeof tx.amount !== 'number' || isNaN(tx.amount)) throw new Error('Invalid amount');
+      if (!tx.merchant || typeof tx.merchant !== 'string' || !tx.merchant.trim()) throw new Error('Invalid merchant');
+      if (!tx.category || typeof tx.category !== 'string') throw new Error('Invalid category');
+      if (!tx.date || typeof tx.date !== 'string') throw new Error('Invalid date');
+      if (!['verified', 'pending_review'].includes(tx.status)) throw new Error('Invalid status');
+    }
+
+    try {
+      const batch = writeBatch(db);
+      const deltasByAccountId = new Map<string, number>();
+
+      for (const tx of txs) {
+        const roundedAmount = roundMoney(tx.amount);
+        const payPeriodId = getPayPeriodForTransaction(tx.date, householdSettings?.lastPaycheckDate);
+
+        const docData: Record<string, unknown> = {
+          amount: roundedAmount,
+          merchant: tx.merchant.trim(),
+          category: tx.category,
+          date: tx.date,
+          status: tx.status,
+          isRecurring: tx.isRecurring ?? false,
+          source: tx.source || 'camera-scan',
+          autoCategorized: tx.autoCategorized ?? true,
+          payPeriodId: payPeriodId || null,
+          createdBy: user.uid,
+          createdAt: serverTimestamp(),
+        };
+        if (tx.relatedHabitIds && tx.relatedHabitIds.length > 0) docData.relatedHabitIds = tx.relatedHabitIds;
+        if (tx.store && tx.store.trim()) docData.store = tx.store.trim();
+        const trimmedAccountId = tx.accountId && tx.accountId.trim() ? tx.accountId.trim() : undefined;
+        if (trimmedAccountId) docData.accountId = trimmedAccountId;
+        if (tx.creditPayment === true) docData.creditPayment = true;
+        if (tx.notes && tx.notes.trim()) docData.notes = tx.notes.trim();
+        if (tx.receiptGroupId && tx.receiptGroupId.trim()) docData.receiptGroupId = tx.receiptGroupId.trim();
+
+        const txRef = doc(collection(db, `households/${householdId}/transactions`));
+        batch.set(txRef, docData);
+
+        // VERIFIED-ONLY, ACCOUNT-ROUTED BALANCE (see addTransaction): a
+        // pending_review row moves no balance; a verified row applies its
+        // account-aware impact. Accumulate per-account so the batch writes each
+        // account doc at most once.
+        const target = resolveTargetAccount(trimmedAccountId, accounts);
+        const balanceDelta = effectiveAccountImpact(
+          { amount: roundedAmount, category: tx.category, creditPayment: tx.creditPayment, status: tx.status },
+          target,
+        );
+        if (balanceDelta !== 0 && target) {
+          deltasByAccountId.set(target.id, (deltasByAccountId.get(target.id) ?? 0) + balanceDelta);
+        }
+      }
+
+      for (const [accId, delta] of deltasByAccountId) {
+        const rounded = roundMoney(delta);
+        if (rounded !== 0) {
+          batch.update(doc(db, `households/${householdId}/accounts`, accId), {
+            balance: increment(rounded),
+            lastUpdated: serverTimestamp(),
+          });
+        }
+      }
+
+      await batch.commit();
+
+      for (const tx of txs) track('transaction_added', { source: tx.source || 'camera-scan' });
+    } catch (error) {
+      console.error('[addTransactions] Failed:', error);
+      throw error;
+    }
+  };
+
+  return { addTransactions };
 }
 
 /**

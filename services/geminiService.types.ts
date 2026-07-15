@@ -24,6 +24,33 @@ export interface ReceiptData {
 }
 
 // ---------------------------------------------------------------------------
+// Itemized receipt line-item splitting (F-DASH-04)
+// ---------------------------------------------------------------------------
+
+/**
+ * One extracted line from an itemized receipt: a purchased item's description,
+ * its price in decimal dollars, and the budget category it best fits.
+ */
+export interface ReceiptLineItem {
+  description: string;
+  amount: number;
+  category: string;
+}
+
+/**
+ * The full result of `parseReceiptLineItems`: the shared merchant/date/store for
+ * the whole receipt plus every extracted line item. The caller splits these into
+ * several categorized transactions (grouped by category) that share one
+ * `receiptGroupId`.
+ */
+export interface ReceiptLineItemsData {
+  merchant: string;
+  date?: string;
+  store?: string;
+  items: ReceiptLineItem[];
+}
+
+// ---------------------------------------------------------------------------
 // Natural-language command parsing
 // ---------------------------------------------------------------------------
 
