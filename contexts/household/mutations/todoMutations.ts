@@ -24,6 +24,8 @@ import { todoConverter } from '@/utils/firestoreConverters';
 import { ToDo, HouseholdMember } from '@/types/schema';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { computeTodoCompletionCredit } from '@/utils/todoPoints';
+import { buildNextRecurringTodo } from '@/utils/todoRecurrence';
+import { getLocalDateString } from '@/utils/dateHelpers';
 import { TODO_COMPLETED_PAGE_SIZE } from '@/utils/listenerWindows';
 import { mergeById, mapTodoDoc } from '@/contexts/household/selectors';
 import type { User } from 'firebase/auth';
@@ -137,6 +139,30 @@ export function makeCompleteToDo(deps: {
   const { db, householdId, membersRef } = deps;
 
   /**
+   * Commits the completion (and optional points credit) WITHOUT the recurring
+   * next-instance spawn. Used as the graceful fallback when the full batch is
+   * rejected — e.g. before the Firestore rules whitelist adds the `recurrence`
+   * field (see the F-TODO-01 note in the PR), a batch that `set`s a doc with
+   * `recurrence` fails, but the user's completion must still succeed.
+   */
+  const commitCompletionOnly = async (
+    hid: string,
+    todoRef: ReturnType<typeof doc>,
+    credit: ReturnType<typeof computeTodoCompletionCredit>,
+  ) => {
+    const batch = writeBatch(db);
+    batch.update(todoRef, { isCompleted: true, completedAt: serverTimestamp() });
+    if (credit) {
+      batch.update(doc(db, `households/${hid}/members`, credit.memberUid), {
+        'points.daily': increment(credit.points),
+        'points.weekly': increment(credit.points),
+        'points.total': increment(credit.points),
+      });
+    }
+    await batch.commit();
+  };
+
+  /**
    * Marks a to-do item as completed.
    *
    * Toast Behavior: Toast notifications are omitted from this function to allow UI-specific messaging.
@@ -172,6 +198,13 @@ export function makeCompleteToDo(deps: {
       }
       const credit = computeTodoCompletionCredit(todo, membersRef.current);
 
+      // F-TODO-01: for a recurring to-do, spawn the next instance in the SAME
+      // writeBatch as the completion so the two can never diverge (matching the
+      // payCalendarItem atomicity convention). buildNextRecurringTodo returns
+      // null for non-recurring todos, so this is byte-for-byte the prior
+      // behaviour for every existing (non-recurring) todo.
+      const nextInstance = buildNextRecurringTodo(todo, getLocalDateString());
+
       const batch = writeBatch(db);
       batch.update(todoRef, {
         isCompleted: true,
@@ -185,7 +218,30 @@ export function makeCompleteToDo(deps: {
           'points.total': increment(credit.points),
         });
       }
-      await batch.commit();
+      if (nextInstance) {
+        // Pre-generate a doc ref and set() it in-batch (atomic spawn).
+        const nextRef = doc(collection(db, `households/${householdId}/todos`));
+        batch.set(nextRef, {
+          ...sanitizeFirestoreData(nextInstance),
+          createdAt: serverTimestamp(),
+          createdBy: todo.createdBy,
+        });
+      }
+
+      try {
+        await batch.commit();
+      } catch (error) {
+        // Graceful degradation: if the spawn write is rejected (e.g. the
+        // Firestore rules whitelist has not yet added the `recurrence` field),
+        // still complete the task so the user isn't blocked. The next instance
+        // simply won't be created until the rules ship.
+        if (nextInstance) {
+          console.warn('[completeToDo] Recurring spawn rejected; completing without it:', error);
+          await commitCompletionOnly(householdId, todoRef, credit);
+        } else {
+          throw error;
+        }
+      }
       // Note: Toast removed to allow UI-specific messaging (consistent with other CRUD operations)
     } catch (error) {
       console.error('[completeToDo] Failed:', error);

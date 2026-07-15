@@ -60,6 +60,7 @@ vi.mock('lucide-react', () => ({
   Rows3: () => <div data-testid="rows3-icon" />,
   Grid2x2: () => <div data-testid="grid2x2-icon" />,
   Smartphone: () => <div data-testid="smartphone-icon" />,
+  Repeat: () => <div data-testid="repeat-icon" />,
   Info: () => <div data-testid="info-icon" />,
   // data/templateIcons.ts — pulled in transitively by TaskTemplateDrawer.
   ShoppingBag: () => <div data-testid="shoppingbag-icon" />,
