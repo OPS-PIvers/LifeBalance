@@ -17,6 +17,7 @@ export interface EisenhowerMatrixViewProps {
   isSelectionMode: boolean;
   selectedIds: ReadonlySet<string>;
   onComplete: (id: string) => void;
+  onUncomplete: (id: string) => void;
   onEdit: (todo: ToDo) => void;
   onDelete: (id: string) => void;
   onDuplicate: (todo: ToDo) => void;
@@ -33,6 +34,7 @@ export const EisenhowerMatrixView: React.FC<EisenhowerMatrixViewProps> = ({
   isSelectionMode,
   selectedIds,
   onComplete,
+  onUncomplete,
   onEdit,
   onDelete,
   onDuplicate,
@@ -52,6 +54,7 @@ export const EisenhowerMatrixView: React.FC<EisenhowerMatrixViewProps> = ({
         color={QUADRANT_SECTIONS[q].color}
         maxVisible={q === 'later' ? 5 : undefined}
         onComplete={onComplete}
+        onUncomplete={onUncomplete}
         onEdit={onEdit}
         onDelete={onDelete}
         onDuplicate={onDuplicate}

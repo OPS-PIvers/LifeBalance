@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MoreVertical, Download, Sparkles, ListOrdered, Settings, Archive } from 'lucide-react';
+import { MoreVertical, Download, Sparkles, ListOrdered, Settings, CalendarClock, Archive } from 'lucide-react';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 
 /**
@@ -17,8 +17,11 @@ export interface HabitsHeaderMenuProps {
   onAdjust: () => void;
   onReorder: () => void;
   onManage: () => void;
+  onCatchUpYesterday: () => void;
   /** Disable the actions that operate on existing habits (Export/Adjust/Reorder). */
   actionsDisabled?: boolean;
+  /** Disable "Catch up yesterday" specifically — nothing eligible to catch up. */
+  catchUpDisabled?: boolean;
   /**
    * Show the "Smart adjust"/"Smart reorder" AI power-tool items. Defaults to
    * `true`; pass `false` when `powerToolsEnabled` is off (Plan 17) so the menu
@@ -35,7 +38,9 @@ const HabitsHeaderMenu: React.FC<HabitsHeaderMenuProps> = ({
   onAdjust,
   onReorder,
   onManage,
+  onCatchUpYesterday,
   actionsDisabled = false,
+  catchUpDisabled = false,
   showSmartTools = true,
   onToggleArchived,
   showingArchived = false,
@@ -44,6 +49,14 @@ const HabitsHeaderMenu: React.FC<HabitsHeaderMenuProps> = ({
 
   const items: MenuItem[] = [
     { key: 'manage', label: 'Manage habits', icon: <Settings size={16} />, onSelect: onManage, tone: 'primary' },
+    {
+      key: 'catch-up',
+      label: 'Catch up yesterday',
+      icon: <CalendarClock size={16} />,
+      onSelect: onCatchUpYesterday,
+      disabled: catchUpDisabled,
+      ariaLabel: "Complete yesterday's forgotten habits for today",
+    },
     ...(showSmartTools
       ? [
           { key: 'adjust', label: 'Smart adjust', icon: <Sparkles size={16} />, onSelect: onAdjust, disabled: actionsDisabled },

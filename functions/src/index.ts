@@ -13,6 +13,7 @@ import {
   type HouseholdMember,
 } from "./shared/notifications";
 import { writeProactiveInsight, type ProactiveCapHouseholdDoc } from "./insights/writeProactiveInsight";
+import { buildActionsDataField, isBillReminderSnoozed } from "./shared/notificationActions";
 
 // Re-export for consumers that imported this from index.ts before the
 // extraction to shared/notifications.ts.
@@ -21,7 +22,7 @@ export { isTimeToSend } from "./shared/notifications";
 admin.initializeApp();
 
 // Export Quick Add HTTP functions for iOS Shortcuts
-export { quickAddHabit, quickAddExpense, quickAddShoppingItem, quickAddNaturalLanguage, quickAddBillPay } from "./quickAdd";
+export { quickAddHabit, quickAddExpense, quickAddShoppingItem, quickAddNaturalLanguage, quickAddBillPay, quickAddTodo } from "./quickAdd";
 
 // Export the Gemini API proxy (holds the GEMINI_API_KEY secret server-side).
 export { geminiproxy } from "./geminiProxy";
@@ -119,7 +120,8 @@ export const sendhabitreminders = onSchedule("every 1 hours", async () => {
             type: "habit_reminder",
             url: "/habits",
           },
-          memberDoc.ref
+          memberDoc.ref,
+          { householdId: group.householdId, recipientUid: member.uid, type: "habit_reminder" }
         );
       } else {
         logger.info(`Member ${member.uid}: not time to send yet (current check didn't match scheduled time)`);
@@ -193,7 +195,8 @@ export const sendactionqueuereminders = onSchedule(
                 type: "action_queue_reminder",
                 url: "/dashboard",
               },
-              memberDoc.ref
+              memberDoc.ref,
+              { householdId: group.householdId, recipientUid: member.uid, type: "action_queue_reminder" }
             );
           } else {
             logger.info(`Member ${member.uid}: no todos for today, skipping notification`);
@@ -271,7 +274,8 @@ export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
               type: "streak_warning",
               url: "/habits",
             },
-            memberDoc.ref
+            memberDoc.ref,
+            { householdId: group.householdId, recipientUid: member.uid, type: "streak_warning" }
           );
 
           // Proactive insight (plan 02 part C): "streak rescue". Piggybacks on
@@ -496,6 +500,15 @@ export const sendbillreminders = onSchedule(
             prefs.timezone || "UTC",
             "yyyy-MM-dd"
           );
+
+          // F-NOTIF-05: honor a "Snooze 1 day" push action. The client wrote
+          // billReminders.snoozedUntil (yyyy-MM-dd local); suppress the reminder
+          // while today is on or before that date.
+          if (isBillReminderSnoozed(prefs.billReminders.snoozedUntil, localToday)) {
+            logger.info(`Member ${member.uid}: bill reminders snoozed until ${prefs.billReminders.snoozedUntil}, skipping`);
+            continue;
+          }
+
           const [ly, lm, ld] = localToday.split("-").map(Number);
           const targetDateObj = new Date(
             Date.UTC(ly ?? 2000, (lm ?? 1) - 1, (ld ?? 1) + daysAhead)
@@ -533,8 +546,16 @@ export const sendbillreminders = onSchedule(
               {
                 type: "bill_reminder",
                 url: "/budget",
+                // F-NOTIF-05: inline action buttons ("Pay bill"/"Snooze 1 day").
+                // JSON string (FCM data values must be strings); the SW renders
+                // them and deep-links back with ?nact=<action>. Undefined key is
+                // dropped by the spread so non-action types are unaffected.
+                ...(buildActionsDataField("bill_reminder")
+                  ? { actions: buildActionsDataField("bill_reminder") as string }
+                  : {}),
               },
-              memberDoc.ref
+              memberDoc.ref,
+              { householdId: group.householdId, recipientUid: member.uid, type: "bill_reminder" }
             );
           } else {
             logger.info(`Member ${member.uid}: no upcoming bills, skipping notification`);
@@ -606,7 +627,8 @@ export const sendbudgetalerts = onDocumentWritten(
             type: "budget_alert",
             url: "/budget",
           },
-          memberDoc.ref
+          memberDoc.ref,
+          { householdId, recipientUid: member.uid, type: "budget_alert" }
         );
       }
     }

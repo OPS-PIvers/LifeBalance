@@ -54,11 +54,18 @@ const byEntryOrder = (a: ShoppingItem, b: ShoppingItem) => {
  * order already reads like a typical store: Produce → Dairy → Meat → Pantry →
  * … → Uncategorized); categories not in the list sort after known ones,
  * alphabetically, so custom/legacy categories still group together.
+ *
+ * `storeOrder` (F-MEALS-07) maps a store's *name* (case-insensitive) to its
+ * household-configured `Store.order` for 'store' mode, so groups walk in
+ * visit order instead of alphabetically. Stores without a configured order
+ * (or items whose `store` string doesn't match a known store) fall back to
+ * alphabetical, sorting after every explicitly-ordered store.
  */
 export function sortShoppingItems(
   items: ShoppingItem[],
   mode: ShoppingSortMode,
-  categoryOrder: readonly string[] = []
+  categoryOrder: readonly string[] = [],
+  storeOrder: ReadonlyMap<string, number> = new Map()
 ): ShoppingItem[] {
   const sorted = [...items];
 
@@ -74,6 +81,11 @@ export function sortShoppingItems(
         if (!storeA && !storeB) return byName(a, b);
         if (!storeA) return 1;
         if (!storeB) return -1;
+        const idxA = storeOrder.get(storeA.toLowerCase());
+        const idxB = storeOrder.get(storeB.toLowerCase());
+        if (idxA !== undefined && idxB !== undefined && idxA !== idxB) return idxA - idxB;
+        if (idxA !== undefined && idxB === undefined) return -1;
+        if (idxA === undefined && idxB !== undefined) return 1;
         const cmp = storeA.localeCompare(storeB, undefined, { sensitivity: 'base' });
         return cmp !== 0 ? cmp : byName(a, b);
       });

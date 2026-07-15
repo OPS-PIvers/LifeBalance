@@ -15,6 +15,7 @@ export interface SectionProps {
   items: ToDo[];
   color: SectionColor;
   onComplete: (id: string) => void;
+  onUncomplete: (id: string) => void;
   onEdit: (todo: ToDo) => void;
   onDelete: (id: string) => void;
   onDuplicate: (todo: ToDo) => void;
@@ -41,7 +42,7 @@ export interface SectionProps {
 // Uses a custom memo comparator: when `selectedIds` changes, re-render is skipped unless
 // at least one of this section's own items changed its selected/deselected state.
 // This prevents toggling an item in one section from re-rendering the other two sections.
-export const Section = React.memo(function Section({ title, subtitle, items, color, onComplete, onEdit, onDelete, onDuplicate, onMoveToTomorrow, onToggleImportant, onMore, onToggleSubtask, memberMap, isSelectionMode, selectedIds, onToggleSelection, maxVisible }: SectionProps) {
+export const Section = React.memo(function Section({ title, subtitle, items, color, onComplete, onUncomplete, onEdit, onDelete, onDuplicate, onMoveToTomorrow, onToggleImportant, onMore, onToggleSubtask, memberMap, isSelectionMode, selectedIds, onToggleSelection, maxVisible }: SectionProps) {
   // Show-more state for capped lists (hooks must run before the empty early-return).
   const [expanded, setExpanded] = useState(false);
 
@@ -78,6 +79,7 @@ export const Section = React.memo(function Section({ title, subtitle, items, col
             isSelected={selectedIds.has(item.id)}
             isSelectionMode={isSelectionMode}
             onComplete={onComplete}
+            onUncomplete={onUncomplete}
             onEdit={onEdit}
             onDelete={onDelete}
             onDuplicate={onDuplicate}
@@ -111,6 +113,7 @@ export const Section = React.memo(function Section({ title, subtitle, items, col
     prev.subtitle === next.subtitle &&
     prev.maxVisible === next.maxVisible &&
     prev.onComplete === next.onComplete &&
+    prev.onUncomplete === next.onUncomplete &&
     prev.onEdit === next.onEdit &&
     prev.onDelete === next.onDelete &&
     prev.onDuplicate === next.onDuplicate &&

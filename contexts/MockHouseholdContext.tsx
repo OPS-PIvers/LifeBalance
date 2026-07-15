@@ -7,6 +7,7 @@ import { getLocalDateString } from '@/utils/dateHelpers';
 import { rollRecurringAnchorForward } from '@/utils/calendarRecurrence';
 import { hashKidPin } from '@/utils/kidPin';
 import { computeTodoCompletionCredit } from '@/utils/todoPoints';
+import { buildToDosFromTemplate } from '@/utils/taskTemplates';
 import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
 import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
@@ -41,6 +42,7 @@ import {
   GroceryCatalogItem,
   Store,
   QuickStockList,
+  TaskTemplate,
   YearlyGoal,
   BucketPeriodSnapshot,
   Household,
@@ -48,6 +50,7 @@ import {
   ModuleKey,
   WeeklyRecap,
   MonthlyMoneyRecap,
+  NotificationLogEntry,
   NetWorthSnapshot,
   SavingsGoal,
   TransactionComment
@@ -472,6 +475,58 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     narrativeSource: 'template',
     premium: true,
   }]);
+  // F-NOTIF-02 (in-app notification inbox) — a few canned entries, mixed
+  // read/unread, so Test Mode renders the bell badge + inbox drawer. Mirrors
+  // the real provider's shape: newest first, `readBy` accumulates member uids.
+  const [notificationLog, setNotificationLog] = useState<NotificationLogEntry[]>(() => [
+    {
+      id: 'notif-1',
+      type: 'bill_reminder',
+      recipientUid: 'test-user-id',
+      title: 'Bills due in 3 days',
+      body: '2 bills totaling $1,265.00 coming up',
+      data: { url: '/budget' },
+      createdAt: new Date(Date.now() - 2 * 3600000).toISOString(),
+      readBy: [],
+    },
+    {
+      id: 'notif-2',
+      type: 'streak_warning',
+      recipientUid: 'test-user-id',
+      title: "Don't break your streak!",
+      body: 'You have 1 habit with an active streak that needs attention today.',
+      data: { url: '/habits' },
+      createdAt: new Date(Date.now() - 26 * 3600000).toISOString(),
+      readBy: [],
+    },
+    {
+      id: 'notif-3',
+      type: 'weekly_recap',
+      recipientUid: 'test-user-id',
+      title: 'Your weekly recap is ready',
+      body: 'See how your spending, habits, and points stacked up this week.',
+      data: { url: '/?recap=test' },
+      createdAt: new Date(Date.now() - 4 * 86400000).toISOString(),
+      readBy: ['test-user-id'],
+    },
+  ]);
+  const unreadNotificationCount = notificationLog.filter((entry) => !entry.readBy.includes('test-user-id')).length;
+  const markNotificationRead = async (entryId: string) => {
+    setNotificationLog((prev) =>
+      prev.map((entry) =>
+        entry.id === entryId && !entry.readBy.includes('test-user-id')
+          ? { ...entry, readBy: [...entry.readBy, 'test-user-id'] }
+          : entry
+      )
+    );
+  };
+  const markAllNotificationsRead = async () => {
+    setNotificationLog((prev) =>
+      prev.map((entry) =>
+        entry.readBy.includes('test-user-id') ? entry : { ...entry, readBy: [...entry.readBy, 'test-user-id'] }
+      )
+    );
+  };
   // One canned monthly money recap (F-MONEY-06) so Test Mode renders the
   // Dashboard money-recap card + drawer. Anchored to the PRIOR calendar month
   // with a fresh generatedAt so the card's freshness window always passes.
@@ -505,6 +560,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [stores, setStores] = useState<Store[]>(SEED_STORES);
   const [groceryCategories, setGroceryCategories] = useState<string[]>([]);
   const [quickStockLists, setQuickStockLists] = useState<QuickStockList[]>([]);
+  const [taskTemplates, setTaskTemplates] = useState<TaskTemplate[]>([]);
   const [currency, setCurrency] = useState<string>('USD');
   const [kidModePinHash, setKidModePinHash] = useState<string | undefined>(undefined);
   // Plan 090 — module visibility starts empty (fail-open => all-on), mirroring a
@@ -596,6 +652,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success(`Mock: ${key} ${value ? 'enabled' : 'disabled'}`);
   }, []);
 
+  const updateModuleVisibility = useCallback(async (patch: Partial<Record<ModuleKey, boolean>>) => {
+    setModuleVisibilityState(prev => ({ ...prev, ...patch }));
+    toast.success('Mock: modules updated');
+  }, []);
+
   const setKidModePin = useCallback(async (pin: string | null) => {
     if (pin === null) {
       setKidModePinHash(undefined);
@@ -680,6 +741,33 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         : a));
     }
     toast.success('Mock: Transaction added');
+  }, [accounts]);
+
+  // F-DASH-04 parity: add several transactions (e.g. a receipt split into
+  // category transactions) with their combined verified-only balance effects.
+  const addTransactions = useCallback(async (
+    txs: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[],
+  ) => {
+    if (txs.length === 0) return;
+    const newTxs = txs.map(tx => ({ ...tx, id: generateId(), payPeriodId: MOCK_PAY_PERIOD_ID } as Transaction));
+    // Accumulate per-account balance deltas (verified-only, account-routed),
+    // computed OUTSIDE the setState updaters (StrictMode double-invokes them).
+    const deltas = new Map<string, number>();
+    for (const tx of newTxs) {
+      const target = resolveTargetAccount(tx.accountId, accounts);
+      const delta = effectiveAccountImpact(
+        { amount: tx.amount, category: tx.category, creditPayment: tx.creditPayment, status: tx.status },
+        target,
+      );
+      if (delta !== 0 && target) deltas.set(target.id, (deltas.get(target.id) ?? 0) + delta);
+    }
+    setTransactions(prev => [...prev, ...newTxs]);
+    if (deltas.size > 0) {
+      setAccounts(prev => prev.map(a => deltas.has(a.id)
+        ? { ...a, balance: roundMoney(a.balance + (deltas.get(a.id) ?? 0)), lastUpdated: new Date().toISOString() }
+        : a));
+    }
+    toast.success(`Mock: ${newTxs.length} transaction(s) added`);
   }, [accounts]);
 
   const updateTransaction = useCallback(async (id: string, updates: Partial<Transaction>) => {
@@ -939,6 +1027,18 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Habit deleted');
   }, []);
 
+  // F-HABITS-01: mock pause/resume so the "Pause until" field and paused badge
+  // are walkable in Test Mode. Passing null strips pausedUntil (resume).
+  const setHabitPause = useCallback(async (id: string, pausedUntil: string | null) => {
+    setHabits(prev => prev.map(h => {
+      if (h.id !== id) return h;
+      if (pausedUntil) return { ...h, pausedUntil };
+      const { pausedUntil: _dropped, ...rest } = h;
+      return rest;
+    }));
+    toast.success(pausedUntil ? 'Mock: Habit paused' : 'Mock: Habit resumed');
+  }, []);
+
   const archiveHabit = useCallback(async (id: string) => {
     setHabits(prev => prev.map(h => h.id === id ? { ...h, archivedAt: getLocalDateString() } : h));
     toast.success('Mock: Habit archived');
@@ -1163,6 +1263,16 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Store deleted');
   }, []);
 
+  const reorderStores = useCallback(async (orderedIds: string[]) => {
+    setStores(prev => {
+      const orderById = new Map(orderedIds.map((id, index) => [id, index]));
+      return prev.map(s => {
+        const order = orderById.get(s.id);
+        return order === undefined ? s : { ...s, order };
+      });
+    });
+  }, []);
+
   // Grocery categories
   const updateGroceryCategories = useCallback(async (categories: string[]) => {
     setGroceryCategories(categories);
@@ -1188,6 +1298,36 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const deleteQuickStockList = useCallback(async (id: string) => {
     setQuickStockLists(prev => prev.filter(l => l.id !== id));
     toast.success('Mock: Template deleted');
+  }, []);
+
+  // Task Templates (F-TODO-03 — "Quick Task Lists")
+  const addTaskTemplate = useCallback(async (template: Omit<TaskTemplate, 'id'>) => {
+    const newTemplate = { ...template, id: generateId() } as TaskTemplate;
+    setTaskTemplates(prev => [...prev, newTemplate]);
+    toast.success('Mock: Template created');
+  }, []);
+
+  const updateTaskTemplate = useCallback(async (template: TaskTemplate) => {
+    setTaskTemplates(prev => prev.map(t => t.id === template.id ? template : t));
+    toast.success('Mock: Template updated');
+  }, []);
+
+  const deleteTaskTemplate = useCallback(async (id: string) => {
+    setTaskTemplates(prev => prev.filter(t => t.id !== id));
+    toast.success('Mock: Template deleted');
+  }, []);
+
+  const applyTaskTemplate = useCallback(async (template: TaskTemplate): Promise<number> => {
+    const todosToCreate = buildToDosFromTemplate(template, getLocalDateString(), 'test-user-id');
+    const newTodos: ToDo[] = todosToCreate.map(todo => ({
+      ...todo,
+      id: generateId(),
+      createdAt: new Date().toISOString(),
+      createdBy: 'test-user-id',
+    }));
+    setTodos(prev => [...prev, ...newTodos]);
+    toast.success(`Mock: Added ${newTodos.length} tasks from ${template.name}`);
+    return newTodos.length;
   }, []);
 
   const addGroceryCatalogItem = useCallback(async (item: Omit<GroceryCatalogItem, 'id'>): Promise<string> => {
@@ -1427,6 +1567,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     redemptionHistory,
     unlockedRewardIds,
     moduleVisibility,
+    // F-DASH-06: seed a nonzero today's usage so the InsightWidget AI-usage
+    // caption is visible/walkable in Test Mode.
+    aiUsage: { dailyCount: 1, lastResetDate: getLocalDateString() },
 
   } as unknown as Household;
   // Same derivation as the real Firebase context, so Test Mode's Budget page
@@ -1477,11 +1620,16 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     bucketHistory,
     recaps,
     moneyRecaps,
+    notificationLog,
+    unreadNotificationCount,
+    markNotificationRead,
+    markAllNotificationsRead,
     insightsHistory,
     insight,
     stores,
     groceryCategories,
     quickStockLists,
+    taskTemplates,
     apiKeys: [], // iOS Shortcuts - empty in test mode
     pendingItemsCount: 0, // Voice commands - always 0 in test mode
 
@@ -1502,7 +1650,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     hasMoreCompletedTodos: false,
     loadOlderCompletedTodos: async () => {},
     ensureMealPlanWeek: async () => {},
-    loadAllMeals: async () => {},
+    loadAllMeals: async () => meals,
     loadFullGroceryCatalog: async () => {},
 
     // Operations
@@ -1525,6 +1673,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateBucketLimit: noOp,
     reallocateBucket,
     addTransaction,
+    addTransactions,
     updateTransaction,
     updateTransactionCategory,
     deleteTransaction,
@@ -1549,6 +1698,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     reorderHabits,
     toggleHabit,
     resetHabit,
+    setHabitPause,
     addHabitSubmission: noOp,
     resetHabitDay: noOp,
     updateHabitSubmission: noOp,
@@ -1601,9 +1751,14 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       });
       toast.success('Mock: ToDo completed');
     }, []),
+    addTaskTemplate,
+    updateTaskTemplate,
+    deleteTaskTemplate,
+    applyTaskTemplate,
     addStore,
     updateStore,
     deleteStore,
+    reorderStores,
     updateGroceryCategories,
     addQuickStockList,
     updateQuickStockList,
@@ -1667,12 +1822,15 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     }, [habits, freezeBank.tokens]),
     rolloverFreezeBankTokens: noOp,
     addMember: noOp,
-    updateMember: noOp,
+    updateMember: useCallback(async (memberId: string, updates: Partial<HouseholdMember>) => {
+      setMembers(prev => prev.map(m => (m.uid === memberId ? { ...m, ...updates } : m)));
+    }, []),
     removeMember: noOp,
     deleteHousehold,
     completeOnboarding,
     setHouseholdCurrency,
     setModuleVisibility,
+    updateModuleVisibility,
     setKidModePin,
     addKidProfile,
     updateKidProfile,

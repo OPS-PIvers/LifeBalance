@@ -637,6 +637,7 @@ service cloud.firestore {
                                 'text', 'completeByDate', 'isCompleted', 'completedAt',
                                 'assignedTo', 'priority', 'notes', 'source',
                                 'isImportant', 'points',
+                                'recurrence', 'subtasks',
                                 'createdBy', 'createdAt'
                               ]) &&
                               isValidString(request.resource.data.text, 500) &&
@@ -651,6 +652,19 @@ service cloud.firestore {
                               (request.resource.data.get('isImportant', null) == null || isValidBoolean(request.resource.data.isImportant)) &&
                               // Managed-kid completion credit (Plan 080c) — optional number
                               isValidOptionalNumber(request.resource.data.get('points', null)) &&
+                              // Recurring to-dos (F-TODO-01) — optional map {frequency, parentRecurringId?}
+                              (request.resource.data.get('recurrence', null) == null ||
+                                (request.resource.data.recurrence is map &&
+                                 request.resource.data.recurrence.keys().hasOnly(['frequency', 'parentRecurringId']) &&
+                                 request.resource.data.recurrence.frequency in ['weekly', 'bi-weekly', 'monthly'] &&
+                                 (request.resource.data.recurrence.get('parentRecurringId', null) == null ||
+                                  (request.resource.data.recurrence.parentRecurringId is string &&
+                                   request.resource.data.recurrence.parentRecurringId.size() <= 128)))) &&
+                              // Subtask checklist (F-TODO-08) — optional bounded list (per-element
+                              // shape is client-validated; rules cap list size to prevent abuse)
+                              (request.resource.data.get('subtasks', null) == null ||
+                                (request.resource.data.subtasks is list &&
+                                 request.resource.data.subtasks.size() <= 50)) &&
                               // Metadata
                               (request.resource.data.get('createdBy', null) == null || request.resource.data.createdBy is string);
         allow delete: if isMemberOf(householdId);
@@ -853,6 +867,17 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Household activity log (F-XCUT-01) — append-only who-did-what feed.
+      // Entries are co-committed inside existing mutation writeBatches; they
+      // must never be editable or deletable by clients (purge is server-side
+      // if ever needed). Read is member-wide (the UI additionally gates the
+      // feed to admins, but the data is household-internal activity).
+      match /activityLog/{entryId} {
+        allow read: if isMemberOf(householdId);
+        allow create: if isMemberOf(householdId);
+        allow update, delete: if false;
+      }
+
       // Monthly money recaps — written ONLY by Cloud Functions (Admin SDK bypasses rules).
       match /moneyRecaps/{recapId} {
         allow read: if isMemberOf(householdId);
@@ -950,7 +975,8 @@ service cloud.firestore {
                      subcollection != 'savingsGoals' &&
                      subcollection != 'recaps' &&
                      subcollection != 'moneyRecaps' &&
-                     subcollection != 'netWorthSnapshots';
+                     subcollection != 'netWorthSnapshots' &&
+                     subcollection != 'activityLog';
       }
     }
 
