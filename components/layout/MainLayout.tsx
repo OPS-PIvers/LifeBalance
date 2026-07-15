@@ -6,11 +6,12 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import { LazyMount } from '@/components/ui/LazyMount';
 import { preloadOnIdle } from '@/utils/preloadOnIdle';
 import { useHouseholdCore, useFinance } from '@/contexts/FirebaseHouseholdContext';
-import { isReviewSnoozed } from '@/hooks/useActionQueue';
+import { isReviewSnoozed, useActionQueue } from '@/hooks/useActionQueue';
 import { useAppReopen } from '@/hooks/useAppReopen';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { useKeyboardViewportAnchor } from '@/hooks/useKeyboardViewportAnchor';
+import { useAppBadge } from '@/hooks/useAppBadge';
 
 // Lazy so the kid view (Plan 080b) stays out of the always-mounted boot bundle —
 // it only loads when a parent actually switches into a kid.
@@ -34,6 +35,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   // keyboard pans the window; the ref scopes it to in-page inputs (portal
   // Drawers/Modals keep WebKit's native pan). See the hook's doc comment.
   const { shellRef, isKeyboardAnchored } = useKeyboardViewportAnchor<HTMLDivElement>();
+
+  // F-NOTIF-07: mirror the Action Queue count onto the installed-PWA home
+  // screen icon (Web App Badging API). Reuses useActionQueue's existing
+  // count rather than computing a separate one (roadmap's "pick one source
+  // of truth"); feature-detected/no-op everywhere the API isn't supported.
+  const { actionQueue } = useActionQueue();
+  useAppBadge(actionQueue.length);
 
   // Every un-snoozed pending_review transaction is a review candidate. Ordered
   // newest-first (date desc) so the most recent activity is reviewed first.
