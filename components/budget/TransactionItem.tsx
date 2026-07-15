@@ -96,6 +96,21 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
                 <span className="font-medium text-brand-600 dark:text-brand-300">{tx.store}</span>
               </>
             )}
+            {/* F-DASH-04: this row is one slice of a receipt split into several
+                categorized transactions — a purely visual grouping cue. */}
+            {tx.receiptGroupId && (
+              <>
+                <span className="w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
+                <span
+                  className="inline-flex items-center gap-0.5 font-medium text-brand-600 dark:text-brand-300"
+                  aria-label="Part of a split receipt"
+                  title="Part of a split receipt"
+                >
+                  <Scissors size={11} />
+                  Split
+                </span>
+              </>
+            )}
             {/* Plan 23: denormalized comment count, read-only — bumped by
                 addTransactionComment/deleteTransactionComment. */}
             {!!tx.commentCount && tx.commentCount > 0 && (
@@ -206,6 +221,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
     p.isRecurring === n.isRecurring &&
     p.store === n.store &&
     p.commentCount === n.commentCount &&
+    p.receiptGroupId === n.receiptGroupId &&
     // Ignored props: payPeriodId, autoCategorized, relatedHabitIds
     // These fields do not affect the rendering of this component.
     // Excluding them prevents unnecessary re-renders when backend-only fields change

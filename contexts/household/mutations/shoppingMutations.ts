@@ -413,7 +413,31 @@ export function makeStoreSettingsMutations(deps: {
     }
   };
 
-  return { updateStore, updateQuickStockList, deleteQuickStockList };
+  // Stores live as an array field on the household doc (not a subcollection),
+  // so "reorder" is a single whole-array write assigning sequential `order`
+  // values per `orderedIds`, rather than a writeBatch of per-doc updates
+  // (mirrors updateStore's read-current/replace-array pattern above).
+  const reorderStores = async (orderedIds: string[]) => {
+    if (!householdId || !householdSettings) return;
+    try {
+      const currentStores = householdSettings.stores || [];
+      const orderById = new Map(orderedIds.map((id, index) => [id, index]));
+      const newStores = currentStores.map(s => {
+        const order = orderById.get(s.id);
+        return order === undefined ? s : { ...s, order };
+      });
+
+      await updateDoc(doc(db, `households/${householdId}`), {
+        stores: newStores
+      });
+    } catch (error) {
+      console.error('[reorderStores] Failed:', error);
+      toast.error('Failed to reorder stores');
+      throw error;
+    }
+  };
+
+  return { updateStore, updateQuickStockList, deleteQuickStockList, reorderStores };
 }
 
 /**

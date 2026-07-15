@@ -23,6 +23,7 @@ import type { Meal, InsightAction } from '@/types/schema';
 import type { WeeklyPlan } from '@/types/weeklyPlan';
 import type {
   ReceiptData,
+  ReceiptLineItemsData,
   ParsedShoppingList,
   ParsedTodoList,
   ParsedExpense,
@@ -195,6 +196,25 @@ export function validateGroceryItems(raw: unknown): GroceryItemLike[] {
     if (!isOptString(o['store'])) fail(`groceryReceipt[${i}]`, 'store must be a string');
     return o as unknown as GroceryItemLike;
   });
+}
+
+// ---------------------------------------------------------------------------
+// Itemized receipt line items (F-DASH-04)
+// ---------------------------------------------------------------------------
+
+export function validateReceiptLineItems(raw: unknown): ReceiptLineItemsData {
+  const o = expectRecord(raw, 'receiptLineItems');
+  if (!isString(o['merchant'])) fail('receiptLineItems', 'merchant must be a string');
+  if (!isOptString(o['date'])) fail('receiptLineItems', 'date must be a string');
+  if (!isOptString(o['store'])) fail('receiptLineItems', 'store must be a string');
+  const items = expectArray(o['items'], 'receiptLineItems.items');
+  items.forEach((entry, i) => {
+    const item = expectRecord(entry, `receiptLineItems.items[${i}]`);
+    if (!isString(item['description'])) fail(`receiptLineItems.items[${i}]`, 'description must be a string');
+    if (!isFiniteNumber(item['amount'])) fail(`receiptLineItems.items[${i}]`, 'amount must be a number');
+    if (!isString(item['category'])) fail(`receiptLineItems.items[${i}]`, 'category must be a string');
+  });
+  return o as unknown as ReceiptLineItemsData;
 }
 
 // ---------------------------------------------------------------------------

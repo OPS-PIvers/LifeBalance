@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Star, TrendingUp, User, Search } from 'lucide-react';
+import { Star, TrendingUp, User, Search, Bell } from 'lucide-react';
 import { useFinance, useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
@@ -33,13 +33,18 @@ const SearchOverlay = React.lazy(loadSearchOverlay);
 const loadSafeToSpendBreakdownDrawer = () => import('@/components/budget/SafeToSpendBreakdownDrawer');
 const SafeToSpendBreakdownDrawer = React.lazy(loadSafeToSpendBreakdownDrawer);
 
+// F-NOTIF-02: notification inbox drawer, opened via the new bell icon. Lazy
+// for the same boot-bundle reason as the other Drawer-based modals above.
+const loadNotificationInboxDrawer = () => import('@/components/layout/NotificationInboxDrawer');
+const NotificationInboxDrawer = React.lazy(loadNotificationInboxDrawer);
+
 const TopToolbar: React.FC = () => {
   const { safeToSpendBreakdown } = useFinance();
   // Fall back to 0 while the breakdown hasn't been computed yet (matches the
   // toolbar's prior initial render with the raw `safeToSpend` field).
   const safeToSpend = safeToSpendBreakdown?.safeToSpend ?? 0;
   const { dailyPoints, weeklyPoints } = useGamification();
-  const { household } = useHouseholdCore();
+  const { household, unreadNotificationCount } = useHouseholdCore();
   const { currentUser } = useAuth();
   const kidModeEnabled = useKidModeEnabled();
   const { isModuleEnabled } = useModuleVisibility();
@@ -55,10 +60,12 @@ const TopToolbar: React.FC = () => {
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [stsOpen, setStsOpen] = useState(false);
+  const [isInboxOpen, setIsInboxOpen] = useState(false);
 
   useEffect(() => preloadOnIdle(loadFeedbackModal), []);
   useEffect(() => preloadOnIdle(loadSearchOverlay), []);
   useEffect(() => preloadOnIdle(loadSafeToSpendBreakdownDrawer), []);
+  useEffect(() => preloadOnIdle(loadNotificationInboxDrawer), []);
 
   // Cmd/Ctrl+K opens search — a lightweight keydown listener only; no slice
   // consumption is added here (SearchOverlay owns its own data).
@@ -159,6 +166,23 @@ const TopToolbar: React.FC = () => {
               <Search className="w-5 h-5" />
             </Button>
 
+            {/* Notification inbox (F-NOTIF-02) — opens the lazy past-pushes drawer. */}
+            <Button
+              type="button"
+              variant="ghost-inverted"
+              size="icon"
+              className="relative"
+              aria-label={
+                unreadNotificationCount > 0
+                  ? `Notifications, ${unreadNotificationCount} unread`
+                  : 'Notifications'
+              }
+              onClick={() => setIsInboxOpen(true)}
+            >
+              <Bell className="w-5 h-5" />
+              <CountBadge count={unreadNotificationCount} className="ring-brand-800" />
+            </Button>
+
             {/* Profile Icon */}
             <button
               type="button"
@@ -198,6 +222,10 @@ const TopToolbar: React.FC = () => {
 
       <LazyMount when={stsOpen}>
         <SafeToSpendBreakdownDrawer open={stsOpen} onClose={() => setStsOpen(false)} />
+      </LazyMount>
+
+      <LazyMount when={isInboxOpen}>
+        <NotificationInboxDrawer open={isInboxOpen} onClose={() => setIsInboxOpen(false)} />
       </LazyMount>
     </>
   );

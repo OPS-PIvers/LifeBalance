@@ -21,12 +21,14 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import { cn } from '@/utils/cn';
 import Input from '@/components/ui/Input';
+import Textarea from '@/components/ui/Textarea';
 import BatchRescheduleModal from '@/components/modals/BatchRescheduleModal';
 import { TodoPhotoImportDrawer } from '@/components/modals/TodoPhotoImportDrawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Section } from '@/components/todos/Section';
 import { EisenhowerMatrixView } from '@/components/todos/EisenhowerMatrixView';
 import { EisenhowerGridView } from '@/components/todos/EisenhowerGridView';
+import { TaskTemplateDrawer } from '@/components/todos/TaskTemplateDrawer';
 
 // localStorage key for the per-device arrangement choice.
 const ARRANGEMENT_KEY = 'lifebalance:todos-view';
@@ -76,6 +78,10 @@ const ToDosPage: React.FC = () => {
   // View Mode State
   const [viewMode, setViewMode] = useState<'active' | 'completed'>('active');
 
+  // Assignee filter chips — session-only, transient (not persisted). `null`
+  // means "All". Filters every visible section/quadrant to one member's tasks.
+  const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null);
+
   // Active-view arrangement: chronological list, Eisenhower sections, or 2×2 grid.
   // Persisted per-device — this is a personal lens on shared data.
   const [arrangement, setArrangement] = useState<Arrangement>(() => {
@@ -114,6 +120,9 @@ const ToDosPage: React.FC = () => {
 
   // Mobile Action Drawer State
   const [actionTodo, setActionTodo] = useState<ToDo | null>(null);
+
+  // F-TODO-03 — Task templates ("Quick Task Lists") drawer.
+  const [isTemplateDrawerOpen, setIsTemplateDrawerOpen] = useState(false);
 
   // Batch Mode State
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -168,6 +177,9 @@ const ToDosPage: React.FC = () => {
   const [completeByDate, setCompleteByDate] = useState(getLocalDateString());
   const [assignedTo, setAssignedTo] = useState('');
   const [isImportant, setIsImportant] = useState(false);
+  // Shared notes surfaced in the editor drawer — visible to all household members
+  // (to-dos are already shared). Capped to match the firestore.rules validator.
+  const [notes, setNotes] = useState('');
 
   // Sticky quick-add bar state — mirrors the shopping list's inline add. The
   // input is desktop-only autofocused (useAutoFocus skips touch so it doesn't
@@ -183,7 +195,7 @@ const ToDosPage: React.FC = () => {
 
   // Categorize To-Dos (Active)
   const { immediate, upcoming, radar, allActiveCount, allActiveIds } = useMemo(() => {
-    const active = todos.filter(t => !t.isCompleted);
+    const active = todos.filter(t => !t.isCompleted && (assigneeFilter === null || t.assignedTo === assigneeFilter));
     const today = currentDate;
     const endOfCurrentWeek = endOfWeek(today, { weekStartsOn: 1 }); // Monday start
 
@@ -222,7 +234,7 @@ const ToDosPage: React.FC = () => {
       allActiveCount: active.length,
       allActiveIds: active.map(t => t.id)
     };
-  }, [todos, currentDate]);
+  }, [todos, currentDate, assigneeFilter]);
 
   // Eisenhower buckets — computed unconditionally (hooks rule) but only
   // rendered in the matrix arrangement. Urgency uses the same midnight-
@@ -231,12 +243,13 @@ const ToDosPage: React.FC = () => {
     const buckets: Record<Quadrant, ToDo[]> = { do: [], schedule: [], delegate: [], later: [] };
     todos.forEach(todo => {
       if (todo.isCompleted) return;
+      if (assigneeFilter !== null && todo.assignedTo !== assigneeFilter) return;
       buckets[quadrantForTodo(todo, currentDate)].push(todo);
     });
     const byDueDate = (a: ToDo, b: ToDo) => a.completeByDate.localeCompare(b.completeByDate);
     QUADRANT_ORDER.forEach(q => buckets[q].sort(byDueDate));
     return buckets;
-  }, [todos, currentDate]);
+  }, [todos, currentDate, assigneeFilter]);
 
   // Categorize To-Dos (Completed)
   const { completedToday, completedYesterday, completedWeek, completedOlder } = useMemo(() => {
@@ -303,6 +316,7 @@ const ToDosPage: React.FC = () => {
     const defaultAssignee = currentUser?.uid ?? (members.length > 0 ? members[0]!.uid : ''); // members[0] is defined: guarded by members.length > 0
     setAssignedTo(defaultAssignee);
     setIsImportant(false);
+    setNotes('');
     setEditingId(null);
     setIsAddModalOpen(true);
   }, [quickText, currentUser, members]);
@@ -347,6 +361,7 @@ const ToDosPage: React.FC = () => {
     setCompleteByDate(todo.completeByDate);
     setAssignedTo(todo.assignedTo);
     setIsImportant(todo.isImportant === true);
+    setNotes(todo.notes ?? '');
     setEditingId(todo.id);
     setIsAddModalOpen(true);
   }, []);
@@ -559,12 +574,14 @@ const ToDosPage: React.FC = () => {
     setIsSaving(true);
     try {
       const trimmedText = text.trim();
+      const trimmedNotes = notes.trim();
       if (editingId) {
         await updateToDo(editingId, {
           text: trimmedText,
           completeByDate,
           assignedTo,
-          isImportant
+          isImportant,
+          notes: trimmedNotes
         });
         toast.success('Task updated');
       } else {
@@ -574,7 +591,8 @@ const ToDosPage: React.FC = () => {
           completeByDate,
           assignedTo,
           isCompleted: false,
-          isImportant
+          isImportant,
+          notes: trimmedNotes
         });
         toast.success('Task added');
         setQuickText(''); // the detailed form consumed the carried-over text
@@ -712,6 +730,51 @@ const ToDosPage: React.FC = () => {
   // strip via --lists-sticky-top (0px fallback when the strip is hidden).
   // Shared by the list and matrix arrangements; hidden in selection mode (adding
   // has no context there) and in the grid arrangement (landscape-immersive).
+  // Assignee filter chips — 'All' plus one avatar-chip per member, using the
+  // same visual pattern as the assign-to fieldset in the add/edit drawer.
+  // Skipped entirely for single-member households where filtering is moot.
+  const assigneeFilterChips = !isSelectionMode && members.length > 1 ? (
+    <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Filter by assignee">
+      <button
+        type="button"
+        onClick={() => setAssigneeFilter(null)}
+        aria-pressed={assigneeFilter === null}
+        className={cn(
+          'flex items-center px-3 py-1.5 rounded-btn border text-sm font-medium whitespace-nowrap transition-colors duration-(--duration-fast) ease-(--ease-standard)',
+          assigneeFilter === null
+            ? 'bg-accent-600 text-white border-accent-600 dark:bg-accent-600 dark:border-accent-600'
+            : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50 dark:bg-brand-700/50 dark:text-brand-200 dark:border-brand-600 dark:hover:bg-brand-700'
+        )}
+      >
+        All
+      </button>
+      {members.map(member => (
+        <button
+          key={member.uid}
+          type="button"
+          onClick={() => setAssigneeFilter(prev => (prev === member.uid ? null : member.uid))}
+          aria-label={`Filter to ${member.displayName || 'User'}`}
+          aria-pressed={assigneeFilter === member.uid}
+          className={cn(
+            'flex items-center gap-2 px-3 py-1.5 rounded-btn border transition-colors duration-(--duration-fast) ease-(--ease-standard) whitespace-nowrap',
+            assigneeFilter === member.uid
+              ? 'bg-accent-600 text-white border-accent-600 dark:bg-accent-600 dark:border-accent-600'
+              : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50 dark:bg-brand-700/50 dark:text-brand-200 dark:border-brand-600 dark:hover:bg-brand-700'
+          )}
+        >
+          {member.photoURL ? (
+            <img src={member.photoURL} alt={member.displayName ?? 'User'} className="w-5 h-5 rounded-full" />
+          ) : (
+            <div className="w-5 h-5 rounded-full bg-brand-200 dark:bg-brand-600 flex items-center justify-center text-xxs font-bold text-brand-600 dark:text-brand-200">
+              {member.displayName?.charAt(0) ?? 'U'}
+            </div>
+          )}
+          <span className="text-sm font-medium">{member.displayName?.split(' ')[0] ?? 'User'}</span>
+        </button>
+      ))}
+    </div>
+  ) : null;
+
   const stickyQuickAdd = !isSelectionMode && effectiveArrangement !== 'grid' ? (
     <div className="sticky top-[var(--lists-sticky-top,0px)] z-20 bg-brand-50 dark:bg-brand-900">
       <SurfaceList>
@@ -727,6 +790,18 @@ const ToDosPage: React.FC = () => {
             disabled={!quickText.trim()}
             submitLabel="Add task"
           />
+
+          {/* Task templates — one-tap creation of a bundle of recurring tasks
+              from a saved template (F-TODO-03, "Quick Task Lists"). */}
+          <button
+            type="button"
+            onClick={() => setIsTemplateDrawerOpen(true)}
+            aria-label="Task templates"
+            title="Add tasks from a template"
+            className="flex-none flex items-center justify-center p-3 rounded-btn text-brand-600 hover:text-brand-900 hover:bg-brand-100 dark:text-brand-300 dark:hover:text-brand-50 dark:hover:bg-brand-700/50 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
+          >
+            <ClipboardList className="w-5 h-5" />
+          </button>
 
           {/* Details — opens the full form to set a custom due date / assignee /
               importance. Retains aria-label "Add new task" so it is the page's
@@ -839,6 +914,7 @@ const ToDosPage: React.FC = () => {
                 the add bar stays visible while a long list scrolls beneath it
                 (reused from the Shopping list). Precedes the sections in both
                 the list and matrix arrangements. */}
+            {assigneeFilterChips}
             {stickyQuickAdd}
             {effectiveArrangement === 'list' ? (
             <>
@@ -851,6 +927,7 @@ const ToDosPage: React.FC = () => {
                 items={immediate}
                 color="rose"
                 onComplete={completeToDo}
+                onUncomplete={handleUncomplete}
                 onEdit={openEditModal}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
@@ -871,6 +948,7 @@ const ToDosPage: React.FC = () => {
                 color="amber"
                 maxVisible={5}
                 onComplete={completeToDo}
+                onUncomplete={handleUncomplete}
                 onEdit={openEditModal}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
@@ -891,6 +969,7 @@ const ToDosPage: React.FC = () => {
                 color="blue"
                 maxVisible={5}
                 onComplete={completeToDo}
+                onUncomplete={handleUncomplete}
                 onEdit={openEditModal}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
@@ -914,6 +993,7 @@ const ToDosPage: React.FC = () => {
               isSelectionMode={isSelectionMode}
               selectedIds={selectedIds}
               onComplete={completeToDo}
+              onUncomplete={handleUncomplete}
               onEdit={openEditModal}
               onDelete={deleteToDo}
               onDuplicate={handleDuplicate}
@@ -1097,6 +1177,17 @@ const ToDosPage: React.FC = () => {
             className="appearance-none"
           />
 
+          <Textarea
+            id="task-notes"
+            label="Notes"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Add details, links, or context (optional)"
+            maxLength={1000}
+            showCount
+            rows={3}
+          />
+
           {/* Eisenhower importance — a household judgment call, deliberately a
               yes/no (not low/med/high) to match the matrix's two-state axis. */}
           <button
@@ -1254,6 +1345,11 @@ const ToDosPage: React.FC = () => {
       <TodoPhotoImportDrawer
         isOpen={isPhotoImportOpen}
         onClose={() => setIsPhotoImportOpen(false)}
+      />
+
+      <TaskTemplateDrawer
+        isOpen={isTemplateDrawerOpen}
+        onClose={() => setIsTemplateDrawerOpen(false)}
       />
 
     </div>
