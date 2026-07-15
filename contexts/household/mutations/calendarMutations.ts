@@ -345,7 +345,20 @@ export function makePayCalendarItem(deps: {
         item.type === 'income' && (!priorPeriodId || specificDate > priorPeriodId)
           ? specificDate
           : priorPeriodId;
-      const payPeriodId = getPayPeriodForTransaction(transactionDate, effectiveLastPaycheck);
+      let payPeriodId = getPayPeriodForTransaction(transactionDate, effectiveLastPaycheck);
+      // Retroactive attribution: a bill dated BEFORE the current period start
+      // (e.g. an overdue bill approved from the Action Queue after the period
+      // rolled) belongs to the pay period it was due in, not the active one.
+      // getPayPeriodForTransaction returns '' for pre-period dates; recover the
+      // real prior period id — the latest APPROVED paycheck on/before the bill's
+      // date (paychecks are paid income calendar items; yyyy-MM-dd compares
+      // lexically). No such paycheck → keep '' (untracked history), the prior
+      // behavior.
+      if (!payPeriodId && item.type === 'expense') {
+        payPeriodId = calendarItems
+          .filter(i => i.type === 'income' && i.isPaid && !i.isDeleted && i.date <= transactionDate)
+          .reduce((latest, i) => (i.date > latest ? i.date : latest), '');
+      }
 
       // Pay-period ceremony: decide BEFORE the commit whether this approval
       // rolls the period (mirrors handlePaycheckApproval's own branch logic —

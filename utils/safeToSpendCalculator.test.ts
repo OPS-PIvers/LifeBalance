@@ -149,7 +149,9 @@ describe('calculateSafeToSpend', () => {
     expect(result).toBe(4850);
   });
 
-  it('should ignore bills before the current period (last paycheck)', () => {
+  it('should reserve overdue unpaid bills from before the current period (within 1-month lookback)', () => {
+    // A still-unpaid bill from the PREVIOUS pay period is money owed — it must
+    // subtract, so that approving it later is StS-neutral for the active period.
     const oldBillDate = formatIso(subDays(today, 5));
     const items: CalendarItem[] = [
       {
@@ -176,8 +178,45 @@ describe('calculateSafeToSpend', () => {
       lastPaycheckDate
     );
 
-    // 5000 - 0 = 5000
+    // 5000 - 150 = 4850
+    expect(result).toBe(4850);
+  });
+
+  it('should ignore unpaid bills older than the 1-month overdue lookback', () => {
+    const ancientBillDate = formatIso(subDays(today, 40));
+    const items: CalendarItem[] = [
+      {
+        id: 'b1',
+        title: 'Ancient Bill',
+        amount: 150,
+        date: ancientBillDate,
+        type: 'expense',
+        isPaid: false
+      }
+    ];
+
+    const result = calculateSafeToSpend(mockAccounts, items, lastPaycheckDate);
+    // Outside the lookback window: 5000 - 0 = 5000
     expect(result).toBe(5000);
+  });
+
+  it('approving an overdue prior-period bill is StS-neutral for the active period', () => {
+    const oldBillDate = formatIso(subDays(today, 2));
+    const unpaidItems: CalendarItem[] = [
+      { id: 'b1', title: 'Old Bill', amount: 150, date: oldBillDate, type: 'expense', isPaid: false }
+    ];
+
+    const before = calculateSafeToSpend(mockAccounts, unpaidItems, lastPaycheckDate);
+
+    // Paying it: bill flips to isPaid and the checking balance drops by the amount.
+    const paidItems: CalendarItem[] = [{ ...unpaidItems[0]!, isPaid: true }];
+    const accountsAfter: Account[] = mockAccounts.map(a =>
+      a.id === '1' ? { ...a, balance: a.balance - 150 } : a
+    );
+    const after = calculateSafeToSpend(accountsAfter, paidItems, lastPaycheckDate);
+
+    expect(before).toBe(4850); // 5000 - 150 owed
+    expect(after).toBe(before); // reserve released exactly as the cash left
   });
 
   it('should ignore bills after the next paycheck', () => {

@@ -1,7 +1,28 @@
 import { Account, CalendarItem, Transaction, INCOME_CATEGORY } from '@/types/schema';
-import { endOfMonth, parseISO, isAfter, isBefore, addMonths } from 'date-fns';
+import { endOfMonth, parseISO, isAfter, isBefore, addMonths, subMonths } from 'date-fns';
 import { expandCalendarItems } from '@/utils/calendarRecurrence';
 import { sumMoney, subtractMoney } from '@/utils/money';
+
+/**
+ * How far BEFORE the current paycheck the formula still reserves unpaid
+ * (overdue) bills. Matches the Action Queue's 1-month overdue lookback
+ * (hooks/useActionQueue.ts): any bill the queue nags about as owed is money
+ * that must not read as spendable. Reserving it here also makes approving an
+ * overdue bill from a PREVIOUS pay period StS-neutral for the ACTIVE period —
+ * the bill leaves `unpaidBills` in the same moment the checking balance drops,
+ * instead of the new period's Safe-to-Spend absorbing an old period's bill.
+ * Callers that pre-expand calendar items must expand from at least this far
+ * back (see calculateSafeToSpendExpansionStart).
+ */
+export const SAFE_TO_SPEND_OVERDUE_LOOKBACK_MONTHS = 1;
+
+/**
+ * Start of the calendar-expansion window the Safe-to-Spend formula needs:
+ * one month before the current paycheck, so overdue unpaid bills from the
+ * previous period are visible to the calculation.
+ */
+export const calculateSafeToSpendExpansionStart = (paycheckA: Date): Date =>
+  subMonths(paycheckA, SAFE_TO_SPEND_OVERDUE_LOOKBACK_MONTHS);
 
 /**
  * Helper to find the next unpaid income item after a given date from a list of expanded items.
@@ -121,7 +142,11 @@ export const calculateSafeToSpendFromExpanded = (
 export interface SafeToSpendBreakdown {
   /** Sum of checking-account balances (the only funds counted as available). */
   checkingBalance: number;
-  /** Unpaid bills from this paycheck to the next (Plan 016: all unpaid bills subtract). */
+  /**
+   * Unpaid bills from the overdue lookback (1 month before this paycheck)
+   * through the next paycheck (Plan 016: all unpaid bills subtract; overdue
+   * bills from the previous period stay reserved until actually paid).
+   */
   unpaidBills: number;
   /**
    * Sum of current-period pending_review *spend* deducted from available funds.
@@ -227,8 +252,13 @@ export const calculateSafeToSpendBreakdownFromExpanded = (
   // Fallback: end of current month if no next paycheck found.
   const rangeEndDate = paycheckBDate ? parseISO(paycheckBDate) : endOfMonth(paycheckA);
 
-  // 5. Unpaid bills in range (AFTER paycheck A, up to and including range end).
-  const unpaidBills = calculateUnpaidBillsInRange(allExpandedItems, paycheckA, rangeEndDate);
+  // 5. Unpaid bills in range — from the overdue lookback (bills from the
+  //    previous period still owed) through the next paycheck, inclusive.
+  const unpaidBills = calculateUnpaidBillsInRange(
+    allExpandedItems,
+    calculateSafeToSpendExpansionStart(paycheckA),
+    rangeEndDate
+  );
 
   return {
     checkingBalance,
@@ -255,7 +285,11 @@ export const calculateSafeToSpendBreakdown = (
   }
   const paycheckA = parseISO(currentPeriodId);
   const searchWindowEnd = addMonths(paycheckA, 2);
-  const allExpandedItems = expandCalendarItems(calendarItems, paycheckA, searchWindowEnd);
+  const allExpandedItems = expandCalendarItems(
+    calendarItems,
+    calculateSafeToSpendExpansionStart(paycheckA),
+    searchWindowEnd
+  );
   return calculateSafeToSpendBreakdownFromExpanded(accounts, allExpandedItems, currentPeriodId, transactions);
 };
 
@@ -283,13 +317,15 @@ export const calculateSafeToSpend = (
 
   const paycheckA = parseISO(currentPeriodId);
 
-  // ⚡ Bolt Optimization: Expand items ONCE for a 60-day window
-  // This covers the search for the next paycheck (Paycheck B) AND the bills in between.
-  // Previously, this function called `findNextPaycheckDate` (which expanded for 60 days)
-  // and then called `expandCalendarItems` AGAIN for the determined range.
-  // This approach reduces the expensive expansion operation from 2x to 1x.
+  // ⚡ Bolt Optimization: Expand items ONCE for the whole window
+  // This covers the overdue lookback, the search for the next paycheck
+  // (Paycheck B), AND the bills in between — one expansion instead of several.
   const searchWindowEnd = addMonths(paycheckA, 2);
-  const allExpandedItems = expandCalendarItems(calendarItems, paycheckA, searchWindowEnd);
+  const allExpandedItems = expandCalendarItems(
+    calendarItems,
+    calculateSafeToSpendExpansionStart(paycheckA),
+    searchWindowEnd
+  );
 
   return calculateSafeToSpendFromExpanded(accounts, allExpandedItems, currentPeriodId, transactions);
 };
