@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   emitPayPeriodCeremony,
+  parseBalanceDraft,
   subscribePayPeriodCeremony,
   suggestBucketLimit,
   type PayPeriodCeremonyEvent,
@@ -20,6 +21,27 @@ const snapshot = (overrides: Partial<BucketPeriodSnapshot>): BucketPeriodSnapsho
   transactionCount: 0,
   createdAt: '2026-06-15T00:00:00.000Z',
   ...overrides,
+});
+
+describe('parseBalanceDraft', () => {
+  it('parses positive and zero balances, rounded to whole cents', () => {
+    expect(parseBalanceDraft('1234.56')).toBe(1234.56);
+    expect(parseBalanceDraft('0')).toBe(0);
+    expect(parseBalanceDraft('10.999')).toBe(11);
+  });
+
+  it('allows NEGATIVE balances (overdrawn checking) — no >= 0 clamp', () => {
+    expect(parseBalanceDraft('-42.5')).toBe(-42.5);
+    expect(parseBalanceDraft('-0.005')).toBe(-0.01);
+  });
+
+  it('rejects empty and non-finite input as null', () => {
+    expect(parseBalanceDraft('')).toBeNull();
+    expect(parseBalanceDraft('   ')).toBeNull();
+    expect(parseBalanceDraft('abc')).toBeNull();
+    expect(parseBalanceDraft('Infinity')).toBeNull();
+    expect(parseBalanceDraft('NaN')).toBeNull();
+  });
 });
 
 describe('suggestBucketLimit', () => {

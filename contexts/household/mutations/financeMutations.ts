@@ -248,7 +248,43 @@ export function makeBucketCrudMutations(deps: {
     }
   };
 
-  return { addBucket, updateBucket, deleteBucket, updateBucketLimit, setBucketLimits };
+  // Pay-period ceremony save (bucket budgets + account balance true-ups):
+  // ALL writes go in ONE writeBatch so the user's period plan can never
+  // half-apply. Bucket rules match setBucketLimits (negative / non-finite
+  // limits are dropped); balances may legitimately be negative (overdrawn
+  // checking) so only non-finite balances are dropped. Balance writes stamp
+  // lastUpdated: serverTimestamp() exactly like updateAccountBalance.
+  const saveCeremonyChanges = async (updates: {
+    bucketLimits: { id: string; limit: number }[];
+    accountBalances: { id: string; balance: number }[];
+  }) => {
+    if (!householdId) return;
+    const validLimits = updates.bucketLimits.filter(u => Number.isFinite(u.limit) && u.limit >= 0);
+    const validBalances = updates.accountBalances.filter(u => Number.isFinite(u.balance));
+    if (validLimits.length === 0 && validBalances.length === 0) return;
+    try {
+      const batch = writeBatch(db);
+      for (const u of validLimits) {
+        batch.update(doc(db, `households/${householdId}/buckets`, u.id), {
+          limit: roundMoney(u.limit),
+        });
+      }
+      for (const u of validBalances) {
+        batch.update(doc(db, `households/${householdId}/accounts`, u.id), {
+          balance: roundMoney(u.balance),
+          lastUpdated: serverTimestamp(),
+        });
+      }
+      await batch.commit();
+      toast.success('Changes saved');
+    } catch (error) {
+      console.error('[saveCeremonyChanges] Failed:', error);
+      toast.error('Failed to save changes. Please try again.');
+      throw error;
+    }
+  };
+
+  return { addBucket, updateBucket, deleteBucket, updateBucketLimit, setBucketLimits, saveCeremonyChanges };
 }
 
 /**

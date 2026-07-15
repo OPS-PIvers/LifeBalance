@@ -734,6 +734,30 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Balance updated');
   }, []);
 
+  // Pay-period ceremony save (bucket budgets + account balance true-ups) —
+  // functional so the ceremony's combined Save is walkable in Test Mode.
+  // Mirrors the Firestore batch rules: limits must be finite and >= 0,
+  // balances only finite (negative = overdrawn is allowed), and balance
+  // updates stamp lastUpdated like updateAccountBalance.
+  const saveCeremonyChanges = useCallback(async (updates: {
+    bucketLimits: { id: string; limit: number }[];
+    accountBalances: { id: string; balance: number }[];
+  }) => {
+    setBuckets(prev => prev.map(b => {
+      const update = updates.bucketLimits.find(u => u.id === b.id);
+      return update && Number.isFinite(update.limit) && update.limit >= 0
+        ? { ...b, limit: roundMoney(update.limit) }
+        : b;
+    }));
+    setAccounts(prev => prev.map(a => {
+      const update = updates.accountBalances.find(u => u.id === a.id);
+      return update && Number.isFinite(update.balance)
+        ? { ...a, balance: roundMoney(update.balance), lastUpdated: new Date().toISOString() }
+        : a;
+    }));
+    toast.success('Mock: Changes saved');
+  }, []);
+
   // Bucket operations
   const addBucket = useCallback(async (bucket: Omit<BudgetBucket, 'id'>) => {
     const newBucket = { ...bucket, id: generateId() } as BudgetBucket;
@@ -1840,6 +1864,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     deleteBucket,
     updateBucketLimit: noOp,
     setBucketLimits,
+    saveCeremonyChanges,
     reallocateBucket,
     addTransaction,
     addTransactions,

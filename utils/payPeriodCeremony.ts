@@ -1,4 +1,5 @@
 import { BucketPeriodSnapshot } from '@/types/schema';
+import { roundMoney } from '@/utils/money';
 
 /**
  * utils/payPeriodCeremony.ts — pay-period reset "ceremony".
@@ -51,6 +52,18 @@ export function emitPayPeriodCeremony(event: PayPeriodCeremonyEvent): void {
       console.error('[payPeriodCeremony] Listener threw:', error);
     }
   }
+}
+
+/**
+ * Parse a balance draft from the ceremony's "Update your balances" section.
+ * Unlike bucket limits, balances may legitimately be NEGATIVE (overdrawn
+ * checking) — only empty / non-finite input is rejected (null). Valid input
+ * is rounded to whole cents (decimal dollars, never integer cents).
+ */
+export function parseBalanceDraft(raw: string): number | null {
+  if (raw.trim() === '') return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? roundMoney(n) : null;
 }
 
 /** How many most-recent period snapshots feed the suggested amount. */
