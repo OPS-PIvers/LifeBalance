@@ -440,10 +440,12 @@ export const useHabitActions = (
     const today = getLocalDateString();
     const weekStartOf = (d: string): string =>
       format(startOfWeek(parseISO(d), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    const currentWeekStart = weekStartOf(today);
     const datesToRemove = habit.period === 'weekly'
-      ? habit.completedDates.filter(d => weekStartOf(d) === weekStartOf(today))
+      ? habit.completedDates.filter(d => weekStartOf(d) === currentWeekStart)
       : habit.completedDates.filter(d => d === today);
-    const newCompletedDates = habit.completedDates.filter(d => !datesToRemove.includes(d));
+    const removeSet = new Set(datesToRemove);
+    const newCompletedDates = habit.completedDates.filter(d => !removeSet.has(d));
 
     // Atomically commit habit state + points in a single batch so both writes
     // succeed together or neither does (prevents points/habit desync on crash).
