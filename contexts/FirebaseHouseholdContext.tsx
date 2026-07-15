@@ -62,7 +62,7 @@ import {
   DietaryProfile,
   NotificationLogEntry
 } from '@/types/schema';
-import { calculateSafeToSpendBreakdownFromExpanded } from '@/utils/safeToSpendCalculator';
+import { calculateSafeToSpendBreakdownFromExpanded, calculateSafeToSpendExpansionStart } from '@/utils/safeToSpendCalculator';
 import { calculatePointsForDate, calculatePointsForDateRange, computeManagedMemberPointsReset, isHabitStale, getHabitResetUpdate } from '@/utils/habitLogic';
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { migrateBucketsToPeriods, needsMigration, migrateToPaycheckPeriods, needsPaycheckMigration } from '@/utils/migrations/payPeriodMigration';
@@ -633,9 +633,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const expandedCalendarItemsForSafeToSpend = useMemo(() => {
     if (!currentPeriodId) return [];
     const paycheckA = parseISO(currentPeriodId);
-    // Expand for 60 days (same window as original calculateSafeToSpend)
+    // Window matches calculateSafeToSpend: 1-month overdue lookback (so unpaid
+    // bills from the previous period stay reserved) through 60 days ahead.
     const searchWindowEnd = addMonths(paycheckA, 2);
-    return expandCalendarItems(calendarItems, paycheckA, searchWindowEnd);
+    return expandCalendarItems(calendarItems, calculateSafeToSpendExpansionStart(paycheckA), searchWindowEnd);
   }, [calendarItems, currentPeriodId]);
 
   const safeToSpendBreakdown = useMemo(
