@@ -13,6 +13,7 @@ import { format, startOfWeek, addDays, parseISO } from 'date-fns';
 import { IngredientSelectorModal } from './IngredientSelectorModal';
 import { CookbookModal } from './CookbookModal';
 import { RecipeModal } from './RecipeModal';
+import { RecipeRateToast } from './RecipeRateToast';
 import { AddMealModal } from './AddMealModal';
 import { AISuggestModal } from './AISuggestModal';
 import { RecipeImportModal } from './RecipeImportModal';
@@ -485,7 +486,7 @@ const MealPlanTab: React.FC = () => {
       if (meal.id) {
         await updateMeal({
             ...meal,
-            lastCooked: new Date().toISOString()
+            lastCooked: getLocalDateString()
         });
       }
 
@@ -505,6 +506,32 @@ const MealPlanTab: React.FC = () => {
 
       setViewingMeal(null);
       toast.success('Bon Appétit! Marked as cooked.');
+
+      // 3. Quick-rate prompt — only when this recipe has never been rated.
+      // `rating` defaults to 0 (not undefined) for app-created meals — see
+      // CookbookModal's `meal.rating > 0` "is rated" check — so a falsy
+      // check (covers both `undefined` and `0`) matches that convention and
+      // avoids re-nagging on every subsequent cook once rated.
+      if (meal.id && !meal.rating) {
+        const mealId = meal.id;
+        toast(
+          (t) => (
+            <RecipeRateToast
+              mealName={meal.name}
+              onRate={(rating) => {
+                toast.dismiss(t.id);
+                void updateMeal({
+                  ...meal,
+                  id: mealId,
+                  rating,
+                  lastCooked: getLocalDateString()
+                });
+              }}
+            />
+          ),
+          { duration: 8000, icon: toastIcon(Sparkles) }
+        );
+      }
     } catch (error) {
       console.error('Failed to mark cooked:', error);
       toast.error('Failed to update status');
@@ -1166,6 +1193,7 @@ const MealPlanTab: React.FC = () => {
             meal={viewingMeal.meal}
             planItem={viewingMeal.planItem}
             onMarkCooked={handleMarkCooked}
+            onShopIngredients={handleOpenIngredientSelector}
         />
       )}
 
