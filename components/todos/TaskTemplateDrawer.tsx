@@ -102,6 +102,8 @@ export const TaskTemplateDrawer: React.FC<TaskTemplateDrawerProps> = ({ isOpen, 
       setIsCreating(false);
       setNewName('');
       setNewItemsText('');
+    } catch {
+      // Error is already handled and toasted by addTaskTemplate
     } finally {
       setIsSavingNew(false);
     }

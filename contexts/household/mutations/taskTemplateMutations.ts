@@ -30,7 +30,9 @@ export function makeTaskTemplateMutations(deps: {
   const { db, householdId } = deps;
 
   const addTaskTemplate = async (template: Omit<TaskTemplate, 'id'>) => {
-    if (!householdId) return;
+    if (!householdId) {
+      throw new Error('Household not selected');
+    }
     try {
       const newTemplate: TaskTemplate = { ...template, id: crypto.randomUUID() };
       await updateDoc(doc(db, `households/${householdId}`), {
@@ -40,6 +42,7 @@ export function makeTaskTemplateMutations(deps: {
     } catch (error) {
       console.error('[addTaskTemplate] Failed:', error);
       toast.error('Failed to create template');
+      throw error;
     }
   };
 

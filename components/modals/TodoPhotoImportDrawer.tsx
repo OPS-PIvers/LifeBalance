@@ -54,6 +54,11 @@ export const TodoPhotoImportDrawer: React.FC<TodoPhotoImportDrawerProps> = ({
         })
       )
     );
+    results.forEach((result) => {
+      if (result.status === 'rejected') {
+        console.error('Failed to add to-do:', result.reason);
+      }
+    });
     const succeeded = results.filter((r) => r.status === 'fulfilled').length;
     if (succeeded === 0) throw new Error('All to-do writes failed');
     toast.success(`Added ${succeeded} to-do${succeeded === 1 ? '' : 's'}`);
@@ -80,6 +85,7 @@ export const TodoPhotoImportDrawer: React.FC<TodoPhotoImportDrawerProps> = ({
       onCommit={onCommit}
       commitLabel={(count) => `Add ${count} to-do${count === 1 ? '' : 's'}`}
       emptyResult="No tasks found in that photo. Try a clearer shot."
+      getItemLabel={(item) => item.text}
     />
   );
 };

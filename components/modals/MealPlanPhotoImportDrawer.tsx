@@ -38,7 +38,11 @@ const MEAL_TYPES: MealPlanSlot[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 /** Map a parsed weekday name to a Monday-first index; unknown/empty → Monday (0). */
 const dayNameToIndex = (day: string | undefined): number => {
   if (!day) return 0;
-  const idx = WEEKDAYS.findIndex((d) => d.toLowerCase() === day.trim().toLowerCase());
+  const cleanDay = day.trim().toLowerCase();
+  const idx = WEEKDAYS.findIndex((d) => {
+    const lowerD = d.toLowerCase();
+    return lowerD === cleanDay || lowerD.startsWith(cleanDay) || cleanDay.startsWith(lowerD.slice(0, 3));
+  });
   return idx === -1 ? 0 : idx;
 };
 
@@ -85,6 +89,11 @@ export const MealPlanPhotoImportDrawer: React.FC<MealPlanPhotoImportDrawerProps>
         )
       )
     );
+    results.forEach((result) => {
+      if (result.status === 'rejected') {
+        console.error('Failed to add meal:', result.reason);
+      }
+    });
     const succeeded = results.filter((r) => r.status === 'fulfilled').length;
     if (succeeded === 0) throw new Error('All meal-plan writes failed');
     toast.success(`Added ${succeeded} meal${succeeded === 1 ? '' : 's'} to the plan`);
@@ -139,6 +148,7 @@ export const MealPlanPhotoImportDrawer: React.FC<MealPlanPhotoImportDrawerProps>
       onCommit={onCommit}
       commitLabel={(count) => `Add ${count} meal${count === 1 ? '' : 's'}`}
       emptyResult="No meals found in that photo. Try a clearer shot."
+      getItemLabel={(item) => item.mealName}
     />
   );
 };
