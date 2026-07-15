@@ -13,6 +13,7 @@ import {
   type HouseholdMember,
 } from "./shared/notifications";
 import { writeProactiveInsight, type ProactiveCapHouseholdDoc } from "./insights/writeProactiveInsight";
+import { buildActionsDataField, isBillReminderSnoozed } from "./shared/notificationActions";
 
 // Re-export for consumers that imported this from index.ts before the
 // extraction to shared/notifications.ts.
@@ -496,6 +497,15 @@ export const sendbillreminders = onSchedule(
             prefs.timezone || "UTC",
             "yyyy-MM-dd"
           );
+
+          // F-NOTIF-05: honor a "Snooze 1 day" push action. The client wrote
+          // billReminders.snoozedUntil (yyyy-MM-dd local); suppress the reminder
+          // while today is on or before that date.
+          if (isBillReminderSnoozed(prefs.billReminders.snoozedUntil, localToday)) {
+            logger.info(`Member ${member.uid}: bill reminders snoozed until ${prefs.billReminders.snoozedUntil}, skipping`);
+            continue;
+          }
+
           const [ly, lm, ld] = localToday.split("-").map(Number);
           const targetDateObj = new Date(
             Date.UTC(ly ?? 2000, (lm ?? 1) - 1, (ld ?? 1) + daysAhead)
@@ -533,6 +543,13 @@ export const sendbillreminders = onSchedule(
               {
                 type: "bill_reminder",
                 url: "/budget",
+                // F-NOTIF-05: inline action buttons ("Pay bill"/"Snooze 1 day").
+                // JSON string (FCM data values must be strings); the SW renders
+                // them and deep-links back with ?nact=<action>. Undefined key is
+                // dropped by the spread so non-action types are unaffected.
+                ...(buildActionsDataField("bill_reminder")
+                  ? { actions: buildActionsDataField("bill_reminder") as string }
+                  : {}),
               },
               memberDoc.ref
             );
