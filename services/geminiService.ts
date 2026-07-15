@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type, Schema, Part } from "@google/genai";
 import { Meal, Transaction, Habit, InsightAction, Household } from "@/types/schema";
+import type { ReflectionSnippet } from "@/utils/habitReflections";
 import { WeeklyPlan, WeeklyPlanConstraints, WeeklyPlanStore } from "@/types/weeklyPlan";
 import { GROCERY_CATEGORIES } from "@/data/groceryCategories";
 import { db, getFunctionsInstance } from "@/firebase.config";
@@ -394,7 +395,7 @@ async function withTimeoutAndRetry<T>(
  * AI Prompt template for generating household insights.
  * This can be easily modified or A/B tested without changing function logic.
  */
-const INSIGHT_GENERATION_PROMPT = (transactions: string, habits: string, previousInsights: string = "") => `Analyze this household data to provide ONE concise, helpful, and digestible insight.
+const INSIGHT_GENERATION_PROMPT = (transactions: string, habits: string, previousInsights: string = "", reflections: string = "") => `Analyze this household data to provide ONE concise, helpful, and digestible insight.
 The insight should be deep and actionable, not just a basic observation.
 Focus on patterns between spending and habits if possible, or interesting trends in either.
 Keep the 'text' under 30 words.
@@ -402,6 +403,11 @@ Keep the 'text' under 30 words.
 ${previousInsights ? `
 PREVIOUS INSIGHTS (Do not repeat these. Instead, expand on them with new analysis, look for different patterns, or provide a completely new insight):
 ${previousInsights}
+` : ''}
+
+${reflections ? `
+Recent self-reported notes/moods on habit completions (use these only if they add real signal — never quote them verbatim):
+${reflections}
 ` : ''}
 
 Also suggest 0-2 actionable 'actions' the user can take to improve their situation.
@@ -1128,6 +1134,9 @@ export const optimizeGroceryList = async (
  * @param previousInsights - List of previous insight texts to avoid repetition
  * @param options - Optional configuration for insight generation
  * @param options.includeMerchantNames - If true, includes merchant names in the data sent to AI (default: true)
+ * @param recentReflections - F-HABITS-06: a small, bounded list of recent habit note/mood
+ *   snippets (see `selectRecentReflections`) so insights can reference how a habit *felt*,
+ *   not just whether it was completed.
  * @param _aiClient - Optional injected AI client for testing purposes.
  */
 export const generateInsight = async (
@@ -1136,7 +1145,8 @@ export const generateInsight = async (
   habits: Habit[],
   previousInsights: string[] = [],
   options?: { includeMerchantNames?: boolean },
-  _aiClient?: Pick<typeof ai, 'models'>
+  _aiClient?: Pick<typeof ai, 'models'>,
+  recentReflections: ReflectionSnippet[] = []
 ): Promise<{ text: string, actions?: InsightAction[] }> => {
   return withErrorHandling('Insight Generation', 'Failed to generate insight.', async () => {
     // Anonymize and simplify data
@@ -1159,10 +1169,19 @@ export const generateInsight = async (
       ? previousInsights.map(t => `- "${t}"`).join('\n')
       : '';
 
+    // Small, bounded, already-truncated by selectRecentReflections — sanitized
+    // the same way habit titles are, since notes are free text.
+    const reflectionsStr = recentReflections.length > 0
+      ? recentReflections
+          .map(r => `- ${sanitizeForPrompt(r.habitTitle)}: ${[r.mood, r.note ? sanitizeForPrompt(r.note) : undefined].filter(Boolean).join(' — ')}`)
+          .join('\n')
+      : '';
+
     const prompt = INSIGHT_GENERATION_PROMPT(
       JSON.stringify(simplifiedTransactions),
       JSON.stringify(simplifiedHabits),
-      previousInsightsStr
+      previousInsightsStr,
+      reflectionsStr
     );
 
     return await generateJsonContent<{ text: string, actions?: InsightAction[] }>(

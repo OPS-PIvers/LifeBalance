@@ -4,14 +4,19 @@ import {
   deleteField,
   addDoc,
   collection,
+  getDocs,
+  query,
+  orderBy,
+  limit as firestoreLimit,
   type Firestore,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 import { Sparkles } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
-import { Habit, Insight, ModuleKey, Transaction } from '@/types/schema';
+import { Habit, HabitSubmission, Insight, ModuleKey, Transaction } from '@/types/schema';
 import { hashKidPin } from '@/utils/kidPin';
 import { track } from '@/services/analytics';
+import { selectRecentReflections } from '@/utils/habitReflections';
 
 // Pure-ish factories for the core household-settings/onboarding mutations plus
 // `refreshInsight`, moved verbatim out of FirebaseHouseholdContext. See
@@ -114,7 +119,29 @@ export function makeRefreshInsight(deps: {
         .slice(0, 3)
         .map(i => i.text);
 
-      const { text, actions } = await generateInsight(householdId, transactions, habits, previousInsightsTexts);
+      // F-HABITS-06 owner note (3): fan out to at most 3 submission-tracked
+      // habits, 3 most-recent submissions each — a small, bounded read (never
+      // more than 9 docs) so this stays cheap on every insight generation.
+      // selectRecentReflections then further trims/sorts down to 5 total.
+      const submissionTrackedHabits = habits.filter(h => h.hasSubmissionTracking).slice(0, 3);
+      const reflectionCandidates = (await Promise.all(
+        submissionTrackedHabits.map(h => getDocs(query(
+          collection(db, `households/${householdId}/habits/${h.id}/submissions`),
+          orderBy('createdAt', 'desc'),
+          firestoreLimit(3),
+        )))
+      )).flatMap(snap => snap.docs.map(d => d.data() as HabitSubmission));
+      const recentReflections = selectRecentReflections(reflectionCandidates);
+
+      const { text, actions } = await generateInsight(
+        householdId,
+        transactions,
+        habits,
+        previousInsightsTexts,
+        undefined,
+        undefined,
+        recentReflections
+      );
 
       const newInsight: Omit<Insight, 'id'> = {
         text,

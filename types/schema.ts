@@ -55,6 +55,14 @@ export interface NotificationPreferences {
     enabled: boolean;
   };
 
+  // F-HABITS-06: opt-in evening nudge to jot a quick note/mood on today's
+  // habit completions. Preference only — the scheduled sending job is a
+  // follow-up (see TODO.md / roadmap concerns).
+  reflectionReminder?: {
+    enabled: boolean;
+    time: string; // HH:MM format (24-hour)
+  };
+
   // Monthly money recap push (F-MONEY-06). Sent server-side on the 1st of the
   // month ~09:00 in the member's timezone; a bare toggle like weeklyRecap.
   // Optional so legacy docs deserialize — treat absent as enabled (default ON).
@@ -414,6 +422,9 @@ export interface Habit {
   archivedAt?: string;
 }
 
+// F-HABITS-06: quick mood tag attachable to a habit completion submission.
+export type HabitMood = 'great' | 'good' | 'meh' | 'rough';
+
 export interface HabitSubmission {
   id: string;
   habitId: string;
@@ -427,6 +438,9 @@ export interface HabitSubmission {
   createdBy: string; // uid of member who submitted
   createdAt: string; // ISO timestamp
   updatedAt?: string; // ISO timestamp if edited
+  // F-HABITS-06: optional lightweight journal attached to a completion.
+  note?: string; // Free-text reflection, capped ~280 chars
+  mood?: HabitMood;
 }
 
 export interface RewardItem {
