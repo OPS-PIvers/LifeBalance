@@ -70,7 +70,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
       setIngredientQty('');
     } else {
       setMoreDetailsOpen(
-        !!(currentMeal.description || currentMeal.instructions?.length || currentMeal.recipeUrl || currentMeal.tags?.length)
+        !!(currentMeal.description || currentMeal.instructions?.length || currentMeal.recipeUrl || currentMeal.tags?.length || typeof currentMeal.estimatedCost === 'number')
       );
     }
   }
@@ -223,6 +223,37 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                     onChange={e => setCurrentMeal({...currentMeal, recipeUrl: e.target.value})}
                     placeholder="https://example.com/recipe"
                 />
+
+                <div>
+                    <label htmlFor="meal-estimated-cost" className="block text-xs font-bold text-brand-400 dark:text-brand-450 uppercase tracking-wider mb-2">
+                        Estimated Cost <span className="normal-case font-medium text-brand-350 dark:text-brand-500">(optional)</span>
+                    </label>
+                    <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-brand-400 dark:text-brand-450">
+                            $
+                        </span>
+                        <input
+                            id="meal-estimated-cost"
+                            type="number"
+                            inputMode="decimal"
+                            min="0"
+                            step="0.01"
+                            value={currentMeal.estimatedCost ?? ''}
+                            onChange={e => {
+                                const raw = e.target.value;
+                                setCurrentMeal({
+                                    ...currentMeal,
+                                    estimatedCost: raw === '' || Number.isNaN(parseFloat(raw)) ? undefined : Math.max(0, parseFloat(raw)),
+                                });
+                            }}
+                            placeholder="0.00"
+                            className="w-full pl-7 pr-3 py-2.5 font-mono tabular-nums text-sm rounded-xl border border-brand-200 dark:border-brand-600 bg-brand-50 dark:bg-brand-700/40 text-brand-700 dark:text-brand-200 focus:outline-hidden focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500"
+                        />
+                    </div>
+                    <p className="text-xxs text-brand-400 dark:text-brand-450 mt-1.5 pl-1">
+                        Used to show a weekly average for planned dinners.
+                    </p>
+                </div>
 
                 {/* Tags Section */}
                 <div>
