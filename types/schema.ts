@@ -732,6 +732,12 @@ export interface Household {
   // app_config/global.kidModeEnabled flag is on.
   kidModePinHash?: string;
 
+  // F-MEALS-04: id of the habit auto-credited when a meal-plan item is marked
+  // `isCooked: true` (e.g. "Cooked dinner at home"). Absent means no linked
+  // habit — marking a meal cooked stays a meals-only action. Set via the
+  // "Cook habit" picker in MealPlanTab's overflow menu.
+  mealCookedHabitId?: string;
+
   // Plan 080d-2 (Kid Mode): kid reward-redemption requests awaiting parent
   // approval. Only PENDING requests live here — each is removed on approve/deny,
   // so the array stays bounded. Absent on every legacy + non-kid household

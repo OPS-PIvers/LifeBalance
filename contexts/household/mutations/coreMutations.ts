@@ -71,6 +71,14 @@ export function makeHouseholdSettingsMutations(deps: {
     await updateDoc(ref, { kidModePinHash });
   };
 
+  // F-MEALS-04: set/clear the habit auto-credited when a meal is marked cooked.
+  // `null` clears the link (deleteField, matching setKidModePin's clear semantics).
+  const setMealCookedHabitId = async (habitId: string | null): Promise<void> => {
+    if (!householdId) return;
+    const ref = doc(db, 'households', householdId);
+    await updateDoc(ref, { mealCookedHabitId: habitId === null ? deleteField() : habitId });
+  };
+
   // F-PLAT-07 — apply an entire module preset (e.g. "Finance only") in one
   // write. Same dotted-path-merge approach as setModuleVisibility, just N
   // keys in a single updateDoc so the write is atomic and there's no
@@ -85,7 +93,7 @@ export function makeHouseholdSettingsMutations(deps: {
     await updateDoc(doc(db, 'households', householdId), dottedPatch);
   };
 
-  return { completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setKidModePin };
+  return { completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setKidModePin, setMealCookedHabitId };
 }
 
 /**
