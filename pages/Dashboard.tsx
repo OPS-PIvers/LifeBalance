@@ -47,6 +47,7 @@ import { Section, SurfaceList } from '@/components/ui/Section';
 import { ShowMoreRow } from '@/components/ui/ShowMoreRow';
 import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
+import { getVisibleOrderedWidgetIds } from '@/utils/dashboardLayout';
 
 // Cap the Action Queue like the sibling widgets (which cap at 5; the queue gets
 // one extra row since it's the page's primary triage surface). useActionQueue
@@ -85,6 +86,14 @@ const Dashboard: React.FC = () => {
 
   // --- ACTION QUEUE LOGIC ---
   const { actionQueue } = useActionQueue();
+
+  // F-XCUT-02: per-member Dashboard widget order/visibility. The Action
+  // Queue and voice-command banner stay structural (fixed position); only
+  // the widgets below are reorderable/hideable — see utils/dashboardLayout.ts.
+  const widgetOrder = useMemo(
+    () => getVisibleOrderedWidgetIds(currentUser?.dashboardLayout, currentUser?.dashboardHidden),
+    [currentUser?.dashboardLayout, currentUser?.dashboardHidden]
+  );
 
   // State for expansions/modals
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -447,29 +456,60 @@ const Dashboard: React.FC = () => {
             "All caught up" state doesn't dominate the top of the page. */}
         {actionQueue.length > 0 && actionQueueSection}
 
-        {/* The Pulse strip — "This week" at a glance (money + habits balance,
-            the app's thesis metric). Leads the widgets, above credit + habits. */}
-        <PulseStripWidget />
-
-        {/* Today's Habits — smart-ranked compact tracker (habits domain — Plan
-            090). Kept high so active / at-risk streaks lead the page. */}
-        {isModuleEnabled('habits') && <DailyHabitsWidget />}
-
-        {/* Credit card activity — charges vs. paydowns this period so balances
-            don't balloon (money domain). Self-nulls without any credit cards. */}
-        {isModuleEnabled('money') && <CreditCardActivityWidget onPayDown={handlePayDown} />}
-
-        {/* Weekly recap (Plan 02) — fresh for a few days after the Sunday
-            generation, dismissible; also hosts the recap detail drawer (which
-            must stay mounted for the ?recap= push deep link even when the
-            card itself is hidden). */}
-        <WeeklyRecapCard />
-
-        {/* Monthly money recap (F-MONEY-06) — budget-vs-actual close-out, fresh
-            for a few days after the 1st-of-month generation, dismissible; also
-            hosts the recap detail drawer (which must stay mounted for the
-            ?moneyrecap= push deep link even when the card itself is hidden). */}
-        <MoneyRecapCard />
+        {/* F-XCUT-02: the widgets below render in each member's customized
+            order (Settings → Dashboard widgets), defaulting to this order.
+            Module-gating (habits/money) still applies on top of the
+            member's own hide list. */}
+        {widgetOrder.map(id => {
+          switch (id) {
+            case 'pulseStrip':
+              // The Pulse strip — "This week" at a glance (money + habits
+              // balance, the app's thesis metric).
+              return <PulseStripWidget key={id} />;
+            case 'dailyHabits':
+              // Today's Habits — smart-ranked compact tracker (habits
+              // domain — Plan 090).
+              return isModuleEnabled('habits') ? <DailyHabitsWidget key={id} /> : null;
+            case 'creditCardActivity':
+              // Credit card activity — charges vs. paydowns this period so
+              // balances don't balloon (money domain). Self-nulls without
+              // any credit cards.
+              return isModuleEnabled('money')
+                ? <CreditCardActivityWidget key={id} onPayDown={handlePayDown} />
+                : null;
+            case 'weeklyRecap':
+              // Weekly recap (Plan 02) — fresh for a few days after the
+              // Sunday generation, dismissible; also hosts the recap detail
+              // drawer (which must stay mounted for the ?recap= push deep
+              // link even when the card itself is hidden).
+              return <WeeklyRecapCard key={id} />;
+            case 'moneyRecap':
+              // Monthly money recap (F-MONEY-06) — budget-vs-actual
+              // close-out, fresh for a few days after the 1st-of-month
+              // generation, dismissible; also hosts the recap detail drawer
+              // (which must stay mounted for the ?moneyrecap= push deep
+              // link even when the card itself is hidden).
+              return <MoneyRecapCard key={id} />;
+            case 'kidsChores':
+              // Kids' Chores (parent overview) — self-nulls unless Kid Mode
+              // is on and a managed kid has a chore.
+              return <KidsChoresWidget key={id} />;
+            case 'insight':
+              // One AI Insight
+              return (
+                <InsightWidget
+                  key={id}
+                  onOpenArchive={handleOpenArchive}
+                  onCreateChallenge={handleCreateChallenge}
+                />
+              );
+            case 'activityFeed':
+              // Compact Recent Activity
+              return <ActivityFeedWidget key={id} />;
+            default:
+              return null;
+          }
+        })}
 
         {/* Pending Voice Commands Banner — on the shared Section wrapper so it
             reads as the same idiom as every other widget, not a bespoke ad hoc
@@ -495,19 +535,6 @@ const Dashboard: React.FC = () => {
         {/* Empty-queue case: the "All caught up" section stays in its original
             position below the widgets rather than leading the page. */}
         {actionQueue.length === 0 && actionQueueSection}
-
-        {/* Kids' Chores (parent overview) — self-nulls unless Kid Mode is on and a
-            managed kid has a chore, so this is dormant by default. */}
-        <KidsChoresWidget />
-
-        {/* One AI Insight */}
-        <InsightWidget
-          onOpenArchive={handleOpenArchive}
-          onCreateChallenge={handleCreateChallenge}
-        />
-
-        {/* Compact Recent Activity */}
-        <ActivityFeedWidget />
 
       </div>
 

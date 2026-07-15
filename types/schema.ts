@@ -104,6 +104,15 @@ export interface HouseholdMember {
   // Functions can query via a collection-group index instead of scanning
   // every household/member (see functions/src/shared/notifications.ts).
   anyNotificationsEnabled?: boolean;
+
+  // F-XCUT-02: per-member Dashboard widget customization. `dashboardLayout`
+  // is the widget-id order (see utils/dashboardLayout.ts DASHBOARD_WIDGET_IDS
+  // for valid ids); missing/unknown ids fall back to the default order.
+  // `dashboardHidden` lists widget ids the member has hidden. Both are
+  // optional — an un-customized member renders every widget in the default
+  // order.
+  dashboardLayout?: string[];
+  dashboardHidden?: string[];
 }
 
 export interface Account {
