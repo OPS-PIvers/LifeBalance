@@ -15,9 +15,10 @@ import {
   calendarItemConverter,
   transactionConverter,
   savingsGoalConverter,
+  netWorthSnapshotConverter,
 } from '@/utils/firestoreConverters';
-import { Account, BudgetBucket, BucketPeriodSnapshot, CalendarItem, Transaction, SavingsGoal } from '@/types/schema';
-import { BUCKET_HISTORY_LIMIT } from '@/utils/listenerWindows';
+import { Account, BudgetBucket, BucketPeriodSnapshot, CalendarItem, Transaction, SavingsGoal, NetWorthSnapshot } from '@/types/schema';
+import { BUCKET_HISTORY_LIMIT, NET_WORTH_HISTORY_LIMIT } from '@/utils/listenerWindows';
 import { mapTransactionDoc } from '@/contexts/household/selectors';
 import toast from 'react-hot-toast';
 
@@ -42,6 +43,7 @@ export function attachFinanceListeners({
   bucketHistoryLoadedAllRef,
   setCalendarItems,
   setSavingsGoals,
+  setNetWorthHistory,
 }: {
   db: Firestore;
   householdId: string;
@@ -52,6 +54,7 @@ export function attachFinanceListeners({
   bucketHistoryLoadedAllRef: { current: boolean };
   setCalendarItems: (items: CalendarItem[]) => void;
   setSavingsGoals: (goals: SavingsGoal[]) => void;
+  setNetWorthHistory: (history: NetWorthSnapshot[]) => void;
 }): Unsubscribe[] {
   const unsubscribers: Unsubscribe[] = [];
 
@@ -124,6 +127,23 @@ export function attachFinanceListeners({
       setSavingsGoals(snapshot.docs.map(doc => doc.data()));
     }, (error) => {
       console.error('[savingsGoals] listener failed:', error);
+    })
+  );
+
+  // Net worth history listener (F-MONEY-09) — bounded live window of the most
+  // recent N daily snapshots, newest first (mirrors the RECAPS_LIMIT pattern).
+  // Snapshots are written server-side by the daily `snapshotnetworth`
+  // scheduled function; the client never writes to this collection.
+  const netWorthQuery = query(
+    collection(db, `households/${householdId}/netWorthSnapshots`).withConverter(netWorthSnapshotConverter),
+    orderBy('date', 'desc'),
+    limit(NET_WORTH_HISTORY_LIMIT)
+  );
+  unsubscribers.push(
+    onSnapshot(netWorthQuery, (snapshot) => {
+      setNetWorthHistory(snapshot.docs.map(doc => doc.data()));
+    }, (error) => {
+      console.error('[netWorthSnapshots] listener failed:', error);
     })
   );
 

@@ -31,6 +31,7 @@ import {
   Account,
   BudgetBucket,
   Transaction,
+  SplitParticipant,
   CalendarItem,
   Habit,
   Challenge,
@@ -52,7 +53,9 @@ import {
   PendingItem,
   ModuleKey,
   WeeklyRecap,
+  MonthlyMoneyRecap,
   SavingsGoal,
+  NetWorthSnapshot,
   DietaryProfile
 } from '@/types/schema';
 import { calculateSafeToSpendBreakdownFromExpanded } from '@/utils/safeToSpendCalculator';
@@ -111,6 +114,8 @@ import {
   makeMergeTransactions,
   makeKeepBothTransactions,
   makeSplitTransaction,
+  makeSetTransactionSplit,
+  makeMarkSplitSettled,
 } from '@/contexts/household/mutations/transactionMutations';
 import {
   makeGetTransactionComments,
@@ -378,6 +383,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [buckets, setBuckets] = useState<BudgetBucket[]>([]);
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
+  const [netWorthHistory, setNetWorthHistory] = useState<NetWorthSnapshot[]>([]);
   const bucketsRef = useRef(buckets); // Ref to access latest buckets in listeners
 
   useEffect(() => {
@@ -502,6 +508,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // Bucket history: live window (most-recent N periods) merged with older history.
   // Weekly recaps (Plan 02) — bounded live window, newest first (see RECAPS_LIMIT).
   const [recaps, setRecaps] = useState<WeeklyRecap[]>([]);
+  // Monthly money recaps (F-MONEY-06) — bounded live window, newest first.
+  const [moneyRecaps, setMoneyRecaps] = useState<MonthlyMoneyRecap[]>([]);
   const [bucketHistoryWindow, setBucketHistoryWindow] = useState<BucketPeriodSnapshot[]>([]);
   const [bucketHistoryOlder, setBucketHistoryOlder] = useState<BucketPeriodSnapshot[]>([]);
   const bucketHistory = useMemo(
@@ -559,7 +567,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   useEffect(() => { householdSettingsRef.current = householdSettings; }, [householdSettings]);
 
   // Habit Actions Hook
-  const habitActions = useHabitActions(householdId, currentUser, habits, householdSettings);
+  const habitActions = useHabitActions(householdId, currentUser, habits, householdSettings, rewards);
 
   // Derived state (Optimized to prevent extra re-renders)
   const currentPeriodId = householdSettings?.lastPaycheckDate || '';
@@ -618,6 +626,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setAccounts([]);
     setBuckets([]);
     setSavingsGoals([]);
+    setNetWorthHistory([]);
     setRecentTransactions([]);
     setOlderTransactions([]);
     recentTransactionsRef.current = [];
@@ -689,6 +698,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       bucketHistoryLoadedAllRef,
       setCalendarItems: (data) => setCalendarItems(data),
       setSavingsGoals: (data) => setSavingsGoals(data),
+      setNetWorthHistory: (data) => setNetWorthHistory(data),
     }));
 
     // (Transactions are handled by their own effect below so the window can
@@ -773,6 +783,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       setLoadedHouseholdId: (id) => setLoadedHouseholdId(id),
       setFreezeBank: (data) => setFreezeBank(data),
       setRecaps: (data) => setRecaps(data),
+      setMoneyRecaps: (data) => setMoneyRecaps(data),
       setApiKeys: (data) => setApiKeys(data),
       setInsightsWindow: (data) => setInsightsWindow(data),
       setHasMoreInsights: (data) => setHasMoreInsights(data),
@@ -1556,6 +1567,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeAccountMutations({ db, householdId, user }).deleteAccount(id);
   }, [householdId, user]);
 
+  const archiveAccount = useCallback(async (id: string) => {
+    await makeAccountMutations({ db, householdId, user }).archiveAccount(id);
+  }, [householdId, user]);
+
+  const unarchiveAccount = useCallback(async (id: string) => {
+    await makeAccountMutations({ db, householdId, user }).unarchiveAccount(id);
+  }, [householdId, user]);
+
   const updateAccountOrder = useCallback(async (accountId: string, newOrder: number) => {
     await makeAccountMutations({ db, householdId, user }).updateAccountOrder(accountId, newOrder);
   }, [householdId, user]);
@@ -1698,6 +1717,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       db, householdId, user, transactions, householdSettings, accounts,
     }).splitTransaction(originalTransactionId, newTransactions);
   }, [householdId, user, transactions, householdSettings, accounts]);
+
+  const setTransactionSplit = useCallback(async (transactionId: string, split: SplitParticipant[] | null) => {
+    await makeSetTransactionSplit({ db, householdId }).setTransactionSplit(transactionId, split);
+  }, [householdId]);
+
+  const markSplitSettled = useCallback(async (transactionId: string, participantKey: string, settled?: boolean) => {
+    await makeMarkSplitSettled({ db, householdId, transactions }).markSplitSettled(transactionId, participantKey, settled);
+  }, [householdId, transactions]);
 
   // Plan 23 — transaction comments. ON-DEMAND fetch (no listener); the
   // households/{id}/transactions/{txnId}/comments subcollection has no
@@ -2094,6 +2121,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     accounts,
     buckets,
     savingsGoals,
+    netWorthHistory,
     calendarItems,
     transactions,
     currentPeriodId,
@@ -2112,6 +2140,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setAccountGoal,
     setAccountCardLast4,
     deleteAccount,
+    archiveAccount,
+    unarchiveAccount,
     updateAccountOrder,
     reorderAccounts,
     addSavingsGoal,
@@ -2133,20 +2163,23 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateTransaction,
     deleteTransaction,
     splitTransaction,
+    setTransactionSplit,
+    markSplitSettled,
     mergeTransactions,
     keepBothTransactions,
     getTransactionComments,
     addTransactionComment,
     deleteTransactionComment,
   }), [
-    safeToSpend, safeToSpendBreakdown, accounts, buckets, savingsGoals, calendarItems, transactions, currentPeriodId, bucketSpentMap, bucketHistory,
+    safeToSpend, safeToSpendBreakdown, accounts, buckets, savingsGoals, netWorthHistory, calendarItems, transactions, currentPeriodId, bucketSpentMap, bucketHistory,
     transactionWindowStart, isLoadingOlderTransactions, hasMoreTransactions, loadOlderTransactions, loadAllTransactions,
     isLoadingOlderBucketHistory, hasMoreBucketHistory, loadAllBucketHistory,
-    addAccount, updateAccountBalance, setAccountGoal, setAccountCardLast4, deleteAccount, updateAccountOrder, reorderAccounts,
+    addAccount, updateAccountBalance, setAccountGoal, setAccountCardLast4, deleteAccount, archiveAccount, unarchiveAccount, updateAccountOrder, reorderAccounts,
     addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, contributeToGoal,
     addBucket, updateBucket, deleteBucket, updateBucketLimit, reallocateBucket,
     addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem,
     addTransaction, updateTransactionCategory, updateTransaction, deleteTransaction, splitTransaction,
+    setTransactionSplit, markSplitSettled,
     mergeTransactions, keepBothTransactions, getTransactionComments, addTransactionComment, deleteTransactionComment,
   ]);
 
@@ -2284,6 +2317,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     actAs,
     exitToParent,
     recaps,
+    moneyRecaps,
   }), [
     isLoading, currentUser, members, insight, insightsHistory, isGeneratingInsight, hasMoreInsights, loadAllInsights,
     pendingItemsCount, apiKeys,
@@ -2291,6 +2325,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     completeOnboarding, setHouseholdCurrency, setModuleVisibility, setKidModePin, setDietaryProfile,
     addKidProfile, updateKidProfile, removeKidProfile, activeMemberId, actAs, exitToParent,
     recaps,
+    moneyRecaps,
   ]);
 
   return (

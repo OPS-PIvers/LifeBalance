@@ -107,14 +107,41 @@ export function makeAccountMutations(deps: {
 
   const deleteAccount = async (id: string) => {
     if (!householdId) return;
-    // NOTE: transactions tagged to this account are intentionally left as-is
-    // (no migration). Their `accountId` becomes a dangling reference, which
-    // resolveTargetAccount() resolves to the checking account on the next
-    // mutation. A pending charge orphaned from a deleted credit/savings account
-    // stays excluded from Safe-to-Spend (sumPendingSpend excludes any accountId
-    // not in the current checking set).
+    // Genuine hard-delete is only safe for an account that has never been
+    // referenced by a transaction — otherwise the transaction's `accountId`
+    // becomes a dangling reference that resolveTargetAccount() silently
+    // resolves to the checking account, losing which card a historical
+    // purchase was really on. When history exists, steer to Archive instead
+    // (archiveAccount below), which keeps the account doc around so
+    // transactions keep resolving to it correctly.
+    const referencingQuery = query(
+      collection(db, `households/${householdId}/transactions`).withConverter(transactionConverter),
+      where('accountId', '==', id),
+      limit(1)
+    );
+    const referencingSnap = await getDocs(referencingQuery);
+    if (!referencingSnap.empty) {
+      toast.error('This account has transaction history — archive it instead of deleting');
+      return;
+    }
     await deleteDoc(doc(db, `households/${householdId}/accounts`, id));
     toast.success('Account deleted');
+  };
+
+  const archiveAccount = async (id: string) => {
+    if (!householdId) return;
+    await updateDoc(doc(db, `households/${householdId}/accounts`, id), {
+      archived: true,
+    });
+    toast.success('Account archived');
+  };
+
+  const unarchiveAccount = async (id: string) => {
+    if (!householdId) return;
+    await updateDoc(doc(db, `households/${householdId}/accounts`, id), {
+      archived: deleteField(),
+    });
+    toast.success('Account unarchived');
   };
 
   const updateAccountOrder = async (accountId: string, newOrder: number) => {
@@ -142,7 +169,7 @@ export function makeAccountMutations(deps: {
 
   return {
     addAccount, updateAccountBalance, setAccountGoal, setAccountCardLast4,
-    deleteAccount, updateAccountOrder, reorderAccounts,
+    deleteAccount, archiveAccount, unarchiveAccount, updateAccountOrder, reorderAccounts,
   };
 }
 

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ChevronDown, Wallet, Receipt, Clock } from 'lucide-react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
 import { cn } from '@/utils/cn';
+import { calculateDailyPace } from '@/utils/spendPace';
 
 /**
  * Read-only Safe-to-Spend breakdown surfaced at the BOTTOM of the Money →
@@ -22,6 +23,11 @@ export const SafeToSpendDetail: React.FC = () => {
   const { safeToSpendBreakdown: breakdown } = useFinance();
   const fmt = useFormatCurrency();
   const [expanded, setExpanded] = useState(false);
+
+  const dailyPace = useMemo(
+    () => (breakdown ? calculateDailyPace(breakdown) : null),
+    [breakdown]
+  );
 
   if (breakdown === undefined) return null;
 
@@ -62,6 +68,11 @@ export const SafeToSpendDetail: React.FC = () => {
             )}
 
             <div className="px-4 pt-3 pb-3.5 hairline-divider">
+              {dailyPace !== null && (
+                <p className="text-xs font-semibold text-brand-700 dark:text-brand-200 mb-1.5">
+                  ≈ {fmt(dailyPace)}/day until payday
+                </p>
+              )}
               <p className="text-xxs text-brand-400 dark:text-brand-450 leading-relaxed">
                 Your available cash after bills due before your next paycheck and pending
                 (un-cleared) transactions. Bucket limits are not subtracted from this number.
