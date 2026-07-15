@@ -264,6 +264,13 @@ export interface Transaction {
    *  display field — never derived client-side from a fetched list, since
    *  comments are loaded on demand (no standing listener). */
   commentCount?: number;
+  /** F-DASH-04: itemized receipt line-item split. When one physical receipt is
+   *  split into several categorized transactions (e.g. a Target run → a
+   *  Groceries row + a Household row), every resulting transaction shares this
+   *  generated id so the list UI can visually group them back into one purchase.
+   *  Purely a display/grouping key — it never affects balances or Safe-to-Spend.
+   *  Absent on ordinary single-transaction captures. */
+  receiptGroupId?: string;
   /** uid of the member who created (and, for splitting, PAID FOR) this
    *  transaction. Written server-authoritatively by `addTransaction`
    *  (`createdBy: user.uid`); the converter passes it through. Used by the

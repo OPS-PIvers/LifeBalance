@@ -16,7 +16,7 @@ import {
 import { getLocalDateString } from "@/utils/dateHelpers";
 import { getLimits, LEGACY_AI_DAILY_QUOTA } from "@/utils/entitlements";
 import { getBillingEnabled } from "./appConfig";
-import type { ReceiptData } from './geminiService.types';
+import type { ReceiptData, ReceiptLineItemsData } from './geminiService.types';
 import {
   GeminiValidationError,
   InvalidImageError,
@@ -37,6 +37,7 @@ import {
   validateNaturalLanguageUnknown,
   validateRecipe,
   validateGeneratedWeeklyPlan,
+  validateReceiptLineItems,
 } from './geminiValidation';
 
 // Re-export image/validation error types and the image guard so callers/tests
@@ -46,6 +47,8 @@ export { GeminiValidationError, InvalidImageError, validateBase64Image };
 // Re-export plain types so existing importers keep compiling unchanged.
 export type {
   ReceiptData,
+  ReceiptLineItem,
+  ReceiptLineItemsData,
   ParsedShoppingList,
   ParsedTodoList,
   ParsedExpense,
@@ -819,6 +822,85 @@ export const analyzeReceipt = async (
     // Clamp to the household's real categories — the schema only constrains the
     // type, so an off-list category would otherwise land on the transaction.
     data.category = clampToAllowed(data.category, resolvedCategories);
+    return data;
+  });
+};
+
+/**
+ * F-DASH-04 — Extracts INDIVIDUAL line items from an itemized receipt so a
+ * single mixed-category purchase (e.g. a Target run) can be split into several
+ * categorized transactions instead of one lump. Modeled on `parseGroceryReceipt`
+ * (line-item OCR) but returns a per-receipt header (merchant/date/store) plus
+ * each item's `{description, amount, category}`, where category is clamped to the
+ * household's actual budget categories.
+ *
+ * @param householdId - The household ID for quota tracking
+ * @param base64Image - Base64 encoded receipt image
+ * @param availableCategories - Household budget categories to choose from
+ * @param availableStores - Existing store names to prefer for the receipt's store
+ * @param _aiClient - Optional injected AI client for testing purposes.
+ */
+export const parseReceiptLineItems = async (
+  householdId: string,
+  base64Image: string,
+  availableCategories?: string[],
+  availableStores?: string[],
+  _aiClient?: Pick<typeof ai, 'models'>
+): Promise<ReceiptLineItemsData> => {
+  return withErrorHandling('Receipt Line-Item Parse', 'Failed to itemize receipt. Please try manual entry.', async () => {
+    const resolvedCategories = availableCategories?.length ? availableCategories : DEFAULT_FINANCE_CATEGORIES;
+    const categoryList = sanitizeList(resolvedCategories);
+
+    const today = getLocalDateString();
+    const prompt = [
+      `Analyze this itemized receipt. Extract the merchant name, the purchase date (YYYY-MM-DD), and EVERY individual purchased line item.`,
+      `For each item, provide:`,
+      `- description: the product name, normalized to be readable (fix typos, expand abbreviations).`,
+      `- amount: the item's price in US dollars as a POSITIVE decimal number (e.g. 12.34). Parse "1,234.56" as 1234.56 ("." = decimal, "," = thousands separator). Multiply unit price by quantity if the receipt lists them separately.`,
+      `- category: choose exactly one of these strings: ${categoryList}. If none fits, use "${FALLBACK_CATEGORY}". Do not invent a new category.`,
+      `Ignore subtotal, tax, total, discounts, and non-product lines. If the image has no itemized products, return an empty items array [].`,
+      availableStores?.length
+        ? `Extract the store name if visible. Prefer one of these existing stores when it's the same place: ${sanitizeList(availableStores)}. Only return a different name if it is clearly a different store; otherwise leave it blank.`
+        : `Extract the store name if visible; otherwise leave it blank.`,
+      `Today's date is ${today}. If the year is missing, infer it.`,
+    ].filter(Boolean).join('\n');
+
+    const data = await generateJsonContent<ReceiptLineItemsData>(
+      householdId,
+      prepareImageContent(base64Image, prompt),
+      {
+        type: Type.OBJECT,
+        properties: {
+          merchant: { type: Type.STRING },
+          date: { type: Type.STRING },
+          store: { type: Type.STRING },
+          items: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                description: { type: Type.STRING },
+                amount: { type: Type.NUMBER },
+                category: { type: Type.STRING },
+              },
+              required: ["description", "amount", "category"],
+            },
+          },
+        },
+        required: ["merchant", "items"],
+      },
+      _aiClient,
+      GEMINI_MODEL,
+      validateReceiptLineItems
+    );
+
+    // Force positive amounts and clamp each item's category to the household's
+    // real set (the schema only constrains the type, not membership).
+    data.items = data.items.map(item => ({
+      ...item,
+      amount: Math.abs(item.amount),
+      category: clampToAllowed(item.category, resolvedCategories),
+    }));
     return data;
   });
 };

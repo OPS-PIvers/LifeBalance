@@ -107,6 +107,7 @@ import {
 } from '@/contexts/household/mutations/calendarMutations';
 import {
   makeAddTransaction,
+  makeAddTransactions,
   makeUpdateTransactionCategory,
   makeUpdateTransaction,
   makeDeleteTransaction,
@@ -1681,6 +1682,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }).addTransaction(tx);
   }, [householdId, user, householdSettings, accounts]);
 
+  const addTransactions = useCallback(async (
+    txs: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[],
+  ) => {
+    await makeAddTransactions({
+      db, householdId, user, householdSettings, accounts,
+    }).addTransactions(txs);
+  }, [householdId, user, householdSettings, accounts]);
+
   const updateTransactionCategory = useCallback(async (
     id: string,
     category: string,
@@ -2153,6 +2162,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     payCalendarItem,
     deferCalendarItem,
     addTransaction,
+    addTransactions,
     updateTransactionCategory,
     updateTransaction,
     deleteTransaction,
@@ -2172,7 +2182,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, contributeToGoal,
     addBucket, updateBucket, deleteBucket, updateBucketLimit, reallocateBucket,
     addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem,
-    addTransaction, updateTransactionCategory, updateTransaction, deleteTransaction, splitTransaction,
+    addTransaction, addTransactions, updateTransactionCategory, updateTransaction, deleteTransaction, splitTransaction,
     setTransactionSplit, markSplitSettled,
     mergeTransactions, keepBothTransactions, getTransactionComments, addTransactionComment, deleteTransactionComment,
   ]);
