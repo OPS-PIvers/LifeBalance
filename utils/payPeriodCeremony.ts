@@ -86,5 +86,7 @@ export function suggestBucketLimit(
     0,
   );
   const avgDollars = totalCents / snapshots.length / 100;
-  return Math.ceil(avgDollars / SUGGESTION_ROUNDING_DOLLARS) * SUGGESTION_ROUNDING_DOLLARS;
+  // Clamp at 0: net-negative history (refunds exceeding spending) must not
+  // suggest a negative budget, which the editor would reject as invalid.
+  return Math.max(0, Math.ceil(avgDollars / SUGGESTION_ROUNDING_DOLLARS) * SUGGESTION_ROUNDING_DOLLARS);
 }

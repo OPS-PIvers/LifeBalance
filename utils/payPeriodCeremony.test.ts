@@ -60,6 +60,13 @@ describe('suggestBucketLimit', () => {
     expect(suggestBucketLimit('b1', 400, history)).toBe(45);
   });
 
+  it('clamps net-negative history (refunds exceeding spending) to $0', () => {
+    const history = [
+      snapshot({ id: 's1', periodId: '2026-07-01', totalSpent: -80, totalPending: 0 }),
+    ];
+    expect(suggestBucketLimit('b1', 400, history)).toBe(0);
+  });
+
   it('is cents-safe (no float drift before rounding)', () => {
     const history = [
       snapshot({ id: 's1', periodId: '2026-07-01', totalSpent: 0.1, totalPending: 0.2 }),

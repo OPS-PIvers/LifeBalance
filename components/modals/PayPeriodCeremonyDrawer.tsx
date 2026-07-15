@@ -78,11 +78,15 @@ const PayPeriodCeremonyDrawer: React.FC<PayPeriodCeremonyDrawerProps> = ({ event
     return Number.isFinite(n) && n >= 0 ? roundMoney(n) : null;
   };
 
-  const hasInvalidDraft = buckets.some(b => parseDraft(drafts[b.id] ?? '') === null);
+  // A bucket added in the background (live listener) after mount has no draft
+  // yet — fall back to its current limit rather than '' so it renders with a
+  // valid value and can't wedge the Save button as "invalid".
+  const draftFor = (b: { id: string; limit: number }) => drafts[b.id] ?? String(b.limit);
+  const hasInvalidDraft = buckets.some(b => parseDraft(draftFor(b)) === null);
   const changedUpdates = useMemo(
     () =>
       buckets.flatMap(b => {
-        const parsed = parseDraft(drafts[b.id] ?? '');
+        const parsed = parseDraft(drafts[b.id] ?? String(b.limit));
         return parsed !== null && parsed !== b.limit ? [{ id: b.id, limit: parsed }] : [];
       }),
     [buckets, drafts],
@@ -212,7 +216,7 @@ const PayPeriodCeremonyDrawer: React.FC<PayPeriodCeremonyDrawerProps> = ({ event
             {buckets.map(b => {
               const suggestion = suggestions.get(b.id) ?? b.limit;
               const lastSpent = closedSnapshots.find(s => s.bucketId === b.id);
-              const invalid = parseDraft(drafts[b.id] ?? '') === null;
+              const invalid = parseDraft(draftFor(b)) === null;
               return (
                 <Row key={b.id} className="flex-col items-stretch gap-1.5">
                   <div className="flex items-center justify-between gap-3">
@@ -229,7 +233,7 @@ const PayPeriodCeremonyDrawer: React.FC<PayPeriodCeremonyDrawerProps> = ({ event
                         inputMode="decimal"
                         min={0}
                         step="1"
-                        value={drafts[b.id] ?? ''}
+                        value={draftFor(b)}
                         onChange={e => setDrafts(prev => ({ ...prev, [b.id]: e.target.value }))}
                         className={cn('text-right font-mono tabular-nums', invalid && FIELD_ERROR)}
                         aria-label={`${b.name} budget for this period`}
