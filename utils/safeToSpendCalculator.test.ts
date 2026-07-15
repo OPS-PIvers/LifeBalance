@@ -346,9 +346,10 @@ describe('calculateSafeToSpend', () => {
   });
 
   it('should handle bills on boundary dates correctly', () => {
-    // Logic: After lastPaycheckDate (Exclusive) AND Before or Equal to nextPaycheckDate (Inclusive)
+    // Logic: On or after lastPaycheckDate (Inclusive) AND before or equal to nextPaycheckDate (Inclusive)
+    // An unpaid bill due on payday itself is still owed and must subtract.
 
-    const onStartBillDate = lastPaycheckDate; // Should be IGNORED (Exclusive start)
+    const onStartBillDate = lastPaycheckDate; // Should be INCLUDED (Inclusive start)
     const onEndBillDate = nextPaycheckDate;   // Should be INCLUDED (Inclusive end)
 
     const items: CalendarItem[] = [
@@ -384,8 +385,52 @@ describe('calculateSafeToSpend', () => {
       lastPaycheckDate
     );
 
-    // 5000 - 200 (End Bill) = 4800. Start bill (100) is ignored.
-    expect(result).toBe(4800);
+    // 5000 - 100 (Start Bill) - 200 (End Bill) = 4700.
+    expect(result).toBe(4700);
+  });
+
+  it('subtracts multiple unpaid bills dated exactly on the paycheck date', () => {
+    // Regression: bills sharing the paycheck's date were excluded by an
+    // exclusive lower bound, dangerously inflating Safe-to-Spend on payday.
+    const items: CalendarItem[] = [
+      {
+        id: 'p1',
+        title: 'Next Paycheck',
+        amount: 2000,
+        date: nextPaycheckDate,
+        type: 'income',
+        isPaid: false
+      },
+      {
+        id: 'b1',
+        title: 'Car Payment',
+        amount: 498,
+        date: lastPaycheckDate,
+        type: 'expense',
+        isPaid: false
+      },
+      {
+        id: 'b2',
+        title: 'HELOC Payment',
+        amount: 400,
+        date: lastPaycheckDate,
+        type: 'expense',
+        isPaid: false
+      },
+      {
+        id: 'b3',
+        title: 'Paid Same-Day Bill',
+        amount: 999,
+        date: lastPaycheckDate,
+        type: 'expense',
+        isPaid: true // paid bills still excluded
+      }
+    ];
+
+    const result = calculateSafeToSpend(mockAccounts, items, lastPaycheckDate);
+
+    // 5000 - 498 - 400 = 4102
+    expect(result).toBe(4102);
   });
 
   it('should ignore income items within the calculation period', () => {

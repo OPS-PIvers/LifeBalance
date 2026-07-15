@@ -44,7 +44,7 @@ function findNextPaycheckFromExpanded(
  * components/budget/SafeToSpendBreakdownDrawer.tsx for the pool/overlay model.
  *
  * @param expandedItems - Pre-expanded calendar items
- * @param startDate - Start of the range (exclusive)
+ * @param startDate - Start of the range (inclusive)
  * @param endDate - End of the range (inclusive)
  * @returns Total amount of unpaid bills in range
  */
@@ -59,7 +59,10 @@ function calculateUnpaidBillsInRange(
     return (
       item.type === 'expense' &&
       !item.isPaid &&
-      isAfter(itemDate, startDate) && // AFTER start date (exclusive)
+      // INCLUSIVE start: an unpaid bill due on payday itself is still owed and
+      // must subtract — an exclusive bound here silently inflated Safe-to-Spend
+      // by every bill sharing the paycheck's date.
+      !isBefore(itemDate, startDate) &&
       (isBefore(itemDate, endDate) || itemDate.getTime() === endDate.getTime()) // Up to range end (inclusive)
     );
   });
