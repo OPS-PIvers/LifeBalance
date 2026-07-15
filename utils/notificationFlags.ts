@@ -16,6 +16,9 @@ import type { NotificationPreferences } from '@/types/schema';
  *     additionally gates on premium status server-side — that's a separate
  *     check the recap job still performs; this flag only answers "is a push
  *     category live".
+ *   - digestMode: counted enabled only when `.enabled === true`, same as the
+ *     four per-type toggles — a member relying solely on the digest (all four
+ *     per-type toggles off) must still match the collection-group query.
  *
  * Kept in perfect parity with the server copy in
  * functions/src/shared/notifications.ts — mirror any change there.
@@ -34,6 +37,7 @@ export function computeAnyNotificationsEnabled(
   return (
     prefs.habitReminders?.enabled === true ||
     prefs.actionQueueReminders?.enabled === true ||
+    prefs.digestMode?.enabled === true ||
     prefs.streakWarnings?.enabled === true ||
     prefs.billReminders?.enabled === true ||
     prefs.dailyBriefing?.enabled === true ||

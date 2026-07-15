@@ -13,6 +13,14 @@ import {
 } from "./shared/notifications";
 import { findBillsDueOnDate, type BillCalendarItem } from "./shared/bills";
 import { writeProactiveInsight, type ProactiveCapHouseholdDoc } from "./insights/writeProactiveInsight";
+import {
+  computeHabitsPending,
+  computeStreaksAtRisk,
+  computeTodosToday,
+  buildDigestMessage,
+  type DigestHabit,
+  type DigestTodo,
+} from "./shared/digest";
 import { buildActionsDataField, isBillReminderSnoozed } from "./shared/notificationActions";
 
 // Re-export for consumers that imported this from index.ts before the
@@ -106,6 +114,11 @@ export const sendhabitreminders = onSchedule("every 1 hours", async () => {
       const member = memberDoc.data() as HouseholdMember;
       const prefs = member.notificationPreferences;
 
+      if (prefs?.digestMode?.enabled) {
+        logger.info(`Member ${member.uid}: digest mode active, skipping per-type habit reminder`);
+        continue;
+      }
+
       if (!prefs?.habitReminders?.enabled) {
         logger.info(`Member ${member.uid}: habit reminders not enabled`);
         continue;
@@ -156,6 +169,11 @@ export const sendactionqueuereminders = onSchedule(
       for (const memberDoc of group.memberDocs) {
         const member = memberDoc.data() as HouseholdMember;
         const prefs = member.notificationPreferences;
+
+        if (prefs?.digestMode?.enabled) {
+          logger.info(`Member ${member.uid}: digest mode active, skipping per-type action queue reminder`);
+          continue;
+        }
 
         if (!prefs?.actionQueueReminders?.enabled) {
           logger.info(`Member ${member.uid}: action queue reminders not enabled`);
@@ -233,6 +251,11 @@ export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
     for (const memberDoc of group.memberDocs) {
       const member = memberDoc.data() as HouseholdMember;
       const prefs = member.notificationPreferences;
+
+      if (prefs?.digestMode?.enabled) {
+        logger.info(`Member ${member.uid}: digest mode active, skipping per-type streak warning`);
+        continue;
+      }
 
       if (!prefs?.streakWarnings?.enabled) {
         logger.info(`Member ${member.uid}: streak warnings not enabled`);
@@ -383,6 +406,11 @@ export const sendbillreminders = onSchedule(
         const member = memberDoc.data() as HouseholdMember;
         const prefs = member.notificationPreferences;
 
+        if (prefs?.digestMode?.enabled) {
+          logger.info(`Member ${member.uid}: digest mode active, skipping per-type bill reminder`);
+          continue;
+        }
+
         if (!prefs?.billReminders?.enabled) {
           logger.info(`Member ${member.uid}: bill reminders not enabled`);
           continue;
@@ -489,6 +517,154 @@ export const sendbillreminders = onSchedule(
     }
   }
 );
+
+/**
+ * Scheduled function (F-NOTIF-03): runs every hour to send the consolidated
+ * digest push to members with `digestMode.enabled`. The four per-type hourly
+ * jobs above skip their own send for such a member (see the `digestMode?.enabled`
+ * early-continue in each), so this is the only push they receive.
+ *
+ * The digest only reports on categories the member has individually enabled
+ * (habitReminders/actionQueueReminders/streakWarnings/billReminders) — turning
+ * on digest mode changes *delivery* (one push instead of several) without
+ * silently opting a member into categories they never turned on.
+ *
+ * Habit/todo/calendar collections are fetched once per household (not once per
+ * digest-eligible member) since the underlying docs are shared; only the
+ * per-member "today" (member's own timezone) and per-member filtering
+ * (todos' assignedTo, which sub-preferences are enabled) vary per member.
+ */
+export const senddigest = onSchedule("every 1 hours", async () => {
+  logger.info("Checking for digest pushes to send");
+
+  const groups = await loadNotifiableMembersByHousehold(db);
+  logger.info(`Found ${groups.length} household(s) with notification-eligible members`);
+
+  for (const group of groups) {
+    const digestMembers = group.memberDocs.filter((memberDoc) => {
+      const member = memberDoc.data() as HouseholdMember;
+      return member.notificationPreferences?.digestMode?.enabled === true;
+    });
+
+    if (digestMembers.length === 0) continue;
+
+    logger.info(`Household ${group.householdId}: ${digestMembers.length} digest-mode member(s)`);
+
+    // Lazily loaded, once per household, and reused across every digest
+    // member in it.
+    let habitsPromise: Promise<DigestHabit[]> | undefined;
+    let todosPromise: Promise<DigestTodo[]> | undefined;
+    let calendarItemsPromise: Promise<BillCalendarItem[]> | undefined;
+    let currencyPromise: Promise<string> | undefined;
+
+    const getHabits = () => {
+      habitsPromise ??= group.householdRef
+        .collection("habits")
+        .get()
+        .then((snap) => snap.docs.map((d) => d.data() as DigestHabit));
+      return habitsPromise;
+    };
+    const getTodos = () => {
+      todosPromise ??= group.householdRef
+        .collection("todos")
+        .where("isCompleted", "==", false)
+        .get()
+        .then((snap) => snap.docs.map((d) => d.data() as DigestTodo));
+      return todosPromise;
+    };
+    const getCalendarItems = () => {
+      calendarItemsPromise ??= group.householdRef
+        .collection("calendarItems")
+        .where("type", "==", "expense")
+        .get()
+        .then((snap) =>
+          snap.docs.map((d) => ({
+            ...(d.data() as Omit<BillCalendarItem, "id">),
+            id: d.id,
+          }))
+        );
+      return calendarItemsPromise;
+    };
+    const getCurrency = () => {
+      currencyPromise ??= group.getHouseholdData().then((data) => data?.currency || "USD");
+      return currencyPromise;
+    };
+
+    for (const memberDoc of digestMembers) {
+      const member = memberDoc.data() as HouseholdMember;
+      const prefs = member.notificationPreferences;
+      const digestPrefs = prefs?.digestMode;
+
+      if (!digestPrefs || !member.fcmTokens || member.fcmTokens.length === 0) {
+        logger.info(`Member ${member.uid}: no FCM tokens found, skipping digest`);
+        continue;
+      }
+
+      if (!isTimeToSend(digestPrefs.time, prefs?.timezone)) {
+        logger.info(`Member ${member.uid}: not time to send digest yet`);
+        continue;
+      }
+
+      const today = formatInTimeZone(new Date(), prefs?.timezone || "UTC", "yyyy-MM-dd");
+
+      const enabled = {
+        habits: prefs?.habitReminders?.enabled === true,
+        todos: prefs?.actionQueueReminders?.enabled === true,
+        streaks: prefs?.streakWarnings?.enabled === true,
+        bills: prefs?.billReminders?.enabled === true,
+      };
+
+      const habits = enabled.habits || enabled.streaks ? await getHabits() : [];
+      const todos = enabled.todos ? await getTodos() : [];
+
+      let billsDueCount = 0;
+      let billsDueTotalFormatted = "$0.00";
+      if (enabled.bills && prefs?.billReminders) {
+        const daysAhead = prefs.billReminders.daysBeforeDue;
+        const [ly, lm, ld] = today.split("-").map(Number);
+        const targetDateObj = new Date(
+          Date.UTC(ly ?? 2000, (lm ?? 1) - 1, (ld ?? 1) + daysAhead)
+        );
+        const targetDateStr = formatInTimeZone(targetDateObj, "UTC", "yyyy-MM-dd");
+
+        const calendarItems = await getCalendarItems();
+        const upcomingBills = findBillsDueOnDate(calendarItems, targetDateStr);
+        billsDueCount = upcomingBills.length;
+        if (billsDueCount > 0) {
+          const totalAmount = upcomingBills.reduce((sum, bill) => sum + (bill.amount || 0), 0);
+          const currency = await getCurrency();
+          billsDueTotalFormatted = formatCurrency(totalAmount, { currency });
+        }
+      }
+
+      const counts = {
+        habitsPending: enabled.habits ? computeHabitsPending(habits, today) : 0,
+        todosToday: enabled.todos ? computeTodosToday(todos, member.uid, today) : 0,
+        streaksAtRisk: enabled.streaks ? computeStreaksAtRisk(habits, today) : 0,
+        billsDueCount,
+        billsDueTotalFormatted,
+      };
+
+      const message = buildDigestMessage(counts, enabled);
+      if (!message) {
+        logger.info(`Member ${member.uid}: nothing to report, skipping digest`);
+        continue;
+      }
+
+      logger.info(`Member ${member.uid}: sending digest — ${message.body}`);
+      await sendNotificationToUser(
+        member.fcmTokens,
+        message.title,
+        message.body,
+        {
+          type: "digest",
+          url: "/",
+        },
+        memberDoc.ref
+      );
+    }
+  }
+});
 
 /**
  * Firestore trigger: Monitor account balance changes and send budget alerts.
