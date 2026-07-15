@@ -37,6 +37,8 @@ interface PhotoImportDrawerProps<T> {
   commitLabel: (count: number) => string;
   /** Message shown when the parse returns no rows. */
   emptyResult: string;
+  /** Optional helper to get a unique label for each item (for accessibility). */
+  getItemLabel?: (item: T) => string;
 }
 
 /**
@@ -62,6 +64,7 @@ export function PhotoImportDrawer<T>({
   onCommit,
   commitLabel,
   emptyResult,
+  getItemLabel,
 }: PhotoImportDrawerProps<T>): React.ReactElement {
   const [view, setView] = useState<View>('menu');
   const [rows, setRows] = useState<Row<T>[]>([]);
@@ -107,7 +110,13 @@ export function PhotoImportDrawer<T>({
         return;
       }
       setRows(
-        parsed.map((data) => ({ id: crypto.randomUUID(), selected: true, data }))
+        parsed.map((data) => ({
+          id: typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : Math.random().toString(36).substring(2, 11),
+          selected: true,
+          data,
+        }))
       );
       setView('review');
     } catch (error) {
@@ -243,7 +252,7 @@ export function PhotoImportDrawer<T>({
                     type="checkbox"
                     checked={r.selected}
                     onChange={() => toggleRow(r.id)}
-                    aria-label="Include this item"
+                    aria-label={getItemLabel ? `Include ${getItemLabel(r.data)}` : 'Include this item'}
                     className="mt-2 h-5 w-5 shrink-0 rounded border-brand-300 text-accent-600 focus:ring-accent-500"
                   />
                   <div className="min-w-0 flex-1">

@@ -1286,7 +1286,7 @@ export const parseMealPlan = async (
               type: Type.OBJECT,
               properties: {
                 mealName: { type: Type.STRING },
-                type: { type: Type.STRING },
+                type: { type: Type.STRING, enum: ["breakfast", "lunch", "dinner", "snack"] },
                 day: { type: Type.STRING },
               },
               required: ["mealName", "type"],
