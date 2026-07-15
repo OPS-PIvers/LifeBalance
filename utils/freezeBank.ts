@@ -1,6 +1,6 @@
 import { Habit } from '@/types/schema';
 import { format, subDays, parseISO } from 'date-fns';
-import { calculateStreak } from '@/utils/habitLogic';
+import { calculateStreak, isHabitPaused } from '@/utils/habitLogic';
 import { getMissedHabitDates } from '@/utils/freezeBankValidator';
 
 /**
@@ -52,6 +52,10 @@ export function selectAutoFreezeCandidates(
 
   for (const habit of habits) {
     if (habit.type !== 'positive' || habit.period !== 'daily') continue;
+
+    // F-HABITS-01: a habit on a planned break never burns a freeze token — the
+    // pause bridges its streak for free.
+    if (isHabitPaused(habit, today)) continue;
 
     const frozen = habit.frozenDates ?? [];
     if (frozen.includes(yesterday)) continue; // idempotency guard

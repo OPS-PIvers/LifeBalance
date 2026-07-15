@@ -6,7 +6,17 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { db } from '@/firebase.config';
 import { collection, query, getDocs, getDoc, addDoc, updateDoc, doc, deleteDoc, orderBy, limit } from 'firebase/firestore';
-import { readAppConfigFlags, setAppFlag, getBillingEnabled, AI_ENABLED_FLAG_KEY, POWER_TOOLS_FLAG_KEY } from '@/services/appConfig';
+import {
+  readAppConfigFlags,
+  setAppFlag,
+  getBillingEnabled,
+  AI_ENABLED_FLAG_KEY,
+  POWER_TOOLS_FLAG_KEY,
+  ALLOWLIST_TARGETABLE_FLAGS,
+  getFlagTargetHouseholds,
+  addFlagTargetHousehold,
+  removeFlagTargetHousehold,
+} from '@/services/appConfig';
 import { getLimits, LEGACY_AI_DAILY_QUOTA } from '@/utils/entitlements';
 import { BetaTester, FeedbackReport, Household } from '@/types/schema';
 import { Loader2, Plus, Trash2, Copy, X, AlertTriangle } from 'lucide-react';
@@ -107,6 +117,12 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
   const [flagSaving, setFlagSaving] = useState(false);
   // Ops-only Plaid status (count of connected bank items; never reads a token).
   const [plaidItemCount, setPlaidItemCount] = useState<number | null>(null);
+  // Per-household allowlist targeting (Plan F-PLAT-09): current household ids per
+  // targetable flag, the add-input draft per flag, and which flag's expander is open.
+  const [targetHouseholds, setTargetHouseholds] = useState<Record<string, string[]>>({});
+  const [targetInputs, setTargetInputs] = useState<Record<string, string>>({});
+  const [expandedTargetFlag, setExpandedTargetFlag] = useState<string | null>(null);
+  const [targetSaving, setTargetSaving] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -137,6 +153,15 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
         } catch {
           setPlaidItemCount(null);
         }
+        // Per-household allowlists for targetable flags (Plan F-PLAT-09).
+        const targetableKeys = Object.keys(ALLOWLIST_TARGETABLE_FLAGS);
+        const lists = await Promise.all(targetableKeys.map(key => getFlagTargetHouseholds(key)));
+        setTargetHouseholds(
+          targetableKeys.reduce<Record<string, string[]>>((acc, key, i) => {
+            acc[key] = lists[i] ?? [];
+            return acc;
+          }, {})
+        );
       }
     } catch (error) {
       console.error("Failed to load data", error);
@@ -229,6 +254,46 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
       toast.error(`Failed to update ${label}`);
     } finally {
       setFlagSaving(false);
+    }
+  };
+
+  // Household allowlist targeting (Plan F-PLAT-09) — soft-launch a targetable flag
+  // to specific households before flipping the global boolean. No confirm dialog
+  // (unlike the global flip): scoped to one household, low blast radius.
+  const handleAddTargetHousehold = async (flagKey: string) => {
+    const id = (targetInputs[flagKey] ?? '').trim();
+    if (!id) return;
+    setTargetSaving(true);
+    try {
+      await addFlagTargetHousehold(flagKey, id);
+      setTargetHouseholds(prev => ({
+        ...prev,
+        [flagKey]: prev[flagKey]?.includes(id) ? prev[flagKey] : [...(prev[flagKey] ?? []), id],
+      }));
+      setTargetInputs(prev => ({ ...prev, [flagKey]: '' }));
+      toast.success(`Household added to ${flagKey} allowlist`);
+    } catch (error) {
+      console.error('Failed to add target household:', error);
+      toast.error('Failed to add household to allowlist');
+    } finally {
+      setTargetSaving(false);
+    }
+  };
+
+  const handleRemoveTargetHousehold = async (flagKey: string, id: string) => {
+    setTargetSaving(true);
+    try {
+      await removeFlagTargetHousehold(flagKey, id);
+      setTargetHouseholds(prev => ({
+        ...prev,
+        [flagKey]: (prev[flagKey] ?? []).filter(h => h !== id),
+      }));
+      toast.success(`Household removed from ${flagKey} allowlist`);
+    } catch (error) {
+      console.error('Failed to remove target household:', error);
+      toast.error('Failed to remove household from allowlist');
+    } finally {
+      setTargetSaving(false);
     }
   };
 
@@ -470,35 +535,107 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                   </p>
                   {FEATURE_FLAGS.map(flag => {
                     const isOn = flags[flag.key] === true;
+                    const isTargetable = flag.key in ALLOWLIST_TARGETABLE_FLAGS;
+                    const targets = targetHouseholds[flag.key] ?? [];
+                    const isExpanded = expandedTargetFlag === flag.key;
                     return (
                       <div
                         key={flag.key}
-                        className={`flex items-start justify-between gap-3 sm:gap-4 p-4 rounded-xl border ${
+                        className={`p-4 rounded-xl border ${
                           flag.danger
                             ? 'border-warm-300/70 bg-warm-50/60 dark:border-warm-800/60 dark:bg-warm-900/20'
                             : 'border-brand-200 bg-brand-50/50 dark:border-brand-700/60 dark:bg-brand-700/30'
                         }`}
                       >
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                            <h3 className="font-bold text-brand-800 dark:text-brand-100">{flag.label}</h3>
-                            <Badge variant={isOn ? 'success' : 'neutral'} size="sm">
-                              {isOn ? 'ON' : 'OFF'}
-                            </Badge>
-                            {flag.danger && (
-                              <Badge variant="warning" size="sm" className="inline-flex items-center gap-1">
-                                <AlertTriangle size={11} aria-hidden="true" /> High impact
+                        <div className="flex items-start justify-between gap-3 sm:gap-4">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                              <h3 className="font-bold text-brand-800 dark:text-brand-100">{flag.label}</h3>
+                              <Badge variant={isOn ? 'success' : 'neutral'} size="sm">
+                                {isOn ? 'ON' : 'OFF'}
                               </Badge>
+                              {flag.danger && (
+                                <Badge variant="warning" size="sm" className="inline-flex items-center gap-1">
+                                  <AlertTriangle size={11} aria-hidden="true" /> High impact
+                                </Badge>
+                              )}
+                              {isTargetable && targets.length > 0 && (
+                                <Badge variant="neutral" size="sm">
+                                  {targets.length} targeted household{targets.length === 1 ? '' : 's'}
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="mt-1.5 text-xs leading-relaxed text-brand-500 dark:text-brand-400">{flag.description}</p>
+                            {isTargetable && (
+                              <button
+                                type="button"
+                                onClick={() => setExpandedTargetFlag(isExpanded ? null : flag.key)}
+                                className="mt-2 text-xs font-semibold text-accent-600 hover:text-accent-700 dark:text-accent-400"
+                              >
+                                {isExpanded ? 'Hide' : 'Target specific household'}
+                              </button>
                             )}
                           </div>
-                          <p className="mt-1.5 text-xs leading-relaxed text-brand-500 dark:text-brand-400">{flag.description}</p>
+                          {/* Confirm-gated: onCheckedChange opens the dialog. */}
+                          <Switch
+                            checked={isOn}
+                            onCheckedChange={() => requestFlagFlip(flag)}
+                            aria-label={`Turn ${flag.label} ${isOn ? 'OFF' : 'ON'}`}
+                          />
                         </div>
-                        {/* Confirm-gated: onCheckedChange opens the dialog. */}
-                        <Switch
-                          checked={isOn}
-                          onCheckedChange={() => requestFlagFlip(flag)}
-                          aria-label={`Turn ${flag.label} ${isOn ? 'OFF' : 'ON'}`}
-                        />
+
+                        {isTargetable && isExpanded && (
+                          <div className="mt-3 pt-3 border-t border-brand-200/70 dark:border-brand-700/50 space-y-2">
+                            <p className="text-xs text-brand-500 dark:text-brand-400">
+                              Households listed here get this flag ON regardless of the global switch above — soft-launch before flipping it for everyone.
+                            </p>
+                            {targets.length > 0 && (
+                              <ul className="space-y-1">
+                                {targets.map(id => (
+                                  <li
+                                    key={id}
+                                    className="flex items-center justify-between gap-2 rounded-lg bg-white dark:bg-brand-800 px-2.5 py-1.5 text-xs font-mono text-brand-700 dark:text-brand-200"
+                                  >
+                                    <span className="truncate">{id}</span>
+                                    <button
+                                      type="button"
+                                      disabled={targetSaving}
+                                      onClick={() => handleRemoveTargetHousehold(flag.key, id)}
+                                      aria-label={`Remove household ${id} from ${flag.label} allowlist`}
+                                      className="shrink-0 text-brand-400 hover:text-red-600 disabled:opacity-50"
+                                    >
+                                      <X size={14} aria-hidden="true" />
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={targetInputs[flag.key] ?? ''}
+                                onChange={(e) => setTargetInputs(prev => ({ ...prev, [flag.key]: e.target.value }))}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    void handleAddTargetHousehold(flag.key);
+                                  }
+                                }}
+                                placeholder="Household ID"
+                                aria-label={`Household ID to target for ${flag.label}`}
+                                className="flex-1 min-w-0 rounded-lg border border-brand-300 dark:border-brand-600 bg-white dark:bg-brand-800 px-2.5 py-1.5 text-xs font-mono text-brand-800 dark:text-brand-100 outline-hidden focus:ring-2 focus:ring-accent-500"
+                              />
+                              <button
+                                type="button"
+                                disabled={targetSaving || !(targetInputs[flag.key] ?? '').trim()}
+                                onClick={() => void handleAddTargetHousehold(flag.key)}
+                                className="shrink-0 rounded-lg bg-accent-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                              >
+                                Add
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}

@@ -13,6 +13,7 @@ import {
   increment,
   writeBatch,
   serverTimestamp,
+  deleteField,
   arrayUnion,
 } from 'firebase/firestore';
 import { db } from '@/firebase.config';
@@ -438,7 +439,13 @@ export const useHabitActions = (
     toast('Reset', { icon: toastIcon(RotateCcw) });
   }, [householdId]);
 
-  const addHabitSubmission = useCallback(async (habitId: string, count: number, timestamp?: string) => {
+  const addHabitSubmission = useCallback(async (
+    habitId: string,
+    count: number,
+    timestamp?: string,
+    note?: string,
+    mood?: HabitSubmission['mood']
+  ) => {
     if (!householdId || !currentUser) return;
 
     const habit = habitsRef.current.find(h => h.id === habitId);
@@ -535,7 +542,8 @@ export const useHabitActions = (
         pointsEarned = signedHabitPoints(habit, multiplier);
       }
 
-      // Create submission document
+      // Create submission document. note/mood are only included when provided
+      // — Firestore rejects an explicit `undefined` field value on addDoc.
       const submission: Omit<HabitSubmission, 'id'> = {
         habitId,
         habitTitle: habit.title,
@@ -547,6 +555,8 @@ export const useHabitActions = (
         multiplierApplied: multiplier,
         createdBy: currentUser.uid,
         createdAt: new Date().toISOString(),
+        ...(note && note.trim() ? { note: note.trim().slice(0, 280) } : {}),
+        ...(mood ? { mood } : {}),
       };
 
       // Atomically commit the submission doc, habit state, and points in a single
@@ -591,7 +601,9 @@ export const useHabitActions = (
 
       await addBatch.commit();
 
-      toast.success(`Logged +${count} submission(s)`);
+      // A count of 0 means this call only attached a note/mood (the one-tap
+      // reflection drawer) rather than logging a new completion — say so.
+      toast.success(count > 0 ? `Logged +${count} submission(s)` : 'Reflection saved');
     } catch (error) {
       console.error('[addHabitSubmission] Failed:', error);
       toast.error('Failed to add submission');
@@ -903,6 +915,24 @@ export const useHabitActions = (
     }
   }, [householdId]);
 
+  // F-HABITS-01: set or clear a habit's planned-break end date. Passing a date
+  // pauses the habit until that day (inclusive); passing null resumes it (the
+  // field is removed via deleteField so isHabitPaused reads false immediately).
+  const setHabitPause = useCallback(async (id: string, pausedUntil: string | null) => {
+    if (!householdId) return;
+    try {
+      await updateDoc(doc(db, `households/${householdId}/habits`, id), {
+        pausedUntil: pausedUntil ?? deleteField(),
+        lastUpdated: serverTimestamp(),
+      });
+      toast.success(pausedUntil ? 'Habit paused' : 'Habit resumed');
+    } catch (error) {
+      console.error('[setHabitPause] Failed to update pause:', error);
+      toast.error('Failed to update pause');
+      throw error;
+    }
+  }, [householdId]);
+
   return useMemo(() => ({
     addHabit,
     updateHabit,
@@ -912,6 +942,7 @@ export const useHabitActions = (
     reorderHabits,
     toggleHabit,
     resetHabit,
+    setHabitPause,
     addHabitSubmission,
     updateHabitSubmission,
     deleteHabitSubmission,
@@ -926,6 +957,7 @@ export const useHabitActions = (
     reorderHabits,
     toggleHabit,
     resetHabit,
+    setHabitPause,
     addHabitSubmission,
     updateHabitSubmission,
     deleteHabitSubmission,

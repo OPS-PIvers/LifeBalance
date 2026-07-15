@@ -21,7 +21,10 @@ import {
   habitPointsMagnitude,
   signedHabitPoints,
   pointsForHabitOnDate,
-  calculateDayNetPoints
+  calculateDayNetPoints,
+  isHabitPaused,
+  pauseBridgeDates,
+  effectiveFrozenDates,
 } from './habitLogic';
 import { Habit } from '@/types/schema';
 import { format, subDays, subWeeks, startOfISOWeek } from 'date-fns';
@@ -1680,6 +1683,105 @@ describe('Plan 25 — frozen-aware streak persistence (reset + toggle)', () => {
     // The frozen day never enters completedDates.
     expect(result!.updatedHabit.completedDates).not.toContain(d(1));
     expect(result!.updatedHabit.completedDates).toContain(localToday);
+  });
+});
+
+// F-HABITS-01 — habit pause / vacation mode. The paused range is synthesized
+// into the existing frozen-date bridging mechanism at read time. This test table
+// is mirrored (adapted for the server helper shapes) in
+// functions/src/quickAdd/habitProcessor.test.ts — change both together.
+describe('F-HABITS-01 — habit pause / vacation mode', () => {
+  const localToday = format(new Date(), 'yyyy-MM-dd');
+  const d = (n: number) => format(subDays(new Date(), n), 'yyyy-MM-dd');
+  const dPlus = (n: number) => format(subDays(new Date(), -n), 'yyyy-MM-dd');
+
+  describe('isHabitPaused', () => {
+    it('is true while pausedUntil is today or later', () => {
+      expect(isHabitPaused({ pausedUntil: localToday })).toBe(true);
+      expect(isHabitPaused({ pausedUntil: dPlus(5) })).toBe(true);
+    });
+    it('is false when pausedUntil is in the past or absent', () => {
+      expect(isHabitPaused({ pausedUntil: d(1) })).toBe(false);
+      expect(isHabitPaused({ pausedUntil: undefined })).toBe(false);
+    });
+  });
+
+  describe('pauseBridgeDates', () => {
+    it('bridges every day from the last pre-pause completion through pausedUntil', () => {
+      const bridge = pauseBridgeDates({ completedDates: [d(6), d(5), d(4)], pausedUntil: dPlus(2) });
+      // Newest-first, from pausedUntil (+2) down to d(3) (just after d(4)).
+      expect(bridge[0]).toBe(dPlus(2));
+      expect(bridge).toContain(localToday);
+      expect(bridge).toContain(d(3));
+      expect(bridge).not.toContain(d(4)); // stops at the completion
+    });
+    it('anchors on the last completion ON OR BEFORE the pause, ignoring later ones', () => {
+      // A completion after the pause end must not collapse the bridge.
+      const bridge = pauseBridgeDates({ completedDates: [d(4), dPlus(3)], pausedUntil: dPlus(1) });
+      expect(bridge).toContain(dPlus(1));
+      expect(bridge).toContain(d(3));
+      expect(bridge).not.toContain(d(4));
+    });
+    it('returns [] when there is nothing to bridge', () => {
+      expect(pauseBridgeDates({ completedDates: [], pausedUntil: dPlus(2) })).toEqual([]);
+      expect(pauseBridgeDates({ completedDates: [d(2)], pausedUntil: undefined })).toEqual([]);
+      // Every completion postdates the pause end.
+      expect(pauseBridgeDates({ completedDates: [dPlus(3)], pausedUntil: d(1) })).toEqual([]);
+    });
+  });
+
+  describe('effectiveFrozenDates', () => {
+    it('unions stored frozenDates with the synthesized pause bridge', () => {
+      const combined = effectiveFrozenDates({
+        completedDates: [d(4)],
+        frozenDates: [d(9)],
+        pausedUntil: dPlus(1),
+      });
+      expect(combined).toContain(d(9)); // stored freeze
+      expect(combined).toContain(dPlus(1)); // pause bridge
+    });
+  });
+
+  describe('streak preservation across a pause', () => {
+    it('keeps the streak alive DURING the break', () => {
+      // 3-day streak ending yesterday, paused 5 days out, no completions since.
+      const habit = {
+        period: 'daily' as const,
+        completedDates: [d(1), d(2), d(3)],
+        pausedUntil: dPlus(5),
+      };
+      expect(streakForHabit(habit)).toBe(3);
+    });
+
+    it('resumes the streak cleanly AFTER the break when completed again', () => {
+      // Streak of 3 ending d(1); paused through today; completed again today.
+      const completedDates = [d(3), d(2), d(1), localToday];
+      const streak = calculateStreak(
+        completedDates,
+        localToday,
+        pauseBridgeDates({ completedDates, pausedUntil: localToday })
+      );
+      expect(streak).toBe(4);
+    });
+
+    it('does NOT bridge when there is no active or planned pause', () => {
+      const habit = { period: 'daily' as const, completedDates: [d(3), d(4), d(5)] };
+      // Gap between d(3) and today is unbridged → streak resets.
+      expect(streakForHabit(habit)).toBe(0);
+    });
+  });
+
+  describe('isHabitStale', () => {
+    it('is never stale while paused', () => {
+      expect(
+        isHabitStale({ id: 'p1', period: 'daily', lastUpdated: d(3), pausedUntil: dPlus(3) })
+      ).toBe(false);
+    });
+    it('is stale again once the pause has elapsed', () => {
+      expect(
+        isHabitStale({ id: 'p2', period: 'daily', lastUpdated: d(3), pausedUntil: d(1) })
+      ).toBe(true);
+    });
   });
 });
 
