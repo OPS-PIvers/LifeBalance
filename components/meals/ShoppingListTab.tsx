@@ -16,6 +16,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Popover } from '@/components/ui/Popover';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { Button } from '@/components/ui/Button';
+import { UndoToast } from '@/components/ui/UndoToast';
 import { QuickAddBar } from '@/components/ui/QuickAddBar';
 import EmptyState from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -123,23 +124,11 @@ interface DeleteUndoToastProps {
   onUndo: () => void;
 }
 
-// Toast body for a single-item delete: message + Undo action. react-hot-toast
-// has no built-in action slot, so this renders inside toast((t) => ...).
-// Toasts always sit on the dark brand-800 surface (Toaster config in App.tsx),
-// so light-tint text is correct in both themes — no dark: pair needed here.
+// Thin wrapper over the shared `UndoToast` (components/ui/UndoToast.tsx,
+// generalized in F-TODO-11) that formats the delete-specific message. Kept
+// as its own export so existing call sites/tests don't need to change.
 export const DeleteUndoToast: React.FC<DeleteUndoToastProps> = ({ itemName, onUndo }) => (
-  <div className="flex min-w-0 items-center gap-2">
-    {/* min-w-0 + truncate keep a long item name from pushing Undo off-screen */}
-    <span className="min-w-0 flex-1 truncate text-sm" title={itemName}>Deleted &ldquo;{itemName}&rdquo;</span>
-    {/* -my-3 lets the 44px hit area overhang the toast padding without growing it */}
-    <button
-      type="button"
-      onClick={onUndo}
-      className="-my-3 min-h-[44px] min-w-[44px] shrink-0 px-3 text-sm font-semibold text-accent-300 hover:text-accent-200 focus:outline-hidden focus:underline"
-    >
-      Undo
-    </button>
-  </div>
+  <UndoToast message={`Deleted "${itemName}"`} onUndo={onUndo} />
 );
 
 const ShoppingListTab: React.FC = () => {
