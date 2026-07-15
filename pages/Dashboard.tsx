@@ -35,6 +35,7 @@ import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import { Button } from '@/components/ui/Button';
 import { InsightWidget } from '@/components/dashboard/InsightWidget';
 import { DailyHabitsWidget } from '@/components/dashboard/DailyHabitsWidget';
+import { HabitCoachWidget } from '@/components/dashboard/HabitCoachWidget';
 import { KidsChoresWidget } from '@/components/dashboard/KidsChoresWidget';
 import { ActivityFeedWidget } from '@/components/dashboard/ActivityFeedWidget';
 import { PulseStripWidget } from '@/components/dashboard/PulseStripWidget';
@@ -512,6 +513,11 @@ const Dashboard: React.FC = () => {
               return null;
           }
         })}
+
+        {/* Habit Coach (F-DASH-03) — wires up analyzeHabitPatterns(), a fully
+            built but previously unwired AI coaching surface (habits domain).
+            Not part of the F-XCUT-02 customizable widgetOrder. */}
+        {isModuleEnabled('habits') && <HabitCoachWidget />}
 
         {/* Setup checklist (F-PLAT-03) — nudges a few high-value setup actions
             the onboarding wizard doesn't cover; self-clears once every item is

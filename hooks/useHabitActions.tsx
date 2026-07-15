@@ -42,6 +42,7 @@ import { addDays, format, parseISO, startOfWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { track } from '@/services/analytics';
 import { shouldTrackFirstTime, FIRST_HABIT_FLAG } from '@/utils/firstTimeFlags';
+import { appendActivityLog, composeSummary } from '@/utils/activityLog';
 import { accumulate, ToastAccumulatorState } from '@/utils/toastAccumulator';
 import { softDeleteDoc } from '@/contexts/household/mutations/trashMutations';
 
@@ -305,6 +306,18 @@ export const useHabitActions = (
     // Read BEFORE the commit so latency-compensated listeners can't already
     // reflect this write when we derive "was this the first completion ever".
     const wasFirstCompletion = direction === 'up' && !habitsRef.current.some(h => h.totalCount > 0);
+
+    // F-XCUT-01: append a cross-domain activity-log entry INSIDE the same batch
+    // so it co-commits atomically with the habit/points writes. Only an 'up'
+    // toggle (a completion) is logged — a 'down' correction would clutter the
+    // feed. AI/quota events are deliberately excluded from the log.
+    if (direction === 'up') {
+      appendActivityLog(batch, db, householdId, { uid: currentUser.uid, name: currentUser.displayName }, {
+        domain: 'habit',
+        action: 'habit_completed',
+        summary: composeSummary(currentUser.displayName, 'completed', habit.title),
+      });
+    }
 
     await batch.commit();
 

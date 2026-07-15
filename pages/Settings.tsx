@@ -30,6 +30,8 @@ import {
   Star,
   Upload,
   RotateCcw,
+  Salad,
+  Newspaper,
 } from 'lucide-react';
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
 import MemberModal from '@/components/modals/MemberModal';
@@ -42,6 +44,9 @@ import { haptic } from '@/utils/haptics';
 import ApiKeyManager from '@/components/settings/ApiKeyManager';
 import CalendarFeedCard from '@/components/settings/CalendarFeedCard';
 import ShortcutSetupGuide from '@/components/settings/ShortcutSetupGuide';
+import ActivityLogCard from '@/components/settings/ActivityLogCard';
+import { ChangelogDrawer } from '@/components/settings/ChangelogDrawer';
+import { CHANGELOG } from '@/data/changelog';
 import { DashboardWidgetSettings } from '@/components/settings/DashboardWidgetSettings';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -82,7 +87,15 @@ const CsvImportDrawer = lazy(() => import('@/components/settings/CsvImportDrawer
 // Lazy so the Recently Deleted list UI stays out of the Settings chunk until opened.
 const RecentlyDeletedDrawer = lazy(() => import('@/components/settings/RecentlyDeletedDrawer'));
 
+// F-MEALS-03 — lazy so the meals-only DietaryProfileModal stays out of the
+// Settings page's boot chunk until first opened.
+const DietaryProfileModal = lazy(() => import('@/components/meals/DietaryProfileModal').then(m => ({ default: m.DietaryProfileModal })));
+
 const APP_VERSION = '0.8.0-alpha';
+
+// localStorage key tracking the last app version the user has opened the
+// "What's New" drawer for — drives the one-time badge dot (F-PLAT-13).
+const LAST_SEEN_VERSION_KEY = 'lifebalance-last-seen-version';
 
 // Currencies offered in the household currency picker. `symbol` is shown in the
 // option label only; actual formatting is driven by the ISO code via `formatCurrency`.
@@ -118,6 +131,7 @@ const Settings: React.FC = () => {
     updateModuleVisibility,
     setKidModePin,
     apiKeys,
+    activityLog,
   } = useHouseholdCore();
   const { habits, challenges, rewardsInventory } = useGamification();
   const {
@@ -145,6 +159,30 @@ const Settings: React.FC = () => {
   const [isKidModeOpen, setIsKidModeOpen] = useState(false);
   const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);
   const [isRecentlyDeletedOpen, setIsRecentlyDeletedOpen] = useState(false);
+  const [isDietaryProfileOpen, setIsDietaryProfileOpen] = useState(false);
+  const [isChangelogOpen, setIsChangelogOpen] = useState(false);
+  // One-time "new version" badge: compare the last-seen version stashed in
+  // localStorage to APP_VERSION. Lazy initializer (not an effect) so there's
+  // no synchronous setState-in-effect cascading render — this page is never
+  // server-rendered, so reading localStorage during init is safe.
+  const [hasUnseenChangelog, setHasUnseenChangelog] = useState(() => {
+    try {
+      return window.localStorage.getItem(LAST_SEEN_VERSION_KEY) !== APP_VERSION;
+    } catch {
+      // localStorage unavailable (private browsing, etc.) — badge stays off.
+      return false;
+    }
+  });
+
+  const handleOpenChangelog = () => {
+    setIsChangelogOpen(true);
+    setHasUnseenChangelog(false);
+    try {
+      window.localStorage.setItem(LAST_SEEN_VERSION_KEY, APP_VERSION);
+    } catch {
+      // localStorage unavailable — badge will just reappear next visit.
+    }
+  };
 
   // Billing / upgrade (Plan 050b) — dormant until billingEnabled is turned on.
   const billingEnabled = useBillingEnabled();
@@ -484,6 +522,13 @@ const Settings: React.FC = () => {
     );
   }
 
+  // F-MEALS-03 — one-line summary of the recorded dietary profile for the Meals row.
+  const dietaryProfileCount = (householdSettings.dietaryProfile?.allergens?.length ?? 0)
+    + (householdSettings.dietaryProfile?.restrictions?.length ?? 0);
+  const dietaryProfileSummary = dietaryProfileCount > 0
+    ? `${dietaryProfileCount} restriction${dietaryProfileCount === 1 ? '' : 's'} applied to AI meal suggestions`
+    : 'Applied automatically to AI meal suggestions';
+
   const sortedMembers = [...members].sort((a, b) => {
     // Sort admins first
     if (a.role === 'admin' && b.role !== 'admin') return -1;
@@ -822,6 +867,10 @@ const Settings: React.FC = () => {
           </div>
         </Section>
 
+        {/* Household activity log / audit trail (F-XCUT-01) — admin-only, to
+            respect member privacy (mirrors the removeMember admin gate). */}
+        {currentUser?.role === 'admin' && <ActivityLogCard activityLog={activityLog} />}
+
         {/* App Modules (Plan 090) — per-household page/tab on-off toggles. Any
             member can edit (like the currency picker). Default all-on. */}
         <Section title="App Modules">
@@ -963,6 +1012,23 @@ const Settings: React.FC = () => {
             </SurfaceList>
           </div>
         </Section>
+
+        {/* F-MEALS-03 — standing household dietary restrictions/allergens,
+            auto-applied to every AI meal suggestion + weekly plan and matched
+            against recipe ingredients for the allergen warning badge. */}
+        <Section title="Meals">
+          <SurfaceList>
+            <DisclosureRow
+              icon={<Salad className="w-5 h-5" />}
+              title="Dietary profile"
+              subtitle={dietaryProfileSummary}
+              onClick={() => setIsDietaryProfileOpen(true)}
+            />
+          </SurfaceList>
+        </Section>
+        <LazyMount when={isDietaryProfileOpen}>
+          <DietaryProfileModal isOpen={isDietaryProfileOpen} onClose={() => setIsDietaryProfileOpen(false)} />
+        </LazyMount>
 
         {/* Dashboard widgets (F-XCUT-02) — per-member reorder/hide, own view only. */}
         {currentUser && (
@@ -1115,6 +1181,8 @@ const Settings: React.FC = () => {
           <RecentlyDeletedDrawer isOpen={isRecentlyDeletedOpen} onClose={() => setIsRecentlyDeletedOpen(false)} />
         </LazyMount>
 
+        <ChangelogDrawer isOpen={isChangelogOpen} onClose={() => setIsChangelogOpen(false)} />
+
         {/* Connect a bank (Plaid) — dormant until the plaidEnabled flag is on.
             Lazy + flag-gated so react-plaid-link never enters the boot bundle. */}
         {plaidEnabled && (
@@ -1196,6 +1264,18 @@ const Settings: React.FC = () => {
                 onClick={() => setIsDeleteHouseholdOpen(true)}
               />
             )}
+          </SurfaceList>
+        </Section>
+
+        <Section title="About">
+          <SurfaceList>
+            <DisclosureRow
+              icon={<Newspaper className="w-5 h-5" />}
+              title="What's New"
+              subtitle={`v${CHANGELOG[0]?.version ?? APP_VERSION}`}
+              value={hasUnseenChangelog ? <Badge variant="warning" size="sm">NEW</Badge> : undefined}
+              onClick={handleOpenChangelog}
+            />
           </SurfaceList>
         </Section>
 

@@ -373,10 +373,13 @@ explorations against this table.
 | `first_habit_completed` | First upward habit toggle ever on this device (flag `lb_first_habit_tracked`) | — |
 | `habit_past_day_logged` | A habit is backfilled for a past day from the Habits header calendar (`components/modals/PastDayLogModal.tsx`) | `daysAgo` — how many days back the logged date is; `positive` — habit type is positive |
 | `insight_generated` | AI insight doc written (`refreshInsight`) | — |
+| `habit_patterns_generated` | Habit Coach patterns doc written (`refreshHabitPatterns`, F-DASH-03) | — |
 | `insight_action_executed` | An insight's suggested action runs successfully (`hooks/useInsightActions.ts`) | `type` — `update_bucket` \| `create_habit` \| `create_todo` |
 | `insight_rated` | Thumbs up/down tapped on an insight (`rateInsight`, `components/dashboard/InsightWidget.tsx`) | `feedback` — `up` \| `down` |
 | `receipt_scanned` | Camera receipt OCR succeeds (`CaptureModal`) | — |
 | `statement_scanned` | Bank-statement/receipt file parse succeeds (`CaptureModal`) | `count` — transactions extracted |
+| `photo_tasklist_scanned` | Handwritten/whiteboard to-do photo parsed (`TodoPhotoImportDrawer`, F-TODO-06) | `count` — tasks extracted |
+| `photo_mealplan_scanned` | Handwritten/whiteboard weekly menu photo parsed (`MealPlanPhotoImportDrawer`, F-TODO-06) | `count` — meals extracted |
 | `meal_planned` | Meal added to the weekly plan (`addMealPlanItem`) | — |
 | `shopping_item_checked` | Shopping item marked purchased (`toggleShoppingItemPurchased`) | — |
 | `reward_redeemed` | Reward redemption commits (`redeemReward`) or a kid request is approved (`approveRedemption`) | `via` — `self` \| `parent_approval` |

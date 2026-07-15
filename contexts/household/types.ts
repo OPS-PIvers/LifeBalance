@@ -18,6 +18,7 @@ import {
   MealPlanItem,
   ToDo,
   Insight,
+  HabitInsightsDoc,
   GroceryCatalogItem,
   Store,
   QuickStockList,
@@ -27,8 +28,10 @@ import {
   WeeklyRecap,
   MonthlyMoneyRecap,
   NetWorthSnapshot,
+  ActivityLogEntry,
   TransactionComment,
   SplitParticipant,
+  DietaryProfile,
   NotificationLogEntry
 } from '@/types/schema';
 import { type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
@@ -74,6 +77,11 @@ export interface HouseholdContextType {
   primaryYearlyGoal: YearlyGoal | null;
   rewardsInventory: RewardItem[];
   freezeBank: FreezeBank | null;
+  /** F-DASH-03 — Habit Coach card. Latest `analyzeHabitPatterns()` output,
+   *  null until first generated for this household. */
+  habitPatterns: HabitInsightsDoc | null;
+  isGeneratingHabitPatterns: boolean;
+  refreshHabitPatterns: () => Promise<void>;
   insight: string;
   insightsHistory: Insight[];
   isGeneratingInsight: boolean;
@@ -93,6 +101,9 @@ export interface HouseholdContextType {
   /** Net worth history (F-MONEY-09) — newest first, bounded live window
    *  (NET_WORTH_HISTORY_LIMIT). Server-written daily; clients only read. */
   netWorthHistory: NetWorthSnapshot[];
+  /** Household activity log (F-XCUT-01) — newest first, bounded live window
+   *  (ACTIVITY_LOG_LIMIT). Read visibility is gated to admins in the UI. */
+  activityLog: ActivityLogEntry[];
   /** In-app notification inbox (F-NOTIF-02) — the current member's own log
    *  entries, newest first, already filtered from the bounded household-wide
    *  fetch window (NOTIFICATION_LOG_FETCH_LIMIT). Server-written; clients only
@@ -370,6 +381,9 @@ export interface HouseholdContextType {
   /** Set (raw PIN, salted+hashed before write) or clear (null) the Kid Mode exit PIN. */
   setKidModePin: (pin: string | null) => Promise<void>;
 
+  /** F-MEALS-03: set the household's standing dietary restrictions/allergens. */
+  setDietaryProfile: (profile: DietaryProfile) => Promise<void>;
+
   /** F-MEALS-04: set (habit id) or clear (null) the habit auto-credited when a meal is marked cooked. */
   setMealCookedHabitId: (habitId: string | null) => Promise<void>;
 
@@ -461,6 +475,7 @@ export type GamificationContextValue = Pick<HouseholdContextType,
   | 'activeChallenge' | 'challenges'
   | 'yearlyGoals' | 'activeYearlyGoals' | 'primaryYearlyGoal'
   | 'rewardsInventory' | 'freezeBank'
+  | 'habitPatterns' | 'isGeneratingHabitPatterns' | 'refreshHabitPatterns'
   | 'addHabit' | 'updateHabit' | 'deleteHabit' | 'archiveHabit' | 'unarchiveHabit' | 'reorderHabits' | 'toggleHabit' | 'resetHabit' | 'setHabitPause'
   | 'addHabitSubmission' | 'updateHabitSubmission' | 'deleteHabitSubmission' | 'getHabitSubmissions'
   | 'resetHabitDay'
@@ -502,10 +517,10 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'pendingItemsCount' | 'apiKeys'
   | 'householdId' | 'householdSettings' | 'household'
   | 'refreshInsight' | 'rateInsight' | 'addMember' | 'updateMember' | 'removeMember' | 'deleteHousehold'
-  | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'updateModuleVisibility' | 'setKidModePin' | 'setMealCookedHabitId'
+  | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'updateModuleVisibility' | 'setKidModePin' | 'setDietaryProfile' | 'setMealCookedHabitId'
   | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
   | 'activeMemberId' | 'actAs' | 'exitToParent'
-  | 'recaps' | 'moneyRecaps'
+  | 'recaps' | 'moneyRecaps' | 'activityLog'
   | 'trashedItems' | 'restoreTrashedItem' | 'purgeTrashedItem'
   | 'notificationLog' | 'unreadNotificationCount' | 'markNotificationRead' | 'markAllNotificationsRead'
 >;

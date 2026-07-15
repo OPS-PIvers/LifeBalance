@@ -11,6 +11,7 @@ import { useAppReopen } from '@/hooks/useAppReopen';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { useKeyboardViewportAnchor } from '@/hooks/useKeyboardViewportAnchor';
+import { InstallPwaBanner } from '@/components/ui/InstallPwaBanner';
 import { useAppBadge } from '@/hooks/useAppBadge';
 import { useNotificationActionIntent } from '@/hooks/useNotificationActionIntent';
 
@@ -170,6 +171,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           onClose={() => setReviewDrawerOpen(false)}
         />
       </LazyMount>
+
+      <InstallPwaBanner />
     </div>
   );
 };

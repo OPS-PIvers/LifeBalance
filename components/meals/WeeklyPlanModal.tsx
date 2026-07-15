@@ -27,7 +27,7 @@ interface WeeklyPlanModalProps {
 export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClose, weekStart }) => {
   const { meals, addMeal, addMealPlanItem } = useMealPlan();
   const { shoppingList, addShoppingItems } = useShopping();
-  const { householdId } = useHouseholdCore();
+  const { householdId, householdSettings } = useHouseholdCore();
 
   const [mode, setMode] = useState<Mode>('choose');
   const [busy, setBusy] = useState(false);
@@ -53,9 +53,12 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
     setBusy(true);
     try {
       const { generateWeeklyPlan } = await import('@/services/geminiService');
+      const dietaryProfile = householdSettings?.dietaryProfile;
       const constraints: WeeklyPlanConstraints = {
         note: note.trim() || undefined,
         recentMeals: meals.slice(0, 20).map(m => m.name),
+        allergies: dietaryProfile?.allergens?.length ? dietaryProfile.allergens : undefined,
+        restrictions: dietaryProfile?.restrictions?.length ? dietaryProfile.restrictions : undefined,
       };
       const result = await generateWeeklyPlan(householdId, weekStart, constraints);
       setPlan(result);

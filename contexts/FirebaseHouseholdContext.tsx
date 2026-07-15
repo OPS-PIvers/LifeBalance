@@ -46,6 +46,7 @@ import {
   MealPlanItem,
   ToDo,
   Insight,
+  HabitInsightsDoc,
   GroceryCatalogItem,
   Store,
   QuickStockList,
@@ -55,8 +56,10 @@ import {
   ModuleKey,
   WeeklyRecap,
   MonthlyMoneyRecap,
+  ActivityLogEntry,
   SavingsGoal,
   NetWorthSnapshot,
+  DietaryProfile,
   NotificationLogEntry
 } from '@/types/schema';
 import { calculateSafeToSpendBreakdownFromExpanded } from '@/utils/safeToSpendCalculator';
@@ -175,6 +178,7 @@ import {
 import {
   makeHouseholdSettingsMutations,
   makeRefreshInsight,
+  makeRefreshHabitPatterns,
   makeRateInsight,
 } from '@/contexts/household/mutations/coreMutations';
 import { makeNotificationMutations } from '@/contexts/household/mutations/notificationMutations';
@@ -464,6 +468,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [hasMoreInsights, setHasMoreInsights] = useState(false);
   const insightsLoadedAllRef = useRef(false);
   const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
+  // F-DASH-03 — Habit Coach card: single regenerable doc, not a history collection.
+  const [habitPatterns, setHabitPatterns] = useState<HabitInsightsDoc | null>(null);
+  const [isGeneratingHabitPatterns, setIsGeneratingHabitPatterns] = useState(false);
   const [yearlyGoals, setYearlyGoals] = useState<YearlyGoal[]>([]);
   const [freezeBank, setFreezeBank] = useState<FreezeBank | null>(null);
   // Meals: live window (most recently created MEALS_LIMIT recipes) merged with
@@ -535,6 +542,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [moneyRecaps, setMoneyRecaps] = useState<MonthlyMoneyRecap[]>([]);
   // Unified trash / recently-deleted recovery (F-XCUT-03) — newest first, bounded.
   const [trashedItems, setTrashedItems] = useState<TrashedItem[]>([]);
+  // Household activity log (F-XCUT-01) — bounded live window, newest first.
+  const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
   const [bucketHistoryWindow, setBucketHistoryWindow] = useState<BucketPeriodSnapshot[]>([]);
   const [bucketHistoryOlder, setBucketHistoryOlder] = useState<BucketPeriodSnapshot[]>([]);
   const bucketHistory = useMemo(
@@ -704,6 +713,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setIsLoadingOlderTodos(false);
     setTrashedItems([]);
     setRecaps([]);
+    setActivityLog([]);
     setBucketHistoryWindow([]);
     setBucketHistoryOlder([]);
     bucketHistoryLoadedAllRef.current = false;
@@ -713,6 +723,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setInsightsOlder([]);
     insightsLoadedAllRef.current = false;
     setHasMoreInsights(false);
+    setHabitPatterns(null);
     setApiKeys([]);
     setNotificationLogRaw([]);
     setPendingItemsCount(0);
@@ -825,11 +836,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       setFreezeBank: (data) => setFreezeBank(data),
       setRecaps: (data) => setRecaps(data),
       setMoneyRecaps: (data) => setMoneyRecaps(data),
+      setActivityLog: (data) => setActivityLog(data),
       setApiKeys: (data) => setApiKeys(data),
       setInsightsWindow: (data) => setInsightsWindow(data),
       setHasMoreInsights: (data) => setHasMoreInsights(data),
       setInsight: (text) => setInsight(text),
       insightsLoadedAllRef,
+      setHabitPatterns: (data) => setHabitPatterns(data),
       setNotificationLogRaw: (data) => setNotificationLogRaw(data),
     }));
 
@@ -1722,9 +1735,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   const payCalendarItem = useCallback(async (itemId: string, accountId: string, opts?: MutationOpts) => {
     await makePayCalendarItem({
-      db, householdId, user, accounts, calendarItems, householdSettings, handlePaycheckApproval,
+      db, householdId, user, actorName: currentUser?.displayName ?? user?.displayName ?? null,
+      accounts, calendarItems, householdSettings, handlePaycheckApproval,
     }).payCalendarItem(itemId, accountId, opts);
-  }, [householdId, user, accounts, calendarItems, householdSettings, handlePaycheckApproval]);
+  }, [householdId, user, currentUser, accounts, calendarItems, householdSettings, handlePaycheckApproval]);
 
   const deferCalendarItem = useCallback(async (itemId: string, opts?: MutationOpts) => {
     await makeDeferCalendarItem({ db, householdId, user, calendarItems }).deferCalendarItem(itemId, opts);
@@ -1979,6 +1993,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeHouseholdSettingsMutations({ db, householdId }).setModuleVisibility(key, value);
   }, [householdId]);
 
+  // F-MEALS-03: standing household dietary restrictions/allergens.
+  const setDietaryProfile = useCallback(async (profile: DietaryProfile) => {
+    await makeHouseholdSettingsMutations({ db, householdId }).setDietaryProfile(profile);
+  }, [householdId]);
+
   // F-PLAT-07 — apply a full module-visibility preset in one write.
   const updateModuleVisibility = useCallback(async (patch: Partial<Record<ModuleKey, boolean>>) => {
     await makeHouseholdSettingsMutations({ db, householdId }).updateModuleVisibility(patch);
@@ -2212,6 +2231,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }).refreshInsight();
   }, [householdId, isGeneratingInsight, transactions, habits, insightsHistory]);
 
+  const refreshHabitPatterns = useCallback(async () => {
+    await makeRefreshHabitPatterns({
+      db,
+      householdId,
+      isGeneratingHabitPatterns,
+      habits,
+      setIsGeneratingHabitPatterns,
+    }).refreshHabitPatterns();
+  }, [householdId, isGeneratingHabitPatterns, habits]);
+
   const rateInsight = useCallback(async (insightId: string, feedback: 'up' | 'down') => {
     await makeRateInsight({ db, householdId }).rateInsight(insightId, feedback);
   }, [householdId]);
@@ -2330,6 +2359,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     primaryYearlyGoal,
     rewardsInventory: rewards,
     freezeBank,
+    habitPatterns,
+    isGeneratingHabitPatterns,
+    refreshHabitPatterns,
     ...habitActions,
     updateChallenge,
     addChallenge,
@@ -2349,7 +2381,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     rolloverFreezeBankTokens,
   }), [
     dailyPoints, weeklyPoints, totalPoints, habits, activeChallenge, challenges, yearlyGoals, activeYearlyGoals,
-    primaryYearlyGoal, rewards, freezeBank, habitActions,
+    primaryYearlyGoal, rewards, freezeBank, habitPatterns, isGeneratingHabitPatterns, refreshHabitPatterns, habitActions,
     updateChallenge, addChallenge, markChallengeComplete, redeemReward,
     addReward, updateReward, deleteReward,
     requestRedemption, approveRedemption, denyRedemption,
@@ -2453,6 +2485,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setModuleVisibility,
     updateModuleVisibility,
     setKidModePin,
+    setDietaryProfile,
     setMealCookedHabitId,
     addKidProfile,
     updateKidProfile,
@@ -2465,6 +2498,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     trashedItems,
     restoreTrashedItem,
     purgeTrashedItem,
+    activityLog,
     notificationLog,
     unreadNotificationCount,
     markNotificationRead,
@@ -2473,11 +2507,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     isLoading, currentUser, members, insight, insightsHistory, isGeneratingInsight, hasMoreInsights, loadAllInsights,
     pendingItemsCount, apiKeys,
     householdId, householdSettings, refreshInsight, rateInsight, addMember, updateMember, removeMember, deleteHousehold,
-    completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setKidModePin, setMealCookedHabitId,
+    completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setKidModePin, setDietaryProfile, setMealCookedHabitId,
     addKidProfile, updateKidProfile, removeKidProfile, activeMemberId, actAs, exitToParent,
     recaps,
     moneyRecaps,
     trashedItems, restoreTrashedItem, purgeTrashedItem,
+    activityLog,
     notificationLog,
     unreadNotificationCount,
     markNotificationRead,

@@ -4,6 +4,7 @@ import {
   deleteField,
   addDoc,
   collection,
+  setDoc,
   getDocs,
   query,
   orderBy,
@@ -13,7 +14,7 @@ import {
 import toast from 'react-hot-toast';
 import { Sparkles } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
-import { Habit, HabitSubmission, Insight, ModuleKey, Transaction } from '@/types/schema';
+import { DietaryProfile, Habit, HabitSubmission, Insight, ModuleKey, Transaction } from '@/types/schema';
 import { hashKidPin } from '@/utils/kidPin';
 import { track } from '@/services/analytics';
 import { selectRecentReflections } from '@/utils/habitReflections';
@@ -71,6 +72,14 @@ export function makeHouseholdSettingsMutations(deps: {
     await updateDoc(ref, { kidModePinHash });
   };
 
+  // F-MEALS-03: persist the household's standing dietary restrictions/allergens
+  // so AI meal calls and the recipe allergen badge can read it without a
+  // per-session prompt. A single-doc write (no cross-doc atomicity needed).
+  const setDietaryProfile = async (profile: DietaryProfile) => {
+    if (!householdId) return;
+    await updateDoc(doc(db, 'households', householdId), { dietaryProfile: profile });
+  };
+
   // F-MEALS-04: set/clear the habit auto-credited when a meal is marked cooked.
   // `null` clears the link (deleteField, matching setKidModePin's clear semantics).
   const setMealCookedHabitId = async (habitId: string | null): Promise<void> => {
@@ -93,7 +102,7 @@ export function makeHouseholdSettingsMutations(deps: {
     await updateDoc(doc(db, 'households', householdId), dottedPatch);
   };
 
-  return { completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setKidModePin, setMealCookedHabitId };
+  return { completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setKidModePin, setDietaryProfile, setMealCookedHabitId };
 }
 
 /**
@@ -201,6 +210,61 @@ export function makeRefreshInsight(deps: {
   };
 
   return { refreshInsight };
+}
+
+/**
+ * refreshHabitPatterns (F-DASH-03) — modeled directly on `makeRefreshInsight`
+ * above. Writes to a single household-scoped doc
+ * (`households/{id}/habitInsights/current`, not a growing collection since
+ * these are ephemeral/regenerable) rather than appending to a history.
+ */
+export function makeRefreshHabitPatterns(deps: {
+  db: Firestore;
+  householdId: string | null;
+  isGeneratingHabitPatterns: boolean;
+  habits: Habit[];
+  setIsGeneratingHabitPatterns: (value: boolean) => void;
+}) {
+  const { db, householdId, isGeneratingHabitPatterns, habits, setIsGeneratingHabitPatterns } = deps;
+
+  const refreshHabitPatterns = async () => {
+    if (!householdId) return;
+
+    if (isGeneratingHabitPatterns) {
+      toast.error('Habit patterns are already being analyzed. Please wait.');
+      return;
+    }
+
+    if (!Array.isArray(habits) || habits.length === 0) {
+      toast.error('Add some habits first to get coaching insights.');
+      return;
+    }
+
+    try {
+      setIsGeneratingHabitPatterns(true);
+      toast.loading('Analyzing your habits...', { id: 'habit-patterns-loading' });
+
+      // Dynamically load Gemini service only when needed (keeps the SDK off boot).
+      const { analyzeHabitPatterns } = await import('@/services/geminiService');
+
+      const patterns = await analyzeHabitPatterns(householdId, habits);
+
+      await setDoc(doc(db, `households/${householdId}/habitInsights/current`), {
+        patterns,
+        generatedAt: new Date().toISOString(),
+      });
+
+      track('habit_patterns_generated');
+      toast.success('Habit coach updated!', { id: 'habit-patterns-loading', icon: toastIcon(Sparkles) });
+    } catch (error) {
+      console.error('Failed to analyze habit patterns:', error);
+      toast.error('Failed to analyze habit patterns', { id: 'habit-patterns-loading' });
+    } finally {
+      setIsGeneratingHabitPatterns(false);
+    }
+  };
+
+  return { refreshHabitPatterns };
 }
 
 /**

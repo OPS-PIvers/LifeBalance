@@ -1,5 +1,5 @@
 import React, { useState, ReactNode, useCallback, useMemo, useRef } from 'react';
-import { Info, PartyPopper, Gift } from 'lucide-react';
+import { Info, PartyPopper, Gift, Sparkles } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { format, addDays, subDays } from 'date-fns';
 import { HouseholdContextType, HouseholdSliceProviders } from './FirebaseHouseholdContext';
@@ -41,6 +41,7 @@ import {
   MealPlanItem,
   ToDo,
   Insight,
+  HabitInsightsDoc,
   GroceryCatalogItem,
   Store,
   QuickStockList,
@@ -50,10 +51,12 @@ import {
   Household,
   FreezeBank,
   ModuleKey,
+  DietaryProfile,
   WeeklyRecap,
   MonthlyMoneyRecap,
   NotificationLogEntry,
   NetWorthSnapshot,
+  ActivityLogEntry,
   SavingsGoal,
   TransactionComment
 } from '@/types/schema';
@@ -557,6 +560,37 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       premium: true,
     }];
   });
+  // A few canned activity-log entries (F-XCUT-01) so Test Mode renders the
+  // admin-only Settings → Activity Log feed with cross-domain content.
+  const [activityLog] = useState<ActivityLogEntry[]>(() => [
+    {
+      id: 'act_1',
+      actorUid: 'test-user-id',
+      actorName: 'Test User',
+      domain: 'money',
+      action: 'bill_paid',
+      summary: 'Test User paid Internet ($65)',
+      timestamp: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 'act_2',
+      actorUid: 'kid_leo',
+      actorName: 'Leo',
+      domain: 'habit',
+      action: 'habit_completed',
+      summary: 'Leo completed Make your bed',
+      timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 'act_3',
+      actorUid: 'test-user-id',
+      actorName: 'Test User',
+      domain: 'habit',
+      action: 'habit_completed',
+      summary: 'Test User completed Exercise 30min',
+      timestamp: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(),
+    },
+  ]);
   // F-DASH-11 — seeded with one entry so the thumbs up/down feedback UI is
   // walkable in Test Mode; rateInsight below mutates it in-memory like the
   // real household context.
@@ -579,6 +613,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // legacy household. Toggling a module mutates this in-memory map so the dynamic
   // footer / route guards / Plan-tab fallback are all walkable in Test Mode.
   const [moduleVisibility, setModuleVisibilityState] = useState<Partial<Record<ModuleKey, boolean>>>({});
+  // F-MEALS-03 — standing household dietary profile, undefined until set (mirrors
+  // a legacy household with no restrictions recorded).
+  const [dietaryProfile, setDietaryProfileState] = useState<DietaryProfile | undefined>(undefined);
   // F-MEALS-04 — habit auto-credited when a meal-plan item is marked cooked.
   const [mealCookedHabitId, setMealCookedHabitIdState] = useState<string | undefined>(undefined);
 
@@ -664,6 +701,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const setModuleVisibility = useCallback(async (key: ModuleKey, value: boolean) => {
     setModuleVisibilityState(prev => ({ ...prev, [key]: value }));
     toast.success(`Mock: ${key} ${value ? 'enabled' : 'disabled'}`);
+  }, []);
+
+  const setDietaryProfile = useCallback(async (profile: DietaryProfile) => {
+    setDietaryProfileState(profile);
+    toast.success('Mock: Dietary profile updated');
   }, []);
 
   const updateModuleVisibility = useCallback(async (patch: Partial<Record<ModuleKey, boolean>>) => {
@@ -1624,6 +1666,37 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     history: [],
   });
   const isGeneratingInsight = false;
+  // F-DASH-03 — Habit Coach: simulate the generate/store round-trip in memory
+  // so Test Mode can exercise the widget's loading + populated states without
+  // hitting Firestore or Gemini.
+  const [habitPatterns, setHabitPatterns] = useState<HabitInsightsDoc | null>(null);
+  const [isGeneratingHabitPatterns, setIsGeneratingHabitPatterns] = useState(false);
+  const refreshHabitPatterns = useCallback(async () => {
+    if (habits.length === 0) {
+      toast.error('Add some habits first to get coaching insights.');
+      return;
+    }
+    setIsGeneratingHabitPatterns(true);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    setHabitPatterns({
+      patterns: [
+        {
+          title: 'On Fire!',
+          description: `${habits[0]?.title ?? 'Your top habit'} has a strong recent streak — keep the momentum going.`,
+          type: 'praise',
+          relatedHabitId: habits[0]?.id,
+        },
+        {
+          title: 'Weekend Slump Detected',
+          description: 'Completions tend to drop off on Saturdays and Sundays — consider a lighter weekend target.',
+          type: 'suggestion',
+        },
+      ],
+      generatedAt: new Date().toISOString(),
+    });
+    setIsGeneratingHabitPatterns(false);
+    toast.success('Habit coach updated!', { icon: toastIcon(Sparkles) });
+  }, [habits]);
   const householdSettings = {
     id: 'test-household-id',
     name: 'Test Household',
@@ -1641,6 +1714,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     redemptionHistory,
     unlockedRewardIds,
     moduleVisibility,
+    dietaryProfile,
     mealCookedHabitId,
     // F-DASH-06: seed a nonzero today's usage so the InsightWidget AI-usage
     // caption is visible/walkable in Test Mode.
@@ -1669,6 +1743,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     primaryYearlyGoal,
     rewardsInventory,
     freezeBank,
+    habitPatterns,
+    isGeneratingHabitPatterns,
+    refreshHabitPatterns,
     isGeneratingInsight,
     householdId: 'test-household-id',
     currentPeriodId,
@@ -1698,6 +1775,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     trashedItems,
     restoreTrashedItem,
     purgeTrashedItem,
+    activityLog,
     notificationLog,
     unreadNotificationCount,
     markNotificationRead,
@@ -1931,6 +2009,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     setModuleVisibility,
     updateModuleVisibility,
     setKidModePin,
+    setDietaryProfile,
     setMealCookedHabitId,
     addKidProfile,
     updateKidProfile,

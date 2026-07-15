@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef, useId } from 'react';
 import { useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Rows3, Grid2x2, List, Sparkles, Plus, Repeat } from 'lucide-react';
+import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Rows3, Grid2x2, List, Camera, Sparkles, Plus, Repeat } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { quadrantForTodo, QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhower';
@@ -25,6 +25,7 @@ import { cn } from '@/utils/cn';
 import Input from '@/components/ui/Input';
 import Textarea from '@/components/ui/Textarea';
 import BatchRescheduleModal from '@/components/modals/BatchRescheduleModal';
+import { TodoPhotoImportDrawer } from '@/components/modals/TodoPhotoImportDrawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Section } from '@/components/todos/Section';
 import { EisenhowerMatrixView } from '@/components/todos/EisenhowerMatrixView';
@@ -110,6 +111,8 @@ const ToDosPage: React.FC = () => {
 
   // Modal and form state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  // F-TODO-06: photo-to-tasklist import drawer.
+  const [isPhotoImportOpen, setIsPhotoImportOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -813,6 +816,12 @@ const ToDosPage: React.FC = () => {
   // Select-multiple (batch mode) is disabled in the Completed view, matching
   // the previous behaviour.
   const menuItems: MenuItem[] = [
+    {
+      key: 'scan',
+      label: 'Scan a list',
+      icon: <Camera size={16} />,
+      onSelect: () => setIsPhotoImportOpen(true),
+    },
     {
       key: 'export',
       label: 'Export CSV',
@@ -1570,6 +1579,12 @@ const ToDosPage: React.FC = () => {
           )}
         </div>
       </Drawer>
+
+      {/* F-TODO-06: photo-to-tasklist import */}
+      <TodoPhotoImportDrawer
+        isOpen={isPhotoImportOpen}
+        onClose={() => setIsPhotoImportOpen(false)}
+      />
 
       <TaskTemplateDrawer
         isOpen={isTemplateDrawerOpen}

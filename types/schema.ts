@@ -626,6 +626,17 @@ export interface MealIngredient {
   quantity?: string; // Amount needed
 }
 
+/**
+ * F-MEALS-03: standing household dietary constraints. `allergens` are hard
+ * exclusions (never propose in any form) fed to `suggestMeal`/`generateWeeklyPlan`
+ * and matched against recipe ingredients for the warning badge; `restrictions`
+ * are softer preferences (e.g. "vegetarian") passed only to the AI, not badge-checked.
+ */
+export interface DietaryProfile {
+  restrictions: string[];
+  allergens: string[];
+}
+
 export interface Meal {
   id: string;
   name: string;
@@ -746,6 +757,11 @@ export interface Household {
   // migration needed). Only an explicit `false` hides a module. Read through
   // utils/moduleVisibility.ts — the single source of truth.
   moduleVisibility?: Partial<Record<ModuleKey, boolean>>;
+
+  // F-MEALS-03: standing household dietary restrictions/allergies. Absent means
+  // no constraints are recorded — AI meal calls (suggestMeal, generateWeeklyPlan)
+  // and the recipe allergen badge treat an absent/empty profile as "no restrictions".
+  dietaryProfile?: DietaryProfile;
 
   // Plan 080 (Kid Mode): salted hash of the parent PIN required to EXIT a kid
   // profile view back to a parent view (Netflix-Kids pattern). Absent until a
@@ -888,7 +904,7 @@ export interface ToDo {
   // New fields for natural language support
   priority?: 'low' | 'medium' | 'high'; // Priority level (defaults to 'medium')
   notes?: string; // Additional task details
-  source?: 'manual' | 'voice' | 'shortcut'; // How the todo was created
+  source?: 'manual' | 'voice' | 'shortcut' | 'photo'; // How the todo was created
 
   // Plan 080c (Kid Mode): points credited to a MANAGED-KID assignee on completion
   // (defaults to DEFAULT_TODO_POINTS, see utils/todoPoints.ts). Absent on every
@@ -981,6 +997,19 @@ export interface Insight {
   // from the same style/topic, and liked ones reinforce it.
   feedback?: 'up' | 'down';
   feedbackAt?: string; // ISO timestamp of the rating, if any
+}
+
+/**
+ * F-DASH-03 — Habit Coach card. Single ephemeral/regenerable doc at
+ * `households/{id}/habitInsights/current` (not a growing collection) holding
+ * the latest `analyzeHabitPatterns()` output. `HabitPatternInsight` itself
+ * lives in services/geminiService.types.ts (the AI response schema) and is
+ * imported here as a type-only reference so this file stays free of runtime
+ * AI-SDK coupling.
+ */
+export interface HabitInsightsDoc {
+  patterns: import('@/services/geminiService.types').HabitPatternInsight[];
+  generatedAt: string; // ISO timestamp
 }
 
 /**
@@ -1086,6 +1115,37 @@ export interface NetWorthSnapshot {
   totalAssets: number;
   totalLiabilities: number;
   netWorth: number;
+}
+
+/**
+ * Household activity log / audit trail (F-XCUT-01) — an append-only,
+ * cross-domain "who did what when" feed at
+ * `households/{id}/activityLog/{autoId}`. Written client-side by piggybacking
+ * on the same `writeBatch` each mutation family already commits, so an entry
+ * can never diverge from the mutation it describes. The live listener is
+ * bounded (ACTIVITY_LOG_LIMIT) to avoid an unbounded collection. Read
+ * visibility is gated to admins in the UI to respect member privacy.
+ *
+ * Deliberately EXCLUDES AI/quota-sensitive events to avoid clutter.
+ */
+export type ActivityDomain =
+  | 'habit'
+  | 'money'
+  | 'todo'
+  | 'shopping'
+  | 'meal'
+  | 'member';
+
+export interface ActivityLogEntry {
+  id: string;
+  actorUid: string;
+  actorName: string;
+  domain: ActivityDomain;
+  /** Machine-readable action slug, e.g. 'habit_completed', 'bill_paid'. */
+  action: string;
+  /** Human-readable one-liner, e.g. 'Paul paid Electric Bill ($142)'. */
+  summary: string;
+  timestamp: string; // ISO timestamp (normalised from a serverTimestamp on read)
 }
 
 export interface BetaTester {

@@ -27,7 +27,8 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import EmptyState from '@/components/ui/EmptyState';
 import { SurfaceList, Row } from '@/components/ui/Section';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Camera } from 'lucide-react';
+import { MealPlanPhotoImportDrawer } from '@/components/modals/MealPlanPhotoImportDrawer';
 import { haptic } from '@/utils/haptics';
 import clsx from 'clsx';
 import { groupMealPlanByDay } from '@/utils/mealPlanFormatter';
@@ -110,6 +111,8 @@ const MealPlanTab: React.FC = () => {
   const [isPreviousMealsModalOpen, setIsPreviousMealsModalOpen] = useState(false);
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  // F-TODO-06: photo-to-meal-plan import drawer.
+  const [isPhotoImportOpen, setIsPhotoImportOpen] = useState(false);
   const [isIngredientSelectorOpen, setIsIngredientSelectorOpen] = useState(false);
   const [ingredientSelectorData, setIngredientSelectorData] = useState<{mealId?: string, name: string, ingredients: MealIngredient[]} | null>(null);
 
@@ -684,7 +687,8 @@ const MealPlanTab: React.FC = () => {
             cheap: aiOptions.cheap,
             quick: aiOptions.quick,
             new: aiOptions.new,
-            previousMeals: meals
+            previousMeals: meals,
+            dietaryProfile: householdSettings?.dietaryProfile
         });
 
         setCurrentMeal({
@@ -824,6 +828,12 @@ const MealPlanTab: React.FC = () => {
   const sheetDelete = (planItem: MealPlanItem) => { haptic('medium'); deleteMealPlanItem(planItem.id); setActionSheetItem(null); };
 
   const weekMenuItems: MenuItem[] = [
+    {
+      key: 'scan-menu',
+      label: 'Scan a meal plan',
+      icon: <Camera size={16} />,
+      onSelect: () => setIsPhotoImportOpen(true),
+    },
     {
       key: 'copy-last-week',
       label: 'Copy last week',
@@ -1142,6 +1152,13 @@ const MealPlanTab: React.FC = () => {
           </Drawer>
         );
       })()}
+
+      {/* F-TODO-06: photo-to-meal-plan import */}
+      <MealPlanPhotoImportDrawer
+        isOpen={isPhotoImportOpen}
+        onClose={() => setIsPhotoImportOpen(false)}
+        weekStartStr={weekStartStr}
+      />
 
       {/* Weekly Plan Modal (AI generate / import weekly-meals) */}
       <WeeklyPlanModal

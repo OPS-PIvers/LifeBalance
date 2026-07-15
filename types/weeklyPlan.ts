@@ -111,6 +111,8 @@ export interface WeeklyPlanConstraints {
   dinners?: number;
   /** Hard allergies to avoid in every form (e.g. ["apple"]). */
   allergies?: string[];
+  /** Softer dietary restrictions/preferences to honor (e.g. ["vegetarian"]). F-MEALS-03. */
+  restrictions?: string[];
   /** Foods/cuisines to never propose. */
   outList?: string[];
   /** Reliable favorites to draw from. */
