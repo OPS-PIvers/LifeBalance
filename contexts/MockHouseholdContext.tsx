@@ -1827,6 +1827,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateBucket,
     deleteBucket,
     updateBucketLimit: noOp,
+    setBucketLimits: noOp,
     reallocateBucket,
     addTransaction,
     addTransactions,

@@ -198,6 +198,9 @@ export interface HouseholdContextType {
   updateBucket: (bucket: BudgetBucket) => Promise<void>;
   deleteBucket: (id: string) => Promise<void>;
   updateBucketLimit: (id: string, newLimit: number) => Promise<void>;
+  /** Pay-period ceremony save: set several bucket limits in ONE writeBatch
+   *  (all-or-nothing) so a period's budget plan can't half-apply. */
+  setBucketLimits: (updates: { id: string; limit: number }[]) => Promise<void>;
   reallocateBucket: (sourceId: string, targetId: string, amount: number) => Promise<void>;
 
   // Calendar Actions
@@ -462,7 +465,7 @@ export type FinanceContextValue = Pick<HouseholdContextType,
   | 'archiveAccount' | 'unarchiveAccount'
   | 'updateAccountOrder' | 'reorderAccounts'
   | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal'
-  | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'reallocateBucket'
+  | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'setBucketLimits' | 'reallocateBucket'
   | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
   | 'addTransaction' | 'addTransactions' | 'updateTransactionCategory' | 'updateTransaction' | 'deleteTransaction' | 'splitTransaction'
   | 'setTransactionSplit' | 'markSplitSettled'

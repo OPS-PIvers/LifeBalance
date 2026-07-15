@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import TopToolbar from './TopToolbar';
 import BottomNav from './BottomNav';
@@ -14,6 +14,7 @@ import { useKeyboardViewportAnchor } from '@/hooks/useKeyboardViewportAnchor';
 import { InstallPwaBanner } from '@/components/ui/InstallPwaBanner';
 import { useAppBadge } from '@/hooks/useAppBadge';
 import { useNotificationActionIntent } from '@/hooks/useNotificationActionIntent';
+import { subscribePayPeriodCeremony, type PayPeriodCeremonyEvent } from '@/utils/payPeriodCeremony';
 
 // Lazy so the kid view (Plan 080b) stays out of the always-mounted boot bundle —
 // it only loads when a parent actually switches into a kid.
@@ -24,6 +25,10 @@ const KidDashboard = lazy(() => import('@/components/kid/KidDashboard'));
 const loadReviewPendingDrawer = () => import('@/components/modals/ReviewPendingDrawer');
 const ReviewPendingDrawer = lazy(loadReviewPendingDrawer);
 
+// Pay-period reset ceremony — lazy for the same reason. Opens on this device
+// only, right after the member here confirms a paycheck that rolls the period.
+const PayPeriodCeremonyDrawer = lazy(() => import('@/components/modals/PayPeriodCeremonyDrawer'));
+
 interface MainLayoutProps {
   children: React.ReactNode;
 }
@@ -31,7 +36,7 @@ interface MainLayoutProps {
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const { pathname } = useLocation();
   const { members, activeMemberId, isLoading, householdId } = useHouseholdCore();
-  const { transactions } = useFinance();
+  const { transactions, buckets } = useFinance();
   const kidModeEnabled = useKidModeEnabled(householdId);
   // Keeps the header and fixed overlays (toasts) anchored when the iOS
   // keyboard pans the window; the ref scopes it to in-page inputs (portal
@@ -68,6 +73,29 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const [reviewSnapshot, setReviewSnapshot] = useState<typeof transactions>([]);
 
   useEffect(() => preloadOnIdle(loadReviewPendingDrawer), []);
+
+  // Pay-period reset ceremony — a paycheck confirmed ON THIS DEVICE that rolled
+  // (or initialized) the pay period emits an event after its batch commits; we
+  // open the ceremony drawer (closed-period recap + set-your-budgets prompt).
+  // Dismissing it is a no-op by design: limits already carried over unchanged,
+  // and the ceremony never re-opens for that period. bucketsRef keeps the
+  // subscription stable across renders while still skipping households with no
+  // buckets (nothing to recap or budget).
+  const [ceremonyEvent, setCeremonyEvent] = useState<PayPeriodCeremonyEvent | null>(null);
+  const [ceremonyOpen, setCeremonyOpen] = useState(false);
+  const bucketsRef = useRef(buckets);
+  useEffect(() => {
+    bucketsRef.current = buckets;
+  }, [buckets]);
+  useEffect(
+    () =>
+      subscribePayPeriodCeremony((event) => {
+        if (bucketsRef.current.length === 0) return;
+        setCeremonyEvent(event);
+        setCeremonyOpen(true);
+      }),
+    [],
+  );
 
   // On an installed PWA, "opening the app" is usually re-foregrounding a page
   // that has been alive for days — no remount, so the mount-time latch above
@@ -170,6 +198,19 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           isOpen={reviewDrawerOpen}
           onClose={() => setReviewDrawerOpen(false)}
         />
+      </LazyMount>
+
+      {/* Pay-period reset ceremony — keyed on the new period so a later roll
+          remounts the drawer with fresh drafts/recap. */}
+      <LazyMount when={ceremonyOpen}>
+        {ceremonyEvent && (
+          <PayPeriodCeremonyDrawer
+            key={ceremonyEvent.newPeriodId}
+            event={ceremonyEvent}
+            isOpen={ceremonyOpen}
+            onClose={() => setCeremonyOpen(false)}
+          />
+        )}
       </LazyMount>
 
       <InstallPwaBanner />

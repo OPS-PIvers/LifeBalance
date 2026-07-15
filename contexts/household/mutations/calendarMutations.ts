@@ -21,6 +21,7 @@ import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { parseRecurringId, isRecurringId, rollRecurringAnchorForward } from '@/utils/calendarRecurrence';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { appendActivityLog, composeSummary } from '@/utils/activityLog';
+import { emitPayPeriodCeremony, type PayPeriodCeremonyEvent } from '@/utils/payPeriodCeremony';
 import { roundMoney } from '@/utils/money';
 import { computePriceChangeNudge } from '@/utils/priceChangeNudge';
 
@@ -342,6 +343,21 @@ export function makePayCalendarItem(deps: {
           : priorPeriodId;
       const payPeriodId = getPayPeriodForTransaction(transactionDate, effectiveLastPaycheck);
 
+      // Pay-period ceremony: decide BEFORE the commit whether this approval
+      // rolls the period (mirrors handlePaycheckApproval's own branch logic —
+      // no prior period → first init; paycheck dated after the current period
+      // start → roll; on/before → no-op, no ceremony). Emitted only AFTER the
+      // batch commits successfully, so the ceremony can never fire for a roll
+      // that didn't happen.
+      const ceremonyKind: PayPeriodCeremonyEvent['kind'] | null =
+        item.type !== 'income'
+          ? null
+          : !priorPeriodId
+            ? 'first'
+            : specificDate > priorPeriodId
+              ? 'roll'
+              : null;
+
       // What was ACTUALLY paid — an explicit override (variable bills edited at
       // pay-time) wins over the item's budgeted amount. Non-finite / non-positive
       // overrides are ignored rather than corrupting the balance. The recurring
@@ -421,6 +437,19 @@ export function makePayCalendarItem(deps: {
       await payBatch.commit();
 
       // DO NOT update bucket.spent - it's now calculated in real-time from transactions
+
+      // Device-local ceremony for the member who confirmed the paycheck.
+      // Deliberately NOT gated on opts.silent: bulk Action-Queue approvals
+      // suppress per-item toasts but should still surface the period reset.
+      if (ceremonyKind) {
+        emitPayPeriodCeremony({
+          kind: ceremonyKind,
+          previousPeriodId: ceremonyKind === 'roll' ? (priorPeriodId ?? null) : null,
+          newPeriodId: specificDate,
+          paycheckTitle: item.title,
+          paycheckAmount: paidAmount,
+        });
+      }
 
       if (!opts?.silent) toast.success(item.type === 'expense' ? 'Bill Paid' : 'Income Received');
 
