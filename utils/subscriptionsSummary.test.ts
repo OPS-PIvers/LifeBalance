@@ -97,5 +97,23 @@ describe('summarizeRecurringItems', () => {
     const result = summarizeRecurringItems([]);
     expect(result.items).toEqual([]);
     expect(result.totalMonthly).toBe(0);
+    expect(result.subscriptions).toEqual([]);
+    expect(result.subscriptionsMonthly).toBe(0);
+    expect(result.otherBills).toEqual([]);
+    expect(result.otherBillsMonthly).toBe(0);
+  });
+
+  it('partitions by the explicit isSubscription flag (recurring alone is NOT a subscription)', () => {
+    const items = [
+      makeItem({ id: 'sub1', title: 'Netflix', amount: 15.49, isRecurring: true, frequency: 'monthly', isSubscription: true }),
+      makeItem({ id: 'bill1', title: 'Mortgage', amount: 2066, isRecurring: true, frequency: 'monthly' }),
+      makeItem({ id: 'bill2', title: 'Car Payment', amount: 498, isRecurring: true, frequency: 'monthly', isSubscription: false }),
+    ];
+    const result = summarizeRecurringItems(items);
+    expect(result.subscriptions.map(i => i.item.id)).toEqual(['sub1']);
+    expect(result.otherBills.map(i => i.item.id)).toEqual(['bill1', 'bill2']);
+    expect(result.subscriptionsMonthly).toBe(15.49);
+    expect(result.otherBillsMonthly).toBe(2564);
+    expect(result.totalMonthly).toBeCloseTo(2579.49, 2);
   });
 });

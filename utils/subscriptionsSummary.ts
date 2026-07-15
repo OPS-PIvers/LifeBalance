@@ -18,6 +18,14 @@ export interface RecurringSpendSummary {
   items: RecurringSummaryItem[];
   /** Sum of every item's monthly-equivalent cost, cent-safe. */
   totalMonthly: number;
+  /** Items the user explicitly marked `isSubscription` (same sort order). */
+  subscriptions: RecurringSummaryItem[];
+  /** Sum of subscription items' monthly-equivalent cost, cent-safe. */
+  subscriptionsMonthly: number;
+  /** Recurring expense items NOT marked as subscriptions (same sort order). */
+  otherBills: RecurringSummaryItem[];
+  /** Sum of non-subscription items' monthly-equivalent cost, cent-safe. */
+  otherBillsMonthly: number;
 }
 
 /**
@@ -66,5 +74,12 @@ export function summarizeRecurringItems(calendarItems: CalendarItem[]): Recurrin
 
   const totalMonthly = sumMoney(items.map(i => i.monthlyEquivalent));
 
-  return { items, totalMonthly };
+  // Recurring ≠ subscription: only explicitly user-flagged items count as
+  // subscriptions (F-MONEY-05 human note); the rest are "other recurring bills".
+  const subscriptions = items.filter(i => i.item.isSubscription === true);
+  const otherBills = items.filter(i => i.item.isSubscription !== true);
+  const subscriptionsMonthly = sumMoney(subscriptions.map(i => i.monthlyEquivalent));
+  const otherBillsMonthly = sumMoney(otherBills.map(i => i.monthlyEquivalent));
+
+  return { items, totalMonthly, subscriptions, subscriptionsMonthly, otherBills, otherBillsMonthly };
 }

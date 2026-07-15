@@ -387,6 +387,10 @@ export interface CalendarItem {
    *  falling back to name-based heuristics, making the check precise and
    *  immune to false-positive substring matches. */
   bucketId?: string;
+  /** Optional: user-marked subscription flag. Recurring alone does NOT make a
+   *  bill a subscription (mortgage, car payment, daycare are recurring but not
+   *  subscriptions) — the Subscriptions tab groups by this explicit flag. */
+  isSubscription?: boolean;
 }
 
 export type EffortLevel = 'easy' | 'medium' | 'hard' | 'very_hard';

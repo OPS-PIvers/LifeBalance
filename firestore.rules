@@ -530,7 +530,8 @@ service cloud.firestore {
               data.keys().hasOnly([
                 'title', 'amount', 'date', 'type', 'isPaid',
                 'isRecurring', 'frequency', 'parentRecurringId', 'isDeleted',
-                'createdBy', 'notes', 'createdAt', 'updatedAt', 'accountId', 'bucketId'
+                'createdBy', 'notes', 'createdAt', 'updatedAt', 'accountId', 'bucketId',
+                'isSubscription'
               ]) &&
               isValidString(data.title, 100) &&
               isValidNumber(data.amount) &&
@@ -542,6 +543,7 @@ service cloud.firestore {
               isValidOptionalString(data.get('frequency', null), 20) &&
               isValidOptionalString(data.get('parentRecurringId', null), 50) &&
               (data.get('isDeleted', null) == null || isValidBoolean(data.isDeleted)) &&
+              (data.get('isSubscription', null) == null || isValidBoolean(data.isSubscription)) &&
               // Metadata
               (data.get('createdBy', null) == null || data.createdBy is string) &&
               // Account linking (optional)
@@ -569,7 +571,8 @@ service cloud.firestore {
           let allowedKeys = [
             'title', 'amount', 'date', 'type', 'isPaid',
             'isRecurring', 'frequency', 'parentRecurringId', 'isDeleted',
-            'createdBy', 'notes', 'createdAt', 'updatedAt', 'accountId', 'bucketId'
+            'createdBy', 'notes', 'createdAt', 'updatedAt', 'accountId', 'bucketId',
+            'isSubscription'
           ].toSet();
           return (
                  // Block writes to any non-allowlisted field (storage abuse): a key
@@ -587,6 +590,7 @@ service cloud.firestore {
                  (!changed.hasAny(['frequency']) || isValidOptionalString(data.get('frequency', null), 20)) &&
                  (!changed.hasAny(['parentRecurringId']) || isValidOptionalString(data.get('parentRecurringId', null), 50)) &&
                  (!changed.hasAny(['isDeleted']) || data.get('isDeleted', null) == null || isValidBoolean(data.isDeleted)) &&
+                 (!changed.hasAny(['isSubscription']) || data.get('isSubscription', null) == null || isValidBoolean(data.isSubscription)) &&
                  (!changed.hasAny(['accountId']) || isValidOptionalString(data.get('accountId', null), 50)) &&
                  (!changed.hasAny(['bucketId']) || isValidOptionalString(data.get('bucketId', null), 50)) &&
                  (!changed.hasAny(['notes']) || isValidOptionalString(data.get('notes', null), 500)) &&

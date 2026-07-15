@@ -76,6 +76,7 @@ const BudgetCalendar: React.FC = () => {
   const [accountId, setAccountId] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
   const [frequency, setFrequency] = useState<'monthly' | 'bi-weekly' | 'weekly'>('monthly');
+  const [isSubscription, setIsSubscription] = useState(false);
 
   const { monthStart, startDate, endDate, days } = useCalendarGrid(currentDate);
 
@@ -229,6 +230,7 @@ const BudgetCalendar: React.FC = () => {
     setAccountId('');
     setIsRecurring(false);
     setFrequency('monthly');
+    setIsSubscription(false);
     setEditingItem(null);
     setIsAddModalOpen(true);
   };
@@ -260,6 +262,7 @@ const BudgetCalendar: React.FC = () => {
       setAccountId(originalItem.accountId || '');
       setIsRecurring(!!originalItem.isRecurring);
       setFrequency(originalItem.frequency || 'monthly');
+      setIsSubscription(!!originalItem.isSubscription);
       setEditingItem(originalItem);
     } else {
       setTitle(item.title);
@@ -269,6 +272,7 @@ const BudgetCalendar: React.FC = () => {
       setAccountId(item.accountId || '');
       setIsRecurring(!!item.isRecurring);
       setFrequency(item.frequency || 'monthly');
+      setIsSubscription(!!item.isSubscription);
       setEditingItem(item);
     }
     setIsAddModalOpen(true);
@@ -286,6 +290,7 @@ const BudgetCalendar: React.FC = () => {
       isPaid: editingItem ? editingItem.isPaid : false,
       isRecurring,
       frequency: isRecurring ? frequency : undefined,
+      isSubscription: type === 'expense' && isSubscription ? true : undefined,
       accountId: accountId || undefined
     };
 
@@ -824,6 +829,22 @@ const BudgetCalendar: React.FC = () => {
                  <option value="bi-weekly">Bi-Weekly</option>
                  <option value="weekly">Weekly</option>
                </Select>
+             )}
+
+             {type === 'expense' && (
+               <div className="flex items-center justify-between">
+                 <div className="min-w-0 pr-3">
+                   <label className="text-sm font-semibold text-brand-700 dark:text-brand-200">Subscription?</label>
+                   <p className="text-xs text-brand-450 dark:text-brand-400">
+                     Groups this bill under Subscriptions on the Money tab.
+                   </p>
+                 </div>
+                 <Switch
+                   checked={isSubscription}
+                   onCheckedChange={setIsSubscription}
+                   aria-label="Subscription?"
+                 />
+               </div>
              )}
 
              <div className="flex gap-2 mt-2">

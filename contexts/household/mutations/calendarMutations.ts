@@ -127,6 +127,10 @@ export function makeUpdateCalendarItem(deps: {
         updates.frequency = deleteField();
       }
 
+      // Subscription flag: store true or remove the field entirely (keeps
+      // legacy docs clean and lets the rules treat it as optional).
+      updates.isSubscription = item.isSubscription ? true : deleteField();
+
       const sanitizedUpdates = sanitizeFirestoreData(updates);
       await updateDoc(doc(db, `households/${householdId}/calendarItems`, item.id), sanitizedUpdates);
       toast.success('Event updated');
