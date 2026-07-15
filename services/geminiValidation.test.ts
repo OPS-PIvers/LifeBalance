@@ -17,6 +17,8 @@ import {
   validateHabitReorganization,
   validateParsedShoppingList,
   validateParsedTodoList,
+  validateParsedTaskList,
+  validateParsedMealPlan,
   validateParsedExpense,
   validateNaturalLanguageUnknown,
   validateRecipe,
@@ -267,6 +269,46 @@ describe('geminiValidation - natural language', () => {
   it('validateNaturalLanguageUnknown rejects an invalid detectedType', () => {
     expect(() => validateNaturalLanguageUnknown({ detectedType: 'mystery', confidence: 1 }))
       .toThrow(/detectedType/);
+  });
+});
+
+describe('geminiValidation - photo import (F-TODO-06)', () => {
+  it('validateParsedTaskList accepts well-formed task lines', () => {
+    const r = validateParsedTaskList({ tasks: [{ text: 'Take out trash' }, { text: 'Pay rent' }] });
+    expect(r.tasks).toHaveLength(2);
+  });
+  it('validateParsedTaskList accepts an empty list', () => {
+    expect(validateParsedTaskList({ tasks: [] }).tasks).toHaveLength(0);
+  });
+  it('validateParsedTaskList rejects a non-string text', () => {
+    expect(() => validateParsedTaskList({ tasks: [{ text: 42 }] }))
+      .toThrow(/text must be a string/);
+  });
+  it('validateParsedTaskList rejects a missing tasks array', () => {
+    expect(() => validateParsedTaskList({}))
+      .toThrow(GeminiValidationError);
+  });
+
+  it('validateParsedMealPlan accepts well-formed meal entries', () => {
+    const r = validateParsedMealPlan({
+      meals: [
+        { mealName: 'Tacos', type: 'dinner', day: 'Monday' },
+        { mealName: 'Oatmeal', type: 'breakfast' },
+      ],
+    });
+    expect(r.meals).toHaveLength(2);
+  });
+  it('validateParsedMealPlan rejects an invalid meal type', () => {
+    expect(() => validateParsedMealPlan({ meals: [{ mealName: 'X', type: 'brunch' }] }))
+      .toThrow(/type must be one of/);
+  });
+  it('validateParsedMealPlan rejects a non-string mealName', () => {
+    expect(() => validateParsedMealPlan({ meals: [{ mealName: 5, type: 'dinner' }] }))
+      .toThrow(/mealName must be a string/);
+  });
+  it('validateParsedMealPlan rejects a non-string day', () => {
+    expect(() => validateParsedMealPlan({ meals: [{ mealName: 'X', type: 'dinner', day: 3 }] }))
+      .toThrow(/day must be a string/);
   });
 });
 

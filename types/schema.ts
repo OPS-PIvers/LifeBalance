@@ -74,6 +74,18 @@ export interface NotificationPreferences {
     enabled: boolean;
   };
 
+  // Digest mode (F-NOTIF-03): one consolidated push at `time` instead of the
+  // separate habitReminders/actionQueueReminders/streakWarnings/billReminders
+  // pushes. When enabled, the four hourly jobs skip their per-type send for
+  // this member and `senddigest` aggregates across whichever of those four
+  // categories the member still has individually enabled. Optional so legacy
+  // docs deserialize — absent/undefined means digest mode is off (fail-closed,
+  // matching the per-type toggles' own default-off spirit).
+  digestMode?: {
+    enabled: boolean;
+    time: string; // HH:MM format (24-hour)
+  };
+
   // AI daily briefing push (F-DASH-02). A proactive one/two-sentence morning
   // summary (bills due, pending review, habits left, streaks at risk) sent
   // server-side at `time` in the member's timezone. Unlike the recaps this
@@ -614,6 +626,17 @@ export interface MealIngredient {
   quantity?: string; // Amount needed
 }
 
+/**
+ * F-MEALS-03: standing household dietary constraints. `allergens` are hard
+ * exclusions (never propose in any form) fed to `suggestMeal`/`generateWeeklyPlan`
+ * and matched against recipe ingredients for the warning badge; `restrictions`
+ * are softer preferences (e.g. "vegetarian") passed only to the AI, not badge-checked.
+ */
+export interface DietaryProfile {
+  restrictions: string[];
+  allergens: string[];
+}
+
 export interface Meal {
   id: string;
   name: string;
@@ -734,6 +757,11 @@ export interface Household {
   // migration needed). Only an explicit `false` hides a module. Read through
   // utils/moduleVisibility.ts — the single source of truth.
   moduleVisibility?: Partial<Record<ModuleKey, boolean>>;
+
+  // F-MEALS-03: standing household dietary restrictions/allergies. Absent means
+  // no constraints are recorded — AI meal calls (suggestMeal, generateWeeklyPlan)
+  // and the recipe allergen badge treat an absent/empty profile as "no restrictions".
+  dietaryProfile?: DietaryProfile;
 
   // Plan 080 (Kid Mode): salted hash of the parent PIN required to EXIT a kid
   // profile view back to a parent view (Netflix-Kids pattern). Absent until a
@@ -876,7 +904,7 @@ export interface ToDo {
   // New fields for natural language support
   priority?: 'low' | 'medium' | 'high'; // Priority level (defaults to 'medium')
   notes?: string; // Additional task details
-  source?: 'manual' | 'voice' | 'shortcut'; // How the todo was created
+  source?: 'manual' | 'voice' | 'shortcut' | 'photo'; // How the todo was created
 
   // Plan 080c (Kid Mode): points credited to a MANAGED-KID assignee on completion
   // (defaults to DEFAULT_TODO_POINTS, see utils/todoPoints.ts). Absent on every
@@ -963,6 +991,25 @@ export interface Insight {
   generatedAt: string; // ISO timestamp
   type: 'general' | 'spending' | 'habits';
   actions?: InsightAction[];
+  // F-DASH-11 — quality signal on this specific insight. Undefined = unrated.
+  // Fed back into the next `generateInsight` prompt (see `rateInsight` /
+  // `makeRefreshInsight`) so disliked insights steer future generations away
+  // from the same style/topic, and liked ones reinforce it.
+  feedback?: 'up' | 'down';
+  feedbackAt?: string; // ISO timestamp of the rating, if any
+}
+
+/**
+ * F-DASH-03 — Habit Coach card. Single ephemeral/regenerable doc at
+ * `households/{id}/habitInsights/current` (not a growing collection) holding
+ * the latest `analyzeHabitPatterns()` output. `HabitPatternInsight` itself
+ * lives in services/geminiService.types.ts (the AI response schema) and is
+ * imported here as a type-only reference so this file stays free of runtime
+ * AI-SDK coupling.
+ */
+export interface HabitInsightsDoc {
+  patterns: import('@/services/geminiService.types').HabitPatternInsight[];
+  generatedAt: string; // ISO timestamp
 }
 
 /**

@@ -18,6 +18,7 @@ import {
   MealPlanItem,
   ToDo,
   Insight,
+  HabitInsightsDoc,
   GroceryCatalogItem,
   Store,
   QuickStockList,
@@ -30,6 +31,7 @@ import {
   ActivityLogEntry,
   TransactionComment,
   SplitParticipant,
+  DietaryProfile,
   NotificationLogEntry
 } from '@/types/schema';
 import { type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
@@ -74,6 +76,11 @@ export interface HouseholdContextType {
   primaryYearlyGoal: YearlyGoal | null;
   rewardsInventory: RewardItem[];
   freezeBank: FreezeBank | null;
+  /** F-DASH-03 — Habit Coach card. Latest `analyzeHabitPatterns()` output,
+   *  null until first generated for this household. */
+  habitPatterns: HabitInsightsDoc | null;
+  isGeneratingHabitPatterns: boolean;
+  refreshHabitPatterns: () => Promise<void>;
   insight: string;
   insightsHistory: Insight[];
   isGeneratingInsight: boolean;
@@ -316,6 +323,8 @@ export interface HouseholdContextType {
   approveRedemption: (redemptionId: string) => Promise<void>;
   denyRedemption: (redemptionId: string) => Promise<void>;
   refreshInsight: () => Promise<void>;
+  // F-DASH-11 — thumbs up/down feedback on a single insight doc.
+  rateInsight: (insightId: string, feedback: 'up' | 'down') => Promise<void>;
 
   // Yearly Goal Actions
   createYearlyGoal: (goal: Omit<YearlyGoal, 'id'>) => Promise<void>;
@@ -359,6 +368,9 @@ export interface HouseholdContextType {
 
   /** Set (raw PIN, salted+hashed before write) or clear (null) the Kid Mode exit PIN. */
   setKidModePin: (pin: string | null) => Promise<void>;
+
+  /** F-MEALS-03: set the household's standing dietary restrictions/allergens. */
+  setDietaryProfile: (profile: DietaryProfile) => Promise<void>;
 
   /** F-MEALS-04: set (habit id) or clear (null) the habit auto-credited when a meal is marked cooked. */
   setMealCookedHabitId: (habitId: string | null) => Promise<void>;
@@ -451,6 +463,7 @@ export type GamificationContextValue = Pick<HouseholdContextType,
   | 'activeChallenge' | 'challenges'
   | 'yearlyGoals' | 'activeYearlyGoals' | 'primaryYearlyGoal'
   | 'rewardsInventory' | 'freezeBank'
+  | 'habitPatterns' | 'isGeneratingHabitPatterns' | 'refreshHabitPatterns'
   | 'addHabit' | 'updateHabit' | 'deleteHabit' | 'archiveHabit' | 'unarchiveHabit' | 'reorderHabits' | 'toggleHabit' | 'resetHabit' | 'setHabitPause'
   | 'addHabitSubmission' | 'updateHabitSubmission' | 'deleteHabitSubmission' | 'getHabitSubmissions'
   | 'resetHabitDay'
@@ -491,8 +504,8 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'hasMoreInsights' | 'loadAllInsights'
   | 'pendingItemsCount' | 'apiKeys'
   | 'householdId' | 'householdSettings' | 'household'
-  | 'refreshInsight' | 'addMember' | 'updateMember' | 'removeMember' | 'deleteHousehold'
-  | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'updateModuleVisibility' | 'setKidModePin' | 'setMealCookedHabitId'
+  | 'refreshInsight' | 'rateInsight' | 'addMember' | 'updateMember' | 'removeMember' | 'deleteHousehold'
+  | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'updateModuleVisibility' | 'setKidModePin' | 'setDietaryProfile' | 'setMealCookedHabitId'
   | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
   | 'activeMemberId' | 'actAs' | 'exitToParent'
   | 'recaps' | 'moneyRecaps' | 'activityLog'

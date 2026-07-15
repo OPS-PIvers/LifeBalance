@@ -373,9 +373,13 @@ explorations against this table.
 | `first_habit_completed` | First upward habit toggle ever on this device (flag `lb_first_habit_tracked`) | — |
 | `habit_past_day_logged` | A habit is backfilled for a past day from the Habits header calendar (`components/modals/PastDayLogModal.tsx`) | `daysAgo` — how many days back the logged date is; `positive` — habit type is positive |
 | `insight_generated` | AI insight doc written (`refreshInsight`) | — |
+| `habit_patterns_generated` | Habit Coach patterns doc written (`refreshHabitPatterns`, F-DASH-03) | — |
 | `insight_action_executed` | An insight's suggested action runs successfully (`hooks/useInsightActions.ts`) | `type` — `update_bucket` \| `create_habit` \| `create_todo` |
+| `insight_rated` | Thumbs up/down tapped on an insight (`rateInsight`, `components/dashboard/InsightWidget.tsx`) | `feedback` — `up` \| `down` |
 | `receipt_scanned` | Camera receipt OCR succeeds (`CaptureModal`) | — |
 | `statement_scanned` | Bank-statement/receipt file parse succeeds (`CaptureModal`) | `count` — transactions extracted |
+| `photo_tasklist_scanned` | Handwritten/whiteboard to-do photo parsed (`TodoPhotoImportDrawer`, F-TODO-06) | `count` — tasks extracted |
+| `photo_mealplan_scanned` | Handwritten/whiteboard weekly menu photo parsed (`MealPlanPhotoImportDrawer`, F-TODO-06) | `count` — meals extracted |
 | `meal_planned` | Meal added to the weekly plan (`addMealPlanItem`) | — |
 | `shopping_item_checked` | Shopping item marked purchased (`toggleShoppingItemPurchased`) | — |
 | `reward_redeemed` | Reward redemption commits (`redeemReward`) or a kid request is approved (`approveRedemption`) | `via` — `self` \| `parent_approval` |
@@ -384,6 +388,7 @@ explorations against this table.
 | `recap_push_opened` | App arrives via the weekly recap push deep link (`?recap=<isoWeek>`, consumed by `utils/recapParam.ts`) | — |
 | `recap_shared` | Share button in `WeeklyRecapDrawer` generates the canvas share card (`utils/recapShareCard.ts`) | `isoWeek`; `method` — `shared` (Web Share API) \| `downloaded` (fallback) |
 | `duplicate_merged` | A `possibleDuplicateOf`-flagged transaction pair is merged (`mergeTransactions` in the context, or the Merge action in `TransactionReviewForm`) | `source` — the deleted duplicate row's `Transaction.source` |
+| `setup_checklist_item_completed` | A post-onboarding setup checklist item (`components/dashboard/SetupChecklistCard.tsx`) transitions from undone to done | `item` — the item id (`bucket` \| `notifications` \| `invite` \| `bank`) |
 | `duplicate_kept_both` | A `possibleDuplicateOf` flag is dismissed without merging (`keepBothTransactions` / the Keep-both action) | — |
 | `bank_linked` | A Plaid Link flow completes and `plaidexchangepublictoken` succeeds (`components/settings/ConnectBankCard.tsx`) | — |
 | `plaid_balance_adopted` | The "Update to bank balance" chip is tapped on a budget account card (`components/budget/BudgetAccounts.tsx`) | — |
