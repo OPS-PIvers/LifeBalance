@@ -968,6 +968,39 @@ export interface MonthlyMoneyRecap {
   premium: boolean;
 }
 
+/** Coarse category for a logged push notification (F-NOTIF-02 inbox). */
+export type NotificationLogType =
+  | 'habit_reminder'
+  | 'action_queue_reminder'
+  | 'streak_warning'
+  | 'bill_reminder'
+  | 'budget_alert'
+  | 'weekly_recap'
+  | 'monthly_money_recap';
+
+/**
+ * In-app notification inbox entry (F-NOTIF-02) — one doc per push sent, at
+ * `households/{id}/notificationLog/{id}`, written server-side by
+ * `sendNotificationToUser` (Admin SDK) alongside the FCM send. This is a
+ * FLAT household-level subcollection (not nested under the member doc) so it
+ * degrades gracefully under today's generic member-write Firestore rule
+ * without a rules change; each entry carries `recipientUid` and the client
+ * filters to the signed-in member's own entries. `readBy` accumulates member
+ * uids that have opened the inbox item (a household-wide log entry can in
+ * principle be marked read by multiple viewers, though in practice only
+ * `recipientUid` ever sees it in their own feed).
+ */
+export interface NotificationLogEntry {
+  id: string;
+  type: NotificationLogType;
+  recipientUid: string;
+  title: string;
+  body: string;
+  data?: Record<string, string>;
+  createdAt: string; // ISO timestamp
+  readBy: string[];
+}
+
 /**
  * Net worth snapshot (F-MONEY-09) — one doc per calendar day at
  * `households/{id}/netWorthSnapshots/{yyyy-MM-dd}`, written server-side once

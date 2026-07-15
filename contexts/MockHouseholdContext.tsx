@@ -50,6 +50,7 @@ import {
   ModuleKey,
   WeeklyRecap,
   MonthlyMoneyRecap,
+  NotificationLogEntry,
   NetWorthSnapshot,
   SavingsGoal,
   TransactionComment
@@ -467,6 +468,58 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     narrativeSource: 'template',
     premium: true,
   }]);
+  // F-NOTIF-02 (in-app notification inbox) — a few canned entries, mixed
+  // read/unread, so Test Mode renders the bell badge + inbox drawer. Mirrors
+  // the real provider's shape: newest first, `readBy` accumulates member uids.
+  const [notificationLog, setNotificationLog] = useState<NotificationLogEntry[]>(() => [
+    {
+      id: 'notif-1',
+      type: 'bill_reminder',
+      recipientUid: 'test-user-id',
+      title: 'Bills due in 3 days',
+      body: '2 bills totaling $1,265.00 coming up',
+      data: { url: '/budget' },
+      createdAt: new Date(Date.now() - 2 * 3600000).toISOString(),
+      readBy: [],
+    },
+    {
+      id: 'notif-2',
+      type: 'streak_warning',
+      recipientUid: 'test-user-id',
+      title: "Don't break your streak!",
+      body: 'You have 1 habit with an active streak that needs attention today.',
+      data: { url: '/habits' },
+      createdAt: new Date(Date.now() - 26 * 3600000).toISOString(),
+      readBy: [],
+    },
+    {
+      id: 'notif-3',
+      type: 'weekly_recap',
+      recipientUid: 'test-user-id',
+      title: 'Your weekly recap is ready',
+      body: 'See how your spending, habits, and points stacked up this week.',
+      data: { url: '/?recap=test' },
+      createdAt: new Date(Date.now() - 4 * 86400000).toISOString(),
+      readBy: ['test-user-id'],
+    },
+  ]);
+  const unreadNotificationCount = notificationLog.filter((entry) => !entry.readBy.includes('test-user-id')).length;
+  const markNotificationRead = async (entryId: string) => {
+    setNotificationLog((prev) =>
+      prev.map((entry) =>
+        entry.id === entryId && !entry.readBy.includes('test-user-id')
+          ? { ...entry, readBy: [...entry.readBy, 'test-user-id'] }
+          : entry
+      )
+    );
+  };
+  const markAllNotificationsRead = async () => {
+    setNotificationLog((prev) =>
+      prev.map((entry) =>
+        entry.readBy.includes('test-user-id') ? entry : { ...entry, readBy: [...entry.readBy, 'test-user-id'] }
+      )
+    );
+  };
   // One canned monthly money recap (F-MONEY-06) so Test Mode renders the
   // Dashboard money-recap card + drawer. Anchored to the PRIOR calendar month
   // with a fresh generatedAt so the card's freshness window always passes.
@@ -1555,6 +1608,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     bucketHistory,
     recaps,
     moneyRecaps,
+    notificationLog,
+    unreadNotificationCount,
+    markNotificationRead,
+    markAllNotificationsRead,
     insightsHistory,
     insight,
     stores,
