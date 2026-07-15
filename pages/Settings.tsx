@@ -64,7 +64,7 @@ import { useBillingEnabled } from '@/hooks/useBillingEnabled';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { usePlaidEnabled } from '@/hooks/usePlaidEnabled';
 import { isValidPinFormat } from '@/utils/kidPin';
-import { getPlan } from '@/utils/entitlements';
+import { getPlan, getLimits } from '@/utils/entitlements';
 
 // Lazy so react-plaid-link stays out of the boot bundle — the chunk only loads
 // when plaidEnabled is on AND this renders (dormant by default → never loads).
@@ -96,6 +96,7 @@ const Settings: React.FC = () => {
     updateMember,
     removeMember,
     deleteHousehold,
+    household,
     householdSettings,
     setHouseholdCurrency,
     setModuleVisibility,
@@ -942,6 +943,28 @@ const Settings: React.FC = () => {
             The delete row keeps its exact admin-only guard. */}
         <Section title="Account">
           <SurfaceList>
+            {billingEnabled && household && (
+              <Row className="flex-col items-stretch gap-1">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={
+                      getPlan(household) === 'premium'
+                        ? 'inline-flex items-center gap-1.5 text-xs font-bold text-warm-700 bg-warm-50 border border-warm-200 px-2.5 py-0.5 rounded-full dark:bg-warm-500/15 dark:text-warm-300 dark:border-warm-500/30'
+                        : 'inline-flex items-center gap-1.5 text-xs font-bold text-brand-600 bg-brand-100 border border-brand-200 px-2.5 py-0.5 rounded-full dark:bg-brand-700/50 dark:text-brand-300 dark:border-brand-600'
+                    }
+                  >
+                    {getPlan(household) === 'premium' ? 'Premium plan' : 'Free plan'}
+                  </span>
+                </div>
+                <p className="text-xs text-brand-500 dark:text-brand-400">
+                  {members.length} of {getLimits(household).maxMembers} members
+                  {' · '}
+                  {getLimits(household).aiDailyCap} AI actions/day
+                  {' · '}
+                  {getLimits(household).historyMonths} mo history
+                </p>
+              </Row>
+            )}
             <DisclosureRow
               icon={<LogOut className="w-5 h-5" />}
               title="Sign Out"
