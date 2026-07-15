@@ -38,6 +38,11 @@ describe('matchAllergens', () => {
     expect(matchAllergens(noIngredients, ['peanut'])).toEqual(['peanut']);
   });
 
+  it('still matches name/description when ingredients are present but incomplete', () => {
+    const incompleteList = meal({ ingredients: [{ name: 'Flour' }, { name: 'Sugar' }], name: 'Peanut Butter Cookies', description: '' });
+    expect(matchAllergens(incompleteList, ['peanut'])).toEqual(['peanut']);
+  });
+
   it('trims and lowercases allergen entries before matching', () => {
     expect(matchAllergens(meal(), [' PEANUT '])).toEqual(['peanut']);
   });

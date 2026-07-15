@@ -60,7 +60,19 @@ export const DietaryProfileModal: React.FC<DietaryProfileModalProps> = ({ isOpen
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await setDietaryProfile({ allergens, restrictions });
+      const finalAllergens = [...allergens];
+      const trimmedAllergen = newAllergen.trim();
+      if (trimmedAllergen && !finalAllergens.some(a => a.toLowerCase() === trimmedAllergen.toLowerCase())) {
+        finalAllergens.push(trimmedAllergen);
+      }
+
+      const finalRestrictions = [...restrictions];
+      const trimmedRestriction = newRestriction.trim();
+      if (trimmedRestriction && !finalRestrictions.some(r => r.toLowerCase() === trimmedRestriction.toLowerCase())) {
+        finalRestrictions.push(trimmedRestriction);
+      }
+
+      await setDietaryProfile({ allergens: finalAllergens, restrictions: finalRestrictions });
       onClose();
     } catch (error) {
       console.error('[DietaryProfileModal] Failed to save dietary profile:', error);
@@ -96,6 +108,7 @@ export const DietaryProfileModal: React.FC<DietaryProfileModalProps> = ({ isOpen
               onChange={(e) => setNewAllergen(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addAllergen())}
               placeholder="e.g. peanuts"
+              aria-label="New allergen"
               className="flex-1 p-2 bg-white border border-brand-200 rounded-lg text-base focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-800 dark:border-brand-700 dark:text-brand-200 dark:placeholder:text-brand-450"
             />
             <Button variant="primary" onClick={addAllergen} disabled={!newAllergen.trim()} aria-label="Add allergen">
@@ -132,6 +145,7 @@ export const DietaryProfileModal: React.FC<DietaryProfileModalProps> = ({ isOpen
               onChange={(e) => setNewRestriction(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addRestriction())}
               placeholder="e.g. vegetarian"
+              aria-label="New restriction"
               className="flex-1 p-2 bg-white border border-brand-200 rounded-lg text-base focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-800 dark:border-brand-700 dark:text-brand-200 dark:placeholder:text-brand-450"
             />
             <Button variant="primary" onClick={addRestriction} disabled={!newRestriction.trim()} aria-label="Add restriction">
