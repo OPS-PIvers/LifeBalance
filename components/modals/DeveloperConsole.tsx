@@ -5,7 +5,8 @@ import { Switch } from '@/components/ui/Switch';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { db } from '@/firebase.config';
-import { collection, query, getDocs, getDoc, addDoc, updateDoc, doc, deleteDoc, orderBy, limit } from 'firebase/firestore';
+import { collection, query, getDocs, getDoc, addDoc, updateDoc, doc, deleteDoc, orderBy, limit, arrayUnion, serverTimestamp } from 'firebase/firestore';
+import { computeHabitHistoryRepair } from '@/utils/migrations/habitHistoryRepair';
 import {
   readAppConfigFlags,
   setAppFlag,
@@ -18,7 +19,7 @@ import {
   removeFlagTargetHousehold,
 } from '@/services/appConfig';
 import { getLimits, LEGACY_AI_DAILY_QUOTA } from '@/utils/entitlements';
-import { BetaTester, FeedbackReport, Household } from '@/types/schema';
+import { BetaTester, FeedbackReport, Household, Habit, HabitSubmission } from '@/types/schema';
 import { Loader2, Plus, Trash2, Copy, X, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -123,6 +124,11 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
   const [targetInputs, setTargetInputs] = useState<Record<string, string>>({});
   const [expandedTargetFlag, setExpandedTargetFlag] = useState<string | null>(null);
   const [targetSaving, setTargetSaving] = useState(false);
+  // Habit-history repair (2026-07-15 incident): additive rebuild of
+  // completedDates from surviving submission docs. Confirm-gated; idempotent.
+  const [repairConfirmOpen, setRepairConfirmOpen] = useState(false);
+  const [repairRunning, setRepairRunning] = useState(false);
+  const [repairLog, setRepairLog] = useState<string[]>([]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -294,6 +300,61 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
       toast.error('Failed to remove household from allowlist');
     } finally {
       setTargetSaving(false);
+    }
+  };
+
+  /**
+   * Habit-history repair (2026-07-15 incident): for every household (up to the
+   * same 50-household ops cap as the AI meter), rebuild each habit's
+   * completedDates from its surviving submission docs. Writes are strictly
+   * additive (`arrayUnion` of only the missing dates), so re-running is
+   * idempotent and toggle-path days are never removed. streakDays is
+   * recomputed over the merged history. See utils/migrations/habitHistoryRepair.
+   */
+  const runHabitHistoryRepair = async () => {
+    setRepairConfirmOpen(false);
+    setRepairRunning(true);
+    setRepairLog([]);
+    const log: string[] = [];
+    try {
+      const householdsSnap = await getDocs(query(collection(db, 'households'), limit(50)));
+      let repairedHabits = 0;
+      let restoredDates = 0;
+      for (const hh of householdsSnap.docs) {
+        const habitsSnap = await getDocs(collection(db, `households/${hh.id}/habits`));
+        for (const habitDoc of habitsSnap.docs) {
+          const habit = habitDoc.data() as Habit;
+          // Only habits flagged for submission tracking can have submission docs.
+          if (!habit.hasSubmissionTracking) continue;
+          const subsSnap = await getDocs(
+            collection(db, `households/${hh.id}/habits/${habitDoc.id}/submissions`)
+          );
+          const submissions = subsSnap.docs.map(d => d.data() as HabitSubmission);
+          const plan = computeHabitHistoryRepair(habit, submissions);
+          if (!plan) continue;
+          await updateDoc(doc(db, `households/${hh.id}/habits`, habitDoc.id), {
+            completedDates: arrayUnion(...plan.missingDates),
+            streakDays: plan.streakDays,
+            lastUpdated: serverTimestamp(),
+          });
+          repairedHabits++;
+          restoredDates += plan.missingDates.length;
+          log.push(`${habit.title ?? habitDoc.id}: restored ${plan.missingDates.length} day(s), streak → ${plan.streakDays}`);
+        }
+      }
+      log.push(
+        repairedHabits === 0
+          ? 'Nothing to repair — every submission-backed day is already present.'
+          : `Done: ${restoredDates} day(s) restored across ${repairedHabits} habit(s). Points totals self-correct on next login/midnight recompute.`
+      );
+      toast.success('Habit history repair complete');
+    } catch (error) {
+      console.error('[runHabitHistoryRepair] Failed:', error);
+      log.push('FAILED — see console. Partial progress is safe to re-run (additive/idempotent).');
+      toast.error('Repair failed — safe to re-run');
+    } finally {
+      setRepairLog(log);
+      setRepairRunning(false);
     }
   };
 
@@ -649,6 +710,40 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                       Secret is set via <span className="font-mono">firebase functions:secrets:set</span> (see docs/PLAID_SETUP_RUNBOOK.md), not here.
                     </span>
                   </div>
+
+                  {/* Maintenance: additive habit-history repair (2026-07-15 incident). */}
+                  <div className="rounded-xl border border-brand-200 bg-brand-50/50 p-4 dark:border-brand-700/60 dark:bg-brand-700/30">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-brand-800 dark:text-brand-100">Repair habit history</h3>
+                        <p className="mt-1.5 text-xs leading-relaxed text-brand-500 dark:text-brand-400">
+                          Rebuilds each habit&apos;s <span className="font-mono">completedDates</span> from its stored submission
+                          docs (all households). Strictly additive and idempotent — only missing days are restored, nothing
+                          is ever removed. Toggle-path days without submissions can&apos;t be recovered automatically; re-enter
+                          those via the History tab&apos;s day editor.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={repairRunning}
+                        onClick={() => setRepairConfirmOpen(true)}
+                        className="shrink-0 rounded-lg bg-accent-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                      >
+                        {repairRunning ? (
+                          <span className="inline-flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" aria-hidden="true" /> Repairing…</span>
+                        ) : (
+                          'Run repair'
+                        )}
+                      </button>
+                    </div>
+                    {repairLog.length > 0 && (
+                      <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto rounded-lg bg-white p-2.5 text-xs font-mono text-brand-700 dark:bg-brand-800 dark:text-brand-200">
+                        {repairLog.map((line, i) => (
+                          <li key={i}>{line}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 </div>
               )}
             </>
@@ -663,6 +758,15 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
         title="Remove Tester"
         message="Are you sure you want to remove this tester?"
         confirmLabel="Remove"
+      />
+
+      <ConfirmDialog
+        isOpen={repairConfirmOpen}
+        onClose={() => setRepairConfirmOpen(false)}
+        onConfirm={() => void runHabitHistoryRepair()}
+        title="Repair habit history?"
+        message="Restores completion days proven by stored submissions across ALL households (max 50). Additive only — no existing data is changed or removed, and re-running is safe."
+        confirmLabel="Run repair"
       />
 
       <ConfirmDialog
