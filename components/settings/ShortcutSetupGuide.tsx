@@ -502,6 +502,67 @@ const EXAMPLES: ShortcutExample[] = [
     after: [
       'Don’t add an “only if amount is over $0” filter — $0 holds are supposed to go through (they become “awaiting amount” items you can fill in).',
       'Any amount format works: 50, “$50.00”, “(50.00)”, “50,00”.',
+      'On **iOS 27 or later** you can also use the **Wallet Notification Auto-Log** below, which reads the real charged amount from the Wallet notification. Keep this one for household members on iOS 26.',
+    ],
+  },
+  {
+    id: 'wallet-notification',
+    title: 'Wallet Notification Auto-Log (iOS 27+)',
+    icon: <CreditCard className="w-5 h-5" />,
+    description: 'iOS 27’s new Notification trigger reads the real amount straight from the Wallet notification.',
+    endpoint: 'expense',
+    isAutomation: true,
+    before: [
+      'Requires **iOS 27 or later** — it uses the new **Notification** automation trigger. On iOS 26, use the **Apple Pay Auto-Log** above instead.',
+      'Unlike the Transaction trigger, the Wallet notification usually carries the **real charged amount** (not a $0 hold), so this fills in any $0 stubs from the Transaction automation automatically.',
+      'Keep a real Wallet notification in mind — you may need to tweak the merchant pattern to match its exact wording.',
+    ],
+    setupSteps: [
+      { text: 'In the **Shortcuts** app, go to the **Automation** tab → tap **+** → choose **Notification**.' },
+      { text: 'Tap the **App** slot and pick **Wallet**, select **Run Immediately**, then tap **Next** → **New Blank Automation**.' },
+      {
+        text: 'Add **Get Text from Input** and set its **Input** to **Shortcut Input** — this turns the notification into plain text.',
+      },
+      {
+        text: 'Add **Match Text**. Paste the pattern below into its **Match** slot, set its **Text** slot to the **Text** output of the previous step, then add **Get Item from List** (First Item) and **Set Variable** named **Amount**:',
+        copy: [
+          {
+            label: 'Amount pattern',
+            value: '\\$?\\d[\\d,]*\\.\\d{2}',
+            hint: 'Finds “$13.31” anywhere in the notification.',
+          },
+        ],
+      },
+      {
+        text: 'Repeat for the store name: **Match Text** (pattern below, Text = the same **Text** output) → **Get Item from List** (First Item) → **Set Variable** named **Merchant**.',
+        copy: [
+          {
+            label: 'Merchant pattern',
+            value: '(?<= at ).*',
+            hint: 'Grabs everything after “ at ” — tweak it once you’ve seen your card’s exact notification wording.',
+          },
+        ],
+      },
+    ],
+    fields: [
+      { key: 'amount', type: 'Number', mode: 'variable', value: 'Amount' },
+      { key: 'merchant', type: 'Text', mode: 'variable', value: 'Merchant' },
+      {
+        key: 'fromBankNotification',
+        type: 'Text',
+        mode: 'copy',
+        value: 'true',
+        hint: 'Tells LifeBalance to fill a matching $0 Apple Pay hold instead of adding a duplicate.',
+      },
+    ],
+    finishSteps: [
+      {
+        text: 'Tap **Done**. On your next purchase, the Wallet notification becomes a pending transaction with the real amount — and merges with any $0 hold from the Transaction automation.',
+      },
+    ],
+    after: [
+      'It’s safe to run this **alongside** the Apple Pay Auto-Log and bank alerts — the server merges and de-duplicates matching purchases, so you won’t get doubles.',
+      'iOS 27 betas can silently stop automations from firing — if runs stop, toggle the automation off/on or rebuild it.',
     ],
   },
   {
@@ -513,7 +574,7 @@ const EXAMPLES: ShortcutExample[] = [
     isAutomation: true,
     before: [
       'First, turn on **text-message purchase alerts** in your bank’s app or website, and keep a real alert text handy — you’ll match its wording below.',
-      'Why texts? iOS can only trigger automations from incoming **Messages** — it can’t react to another app’s push notifications.',
+      'Why texts? On iOS 26 and earlier, automations can only react to incoming **Messages** — not another app’s push notifications. (On **iOS 27+** there’s also a **Notification** trigger — see the Wallet Notification Auto-Log below.)',
     ],
     setupSteps: [
       { text: 'In the **Shortcuts** app, go to the **Automation** tab → tap **+** → choose **Message**.' },
@@ -587,7 +648,7 @@ const EXAMPLES: ShortcutExample[] = [
       },
       { text: 'Select **Run Immediately** → **Next** → **New Blank Automation**.' },
       {
-        text: 'Add **Get Text from Input** — this turns the incoming email into plain text. That’s the only preparation: LifeBalance reads the amount, merchant, card, and date out of the email on the server, so there are no patterns to copy.',
+        text: 'Add **Get Text from Input** — this turns the incoming email into plain text. **Important:** tap the pale **Input** word inside that action and set it to **Shortcut Input** (the incoming email). If it’s left empty or auto-fills with something else, the action produces nothing and the server rejects the run with an “emailText was empty” error. That’s the only preparation: LifeBalance reads the amount, merchant, card, and date out of the email on the server, so there are no patterns to copy.',
       },
     ],
     fields: [
@@ -596,7 +657,7 @@ const EXAMPLES: ShortcutExample[] = [
         type: 'Text',
         mode: 'variable',
         value: 'Text',
-        hint: 'Pick the **Text** output of the “Get Text from Input” step — the whole email. LifeBalance extracts the amount, merchant, card digits, and date server-side.',
+        hint: 'Pick the **Text** output of the “Get Text from Input” step — the whole email. If runs keep failing with “emailText was empty” (seen on the iOS 27 beta), delete the Get Text from Input action and set this field directly to **Shortcut Input** instead — the server parser handles the raw email either way.',
       },
     ],
     finishSteps: [
@@ -608,6 +669,7 @@ const EXAMPLES: ShortcutExample[] = [
       },
     ],
     after: [
+      '**On the iOS 27 beta?** Automations can silently stop firing or lose their wiring (“corrupted”) — if that happens, delete the automation and rebuild it from scratch rather than editing it, and toggle it off/on in the Automation tab. The **Get Text from Input** step is the usual casualty: re-check its Input is **Shortcut Input**, or bypass it as described in the emailText field above.',
       '**No Email trigger on your iOS?** Build the exact same actions as a regular shortcut, tap ⓘ → turn on **Show in Share Sheet**, then open an alert email → **Share** → run the shortcut.',
       'Email alerts automatically fill a matching Apple Pay **$0 hold** instead of adding a duplicate — no extra field needed.',
       'Gmail / Google Workspace accounts in Apple **Mail** are fetch-only, so the automation may run several minutes after the purchase — whenever Mail actually downloads the message.',
