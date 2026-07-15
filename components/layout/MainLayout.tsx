@@ -11,6 +11,7 @@ import { useAppReopen } from '@/hooks/useAppReopen';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { useKeyboardViewportAnchor } from '@/hooks/useKeyboardViewportAnchor';
+import { InstallPwaBanner } from '@/components/ui/InstallPwaBanner';
 
 // Lazy so the kid view (Plan 080b) stays out of the always-mounted boot bundle —
 // it only loads when a parent actually switches into a kid.
@@ -157,6 +158,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           onClose={() => setReviewDrawerOpen(false)}
         />
       </LazyMount>
+
+      <InstallPwaBanner />
     </div>
   );
 };
