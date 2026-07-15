@@ -340,6 +340,46 @@
 }
 
 /*
+ * Accessibility: base text scale (F-XCUT-06).
+ *
+ * `data-font-scale` is stamped on <html> by ThemeContext. Scaling the root
+ * `%` font-size (rather than a transform or a rem-multiplier custom property)
+ * means every rem-based Tailwind utility — text sizes, spacing, radii — grows
+ * proportionally with zero per-component changes, matching how the browser's
+ * own "larger text" zoom behaves.
+ */
+html[data-font-scale='115'] {
+  font-size: 115%;
+}
+html[data-font-scale='130'] {
+  font-size: 130%;
+}
+
+/*
+ * Accessibility: high-contrast theme variant (F-XCUT-06).
+ *
+ * `data-contrast="high"` is stamped on <html> by ThemeContext, independent of
+ * light/dark. Tailwind v4 emits color utilities as `var(--color-*)` reads
+ * against the `@theme` custom properties, so overriding those properties here
+ * retints every consumer (text/border/bg) without touching component code.
+ * Only the tokens that fail or sit close to WCAG AA at normal contrast are
+ * strengthened: muted/secondary text and hairline borders. Brand-900/50 (body
+ * text) and accent-600 (primary) already exceed AA and are left alone.
+ */
+:root[data-contrast='high'] {
+  --color-brand-400: #726d61;
+  --color-brand-500: #4a463d;
+  --color-brand-200: #c7c2b5;
+  --color-brand-300: #a19b8c;
+}
+:root.dark[data-contrast='high'] {
+  --color-brand-400: #c9c5b8;
+  --color-brand-450: #d6d2c5;
+  --color-brand-500: #b8b3a5;
+  --color-brand-700: #4c483f;
+}
+
+/*
  * Global search deep-link highlight (Plan 14 v1.1) — a brief flash applied to
  * the row a search result scrolled to (see useScrollToHighlight). The
  * app-wide prefers-reduced-motion guard below collapses this animation's

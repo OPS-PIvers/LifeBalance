@@ -16,6 +16,8 @@ import { track } from '@/services/analytics';
 import { Drawer } from '@/components/ui/Drawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { findMatchingPendingTransaction, buildReceiptMergeUpdates } from '@/utils/transactionMatch';
+import { buildLineItemTransactions, shouldSplitReceipt, groupLineItemsByCategory } from '@/utils/receiptLineItems';
+import { sumMoney } from '@/utils/money';
 import { buildTransactionCategoryOptions } from '@/utils/categories';
 import { Button } from '@/components/ui/Button';
 import { SegmentedControl, SegmentedControlOption } from '@/components/ui/SegmentedControl';
@@ -62,7 +64,7 @@ interface ManualInitialData {
 }
 
 const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialManualData }) => {
-  const { addTransaction, updateTransaction, buckets, transactions, accounts } = useFinance();
+  const { addTransaction, addTransactions, updateTransaction, buckets, transactions, accounts } = useFinance();
   const { habits } = useGamification();
   const { currentUser, members, householdId } = useHouseholdCore();
   const { addToDo } = useTodos();
@@ -326,15 +328,48 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
       setProcessingMessage('Scanning receipt...');
       try {
         if (!householdId) throw new Error("Household ID not found");
-        const { analyzeReceipt } = await import('@/services/geminiService');
+        const { parseReceiptLineItems } = await import('@/services/geminiService');
 
-        const data: ReceiptData = await analyzeReceipt(householdId, base64Image, dynamicCategories, habitTitles, stores.map(s => s.name));
+        // F-DASH-04: extract itemized line items so a mixed-category receipt can
+        // be split into several categorized transactions. One AI call handles
+        // both the split and the single-transaction case.
+        const data = await parseReceiptLineItems(householdId, base64Image, dynamicCategories, stores.map(s => s.name));
         track('receipt_scanned');
-        const category = matchCategory(data.category);
+
+        // Multiple category groups → review-and-split flow (reuses the existing
+        // multi-transaction review UI). Each row shares one receiptGroupId.
+        if (shouldSplitReceipt(data)) {
+          const groupId = crypto.randomUUID();
+          const rows = buildLineItemTransactions(data, groupId).map(r => ({
+            ...r,
+            category: matchCategory(r.category),
+          }));
+          setParsedTransactions(rows);
+          track('receipt_line_split', { count: rows.length });
+          setView('review');
+          toast.success(`Split into ${rows.length} categories — review below`);
+          return;
+        }
+
+        // Single category (or a receipt with no itemized products): fall back to
+        // the whole-receipt single-transaction path, preserving the duplicate
+        // match against existing pending rows.
+        const groups = groupLineItemsByCategory(data.items);
+        const total = groups.length > 0
+          ? (groups[0]?.amount ?? 0)
+          : sumMoney(data.items.map(i => i.amount));
+        const category = matchCategory(groups[0]?.category ?? data.items[0]?.category ?? '');
+        const receiptLike: ReceiptData = {
+          merchant: data.merchant,
+          amount: total,
+          category,
+          date: data.date,
+          store: data.store,
+        };
 
         const newTransaction: Transaction = {
           id: crypto.randomUUID(),
-          amount: data.amount,
+          amount: total,
           merchant: data.merchant,
           category,
           date: data.date || getLocalDateString(),
@@ -342,14 +377,13 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
           isRecurring: false,
           source: 'camera-scan',
           autoCategorized: true,
-          relatedHabitIds: matchHabits(data.suggestedHabits),
           store: data.store
         };
         // Before writing, see if this receipt likely duplicates an existing
         // pending transaction (e.g. an Apple Pay $0 stub or another pending row
         // for the same store within ~3 days). If so, hold it and ask whether to
         // link/merge instead of creating a duplicate.
-        const candidate = findMatchingPendingTransaction(data, transactions);
+        const candidate = findMatchingPendingTransaction(receiptLike, transactions);
         if (candidate) {
           setPendingMatch({ receiptTx: newTransaction, candidate });
           // Park the body on the menu view (re-enables normal Drawer close) and
@@ -456,31 +490,47 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
     // Resolve AI store names to canonical stores (creating non-duplicates once)
     // before writing, so each transaction references a real household store.
     const storeMap = await ensureStores(selectedTx.map(tx => tx.store));
-    const results = await Promise.allSettled(
-      selectedTx.map(tx => {
-        const resolvedStore = tx.store ? (storeMap.get(normalizeStoreName(tx.store)) ?? tx.store) : tx.store;
-        // Credit-tagged rows carry the sentinel instead of a bucket category
-        // (credit spend never counts toward buckets); the AI-parsed category is
-        // only used for asset-account rows.
-        const isCredit = accounts.find(a => a.id === tx.accountId)?.type === 'credit';
-        const newTransaction: Transaction = {
-          id: tx.id,
-          amount: tx.amount,
-          merchant: tx.merchant,
-          category: isCredit ? CREDIT_CARD_CATEGORY : tx.category,
-          date: tx.date,
-          status: 'pending_review',
-          isRecurring: false,
-          source: 'file-upload',
-          autoCategorized: true,
-          relatedHabitIds: tx.relatedHabitIds,
-          store: resolvedStore,
-          accountId: tx.accountId,
-          creditPayment: tx.creditPayment
-        };
-        return addTransaction(newTransaction);
-      })
-    );
+    // A receipt split carries a shared receiptGroupId on every row; a bank
+    // statement upload does not. The split MUST commit atomically (owner note:
+    // all resulting transactions in one writeBatch) so a partial receipt can
+    // never land, while statement rows stay independent (one bad row shouldn't
+    // fail the rest).
+    const isReceiptSplit = selectedTx.some(tx => tx.receiptGroupId);
+    const buildPayload = (tx: typeof selectedTx[number]): Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'> => {
+      const resolvedStore = tx.store ? (storeMap.get(normalizeStoreName(tx.store)) ?? tx.store) : tx.store;
+      // Credit-tagged rows carry the sentinel instead of a bucket category
+      // (credit spend never counts toward buckets); the AI-parsed category is
+      // only used for asset-account rows.
+      const isCredit = accounts.find(a => a.id === tx.accountId)?.type === 'credit';
+      return {
+        amount: tx.amount,
+        merchant: tx.merchant,
+        category: isCredit ? CREDIT_CARD_CATEGORY : tx.category,
+        date: tx.date,
+        status: 'pending_review',
+        isRecurring: false,
+        source: isReceiptSplit ? 'camera-scan' : 'file-upload',
+        autoCategorized: true,
+        relatedHabitIds: tx.relatedHabitIds,
+        store: resolvedStore,
+        accountId: tx.accountId,
+        creditPayment: tx.creditPayment,
+        receiptGroupId: tx.receiptGroupId,
+      };
+    };
+
+    if (isReceiptSplit) {
+      try {
+        await addTransactions(selectedTx.map(buildPayload));
+        toast.success(`${selectedTx.length} transaction(s) added to Action Queue!`);
+      } catch {
+        toast.error('Failed to add transactions');
+      }
+      handleClose();
+      return;
+    }
+
+    const results = await Promise.allSettled(selectedTx.map(tx => addTransaction(buildPayload(tx))));
     const succeeded = results.filter(r => r.status === 'fulfilled').length;
     if (succeeded > 0) toast.success(`${succeeded} transaction(s) added to Action Queue!`);
     else toast.error('Failed to add transactions');

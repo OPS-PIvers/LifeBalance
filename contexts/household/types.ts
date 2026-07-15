@@ -21,6 +21,7 @@ import {
   GroceryCatalogItem,
   Store,
   QuickStockList,
+  TaskTemplate,
   HouseholdApiKey,
   ModuleKey,
   WeeklyRecap,
@@ -28,7 +29,8 @@ import {
   NetWorthSnapshot,
   ActivityLogEntry,
   TransactionComment,
-  SplitParticipant
+  SplitParticipant,
+  NotificationLogEntry
 } from '@/types/schema';
 import { type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { type BucketSpent } from '@/utils/bucketSpentCalculator';
@@ -79,6 +81,8 @@ export interface HouseholdContextType {
   shoppingList: ShoppingItem[];
   mealPlan: MealPlanItem[];
   todos: ToDo[];
+  /** F-TODO-03 — task-bundle templates ("Quick Task Lists"). */
+  taskTemplates: TaskTemplate[];
   groceryCatalog: GroceryCatalogItem[];
   bucketHistory: BucketPeriodSnapshot[];
   /** Weekly recaps (Plan 02) — newest first, bounded live window (RECAPS_LIMIT). */
@@ -92,6 +96,17 @@ export interface HouseholdContextType {
   /** Household activity log (F-XCUT-01) — newest first, bounded live window
    *  (ACTIVITY_LOG_LIMIT). Read visibility is gated to admins in the UI. */
   activityLog: ActivityLogEntry[];
+  /** In-app notification inbox (F-NOTIF-02) — the current member's own log
+   *  entries, newest first, already filtered from the bounded household-wide
+   *  fetch window (NOTIFICATION_LOG_FETCH_LIMIT). Server-written; clients only
+   *  read + mark read. */
+  notificationLog: NotificationLogEntry[];
+  /** Count of `notificationLog` entries not yet read by the current member. */
+  unreadNotificationCount: number;
+  /** Marks one notification-log entry as read by the current member. */
+  markNotificationRead: (entryId: string) => Promise<void>;
+  /** Marks every currently-loaded unread notification-log entry as read. */
+  markAllNotificationsRead: () => Promise<void>;
 
   // --- Listener windowing / pagination ---
   // The high-cardinality collections below are windowed on cold load (see
@@ -125,8 +140,8 @@ export interface HouseholdContextType {
   loadOlderCompletedTodos: () => Promise<void>;
   /** Ensure the meal-plan entries for the week containing `date` are loaded. */
   ensureMealPlanWeek: (date: Date) => Promise<void>;
-  /** Fetch every meal beyond the bounded live window (cookbook view). Idempotent per household. */
-  loadAllMeals: () => Promise<void>;
+  /** Fetch every meal beyond the bounded live window (cookbook view). Idempotent per household; resolves with the full, up-to-date meals list. */
+  loadAllMeals: () => Promise<Meal[]>;
   /** Fetch the full grocery catalog beyond the bounded live window (shopping-form search fallback). Idempotent per household. */
   loadFullGroceryCatalog: () => Promise<void>;
 
@@ -190,6 +205,10 @@ export interface HouseholdContextType {
 
   // Transaction Actions
   addTransaction: (tx: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>) => Promise<void>;
+  /** F-DASH-04: add SEVERAL transactions (e.g. an itemized receipt split into
+   *  category transactions) with their combined balance effects in ONE
+   *  writeBatch — atomic, so a partial split can never land. */
+  addTransactions: (txs: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[]) => Promise<void>;
   /** Verify a pending transaction under `category`. Optional `accountId`
    *  additionally (re)tags the transaction so the verify-time balance impact
    *  lands on that account (used by the Action Queue's smart approve); pass
@@ -262,7 +281,7 @@ export interface HouseholdContextType {
   setHabitPause: (id: string, pausedUntil: string | null) => Promise<void>;
 
   // Habit Submission Actions
-  addHabitSubmission: (habitId: string, count: number, timestamp?: string) => Promise<void>;
+  addHabitSubmission: (habitId: string, count: number, timestamp?: string, note?: string, mood?: HabitSubmission['mood']) => Promise<void>;
   updateHabitSubmission: (habitId: string, submissionId: string, updates: Partial<HabitSubmission>) => Promise<void>;
   deleteHabitSubmission: (habitId: string, submissionId: string) => Promise<void>;
   getHabitSubmissions: (habitId: string, startDate?: string, endDate?: string) => Promise<HabitSubmission[]>;
@@ -335,8 +354,14 @@ export interface HouseholdContextType {
   /** Plan 090 — toggle a module on/off for the household (merge-writes moduleVisibility.<key>). */
   setModuleVisibility: (key: ModuleKey, value: boolean) => Promise<void>;
 
+  /** F-PLAT-07 — apply a full module-visibility preset in one write (merge-writes every key at once). */
+  updateModuleVisibility: (patch: Partial<Record<ModuleKey, boolean>>) => Promise<void>;
+
   /** Set (raw PIN, salted+hashed before write) or clear (null) the Kid Mode exit PIN. */
   setKidModePin: (pin: string | null) => Promise<void>;
+
+  /** F-MEALS-04: set (habit id) or clear (null) the habit auto-credited when a meal is marked cooked. */
+  setMealCookedHabitId: (habitId: string | null) => Promise<void>;
 
   // Meal Actions
   addMeal: (meal: Omit<Meal, 'id'>, options?: { suppressToast?: boolean }) => Promise<string>;
@@ -356,6 +381,8 @@ export interface HouseholdContextType {
   addStore: (store: Omit<Store, 'id'>) => Promise<void>;
   updateStore: (store: Store) => Promise<void>;
   deleteStore: (id: string) => Promise<void>;
+  /** Persists `Store.order` for every store in `orderedIds` sequence (F-MEALS-07; mirrors reorderAccounts). */
+  reorderStores: (orderedIds: string[]) => Promise<void>;
   updateGroceryCategories: (categories: string[]) => Promise<void>;
   addQuickStockList: (list: Omit<QuickStockList, 'id'>) => Promise<void>;
   updateQuickStockList: (list: QuickStockList) => Promise<void>;
@@ -384,6 +411,13 @@ export interface HouseholdContextType {
   updateToDo: (id: string, updates: Partial<ToDo>) => Promise<void>;
   deleteToDo: (id: string) => Promise<void>;
   completeToDo: (id: string) => Promise<void>;
+  /** F-TODO-03 — Task templates ("Quick Task Lists"). */
+  addTaskTemplate: (template: Omit<TaskTemplate, 'id'>) => Promise<void>;
+  updateTaskTemplate: (template: TaskTemplate) => Promise<void>;
+  deleteTaskTemplate: (id: string) => Promise<void>;
+  /** One-tap creation of a bundle of to-dos from a saved template. Resolves
+   *  with the number of to-dos created. */
+  applyTaskTemplate: (template: TaskTemplate) => Promise<number>;
 }
 
 // --- DOMAIN CONTEXT SLICES ---
@@ -406,7 +440,7 @@ export type FinanceContextValue = Pick<HouseholdContextType,
   | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal'
   | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'reallocateBucket'
   | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
-  | 'addTransaction' | 'updateTransactionCategory' | 'updateTransaction' | 'deleteTransaction' | 'splitTransaction'
+  | 'addTransaction' | 'addTransactions' | 'updateTransactionCategory' | 'updateTransaction' | 'deleteTransaction' | 'splitTransaction'
   | 'setTransactionSplit' | 'markSplitSettled'
   | 'mergeTransactions' | 'keepBothTransactions'
   | 'getTransactionComments' | 'addTransactionComment' | 'deleteTransactionComment'
@@ -437,7 +471,7 @@ export type ShoppingContextValue = Pick<HouseholdContextType,
   | 'shoppingList' | 'groceryCatalog' | 'loadFullGroceryCatalog' | 'stores' | 'groceryCategories' | 'quickStockLists'
   | 'addShoppingItem' | 'addShoppingItems' | 'updateShoppingItem' | 'reorderShoppingItems'
   | 'deleteShoppingItem' | 'toggleShoppingItemPurchased' | 'clearPurchasedShoppingItems'
-  | 'addStore' | 'updateStore' | 'deleteStore' | 'updateGroceryCategories'
+  | 'addStore' | 'updateStore' | 'deleteStore' | 'reorderStores' | 'updateGroceryCategories'
   | 'addQuickStockList' | 'updateQuickStockList' | 'updateQuickStockLists' | 'deleteQuickStockList'
   | 'addGroceryCatalogItem' | 'updateGroceryCatalogItem' | 'deleteGroceryCatalogItem'
 >;
@@ -448,6 +482,7 @@ export type MealsContextValue = MealPlanContextValue & ShoppingContextValue;
 export type TodosContextValue = Pick<HouseholdContextType,
   | 'todos' | 'addToDo' | 'updateToDo' | 'deleteToDo' | 'completeToDo'
   | 'isLoadingOlderTodos' | 'hasMoreCompletedTodos' | 'loadOlderCompletedTodos'
+  | 'taskTemplates' | 'addTaskTemplate' | 'updateTaskTemplate' | 'deleteTaskTemplate' | 'applyTaskTemplate'
 >;
 
 export type HouseholdCoreContextValue = Pick<HouseholdContextType,
@@ -457,8 +492,9 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'pendingItemsCount' | 'apiKeys'
   | 'householdId' | 'householdSettings' | 'household'
   | 'refreshInsight' | 'addMember' | 'updateMember' | 'removeMember' | 'deleteHousehold'
-  | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'setKidModePin'
+  | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'updateModuleVisibility' | 'setKidModePin' | 'setMealCookedHabitId'
   | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
   | 'activeMemberId' | 'actAs' | 'exitToParent'
   | 'recaps' | 'moneyRecaps' | 'activityLog'
+  | 'notificationLog' | 'unreadNotificationCount' | 'markNotificationRead' | 'markAllNotificationsRead'
 >;

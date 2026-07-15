@@ -1,10 +1,11 @@
 import React, { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, ArrowLeft, LogOut, Plus, Settings, User, Users } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Bell, LogOut, Plus, Search, Settings, User, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Popover } from '@/components/ui/Popover';
+import CountBadge from '@/components/ui/CountBadge';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 
 interface ProfileMenuProps {
@@ -12,9 +13,22 @@ interface ProfileMenuProps {
   onClose: () => void;
   /** Opens the Feedback modal (owned by TopToolbar, which keeps the lazy mount). */
   onSendFeedback?: () => void;
+  /** Opens the global search overlay (owned by TopToolbar, which keeps the lazy mount). */
+  onOpenSearch?: () => void;
+  /** Opens the notification inbox drawer (owned by TopToolbar, which keeps the lazy mount). */
+  onOpenNotifications?: () => void;
+  /** Unread push-notification count, badged on the Notifications row. */
+  unreadNotificationCount?: number;
 }
 
-const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, onSendFeedback }) => {
+const ProfileMenu: React.FC<ProfileMenuProps> = ({
+  isOpen,
+  onClose,
+  onSendFeedback,
+  onOpenSearch,
+  onOpenNotifications,
+  unreadNotificationCount = 0,
+}) => {
   const { currentUser, logout } = useAuth();
   // Active-member (acting-as) state lives in the household context so the switch is
   // app-wide (the kid view in a later slice reads it), not local to this menu.
@@ -181,6 +195,40 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, onSendFeedba
 
       {/* Menu Actions */}
       <div className="p-2">
+        <button
+          onClick={() => {
+            onOpenSearch?.();
+            onClose();
+          }}
+          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-700 hover:text-accent-700 dark:hover:text-accent-300 rounded-btn transition-colors text-left"
+          role="menuitem"
+          tabIndex={-1}
+        >
+          <Search className="w-4 h-4" />
+          Search
+        </button>
+
+        <button
+          onClick={() => {
+            onOpenNotifications?.();
+            onClose();
+          }}
+          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-700 hover:text-accent-700 dark:hover:text-accent-300 rounded-btn transition-colors text-left"
+          role="menuitem"
+          tabIndex={-1}
+        >
+          <span className="relative flex items-center">
+            <Bell className="w-4 h-4" />
+            <CountBadge count={unreadNotificationCount} className="-top-2 -right-2 ring-white dark:ring-brand-800" />
+          </span>
+          Notifications
+          {unreadNotificationCount > 0 && (
+            <span className="sr-only">, {unreadNotificationCount} unread</span>
+          )}
+        </button>
+
+        <hr className="my-1 border-brand-200 dark:border-brand-700" />
+
         <button
           onClick={() => {
             onSendFeedback?.();

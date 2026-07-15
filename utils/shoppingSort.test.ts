@@ -60,6 +60,34 @@ describe('sortShoppingItems', () => {
     ]);
   });
 
+  it('store mode uses storeOrder map for visit order when provided (F-MEALS-07)', () => {
+    const items = [
+      item({ name: 'Apples', store: 'Costco' }),
+      item({ name: 'Milk', store: 'Target' }),
+      item({ name: 'Bread', store: 'Aldi' }),
+    ];
+    const storeOrder = new Map([
+      ['target', 0],
+      ['aldi', 1],
+      ['costco', 2],
+    ]);
+    expect(sortShoppingItems(items, 'store', [], storeOrder).map(i => i.name)).toEqual([
+      'Milk', 'Bread', 'Apples',
+    ]);
+  });
+
+  it('store mode sorts ordered stores before unordered ones, then alphabetically within each group', () => {
+    const items = [
+      item({ name: 'Eggs', store: 'Whole Foods' }), // not in storeOrder
+      item({ name: 'Milk', store: 'Target' }),
+      item({ name: 'Apples', store: 'Costco' }),
+    ];
+    const storeOrder = new Map([['target', 5]]);
+    expect(sortShoppingItems(items, 'store', [], storeOrder).map(i => i.name)).toEqual([
+      'Milk', 'Apples', 'Eggs',
+    ]);
+  });
+
   it('section mode follows the category walk order, then name', () => {
     const items = [
       item({ name: 'Ice cream', category: 'Frozen' }),

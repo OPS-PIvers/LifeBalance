@@ -37,6 +37,19 @@ export const NET_WORTH_HISTORY_LIMIT = 180;
 /** Household activity log (F-XCUT-01): live listener keeps the most recent N entries. */
 export const ACTIVITY_LOG_LIMIT = 50;
 
+/**
+ * Notification inbox (F-NOTIF-02): the live listener fetches the most recent N
+ * entries across the WHOLE household (query is `orderBy('createdAt', 'desc')`,
+ * no `recipientUid` equality filter — see the flat-subcollection note on
+ * `NotificationLogEntry`), and the client then filters down to the signed-in
+ * member's own entries. A larger fetch window than the per-member display
+ * window compensates for other members' notifications occupying slots; still
+ * bounded so cost doesn't scale with household age. See PR description for
+ * the composite-index follow-up that would let this be a precise per-member
+ * query instead.
+ */
+export const NOTIFICATION_LOG_FETCH_LIMIT = 60;
+
 /** To-dos: completed items are only kept live if completed within the last N days. */
 export const TODO_COMPLETED_WINDOW_DAYS = 30;
 

@@ -61,6 +61,7 @@ import type {
   NetWorthSnapshot,
   SavingsGoal,
   ActivityLogEntry,
+  NotificationLogEntry,
 } from '@/types/schema';
 
 // ---------------------------------------------------------------------------
@@ -364,6 +365,32 @@ export const monthlyMoneyRecapConverter: FirestoreDataConverter<MonthlyMoneyReca
           ? d['generatedAt'].toDate().toISOString()
           : d['generatedAt'],
     } as MonthlyMoneyRecap;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// NotificationLogEntry (F-NOTIF-02) — server-written (Admin SDK) via
+// sendNotificationToUser; the converter still strips the synthetic id
+// defensively on any client write path (e.g. the mark-read mutation only
+// ever updates readBy, never round-trips the full object, but toFirestore
+// must stay correct regardless of caller). createdAt normalises a Firestore
+// server Timestamp to ISO, mirroring the recap converters.
+// ---------------------------------------------------------------------------
+export const notificationLogConverter: FirestoreDataConverter<NotificationLogEntry> = {
+  toFirestore(entry: NotificationLogEntry): DocumentData {
+    return omitKey(entry, 'id');
+  },
+  fromFirestore(snapshot: QueryDocumentSnapshot): NotificationLogEntry {
+    const d = snapshot.data();
+    return {
+      ...d,
+      id: snapshot.id,
+      readBy: Array.isArray(d['readBy']) ? d['readBy'] : [],
+      createdAt:
+        d['createdAt'] instanceof Timestamp
+          ? d['createdAt'].toDate().toISOString()
+          : d['createdAt'],
+    } as NotificationLogEntry;
   },
 };
 

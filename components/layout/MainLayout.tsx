@@ -11,6 +11,7 @@ import { useAppReopen } from '@/hooks/useAppReopen';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { useKeyboardViewportAnchor } from '@/hooks/useKeyboardViewportAnchor';
+import { useNotificationActionIntent } from '@/hooks/useNotificationActionIntent';
 
 // Lazy so the kid view (Plan 080b) stays out of the always-mounted boot bundle —
 // it only loads when a parent actually switches into a kid.
@@ -27,13 +28,18 @@ interface MainLayoutProps {
 
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const { pathname } = useLocation();
-  const { members, activeMemberId, isLoading } = useHouseholdCore();
+  const { members, activeMemberId, isLoading, householdId } = useHouseholdCore();
   const { transactions } = useFinance();
-  const kidModeEnabled = useKidModeEnabled();
+  const kidModeEnabled = useKidModeEnabled(householdId);
   // Keeps the header and fixed overlays (toasts) anchored when the iOS
   // keyboard pans the window; the ref scopes it to in-page inputs (portal
   // Drawers/Modals keep WebKit's native pan). See the hook's doc comment.
   const { shellRef, isKeyboardAnchored } = useKeyboardViewportAnchor<HTMLDivElement>();
+
+  // F-NOTIF-05: dispatch a bill-reminder push action-button tap (Pay bill /
+  // Snooze) if the app was opened via one. Unconditional (above Kid-Mode early
+  // returns) to satisfy rules-of-hooks.
+  useNotificationActionIntent();
 
   // Every un-snoozed pending_review transaction is a review candidate. Ordered
   // newest-first (date desc) so the most recent activity is reviewed first.
