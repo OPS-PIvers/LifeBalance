@@ -144,6 +144,12 @@ const Settings: React.FC = () => {
   const [isDeleteHouseholdOpen, setIsDeleteHouseholdOpen] = useState(false);
   const [isDeletingHousehold, setIsDeletingHousehold] = useState(false);
 
+  // Self-serve leave household (F-XCUT-05) — any member can remove themselves,
+  // except the last remaining admin (they must promote someone else or use
+  // Delete Household instead).
+  const [isLeaveHouseholdOpen, setIsLeaveHouseholdOpen] = useState(false);
+  const [isLeavingHousehold, setIsLeavingHousehold] = useState(false);
+
   // Points Breakdown Modal
   const [activePointsView, setActivePointsView] = useState<'daily' | 'weekly' | 'total' | null>(null);
 
@@ -271,6 +277,23 @@ const Settings: React.FC = () => {
       toast.error('Failed to delete household');
       setIsDeletingHousehold(false);
       setIsDeleteHouseholdOpen(false);
+    }
+  };
+
+  const handleConfirmLeaveHousehold = async () => {
+    if (!currentUser) return;
+    setIsLeavingHousehold(true);
+    try {
+      await removeMember(currentUser.uid);
+      toast.success('You left the household');
+      // Hard reload so AuthContext re-resolves (no household -> routes to
+      // /setup), matching deleteHousehold's flow above.
+      window.location.reload();
+    } catch (error) {
+      console.error('Error leaving household:', error);
+      toast.error('Failed to leave household');
+      setIsLeavingHousehold(false);
+      setIsLeaveHouseholdOpen(false);
     }
   };
 
@@ -419,6 +442,14 @@ const Settings: React.FC = () => {
     // Legacy member docs can lack displayName despite the schema type — sort them safely.
     return (a.displayName || '').localeCompare(b.displayName || '');
   });
+
+  // Self-serve leave household: block the LAST admin from leaving via this
+  // path — they'd orphan the household. They must promote another member to
+  // admin first, or use Delete Household instead.
+  const adminCount = members.filter((m) => m.role === 'admin').length;
+  const canLeaveHousehold = Boolean(
+    currentUser && !(currentUser.role === 'admin' && adminCount <= 1)
+  );
 
   return (
     <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe">
@@ -947,6 +978,15 @@ const Settings: React.FC = () => {
               title="Sign Out"
               onClick={handleSignOut}
             />
+            {canLeaveHousehold && (
+              <DisclosureRow
+                destructive
+                icon={<Users className="w-5 h-5" />}
+                title="Leave Household"
+                subtitle="Remove yourself from this household — you'll lose access to shared budgets, habits, and history"
+                onClick={() => setIsLeaveHouseholdOpen(true)}
+              />
+            )}
             {currentUser?.role === 'admin' && (
               <DisclosureRow
                 destructive
@@ -1098,6 +1138,16 @@ const Settings: React.FC = () => {
             This action cannot be undone. Only household admins can do this.
           </>
         }
+      />
+
+      <ConfirmDialog
+        isOpen={isLeaveHouseholdOpen}
+        onClose={() => setIsLeaveHouseholdOpen(false)}
+        onConfirm={handleConfirmLeaveHousehold}
+        isConfirming={isLeavingHousehold}
+        title="Leave household?"
+        confirmLabel="Leave"
+        message={`Leave ${householdSettings.name}? You'll lose access to all shared household data — budgets, habits, and history. This cannot be undone.`}
       />
 
       {householdId && (
