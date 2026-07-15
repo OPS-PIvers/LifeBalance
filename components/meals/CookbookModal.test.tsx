@@ -29,6 +29,13 @@ vi.mock('lucide-react', () => ({
   Star: () => <div data-testid="star-icon" />,
   Check: () => <div data-testid="check-icon" />,
   ChefHat: () => <div data-testid="chef-hat-icon" />,
+  ShieldAlert: () => <div data-testid="shield-alert-icon" />,
+}));
+
+// F-MEALS-03: CookbookModal reads the household's dietary profile to flag
+// allergen matches — no restrictions recorded in this test's household.
+vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
+  useHouseholdCore: () => ({ householdSettings: null }),
 }));
 
 // Mock date-fns

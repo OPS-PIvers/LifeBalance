@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Meal } from '@/types/schema';
+import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -8,7 +9,8 @@ import Select from '@/components/ui/Select';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import { FIELD_BASE } from '@/components/ui/fieldStyles';
 import { cn } from '@/utils/cn';
-import { Search, ChevronRight, ChevronDown, Copy, X, Star, ChefHat, Check } from 'lucide-react';
+import { mealMatchesAnyAllergen } from '@/utils/allergenCheck';
+import { Search, ChevronRight, ChevronDown, Copy, X, Star, ChefHat, Check, ShieldAlert } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { SMART_COLLECTIONS, SmartCollectionId } from '@/utils/recipeCollections';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -30,6 +32,9 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
   onSelect,
   onClone
 }) => {
+  const { householdSettings } = useHouseholdCore();
+  const allergens = householdSettings?.dietaryProfile?.allergens;
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<SortOption>('name');
@@ -263,7 +268,12 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
                         className="flex-1 min-w-0 text-left p-2 rounded-lg hover:bg-brand-50 transition-colors duration-(--duration-fast) ease-(--ease-standard) group flex justify-between items-center dark:hover:bg-brand-700/40"
                     >
                         <div className="min-w-0">
-                            <span className="font-bold text-brand-700 group-hover:text-brand-700 block mb-0.5 dark:text-brand-200 dark:group-hover:text-brand-300">{meal.name}</span>
+                            <span className="font-bold text-brand-700 group-hover:text-brand-700 block mb-0.5 dark:text-brand-200 dark:group-hover:text-brand-300 flex items-center gap-1.5">
+                                {meal.name}
+                                {mealMatchesAnyAllergen(meal, allergens) && (
+                                    <ShieldAlert className="w-3.5 h-3.5 text-money-neg dark:text-money-negDark shrink-0" aria-label="Contains a flagged allergen" />
+                                )}
+                            </span>
                             <div className="flex items-center gap-2">
                                 {meal.rating && meal.rating > 0 ? (
                                     <div className="flex items-center text-xs text-warm-500 dark:text-warm-400 font-bold">

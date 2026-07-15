@@ -207,6 +207,21 @@ self.addEventListener('push', (event) => {
     options.actions = notificationActions;
   }
 
+  // F-NOTIF-07: mirror an app-icon badge count for background pushes (the
+  // client's useAppBadge hook only runs while a tab is open). The server
+  // may attach a `badgeCount` on the data payload (e.g. unpaid-bills +
+  // at-risk-streaks count); feature-detected and best-effort — a missing
+  // count or unsupported API is a silent no-op, never blocks the
+  // notification display above.
+  const badgeCount = Number(data.badgeCount);
+  if ('setAppBadge' in self.navigator && Number.isFinite(badgeCount)) {
+    const safeBadgeCount = badgeCount > 0 ? Math.floor(badgeCount) : 0;
+    const badgePromise = safeBadgeCount > 0
+      ? self.navigator.setAppBadge(safeBadgeCount)
+      : ('clearAppBadge' in self.navigator ? self.navigator.clearAppBadge() : Promise.resolve());
+    event.waitUntil(badgePromise.catch((err) => console.error('[SW] Failed to set app badge:', err)));
+  }
+
   // CRITICAL: event.waitUntil() ensures Safari doesn't treat this as a silent push
   // The Promise passed to waitUntil must resolve BEFORE the event handler completes
   event.waitUntil(

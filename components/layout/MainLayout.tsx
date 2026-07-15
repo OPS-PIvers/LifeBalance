@@ -6,12 +6,13 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import { LazyMount } from '@/components/ui/LazyMount';
 import { preloadOnIdle } from '@/utils/preloadOnIdle';
 import { useHouseholdCore, useFinance } from '@/contexts/FirebaseHouseholdContext';
-import { isReviewSnoozed } from '@/hooks/useActionQueue';
+import { isReviewSnoozed, useActionQueue } from '@/hooks/useActionQueue';
 import { useAppReopen } from '@/hooks/useAppReopen';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { useKeyboardViewportAnchor } from '@/hooks/useKeyboardViewportAnchor';
 import { InstallPwaBanner } from '@/components/ui/InstallPwaBanner';
+import { useAppBadge } from '@/hooks/useAppBadge';
 import { useNotificationActionIntent } from '@/hooks/useNotificationActionIntent';
 
 // Lazy so the kid view (Plan 080b) stays out of the always-mounted boot bundle —
@@ -37,6 +38,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   // Drawers/Modals keep WebKit's native pan). See the hook's doc comment.
   const { shellRef, isKeyboardAnchored } = useKeyboardViewportAnchor<HTMLDivElement>();
 
+  // F-NOTIF-07: mirror the Action Queue count onto the installed-PWA home
+  // screen icon (Web App Badging API). Reuses useActionQueue's existing
+  // count rather than computing a separate one (roadmap's "pick one source
+  // of truth"); feature-detected/no-op everywhere the API isn't supported.
+  const { actionQueue } = useActionQueue();
+  useAppBadge(actionQueue.length);
   // F-NOTIF-05: dispatch a bill-reminder push action-button tap (Pay bill /
   // Snooze) if the app was opened via one. Unconditional (above Kid-Mode early
   // returns) to satisfy rules-of-hooks.

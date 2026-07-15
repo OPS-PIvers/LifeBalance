@@ -57,6 +57,7 @@ import {
   MonthlyMoneyRecap,
   SavingsGoal,
   NetWorthSnapshot,
+  DietaryProfile,
   NotificationLogEntry
 } from '@/types/schema';
 import { calculateSafeToSpendBreakdownFromExpanded } from '@/utils/safeToSpendCalculator';
@@ -168,6 +169,7 @@ import {
 import {
   makeHouseholdSettingsMutations,
   makeRefreshInsight,
+  makeRateInsight,
 } from '@/contexts/household/mutations/coreMutations';
 import { makeNotificationMutations } from '@/contexts/household/mutations/notificationMutations';
 import {
@@ -1960,6 +1962,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeHouseholdSettingsMutations({ db, householdId }).setModuleVisibility(key, value);
   }, [householdId]);
 
+  // F-MEALS-03: standing household dietary restrictions/allergens.
+  const setDietaryProfile = useCallback(async (profile: DietaryProfile) => {
+    await makeHouseholdSettingsMutations({ db, householdId }).setDietaryProfile(profile);
+  }, [householdId]);
+
   // F-PLAT-07 — apply a full module-visibility preset in one write.
   const updateModuleVisibility = useCallback(async (patch: Partial<Record<ModuleKey, boolean>>) => {
     await makeHouseholdSettingsMutations({ db, householdId }).updateModuleVisibility(patch);
@@ -2174,6 +2181,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       setIsGeneratingInsight,
     }).refreshInsight();
   }, [householdId, isGeneratingInsight, transactions, habits, insightsHistory]);
+
+  const rateInsight = useCallback(async (insightId: string, feedback: 'up' | 'down') => {
+    await makeRateInsight({ db, householdId }).rateInsight(insightId, feedback);
+  }, [householdId]);
 
   // Freeze-bank maintenance at midnight / first login (Plan 25): refill to the
   // fixed max on a new month, otherwise auto-apply freezes to yesterday's
@@ -2402,6 +2413,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     householdSettings,
     household: householdSettings, // Provide alias
     refreshInsight,
+    rateInsight,
     addMember,
     updateMember,
     removeMember,
@@ -2411,6 +2423,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setModuleVisibility,
     updateModuleVisibility,
     setKidModePin,
+    setDietaryProfile,
     setMealCookedHabitId,
     addKidProfile,
     updateKidProfile,
@@ -2427,8 +2440,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }), [
     isLoading, currentUser, members, insight, insightsHistory, isGeneratingInsight, hasMoreInsights, loadAllInsights,
     pendingItemsCount, apiKeys,
-    householdId, householdSettings, refreshInsight, addMember, updateMember, removeMember, deleteHousehold,
-    completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setKidModePin, setMealCookedHabitId,
+    householdId, householdSettings, refreshInsight, rateInsight, addMember, updateMember, removeMember, deleteHousehold,
+    completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setKidModePin, setDietaryProfile, setMealCookedHabitId,
     addKidProfile, updateKidProfile, removeKidProfile, activeMemberId, actAs, exitToParent,
     recaps,
     moneyRecaps,
