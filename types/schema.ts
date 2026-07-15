@@ -852,6 +852,17 @@ export interface PendingItem {
  * - completedAt: Uses ISO timestamp (with time) to record the exact moment of completion
  * This distinction allows date-based categorization while preserving precise completion history.
  */
+
+/**
+ * A single step within a to-do's optional subtask checklist (F-TODO-08).
+ * Stored as a plain array field on the parent `ToDo` document — no subcollection.
+ */
+export interface Subtask {
+  id: string; // stable client-generated id (see utils/subtasks.ts)
+  text: string; // short step description
+  isDone: boolean; // completion state
+}
+
 export interface ToDo {
   id: string;
   text: string;
@@ -877,6 +888,11 @@ export interface ToDo {
   // Absent/false = not important — no migration needed. Urgency is NOT stored;
   // it is derived from completeByDate (utils/eisenhower.ts).
   isImportant?: boolean;
+
+  // F-TODO-08: optional lightweight checklist of steps inside this task. A plain
+  // array field (no subcollection); the row shows an "n/m done" progress chip and
+  // an expandable checkable list. Absent on every existing todo — no migration.
+  subtasks?: Subtask[];
 
   // F-TODO-01: Recurring / repeating to-dos. Mirrors CalendarItem's
   // frequency/parentRecurringId model. When present, completing the task

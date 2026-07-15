@@ -397,6 +397,13 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       isImportant: true,
       createdBy: 'test-user-id',
       createdAt: new Date().toISOString(),
+      // F-TODO-08: seed a subtask checklist so the progress chip + expandable
+      // list are walkable in Test Mode.
+      subtasks: [
+        { id: 'st_vac_1', text: 'Pick destination', isDone: true },
+        { id: 'st_vac_2', text: 'Book flights', isDone: false },
+        { id: 'st_vac_3', text: 'Reserve hotel', isDone: false },
+      ],
     },
     {
       id: 'todo_later_1',

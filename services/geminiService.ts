@@ -25,6 +25,7 @@ import {
   validateReceiptData,
   validateBankTransactions,
   validateMealSuggestion,
+  validateSubtaskSuggestions,
   validateGroceryItems,
   validateOptimizableItems,
   validateInsight,
@@ -1056,6 +1057,62 @@ export const suggestMeal = async (
     // the dish name instead.
     suggestion.recipeUrl = `https://www.google.com/search?q=${encodeURIComponent(`${suggestion.name} recipe`)}`;
     return suggestion;
+  });
+};
+
+/** Upper bound on AI-suggested subtasks (keeps a checklist scannable). */
+const MAX_SUGGESTED_SUBTASKS = 8;
+
+/**
+ * Breaks a single to-do down into a short, ordered checklist of concrete steps
+ * (F-TODO-08 "Break down with AI"). Returns an ordered array of subtask strings;
+ * empty when the model can't produce a meaningful breakdown.
+ *
+ * The global `aiEnabled` kill-switch and daily quota are enforced by
+ * `generateJsonContent`, so a caller that hits a disabled switch receives the
+ * "AI features are temporarily disabled." error and can degrade gracefully.
+ *
+ * @param householdId - The household ID for quota tracking
+ * @param taskText - The parent task's text to decompose
+ * @param notes - Optional extra context (the task's notes field)
+ * @param _aiClient - Optional injected AI client for testing purposes.
+ */
+export const suggestSubtasks = async (
+  householdId: string,
+  taskText: string,
+  notes?: string,
+  _aiClient?: Pick<typeof ai, 'models'>
+): Promise<string[]> => {
+  return withErrorHandling('Subtask Breakdown', 'Failed to break down task.', async () => {
+    const trimmedTask = taskText.trim();
+    const trimmedNotes = (notes ?? '').trim();
+
+    let prompt = `Break this household to-do into a short, ordered checklist of concrete, actionable steps.
+Return between 2 and ${MAX_SUGGESTED_SUBTASKS} steps. Each step should be a brief imperative phrase
+(e.g. "Book venue", "Order cake"), not a full sentence, and specific to actually completing the task.
+Do NOT restate the task itself as a step. If the task is already atomic and cannot be sensibly broken
+down, return an empty array.
+
+Task: ${trimmedTask}`;
+    if (trimmedNotes) prompt += `\nNotes/context: ${trimmedNotes}`;
+    prompt += `\n\nReturn a JSON object: { "subtasks": string[] }`;
+
+    const result = await generateJsonContent<string[]>(
+      householdId,
+      prompt,
+      {
+        type: Type.OBJECT,
+        properties: {
+          subtasks: { type: Type.ARRAY, items: { type: Type.STRING } }
+        },
+        required: ["subtasks"]
+      },
+      _aiClient,
+      GEMINI_MODEL,
+      validateSubtaskSuggestions
+    );
+    // Clamp to a scannable length even if the model over-produces.
+    return result.slice(0, MAX_SUGGESTED_SUBTASKS);
   });
 };
 

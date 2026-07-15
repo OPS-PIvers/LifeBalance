@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef, useId } from 'react';
 import { useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Rows3, Grid2x2, List, Repeat } from 'lucide-react';
+import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Rows3, Grid2x2, List, Sparkles, Plus, Repeat } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { quadrantForTodo, QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhower';
+import { toggleSubtask, appendSubtask, removeSubtask, subtasksFromTexts, subtaskWriteErrorMessage, isPermissionDeniedError, subtaskProgress } from '@/utils/subtasks';
 import { TODO_FREQUENCIES, TODO_FREQUENCY_LABELS, type TodoFrequency } from '@/utils/todoRecurrence';
-import { ToDo, HouseholdMember } from '@/types/schema';
+import { ToDo, HouseholdMember, Subtask } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { haptic } from '@/utils/haptics';
 import { HapticCheck } from '@/components/ui/HapticCheck';
@@ -65,7 +66,7 @@ const ToDosPage: React.FC = () => {
     isLoadingOlderTodos,
     loadOlderCompletedTodos,
   } = useTodos();
-  const { members, currentUser } = useHouseholdCore();
+  const { members, currentUser, householdId } = useHouseholdCore();
 
   // Page-level member lookup map — computed once here, passed to Section/CompletedSection
   // so the O(n) map build does not repeat per-section (previously built 3× in render).
@@ -180,6 +181,12 @@ const ToDosPage: React.FC = () => {
   // Shared notes surfaced in the editor drawer — visible to all household members
   // (to-dos are already shared). Capped to match the firestore.rules validator.
   const [notes, setNotes] = useState('');
+  // F-TODO-08: subtask checklist edited in the drawer as local state, persisted
+  // on save via addToDo/updateToDo. `subtaskInput` is the pending new-step text;
+  // `aiBreakingDown` guards the "Break down with AI" request.
+  const [subtasks, setSubtasks] = useState<Subtask[]>([]);
+  const [subtaskInput, setSubtaskInput] = useState('');
+  const [aiBreakingDown, setAiBreakingDown] = useState(false);
 
   // Sticky quick-add bar state — mirrors the shopping list's inline add. The
   // input is desktop-only autofocused (useAutoFocus skips touch so it doesn't
@@ -318,6 +325,8 @@ const ToDosPage: React.FC = () => {
     setIsImportant(false);
     setRecurrence('none');
     setNotes('');
+    setSubtasks([]);
+    setSubtaskInput('');
     setEditingId(null);
     setIsAddModalOpen(true);
   }, [quickText, currentUser, members]);
@@ -364,6 +373,8 @@ const ToDosPage: React.FC = () => {
     setIsImportant(todo.isImportant === true);
     setRecurrence(todo.recurrence?.frequency ?? 'none');
     setNotes(todo.notes ?? '');
+    setSubtasks(todo.subtasks ?? []);
+    setSubtaskInput('');
     setEditingId(todo.id);
     setIsAddModalOpen(true);
   }, []);
@@ -422,6 +433,72 @@ const ToDosPage: React.FC = () => {
           toast.error('Failed to update importance');
       }
   }, [updateToDo]);
+
+  // F-TODO-08: toggle a single subtask's done state. Never touches points, so a
+  // plain updateToDo (no batch). Persists the whole subtasks array with the one
+  // entry flipped. Degrades gracefully if the firestore.rules whitelist hasn't
+  // shipped the `subtasks` field yet (permission-denied → friendly toast).
+  const handleToggleSubtask = useCallback(async (todo: ToDo, subtaskId: string) => {
+      haptic('light'); // at gesture time — dead after the await on iOS
+      const nextSubtasks = toggleSubtask(todo.subtasks, subtaskId);
+      try {
+          await updateToDo(todo.id, { subtasks: nextSubtasks });
+      } catch (error) {
+          console.error('Failed to update subtask:', error);
+          toast.error(subtaskWriteErrorMessage(error));
+      }
+  }, [updateToDo]);
+
+  // --- Drawer subtask editor handlers (local state; persisted on save) ---
+  const handleAddSubtaskInput = useCallback(() => {
+    setSubtasks(prev => appendSubtask(prev, subtaskInput));
+    setSubtaskInput('');
+  }, [subtaskInput]);
+
+  const handleRemoveSubtaskLocal = useCallback((id: string) => {
+    setSubtasks(prev => removeSubtask(prev, id));
+  }, []);
+
+  const handleToggleSubtaskLocal = useCallback((id: string) => {
+    setSubtasks(prev => toggleSubtask(prev, id));
+  }, []);
+
+  // "Break down with AI": ask the Gemini proxy to decompose the task into steps,
+  // appending any it returns. Fully guarded — a disabled kill-switch, quota cap,
+  // or transport error surfaces a toast and leaves the manual editor untouched.
+  const handleBreakDownWithAI = useCallback(async () => {
+    const taskText = text.trim();
+    if (!taskText) {
+      toast.error('Add a task description first');
+      return;
+    }
+    if (!householdId) {
+      toast.error('Household not ready — try again in a moment');
+      return;
+    }
+    setAiBreakingDown(true);
+    try {
+      const { suggestSubtasks } = await import('@/services/geminiService');
+      const steps = await suggestSubtasks(householdId, taskText, notes.trim() || undefined);
+      const built = subtasksFromTexts(steps);
+      if (built.length === 0) {
+        toast('No steps suggested — this task looks atomic.', { icon: 'ℹ️' });
+        return;
+      }
+      setSubtasks(prev => [...prev, ...built]);
+      toast.success(`Added ${built.length} step${built.length === 1 ? '' : 's'}`);
+    } catch (error) {
+      console.error('Failed to break down task:', error);
+      const message = error instanceof Error && error.message.includes('temporarily disabled')
+        ? 'AI features are turned off right now.'
+        : error instanceof Error && error.message.toLowerCase().includes('quota')
+          ? error.message
+          : 'Could not break down this task. Please try again.';
+      toast.error(message);
+    } finally {
+      setAiBreakingDown(false);
+    }
+  }, [text, notes, householdId]);
 
   const toggleSelection = useCallback((id: string) => {
     setSelectedIds(prev => {
@@ -587,13 +664,22 @@ const ToDosPage: React.FC = () => {
               ? { parentRecurringId: editingTodo.recurrence.parentRecurringId }
               : {}) };
       const trimmedNotes = notes.trim();
+      // Only write the `subtasks` field when there's something to persist (or when
+      // clearing a task that previously had them). This keeps ordinary edits off
+      // the new field until the firestore.rules whitelist ships it — a plain task
+      // with no checklist never sends `subtasks`, so its write stays valid today.
+      const editingOriginal = editingId ? todos.find(t => t.id === editingId) : undefined;
+      const hadSubtasks = (editingOriginal?.subtasks?.length ?? 0) > 0;
+      const subtaskField: Partial<ToDo> =
+        subtasks.length > 0 || hadSubtasks ? { subtasks } : {};
       if (editingId) {
         const updates: Partial<ToDo> = {
           text: trimmedText,
           completeByDate,
           assignedTo,
           isImportant,
-          notes: trimmedNotes
+          notes: trimmedNotes,
+          ...subtaskField
         };
         // Only touch the recurrence field when it is set now, or when it was
         // previously set and is being turned off — so plain (never-recurring)
@@ -614,6 +700,7 @@ const ToDosPage: React.FC = () => {
           isCompleted: false,
           isImportant,
           notes: trimmedNotes,
+          ...subtaskField,
           ...(recurrenceValue ? { recurrence: recurrenceValue } : {})
         });
         toast.success('Task added');
@@ -622,7 +709,13 @@ const ToDosPage: React.FC = () => {
       setIsAddModalOpen(false);
     } catch (error) {
       console.error('Error saving to-do:', error);
-      toast.error('Failed to save to-do. Please try again.');
+      // A rules rejection on the not-yet-whitelisted `subtasks` field gets a
+      // specific message; everything else keeps the generic save error.
+      toast.error(
+        isPermissionDeniedError(error) && subtasks.length > 0
+          ? "Subtasks aren't available yet — the task's other changes weren't saved."
+          : 'Failed to save to-do. Please try again.'
+      );
     } finally {
       setIsSaving(false);
     }
@@ -954,6 +1047,7 @@ const ToDosPage: React.FC = () => {
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
                 onToggleSelection={toggleSelection}
+                onToggleSubtask={handleToggleSubtask}
             />
 
             {/* Upcoming Section */}
@@ -975,6 +1069,7 @@ const ToDosPage: React.FC = () => {
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
                 onToggleSelection={toggleSelection}
+                onToggleSubtask={handleToggleSubtask}
             />
 
             {/* On The Radar Section */}
@@ -996,6 +1091,7 @@ const ToDosPage: React.FC = () => {
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
                 onToggleSelection={toggleSelection}
+                onToggleSubtask={handleToggleSubtask}
             />
             </>
             ) : effectiveArrangement === 'matrix' ? (
@@ -1017,6 +1113,7 @@ const ToDosPage: React.FC = () => {
               onToggleImportant={handleToggleImportant}
               onMore={setActionTodo}
               onToggleSelection={toggleSelection}
+              onToggleSubtask={handleToggleSubtask}
             />
             ) : (
             /* True 2×2 Eisenhower grid — auto-immersive full-screen overlay in
@@ -1238,6 +1335,88 @@ const ToDosPage: React.FC = () => {
             showCount
             rows={3}
           />
+
+          {/* F-TODO-08: subtask checklist editor. Local state — persisted when the
+              form saves. "Break down with AI" appends model-suggested steps. */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="block text-xs font-bold text-brand-400 dark:text-brand-450 uppercase tracking-wider">
+                Subtasks{subtasks.length > 0 ? ` (${subtaskProgress(subtasks).done}/${subtasks.length})` : ''}
+              </span>
+              <Button
+                type="button"
+                variant="ghost-brand"
+                size="sm"
+                onClick={handleBreakDownWithAI}
+                isLoading={aiBreakingDown}
+                disabled={aiBreakingDown || !text.trim()}
+                className="gap-1.5 text-accent-600 dark:text-accent-300"
+              >
+                {!aiBreakingDown && <Sparkles size={15} aria-hidden="true" />}
+                Break down with AI
+              </Button>
+            </div>
+
+            {subtasks.length > 0 && (
+              <ul className="space-y-1 mb-2" aria-label="Subtasks">
+                {subtasks.map(sub => (
+                  <li key={sub.id} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={sub.isDone}
+                      onChange={() => handleToggleSubtaskLocal(sub.id)}
+                      aria-label={`Mark "${sub.text}" ${sub.isDone ? 'not done' : 'done'}`}
+                      className="w-4 h-4 shrink-0 rounded-sm border-brand-300 text-accent-600 focus-visible:ring-2 focus-visible:ring-accent-500 dark:border-brand-600 dark:bg-brand-700"
+                    />
+                    <span className={cn(
+                      'flex-1 min-w-0 text-sm truncate',
+                      sub.isDone ? 'line-through text-brand-400 dark:text-brand-500' : 'text-brand-700 dark:text-brand-200'
+                    )}>
+                      {sub.text}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost-brand"
+                      size="icon"
+                      onClick={() => handleRemoveSubtaskLocal(sub.id)}
+                      aria-label={`Remove subtask: ${sub.text}`}
+                      className="shrink-0 hover:text-money-neg dark:hover:text-money-negDark"
+                    >
+                      <X size={16} />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div className="flex items-center gap-2">
+              <Input
+                id="subtask-input"
+                type="text"
+                value={subtaskInput}
+                onChange={(e) => setSubtaskInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddSubtaskInput();
+                  }
+                }}
+                placeholder="Add a step"
+                maxLength={200}
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                size="icon"
+                onClick={handleAddSubtaskInput}
+                disabled={!subtaskInput.trim()}
+                aria-label="Add subtask"
+              >
+                <Plus size={18} />
+              </Button>
+            </div>
+          </div>
 
           {/* Eisenhower importance — a household judgment call, deliberately a
               yes/no (not low/med/high) to match the matrix's two-state axis. */}
