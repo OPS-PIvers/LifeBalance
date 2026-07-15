@@ -355,9 +355,13 @@ export function makePayCalendarItem(deps: {
       // lexically). No such paycheck → keep '' (untracked history), the prior
       // behavior.
       if (!payPeriodId && item.type === 'expense') {
-        payPeriodId = calendarItems
-          .filter(i => i.type === 'income' && i.isPaid && !i.isDeleted && i.date <= transactionDate)
-          .reduce((latest, i) => (i.date > latest ? i.date : latest), '');
+        payPeriodId = calendarItems.reduce(
+          (latest, i) =>
+            i.type === 'income' && i.isPaid && !i.isDeleted && i.date <= transactionDate && i.date > latest
+              ? i.date
+              : latest,
+          ''
+        );
       }
 
       // Pay-period ceremony: decide BEFORE the commit whether this approval
