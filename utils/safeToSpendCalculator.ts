@@ -63,7 +63,7 @@ function calculateUnpaidBillsInRange(
       // must subtract — an exclusive bound here silently inflated Safe-to-Spend
       // by every bill sharing the paycheck's date.
       !isBefore(itemDate, startDate) &&
-      (isBefore(itemDate, endDate) || itemDate.getTime() === endDate.getTime()) // Up to range end (inclusive)
+      !isAfter(itemDate, endDate) // Up to range end (inclusive)
     );
   });
 
