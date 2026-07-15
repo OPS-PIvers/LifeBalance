@@ -40,6 +40,7 @@ import { ActivityFeedWidget } from '@/components/dashboard/ActivityFeedWidget';
 import { PulseStripWidget } from '@/components/dashboard/PulseStripWidget';
 import { WeeklyRecapCard } from '@/components/dashboard/WeeklyRecapCard';
 import { MoneyRecapCard } from '@/components/dashboard/MoneyRecapCard';
+import { PointRebalanceCard } from '@/components/dashboard/PointRebalanceCard';
 import { CreateChallengePayload, CREDIT_CARD_CATEGORY } from '@/types/schema';
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
 import { CreditCardActivityWidget } from '@/components/dashboard/CreditCardActivityWidget';
@@ -470,6 +471,12 @@ const Dashboard: React.FC = () => {
             hosts the recap detail drawer (which must stay mounted for the
             ?moneyrecap= push deep link even when the card itself is hidden). */}
         <MoneyRecapCard />
+
+        {/* Point-rebalance nudge (F-DASH-08) — wires up the already-shipped
+            `analyzeHabitPoints` AI helper: a dismissible, cadence-gated
+            suggestion to raise/lower one habit's basePoints. Self-nulls when
+            powerToolsEnabled is off or there's nothing to suggest. */}
+        {isModuleEnabled('habits') && <PointRebalanceCard />}
 
         {/* Pending Voice Commands Banner — on the shared Section wrapper so it
             reads as the same idiom as every other widget, not a bespoke ad hoc
