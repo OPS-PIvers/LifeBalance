@@ -1,3 +1,4 @@
+import { differenceInCalendarDays, parseISO } from 'date-fns';
 import { Meal } from '@/types/schema';
 
 /**
@@ -13,15 +14,13 @@ export interface SmartCollection {
   predicate: (meal: Meal, today: string) => boolean;
 }
 
-const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-
 /** "Not cooked in 30+ days": lastCooked older than 30 days, or absent entirely. */
 export function isNotCookedIn30Days(meal: Meal, today: string): boolean {
   if (!meal.lastCooked) return true;
-  const lastCookedTime = new Date(meal.lastCooked).getTime();
-  const todayTime = new Date(today).getTime();
-  if (Number.isNaN(lastCookedTime) || Number.isNaN(todayTime)) return true;
-  return todayTime - lastCookedTime >= THIRTY_DAYS_MS;
+  const lastCookedDate = parseISO(meal.lastCooked);
+  const todayDate = parseISO(today);
+  if (Number.isNaN(lastCookedDate.getTime()) || Number.isNaN(todayDate.getTime())) return true;
+  return differenceInCalendarDays(todayDate, lastCookedDate) >= 30;
 }
 
 /** "Never tried": no lastCooked date recorded at all. */
