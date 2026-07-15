@@ -2,6 +2,7 @@ import React from 'react';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { useInsightActions } from '@/hooks/useInsightActions';
+import { useAiUsageToday } from '@/hooks/useAiUsageToday';
 import { Sparkles, Wand2, ArrowRight, Wallet, CheckCircle2, Plus, Trophy, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { CreateChallengePayload, Insight, InsightAction } from '@/types/schema';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -48,6 +49,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = React.memo(({ onOpenA
   const { isModuleEnabled, isPlanTabVisible } = useModuleVisibility();
 
   const { handleAction } = useInsightActions();
+  const aiUsage = useAiUsageToday();
 
   const normalizeInsightText = (text: string | null | undefined): string =>
     (text ?? '').replace(/\s+/g, ' ').trim();
@@ -112,6 +114,11 @@ export const InsightWidget: React.FC<InsightWidgetProps> = React.memo(({ onOpenA
         </div>
       }
     >
+      {aiUsage && (
+        <p className="text-xxs text-brand-400 dark:text-brand-500 text-right -mt-2 mb-1">
+          {aiUsage.used} of {aiUsage.cap} AI requests used today
+        </p>
+      )}
       {/* A hairline-edged BAND on the canvas — mirrors PulseStripWidget's
           "distinct but not boxed" treatment (border-y, no side border, no
           rounded panel, no background) instead of a full `surface-section`.

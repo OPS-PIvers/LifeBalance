@@ -867,6 +867,17 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Household activity log (F-XCUT-01) — append-only who-did-what feed.
+      // Entries are co-committed inside existing mutation writeBatches; they
+      // must never be editable or deletable by clients (purge is server-side
+      // if ever needed). Read is member-wide (the UI additionally gates the
+      // feed to admins, but the data is household-internal activity).
+      match /activityLog/{entryId} {
+        allow read: if isMemberOf(householdId);
+        allow create: if isMemberOf(householdId);
+        allow update, delete: if false;
+      }
+
       // Monthly money recaps — written ONLY by Cloud Functions (Admin SDK bypasses rules).
       match /moneyRecaps/{recapId} {
         allow read: if isMemberOf(householdId);
@@ -964,7 +975,8 @@ service cloud.firestore {
                      subcollection != 'savingsGoals' &&
                      subcollection != 'recaps' &&
                      subcollection != 'moneyRecaps' &&
-                     subcollection != 'netWorthSnapshots';
+                     subcollection != 'netWorthSnapshots' &&
+                     subcollection != 'activityLog';
       }
     }
 
