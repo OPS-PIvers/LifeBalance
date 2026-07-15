@@ -377,6 +377,8 @@ explorations against this table.
 | `insight_rated` | Thumbs up/down tapped on an insight (`rateInsight`, `components/dashboard/InsightWidget.tsx`) | `feedback` — `up` \| `down` |
 | `receipt_scanned` | Camera receipt OCR succeeds (`CaptureModal`) | — |
 | `statement_scanned` | Bank-statement/receipt file parse succeeds (`CaptureModal`) | `count` — transactions extracted |
+| `photo_tasklist_scanned` | Handwritten/whiteboard to-do photo parsed (`TodoPhotoImportDrawer`, F-TODO-06) | `count` — tasks extracted |
+| `photo_mealplan_scanned` | Handwritten/whiteboard weekly menu photo parsed (`MealPlanPhotoImportDrawer`, F-TODO-06) | `count` — meals extracted |
 | `meal_planned` | Meal added to the weekly plan (`addMealPlanItem`) | — |
 | `shopping_item_checked` | Shopping item marked purchased (`toggleShoppingItemPurchased`) | — |
 | `reward_redeemed` | Reward redemption commits (`redeemReward`) or a kid request is approved (`approveRedemption`) | `via` — `self` \| `parent_approval` |

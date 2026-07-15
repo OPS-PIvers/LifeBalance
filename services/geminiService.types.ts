@@ -69,6 +69,35 @@ export interface ParsedTodoList {
   }>;
 }
 
+// ---------------------------------------------------------------------------
+// Photo-to-tasklist (F-TODO-06): parse a handwritten/whiteboard note into
+// discrete task lines. Distinct from ParsedTodoList (natural-language command
+// parse) — this is an image OCR parse and carries no priority.
+// ---------------------------------------------------------------------------
+
+export interface ParsedTaskList {
+  tasks: Array<{
+    text: string;
+  }>;
+}
+
+// ---------------------------------------------------------------------------
+// Photo-to-meal-plan (F-TODO-06 owner note): parse a handwritten/whiteboard
+// weekly menu into meal-plan entries. `day` is a weekday name the client maps
+// onto the currently-displayed week; `type` is the meal slot.
+// ---------------------------------------------------------------------------
+
+export type MealPlanSlot = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+
+export interface ParsedMealPlan {
+  meals: Array<{
+    /** Weekday name (Monday…Sunday). Empty/absent when the note has no day column. */
+    day?: string;
+    type: MealPlanSlot;
+    mealName: string;
+  }>;
+}
+
 export interface ParsedExpense {
   amount?: number;
   merchant?: string;

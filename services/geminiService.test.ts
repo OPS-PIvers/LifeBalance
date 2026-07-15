@@ -527,6 +527,38 @@ describe('geminiService', () => {
     expect(result.data.category).toBe('Other');
   });
 
+  it('parseTaskList returns the parsed task lines', async () => {
+    const { parseTaskList } = await import('./geminiService');
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify({ tasks: [{ text: 'Take out trash' }, { text: 'Pay rent' }] }),
+    });
+    const result = await parseTaskList('test-id', VALID_TEST_IMAGE);
+    expect(result.tasks.map((t) => t.text)).toEqual(['Take out trash', 'Pay rent']);
+  });
+
+  it('parseTaskList returns an empty array when nothing is legible', async () => {
+    const { parseTaskList } = await import('./geminiService');
+    generateContentMock.mockResolvedValue({ text: JSON.stringify({ tasks: [] }) });
+    const result = await parseTaskList('test-id', VALID_TEST_IMAGE);
+    expect(result.tasks).toHaveLength(0);
+  });
+
+  it('parseMealPlan returns the parsed meal entries', async () => {
+    const { parseMealPlan } = await import('./geminiService');
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify({
+        meals: [
+          { mealName: 'Tacos', type: 'dinner', day: 'Monday' },
+          { mealName: 'Oatmeal', type: 'breakfast', day: 'Tuesday' },
+        ],
+      }),
+    });
+    const result = await parseMealPlan('test-id', VALID_TEST_IMAGE);
+    expect(result.meals).toHaveLength(2);
+    expect(result.meals[0]!.mealName).toBe('Tacos');
+    expect(result.meals[0]!.type).toBe('dinner');
+  });
+
   it('parseBankStatement prompt includes correct date from local time', async () => {
     const { parseBankStatement } = await import('./geminiService');
 
