@@ -1507,7 +1507,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     hasMoreCompletedTodos: false,
     loadOlderCompletedTodos: async () => {},
     ensureMealPlanWeek: async () => {},
-    loadAllMeals: async () => {},
+    loadAllMeals: async () => meals,
     loadFullGroceryCatalog: async () => {},
 
     // Operations

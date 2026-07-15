@@ -459,6 +459,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     [mealsWindow, mealsExtra]
   );
   const mealsLoadedAllRef = useRef(false);
+  // Ref-backed mirror of the latest merged `meals` so loadAllMeals() can return
+  // the up-to-date full list synchronously on a repeat call (state updates from
+  // setMealsExtra aren't visible in this render's closure until the next render).
+  const mealsRef = useRef(meals);
+  useEffect(() => {
+    mealsRef.current = meals;
+  }, [meals]);
   // Meal ids already fetched (or in flight) by the by-id resolution, so each
   // missing reference is requested at most once per household (deleted meals
   // stay marked and are never re-fetched).
@@ -1148,19 +1155,26 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   // Escape hatch for the cookbook view: fetch every meal beyond the bounded
   // live window. Idempotent per household (guarded by mealsLoadedAllRef).
-  const loadAllMeals = useCallback(async () => {
-    if (!householdId || mealsLoadedAllRef.current) return;
+  const loadAllMeals = useCallback(async (): Promise<Meal[]> => {
+    if (!householdId) return [];
+    if (mealsLoadedAllRef.current) return mealsRef.current;
     mealsLoadedAllRef.current = true;
     try {
       const snap = await getDocs(
         collection(db, `households/${householdId}/meals`).withConverter(mealConverter)
       );
-      if (householdIdRef.current !== householdId) return;
-      setMealsExtra(snap.docs.map(d => d.data()));
+      if (householdIdRef.current !== householdId) return mealsRef.current;
+      const fullMeals = snap.docs.map(d => d.data());
+      setMealsExtra(fullMeals);
+      // The live window is a subset of this full fetch, so it's already the
+      // complete, up-to-date list — return it directly rather than waiting for
+      // the setMealsExtra-triggered re-render to land in mealsRef.
+      return fullMeals;
     } catch (error) {
       console.error('[loadAllMeals] Failed:', error);
       // Allow a retry on the next call (e.g. transient offline error).
       if (householdIdRef.current === householdId) mealsLoadedAllRef.current = false;
+      return mealsRef.current;
     }
   }, [householdId]);
 

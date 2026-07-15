@@ -121,8 +121,8 @@ export interface HouseholdContextType {
   loadOlderCompletedTodos: () => Promise<void>;
   /** Ensure the meal-plan entries for the week containing `date` are loaded. */
   ensureMealPlanWeek: (date: Date) => Promise<void>;
-  /** Fetch every meal beyond the bounded live window (cookbook view). Idempotent per household. */
-  loadAllMeals: () => Promise<void>;
+  /** Fetch every meal beyond the bounded live window (cookbook view). Idempotent per household; resolves with the full, up-to-date meals list. */
+  loadAllMeals: () => Promise<Meal[]>;
   /** Fetch the full grocery catalog beyond the bounded live window (shopping-form search fallback). Idempotent per household. */
   loadFullGroceryCatalog: () => Promise<void>;
 

@@ -53,7 +53,7 @@ import { isModuleEnabled } from '@/utils/moduleVisibility';
 import type { ModuleKey } from '@/types/schema';
 import { requestNotificationPermission, setupForegroundNotificationListener } from '@/services/notificationService';
 import { generateJsonBackup, generateCsvExport, buildExportPayload } from '@/utils/exportUtils';
-import { HouseholdMember, NotificationPreferences, Transaction } from '@/types/schema';
+import { HouseholdMember, NotificationPreferences, Transaction, Meal } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { doc, updateDoc } from 'firebase/firestore';
 import { computeAnyNotificationsEnabled } from '@/utils/notificationFlags';
@@ -111,7 +111,7 @@ const Settings: React.FC = () => {
     isLoadingOlderTransactions,
     loadAllTransactions,
   } = useFinance();
-  const { meals, mealPlan } = useMealPlan();
+  const { mealPlan, loadAllMeals } = useMealPlan();
   const { shoppingList, stores } = useShopping();
   const { todos } = useTodos();
   const navigate = useNavigate();
@@ -328,7 +328,7 @@ const Settings: React.FC = () => {
     }
   };
 
-  const doExportJson = (txList: Transaction[]) => {
+  const doExportJson = (txList: Transaction[], mealsList: Meal[]) => {
     try {
       const exportData = buildExportPayload({
         householdId,
@@ -339,7 +339,7 @@ const Settings: React.FC = () => {
         transactions: txList,
         buckets,
         calendarItems,
-        meals,
+        meals: mealsList,
         shoppingList,
         todos,
         mealPlan,
@@ -384,9 +384,11 @@ const Settings: React.FC = () => {
     }
   };
 
-  // Exports must include the FULL transaction history, but the household context
-  // only keeps the recent window live. Pull every older transaction first (a
-  // no-op when nothing is windowed), then export the complete list it returns.
+  // Exports must include the FULL transaction history (and, for the JSON
+  // backup, the full recipe cookbook), but the household context only keeps
+  // bounded live windows for both (see utils/listenerWindows.ts). Pull every
+  // older transaction / recipe first (a no-op when nothing is windowed), then
+  // export the complete lists.
   const requestExport = async (kind: 'json' | 'csv') => {
     let txList = transactions;
     if (hasMoreTransactions) {
@@ -394,8 +396,12 @@ const Settings: React.FC = () => {
       txList = await loadAllTransactions();
       toast.dismiss('export-load');
     }
-    if (kind === 'json') doExportJson(txList);
-    else doExportCsv(txList);
+    if (kind === 'json') {
+      const mealsList = await loadAllMeals();
+      doExportJson(txList, mealsList);
+    } else {
+      doExportCsv(txList);
+    }
   };
 
   if (!householdSettings) {
