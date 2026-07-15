@@ -594,3 +594,59 @@ describe('MockHouseholdContext addTransaction pay period (Safe-to-Spend pending 
     expect(after?.safeToSpend).toBe((before?.safeToSpend ?? 0) - 50);
   });
 });
+
+describe('MockHouseholdContext saveCeremonyChanges (ceremony balances + budgets save)', () => {
+  it('applies bucket limits and account balances together, stamping lastUpdated', async () => {
+    const { result } = renderHook(() => useFinance(), { wrapper });
+    const groceries = result.current.buckets.find((b) => b.name === 'Groceries');
+    const checking = result.current.accounts.find((a) => a.id === 'acc1');
+    expect(groceries).toBeDefined();
+    expect(checking).toBeDefined();
+    const previousStamp = checking!.lastUpdated;
+
+    await act(async () => {
+      await result.current.saveCeremonyChanges({
+        bucketLimits: [{ id: groceries!.id, limit: 425.559 }],
+        accountBalances: [{ id: 'acc1', balance: 5100.129 }],
+      });
+    });
+
+    // Amounts round to whole cents (decimal dollars, never integer cents).
+    expect(result.current.buckets.find((b) => b.id === groceries!.id)?.limit).toBe(425.56);
+    const updated = result.current.accounts.find((a) => a.id === 'acc1');
+    expect(updated?.balance).toBe(5100.13);
+    expect(typeof updated?.lastUpdated).toBe('string');
+    expect(updated!.lastUpdated >= previousStamp).toBe(true);
+  });
+
+  it('accepts NEGATIVE balances (overdrawn) but drops negative bucket limits', async () => {
+    const { result } = renderHook(() => useFinance(), { wrapper });
+    const groceries = result.current.buckets.find((b) => b.name === 'Groceries');
+    const originalLimit = groceries!.limit;
+
+    await act(async () => {
+      await result.current.saveCeremonyChanges({
+        bucketLimits: [{ id: groceries!.id, limit: -50 }],
+        accountBalances: [{ id: 'acc1', balance: -12.34 }],
+      });
+    });
+
+    expect(result.current.buckets.find((b) => b.id === groceries!.id)?.limit).toBe(originalLimit);
+    expect(result.current.accounts.find((a) => a.id === 'acc1')?.balance).toBe(-12.34);
+  });
+
+  it('drops non-finite values and leaves untouched entries alone', async () => {
+    const { result } = renderHook(() => useFinance(), { wrapper });
+    const savingsBefore = result.current.accounts.find((a) => a.id === 'acc2');
+
+    await act(async () => {
+      await result.current.saveCeremonyChanges({
+        bucketLimits: [],
+        accountBalances: [{ id: 'acc1', balance: Number.NaN }],
+      });
+    });
+
+    expect(result.current.accounts.find((a) => a.id === 'acc1')?.balance).toBe(5420.5);
+    expect(result.current.accounts.find((a) => a.id === 'acc2')).toEqual(savingsBefore);
+  });
+});

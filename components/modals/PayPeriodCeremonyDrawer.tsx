@@ -10,17 +10,20 @@ import Input from '@/components/ui/Input';
 import { FIELD_ERROR } from '@/components/ui/fieldStyles';
 import { cn } from '@/utils/cn';
 import { roundMoney } from '@/utils/money';
-import { suggestBucketLimit, type PayPeriodCeremonyEvent } from '@/utils/payPeriodCeremony';
+import { parseBalanceDraft, suggestBucketLimit, type PayPeriodCeremonyEvent } from '@/utils/payPeriodCeremony';
 
 /**
  * Pay-period reset ceremony — opened (device-locally, for the approving
  * member only) right after a confirmed paycheck rolls the pay period.
  *
- * Two jobs:
+ * Three jobs:
  *  1. Confirm what just happened: the closed period's dates, per-bucket
  *     over/under recap (from the bucketHistory snapshots the roll just wrote),
  *     period totals, and the new Safe-to-Spend.
- *  2. Prompt the user to set bucket budgets for the NEW period — prefilled
+ *  2. Prompt the user to TRUE-UP account balances for the new period —
+ *     balances are entered manually and Safe-to-Spend derives from them, so
+ *     this comes before the budget editor. Unchanged drafts write nothing.
+ *  3. Prompt the user to set bucket budgets for the NEW period — prefilled
  *     with last period's limits ("keep the same" is the zero-effort path;
  *     dismissing the drawer means exactly that, since limits already carried
  *     over), with per-bucket suggestions from recent spending history.
@@ -40,14 +43,24 @@ interface PayPeriodCeremonyDrawerProps {
 const fmtDay = (iso: string) => format(parseISO(iso), 'MMM d');
 
 const PayPeriodCeremonyDrawer: React.FC<PayPeriodCeremonyDrawerProps> = ({ event, isOpen, onClose }) => {
-  const { buckets, bucketHistory, safeToSpend, setBucketLimits } = useFinance();
+  const { accounts, buckets, bucketHistory, safeToSpend, saveCeremonyChanges } = useFinance();
   const fmt = useFormatCurrency();
+
+  // Archived accounts are excluded everywhere active balances matter
+  // (net worth, Safe-to-Spend) — same filter as BudgetAccounts.
+  const activeAccounts = useMemo(() => accounts.filter(a => !a.archived), [accounts]);
 
   // Draft limits keyed by bucket id, prefilled with the carried-over limits.
   // Lazy init is enough: the parent keys this component on the event's period
   // so a later roll remounts with fresh drafts.
   const [drafts, setDrafts] = useState<Record<string, string>>(() =>
     Object.fromEntries(buckets.map(b => [b.id, String(b.limit)])),
+  );
+  // Balance drafts keyed by account id, prefilled with the current balances
+  // (credit debt is stored positive, same convention as the account cards —
+  // drafts pass the stored value straight through, no sign flipping).
+  const [balanceDrafts, setBalanceDrafts] = useState<Record<string, string>>(() =>
+    Object.fromEntries(accounts.filter(a => !a.archived).map(a => [a.id, String(a.balance)])),
   );
   const [isSaving, setIsSaving] = useState(false);
 
@@ -92,6 +105,23 @@ const PayPeriodCeremonyDrawer: React.FC<PayPeriodCeremonyDrawerProps> = ({ event
     [buckets, drafts],
   );
 
+  // Same live-listener fallback as draftFor: an account added after mount
+  // renders with its current balance rather than wedging Save as invalid.
+  const balanceDraftFor = (a: { id: string; balance: number }) =>
+    balanceDrafts[a.id] ?? String(a.balance);
+  const hasInvalidBalanceDraft = activeAccounts.some(a => parseBalanceDraft(balanceDraftFor(a)) === null);
+  const changedBalanceUpdates = useMemo(
+    () =>
+      activeAccounts.flatMap(a => {
+        const parsed = parseBalanceDraft(balanceDrafts[a.id] ?? String(a.balance));
+        return parsed !== null && parsed !== a.balance ? [{ id: a.id, balance: parsed }] : [];
+      }),
+    [activeAccounts, balanceDrafts],
+  );
+
+  const hasAnyInvalid = hasInvalidDraft || hasInvalidBalanceDraft;
+  const changeCount = changedUpdates.length + changedBalanceUpdates.length;
+
   const applySuggestions = () => {
     setDrafts(Object.fromEntries(buckets.map(b => [b.id, String(suggestions.get(b.id) ?? b.limit)])));
   };
@@ -100,13 +130,17 @@ const PayPeriodCeremonyDrawer: React.FC<PayPeriodCeremonyDrawerProps> = ({ event
   };
 
   const handleSave = async () => {
-    if (changedUpdates.length === 0 || hasInvalidDraft) return;
+    if (changeCount === 0 || hasAnyInvalid) return;
     setIsSaving(true);
     try {
-      await setBucketLimits(changedUpdates);
+      // ONE writeBatch for balances + limits (all-or-nothing).
+      await saveCeremonyChanges({
+        bucketLimits: changedUpdates,
+        accountBalances: changedBalanceUpdates,
+      });
       onClose();
     } catch {
-      // setBucketLimits already toasted; keep the drawer open so the user
+      // saveCeremonyChanges already toasted; keep the drawer open so the user
       // can retry without losing their edits.
     } finally {
       setIsSaving(false);
@@ -142,10 +176,10 @@ const PayPeriodCeremonyDrawer: React.FC<PayPeriodCeremonyDrawerProps> = ({ event
           <Button
             className="flex-1"
             onClick={handleSave}
-            disabled={changedUpdates.length === 0 || hasInvalidDraft}
+            disabled={changeCount === 0 || hasAnyInvalid}
             isLoading={isSaving}
           >
-            Save budgets
+            Save changes
           </Button>
         </div>
       }
@@ -182,6 +216,59 @@ const PayPeriodCeremonyDrawer: React.FC<PayPeriodCeremonyDrawerProps> = ({ event
                 );
               })}
             </SurfaceList>
+          </Section>
+        )}
+
+        {activeAccounts.length > 0 && (
+          <Section title="Update your balances">
+            <SurfaceList>
+              {activeAccounts.map(a => {
+                const invalid = parseBalanceDraft(balanceDraftFor(a)) === null;
+                const lastUpdatedDate = a.lastUpdated ? new Date(a.lastUpdated) : null;
+                const lastUpdatedLabel =
+                  lastUpdatedDate && !Number.isNaN(lastUpdatedDate.getTime())
+                    ? format(lastUpdatedDate, 'MMM d, yyyy')
+                    : null;
+                return (
+                  <Row key={a.id} className="flex-col items-stretch gap-1.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <label
+                        htmlFor={`ceremony-balance-${a.id}`}
+                        className="min-w-0 truncate text-sm font-medium text-brand-800 dark:text-brand-100"
+                      >
+                        {a.name}
+                        <span className="ml-1.5 text-xxs font-normal text-brand-400 dark:text-brand-450">
+                          {a.type === 'credit' ? 'Credit card' : a.type === 'savings' ? 'Savings' : 'Checking'}
+                        </span>
+                      </label>
+                      <div className="w-28 shrink-0">
+                        <Input
+                          id={`ceremony-balance-${a.id}`}
+                          type="number"
+                          inputMode="decimal"
+                          step="0.01"
+                          value={balanceDraftFor(a)}
+                          onChange={e =>
+                            setBalanceDrafts(prev => ({ ...prev, [a.id]: e.target.value }))
+                          }
+                          className={cn('text-right font-mono tabular-nums', invalid && FIELD_ERROR)}
+                          aria-label={`${a.name} balance`}
+                        />
+                      </div>
+                    </div>
+                    {lastUpdatedLabel && (
+                      <div className="text-xxs text-brand-400 dark:text-brand-450">
+                        Last updated {lastUpdatedLabel}
+                      </div>
+                    )}
+                  </Row>
+                );
+              })}
+            </SurfaceList>
+            <p className="px-1 pt-2 text-xxs text-brand-400 dark:text-brand-450 leading-relaxed">
+              Balances are entered manually — a quick true-up keeps Safe-to-Spend accurate for
+              the new period. Unchanged balances aren&apos;t written.
+            </p>
           </Section>
         )}
 

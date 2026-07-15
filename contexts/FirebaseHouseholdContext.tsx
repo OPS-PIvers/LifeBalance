@@ -1695,6 +1695,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeBucketCrudMutations({ db, householdId, user }).setBucketLimits(updates);
   }, [householdId, user]);
 
+  const saveCeremonyChanges = useCallback(async (updates: {
+    bucketLimits: { id: string; limit: number }[];
+    accountBalances: { id: string; balance: number }[];
+  }) => {
+    await makeBucketCrudMutations({ db, householdId, user }).saveCeremonyChanges(updates);
+  }, [householdId, user]);
+
   const reallocateBucket = useCallback(async (sourceId: string, targetId: string, amount: number) => {
     await makeReallocateBucket({ db, householdId, buckets }).reallocateBucket(sourceId, targetId, amount);
   }, [householdId, buckets]);
@@ -2320,6 +2327,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     deleteBucket,
     updateBucketLimit,
     setBucketLimits,
+    saveCeremonyChanges,
     reallocateBucket,
     addCalendarItem,
     updateCalendarItem,
@@ -2345,7 +2353,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     isLoadingOlderBucketHistory, hasMoreBucketHistory, loadAllBucketHistory,
     addAccount, updateAccountBalance, setAccountGoal, setAccountCardLast4, deleteAccount, archiveAccount, unarchiveAccount, updateAccountOrder, reorderAccounts,
     addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, contributeToGoal,
-    addBucket, updateBucket, deleteBucket, updateBucketLimit, setBucketLimits, reallocateBucket,
+    addBucket, updateBucket, deleteBucket, updateBucketLimit, setBucketLimits, saveCeremonyChanges, reallocateBucket,
     addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem,
     addTransaction, addTransactions, updateTransactionCategory, updateTransaction, deleteTransaction, splitTransaction,
     setTransactionSplit, markSplitSettled,

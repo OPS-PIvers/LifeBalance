@@ -201,6 +201,13 @@ export interface HouseholdContextType {
   /** Pay-period ceremony save: set several bucket limits in ONE writeBatch
    *  (all-or-nothing) so a period's budget plan can't half-apply. */
   setBucketLimits: (updates: { id: string; limit: number }[]) => Promise<void>;
+  /** Pay-period ceremony save covering BOTH bucket limits and account balance
+   *  true-ups in ONE writeBatch (all-or-nothing). Balances may be negative
+   *  (overdrawn); balance writes stamp lastUpdated like updateAccountBalance. */
+  saveCeremonyChanges: (updates: {
+    bucketLimits: { id: string; limit: number }[];
+    accountBalances: { id: string; balance: number }[];
+  }) => Promise<void>;
   reallocateBucket: (sourceId: string, targetId: string, amount: number) => Promise<void>;
 
   // Calendar Actions
@@ -465,7 +472,7 @@ export type FinanceContextValue = Pick<HouseholdContextType,
   | 'archiveAccount' | 'unarchiveAccount'
   | 'updateAccountOrder' | 'reorderAccounts'
   | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal'
-  | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'setBucketLimits' | 'reallocateBucket'
+  | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'setBucketLimits' | 'saveCeremonyChanges' | 'reallocateBucket'
   | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
   | 'addTransaction' | 'addTransactions' | 'updateTransactionCategory' | 'updateTransaction' | 'deleteTransaction' | 'splitTransaction'
   | 'setTransactionSplit' | 'markSplitSettled'
