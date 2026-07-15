@@ -1432,6 +1432,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     redemptionHistory,
     unlockedRewardIds,
     moduleVisibility,
+    // F-DASH-06: seed a nonzero today's usage so the InsightWidget AI-usage
+    // caption is visible/walkable in Test Mode.
+    aiUsage: { dailyCount: 1, lastResetDate: getLocalDateString() },
 
   } as unknown as Household;
   // Same derivation as the real Firebase context, so Test Mode's Budget page
