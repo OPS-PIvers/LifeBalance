@@ -428,9 +428,22 @@ export const useHabitActions = (
       return;
     }
 
-    // Filter out today's date if present (handling both stale and non-stale cases)
+    // Which completion dates does this reset undo? Daily: only today. Weekly:
+    // the live counter accumulates across the WHOLE current ISO week and every
+    // completion day entered completedDates, so removing only today would leave
+    // earlier-in-week dates behind for calculatePointsForDateRange (which scores
+    // weekly habits once per ISO week from completedDates) to re-credit points
+    // this reset just reversed — desyncing daily vs weekly/total on the next
+    // corrective recompute. calculateResetPoints already reverses the whole
+    // week's credit (it deducts from the full live counter), so dates-removed
+    // and points-reversed agree.
     const today = getLocalDateString();
-    const newCompletedDates = habit.completedDates.filter(d => d !== today);
+    const weekStartOf = (d: string): string =>
+      format(startOfWeek(parseISO(d), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    const datesToRemove = habit.period === 'weekly'
+      ? habit.completedDates.filter(d => weekStartOf(d) === weekStartOf(today))
+      : habit.completedDates.filter(d => d === today);
+    const newCompletedDates = habit.completedDates.filter(d => !datesToRemove.includes(d));
 
     // Atomically commit habit state + points in a single batch so both writes
     // succeed together or neither does (prevents points/habit desync on crash).
@@ -438,11 +451,13 @@ export const useHabitActions = (
 
     resetBatch.update(doc(db, `households/${householdId}/habits`, id), {
       count: 0,
-      // Server-side delta: remove ONLY today. Writing the locally-computed
-      // array here lets a device with a stale offline cache wholesale-
-      // overwrite (wipe) the habit's completion history. streakDays is a
-      // self-correcting scalar, so local computation is safe.
-      completedDates: arrayRemove(today),
+      // Server-side delta: remove ONLY this period's dates. Writing the
+      // locally-computed array here lets a device with a stale offline cache
+      // wholesale-overwrite (wipe) the habit's completion history. streakDays
+      // is a self-correcting scalar, so local computation is safe. Only
+      // included when there is actually something to remove (arrayRemove
+      // requires at least one value).
+      ...(datesToRemove.length > 0 ? { completedDates: arrayRemove(...datesToRemove) } : {}),
       streakDays: streakForHabit({ period: habit.period, completedDates: newCompletedDates, frozenDates: habit.frozenDates }),
       lastUpdated: serverTimestamp(),
     });
