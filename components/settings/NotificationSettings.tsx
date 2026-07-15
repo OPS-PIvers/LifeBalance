@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clock, DollarSign, Flame, Calendar, ListTodo, Send, Info, Newspaper, Wallet } from 'lucide-react';
+import { Clock, DollarSign, Flame, Calendar, ListTodo, Send, Info, Newspaper, Wallet, Layers } from 'lucide-react';
 import { NotificationPreferences } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { getFunctionsInstance } from '@/firebase.config';
@@ -14,6 +14,12 @@ interface NotificationSettingsProps {
   currentPreferences?: NotificationPreferences;
   onSave: (preferences: NotificationPreferences) => Promise<void>;
 }
+
+// Pulled out to a standalone (non-optional) const so mergePreferences can
+// spread it without TS widening `enabled`/`time` to optional the way it would
+// spreading `DEFAULT_PREFERENCES.digestMode` (whose type is optional per the
+// NotificationPreferences interface).
+const DEFAULT_DIGEST_MODE = { enabled: false, time: '07:30' };
 
 const DEFAULT_PREFERENCES: NotificationPreferences = {
   habitReminders: {
@@ -47,6 +53,9 @@ const DEFAULT_PREFERENCES: NotificationPreferences = {
   monthlyMoneyRecap: {
     enabled: true
   },
+  // Digest mode defaults OFF — opt-in consolidation of the four per-type
+  // reminders above into one push at a single time.
+  digestMode: DEFAULT_DIGEST_MODE,
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
 };
 
@@ -80,6 +89,7 @@ const mergePreferences = (current?: NotificationPreferences): NotificationPrefer
   billReminders: { ...DEFAULT_PREFERENCES.billReminders, ...current?.billReminders },
   weeklyRecap: { enabled: true, ...current?.weeklyRecap },
   monthlyMoneyRecap: { enabled: true, ...current?.monthlyMoneyRecap },
+  digestMode: { ...DEFAULT_DIGEST_MODE, ...current?.digestMode },
   timezone: current?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
 });
 
@@ -250,6 +260,49 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
       })()}
 
       <SurfaceList>
+        {/* Digest Mode — consolidates habit/to-do/streak/bill reminders below
+            into one push. Placed first since it changes how those four rows'
+            individual sends behave (they're suppressed server-side while
+            digest mode is on). */}
+        <Row className="items-start">
+          <div className="w-10 h-10 bg-accent-50 dark:bg-accent-500/15 rounded-btn flex items-center justify-center shrink-0">
+            <Layers className="w-5 h-5 text-accent-600 dark:text-accent-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <h4 className="font-semibold text-brand-900 dark:text-brand-100">Digest Mode</h4>
+                <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">
+                  Get one consolidated push instead of separate habit, to-do, streak, and bill reminders.
+                </p>
+              </div>
+              <Switch
+                id="notif-digest-mode"
+                aria-label="Digest mode"
+                checked={preferences.digestMode?.enabled ?? false}
+                onCheckedChange={() => handleToggle('digestMode')}
+              />
+            </div>
+            {preferences.digestMode?.enabled && (
+              <div className="flex items-center gap-2 mt-3">
+                <Clock className="w-4 h-4 text-brand-500 dark:text-brand-400" />
+                <select
+                  value={preferences.digestMode.time}
+                  onChange={(e) => handleTimeChange('digestMode', e.target.value)}
+                  className={inlineControlClass}
+                  aria-label="Digest time"
+                >
+                  {hourOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        </Row>
+
         {/* Habit Reminders */}
         <Row className="items-start">
           <div className="w-10 h-10 bg-warm-50 dark:bg-warm-500/15 rounded-btn flex items-center justify-center shrink-0">

@@ -62,6 +62,18 @@ export interface NotificationPreferences {
     enabled: boolean;
   };
 
+  // Digest mode (F-NOTIF-03): one consolidated push at `time` instead of the
+  // separate habitReminders/actionQueueReminders/streakWarnings/billReminders
+  // pushes. When enabled, the four hourly jobs skip their per-type send for
+  // this member and `senddigest` aggregates across whichever of those four
+  // categories the member still has individually enabled. Optional so legacy
+  // docs deserialize — absent/undefined means digest mode is off (fail-closed,
+  // matching the per-type toggles' own default-off spirit).
+  digestMode?: {
+    enabled: boolean;
+    time: string; // HH:MM format (24-hour)
+  };
+
   // General notification settings
   timezone?: string; // IANA timezone (e.g., 'America/New_York')
 }
