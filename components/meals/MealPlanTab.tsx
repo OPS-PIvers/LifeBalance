@@ -793,11 +793,20 @@ const MealPlanTab: React.FC = () => {
   // tab bar and the day's content for keyboard and switch users.
   const handleStripKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
-      let target: Date | null = null;
-      if (e.key === 'ArrowLeft') target = addDays(selectedDate, -1);
-      else if (e.key === 'ArrowRight') target = addDays(selectedDate, 1);
-      else if (e.key === 'Home') target = new Date();
-      if (!target) return;
+      let target: Date;
+      switch (e.key) {
+        case 'ArrowLeft':
+          target = addDays(selectedDate, -1);
+          break;
+        case 'ArrowRight':
+          target = addDays(selectedDate, 1);
+          break;
+        case 'Home':
+          target = new Date();
+          break;
+        default:
+          return;
+      }
       e.preventDefault();
       const first = stripDays[0]?.dateStr;
       const last = stripDays[stripDays.length - 1]?.dateStr;
