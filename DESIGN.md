@@ -97,9 +97,9 @@ Three self-hosted variable fonts (woff2, `font-display: swap`, per-subset
 
 | Token | Family | Role |
 |---|---|---|
-| `font-display` | **Fraunces** (serif, 400–600) | Greetings, section titles, hero numbers, dialog titles |
+| `font-display` | **Besley** (Clarendon serif, 400–600) | Greetings, section titles, hero numbers, dialog titles |
 | `font-sans` | **Schibsted Grotesk** (400–700) | All UI text (default) |
-| `font-mono` | **Geist Mono** (400–600) | Tabular numerals where alignment matters |
+| `font-mono` | **Spline Sans Mono** (400–600) | Tabular numerals where alignment matters |
 
 ### Usage rules
 
@@ -267,7 +267,7 @@ and border token has a dark counterpart — always pair them
 
 ## 9. Numbers & money
 
-- Currency and aligned figures use `font-mono` (Geist Mono) for tabular feel.
+- Currency and aligned figures use `font-mono` (Spline Sans Mono) for tabular feel.
 - Sign-color amounts with `money-pos` / `money-neg`.
 - Sum money in integer cents ([utils/money.ts](utils/money.ts)) — never floats.
 
@@ -292,7 +292,7 @@ These are the "generic AI slop" markers the redesign removed:
 
 - ❌ **Purple** anything (the old brand). Primary is evergreen `accent-600`.
 - ❌ **Glassmorphism / `backdrop-blur` / translucent floating cards.**
-- ❌ **Inter / JetBrains Mono.** Use Fraunces / Schibsted Grotesk / Geist Mono.
+- ❌ **Inter / JetBrains Mono.** Use Besley / Schibsted Grotesk / Spline Sans Mono.
 - ❌ **Raw `slate-*`** (or other default Tailwind palettes). Use `brand-*`.
   > ⚠️ Token-swapping `slate`→`brand` must be word-bounded (`(^|[^a-z])slate-[0-9]`);
   > a blind replace once corrupted `tran[slate]-y` → `tranbrand-y`. Never do a bare
@@ -309,7 +309,7 @@ These are the "generic AI slop" markers the redesign removed:
 Defined in [`index.css`](index.css) `@theme`:
 
 ```
-Fonts    --font-display (Fraunces) · --font-sans (Schibsted Grotesk) · --font-mono (Geist Mono)
+Fonts    --font-display (Besley) · --font-sans (Schibsted Grotesk) · --font-mono (Spline Sans Mono)
 Neutral  brand-50 … brand-900            (warm paper)
 Primary  accent-50 … accent-900          (evergreen; 600 = PRIMARY)
 Warm     warm-50 … warm-900              (amber; 500 = PRIMARY)
