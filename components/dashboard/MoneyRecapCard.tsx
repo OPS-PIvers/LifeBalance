@@ -9,6 +9,7 @@ import { cn } from '@/utils/cn';
 import { formatMonthLabel } from '@/utils/monthLabel';
 import { Section } from '@/components/ui/Section';
 import { MoneyRecapDrawer } from '@/components/dashboard/MoneyRecapDrawer';
+import { moneyRecapCardVisible, moneyRecapDismissKey } from '@/components/dashboard/recapVisibility';
 import type { MonthlyMoneyRecap } from '@/types/schema';
 
 /**
@@ -25,35 +26,28 @@ import type { MonthlyMoneyRecap } from '@/types/schema';
  * WeeklyRecapCard.
  */
 
-/** How long after generation the card stays on the Dashboard. */
-const FRESHNESS_WINDOW_MS = 6 * 24 * 60 * 60 * 1000;
-
-const dismissKey = (month: string) => `lb_money_recap_dismissed_${month}`;
-
-/**
- * Whether the latest recap should render as a card right now: fresh (within the
- * window, with a sane timestamp) and not dismissed for that month. Module helper
- * (not inline) so the impure reads — clock + localStorage — stay out of render.
- */
-function shouldShowCard(recap: MonthlyMoneyRecap): boolean {
-  const ageMs = Date.now() - new Date(recap.generatedAt).getTime();
-  if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > FRESHNESS_WINDOW_MS) return false;
-  try {
-    return window.localStorage.getItem(dismissKey(recap.month)) !== '1';
-  } catch {
-    return true;
-  }
-}
+// Freshness window + dismissal logic live in recapVisibility.ts, shared with
+// RecapSlot (which asks "would this card show?" to arbitrate the shared slot).
+const shouldShowCard = moneyRecapCardVisible;
 
 const persistDismiss = (month: string): void => {
   try {
-    window.localStorage.setItem(dismissKey(month), '1');
+    window.localStorage.setItem(moneyRecapDismissKey(month), '1');
   } catch {
     // Best-effort — the in-session state still hides the card.
   }
 };
 
-export const MoneyRecapCard: React.FC = () => {
+interface MoneyRecapCardProps {
+  /**
+   * Render only the (always-mounted) detail drawer, not the card — used by
+   * RecapSlot when the weekly recap won the shared Dashboard slot, so the
+   * `?moneyrecap=` push deep link keeps working while the card stays hidden.
+   */
+  drawerOnly?: boolean;
+}
+
+export const MoneyRecapCard: React.FC<MoneyRecapCardProps> = ({ drawerOnly = false }) => {
   const { moneyRecaps } = useHouseholdCore();
   const fmt = useFormatCurrency();
 
@@ -115,7 +109,7 @@ export const MoneyRecapCard: React.FC = () => {
   );
 
   // --- Card visibility -----------------------------------------------------
-  if (!latest) return drawer;
+  if (drawerOnly || !latest) return drawer;
   if (dismissedMonth === latest.month || !shouldShowCard(latest)) {
     return drawer;
   }

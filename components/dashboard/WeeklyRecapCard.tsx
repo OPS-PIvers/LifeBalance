@@ -8,6 +8,7 @@ import { roundMoney } from '@/utils/money';
 import { cn } from '@/utils/cn';
 import { Section } from '@/components/ui/Section';
 import { WeeklyRecapDrawer } from '@/components/dashboard/WeeklyRecapDrawer';
+import { weeklyRecapCardVisible, weeklyRecapDismissKey } from '@/components/dashboard/recapVisibility';
 import type { WeeklyRecap } from '@/types/schema';
 
 /**
@@ -23,36 +24,28 @@ import type { WeeklyRecap } from '@/types/schema';
  * (dismissed/stale) so a late push open still works.
  */
 
-/** How long after generation the card stays on the Dashboard. */
-const FRESHNESS_WINDOW_MS = 4 * 24 * 60 * 60 * 1000;
-
-const dismissKey = (isoWeek: string) => `lb_recap_dismissed_${isoWeek}`;
-
-/**
- * Whether the latest recap should render as a card right now: fresh (within
- * the window, with a sane timestamp) and not dismissed for that ISO week.
- * Module helper (not inline in the component) so the impure reads — clock +
- * localStorage — stay out of the render body proper.
- */
-function shouldShowCard(recap: WeeklyRecap): boolean {
-  const ageMs = Date.now() - new Date(recap.generatedAt).getTime();
-  if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > FRESHNESS_WINDOW_MS) return false;
-  try {
-    return window.localStorage.getItem(dismissKey(recap.isoWeek)) !== '1';
-  } catch {
-    return true;
-  }
-}
+// Freshness window + dismissal logic live in recapVisibility.ts, shared with
+// RecapSlot (which asks "would this card show?" to arbitrate the shared slot).
+const shouldShowCard = weeklyRecapCardVisible;
 
 const persistDismiss = (isoWeek: string): void => {
   try {
-    window.localStorage.setItem(dismissKey(isoWeek), '1');
+    window.localStorage.setItem(weeklyRecapDismissKey(isoWeek), '1');
   } catch {
     // Best-effort — the in-session state still hides the card.
   }
 };
 
-export const WeeklyRecapCard: React.FC = () => {
+interface WeeklyRecapCardProps {
+  /**
+   * Render only the (always-mounted) detail drawer, not the card — used by
+   * RecapSlot when the monthly money recap won the shared Dashboard slot, so
+   * the `?recap=` push deep link keeps working while the card stays hidden.
+   */
+  drawerOnly?: boolean;
+}
+
+export const WeeklyRecapCard: React.FC<WeeklyRecapCardProps> = ({ drawerOnly = false }) => {
   const { recaps } = useHouseholdCore();
   const fmt = useFormatCurrency();
 
@@ -115,7 +108,7 @@ export const WeeklyRecapCard: React.FC = () => {
   );
 
   // --- Card visibility -----------------------------------------------------
-  if (!latest) return drawer;
+  if (drawerOnly || !latest) return drawer;
   if (dismissedWeek === latest.isoWeek || !shouldShowCard(latest)) {
     return drawer;
   }

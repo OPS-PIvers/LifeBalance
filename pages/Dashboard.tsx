@@ -39,9 +39,8 @@ import { HabitCoachWidget } from '@/components/dashboard/HabitCoachWidget';
 import { KidsChoresWidget } from '@/components/dashboard/KidsChoresWidget';
 import { ActivityFeedWidget } from '@/components/dashboard/ActivityFeedWidget';
 import { PulseStripWidget } from '@/components/dashboard/PulseStripWidget';
-import { WeeklyRecapCard } from '@/components/dashboard/WeeklyRecapCard';
+import { RecapSlot } from '@/components/dashboard/RecapSlot';
 import { SetupChecklistCard } from '@/components/dashboard/SetupChecklistCard';
-import { MoneyRecapCard } from '@/components/dashboard/MoneyRecapCard';
 import { PointRebalanceCard } from '@/components/dashboard/PointRebalanceCard';
 import { CreateChallengePayload, CREDIT_CARD_CATEGORY } from '@/types/schema';
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
@@ -481,18 +480,26 @@ const Dashboard: React.FC = () => {
                 ? <CreditCardActivityWidget key={id} onPayDown={handlePayDown} />
                 : null;
             case 'weeklyRecap':
-              // Weekly recap (Plan 02) — fresh for a few days after the
-              // Sunday generation, dismissible; also hosts the recap detail
-              // drawer (which must stay mounted for the ?recap= push deep
-              // link even when the card itself is hidden).
-              return <WeeklyRecapCard key={id} />;
-            case 'moneyRecap':
-              // Monthly money recap (F-MONEY-06) — budget-vs-actual
-              // close-out, fresh for a few days after the 1st-of-month
-              // generation, dismissible; also hosts the recap detail drawer
-              // (which must stay mounted for the ?moneyrecap= push deep
-              // link even when the card itself is hidden).
-              return <MoneyRecapCard key={id} />;
+            case 'moneyRecap': {
+              // The weekly recap (Plan 02) and monthly money recap
+              // (F-MONEY-06) share ONE Dashboard slot (see RecapSlot) — when
+              // both are fresh, only the newer one renders a card, but both
+              // detail drawers stay mounted for their push deep links. The
+              // slot renders at the position of whichever recap id comes
+              // first in the member's order; the other id contributes its
+              // enablement and renders nothing of its own.
+              const firstRecapId = widgetOrder.find(
+                w => w === 'weeklyRecap' || w === 'moneyRecap'
+              );
+              if (id !== firstRecapId) return null;
+              return (
+                <RecapSlot
+                  key="recapSlot"
+                  weekly={widgetOrder.includes('weeklyRecap')}
+                  money={widgetOrder.includes('moneyRecap')}
+                />
+              );
+            }
             case 'kidsChores':
               // Kids' Chores (parent overview) — self-nulls unless Kid Mode
               // is on and a managed kid has a chore.
