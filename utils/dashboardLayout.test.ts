@@ -3,6 +3,7 @@ import {
   DASHBOARD_WIDGET_IDS,
   DEFAULT_DASHBOARD_WIDGET_ORDER,
   DEFAULT_HIDDEN_DASHBOARD_WIDGETS,
+  resolveHiddenWidgets,
   resolveDashboardOrder,
   getVisibleOrderedWidgetIds,
   moveWidget,
@@ -56,6 +57,24 @@ describe('getVisibleOrderedWidgetIds', () => {
     expect(result).not.toContain('moneyRecap');
     expect(result).not.toContain('kidsChores');
     expect(result.length).toBe(DASHBOARD_WIDGET_IDS.length - 2);
+  });
+});
+
+describe('first toggle from never-customized defaults (Settings path)', () => {
+  // The Settings editor resolves the effective hidden list before toggling,
+  // so a never-customized member's first toggle persists the lean defaults
+  // ± the toggled id — not a bare one-element list.
+  it('re-enabling a default-hidden widget keeps the rest of the defaults hidden', () => {
+    const result = toggleWidgetHidden([...resolveHiddenWidgets(undefined)], 'insight');
+    expect(result).not.toContain('insight');
+    expect(new Set(result)).toEqual(
+      new Set(DEFAULT_HIDDEN_DASHBOARD_WIDGETS.filter(id => id !== 'insight'))
+    );
+  });
+
+  it('hiding a default-visible widget adds it on top of the defaults', () => {
+    const result = toggleWidgetHidden([...resolveHiddenWidgets(undefined)], 'pulseStrip');
+    expect(new Set(result)).toEqual(new Set([...DEFAULT_HIDDEN_DASHBOARD_WIDGETS, 'pulseStrip']));
   });
 });
 

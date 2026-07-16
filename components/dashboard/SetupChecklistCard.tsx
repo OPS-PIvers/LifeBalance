@@ -123,6 +123,10 @@ export const SetupChecklistCard: React.FC = () => {
     setSessionDismissed(true);
   };
 
+  // Guards the collapse math (doneCount / items.length) and an empty Section
+  // if a future config change ever produces zero checklist items.
+  if (items.length === 0) return null;
+
   const doneCount = items.filter((item) => item.done).length;
 
   return (
@@ -153,29 +157,29 @@ export const SetupChecklistCard: React.FC = () => {
             onClick={() => setExpandedOverride(true)}
           />
         ) : (
-        items.map((item) => (
-          <DisclosureRow
-            key={item.id}
-            icon={
-              item.done ? (
-                <CheckCircle2
-                  size={20}
-                  className="text-accent-600 dark:text-accent-400"
-                  aria-hidden="true"
-                />
-              ) : (
-                <Circle size={20} className="text-brand-300 dark:text-brand-600" aria-hidden="true" />
-              )
-            }
-            title={
-              <span className={cn(item.done && 'line-through text-brand-400 dark:text-brand-450')}>
-                {item.title}
-              </span>
-            }
-            subtitle={item.done ? undefined : item.description}
-            onClick={() => navigate(item.route)}
-          />
-        ))
+          items.map((item) => (
+            <DisclosureRow
+              key={item.id}
+              icon={
+                item.done ? (
+                  <CheckCircle2
+                    size={20}
+                    className="text-accent-600 dark:text-accent-400"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <Circle size={20} className="text-brand-300 dark:text-brand-600" aria-hidden="true" />
+                )
+              }
+              title={
+                <span className={cn(item.done && 'line-through text-brand-400 dark:text-brand-450')}>
+                  {item.title}
+                </span>
+              }
+              subtitle={item.done ? undefined : item.description}
+              onClick={() => navigate(item.route)}
+            />
+          ))
         )}
       </SurfaceList>
     </Section>
