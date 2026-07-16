@@ -58,13 +58,13 @@ describe('HabitCoach', () => {
   it('renders empty state when no habits exist', () => {
     mockHouseholdContext.habits = [];
     render(<HabitCoach />);
-    expect(screen.getByText('No Habits Yet')).toBeInTheDocument();
+    expect(screen.getByText('No habits yet')).toBeInTheDocument();
   });
 
   it('renders initial CTA when habits exist', () => {
     render(<HabitCoach />);
-    expect(screen.getByText('Unlock Your Habit Potential')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Analyze My Habits/i })).toBeInTheDocument();
+    expect(screen.getByText('See what your streaks are telling you')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Analyze my habits/i })).toBeInTheDocument();
   });
 
   it('calls analyzeHabitPatterns and displays insights', async () => {
@@ -81,7 +81,7 @@ describe('HabitCoach', () => {
 
     render(<HabitCoach />);
 
-    await user.click(screen.getByRole('button', { name: /Analyze My Habits/i }));
+    await user.click(screen.getByRole('button', { name: /Analyze my habits/i }));
 
     await waitFor(() => {
         expect(screen.getByText('Great Streak!')).toBeInTheDocument();
@@ -99,7 +99,7 @@ describe('HabitCoach', () => {
 
     render(<HabitCoach />);
 
-    await user.click(screen.getByRole('button', { name: /Analyze My Habits/i }));
+    await user.click(screen.getByRole('button', { name: /Analyze my habits/i }));
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('API Error');
