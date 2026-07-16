@@ -7,6 +7,7 @@ import TransactionMasterList from '@/components/budget/TransactionMasterList';
 import MoneyOverview from '@/components/budget/MoneyOverview';
 import SettleUpView from '@/components/transactions/SettleUpView';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import PageHeader from '@/components/ui/PageHeader';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Skeleton, SkeletonText } from '@/components/ui/Skeleton';
@@ -20,9 +21,51 @@ import { preloadOnIdle } from '@/utils/preloadOnIdle';
 const loadBudgetTrends = () => import('@/components/budget/BudgetTrends');
 const BudgetTrends = React.lazy(loadBudgetTrends);
 
-// Allowed Money sub-tabs. Module-level so the array identity is stable and
-// other screens can deep-link via `navigate('/budget', { state: { tab } })`.
-const MONEY_TABS = ['overview', 'calendar', 'subscriptions', 'buckets', 'accounts', 'transactions', 'trends'] as const;
+// Money's IA is 4 top-level tabs (the old 7 overflowed the phone viewport —
+// 2026-07 critique P2), three of which pair two views behind an inline
+// segment toggle. ONE state value holds the full location: the six legacy
+// view keys stay valid and select their group's tab WITH the right segment,
+// so every existing `navigate('/budget', { state: { tab: 'trends' } })`
+// deep-link keeps working unchanged.
+const MONEY_TABS = [
+  'overview',
+  // Activity group ('activity' = its default segment)
+  'activity', 'transactions', 'trends',
+  // Planned group
+  'planned', 'calendar', 'subscriptions',
+  // Balances group
+  'balances', 'buckets', 'accounts',
+] as const;
+
+type MoneyTabValue = (typeof MONEY_TABS)[number];
+type TopTab = 'overview' | 'activity' | 'planned' | 'balances';
+
+/** Collapse any tab value (incl. legacy view keys) to its top-level tab. */
+const topTabOf = (value: string): TopTab => {
+  switch (value) {
+    case 'transactions':
+    case 'trends':
+    case 'activity':
+      return 'activity';
+    case 'calendar':
+    case 'subscriptions':
+    case 'planned':
+      return 'planned';
+    case 'buckets':
+    case 'accounts':
+    case 'balances':
+      return 'balances';
+    default:
+      return 'overview';
+  }
+};
+
+/** The segment each group shows when entered via its top-level trigger. */
+const DEFAULT_SEGMENT: Record<Exclude<TopTab, 'overview'>, MoneyTabValue> = {
+  activity: 'transactions',
+  planned: 'calendar',
+  balances: 'buckets',
+};
 
 const BudgetSkeleton: React.FC = () => (
   <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe" aria-busy="true" aria-live="polite">
@@ -66,8 +109,19 @@ const BudgetSkeleton: React.FC = () => (
 const Budget: React.FC = () => {
   const { isLoading } = useHouseholdCore();
   // Controlled so the toolbar Safe-to-Spend glance / Home Analytics button can
-  // deep-link straight to a tab (Overview / Trends) instead of opening a modal.
-  const [activeTab, setActiveTab] = useDeepLinkTab('overview', MONEY_TABS);
+  // deep-link straight to a view. `activeView` may be a legacy view key
+  // ('trends', 'buckets', …) — the Tabs bar renders its top-level group and
+  // the group's SegmentedControl renders the specific view.
+  const [activeView, setActiveView] = useDeepLinkTab('overview', MONEY_TABS);
+  const activeTab = topTabOf(activeView);
+  // Re-clicking the active group tab resets its segment to the default
+  // (intentional — "tap the active tab to get back to its main view").
+  const selectTab = (value: string) => {
+    const tab = topTabOf(value);
+    setActiveView(tab === 'overview' ? 'overview' : DEFAULT_SEGMENT[tab]);
+  };
+  const segmentOf = (tab: Exclude<TopTab, 'overview'>): MoneyTabValue =>
+    topTabOf(activeView) === tab && activeView !== tab ? (activeView as MoneyTabValue) : DEFAULT_SEGMENT[tab];
   // Global search deep-link (v1.1): scroll-to + briefly flash the specific
   // transaction row selected in SearchOverlay, on top of the tab-level jump.
   const highlightTransactionId = useDeepLinkHighlight();
@@ -85,18 +139,15 @@ const Budget: React.FC = () => {
     <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe">
       <PageHeader title="Money" subtitle="Your accounts, bills, and spending." />
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={selectTab}>
         <div className="px-4">
-          {/* Sub-navigation — unified ui/Tabs. `sm` matches the Habits and Lists
-              in-page tab strips (secondary in-page navigation, not primary nav). */}
+          {/* Sub-navigation — 4 top-level groups so every destination is on
+              screen at 375px (was 7 tabs with two off-screen). */}
           <TabsList className="mb-6">
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="calendar">Calendar</TabsTrigger>
-            <TabsTrigger value="subscriptions">Subscriptions</TabsTrigger>
-            <TabsTrigger value="buckets">Buckets</TabsTrigger>
-            <TabsTrigger value="accounts">Accounts</TabsTrigger>
-            <TabsTrigger value="transactions">Transactions</TabsTrigger>
-            <TabsTrigger value="trends">Trends</TabsTrigger>
+            <TabsTrigger value="activity">Activity</TabsTrigger>
+            <TabsTrigger value="planned">Planned</TabsTrigger>
+            <TabsTrigger value="balances">Balances</TabsTrigger>
           </TabsList>
 
           {/* View container */}
@@ -104,35 +155,70 @@ const Budget: React.FC = () => {
             <TabsContent value="overview">
               <MoneyOverview />
             </TabsContent>
-            <TabsContent value="calendar">
-              <BudgetCalendar />
-            </TabsContent>
-            <TabsContent value="subscriptions">
-              <SubscriptionsView />
-            </TabsContent>
-            <TabsContent value="buckets">
-              <BudgetBuckets />
-            </TabsContent>
-            <TabsContent value="accounts">
-              <div className="space-y-6">
-                <BudgetAccounts />
-                <SettleUpView />
+            <TabsContent value="activity">
+              <div className="space-y-4">
+                <SegmentedControl
+                  name="Activity view"
+                  size="sm"
+                  options={[
+                    { value: 'transactions', label: 'Transactions' },
+                    { value: 'trends', label: 'Trends' },
+                  ]}
+                  value={segmentOf('activity')}
+                  onChange={setActiveView}
+                />
+                {segmentOf('activity') === 'transactions' ? (
+                  <TransactionMasterList highlightId={highlightTransactionId} />
+                ) : (
+                  <Suspense
+                    fallback={
+                      <div className="space-y-6" aria-busy="true">
+                        <Skeleton className="h-80 w-full rounded-2xl" />
+                        <Skeleton className="h-56 w-full rounded-2xl" />
+                      </div>
+                    }
+                  >
+                    <BudgetTrends />
+                  </Suspense>
+                )}
               </div>
             </TabsContent>
-            <TabsContent value="transactions">
-              <TransactionMasterList highlightId={highlightTransactionId} />
+            <TabsContent value="planned">
+              <div className="space-y-4">
+                <SegmentedControl
+                  name="Planned view"
+                  size="sm"
+                  options={[
+                    { value: 'calendar', label: 'Calendar' },
+                    { value: 'subscriptions', label: 'Subscriptions' },
+                  ]}
+                  value={segmentOf('planned')}
+                  onChange={setActiveView}
+                />
+                {segmentOf('planned') === 'calendar' ? <BudgetCalendar /> : <SubscriptionsView />}
+              </div>
             </TabsContent>
-            <TabsContent value="trends">
-              <Suspense
-                fallback={
-                  <div className="space-y-6" aria-busy="true">
-                    <Skeleton className="h-80 w-full rounded-2xl" />
-                    <Skeleton className="h-56 w-full rounded-2xl" />
+            <TabsContent value="balances">
+              <div className="space-y-4">
+                <SegmentedControl
+                  name="Balances view"
+                  size="sm"
+                  options={[
+                    { value: 'buckets', label: 'Buckets' },
+                    { value: 'accounts', label: 'Accounts' },
+                  ]}
+                  value={segmentOf('balances')}
+                  onChange={setActiveView}
+                />
+                {segmentOf('balances') === 'buckets' ? (
+                  <BudgetBuckets />
+                ) : (
+                  <div className="space-y-6">
+                    <BudgetAccounts />
+                    <SettleUpView />
                   </div>
-                }
-              >
-                <BudgetTrends />
-              </Suspense>
+                )}
+              </div>
             </TabsContent>
           </div>
         </div>

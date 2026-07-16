@@ -42,11 +42,14 @@ test.describe('Transaction review drawer (Test Mode, stub seed)', () => {
 
     // Bucket progress: Entertainment now shows the verified spend.
     await bottomNav(page).getByRole('link', { name: 'Money', exact: true }).click();
-    await page.getByRole('tab', { name: 'Buckets' }).click();
+    // Buckets is the default segment of the Balances tab (Money IA is 4
+    // top-level tabs since the 2026-07 consolidation).
+    await page.getByRole('tab', { name: 'Balances' }).click();
     await expect(page.getByText(usd(STUB_AMOUNT), { exact: true })).toBeVisible();
 
     // Master list: the row exists and is no longer marked Pending.
-    await page.getByRole('tab', { name: 'Transactions' }).click();
+    // (Transactions is the default segment of the Activity tab.)
+    await page.getByRole('tab', { name: 'Activity' }).click();
     const row = page.getByText('Apple Pay', { exact: true });
     await expect(row).toBeVisible();
     await expect(page.getByText('Pending', { exact: true })).not.toBeVisible();
