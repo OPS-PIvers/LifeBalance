@@ -340,7 +340,7 @@ export function makeUpdateTransactionCategory(deps: {
     category: string,
     relatedHabitIds?: string[],
     accountId?: string | null,
-    overrides?: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean; creditPayment?: boolean },
+    overrides?: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean; creditPayment?: boolean; isRecurring?: boolean },
   ) => {
     if (!householdId || !currentUser) return;
 
@@ -433,6 +433,10 @@ export function makeUpdateTransactionCategory(deps: {
       // truthy guard, editedPayPeriodId is only computed when a date is present.
       ...(overrides?.date ? { date: overrides.date, payPeriodId: editedPayPeriodId } : {}),
       ...(overrides?.clearNeedsAmount ? { needsAmount: false } : {}),
+      // The review drawer can flag the spend as recurring in the same verify
+      // (the caller also creates the subscription CalendarItem). Only ever sent
+      // as `true` — an untouched toggle leaves the stored value alone.
+      ...(overrides?.isRecurring ? { isRecurring: true } : {}),
       // Persist-only-when-true convention (matches addTransaction): an explicit
       // false override removes a stored flag rather than writing `false`.
       ...(overrides?.creditPayment !== undefined

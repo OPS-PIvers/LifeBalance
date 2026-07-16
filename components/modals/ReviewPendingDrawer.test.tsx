@@ -5,6 +5,7 @@ import type { Transaction } from '@/types/schema';
 
 const mockUpdateCategory = vi.fn(() => Promise.resolve());
 const mockDeleteTransaction = vi.fn(() => Promise.resolve());
+const mockAddCalendarItem = vi.fn(() => Promise.resolve());
 
 // ReviewPendingDrawer renders TransactionReviewForm, which consumes
 // useFinance/useGamification directly. Mocking these two is sufficient.
@@ -15,6 +16,7 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
     transactions: [],
     updateTransactionCategory: mockUpdateCategory,
     deleteTransaction: mockDeleteTransaction,
+    addCalendarItem: mockAddCalendarItem,
   }),
   useGamification: () => ({ habits: [] }),
 }));
@@ -82,6 +84,35 @@ describe('ReviewPendingDrawer', () => {
       undefined,
       expect.objectContaining({ amount: 45.5, clearNeedsAmount: true }),
     );
+  });
+
+  it('resets the Recurring toggle between review items and only flags the item it was ON for', async () => {
+    const transactions = [tx('t1', 'Peacock Premium'), tx('t2', 'Target')];
+    render(<ReviewPendingDrawer transactions={transactions} isOpen onClose={vi.fn()} />);
+
+    // Flip Recurring ON for the first card and approve it.
+    fireEvent.click(screen.getByRole('checkbox', { name: /recurring transaction/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Approve Transaction/ }));
+
+    await waitFor(() => expect(mockUpdateCategory).toHaveBeenCalledTimes(1));
+    expect(mockUpdateCategory).toHaveBeenCalledWith(
+      't1', 'Groceries', [], undefined,
+      expect.objectContaining({ isRecurring: true }),
+    );
+    await waitFor(() => expect(mockAddCalendarItem).toHaveBeenCalledTimes(1));
+    expect(mockAddCalendarItem).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Peacock Premium', frequency: 'monthly', isSubscription: true }),
+    );
+
+    // The next card remounts the form — the toggle is OFF again.
+    await waitFor(() => expect(screen.getByDisplayValue('Target')).toBeInTheDocument());
+    expect(screen.getByRole('checkbox', { name: /recurring transaction/i })).not.toBeChecked();
+
+    // Approving the second card untouched sends no overrides / no calendar item.
+    fireEvent.click(screen.getByRole('button', { name: /Approve Transaction/ }));
+    await waitFor(() => expect(mockUpdateCategory).toHaveBeenCalledTimes(2));
+    expect(mockUpdateCategory).toHaveBeenLastCalledWith('t2', 'Groceries', [], undefined, undefined);
+    expect(mockAddCalendarItem).toHaveBeenCalledTimes(1);
   });
 
   it('skip advances without verifying; finishing the last card closes the drawer', async () => {

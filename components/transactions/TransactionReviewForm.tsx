@@ -3,6 +3,7 @@ import { Check, ChevronDown, Copy, Sparkles, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import { Transaction, CREDIT_CARD_CATEGORY, INCOME_CATEGORY } from '@/types/schema';
+import { Switch } from '@/components/ui/Switch';
 import { getAutoSelectedHabitIds, suggestHabitsForTransaction } from '@/utils/habitSuggestions';
 import { suggestAccountIdForTransaction, suggestCategoryForTransaction } from '@/utils/actionQueueSmart';
 import { buildTransactionCategoryOptions } from '@/utils/categories';
@@ -73,7 +74,7 @@ export interface TransactionReviewFormProps {
 const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transaction, onDone, onDeleted }) => {
   const {
     accounts, buckets, transactions,
-    updateTransactionCategory, deleteTransaction,
+    updateTransactionCategory, deleteTransaction, addCalendarItem,
     mergeTransactions, keepBothTransactions,
   } = useFinance();
   const { habits } = useGamification();
@@ -137,6 +138,9 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
   }
   const [showAllHabits, setShowAllHabits] = useState(false);
   const [creditPayment, setCreditPayment] = useState(() => transaction.creditPayment ?? false);
+  // Recurring (subscription) toggle — defaults OFF; the host drawer remounts
+  // the form per transaction (keyed), so it resets between review items.
+  const [isRecurring, setIsRecurring] = useState(false);
 
   // Credit-tagged transactions carry no budget category (credit spend is
   // tracked on the card, not against buckets), so the category chips hide and
@@ -145,6 +149,11 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
     () => accounts.find(a => a.id === accountId)?.type === 'credit',
     [accounts, accountId]
   );
+
+  // A credit-card PAYMENT is a transfer, not recurring spend — the Recurring
+  // (subscription) toggle is hidden/ignored in that mode (same rationale as
+  // the manual-capture form).
+  const isCreditPaymentMode = isSelectedAccountCredit && creditPayment;
 
   // Smart habit suggestions follow the live merchant field (so editing the
   // merchant re-scores suggestions, matching the manual-capture path).
@@ -180,7 +189,7 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
     // Only send the fields that actually changed. Passing `overrides.amount`
     // makes the context use it (not the stale local amount, which is 0 for a
     // stub) for the checking-balance delta, so the entered amount debits once.
-    const overrides: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean; creditPayment?: boolean } = {};
+    const overrides: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean; creditPayment?: boolean; isRecurring?: boolean } = {};
     if (transaction.needsAmount || parsedAmount !== transaction.amount) overrides.amount = parsedAmount;
     if (trimmedMerchant !== transaction.merchant) overrides.merchant = trimmedMerchant;
     // Only send a date override for a real, non-empty change — an emptied date
@@ -193,6 +202,11 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
     // the common case stays a minimal write.
     const desiredCreditPayment = isSelectedAccountCredit && creditPayment;
     if (desiredCreditPayment !== (transaction.creditPayment ?? false)) overrides.creditPayment = desiredCreditPayment;
+    // Recurring ON flags the transaction itself; the subscription CalendarItem
+    // is created after a successful approve (below). Never for a credit-card
+    // payment — that's a transfer, not a subscription.
+    const markRecurring = isRecurring && !isCreditPaymentMode;
+    if (markRecurring) overrides.isRecurring = true;
     const hasOverrides = Object.keys(overrides).length > 0;
 
     // Selecting "No account" on a previously-tagged transaction is an EXPLICIT
@@ -207,6 +221,33 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
         accountIdArg,
         hasOverrides ? overrides : undefined
       );
+
+      // Recurring ON ⇒ also create a monthly recurring expense on the calendar,
+      // flagged as a subscription so it appears on the Subscriptions tab. Uses
+      // the (possibly user-edited) merchant/amount/date/account values, so a
+      // noisy bank-alert merchant can be cleaned up before it becomes the title.
+      if (markRecurring) {
+        try {
+          await addCalendarItem({
+            id: crypto.randomUUID(),
+            title: trimmedMerchant,
+            amount: parsedAmount,
+            date: date || transaction.date,
+            type: 'expense',
+            isPaid: false,
+            isRecurring: true,
+            frequency: 'monthly',
+            isSubscription: true,
+            ...(accountId ? { accountId } : {}),
+          });
+        } catch (calendarError) {
+          // The approve itself succeeded — surface the partial failure without
+          // blocking the advance (mirrors the manual-capture form).
+          console.error('Failed to create recurring subscription entry:', calendarError);
+          toast.error('Approved, but the recurring subscription entry failed.');
+        }
+      }
+
       // Success toast is emitted by the context mutation.
       onDone();
     } catch (error) {
@@ -458,6 +499,24 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
           </div>
         )}
       </div>
+
+      {/* Recurring (subscription) toggle — hidden for a credit-card PAYMENT,
+          that's a transfer, not subscription-style recurring spend. */}
+      {!isCreditPaymentMode && (
+        <div className="p-4 bg-brand-50 dark:bg-brand-700/50 rounded-xl border border-brand-100 dark:border-brand-700 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span id="review-recurring-label" className="text-sm font-medium text-brand-700 dark:text-brand-200">Recurring Transaction</span>
+            <Switch
+              checked={isRecurring}
+              onCheckedChange={setIsRecurring}
+              aria-labelledby="review-recurring-label"
+            />
+          </div>
+          <p className="text-xs text-brand-400 dark:text-brand-400">
+            Creates a monthly entry on your Subscriptions tab.
+          </p>
+        </div>
+      )}
 
       {/* Approve CTA */}
       <Button

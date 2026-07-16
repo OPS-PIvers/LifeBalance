@@ -899,7 +899,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     category: string,
     relatedHabitIds?: string[],
     accountId?: string | null,
-    overrides?: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean; creditPayment?: boolean },
+    overrides?: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean; creditPayment?: boolean; isRecurring?: boolean },
   ) => {
     const clearAccount = accountId === null;
     // Balance parity (computed OUTSIDE the setState updaters — StrictMode
@@ -931,6 +931,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         ...(overrides?.merchant !== undefined ? { merchant: overrides.merchant } : {}),
         ...(overrides?.date ? { date: overrides.date } : {}),
         ...(overrides?.clearNeedsAmount ? { needsAmount: false } : {}),
+        ...(overrides?.isRecurring ? { isRecurring: true } : {}),
       };
       // `null` explicitly clears a previously-tagged account.
       if (clearAccount) delete next.accountId;

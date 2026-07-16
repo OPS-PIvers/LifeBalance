@@ -10,6 +10,7 @@ const {
   mockDeleteTransaction,
   mockMergeTransactions,
   mockKeepBothTransactions,
+  mockAddCalendarItem,
   mockOnDone,
   mockToast,
 } = vi.hoisted(() => ({
@@ -17,6 +18,7 @@ const {
   mockDeleteTransaction: vi.fn((..._args: unknown[]) => Promise.resolve()),
   mockMergeTransactions: vi.fn((..._args: unknown[]) => Promise.resolve()),
   mockKeepBothTransactions: vi.fn((..._args: unknown[]) => Promise.resolve()),
+  mockAddCalendarItem: vi.fn((..._args: unknown[]) => Promise.resolve()),
   mockOnDone: vi.fn(),
   mockToast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 }));
@@ -43,6 +45,7 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
     deleteTransaction: mockDeleteTransaction,
     mergeTransactions: mockMergeTransactions,
     keepBothTransactions: mockKeepBothTransactions,
+    addCalendarItem: mockAddCalendarItem,
   }),
   useGamification: () => ({ habits: mockHabits }),
 }));
@@ -462,6 +465,89 @@ describe('TransactionReviewForm', () => {
       );
 
       expect(screen.queryByText(/pre-selected from your history/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('recurring (subscription) toggle', () => {
+    it('renders the toggle defaulted OFF and approves without any recurring side effects when untouched', async () => {
+      const user = userEvent.setup();
+      render(<TransactionReviewForm transaction={baseTx} onDone={mockOnDone} />);
+
+      const toggle = screen.getByRole('checkbox', { name: /recurring transaction/i });
+      expect(toggle).not.toBeChecked();
+      expect(screen.getByText(/creates a monthly entry on your subscriptions tab/i)).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      const call = mockUpdateTransactionCategory.mock.calls[0]!;
+      expect(call[4]).toBeUndefined();
+      expect(mockAddCalendarItem).not.toHaveBeenCalled();
+    });
+
+    it('approving with the toggle ON sets isRecurring and creates a monthly subscription calendar item from the edited values', async () => {
+      const user = userEvent.setup();
+      render(<TransactionReviewForm transaction={baseTx} onDone={mockOnDone} />);
+
+      // Clean up the noisy bank-alert merchant first — the calendar title must
+      // use the edited value.
+      const merchantInput = screen.getByLabelText(/merchant/i);
+      await user.clear(merchantInput);
+      await user.type(merchantInput, 'Peacock Premium');
+
+      await user.click(screen.getByRole('checkbox', { name: /recurring transaction/i }));
+      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+
+      const call = mockUpdateTransactionCategory.mock.calls[0]!;
+      expect(call[4]).toMatchObject({ isRecurring: true, merchant: 'Peacock Premium' });
+
+      expect(mockAddCalendarItem).toHaveBeenCalledTimes(1);
+      expect(mockAddCalendarItem.mock.calls[0]![0]).toMatchObject({
+        title: 'Peacock Premium',
+        amount: 25,
+        date: '2026-06-10',
+        type: 'expense',
+        isPaid: false,
+        isRecurring: true,
+        frequency: 'monthly',
+        isSubscription: true,
+      });
+      expect(mockOnDone).toHaveBeenCalled();
+    });
+
+    it('a calendar-creation failure after a successful approve toasts a partial error but still advances', async () => {
+      const user = userEvent.setup();
+      mockAddCalendarItem.mockRejectedValueOnce(new Error('offline'));
+      render(<TransactionReviewForm transaction={baseTx} onDone={mockOnDone} />);
+
+      await user.click(screen.getByRole('checkbox', { name: /recurring transaction/i }));
+      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+
+      expect(mockUpdateTransactionCategory).toHaveBeenCalledTimes(1);
+      expect(mockToast.error).toHaveBeenCalledWith('Approved, but the recurring subscription entry failed.');
+      expect(mockOnDone).toHaveBeenCalled();
+    });
+
+    it('hides the toggle in credit-card Payment mode and ignores a prior ON state on approve', async () => {
+      const user = userEvent.setup();
+      mockAccounts.push(
+        { id: 'chk', name: 'Checking', type: 'checking' },
+        { id: 'cc', name: 'Paul Visa', type: 'credit' },
+      );
+      render(
+        <TransactionReviewForm
+          transaction={{ ...baseTx, accountId: 'cc', category: '' }}
+          onDone={mockOnDone}
+        />
+      );
+
+      // Charge mode: toggle visible. Flip it ON, then switch to Payment mode.
+      await user.click(screen.getByRole('checkbox', { name: /recurring transaction/i }));
+      await user.click(screen.getByRole('radio', { name: 'Payment' }));
+      expect(screen.queryByRole('checkbox', { name: /recurring transaction/i })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      const call = mockUpdateTransactionCategory.mock.calls[0]!;
+      expect((call[4] as { isRecurring?: boolean } | undefined)?.isRecurring).toBeUndefined();
+      expect(mockAddCalendarItem).not.toHaveBeenCalled();
     });
   });
 });
