@@ -693,13 +693,20 @@ describe('ToDosPage', () => {
       expect(screen.getByText('Immediate')).toBeInTheDocument();
     });
 
-    it('shows a rotate prompt in grid arrangement while portrait', () => {
+    it('falls back to stacked quadrants (with a rotate hint) in grid arrangement while portrait', () => {
       localStorage.setItem(ARRANGEMENT_KEY, 'grid');
       setOrientation(false);
-      setup();
+      setup(quadrantTodos);
 
-      expect(screen.getByText('Rotate your phone')).toBeInTheDocument();
+      // Tasks stay visible via the matrix sections instead of hiding behind a
+      // full-screen rotate wall; an inline hint explains how to get the grid.
+      expect(screen.getByText(/Rotate your phone for the 2×2 grid/)).toBeInTheDocument();
+      expect(screen.getByText('Do First')).toBeInTheDocument();
+      expect(screen.getByText('Do First Task')).toBeInTheDocument();
+      expect(screen.queryByTestId('grid-overlay')).not.toBeInTheDocument();
       expect(screen.queryByTestId('grid-cell-do')).not.toBeInTheDocument();
+      // The stored preference is untouched — landscape will restore the grid.
+      expect(localStorage.getItem(ARRANGEMENT_KEY)).toBe('grid');
     });
 
     it('renders all four quadrant cells with correct task placement in landscape', () => {
@@ -795,11 +802,12 @@ describe('ToDosPage', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Edit task: Do First Task' }));
       expect(screen.getByText('Edit task')).toBeInTheDocument();
 
-      // Rotate to portrait: the overlay unmounts (rotate prompt shows) but the
-      // drawer is still open — the page-level latch must HOLD the lock.
+      // Rotate to portrait: the overlay unmounts (stacked-quadrant fallback
+      // shows) but the drawer is still open — the page-level latch must HOLD
+      // the lock.
       rotateTo(false);
       expect(screen.queryByTestId('grid-overlay')).not.toBeInTheDocument();
-      expect(screen.getByText('Rotate your phone')).toBeInTheDocument();
+      expect(screen.getByText(/Rotate your phone for the 2×2 grid/)).toBeInTheDocument();
       expect(document.body.style.overflow).toBe('hidden');
 
       // Close the drawer: now everything is closed — lock fully released.

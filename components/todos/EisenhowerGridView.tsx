@@ -1,24 +1,23 @@
 import React, { useEffect, useRef } from 'react';
-import { Check, Star, X, Smartphone } from 'lucide-react';
+import { Check, Star, X } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, startOfToday } from 'date-fns';
 import { QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhower';
 import { ToDo } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { HapticCheck } from '@/components/ui/HapticCheck';
 import { Button } from '@/components/ui/Button';
-import EmptyState from '@/components/ui/EmptyState';
 import { cn } from '@/utils/cn';
 import { type SectionColor, dateColorMap, sectionDotColors, QUADRANT_SECTIONS } from './todoDisplay';
 
 // Extracted from pages/ToDosPage.tsx (Plan 27) — the grid/landscape render
-// branch (the `effectiveArrangement === 'grid'` case, moved verbatim), plus
-// its own GridOverlay/GridCell/GridChip subcomponents which are used only
-// here.
+// branch (the `effectiveArrangement === 'grid'` case), plus its own
+// GridOverlay/GridCell/GridChip subcomponents which are used only here.
+// Landscape-only by contract: in portrait the page's effectiveArrangement
+// falls back to the stacked 'matrix' sections instead of rendering this,
+// so tasks are never hidden behind a rotate prompt.
 
 export interface EisenhowerGridViewProps {
   quadrants: Record<Quadrant, ToDo[]>;
-  /** The 2×2 grid needs landscape; the page's isLandscape hook drives this. */
-  isLandscape: boolean;
   onComplete: (id: string) => void;
   onEdit: (todo: ToDo) => void;
   onToggleImportant: (todo: ToDo) => void;
@@ -32,30 +31,19 @@ export interface EisenhowerGridViewProps {
   escapeDisabled: boolean;
 }
 
-export const EisenhowerGridView: React.FC<EisenhowerGridViewProps> = ({ quadrants, isLandscape, onComplete, onEdit, onToggleImportant, onExit, escapeDisabled }) => (
-  isLandscape ? (
-    /* True 2×2 Eisenhower grid — auto-immersive full-screen overlay.
-       In landscape (~375px tall) the toolbar + tabs + bottom nav left
-       the in-page grid an unusable sliver, so the grid takes the whole
-       viewport instead; ✕ (or Escape / rotating away) leaves it. */
-    <GridOverlay
-      quadrants={quadrants}
-      onComplete={onComplete}
-      onEdit={onEdit}
-      onToggleImportant={onToggleImportant}
-      onExit={onExit}
-      escapeDisabled={escapeDisabled}
-    />
-  ) : (
-    /* Grid arrangement in portrait: friendly rotate prompt. The
-       orientation hook re-renders the instant the device rotates. */
-    <EmptyState
-      variant="surface"
-      icon={<Smartphone size={28} className="rotate-90" aria-hidden="true" />}
-      title="Rotate your phone"
-      description="The Eisenhower grid needs landscape to show all four quadrants side by side."
-    />
-  )
+export const EisenhowerGridView: React.FC<EisenhowerGridViewProps> = ({ quadrants, onComplete, onEdit, onToggleImportant, onExit, escapeDisabled }) => (
+  /* True 2×2 Eisenhower grid — auto-immersive full-screen overlay.
+     In landscape (~375px tall) the toolbar + tabs + bottom nav left
+     the in-page grid an unusable sliver, so the grid takes the whole
+     viewport instead; ✕ (or Escape / rotating away) leaves it. */
+  <GridOverlay
+    quadrants={quadrants}
+    onComplete={onComplete}
+    onEdit={onEdit}
+    onToggleImportant={onToggleImportant}
+    onExit={onExit}
+    escapeDisabled={escapeDisabled}
+  />
 );
 
 interface GridOverlayProps {
