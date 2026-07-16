@@ -71,7 +71,10 @@ function toDollars(captured: string): number {
  */
 const LABELED_AMOUNT_PATTERNS: readonly RegExp[] = [
   /purchase of\s*\$\s*([\d,]+\.\d{2})(?!\d)/i,
-  /\b(?:amount|total|charged?)\s*:?\s*\$\s*([\d,]+\.\d{2})(?!\d)/i,
+  // WF debit "exceeded preset amount" alerts write "Purchase amount 3.20 USD"
+  // — labeled, but with NO dollar sign and a trailing currency code.
+  /\b(?:purchase\s+)?amount\s*:?\s*\$?\s*([\d,]+\.\d{2})(?!\d)(?:\s*USD)?/i,
+  /\b(?:total|charged?)\s*:?\s*\$\s*([\d,]+\.\d{2})(?!\d)/i,
   /\b(?:for|of)\s+\$\s*([\d,]+\.\d{2})(?!\d)/i,
 ];
 
@@ -84,14 +87,17 @@ function extractAmount(text: string): number | null {
     const m = text.match(pattern);
     if (m?.[1]) return toDollars(m[1]);
   }
-  // Generic fallback: first "$x.xx" not preceded by threshold wording.
-  const generic = /\$\s*([\d,]+\.\d{2})(?!\d)/g;
-  let g: RegExpExecArray | null;
-  while ((g = generic.exec(text)) !== null) {
-    const before = text.slice(Math.max(0, g.index - 30), g.index);
-    if (!THRESHOLD_CONTEXT.test(before)) {
-      const captured = g[1];
-      if (captured) return toDollars(captured);
+  // Generic fallbacks: first "$x.xx" (then "x.xx USD") not preceded by
+  // threshold wording.
+  const generics = [/\$\s*([\d,]+\.\d{2})(?!\d)/g, /(?<!\d)([\d,]+\.\d{2})\s*USD\b/gi];
+  for (const generic of generics) {
+    let g: RegExpExecArray | null;
+    while ((g = generic.exec(text)) !== null) {
+      const before = text.slice(Math.max(0, g.index - 30), g.index);
+      if (!THRESHOLD_CONTEXT.test(before)) {
+        const captured = g[1];
+        if (captured) return toDollars(captured);
+      }
     }
   }
   return null;
@@ -106,11 +112,19 @@ function extractAmount(text: string): number | null {
  * a sentence-ending period, or a newline. A bare "." inside a name like
  * "Amazon.com" is kept — only ". " / "." at end-of-text terminates.
  */
-const MERCHANT_STOP =
-  "(?=\\s+on\\s+(?:\\d|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)" +
-  "|\\s+with\\s|\\s+using\\s|,\\s|\\.\\s|\\.$|\\n|$)";
+const MERCHANT_STOP_ALTS =
+  "\\s+on\\s+(?:\\d|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)" +
+  "|\\s+with\\s|\\s+using\\s|,\\s|\\.\\s|\\.$|\\n|$";
+const MERCHANT_STOP = `(?=${MERCHANT_STOP_ALTS})`;
 
 const MERCHANT_PATTERNS: readonly RegExp[] = [
+  // WF debit "exceeded preset amount" alerts: "Merchant details at
+  // CPI*THEISEN VENDING INC in GOLDEN VALLEY UNITED STATES" — capture the
+  // name only, stopping before the " in CITY COUNTRY" location tail.
+  new RegExp(
+    `merchant details\\s*:?\\s*(?:at\\s+)?([^\\n]+?)(?=\\s+in\\s+[A-Z]|${MERCHANT_STOP_ALTS})`,
+    "i"
+  ),
   new RegExp(`merchant\\s*:\\s*([^\\n]+?)${MERCHANT_STOP}`, "i"),
   // Table-layout emails (and text selections copied from them) render the
   // label and value as separate cells, which tag-stripping turns into

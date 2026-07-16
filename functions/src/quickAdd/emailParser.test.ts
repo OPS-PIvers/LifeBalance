@@ -34,7 +34,30 @@ TST* ANNA MARIA GENERAL S in ANNA MARIA, FL, USA
 Date
 07/03/2026`;
 
+// The Wells Fargo debit "exceeded preset amount" alert (observed 2026-07-15):
+// no dollar sign on the amount ("3.20 USD"), and the merchant labeled as
+// "Merchant details at X in CITY COUNTRY". The threshold sentence uses "$1".
+const PRESET_AMOUNT_EMAIL = `A card purchase exceeded your preset amount
+
+You asked us to let you know whenever your Wells Fargo Debit Card was used to make a purchase that exceeds $1.
+
+Card ending in 2115
+Purchase amount 3.20 USD
+Merchant details at CPI*THEISEN VENDING INC in GOLDEN VALLEY UNITED STATES
+Date 07/15/2026 03:22 PM US/Pacific
+
+For transaction details and your current balance, sign on and select this account.`;
+
 describe("parseTransactionEmail", () => {
+  it("parses the debit 'exceeded preset amount' format (no $, 'Merchant details at')", () => {
+    expect(parseTransactionEmail(PRESET_AMOUNT_EMAIL)).toEqual({
+      amount: 3.2,
+      merchant: "CPI*THEISEN VENDING INC",
+      cardLast4: "2115",
+      date: "2026-07-15",
+    });
+  });
+
   it("parses the Wells Fargo credit alert format (labeled merchant)", () => {
     expect(parseTransactionEmail(CREDIT_EMAIL)).toEqual({
       amount: 6.02,
