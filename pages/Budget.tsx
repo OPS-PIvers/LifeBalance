@@ -89,7 +89,7 @@ const Budget: React.FC = () => {
         <div className="px-4">
           {/* Sub-navigation — unified ui/Tabs. `sm` matches the Habits and Lists
               in-page tab strips (secondary in-page navigation, not primary nav). */}
-          <TabsList size="sm" className="mb-6">
+          <TabsList className="mb-6">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="calendar">Calendar</TabsTrigger>
             <TabsTrigger value="subscriptions">Subscriptions</TabsTrigger>

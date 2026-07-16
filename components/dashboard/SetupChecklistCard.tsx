@@ -125,7 +125,7 @@ export const SetupChecklistCard: React.FC = () => {
       action={
         <button
           onClick={dismiss}
-          className="p-1 min-h-6 text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300"
+          className="flex items-center justify-center min-h-11 min-w-11 -m-3 text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300 rounded-full"
           aria-label="Dismiss setup checklist"
         >
           <X size={16} />

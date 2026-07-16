@@ -132,18 +132,47 @@ export const TabsList: React.FC<
     }
   };
 
+  // Overflow affordance: on narrow screens a long tab strip scrolls, but with
+  // no scrollbar (`no-scrollbar`) nothing hinted that more tabs exist offscreen
+  // (e.g. Money's 7 tabs cut off after "Buckets"). Fade the clipped edge(s).
+  const scrollerRef = React.useRef<HTMLDivElement>(null);
+  const [overflow, setOverflow] = React.useState({ left: false, right: false });
+  const updateOverflow = React.useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const left = el.scrollLeft > 2;
+    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
+    setOverflow(prev => (prev.left === left && prev.right === right ? prev : { left, right }));
+  }, []);
+  React.useEffect(() => {
+    updateOverflow();
+    const el = scrollerRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(updateOverflow);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [updateOverflow]);
+
+  const fadeBase =
+    'pointer-events-none absolute inset-y-0 w-8 rounded-xl from-brand-100 dark:from-brand-800 to-transparent transition-opacity duration-(--duration-fast) ease-(--ease-standard)';
+
   return (
     <TabsSizeContext.Provider value={size}>
-      <div
-        className={cn(
-          'bg-brand-100 dark:bg-brand-800 p-1 rounded-xl flex flex-nowrap gap-1 overflow-x-auto no-scrollbar border border-brand-200 dark:border-brand-700',
-          className
-        )}
-        role="tablist"
-        onKeyDown={handleKeyDown}
-        {...rest}
-      >
-        {children}
+      {/* Caller className lands on the wrapper (layout: margins, inline-flex)
+          so the edge fades always hug the pill itself. */}
+      <div className={cn('relative', className)}>
+        <div
+          ref={scrollerRef}
+          onScroll={updateOverflow}
+          className="bg-brand-100 dark:bg-brand-800 p-1 rounded-xl flex flex-nowrap gap-1 overflow-x-auto no-scrollbar border border-brand-200 dark:border-brand-700"
+          role="tablist"
+          onKeyDown={handleKeyDown}
+          {...rest}
+        >
+          {children}
+        </div>
+        <div aria-hidden="true" className={cn(fadeBase, 'left-0 bg-gradient-to-r', overflow.left ? 'opacity-100' : 'opacity-0')} />
+        <div aria-hidden="true" className={cn(fadeBase, 'right-0 bg-gradient-to-l', overflow.right ? 'opacity-100' : 'opacity-0')} />
       </div>
     </TabsSizeContext.Provider>
   );

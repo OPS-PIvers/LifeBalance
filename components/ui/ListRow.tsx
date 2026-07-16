@@ -80,7 +80,9 @@ export const ListRow: React.FC<ListRowProps> = ({
             aria-label={menu.ariaLabel}
             aria-haspopup={menu.hasPopup ?? 'menu'}
             aria-expanded={menu.expanded}
-            className="p-2 text-brand-300 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300 rounded-full hover:bg-brand-100 dark:hover:bg-brand-700/50 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+            // min 44px hit target; the negative margin keeps the rail's visual
+            // footprint at the previous 32px so row heights don't change.
+            className="flex items-center justify-center min-w-11 min-h-11 -m-1.5 text-brand-300 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300 rounded-full hover:bg-brand-100 dark:hover:bg-brand-700/50 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
           >
             <MoreVertical size={16} />
           </button>

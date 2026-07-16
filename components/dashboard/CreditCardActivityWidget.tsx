@@ -110,7 +110,9 @@ export const CreditCardActivityWidget: React.FC<CreditCardActivityWidgetProps> =
                 <button
                   type="button"
                   onClick={() => onPayDown(account.id)}
-                  className="shrink-0 inline-flex items-center gap-1 rounded-full bg-money-bgPos dark:bg-money-pos/15 px-3 py-1.5 text-xs font-semibold text-money-pos dark:text-money-posDark border border-money-pos/30 active:scale-95 transition-transform duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-money-pos/40"
+                  // before:-inset-y-2 grows the tap area to ~44px without
+                  // changing the chip's visual size.
+                  className="relative before:absolute before:-inset-y-2 before:-inset-x-1 before:content-[''] shrink-0 inline-flex items-center gap-1 rounded-full bg-money-bgPos dark:bg-money-pos/15 px-3 py-1.5 text-xs font-semibold text-money-pos dark:text-money-posDark border border-money-pos/30 active:scale-95 transition-transform duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-money-pos/40"
                 >
                   <ArrowDownCircle size={14} aria-hidden="true" />
                   Pay down

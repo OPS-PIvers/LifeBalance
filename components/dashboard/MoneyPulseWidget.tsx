@@ -52,7 +52,10 @@ export const MoneyPulseWidget: React.FC = () => {
     <Section
       title="Money pulse"
       action={
-        <SectionActionLink to="/budget" state={{ tab: 'transactions' }}>View money</SectionActionLink>
+        // The link deep-links to Money → Transactions; "View money" reads as a
+        // no-op when this widget is reused ON the Money page, so name the
+        // destination tab instead.
+        <SectionActionLink to="/budget" state={{ tab: 'transactions' }}>All transactions</SectionActionLink>
       }
     >
       <SurfaceList>

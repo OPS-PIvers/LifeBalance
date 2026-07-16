@@ -28,7 +28,7 @@ export const CategorySpendWidget: React.FC = () => {
     <Section
       title="Top spending this month"
       action={
-        <SectionActionLink to="/budget" state={{ tab: 'trends' }}>Details</SectionActionLink>
+        <SectionActionLink to="/budget" state={{ tab: 'trends' }}>Trends</SectionActionLink>
       }
     >
       <SurfaceList>

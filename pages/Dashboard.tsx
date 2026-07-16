@@ -365,14 +365,14 @@ const Dashboard: React.FC = () => {
           selectionMode ? (
             <button
               onClick={exitSelectionMode}
-              className="text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-200 px-1 min-h-6"
+              className="text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-200 px-2 -mx-1 min-h-11 -my-3"
             >
               Cancel
             </button>
           ) : (
             <button
               onClick={() => enterSelectionMode()}
-              className="text-xs font-semibold text-accent-700 dark:text-accent-300 hover:underline px-1 min-h-6"
+              className="text-xs font-semibold text-accent-700 dark:text-accent-300 hover:underline px-2 -mx-1 min-h-11 -my-3"
             >
               Select
             </button>

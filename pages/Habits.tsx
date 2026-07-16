@@ -377,7 +377,7 @@ const Habits: React.FC = () => {
             primary bottom-nav-adjacent navigation (only "Track" is the
             daily-use default). */}
         <div className="px-4 mb-4">
-          <TabsList size="sm">
+          <TabsList>
             <TabsTrigger value="track">
               <LayoutList size={16} />
               Track

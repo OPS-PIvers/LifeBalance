@@ -31,7 +31,9 @@ const SectionActionLink: React.FC<SectionActionLinkProps> = ({
     to={to}
     state={state}
     className={cn(
-      'text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-accent-700 dark:hover:text-accent-300 flex items-center gap-1 transition-colors',
+      // min 44px hit target; negative margins keep the Section header's
+      // visual rhythm (the link previously measured ~16px tall).
+      'text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-accent-700 dark:hover:text-accent-300 flex items-center gap-1 min-h-11 -my-3 px-2 -mx-2 transition-colors',
       className
     )}
   >
