@@ -76,6 +76,10 @@ export const SetupChecklistCard: React.FC = () => {
   // Session-level dismissal; persisted copy is read via `readDismissed` so a
   // re-mount (e.g. route change) stays hidden without waiting for state.
   const [sessionDismissed, setSessionDismissed] = useState(false);
+  // Once most items are done the card collapses to a one-row progress
+  // summary (critique: sessions shouldn't end on a wall of homework);
+  // tapping it re-expands the remaining items for this mount.
+  const [expandedOverride, setExpandedOverride] = useState(false);
 
   const notificationsEnabled = 'Notification' in window && Notification.permission === 'granted';
   const plaidConnected = (accounts ?? []).some(
@@ -119,6 +123,8 @@ export const SetupChecklistCard: React.FC = () => {
     setSessionDismissed(true);
   };
 
+  const doneCount = items.filter((item) => item.done).length;
+
   return (
     <Section
       title="Finish setting up"
@@ -133,7 +139,21 @@ export const SetupChecklistCard: React.FC = () => {
       }
     >
       <SurfaceList>
-        {items.map((item) => (
+        {doneCount / items.length > 0.5 && !expandedOverride ? (
+          <DisclosureRow
+            icon={
+              <CheckCircle2
+                size={20}
+                className="text-accent-600 dark:text-accent-400"
+                aria-hidden="true"
+              />
+            }
+            title={`${doneCount} of ${items.length} done`}
+            subtitle={`${items.length - doneCount} step${items.length - doneCount === 1 ? '' : 's'} left — tap to see`}
+            onClick={() => setExpandedOverride(true)}
+          />
+        ) : (
+        items.map((item) => (
           <DisclosureRow
             key={item.id}
             icon={
@@ -155,7 +175,8 @@ export const SetupChecklistCard: React.FC = () => {
             subtitle={item.done ? undefined : item.description}
             onClick={() => navigate(item.route)}
           />
-        ))}
+        ))
+        )}
       </SurfaceList>
     </Section>
   );

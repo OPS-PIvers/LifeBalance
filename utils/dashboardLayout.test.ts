@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   DASHBOARD_WIDGET_IDS,
   DEFAULT_DASHBOARD_WIDGET_ORDER,
+  DEFAULT_HIDDEN_DASHBOARD_WIDGETS,
   resolveDashboardOrder,
   getVisibleOrderedWidgetIds,
   moveWidget,
@@ -34,8 +35,20 @@ describe('resolveDashboardOrder', () => {
 });
 
 describe('getVisibleOrderedWidgetIds', () => {
-  it('returns everything when nothing is hidden', () => {
-    expect(getVisibleOrderedWidgetIds(undefined, undefined)).toEqual([...DEFAULT_DASHBOARD_WIDGET_ORDER]);
+  it('returns everything when the member explicitly hides nothing', () => {
+    expect(getVisibleOrderedWidgetIds(undefined, [])).toEqual([...DEFAULT_DASHBOARD_WIDGET_ORDER]);
+  });
+
+  it('applies the lean default-hidden set for never-customized members', () => {
+    const result = getVisibleOrderedWidgetIds(undefined, undefined);
+    expect(result).toEqual(
+      DEFAULT_DASHBOARD_WIDGET_ORDER.filter(id => !DEFAULT_HIDDEN_DASHBOARD_WIDGETS.includes(id))
+    );
+    // The triage core survives the default trim.
+    expect(result).toContain('pulseStrip');
+    expect(result).toContain('dailyHabits');
+    expect(result).toContain('weeklyRecap');
+    expect(result).toContain('moneyRecap');
   });
 
   it('filters out hidden ids while preserving order', () => {

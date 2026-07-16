@@ -29,11 +29,32 @@ export const DASHBOARD_WIDGETS: readonly DashboardWidgetDef[] = [
   { id: 'kidsChores', label: "Kids' Chores", description: 'Managed-profile chore overview' },
   { id: 'insight', label: 'AI Insight', description: 'One rotating insight card' },
   { id: 'activityFeed', label: 'Recent Activity', description: 'Compact activity log' },
+  { id: 'habitCoach', label: 'Habit Coach', description: 'AI coaching on your habit patterns' },
 ] as const;
 
 export const DASHBOARD_WIDGET_IDS: readonly string[] = DASHBOARD_WIDGETS.map(w => w.id);
 
 export const DEFAULT_DASHBOARD_WIDGET_ORDER: readonly string[] = DASHBOARD_WIDGET_IDS;
+
+/**
+ * Widgets hidden by default for members who have never customized visibility
+ * (dashboardHidden === undefined). The lean default keeps the Home screen to
+ * a triage core — Action Queue (structural), pulse, today's habits, recap —
+ * per the 2026-07 critique's information-overload P1; everything here remains
+ * one Settings toggle away. A member's explicit list (even []) always wins.
+ */
+export const DEFAULT_HIDDEN_DASHBOARD_WIDGETS: readonly string[] = [
+  'creditCardActivity',
+  'kidsChores',
+  'insight',
+  'activityFeed',
+  'habitCoach',
+];
+
+/** A member's effective hidden list: their own when set, else the lean default. */
+export function resolveHiddenWidgets(hidden: readonly string[] | undefined): readonly string[] {
+  return hidden ?? DEFAULT_HIDDEN_DASHBOARD_WIDGETS;
+}
 
 /**
  * Resolve a member's customized order into the full, valid widget-id list:
@@ -54,7 +75,7 @@ export function getVisibleOrderedWidgetIds(
   layout: readonly string[] | undefined,
   hidden: readonly string[] | undefined
 ): string[] {
-  const hiddenSet = new Set(hidden ?? []);
+  const hiddenSet = new Set(resolveHiddenWidgets(hidden));
   return resolveDashboardOrder(layout).filter(id => !hiddenSet.has(id));
 }
 

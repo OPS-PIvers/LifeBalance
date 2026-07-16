@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import {
   DASHBOARD_WIDGETS,
   resolveDashboardOrder,
+  resolveHiddenWidgets,
   moveWidget,
   toggleWidgetHidden,
 } from '@/utils/dashboardLayout';
@@ -25,7 +26,10 @@ const WIDGET_LABELS = new Map(DASHBOARD_WIDGETS.map(w => [w.id, w]));
  */
 export const DashboardWidgetSettings: React.FC<DashboardWidgetSettingsProps> = ({ member, onSave }) => {
   const order = useMemo(() => resolveDashboardOrder(member.dashboardLayout), [member.dashboardLayout]);
-  const hidden = useMemo(() => member.dashboardHidden ?? [], [member.dashboardHidden]);
+  // Effective hidden list — members who never customized see the lean
+  // defaults, and their first toggle persists from that seeded state rather
+  // than from an empty list (which would suddenly reveal every widget).
+  const hidden = useMemo(() => [...resolveHiddenWidgets(member.dashboardHidden)], [member.dashboardHidden]);
   const hiddenSet = useMemo(() => new Set(hidden), [hidden]);
 
   const handleMove = useCallback((id: string, direction: 'up' | 'down') => {

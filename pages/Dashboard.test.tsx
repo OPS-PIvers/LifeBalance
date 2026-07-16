@@ -10,7 +10,7 @@ import type { ModuleKey } from '@/types/schema';
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useHouseholdCore: () => ({
     isLoading: false,
-    currentUser: { displayName: 'Test User' },
+    currentUser: { displayName: 'Test User', dashboardHidden: [] },
     members: [],
     pendingItemsCount: 0,
     recaps: [],
