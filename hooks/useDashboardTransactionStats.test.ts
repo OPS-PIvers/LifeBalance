@@ -55,6 +55,7 @@ describe('useDashboardTransactionStats', () => {
     expect(stats.lastWeekSpend).toBe(0);
     expect(stats.monthTotalSpent).toBe(0);
     expect(stats.monthCategoryItems).toEqual([]);
+    expect(stats.monthCategoryTransactions).toEqual({});
     expect(stats.recentTransactions).toEqual([]);
     expect(stats.transactionActivityRows).toEqual([]);
   });
@@ -133,6 +134,31 @@ describe('useDashboardTransactionStats', () => {
     expect(others.amount).toBe(60); // 40 + 20
   });
 
+  it('exposes the per-row month transaction lists, keyed by displayed row name', () => {
+    setTransactions([
+      makeTransaction({ id: 'a1', amount: 100, category: 'A', date: '2026-06-10' }),
+      makeTransaction({ id: 'a2', amount: 50, category: 'A', date: '2026-06-16' }),
+      makeTransaction({ id: 'b1', amount: 80, category: 'B', date: '2026-06-16' }),
+      makeTransaction({ id: 'c1', amount: 60, category: 'C', date: '2026-06-16' }),
+      // Rolled into "Others" (beyond top 3).
+      makeTransaction({ id: 'd1', amount: 40, category: 'D', date: '2026-06-12' }),
+      makeTransaction({ id: 'e1', amount: 20, category: 'E', date: '2026-06-14' }),
+      // Outside the month / income / pending — never listed.
+      makeTransaction({ id: 'old', amount: 500, category: 'A', date: '2026-05-30' }),
+      makeTransaction({ id: 'inc', amount: 1000, category: 'Income', date: '2026-06-16' }),
+      makeTransaction({ id: 'pend', amount: 5, category: 'A', date: '2026-06-16', status: 'pending_review' }),
+    ]);
+    const stats = render();
+    expect(stats.monthCategoryItems.map((c) => c.name)).toEqual(['A', 'B', 'C', 'Others']);
+    // Sorted date desc within each row.
+    expect(stats.monthCategoryTransactions['A']?.map((t) => t.id)).toEqual(['a2', 'a1']);
+    expect(stats.monthCategoryTransactions['B']?.map((t) => t.id)).toEqual(['b1']);
+    expect(stats.monthCategoryTransactions['C']?.map((t) => t.id)).toEqual(['c1']);
+    // "Others" concatenates the rolled-up remainder categories, date desc.
+    expect(stats.monthCategoryTransactions['Others']?.map((t) => t.id)).toEqual(['e1', 'd1']);
+    expect(Object.keys(stats.monthCategoryTransactions)).toEqual(['A', 'B', 'C', 'Others']);
+  });
+
   it('sorts the recent list by date desc and limits to 3', () => {
     setTransactions([
       makeTransaction({ id: 'oldest', date: '2026-06-10' }),
@@ -144,6 +170,47 @@ describe('useDashboardTransactionStats', () => {
     expect(stats.recentTransactions.map((t) => t.id)).toEqual(['newest', 'mid', 'old2']);
     // Each recent item carries a precomputed relative-time label.
     expect(stats.recentTransactions[0]?.relativeDate).toEqual(expect.any(String));
+  });
+
+  describe('recent-transaction relative labels (never a future distance)', () => {
+    it('uses createdAt for the relative label when present', () => {
+      setTransactions([
+        makeTransaction({
+          id: 'with-created',
+          date: '2026-06-15',
+          createdAt: '2026-06-15T16:00:00Z', // 20h before frozen now
+        }),
+      ]);
+      const stats = render();
+      expect(stats.recentTransactions[0]?.relativeDate).toBe('about 20 hours ago');
+    });
+
+    it('never shows a future suffix for a date-only future date — shows the calendar date', () => {
+      // Frozen now is 2026-06-16; local midnight of 06-18 parses ahead of now.
+      setTransactions([makeTransaction({ id: 'future', date: '2026-06-18' })]);
+      const stats = render();
+      const label = stats.recentTransactions[0]?.relativeDate;
+      expect(label).toBe('Jun 18');
+      expect(label).not.toMatch(/^in /);
+    });
+
+    it('labels a future-parsing timestamp on the current local day as "Today"', () => {
+      setTransactions([
+        makeTransaction({
+          id: 'later-today',
+          date: '2026-06-16',
+          createdAt: '2026-06-16T16:00:00Z', // 4h AFTER frozen now (clock skew)
+        }),
+      ]);
+      const stats = render();
+      expect(stats.recentTransactions[0]?.relativeDate).toBe('Today');
+    });
+
+    it('falls back to a past relative distance for date-only past dates', () => {
+      setTransactions([makeTransaction({ id: 'past', date: '2026-06-14' })]);
+      const stats = render();
+      expect(stats.recentTransactions[0]?.relativeDate).toMatch(/ago$/);
+    });
   });
 
   it('sums money in integer cents without float drift', () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { CategorySpendWidget } from './CategorySpendWidget';
 
 // Fixed "today" so both the module-level fixtures and the widget's
@@ -112,10 +112,10 @@ describe('CategorySpendWidget', () => {
     // Income should be ignored
 
     expect(screen.getByText('Groceries')).toBeInTheDocument();
-    expect(screen.getByText('$300')).toBeInTheDocument();
+    expect(screen.getByText('$300.00')).toBeInTheDocument();
 
     expect(screen.getByText('Dining')).toBeInTheDocument();
-    expect(screen.getByText('$50')).toBeInTheDocument();
+    expect(screen.getByText('$50.00')).toBeInTheDocument();
 
     expect(screen.queryByText('Rent')).not.toBeInTheDocument();
     expect(screen.queryByText('Income')).not.toBeInTheDocument();
@@ -136,6 +136,50 @@ describe('CategorySpendWidget', () => {
     expect(Number(groceriesBar!.getAttribute('aria-valuenow'))).toBeGreaterThan(0);
     expect(groceriesBar!.getAttribute('aria-valuemin')).toBe('0');
     expect(groceriesBar!.getAttribute('aria-valuemax')).toBe('100');
+  });
+
+  it('expands a row to list its month transactions, and collapses it again', () => {
+    render(<CategorySpendWidget />);
+
+    const groceriesToggle = screen
+      .getAllByRole('button')
+      .find(btn => btn.textContent?.includes('Groceries'))!;
+    expect(groceriesToggle).toBeTruthy();
+    expect(groceriesToggle).toHaveAttribute('aria-expanded', 'false');
+    // Collapsed: no transaction detail visible.
+    expect(screen.queryByText('Safeway')).not.toBeInTheDocument();
+
+    fireEvent.click(groceriesToggle);
+    expect(groceriesToggle).toHaveAttribute('aria-expanded', 'true');
+    // Expanded: the group's transactions show merchant, date, and cents.
+    expect(screen.getByText('Safeway')).toBeInTheDocument();
+    expect(screen.getByText('Whole Foods')).toBeInTheDocument();
+    expect(screen.getAllByText('Jun 16').length).toBe(2);
+    expect(screen.getByText('$100.00')).toBeInTheDocument();
+    expect(screen.getByText('$200.00')).toBeInTheDocument();
+    // Other groups' transactions are not listed.
+    expect(screen.queryByText('McDonalds')).not.toBeInTheDocument();
+
+    fireEvent.click(groceriesToggle);
+    expect(groceriesToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Safeway')).not.toBeInTheDocument();
+  });
+
+  it('only one row is expanded at a time', () => {
+    render(<CategorySpendWidget />);
+
+    const buttons = screen.getAllByRole('button');
+    const groceriesToggle = buttons.find(btn => btn.textContent?.includes('Groceries'))!;
+    const diningToggle = buttons.find(btn => btn.textContent?.includes('Dining'))!;
+
+    fireEvent.click(groceriesToggle);
+    expect(screen.getByText('Safeway')).toBeInTheDocument();
+
+    fireEvent.click(diningToggle);
+    expect(screen.getByText('McDonalds')).toBeInTheDocument();
+    expect(screen.queryByText('Safeway')).not.toBeInTheDocument();
+    expect(groceriesToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(diningToggle).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('renders nothing if no spending', () => {

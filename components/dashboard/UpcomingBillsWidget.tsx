@@ -55,7 +55,7 @@ export const UpcomingBillsWidget: React.FC<UpcomingBillsWidgetProps> = ({ onPay 
     <Section
       title="Upcoming bills"
       action={
-        <SectionActionLink to="/budget">Calendar</SectionActionLink>
+        <SectionActionLink to="/budget" state={{ tab: 'calendar' }}>Calendar</SectionActionLink>
       }
     >
       <SurfaceList>
@@ -66,13 +66,13 @@ export const UpcomingBillsWidget: React.FC<UpcomingBillsWidgetProps> = ({ onPay 
                 {bill.displayDate}
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-brand-800 dark:text-brand-100 truncate max-w-[120px]">{bill.title}</p>
+                <p className="text-sm font-semibold text-brand-800 dark:text-brand-100 truncate">{bill.title}</p>
                 <p className={`text-xs ${bill.urgencyClass}`}>{bill.dateLabel}</p>
               </div>
             </div>
             <div className="flex items-center gap-3 shrink-0">
               <span className="font-mono font-bold tabular-nums text-brand-900 dark:text-brand-50 text-sm">
-                {fmt(bill.amount, { decimals: 0 })}
+                {fmt(bill.amount)}
               </span>
               <button
                 onClick={() => onPay(bill.id, bill.amount)}

@@ -6,7 +6,9 @@ import {
   startOfMonth,
   endOfMonth,
   isWithinInterval,
+  isSameDay,
   parseISO,
+  format,
   formatDistanceToNow,
 } from 'date-fns';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
@@ -43,6 +45,23 @@ export interface RecentTransaction extends Transaction {
   relativeDate: string;
 }
 
+/**
+ * Human-sensible relative label for a transaction. Prefers the precise
+ * `createdAt` timestamp when present; otherwise falls back to the date-only
+ * `date` field parsed at local midnight. Never shows a FUTURE distance
+ * ("in about 4 hours") — a timestamp ahead of `now` (a future-dated bill, or a
+ * clock/timezone skew on a date-only value) renders as "Today" for the current
+ * local day, else the calendar date (e.g. "Jun 18").
+ */
+const relativeDateLabel = (tx: Transaction, now: Date): string => {
+  const timestamp = tx.createdAt ? parseISO(tx.createdAt) : parseISO(tx.date);
+  if (timestamp.getTime() > now.getTime()) {
+    const calendarDate = parseISO(tx.date);
+    return isSameDay(calendarDate, now) ? 'Today' : format(calendarDate, 'MMM d');
+  }
+  return formatDistanceToNow(timestamp, { addSuffix: true });
+};
+
 /** One category's current-month spend slice (CategorySpend display row). */
 export interface CategorySpendItem {
   name: string;
@@ -76,6 +95,13 @@ export interface DashboardTransactionStats {
   lastWeekSpend: number;
   /** Top categories (top 3 + "Others") of current-month cleared, non-income spend. */
   monthCategoryItems: CategorySpendItem[];
+  /**
+   * The current-month cleared, non-income transactions behind each
+   * `monthCategoryItems` row, keyed by the row's `name` (including the rolled-up
+   * "Others" remainder). Each list is sorted by `date` desc. Powers the
+   * CategorySpend row disclosures.
+   */
+  monthCategoryTransactions: Record<string, Transaction[]>;
   /** Total current-month cleared, non-income spend (rounded dollars). */
   monthTotalSpent: number;
   /** Most-recent 3 cleared, non-income transactions, sorted by `date` desc. */
@@ -114,8 +140,10 @@ export const useDashboardTransactionStats = (): DashboardTransactionStats => {
     let thisWeekCents = 0;
     let lastWeekCents = 0;
 
-    // Current-month category breakdown, accumulated in integer cents per key.
+    // Current-month category breakdown, accumulated in integer cents per key,
+    // plus the underlying transaction list per category (row disclosures).
     const monthCents: Record<string, number> = {};
+    const monthTxByCategory: Record<string, Transaction[]> = {};
     let monthTotalCents = 0;
 
     // The cleared, non-income transactions (MoneyPulse's recent-list source).
@@ -159,6 +187,7 @@ export const useDashboardTransactionStats = (): DashboardTransactionStats => {
       if (isWithinInterval(date, { start: monthStart, end: monthEnd })) {
         const cat = t.category || 'Uncategorized';
         monthCents[cat] = (monthCents[cat] ?? 0) + amountCents;
+        (monthTxByCategory[cat] ??= []).push(t);
         monthTotalCents += amountCents;
       }
     }
@@ -193,13 +222,28 @@ export const useDashboardTransactionStats = (): DashboardTransactionStats => {
       });
     }
 
+    // Per-row transaction lists, keyed by the DISPLAYED row name — top-3
+    // categories map straight through; "Others" concatenates every rolled-up
+    // remainder category. Each list sorted by `date` desc for display.
+    const byDateDesc = (a: Transaction, b: Transaction) =>
+      b.date > a.date ? 1 : b.date < a.date ? -1 : 0;
+    const monthCategoryTransactions: Record<string, Transaction[]> = {};
+    for (const item of top3) {
+      monthCategoryTransactions[item.name] = [...(monthTxByCategory[item.name] ?? [])].sort(byDateDesc);
+    }
+    if (othersAmount > 0) {
+      monthCategoryTransactions['Others'] = rest
+        .flatMap((item) => monthTxByCategory[item.name] ?? [])
+        .sort(byDateDesc);
+    }
+
     // MoneyPulse recent list: sort cleared by `date` string desc, top 3, label.
     const recentTransactions: RecentTransaction[] = [...cleared]
       .sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : 0))
       .slice(0, 3)
       .map((tx) => ({
         ...tx,
-        relativeDate: formatDistanceToNow(parseISO(tx.date), { addSuffix: true }),
+        relativeDate: relativeDateLabel(tx, now),
       }));
 
     // ActivityFeed pre-limit: sort by the IDENTICAL comparator ActivityFeed uses
@@ -219,6 +263,7 @@ export const useDashboardTransactionStats = (): DashboardTransactionStats => {
       thisWeekSpend,
       lastWeekSpend,
       monthCategoryItems,
+      monthCategoryTransactions,
       monthTotalSpent: roundMoney(monthTotalSpent),
       recentTransactions,
       transactionActivityRows: topTransactionActivityRows,

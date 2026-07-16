@@ -76,9 +76,9 @@ describe('UpcomingBillsWidget', () => {
 
     expect(screen.getByText('Upcoming bills')).toBeInTheDocument();
     expect(screen.getByText('Rent')).toBeInTheDocument();
-    expect(screen.getByText('$1,200')).toBeInTheDocument();
+    expect(screen.getByText('$1,200.00')).toBeInTheDocument();
     expect(screen.getByText('Netflix')).toBeInTheDocument();
-    expect(screen.getByText('$15')).toBeInTheDocument();
+    expect(screen.getByText('$15.00')).toBeInTheDocument();
   });
 
   it('calls onPay when pay button is clicked', () => {

@@ -52,7 +52,7 @@ export const MoneyPulseWidget: React.FC = () => {
     <Section
       title="Money pulse"
       action={
-        <SectionActionLink to="/budget">View money</SectionActionLink>
+        <SectionActionLink to="/budget" state={{ tab: 'transactions' }}>View money</SectionActionLink>
       }
     >
       <SurfaceList>
@@ -61,7 +61,7 @@ export const MoneyPulseWidget: React.FC = () => {
           <p className="text-xs text-brand-500 dark:text-brand-400 font-medium">Spent this week</p>
           <div className="flex items-baseline gap-3 flex-wrap">
             <p className="stat-num text-2xl font-bold text-brand-900 dark:text-brand-50">
-              {fmt(spendingStats.thisWeek, { decimals: 0 })}
+              {fmt(spendingStats.thisWeek)}
             </p>
             <div
               className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
@@ -93,12 +93,12 @@ export const MoneyPulseWidget: React.FC = () => {
                 <Receipt size={16} />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-brand-800 dark:text-brand-100 truncate max-w-[150px]">{tx.merchant}</p>
+                <p className="text-sm font-semibold text-brand-800 dark:text-brand-100 truncate">{tx.merchant}</p>
                 <p className="text-xxs text-brand-400 dark:text-brand-450 font-medium">{tx.relativeDate}</p>
               </div>
             </div>
             <span className="font-mono font-bold tabular-nums text-brand-900 dark:text-brand-50 text-sm shrink-0">
-              {fmt(tx.amount, { decimals: 0 })}
+              {fmt(tx.amount)}
             </span>
           </Row>
         ))}

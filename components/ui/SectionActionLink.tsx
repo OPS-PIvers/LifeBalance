@@ -6,6 +6,11 @@ import { cn } from '@/utils/cn';
 export interface SectionActionLinkProps {
   /** Route path to navigate to. */
   to: string;
+  /**
+   * Optional router state passed through to the `Link` — e.g.
+   * `{ tab: 'calendar' }` to deep-link a sub-tab via `useDeepLinkTab`.
+   */
+  state?: unknown;
   /** The link label (rendered before the trailing arrow). */
   children: React.ReactNode;
   className?: string;
@@ -18,11 +23,13 @@ export interface SectionActionLinkProps {
  */
 const SectionActionLink: React.FC<SectionActionLinkProps> = ({
   to,
+  state,
   children,
   className,
 }) => (
   <Link
     to={to}
+    state={state}
     className={cn(
       'text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-accent-700 dark:hover:text-accent-300 flex items-center gap-1 transition-colors',
       className
