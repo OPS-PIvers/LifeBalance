@@ -81,18 +81,20 @@ const COLORS = {
   moneyNeg: '#d4483f',
 };
 
-/** Loads the self-hosted brand fonts so canvas text renders as Fraunces/Schibsted Grotesk. */
+/** Loads the self-hosted brand fonts so canvas text renders as Besley/Schibsted Grotesk. */
 async function loadShareCardFonts(): Promise<{ display: string; sans: string }> {
-  const display = "'Fraunces'";
+  const display = "'Besley'";
   const sans = "'Schibsted Grotesk'";
   try {
-    const [fraunces, grotesk] = await Promise.all([
-      new FontFace('Fraunces', "url('/fonts/fraunces-latin.woff2') format('woff2')", { weight: '600 700' }).load(),
+    const [besley, grotesk] = await Promise.all([
+      new FontFace('Besley', "url('/fonts/besley-latin.woff2') format('woff2')", { weight: '400 900' }).load(),
       new FontFace('Schibsted Grotesk', "url('/fonts/schibsted-grotesk-latin.woff2') format('woff2')", {
-        weight: '400 600',
+        // The variable file covers 400–700 (see index.css); the card draws
+        // headline text at 700, which an under-declared range would clamp.
+        weight: '400 700',
       }).load(),
     ]);
-    document.fonts.add(fraunces);
+    document.fonts.add(besley);
     document.fonts.add(grotesk);
     return { display, sans };
   } catch {

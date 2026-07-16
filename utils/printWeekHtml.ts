@@ -76,10 +76,10 @@ export const buildPrintWeekHtml = (
 <title>Meal Plan &amp; Shopping List — ${escapeHtml(weekRangeLabel)}</title>
 <style>
   @font-face {
-    font-family: 'Fraunces';
+    font-family: 'Besley';
     font-weight: 400 600;
     font-display: swap;
-    src: url('/fonts/fraunces-latin.woff2') format('woff2');
+    src: url('/fonts/besley-latin.woff2') format('woff2');
   }
   @font-face {
     font-family: 'Schibsted Grotesk';
@@ -97,7 +97,7 @@ export const buildPrintWeekHtml = (
     max-width: 820px;
   }
   h1 {
-    font-family: 'Fraunces', Georgia, serif;
+    font-family: 'Besley', Georgia, serif;
     font-size: 28px;
     font-weight: 600;
     margin: 0 0 4px;
@@ -110,7 +110,7 @@ export const buildPrintWeekHtml = (
     letter-spacing: 0.06em;
   }
   h2.section {
-    font-family: 'Fraunces', Georgia, serif;
+    font-family: 'Besley', Georgia, serif;
     font-size: 18px;
     font-weight: 600;
     border-bottom: 2px solid #1c1a17;

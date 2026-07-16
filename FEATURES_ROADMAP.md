@@ -1743,7 +1743,7 @@ call or backend work.
 **Implementation notes:** Add `utils/recapShareCard.ts` exporting `renderRecapShareCard(recap):
 Promise<Blob>` drawing to an offscreen `<canvas>` using DESIGN.md's brand-*/accent-*/warm-* token
 hex values (canvas text can't reliably consume `@font-face` without pre-loading via the FontFace
-API — either preload `public/fonts/Fraunces*.woff2` or fall back to a system serif). Add a Share
+API — either preload `public/fonts/besley*.woff2` or fall back to a system serif). Add a Share
 button in `WeeklyRecapDrawer.tsx` calling `navigator.share({files: [...]})` when
 `navigator.canShare` supports files, falling back to an `<a download>` on the generated blob.
 Track `recap_shared` (register in `docs/PRODUCT_ROADMAP.md` Part 7).
