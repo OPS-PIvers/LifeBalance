@@ -254,6 +254,13 @@ export interface Transaction {
    *  increases it). Meaningless / ignored for checking & savings accounts.
    *  Absent ⇒ treated as a charge. Never represents income or bucket spend. */
   creditPayment?: boolean;
+  /** For a credit-card PAYMENT (`creditPayment === true` on a credit account):
+   *  the asset (non-credit) account the payment is funded FROM. When present on
+   *  a verified payment, `addTransaction` debits this account by the payment
+   *  amount in the SAME writeBatch that credits the card — a full transfer.
+   *  Absent ⇒ legacy behavior: only the card's balance moves. Never meaningful
+   *  on charges or asset-account transactions. */
+  fundingAccountId?: string;
   notes?: string;
   createdAt?: string; // ISO timestamp
   /** Apple Pay $0 pre-authorization stub (created by the quickAddExpense Cloud

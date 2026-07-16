@@ -831,11 +831,26 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       { amount: newTx.amount, category: newTx.category, creditPayment: newTx.creditPayment, status: newTx.status },
       target
     );
+    // Credit-card payment as a transfer (parity with makeAddTransaction): a
+    // VERIFIED payment on a credit account that names a non-credit funding
+    // account also debits that account by the payment amount.
+    const fundingTarget =
+      newTx.creditPayment === true &&
+      target?.type === 'credit' &&
+      newTx.status === 'verified' &&
+      newTx.fundingAccountId
+        ? accounts.find(a => a.id === newTx.fundingAccountId && a.type !== 'credit' && a.id !== target.id)
+        : undefined;
     setTransactions(prev => [...prev, newTx]);
-    if (balanceDelta !== 0 && target) {
-      setAccounts(prev => prev.map(a => a.id === target.id
-        ? { ...a, balance: roundMoney(a.balance + balanceDelta), lastUpdated: new Date().toISOString() }
-        : a));
+    if ((balanceDelta !== 0 && target) || fundingTarget) {
+      setAccounts(prev => prev.map(a => {
+        let delta = 0;
+        if (target && a.id === target.id) delta += balanceDelta;
+        if (fundingTarget && a.id === fundingTarget.id) delta -= newTx.amount;
+        return delta !== 0
+          ? { ...a, balance: roundMoney(a.balance + delta), lastUpdated: new Date().toISOString() }
+          : a;
+      }));
     }
     toast.success('Mock: Transaction added');
   }, [accounts]);

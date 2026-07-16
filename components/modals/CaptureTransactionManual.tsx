@@ -2,7 +2,7 @@ import React, { useId, useState, useMemo } from 'react';
 import { Check, CheckCircle2, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getLocalDateString } from '@/utils/dateHelpers';
-import { Transaction, Habit, Store, Account, CREDIT_CARD_CATEGORY } from '@/types/schema';
+import { Transaction, Habit, Store, Account, CalendarItem, CREDIT_CARD_CATEGORY } from '@/types/schema';
 import { suggestHabitsForTransaction } from '@/utils/habitSuggestions';
 import { resolveStoreName } from '@/utils/stores';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
@@ -24,6 +24,10 @@ interface CaptureTransactionManualProps {
     creditPayment?: boolean;
   };
   onAddTransaction: (transaction: Transaction) => Promise<void>;
+  /** When provided, saving with "Recurring" ON also creates a monthly
+   *  recurring expense CalendarItem flagged `isSubscription: true`, so the
+   *  entry shows up on the Subscriptions tab. */
+  onAddCalendarItem?: (item: CalendarItem) => Promise<void>;
   onClose: () => void;
   dynamicCategories: string[];
   habits: Habit[];
@@ -35,6 +39,7 @@ interface CaptureTransactionManualProps {
 export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> = ({
   initialData,
   onAddTransaction,
+  onAddCalendarItem,
   onClose,
   dynamicCategories,
   habits,
@@ -70,6 +75,19 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
   );
 
   const [isRecurring, setIsRecurring] = useState(false);
+
+  // Fix: credit-card payment funded FROM an asset account (full transfer).
+  // Only meaningful when the selected account is a credit card AND the kind is
+  // Payment; cleared implicitly on save when those don't hold.
+  const [fundingAccountId, setFundingAccountId] = useState('');
+  const nonCreditAccounts = useMemo(
+    () => accounts.filter(a => a.type !== 'credit'),
+    [accounts]
+  );
+
+  // A credit-card PAYMENT is a transfer, not recurring spend — the Recurring
+  // (subscription) toggle is hidden/ignored in that mode.
+  const isCreditPaymentMode = isSelectedAccountCredit && creditPayment;
   const [transactionDate, setTransactionDate] = useState(() => initialData?.date || getLocalDateString());
   const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -114,6 +132,19 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
       setSelectedHabitIds(autoSelectKey === '' ? [] : autoSelectKey.split('|'));
     }
   }
+
+  // Habit picker chip sets. The section previously gated its label on
+  // `habits.length` but rendered chips only from high/medium suggestions, so
+  // the label could sit above an empty row. Now: primary chips are the
+  // high/medium suggestions, any OTHER selected habit renders as a selected
+  // chip, and EVERY remaining habit is reachable behind the "+ More"
+  // disclosure — so the user can always optionally tag any habit, and the
+  // label never renders above nothing (when habits exist, "+ More" or chips
+  // are always present; with no habits the whole section is omitted).
+  const primaryChips = suggestedHabits.filter(s => s.confidence === 'high' || s.confidence === 'medium');
+  const primaryChipIds = new Set(primaryChips.map(s => s.habit.id));
+  const selectedExtraHabits = habits.filter(h => selectedHabitIds.includes(h.id) && !primaryChipIds.has(h.id));
+  const moreHabits = habits.filter(h => !primaryChipIds.has(h.id) && !selectedHabitIds.includes(h.id));
 
   // Merchant now doubles as the Store field (a separate lower-cased "store"
   // dropdown was redundant with the free-text merchant name). A native
@@ -177,7 +208,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
       category: finalCategory,
       date: transactionDate,
       status: isFuture ? 'pending_review' : 'verified',
-      isRecurring: isRecurring,
+      isRecurring: isCreditPaymentMode ? false : isRecurring,
       source: 'manual',
       autoCategorized: false,
       relatedHabitIds: selectedHabitIds.length > 0 ? selectedHabitIds : undefined,
@@ -185,11 +216,41 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
       accountId: accountId || undefined,
       // Only meaningful for a credit account; a charge (false) raises the card's
       // balance, a payment (true) pays it down. Undefined for asset accounts.
-      creditPayment: isSelectedAccountCredit && creditPayment ? true : undefined
+      creditPayment: isSelectedAccountCredit && creditPayment ? true : undefined,
+      // Optional funding (asset) account for a credit-card payment — makes the
+      // payment a full transfer (card credited AND funding account debited in
+      // one batch, see makeAddTransaction). Omitted otherwise.
+      fundingAccountId: isCreditPaymentMode && fundingAccountId ? fundingAccountId : undefined
     };
 
     try {
       await onAddTransaction(newTransaction);
+
+      // Recurring ON ⇒ also create a monthly recurring expense on the calendar,
+      // flagged as a subscription so it appears on the Subscriptions tab.
+      // Never for a credit-card payment (that's a transfer, not a subscription).
+      if (isRecurring && !isCreditPaymentMode && onAddCalendarItem) {
+        try {
+          await onAddCalendarItem({
+            id: crypto.randomUUID(),
+            title: trimmedMerchant,
+            amount: parsedAmount,
+            date: transactionDate,
+            type: 'expense',
+            isPaid: false,
+            isRecurring: true,
+            frequency: 'monthly',
+            isSubscription: true,
+            ...(accountId ? { accountId } : {}),
+          });
+        } catch (calendarError) {
+          // The transaction itself saved — surface the partial failure without
+          // blocking the close.
+          console.error('Failed to create recurring subscription entry:', calendarError);
+          toast.error('Saved, but the recurring subscription entry failed.');
+        }
+      }
+
       toast.success("Transaction saved!");
       onClose();
     } catch (error) {
@@ -311,6 +372,23 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
                   ? 'Lowers this card’s balance (paying it down).'
                   : 'Raises this card’s balance; never affects Safe-to-Spend.'}
               </p>
+              {creditPayment && nonCreditAccounts.length > 0 && (
+                <div className="pt-1 space-y-1">
+                  <Select
+                    label="From account (Optional)"
+                    value={fundingAccountId}
+                    onChange={(e) => setFundingAccountId(e.target.value)}
+                  >
+                    <option value="">No source account</option>
+                    {nonCreditAccounts.map(a => (
+                      <option key={a.id} value={a.id}>{a.name}</option>
+                    ))}
+                  </Select>
+                  <p className="text-xs text-brand-400 dark:text-brand-400">
+                    Also deducts the payment from this account, like a transfer.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -321,14 +399,13 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
                 <label className="block text-xs font-semibold text-brand-400 dark:text-brand-400 uppercase tracking-wider">
                   Connect Habits (Optional)
                 </label>
-                {suggestedHabits.some(s => s.confidence !== 'low') && (
+                {primaryChips.length > 0 && (
                   <Sparkles size={12} className="text-warm-500 dark:text-warm-300" />
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
                 {/* Show suggested habits first */}
-                {suggestedHabits
-                  .filter(s => s.confidence === 'high' || s.confidence === 'medium')
+                {primaryChips
                   .map(({ habit, confidence }) => {
                     const isSelected = selectedHabitIds.includes(habit.id);
                     return (
@@ -360,10 +437,9 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
                     );
                   })}
 
-                {/* Show selected non-suggested habits */}
-                {suggestedHabits
-                  .filter(s => s.confidence === 'low' && selectedHabitIds.includes(s.habit.id))
-                  .map(({ habit }) => (
+                {/* Show any selected habit that isn't already a suggestion chip */}
+                {selectedExtraHabits
+                  .map((habit) => (
                     <button
                       key={habit.id}
                       type="button"
@@ -378,16 +454,16 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
                     </button>
                   ))}
 
-                {/* "More" button to show all habits */}
-                {suggestedHabits.filter(s => s.confidence === 'low' && !selectedHabitIds.includes(s.habit.id)).length > 0 && (
+                {/* Disclosure listing EVERY remaining habit, so any habit can be
+                    tagged even with no merchant-based suggestions. */}
+                {moreHabits.length > 0 && (
                   <details className="inline">
                     <summary className="px-3 py-1.5 rounded-lg text-xs font-bold bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 text-brand-500 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-700/50 cursor-pointer inline-flex items-center gap-1">
-                      + More ({suggestedHabits.filter(s => s.confidence === 'low').length})
+                      {primaryChips.length > 0 ? `+ More (${moreHabits.length})` : `Choose a habit (${moreHabits.length})`}
                     </summary>
                     <div className="flex flex-wrap gap-2 mt-2">
-                      {suggestedHabits
-                        .filter(s => s.confidence === 'low' && !selectedHabitIds.includes(s.habit.id))
-                        .map(({ habit }) => (
+                      {moreHabits
+                        .map((habit) => (
                           <button
                             key={habit.id}
                             type="button"
@@ -407,14 +483,23 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
             </div>
           )}
 
-          <div className="flex items-center justify-between p-4 bg-brand-50 dark:bg-brand-700/50 rounded-xl border border-brand-100 dark:border-brand-700">
-            <span id="recurring-label" className="text-sm font-medium text-brand-700 dark:text-brand-200">Recurring Transaction</span>
-            <Switch
-              checked={isRecurring}
-              onCheckedChange={setIsRecurring}
-              aria-labelledby="recurring-label"
-            />
-          </div>
+          {/* Hidden for a credit-card PAYMENT — that's a transfer, not a
+              subscription-style recurring spend. */}
+          {!isCreditPaymentMode && (
+            <div className="p-4 bg-brand-50 dark:bg-brand-700/50 rounded-xl border border-brand-100 dark:border-brand-700 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span id="recurring-label" className="text-sm font-medium text-brand-700 dark:text-brand-200">Recurring Transaction</span>
+                <Switch
+                  checked={isRecurring}
+                  onCheckedChange={setIsRecurring}
+                  aria-labelledby="recurring-label"
+                />
+              </div>
+              <p className="text-xs text-brand-400 dark:text-brand-400">
+                Creates a monthly entry on your Subscriptions tab.
+              </p>
+            </div>
+          )}
         </div>
       </CollapsibleSection>
 

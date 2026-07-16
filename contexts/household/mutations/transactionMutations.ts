@@ -170,6 +170,33 @@ export function makeAddTransaction(deps: {
         });
       }
 
+      // CREDIT-CARD PAYMENT AS A TRANSFER: when a payment on a credit account
+      // names a funding account, debit that (non-credit) account by the same
+      // amount in the SAME batch, so card credit + funding debit can never
+      // partially apply. Verified-only (a pending payment moves no balance),
+      // and skipped when the funding account is missing/credit/the same doc
+      // (a batch must not write one doc twice) — those degrade to today's
+      // card-only behavior. The id is persisted only when it actually applies
+      // to a credit payment, matching the optional-field convention.
+      const trimmedFundingId = tx.fundingAccountId?.trim() || undefined;
+      const fundingAccount = trimmedFundingId ? accounts.find(a => a.id === trimmedFundingId) : undefined;
+      const isCreditPaymentOnCard = tx.creditPayment === true && target?.type === 'credit';
+      if (trimmedFundingId && isCreditPaymentOnCard) {
+        docData.fundingAccountId = trimmedFundingId;
+      }
+      if (
+        isCreditPaymentOnCard &&
+        fundingAccount &&
+        fundingAccount.type !== 'credit' &&
+        fundingAccount.id !== target.id &&
+        tx.status === 'verified'
+      ) {
+        batch.update(doc(db, `households/${householdId}/accounts`, fundingAccount.id), {
+          balance: increment(-roundedAmount),
+          lastUpdated: serverTimestamp(),
+        });
+      }
+
       // Read the live window BEFORE the commit so latency-compensated listeners
       // can't already include this write (ref, not `transactions`, to keep the
       // callback's deps free of per-transaction churn).

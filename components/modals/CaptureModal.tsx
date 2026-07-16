@@ -64,7 +64,7 @@ interface ManualInitialData {
 }
 
 const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialManualData }) => {
-  const { addTransaction, addTransactions, updateTransaction, buckets, transactions, accounts } = useFinance();
+  const { addTransaction, addTransactions, updateTransaction, addCalendarItem, buckets, transactions, accounts } = useFinance();
   const { habits } = useGamification();
   const { currentUser, members, householdId } = useHouseholdCore();
   const { addToDo } = useTodos();
@@ -799,6 +799,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
                 <CaptureTransactionManual
                   initialData={manualInitialData}
                   onAddTransaction={addTransaction}
+                  onAddCalendarItem={addCalendarItem}
                   onClose={handleClose}
                   dynamicCategories={dynamicCategories}
                   habits={habits}
