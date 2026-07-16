@@ -50,10 +50,13 @@ import { softDeleteDoc } from '@/contexts/household/mutations/trashMutations';
 
 /**
  * Window for folding rapid same-habit toggles into a single cumulative toast
- * instead of stacking one per tap. Matches the toast's own `duration: 1500`
+ * instead of stacking one per tap. Matches the toast's own `duration: 5000`
  * below so the accumulation window and the toast's visible lifetime agree.
+ * 5s (up from 1.5s) so the toast's Undo action is actually reachable — a
+ * habit row is a full-surface tap target, and an accidental tap mutates
+ * points silently without it (2026-07 round-3 critique).
  */
-const POINTS_TOAST_WINDOW_MS = 1500;
+const POINTS_TOAST_WINDOW_MS = 5000;
 
 /**
  * Plan 080c: the doc that receives a habit's points. An assigned (per-member /
@@ -91,6 +94,11 @@ export const useHabitActions = (
   // component state, which would re-render on every toggle) — see
   // toastAccumulator.ts for the pure math this drives.
   const pointsToastAccumulatorRef = useRef<ToastAccumulatorState>(new Map());
+
+  // Self-reference so the points toast's Undo action can fire the reverse
+  // toggle — a useCallback can't appear in its own dependency array, so the
+  // toast closure reads the latest callback through this ref instead.
+  const toggleHabitSelfRef = useRef<(id: string, direction: 'up' | 'down') => Promise<void>>(async () => {});
 
   const addHabit = useCallback(async (habit: Habit): Promise<string> => {
     if (!householdId || !currentUser) throw new Error("Not authenticated");
@@ -434,11 +442,22 @@ export const useHabitActions = (
       } else {
         const sign = net > 0 ? '+' : '';
         toast(
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <span className="font-bold">{sign}{net} pts</span>
             <span className="text-sm opacity-80">
               {count === 1 ? `(${result.multiplier}x)` : `(${count} changes)`}
             </span>
+            {/* Undo = the reverse toggle. It feeds the same accumulator, so a
+                single-tap undo nets to 0 and the branch above dismisses this
+                toast; after multiple taps it walks the total back one tap at
+                a time. -my-3 overhangs the toast padding for a 44px target. */}
+            <button
+              type="button"
+              onClick={() => void toggleHabitSelfRef.current(id, direction === 'up' ? 'down' : 'up')}
+              className="-my-3 ml-1 min-h-[44px] shrink-0 px-2 text-sm font-semibold underline underline-offset-2 focus:outline-hidden focus-visible:opacity-70"
+            >
+              Undo
+            </button>
           </div>,
           {
             id: toastId,
@@ -458,6 +477,10 @@ export const useHabitActions = (
       }
     }
   }, [householdId, currentUser]);
+  // Keep the undo self-reference pointing at the latest callback (same
+  // effect-sync pattern as habitsRef above). The effect commits long before
+  // any toast's Undo can be clicked.
+  useEffect(() => { toggleHabitSelfRef.current = toggleHabit; }, [toggleHabit]);
 
   const resetHabit = useCallback(async (id: string) => {
     if (!householdId || !householdSettingsRef.current) return;
