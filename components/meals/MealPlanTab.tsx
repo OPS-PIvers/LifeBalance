@@ -786,6 +786,32 @@ const MealPlanTab: React.FC = () => {
   }, [stripDays]);
   useEffect(() => () => cancelAnimationFrame(scrollRafRef.current), []);
 
+  // Roving tabindex for the day strip: only the selected chip is a tab stop
+  // (tabIndex 0); Arrow keys move the selection day-by-day and Home jumps to
+  // today, with focus following onto the newly selected chip. Without this,
+  // the strip's ~150 day buttons were ~150 consecutive tab stops between the
+  // tab bar and the day's content for keyboard and switch users.
+  const handleStripKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      let target: Date | null = null;
+      if (e.key === 'ArrowLeft') target = addDays(selectedDate, -1);
+      else if (e.key === 'ArrowRight') target = addDays(selectedDate, 1);
+      else if (e.key === 'Home') target = new Date();
+      if (!target) return;
+      e.preventDefault();
+      const first = stripDays[0]?.dateStr;
+      const last = stripDays[stripDays.length - 1]?.dateStr;
+      const targetStr = format(target, 'yyyy-MM-dd');
+      if ((first && targetStr < first) || (last && targetStr > last)) return;
+      setSelectedDate(target);
+      // Every day chip is already mounted, so focus can move synchronously
+      // (focus() works on tabIndex=-1 elements; the roving tabIndex catches up
+      // on the re-render). An rAF here can be throttled in background tabs.
+      stripRef.current?.querySelector<HTMLElement>(`[data-date="${targetStr}"]`)?.focus();
+    },
+    [selectedDate, stripDays]
+  );
+
   const handleJumpToToday = useCallback(() => {
     const todayDateStr = format(new Date(), 'yyyy-MM-dd');
     if (selectedDateStr !== todayDateStr) setSelectedDate(new Date());
@@ -921,6 +947,9 @@ const MealPlanTab: React.FC = () => {
         <div
             ref={stripRef}
             onScroll={handleStripScroll}
+            onKeyDown={handleStripKeyDown}
+            role="group"
+            aria-label="Pick a day (arrow keys to move, Home for today)"
             className="relative flex gap-1 overflow-x-auto no-scrollbar snap-x"
         >
             {stripDays.map(day => {
@@ -936,6 +965,7 @@ const MealPlanTab: React.FC = () => {
                         onClick={() => setSelectedDate(day.date)}
                         aria-label={`${day.ariaLabel}${count > 0 ? `, ${count} meals planned` : ''}`}
                         aria-pressed={isSelected}
+                        tabIndex={isSelected ? 0 : -1}
                         className={clsx(
                             "w-12 shrink-0 snap-center flex flex-col items-center gap-0.5 py-1.5 rounded-btn transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95",
                             isSelected
