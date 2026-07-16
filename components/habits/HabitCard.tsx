@@ -235,7 +235,9 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
         }
         grip={onGripPointerDown ? { onPointerDownCapture: onGripPointerDown } : undefined}
         menu={{
-          ariaLabel: 'Habit options menu',
+          // Item-qualified so multiple habit kebabs are distinguishable in a
+          // screen-reader rotor list.
+          ariaLabel: `Options for ${habit.title}`,
           // What actually opens differs by breakpoint: desktop anchors the
           // dropdown Menu, mobile presents the options Drawer (a dialog).
           hasPopup: isDesktop ? 'menu' : 'dialog',

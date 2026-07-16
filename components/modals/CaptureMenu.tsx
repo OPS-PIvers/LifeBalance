@@ -111,7 +111,7 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
         </div>
         <Badge variant="warning" size="sm">
           REVIEW
-          <span className="sr-only">: shows in Action Queue before affecting your budget</span>
+          <span className="sr-only">. Shows in the Action Queue before affecting your budget.</span>
         </Badge>
       </button>
 
@@ -128,7 +128,7 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
         </div>
         <Badge variant="warning" size="sm">
           REVIEW
-          <span className="sr-only">: shows in Action Queue before affecting your budget</span>
+          <span className="sr-only">. Shows in the Action Queue before affecting your budget.</span>
         </Badge>
       </button>
 
@@ -144,7 +144,7 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
         </div>
         <Badge variant="success" size="sm">
           INSTANT
-          <span className="sr-only">: updates budget immediately</span>
+          <span className="sr-only">. Updates your budget immediately.</span>
         </Badge>
       </button>
 

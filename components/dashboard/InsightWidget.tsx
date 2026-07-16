@@ -115,7 +115,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = React.memo(({ onOpenA
       }
     >
       {aiUsage && (
-        <p className="text-xxs text-brand-400 dark:text-brand-450 text-right -mt-2 mb-1">
+        <p className="text-xs text-brand-400 dark:text-brand-450 text-right -mt-2 mb-1">
           {aiUsage.used} of {aiUsage.cap} AI requests used today
         </p>
       )}

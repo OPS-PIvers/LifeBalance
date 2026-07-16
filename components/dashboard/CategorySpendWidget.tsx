@@ -43,7 +43,9 @@ export const CategorySpendWidget: React.FC = () => {
                 onClick={() => setExpandedName(prev => (prev === item.name ? null : item.name))}
                 aria-expanded={isExpanded}
                 aria-controls={detailId}
-                className="flex w-full flex-col items-stretch gap-2 text-left rounded-card focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+                // before: lifts the ~30px label+bar block to a ≥44px hit area
+                // inside the Row's padding without changing the visual density.
+                className="relative before:absolute before:inset-x-0 before:-inset-y-2 before:content-[''] flex w-full flex-col items-stretch gap-2 text-left rounded-card focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
               >
                 <span className="flex items-center justify-between gap-2 text-xs font-semibold text-brand-700 dark:text-brand-200">
                   <span className="truncate">{item.name}</span>
