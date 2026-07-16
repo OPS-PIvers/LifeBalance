@@ -12,7 +12,7 @@ import { buildToDosFromTemplate } from '@/utils/taskTemplates';
 import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
 import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
-import { processToggleHabit, calculateResetPoints, streakForHabit } from '@/utils/habitLogic';
+import { processToggleHabit, processStaleDownToggle, isHabitStale, calculateResetPoints, streakForHabit } from '@/utils/habitLogic';
 import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
 import { selectAutoFreezeCandidates } from '@/utils/freezeBank';
 import { accountImpactOf, effectiveAccountImpact, resolveTargetAccount } from '@/utils/accountImpact';
@@ -1215,7 +1215,41 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const toggleHabit = useCallback(async (id: string, direction: 'up' | 'down') => {
     const habit = habits.find(h => h.id === id);
     if (!habit) return;
-    const result = processToggleHabit(habit, direction);
+
+    // Lazy-reset parity with the real toggle path (useHabitActions): a stale
+    // habit's counter belongs to a previous period. 'down' undoes that prior
+    // period's completion with date-aware point deltas (never today's daily);
+    // 'up' proceeds as if the counter were already reset to 0.
+    let effectiveHabit = habit;
+    if (isHabitStale(habit)) {
+      if (direction === 'down') {
+        const staleResult = processStaleDownToggle(habit);
+        setHabits(prev => prev.map(h => h.id === id
+          ? {
+              ...h,
+              count: 0,
+              totalCount: staleResult.datesToRemove.length > 0
+                ? Math.max(0, h.totalCount - h.count)
+                : h.totalCount,
+              completedDates: staleResult.completedDates,
+              streakDays: staleResult.streakDays,
+              lastUpdated: new Date().toISOString(),
+            }
+          : h));
+        const { daily, weekly, total } = staleResult.pointsDelta;
+        if (daily !== 0 || weekly !== 0 || total !== 0) {
+          setMembers(prev => prev.map(m => m.uid === 'test-user-id'
+            ? { ...m, points: { daily: m.points.daily + daily, weekly: m.points.weekly + weekly, total: m.points.total + total } }
+            : m));
+          setTotalPoints(prev => prev + total);
+        }
+        toast.success('Mock: previous period completion undone');
+        return;
+      }
+      effectiveHabit = { ...habit, count: 0, lastUpdated: new Date().toISOString() };
+    }
+
+    const result = processToggleHabit(effectiveHabit, direction);
     if (!result) return; // e.g. decrement below 0
     setHabits(prev => prev.map(h => h.id === id ? { ...h, ...result.updatedHabit } : h));
     creditPoints(result.pointsChange);

@@ -17,7 +17,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { subDays } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { haptic } from '@/utils/haptics';
-import { getMultiplier, signedHabitPoints, isHabitPaused } from '@/utils/habitLogic';
+import { getMultiplier, signedHabitPoints, isHabitPaused, isHabitStale } from '@/utils/habitLogic';
 import StreakFlame from './StreakFlame';
 import CountUp from './CountUp';
 
@@ -37,14 +37,21 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
 
   // Logic helpers
   const isPositive = habit.type === 'positive';
-  const isActive = habit.count > 0;
+  // Staleness guard (parity with DailyHabitsWidget): a stale habit's live
+  // counter belongs to a PREVIOUS period whose auto-reset hasn't landed yet
+  // (throttled PWA timers), so render it as 0 — a pending-reset habit must
+  // never show as selected/active the next morning. Recomputed every render
+  // (cheap date compare) so a long-lived card crosses midnight correctly.
+  const isStale = isHabitStale(habit);
+  const count = isStale ? 0 : habit.count;
+  const isActive = count > 0;
   const isThreshold = habit.scoringType === 'threshold';
   
   // Challenge Logic
   const isLinkedToChallenge = activeChallenge?.relatedHabitIds.includes(habit.id);
   
   // Completion Logic
-  const isCompleted = habit.count >= habit.targetCount;
+  const isCompleted = count >= habit.targetCount;
   
   // Multipliers — period-aware (daily uses a 3/7-day ladder, weekly a 2/4-week
   // ladder). `habit.streakDays` holds the streak in the habit's own cadence, so
@@ -113,7 +120,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
     // Fire tactile feedback based on whether this tap completes the habit.
     // Reaching (or staying at) the target counts as a "success"; otherwise it
     // is a light increment nudge. Negative habits always use the light pattern.
-    const willComplete = isPositive && !isCompleted && habit.count + 1 >= habit.targetCount;
+    const willComplete = isPositive && !isCompleted && count + 1 >= habit.targetCount;
     haptic(willComplete ? 'success' : 'light');
     toggleHabit(habit.id, 'up');
   };
@@ -177,7 +184,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
             <button
               onClick={handleCardClick}
               className="main-overlay absolute inset-0 w-full h-full cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900 rounded-card"
-              aria-label={`Toggle habit: ${habit.title}, current count: ${habit.count}`}
+              aria-label={`Toggle habit: ${habit.title}, current count: ${count}`}
               tabIndex={0}
               style={{ zIndex: 1 }}
             />
@@ -186,9 +193,9 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
             <div className="shrink-0 relative group pointer-events-none" style={{ zIndex: 2 }}>
               <div className={buttonClasses}>
                 {isThreshold && !isCompleted ? (
-                  <span className="text-lg font-bold font-mono">{habit.count}</span>
+                  <span className="text-lg font-bold font-mono">{count}</span>
                 ) : isActive ? (
-                  <span className="text-xl font-bold font-mono">{habit.count}</span>
+                  <span className="text-xl font-bold font-mono">{count}</span>
                 ) : (
                   <div className="w-6 h-6 rounded-full border-2 border-current opacity-40" />
                 )}
@@ -196,7 +203,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
                 {/* Progress Ring for Threshold */}
                 {isThreshold && (
                   <ProgressRing
-                    percent={(habit.count / habit.targetCount) * 100}
+                    percent={(count / habit.targetCount) * 100}
                     strokeWidth={3}
                     trackClassName={isActive && !isCompleted ? 'text-brand-900/10 dark:text-white/10' : 'text-white/20'}
                     barClassName={isCompleted ? 'text-white' : 'text-accent-600 dark:text-accent-300'}

@@ -167,7 +167,8 @@ describe('HabitCard - core row interactions (ListRow migration regression)', () 
 
   it('tapping the X resets the habit without also toggling it', async () => {
     const user = userEvent.setup();
-    render(<HabitCard habit={{ ...mockHabit, count: 1 }} />);
+    // lastUpdated must be current: a stale habit renders unselected (no X).
+    render(<HabitCard habit={{ ...mockHabit, count: 1, lastUpdated: new Date().toISOString() }} />);
 
     await user.click(screen.getByLabelText('Reset habit progress'));
 
@@ -400,5 +401,44 @@ describe('HabitCard - React.memo', () => {
 
     // Component should still display correctly (memo preserved the DOM)
     expect(screen.getByText('Memo Habit')).toBeInTheDocument();
+  });
+});
+
+describe('HabitCard - stale habit rendering (pending-reset guard)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupMatchMedia(true);
+  });
+
+  const yesterdayIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  it('renders a stale habit (count > 0 from a previous day) as unselected', () => {
+    // Completed yesterday, overnight auto-reset never ran: count is still 2 but
+    // lastUpdated is yesterday, so the card must NOT render selected/active.
+    render(
+      <HabitCard
+        habit={{ ...mockHabit, count: 2, totalCount: 2, lastUpdated: yesterdayIso }}
+      />
+    );
+
+    // The X reset affordance only renders on an ACTIVE card.
+    expect(screen.queryByLabelText('Reset habit progress')).not.toBeInTheDocument();
+    // The toggle overlay reports the effective (reset-pending) count of 0.
+    expect(
+      screen.getByLabelText(`Toggle habit: ${mockHabit.title}, current count: 0`)
+    ).toBeInTheDocument();
+  });
+
+  it('still renders a non-stale completed habit as selected', () => {
+    render(
+      <HabitCard
+        habit={{ ...mockHabit, count: 1, totalCount: 1, lastUpdated: new Date().toISOString() }}
+      />
+    );
+
+    expect(screen.getByLabelText('Reset habit progress')).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(`Toggle habit: ${mockHabit.title}, current count: 1`)
+    ).toBeInTheDocument();
   });
 });

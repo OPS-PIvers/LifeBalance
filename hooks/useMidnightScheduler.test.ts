@@ -177,3 +177,131 @@ describe('useMidnightScheduler', () => {
     expect(first).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('useMidnightScheduler hidden→visible catch-up', () => {
+  /** Stubs document.visibilityState and dispatches the matching event. */
+  const setVisibility = (state: 'visible' | 'hidden') => {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => state,
+    });
+    document.dispatchEvent(new Event('visibilitychange'));
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers({ now: new Date('2026-06-16T18:00:00') });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    // Restore the real visibilityState getter so other tests see jsdom's default.
+    delete (document as unknown as Record<string, unknown>).visibilityState;
+  });
+
+  it('runs the callback on hidden→visible when the local day changed since the last run', async () => {
+    const callback = vi.fn(() => Promise.resolve());
+
+    await act(async () => {
+      renderHook(() => useMidnightScheduler(callback, true, { initialDelayMs: 0 }));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(callback).toHaveBeenCalledTimes(1); // immediate run, day 06-16
+
+    // Simulate a throttled PWA resume: the wall clock jumps past midnight
+    // WITHOUT any timer firing (setSystemTime does not run timers), then the
+    // page is re-foregrounded the next morning.
+    await act(async () => {
+      setVisibility('hidden');
+      vi.setSystemTime(new Date('2026-06-17T08:00:00'));
+      setVisibility('visible');
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(callback).toHaveBeenCalledTimes(2); // catch-up run
+  });
+
+  it('does NOT re-run on same-day tab flips (no day change since last run)', async () => {
+    const callback = vi.fn(() => Promise.resolve());
+
+    await act(async () => {
+      renderHook(() => useMidnightScheduler(callback, true, { initialDelayMs: 0 }));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(callback).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      setVisibility('hidden');
+      vi.setSystemTime(new Date('2026-06-16T19:30:00')); // still the same local day
+      setVisibility('visible');
+      setVisibility('hidden');
+      setVisibility('visible');
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(callback).toHaveBeenCalledTimes(1); // guard suppressed the flips
+  });
+
+  it('runs at most one catch-up per day change even for rapid visibility flips', async () => {
+    const callback = vi.fn(() => Promise.resolve());
+
+    await act(async () => {
+      renderHook(() => useMidnightScheduler(callback, true, { initialDelayMs: 0 }));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    await act(async () => {
+      setVisibility('hidden');
+      vi.setSystemTime(new Date('2026-06-17T08:00:00'));
+      setVisibility('visible');
+      setVisibility('hidden');
+      setVisibility('visible');
+      setVisibility('hidden');
+      setVisibility('visible');
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // 1 immediate + exactly 1 catch-up (the first run stamped the new day).
+    expect(callback).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores visibility events before the scheduler has started (initial delay pending)', async () => {
+    const callback = vi.fn(() => Promise.resolve());
+
+    await act(async () => {
+      renderHook(() => useMidnightScheduler(callback, true, { initialDelayMs: 60_000 }));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(callback).not.toHaveBeenCalled();
+
+    await act(async () => {
+      setVisibility('hidden');
+      setVisibility('visible');
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(callback).not.toHaveBeenCalled();
+  });
+
+  it('does not run the catch-up after unmount', async () => {
+    const callback = vi.fn(() => Promise.resolve());
+
+    let unmount: () => void = () => {};
+    await act(async () => {
+      const result = renderHook(() => useMidnightScheduler(callback, true, { initialDelayMs: 0 }));
+      unmount = result.unmount;
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(callback).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      unmount();
+      setVisibility('hidden');
+      vi.setSystemTime(new Date('2026-06-17T08:00:00'));
+      setVisibility('visible');
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(callback).toHaveBeenCalledTimes(1);
+  });
+});

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { startOfDay, addDays, differenceInMilliseconds } from 'date-fns';
+import { getLocalDateString } from '@/utils/dateHelpers';
 
 /**
  * A hook that schedules a callback to run at midnight and periodically.
@@ -25,8 +26,13 @@ export const useMidnightScheduler = (
     callbackRef.current = callback;
   }, [callback]);
 
+  // Local day (yyyy-MM-dd) of the most recent run — drives the hidden→visible
+  // catch-up below. null until the first run (e.g. while initialDelayMs pends).
+  const lastRunDayRef = useRef<string | null>(null);
+
   const safeCallback = useCallback(async () => {
     if (!isMountedRef.current) return;
+    lastRunDayRef.current = getLocalDateString();
     try {
       await callbackRef.current();
     } catch (error) {
@@ -72,6 +78,22 @@ export const useMidnightScheduler = (
       scheduleMidnightCheck();
     };
 
+    // Catch-up on resume: on an installed PWA the page can sit hidden for days
+    // with timers throttled/suspended, so the midnight timeout and the 5-min
+    // interval never fire while backgrounded — habits/points are still stale
+    // when the user re-foregrounds the app the next morning. Run the callback
+    // immediately on hidden→visible, but ONLY when the local day changed since
+    // the last run, so rapid tab flips within the same day never spam it.
+    const handleVisibilityChange = () => {
+      if (!isMountedRef.current) return;
+      if (document.visibilityState !== 'visible') return;
+      if (lastRunDayRef.current === null) return; // scheduler hasn't started yet
+      if (lastRunDayRef.current !== getLocalDateString()) {
+        safeCallback();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     // Apply initial delay to stagger initialization and prevent race conditions
     if (initialDelayMs > 0) {
       initialDelayTimeoutId = setTimeout(startScheduler, initialDelayMs);
@@ -81,6 +103,7 @@ export const useMidnightScheduler = (
 
     return () => {
       isMountedRef.current = false;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearTimeout(initialDelayTimeoutId);
       clearInterval(intervalId);
       clearTimeout(midnightTimeoutId);

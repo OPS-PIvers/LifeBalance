@@ -26,6 +26,7 @@ import {
 } from '@/types/schema';
 import {
   processToggleHabit,
+  processStaleDownToggle,
   calculateResetPoints,
   streakForHabit,
   streakEndingOnForHabit,
@@ -228,14 +229,51 @@ export const useHabitActions = (
     let effectiveHabit = habit;
 
     if (isStale) {
-      // If toggling down on a stale habit, just perform a reset (0 points)
+      // Down-toggle on a stale habit = "undo the previous period's completion"
+      // (the overnight auto-reset never ran, so the card still showed selected).
+      // Remove that prior period's completion date(s) AND reverse the points it
+      // earned with date-aware gating (processStaleDownToggle): total always,
+      // weekly only when the reversed date is still in the current Monday-
+      // anchored week, daily never (the date is by definition not today) — so
+      // deselecting yesterday's leftover can't drive today's daily negative.
+      // Habit + points commit in ONE writeBatch (project atomicity rule).
       if (direction === 'down') {
-        await updateDoc(doc(db, `households/${householdId}/habits`, id), {
+        const staleResult = processStaleDownToggle(habit);
+        const staleBatch = writeBatch(db);
+
+        staleBatch.update(doc(db, `households/${householdId}/habits`, id), {
           count: 0,
+          // Reversing the prior period's completion also disavows its counted
+          // actions from the lifetime counter (mirrors resetHabitDay).
+          totalCount: staleResult.datesToRemove.length > 0
+            ? Math.max(0, habit.totalCount - habit.count)
+            : habit.totalCount,
+          // Server-side delta, never the locally-computed array (a stale
+          // offline cache would wholesale-overwrite completion history).
+          ...(staleResult.datesToRemove.length > 0
+            ? { completedDates: arrayRemove(...staleResult.datesToRemove) }
+            : {}),
+          streakDays: staleResult.streakDays,
           lastUpdated: serverTimestamp(),
         });
 
-        toast("Habit reset to 0 for today. Previous points preserved.", { icon: toastIcon(CalendarDays) });
+        const { daily, weekly, total } = staleResult.pointsDelta;
+        if (daily !== 0 || weekly !== 0 || total !== 0) {
+          staleBatch.update(habitPointsTargetRef(householdId, habit.assignedTo), {
+            ...(daily !== 0 ? { 'points.daily': increment(daily) } : {}),
+            ...(weekly !== 0 ? { 'points.weekly': increment(weekly) } : {}),
+            ...(total !== 0 ? { 'points.total': increment(total) } : {}),
+          });
+        }
+
+        await staleBatch.commit();
+
+        toast(
+          staleResult.datesToRemove.length > 0
+            ? "Previous period's completion undone."
+            : 'Habit reset to 0 for today.',
+          { icon: toastIcon(CalendarDays) }
+        );
         return;
       }
 
@@ -281,6 +319,11 @@ export const useHabitActions = (
     // member.points — their personal balance for rewards/allowance — instead of the
     // shared household pool. Unassigned/shared habits keep crediting the household,
     // and only those feed the household-points recompute (see habitLogic.ts).
+    // Date-awareness invariant: on this NON-STALE path, processToggleHabit only
+    // ever adds/removes TODAY from completedDates (a stale habit — whose counter
+    // could reference a prior period — was either lazily zeroed above for 'up'
+    // or diverted to the processStaleDownToggle branch for 'down'), so the flat
+    // daily+weekly+total increment is always attributing to the correct date.
     if (result.pointsChange !== 0) {
       batch.update(habitPointsTargetRef(householdId, habit.assignedTo), {
         'points.daily': increment(result.pointsChange),

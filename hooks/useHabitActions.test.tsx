@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { format, startOfWeek, subDays } from 'date-fns';
 import type { Habit, HouseholdMember, Household } from '@/types/schema';
@@ -876,5 +876,140 @@ describe('useHabitActions.updateHabit (Plan 080c-3: assignedTo round-trips throu
 
     const payload = lastUpdatePayload();
     expect('assignedTo' in payload).toBe(false);
+  });
+});
+
+describe('useHabitActions.toggleHabit (stale deselect — date-aware reversal)', () => {
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    commitCount = 0;
+    incrementMock.mockClear();
+    updateDocMock.mockClear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("mid-week: clears yesterday's completion, debits weekly+total, NEVER today's daily, in one batch", async () => {
+    // Wednesday 2026-07-15; habit completed Tuesday and never auto-reset.
+    vi.useFakeTimers({ now: new Date('2026-07-15T09:00:00') });
+    const habit = baseHabit({
+      scoringType: 'threshold',
+      count: 1,
+      totalCount: 5,
+      completedDates: ['2026-07-14'],
+      lastUpdated: '2026-07-14T20:00:00',
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'down');
+    });
+
+    const hu = habitUpdate();
+    expect(hu).toBeDefined();
+    expect(hu!.data['count']).toBe(0);
+    expect(hu!.data['totalCount']).toBe(4);
+    expect(hu!.data['completedDates']).toEqual({ __arrayRemove: ['2026-07-14'] });
+
+    const hh = householdUpdate();
+    expect(hh).toBeDefined();
+    // The completion being reversed happened YESTERDAY: today's daily bucket
+    // never held those points, so it must not be debited (no negative daily).
+    expect(hh!.data['points.daily']).toBeUndefined();
+    // Yesterday is inside the current Monday-anchored week, whose bucket DOES
+    // hold the award — debit it so the corrective recompute agrees.
+    expect(hh!.data['points.weekly']).toEqual({ __increment: -10 });
+    expect(hh!.data['points.total']).toEqual({ __increment: -10 });
+
+    // Habit + points committed atomically in a single writeBatch.
+    expect(commitCount).toBe(1);
+  });
+
+  it('Sunday-complete / Monday-deselect: only total is debited across the week boundary', async () => {
+    // Monday 2026-07-13; habit completed Sunday 2026-07-12 (previous ISO week).
+    vi.useFakeTimers({ now: new Date('2026-07-13T08:00:00') });
+    const habit = baseHabit({
+      scoringType: 'threshold',
+      count: 1,
+      totalCount: 1,
+      completedDates: ['2026-07-12'],
+      lastUpdated: '2026-07-12T21:00:00',
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'down');
+    });
+
+    const hu = habitUpdate();
+    expect(hu!.data['count']).toBe(0);
+    expect(hu!.data['completedDates']).toEqual({ __arrayRemove: ['2026-07-12'] });
+
+    const hh = householdUpdate();
+    expect(hh).toBeDefined();
+    expect(hh!.data['points.daily']).toBeUndefined();
+    expect(hh!.data['points.weekly']).toBeUndefined(); // Sunday = last week
+    expect(hh!.data['points.total']).toEqual({ __increment: -10 });
+    expect(commitCount).toBe(1);
+  });
+
+  it('stale deselect with no recorded prior completion just zeroes the counter (no points write)', async () => {
+    vi.useFakeTimers({ now: new Date('2026-07-15T09:00:00') });
+    const habit = baseHabit({
+      scoringType: 'threshold',
+      targetCount: 3,
+      count: 2, // below target: never entered completedDates
+      totalCount: 2,
+      completedDates: [],
+      lastUpdated: '2026-07-14T20:00:00',
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'down');
+    });
+
+    const hu = habitUpdate();
+    expect(hu).toBeDefined();
+    expect(hu!.data['count']).toBe(0);
+    expect(hu!.data['completedDates']).toBeUndefined();
+    expect(hu!.data['totalCount']).toBe(2); // nothing disavowed
+    expect(householdUpdate()).toBeUndefined();
+  });
+
+  it("an assigned chore's stale deselect debits the assignee's member doc, not the household", async () => {
+    vi.useFakeTimers({ now: new Date('2026-07-15T09:00:00') });
+    const habit = baseHabit({
+      scoringType: 'threshold',
+      count: 1,
+      totalCount: 1,
+      completedDates: ['2026-07-14'],
+      lastUpdated: '2026-07-14T20:00:00',
+      assignedTo: 'kid_leo',
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'down');
+    });
+
+    expect(householdUpdate()).toBeUndefined();
+    const member = capturedUpdates.find(
+      u => u.ref.__path === `${householdPath}/members/kid_leo`
+    );
+    expect(member).toBeDefined();
+    expect(member!.data['points.total']).toEqual({ __increment: -10 });
+    expect(member!.data['points.daily']).toBeUndefined();
   });
 });

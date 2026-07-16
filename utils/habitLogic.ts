@@ -609,6 +609,90 @@ export const processToggleHabit = (
   };
 };
 
+/** Result of reversing a STALE habit's prior-period completion (down-toggle). */
+export interface StaleDownToggleResult {
+  /** Prior-period completion dates to strip from completedDates (may be empty). */
+  datesToRemove: string[];
+  /** completedDates after the removal. */
+  completedDates: string[];
+  /** Recomputed (period-aware) streak after the removal. */
+  streakDays: number;
+  /**
+   * Signed deltas to APPLY to the points buckets (≤ 0 for positive habits).
+   * Date-aware gating mirrors deleteHabitSubmission/resetHabitDay: `total`
+   * always absorbs the reversal, `weekly` only when the reversed date falls in
+   * the current Monday-anchored week, `daily` only when it is today — which by
+   * construction never happens here (only prior-period dates are removed), so
+   * a stale deselect can never drive today's daily bucket negative.
+   */
+  pointsDelta: { daily: number; weekly: number; total: number };
+}
+
+/**
+ * Process a 'down' toggle on a STALE habit (its live counter belongs to a
+ * previous period that was never auto-reset — e.g. an overnight reset missed
+ * on a throttled PWA). Deselecting such a habit means "undo that previous
+ * period's completion", so this removes the prior period's completion date(s)
+ * — the most recent completed day for daily habits, that day's whole ISO week
+ * for weekly ones (mirroring resetHabit's period scoping) — and reverses the
+ * points that period actually earned, using the same per-date attribution the
+ * corrective recompute uses (`pointsForHabitOnDate`, historical multiplier
+ * included) so the next login/midnight recompute agrees with the reversal.
+ *
+ * Pure: the caller (useHabitActions.toggleHabit's stale-down branch and the
+ * Mock context) commits the returned fields plus `count: 0` atomically.
+ *
+ * @param habit - The stale habit being deselected
+ * @param today - "Today" (YYYY-MM-DD, caller-local); injectable for tests
+ */
+export const processStaleDownToggle = (
+  habit: Habit,
+  today: string = getLocalDateString(),
+): StaleDownToggleResult => {
+  const weekStartOf = (d: string): string =>
+    format(startOfWeek(parseISO(d), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+  const currentWeekStart = weekStartOf(today);
+
+  // Only PRIOR-period completions are candidates: the stale counter describes
+  // the period of the habit's most recent completion, which staleness
+  // guarantees is before the current period. Current-period dates (defensive:
+  // e.g. a completion written while lastUpdated stayed unsynced) are left
+  // alone — reversing those is resetHabit's job.
+  const priorDates = habit.period === 'weekly'
+    ? habit.completedDates.filter(d => weekStartOf(d) < currentWeekStart)
+    : habit.completedDates.filter(d => d < today);
+
+  let datesToRemove: string[] = [];
+  if (priorDates.length > 0) {
+    const lastCompleted = priorDates.reduce((a, b) => (a > b ? a : b));
+    datesToRemove = habit.period === 'weekly'
+      ? priorDates.filter(d => weekStartOf(d) === weekStartOf(lastCompleted))
+      : [lastCompleted];
+  }
+
+  const removeSet = new Set(datesToRemove);
+  const completedDates = habit.completedDates.filter(d => !removeSet.has(d));
+
+  // Reverse exactly what the recompute would attribute to each removed date
+  // (historical streak multiplier, weekly once-per-week attribution), gated
+  // per bucket by the removed DATE — not blindly against today's counters.
+  const pointsDelta = { daily: 0, weekly: 0, total: 0 };
+  for (const date of datesToRemove) {
+    const earned = pointsForHabitOnDate(habit, date, today);
+    if (earned === 0) continue;
+    pointsDelta.total -= earned;
+    if (date >= currentWeekStart && date <= today) pointsDelta.weekly -= earned;
+    if (date === today) pointsDelta.daily -= earned;
+  }
+
+  const bridged = effectiveFrozenDates({ ...habit, completedDates }, today);
+  const streakDays = habit.period === 'weekly'
+    ? calculateWeeklyStreak(completedDates, today, bridged)
+    : calculateStreak(completedDates, today, bridged);
+
+  return { datesToRemove, completedDates, streakDays, pointsDelta };
+};
+
 /**
  * Calculate points to remove when resetting a habit
  * @param habit - The habit being reset

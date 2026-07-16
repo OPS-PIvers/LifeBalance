@@ -8,6 +8,7 @@ import {
   streakEndingOnForHabit,
   getMultiplier,
   processToggleHabit,
+  processStaleDownToggle,
   calculateResetPoints,
   streakEndingOn,
   calculatePointsForDate,
@@ -1976,5 +1977,108 @@ describe('pointsForHabitOnDate (weekly incremental, past ISO week)', () => {
     expect(
       pointsForHabitOnDate(habit, pastMonday) + pointsForHabitOnDate(habit, pastTuesday)
     ).toBe(calculatePointsForDateRange([habit], pastMonday, pastTuesday));
+  });
+});
+
+describe('processStaleDownToggle (date-aware stale deselect)', () => {
+  // Fixed dates for determinism (all injectable via the `today` param):
+  // Mon 2026-07-13 … Sun 2026-07-19 is the "current" ISO week.
+  const WED = '2026-07-15';
+  const TUE = '2026-07-14'; // yesterday relative to WED, same week
+  const MON = '2026-07-13';
+  const SUN = '2026-07-12'; // previous ISO week
+
+  const staleHabit = (overrides: Partial<Habit>): Habit => ({
+    id: 'h1',
+    title: 'Read',
+    category: 'Health',
+    type: 'positive',
+    period: 'daily',
+    scoringType: 'threshold',
+    basePoints: 10,
+    targetCount: 1,
+    count: 1,
+    totalCount: 1,
+    streakDays: 1,
+    completedDates: [],
+    lastUpdated: '2026-07-14T20:00:00',
+    ...overrides,
+  } as Habit);
+
+  it('removes yesterday and reverses total + weekly (same week) but NEVER daily', () => {
+    const habit = staleHabit({ completedDates: [TUE] });
+    const result = processStaleDownToggle(habit, WED);
+
+    expect(result.datesToRemove).toEqual([TUE]);
+    expect(result.completedDates).toEqual([]);
+    expect(result.streakDays).toBe(0);
+    // Yesterday's award never touched TODAY's daily bucket — it must not be
+    // debited from it (that was the negative-daily bug).
+    expect(result.pointsDelta.daily).toBe(0);
+    // Yesterday IS in the current Monday-anchored week, so the weekly bucket
+    // (which still holds that award) is debited — matching the corrective
+    // recompute and the deleteHabitSubmission gating.
+    expect(result.pointsDelta.weekly).toBe(-10);
+    expect(result.pointsDelta.total).toBe(-10);
+  });
+
+  it('Sunday-complete / Monday-deselect: only total is reversed across the week boundary', () => {
+    const habit = staleHabit({ completedDates: [SUN], lastUpdated: '2026-07-12T20:00:00' });
+    const result = processStaleDownToggle(habit, MON);
+
+    expect(result.datesToRemove).toEqual([SUN]);
+    expect(result.pointsDelta.daily).toBe(0);
+    expect(result.pointsDelta.weekly).toBe(0); // Sunday belongs to LAST week
+    expect(result.pointsDelta.total).toBe(-10);
+  });
+
+  it('reverses the HISTORICAL multiplier the removed day actually earned', () => {
+    // 3-day chain ending yesterday → yesterday was awarded at 1.5x (15 pts).
+    const habit = staleHabit({ completedDates: [SUN, MON, TUE], streakDays: 3 });
+    const result = processStaleDownToggle(habit, WED);
+
+    // Only the most recent prior day is removed; older history is preserved.
+    expect(result.datesToRemove).toEqual([TUE]);
+    expect(result.completedDates).toEqual([SUN, MON]);
+    expect(result.pointsDelta.total).toBe(-15);
+    expect(result.pointsDelta.weekly).toBe(-15);
+    expect(result.pointsDelta.daily).toBe(0);
+    // Remaining chain no longer reaches today/yesterday → streak collapses.
+    expect(result.streakDays).toBe(0);
+  });
+
+  it('weekly habit: removes the whole prior ISO week and reverses its single award from total only', () => {
+    const habit = staleHabit({
+      period: 'weekly',
+      completedDates: ['2026-07-06', '2026-07-08'], // both in prior week (Mon/Wed)
+      count: 2,
+      totalCount: 2,
+      lastUpdated: '2026-07-08T20:00:00',
+    });
+    const result = processStaleDownToggle(habit, WED);
+
+    expect([...result.datesToRemove].sort()).toEqual(['2026-07-06', '2026-07-08']);
+    expect(result.completedDates).toEqual([]);
+    // The week's single threshold award (attributed to its first completed day).
+    expect(result.pointsDelta.total).toBe(-10);
+    expect(result.pointsDelta.weekly).toBe(0); // prior week ≠ current week
+    expect(result.pointsDelta.daily).toBe(0);
+  });
+
+  it('returns empty removal and zero deltas when there is no prior-period completion', () => {
+    const habit = staleHabit({ completedDates: [], count: 1 });
+    const result = processStaleDownToggle(habit, WED);
+
+    expect(result.datesToRemove).toEqual([]);
+    expect(result.completedDates).toEqual([]);
+    expect(result.pointsDelta).toEqual({ daily: 0, weekly: 0, total: 0 });
+  });
+
+  it('leaves current-period completions alone (defensive: only prior periods are reversed)', () => {
+    const habit = staleHabit({ completedDates: [WED, TUE] });
+    const result = processStaleDownToggle(habit, WED);
+
+    expect(result.datesToRemove).toEqual([TUE]);
+    expect(result.completedDates).toEqual([WED]);
   });
 });
