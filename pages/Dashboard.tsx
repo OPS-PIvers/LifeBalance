@@ -516,15 +516,15 @@ const Dashboard: React.FC = () => {
             case 'activityFeed':
               // Compact Recent Activity
               return <ActivityFeedWidget key={id} />;
+            case 'habitCoach':
+              // Habit Coach (F-DASH-03) — AI coaching on habit patterns
+              // (habits domain). Customizable (default-hidden) since the
+              // lean-triage defaults landed.
+              return isModuleEnabled('habits') ? <HabitCoachWidget key={id} /> : null;
             default:
               return null;
           }
         })}
-
-        {/* Habit Coach (F-DASH-03) — wires up analyzeHabitPatterns(), a fully
-            built but previously unwired AI coaching surface (habits domain).
-            Not part of the F-XCUT-02 customizable widgetOrder. */}
-        {isModuleEnabled('habits') && <HabitCoachWidget />}
 
         {/* Setup checklist (F-PLAT-03) — nudges a few high-value setup actions
             the onboarding wizard doesn't cover; self-clears once every item is
