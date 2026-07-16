@@ -486,7 +486,12 @@ const CookMode: React.FC<{ meal: WeeklyPlanMeal; steps: ScheduledStep[]; onClose
       </div>
 
       <div className="h-1.5 bg-brand-100 dark:bg-brand-800 rounded-full mt-3 overflow-hidden">
-        <div className="h-full bg-accent-600 transition-[width] duration-(--duration-base) ease-(--ease-standard)" style={{ width: `${progress}%` }} />
+        {/* scaleX (not width) so the fill animates on the compositor without
+            relayout. */}
+        <div
+          className="h-full w-full origin-left bg-accent-600 transition-transform duration-(--duration-base) ease-(--ease-standard)"
+          style={{ transform: `scaleX(${progress / 100})` }}
+        />
       </div>
 
       <div className="flex-1 flex flex-col justify-center min-h-0">
