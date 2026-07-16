@@ -22,7 +22,8 @@ test.describe('Bucket reallocation (Test Mode)', () => {
     });
 
     await bottomNav(page).getByRole('link', { name: 'Money', exact: true }).click();
-    await page.getByRole('tab', { name: 'Buckets' }).click();
+    // Buckets is the default segment of the Balances tab (4-tab Money IA).
+    await page.getByRole('tab', { name: 'Balances' }).click();
 
     // The overspent Gas card surfaces the Fix affordance.
     await page.getByRole('button', { name: 'Fix' }).click();
