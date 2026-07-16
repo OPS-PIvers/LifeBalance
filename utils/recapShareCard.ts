@@ -89,7 +89,9 @@ async function loadShareCardFonts(): Promise<{ display: string; sans: string }> 
     const [besley, grotesk] = await Promise.all([
       new FontFace('Besley', "url('/fonts/besley-latin.woff2') format('woff2')", { weight: '400 900' }).load(),
       new FontFace('Schibsted Grotesk', "url('/fonts/schibsted-grotesk-latin.woff2') format('woff2')", {
-        weight: '400 600',
+        // The variable file covers 400–700 (see index.css); the card draws
+        // headline text at 700, which an under-declared range would clamp.
+        weight: '400 700',
       }).load(),
     ]);
     document.fonts.add(besley);
