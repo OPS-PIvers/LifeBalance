@@ -4,13 +4,14 @@ import { Habit, HouseholdMember } from '@/types/schema';
 import { Skeleton } from '@/components/ui/Skeleton';
 import HabitCategoryList from '@/components/habits/HabitCategoryList';
 import {
-  Sparkles, LayoutList, GraduationCap, Calendar, CalendarPlus,
-  ListChecks, Check, Flame, Star, BarChart2, Gift, Trophy, Archive,
+  Sparkles, CalendarPlus,
+  ListChecks, Check, Flame, Star, Archive,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
 import Eyebrow from '@/components/ui/Eyebrow';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import HabitCreatorWizard from '@/components/modals/HabitCreatorWizard';
 import SmartHabitAdjustModal from '@/components/modals/SmartHabitAdjustModal';
 import SmartHabitReorderModal from '@/components/modals/SmartHabitReorderModal';
@@ -33,9 +34,39 @@ import { generateCsvExport } from '@/utils/exportUtils';
 import toast from 'react-hot-toast';
 import { format, subDays } from 'date-fns';
 
-// Allowed Habits sub-tabs. Module-level so the array identity is stable and
-// other screens can deep-link via `navigate('/habits', { state: { tab } })`.
-const HABIT_TABS = ['track', 'history', 'coach', 'rewards', 'challenges', 'insights'] as const;
+// Habits' IA is 4 top-level tabs (the old 6 overflowed the phone viewport —
+// 2026-07 critique P2): Track, Progress (History + Insights behind a segment
+// toggle), Rewards (+ Challenges behind a segment toggle), Coach. ONE state
+// value holds the full location: the legacy view keys stay valid so every
+// existing `navigate('/habits', { state: { tab } })` deep-link keeps working
+// and selects the right group WITH the right segment.
+const HABIT_TABS = [
+  'track',
+  // Progress group ('progress' = its default segment)
+  'progress', 'history', 'insights',
+  // Rewards group
+  'rewards', 'challenges',
+  'coach',
+] as const;
+
+type HabitTabValue = (typeof HABIT_TABS)[number];
+
+/** Collapse any tab value (incl. legacy view keys) to its top-level tab. */
+const topTabOf = (value: string): 'track' | 'progress' | 'rewards' | 'coach' => {
+  switch (value) {
+    case 'history':
+    case 'insights':
+    case 'progress':
+      return 'progress';
+    case 'rewards':
+    case 'challenges':
+      return 'rewards';
+    case 'coach':
+      return 'coach';
+    default:
+      return 'track';
+  }
+};
 
 // Lazy-loaded so the heavy modal/Drawer dependencies stay out of the Habits boot
 // bundle and only load when a tab's "manage" CTA is actually used (mirrors the
@@ -187,7 +218,17 @@ const Habits: React.FC = () => {
   // F-HABITS-05: Track tab toggles between active and archived habits.
   const [showArchived, setShowArchived] = useState(false);
   // Controlled so the toolbar points glance can deep-link straight to Rewards.
-  const [activeTab, setActiveTab] = useDeepLinkTab('track', HABIT_TABS);
+  // `activeView` may be a legacy view key ('history', 'challenges', …) — the
+  // Tabs bar renders its top-level group and the group's SegmentedControl
+  // renders the specific view (same pattern as Money's 4-tab IA).
+  const [activeView, setActiveView] = useDeepLinkTab('track', HABIT_TABS);
+  const activeTab = topTabOf(activeView);
+  const selectTab = (value: string) => {
+    // Entering a group via its top trigger shows the group's default segment.
+    setActiveView(value === 'progress' ? 'history' : value);
+  };
+  const progressSegment: HabitTabValue = activeView === 'insights' ? 'insights' : 'history';
+  const rewardsSegment: HabitTabValue = activeView === 'challenges' ? 'challenges' : 'rewards';
   // Global search deep-link (v1.1): scroll-to + briefly flash the specific
   // habit row selected in SearchOverlay, on top of the tab-level jump above.
   const highlightHabitId = useDeepLinkHighlight();
@@ -332,7 +373,7 @@ const Habits: React.FC = () => {
           off. */}
       <Tabs
         value={!powerToolsEnabled && activeTab === 'coach' ? 'track' : activeTab}
-        onValueChange={setActiveTab}
+        onValueChange={selectTab}
       >
         {/* Compact PageHeader (title+subtitle) with the overflow menu as its
             actions slot, replacing the hand-rolled pt-8/text-3xl header — see
@@ -377,33 +418,14 @@ const Habits: React.FC = () => {
             primary bottom-nav-adjacent navigation (only "Track" is the
             daily-use default). */}
         <div className="px-4 mb-4">
+          {/* Text-only triggers (matching Money's 4-tab bar) — with the 16px
+              icons the four tabs overflowed 375px by ~60px, which is the exact
+              problem this consolidation removes. */}
           <TabsList>
-            <TabsTrigger value="track">
-              <LayoutList size={16} />
-              Track
-            </TabsTrigger>
-            <TabsTrigger value="history">
-              <Calendar size={16} />
-              History
-            </TabsTrigger>
-            {powerToolsEnabled && (
-              <TabsTrigger value="coach">
-                <GraduationCap size={16} />
-                Coach
-              </TabsTrigger>
-            )}
-            <TabsTrigger value="rewards">
-              <Gift size={16} />
-              Rewards
-            </TabsTrigger>
-            <TabsTrigger value="challenges">
-              <Trophy size={16} />
-              Challenges
-            </TabsTrigger>
-            <TabsTrigger value="insights">
-              <BarChart2 size={16} />
-              Insights
-            </TabsTrigger>
+            <TabsTrigger value="track">Track</TabsTrigger>
+            <TabsTrigger value="progress">Progress</TabsTrigger>
+            <TabsTrigger value="rewards">Rewards</TabsTrigger>
+            {powerToolsEnabled && <TabsTrigger value="coach">Coach</TabsTrigger>}
           </TabsList>
         </div>
 
@@ -468,8 +490,21 @@ const Habits: React.FC = () => {
             )}
           </TabsContent>
 
-          <TabsContent value="history">
-            <HabitHistoryCalendar />
+          <TabsContent value="progress">
+            <div className="space-y-4">
+              <SegmentedControl
+                name="Progress view"
+                size="sm"
+                tone="warm"
+                options={[
+                  { value: 'history', label: 'History' },
+                  { value: 'insights', label: 'Insights' },
+                ]}
+                value={progressSegment}
+                onChange={setActiveView}
+              />
+              {progressSegment === 'history' ? <HabitHistoryCalendar /> : <HabitsInsightsTab />}
+            </div>
           </TabsContent>
 
           {powerToolsEnabled && (
@@ -479,15 +514,24 @@ const Habits: React.FC = () => {
           )}
 
           <TabsContent value="rewards">
-            <HabitsRewardsTab />
-          </TabsContent>
-
-          <TabsContent value="challenges">
-            <HabitsChallengesTab onOpenChallengeHub={() => setIsChallengeHubOpen(true)} />
-          </TabsContent>
-
-          <TabsContent value="insights">
-            <HabitsInsightsTab />
+            <div className="space-y-4">
+              <SegmentedControl
+                name="Rewards view"
+                size="sm"
+                tone="warm"
+                options={[
+                  { value: 'rewards', label: 'Rewards' },
+                  { value: 'challenges', label: 'Challenges' },
+                ]}
+                value={rewardsSegment}
+                onChange={setActiveView}
+              />
+              {rewardsSegment === 'rewards' ? (
+                <HabitsRewardsTab />
+              ) : (
+                <HabitsChallengesTab onOpenChallengeHub={() => setIsChallengeHubOpen(true)} />
+              )}
+            </div>
           </TabsContent>
         </div>
       </Tabs>
