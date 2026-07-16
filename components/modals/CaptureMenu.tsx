@@ -5,15 +5,17 @@ import { CaptureMagicAction } from './CaptureMagicAction';
 import type { MagicActionResponse } from '@/services/geminiService.types';
 import toast from 'react-hot-toast';
 
-// One-time-per-session PII disclaimer: shown until the user explicitly
-// dismisses it, then suppressed for the rest of the browser session. Never
+// One-time-per-device PII disclaimer: shown until the user explicitly
+// dismisses it, then suppressed on this device (localStorage — it was
+// per-session, which re-injected compliance anxiety into the app's
+// highest-frequency flow every browser session; round-3 critique). Never
 // auto-set on mere render — only the explicit dismiss writes the key.
 const PII_NOTICE_KEY = 'lifebalance_pii_notice_seen';
 
-/** Lazily read sessionStorage, guarding against jsdom/private-mode throws. */
+/** Lazily read localStorage, guarding against jsdom/private-mode throws. */
 const readPiiNoticeSeen = (): boolean => {
   try {
-    return sessionStorage.getItem(PII_NOTICE_KEY) !== null;
+    return localStorage.getItem(PII_NOTICE_KEY) !== null;
   } catch {
     return false;
   }
@@ -43,7 +45,7 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
 
   const dismissPiiNotice = () => {
     try {
-      sessionStorage.setItem(PII_NOTICE_KEY, '1');
+      localStorage.setItem(PII_NOTICE_KEY, '1');
     } catch {
       // Ignore — worst case the notice reappears next render, which is safe.
     }

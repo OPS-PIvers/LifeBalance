@@ -112,7 +112,9 @@ describe('CaptureModal', () => {
   it('renders correctly when open', () => {
     render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
     expect(screen.getByTestId('drawer')).toBeInTheDocument();
-    expect(screen.getByText('Add Transaction')).toBeInTheDocument(); // Default title
+    // Menu view with multiple capture types keeps the generic title — the
+    // type selector below carries the specifics (round-3 critique).
+    expect(screen.getByText('Capture')).toBeInTheDocument();
   });
 
   it('does not render when closed', () => {
@@ -137,8 +139,9 @@ describe('CaptureModal', () => {
     // Click To-Do tab
     fireEvent.click(screen.getByText('To-Do'));
 
-    // Check header update
-    expect(screen.getByText('New Task')).toBeInTheDocument();
+    // Title stays the generic 'Capture' while the multi-type selector is
+    // visible; the selected segment communicates the type.
+    expect(screen.getByText('Capture')).toBeInTheDocument();
 
     // Check content update
     expect(screen.getByTestId('capture-todo-tab')).toBeInTheDocument();
@@ -151,8 +154,8 @@ describe('CaptureModal', () => {
     // Click Shop tab
     fireEvent.click(screen.getByText('Shop'));
 
-    // Check header update
-    expect(screen.getByText('Add Item')).toBeInTheDocument();
+    // Generic title while the multi-type selector is visible (see above).
+    expect(screen.getByText('Capture')).toBeInTheDocument();
 
     // Check content update
     expect(screen.getByTestId('capture-shopping-tab')).toBeInTheDocument();
@@ -168,7 +171,7 @@ describe('CaptureModal', () => {
     // Go back to Expense
     fireEvent.click(screen.getByText('Expense'));
     expect(screen.getByTestId('capture-menu')).toBeInTheDocument();
-    expect(screen.getByText('Add Transaction')).toBeInTheDocument();
+    expect(screen.getByText('Capture')).toBeInTheDocument();
   });
 
   // --- Plan 090: capture-tab cascade ---
@@ -198,8 +201,9 @@ describe('CaptureModal', () => {
     setEnabledModules(['plan', 'todos', 'shopping']);
     render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
 
-    // First enabled tab is To-Do — its content + title should be active.
-    expect(screen.getByText('New Task')).toBeInTheDocument();
+    // First enabled tab is To-Do — its content is active (title stays the
+    // generic 'Capture' since To-Do + Shop are both selectable).
+    expect(screen.getByText('Capture')).toBeInTheDocument();
     expect(screen.getByTestId('capture-todo-tab')).toBeInTheDocument();
     expect(screen.queryByTestId('capture-menu')).not.toBeInTheDocument();
   });

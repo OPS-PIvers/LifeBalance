@@ -676,16 +676,26 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
     <div className="flex flex-col border-b border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
       <div className="flex items-center justify-between px-6 py-4">
         <h2 id="capture-drawer-title" className="font-display text-xl font-semibold text-brand-800 dark:text-brand-100">
-          {effectiveTab === 'transaction' && (
-            view === 'menu' ? 'Add Transaction' :
-            view === 'camera' ? 'Scan Receipt' :
-            view === 'upload' ? 'Upload Image' :
-            view === 'manual' ? 'Manual Entry' :
-            view === 'processing' ? 'Processing' : 'Review'
+          {view === 'menu' && tabOptions.length > 1 ? (
+            // While the type selector below offers every capture kind, a
+            // type-specific title ("Add Transaction") contradicted the FAB's
+            // "transaction, task, or item" promise (round-3 critique). The
+            // title specializes once a specific flow is entered.
+            'Capture'
+          ) : (
+            <>
+              {effectiveTab === 'transaction' && (
+                view === 'menu' ? 'Add Transaction' :
+                view === 'camera' ? 'Scan Receipt' :
+                view === 'upload' ? 'Upload Image' :
+                view === 'manual' ? 'Manual Entry' :
+                view === 'processing' ? 'Processing' : 'Review'
+              )}
+              {effectiveTab === 'todo' && 'New Task'}
+              {effectiveTab === 'shopping' && 'Add Item'}
+              {effectiveTab === null && 'Capture'}
+            </>
           )}
-          {effectiveTab === 'todo' && 'New Task'}
-          {effectiveTab === 'shopping' && 'Add Item'}
-          {effectiveTab === null && 'Capture'}
         </h2>
         <Button
           variant="subtle"
