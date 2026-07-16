@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef, useId } from 'react';
 import { useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Rows3, Grid2x2, List, Camera, Sparkles, Plus, Repeat } from 'lucide-react';
+import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Rows3, Grid2x2, List, Camera, Smartphone, Sparkles, Plus, Repeat } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { quadrantForTodo, QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhower';
@@ -515,11 +515,14 @@ const ToDosPage: React.FC = () => {
     });
   }, []);
 
-  // The 2×2 grid's compact chips have no selection affordance, so batch
-  // selection falls back to the stacked quadrant sections — same buckets,
-  // selectable rows. The stored preference is untouched.
+  // The 2×2 grid falls back to the stacked quadrant sections — same buckets,
+  // full rows — whenever it can't do its job: in selection mode its compact
+  // chips have no selection affordance, and in portrait the four quadrants
+  // can't fit side by side (a full-screen "rotate your phone" wall would hide
+  // every task in the phone's default orientation). The stored preference is
+  // untouched, so rotating to landscape restores the grid.
   const effectiveArrangement: Arrangement =
-    isSelectionMode && arrangement === 'grid' ? 'matrix' : arrangement;
+    arrangement === 'grid' && (isSelectionMode || !isLandscape) ? 'matrix' : arrangement;
 
   const gridOverlayVisible =
     viewMode === 'active' && effectiveArrangement === 'grid' && isLandscape;
@@ -1108,6 +1111,16 @@ const ToDosPage: React.FC = () => {
                urgency (derived from due date, same window as Immediate) ×
                importance (the star). Stacked sections in actionability order;
                the quick-add bar sits in the sticky card above. */
+            <>
+            {arrangement === 'grid' && !isSelectionMode && (
+              /* Portrait fallback from the 2×2 grid: the tasks stay visible;
+                 this one-liner explains why the layout differs and how to get
+                 the grid back. */
+              <p className="px-1 text-xs text-brand-400 dark:text-brand-450 flex items-center gap-1.5">
+                <Smartphone size={14} className="rotate-90" aria-hidden="true" />
+                Stacked while portrait. Rotate your phone for the 2×2 grid.
+              </p>
+            )}
             <EisenhowerMatrixView
               quadrants={quadrants}
               memberMap={memberMap}
@@ -1124,12 +1137,13 @@ const ToDosPage: React.FC = () => {
               onToggleSelection={toggleSelection}
               onToggleSubtask={handleToggleSubtask}
             />
+            </>
             ) : (
-            /* True 2×2 Eisenhower grid — auto-immersive full-screen overlay in
-               landscape; a friendly rotate prompt in portrait. */
+            /* True 2×2 Eisenhower grid — auto-immersive full-screen overlay.
+               Only reachable in landscape (effectiveArrangement falls back to
+               'matrix' in portrait). */
             <EisenhowerGridView
               quadrants={quadrants}
-              isLandscape={isLandscape}
               onComplete={completeToDo}
               onEdit={openEditModal}
               onToggleImportant={handleToggleImportant}
