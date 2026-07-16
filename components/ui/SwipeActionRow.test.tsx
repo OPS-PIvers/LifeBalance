@@ -1,7 +1,12 @@
-import { render, screen } from '@testing-library/react';
+import { render as rtlRender, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { Check, Trash2 } from 'lucide-react';
+import type { ReactElement } from 'react';
+import { ThemeProvider } from '@/contexts/ThemeContext';
 import { SwipeActionRow, type SwipeAction } from './SwipeActionRow';
+
+// SwipeActionRow reads the resolved theme from ThemeContext for its rail tints.
+const render = (ui: ReactElement) => rtlRender(<ThemeProvider>{ui}</ThemeProvider>);
 
 const completeAction: SwipeAction = {
   icon: Check,

@@ -1,9 +1,14 @@
-import { render, screen } from '@testing-library/react';
+import { render as rtlRender, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Reorder } from 'framer-motion';
+import type { ReactElement } from 'react';
 import { ShoppingItem } from '@/types/schema';
+import { ThemeProvider } from '@/contexts/ThemeContext';
 import { ShoppingItemRow } from './ShoppingItemRow';
+
+// The row's SwipeActionRow reads the resolved theme from ThemeContext.
+const render = (ui: ReactElement) => rtlRender(<ThemeProvider>{ui}</ThemeProvider>);
 
 const item: ShoppingItem = {
   id: 'item-1',
