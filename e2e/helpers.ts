@@ -83,8 +83,9 @@ export async function addManualExpense(
 ): Promise<void> {
   await page.getByRole('button', { name: 'Capture transaction, task, or item' }).click();
 
-  // The capture drawer opens on the transaction menu view ("Add Transaction").
-  const captureDrawer = page.getByRole('dialog', { name: /Add Transaction/i });
+  // The capture drawer opens on the multi-type menu view, titled "Capture"
+  // while the type selector is visible (it specializes per flow after that).
+  const captureDrawer = page.getByRole('dialog', { name: /Capture/i });
   await captureDrawer.getByRole('button', { name: /Manual Entry/ }).click();
 
   // Same drawer, title flips to "Manual Entry".
