@@ -33,6 +33,12 @@ export interface SwipeAction {
   icon: LucideIcon;
   /** Short label rendered under the icon (e.g. "Delete", "Purchased"). */
   label: string;
+  /**
+   * Accessible name when the visible label alone lacks context — e.g.
+   * "Delete Make your bed" instead of "Delete", since the stuck-open button
+   * is announced before the row content it acts on.
+   */
+  ariaLabel?: string;
   /** Visual tone: background tint + icon/label color. */
   tone: 'positive' | 'destructive' | 'warm';
   /** Fired on commit-swipe or on tapping the stuck-open button. */
@@ -225,6 +231,7 @@ export const SwipeActionRow: React.FC<SwipeActionRowProps> = ({
               type="button"
               tabIndex={isOpen ? 0 : -1}
               aria-hidden={!isOpen}
+              aria-label={action.ariaLabel}
               onClick={() => fire(action)}
               // Only the primary grows toward the commit point — it's the one
               // a continued swipe will fire.

@@ -165,7 +165,9 @@ const TopToolbar: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsProfileOpen(!isProfileOpen)}
-              className="relative ml-1 w-9 h-9 rounded-full bg-brand-700 flex items-center justify-center text-brand-200 border border-brand-600 active:bg-brand-600 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-400"
+              // 44px hit target around the 36px visual avatar; the negative
+              // margin keeps the header's layout at the previous footprint.
+              className="relative ml-1 w-11 h-11 -m-1 rounded-full flex items-center justify-center focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-400"
               aria-label={
                 unreadNotificationCount > 0
                   ? `Open Profile Menu, ${unreadNotificationCount} unread notification${unreadNotificationCount === 1 ? '' : 's'}`
@@ -174,18 +176,20 @@ const TopToolbar: React.FC = () => {
               aria-expanded={isProfileOpen}
               aria-haspopup="menu"
             >
-              {currentUser?.photoURL ? (
-                <img src={currentUser.photoURL} alt={currentUser.displayName ? `${currentUser.displayName}'s profile picture` : 'Profile picture'} className="w-full h-full rounded-full object-cover" />
-              ) : currentUser?.displayName ? (
-                <span className="font-bold text-sm">
-                  {currentUser.displayName.charAt(0)}
-                </span>
-              ) : (
-                <User className="w-5 h-5" />
-              )}
+              <span className="w-9 h-9 rounded-full bg-brand-700 flex items-center justify-center text-brand-200 border border-brand-600 overflow-hidden active:bg-brand-600 transition-colors duration-(--duration-fast) ease-(--ease-standard)">
+                {currentUser?.photoURL ? (
+                  <img src={currentUser.photoURL} alt={currentUser.displayName ? `${currentUser.displayName}'s profile picture` : 'Profile picture'} className="w-full h-full rounded-full object-cover" />
+                ) : currentUser?.displayName ? (
+                  <span className="font-bold text-sm">
+                    {currentUser.displayName.charAt(0)}
+                  </span>
+                ) : (
+                  <User className="w-5 h-5" />
+                )}
+              </span>
               {unreadNotificationCount > 0 && (
                 <span
-                  className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-money-neg ring-2 ring-brand-800"
+                  className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-money-neg ring-2 ring-brand-800"
                   aria-hidden="true"
                 />
               )}

@@ -330,6 +330,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
         startActions={[{
           icon: Check,
           label: approveLabel,
+          ariaLabel: `${approveLabel} ${itemLabel}`,
           tone: 'positive',
           onAction: approveAction,
         }]}
@@ -338,6 +339,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
           {
             icon: Clock,
             label: 'Defer',
+            ariaLabel: `Defer ${itemLabel}`,
             tone: 'warm',
             onAction: () => onSwipeDefer(item),
           },
@@ -345,6 +347,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
           {
             icon: Trash2,
             label: 'Delete',
+            ariaLabel: `Delete ${itemLabel}`,
             tone: 'destructive',
             hapticPattern: 'medium',
             onAction: deleteAction,
