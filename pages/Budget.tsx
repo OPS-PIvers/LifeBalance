@@ -114,6 +114,8 @@ const Budget: React.FC = () => {
   // the group's SegmentedControl renders the specific view.
   const [activeView, setActiveView] = useDeepLinkTab('overview', MONEY_TABS);
   const activeTab = topTabOf(activeView);
+  // Re-clicking the active group tab resets its segment to the default
+  // (intentional — "tap the active tab to get back to its main view").
   const selectTab = (value: string) => {
     const tab = topTabOf(value);
     setActiveView(tab === 'overview' ? 'overview' : DEFAULT_SEGMENT[tab]);
