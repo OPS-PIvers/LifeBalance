@@ -9,7 +9,7 @@ import { useFocusTrap } from '@/hooks/useFocusTrap';
 // Sheet motion — extracted so the sheet animates on one named curve instead of
 // inline literals, and the values retune together. The spring is a framer-motion
 // config (numeric damping/stiffness, so it can't be a CSS var); keep it in sync
-// with --ease-spring / --duration-base in index.css. Module-local (not exported)
+// with --duration-base in index.css. Module-local (not exported)
 // to keep this component file fast-refresh-clean; promote to a shared motion
 // module if another primitive ever needs the same curve.
 const DRAWER_SPRING = { type: 'spring', damping: 25, stiffness: 200 } as const;

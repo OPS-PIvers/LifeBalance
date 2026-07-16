@@ -148,7 +148,7 @@ export const SetupChecklistCard: React.FC = () => {
               )
             }
             title={
-              <span className={cn(item.done && 'line-through text-brand-400 dark:text-brand-500')}>
+              <span className={cn(item.done && 'line-through text-brand-400 dark:text-brand-450')}>
                 {item.title}
               </span>
             }

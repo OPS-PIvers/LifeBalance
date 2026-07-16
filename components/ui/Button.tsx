@@ -53,7 +53,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       'ghost-destructive': 'bg-transparent text-brand-400 hover:text-money-neg hover:bg-money-bgNeg dark:text-brand-450 dark:hover:text-money-negDark dark:hover:bg-money-neg/15',
       'ghost-brand': 'bg-transparent text-brand-400 hover:text-accent-600 active:text-accent-800 active:bg-accent-50 dark:text-brand-400 dark:hover:text-accent-300 dark:active:text-accent-200 dark:active:bg-accent-800/40',
       success: 'bg-money-pos text-white hover:brightness-95 shadow-btn-primary',
-      warning: 'bg-warm-500 text-white hover:bg-warm-600 shadow-btn-primary',
+      warning: 'bg-warm-600 text-white hover:bg-warm-700 shadow-btn-primary',
       destructive: 'bg-money-neg text-white hover:brightness-95 shadow-btn-primary',
       link: 'bg-transparent text-accent-600 hover:text-accent-700 hover:underline px-0 shadow-none h-auto dark:text-accent-300 dark:hover:text-accent-200',
       'ghost-inverted': 'bg-transparent text-white/80 hover:text-white hover:bg-white/10',
