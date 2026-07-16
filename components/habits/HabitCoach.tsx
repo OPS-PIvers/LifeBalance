@@ -31,8 +31,8 @@ export const HabitCoach: React.FC = () => {
     return (
       <EmptyState
         icon={<Trophy size={32} />}
-        title="No Habits Yet"
-        description="Start tracking some habits to unlock coaching insights!"
+        title="No habits yet"
+        description="Track a few habits first. Coaching insights come from your completion history."
       />
     );
   }
@@ -46,9 +46,9 @@ export const HabitCoach: React.FC = () => {
           <div className="w-16 h-16 bg-white/10 rounded-card flex items-center justify-center mx-auto mb-4">
             <Sparkles size={32} className="text-warm-200" />
           </div>
-          <h2 className="font-display text-xl font-semibold mb-2">Unlock Your Habit Potential</h2>
+          <h2 className="font-display text-xl font-semibold mb-2">See what your streaks are telling you</h2>
           <p className="text-accent-100 text-sm mb-6 max-w-xs mx-auto leading-relaxed">
-            Let our AI coach analyze your streaks, find hidden patterns, and suggest ways to level up.
+            The coach reads your completion history for patterns: slumps, strong days, and habits that could use an easier target.
           </p>
           <button
             onClick={handleAnalyze}
@@ -56,7 +56,7 @@ export const HabitCoach: React.FC = () => {
             className="px-6 py-3 bg-warm-500 text-white font-bold rounded-btn shadow-btn-primary hover:bg-warm-600 active:scale-95 transition-[transform,background-color] duration-(--duration-fast) ease-(--ease-standard) disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2 mx-auto focus:outline-hidden focus-visible:ring-2 focus-visible:ring-white/50"
           >
             {loading ? <RefreshCw size={20} className="animate-spin" /> : <Sparkles size={20} />}
-            {loading ? "Analyzing..." : "Analyze My Habits"}
+            {loading ? "Analyzing…" : "Analyze my habits"}
           </button>
         </div>
       ) : (
@@ -91,7 +91,7 @@ export const HabitCoach: React.FC = () => {
                   {insight.relatedHabitId && (
                      <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-brand-100 dark:bg-brand-700/50 rounded-btn text-xs font-medium text-brand-500 dark:text-brand-400">
                         <TrendingUp size={12} />
-                        Related Habit
+                        Related habit
                      </div>
                   )}
                 </div>
