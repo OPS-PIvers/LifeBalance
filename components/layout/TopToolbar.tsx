@@ -101,7 +101,9 @@ const TopToolbar: React.FC = () => {
               onClick={() => setStsOpen(true)}
             >
               <span
-                className={`text-2xl font-mono font-bold tracking-tight tabular-nums ${isPositive ? 'text-money-pos dark:text-money-posDark' : 'text-money-neg dark:text-money-negDark'}`}
+                // No theme split: the toolbar band is brand-800 in BOTH themes,
+                // so the figure always needs the light-on-dark money variants.
+                className={`text-2xl font-mono font-bold tracking-tight tabular-nums ${isPositive ? 'text-money-posDark' : 'text-money-negDark'}`}
               >
                 {fmt(safeToSpend)}
               </span>
