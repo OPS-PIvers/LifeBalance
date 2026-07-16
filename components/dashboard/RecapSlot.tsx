@@ -30,15 +30,18 @@ interface RecapSlotProps {
 export const RecapSlot: React.FC<RecapSlotProps> = ({ weekly, money }) => {
   const { recaps, moneyRecaps } = useHouseholdCore();
 
-  const weeklyWants = weekly && weeklyRecapCardVisible(recaps[0]);
-  const moneyWants = money && moneyRecapCardVisible(moneyRecaps[0]);
+  const latestWeekly = recaps[0];
+  const latestMoney = moneyRecaps[0];
+  const weeklyWants = weekly && weeklyRecapCardVisible(latestWeekly);
+  const moneyWants = money && moneyRecapCardVisible(latestMoney);
 
-  // Both fresh → the newer generation wins the slot.
+  // Both fresh → the newer generation wins the slot. (The extra undefined
+  // checks are for the type system only — `*Wants` already implies them.)
   let showWeekly = weeklyWants;
   let showMoney = moneyWants;
-  if (weeklyWants && moneyWants) {
-    const weeklyAt = new Date(recaps[0]?.generatedAt ?? 0).getTime();
-    const moneyAt = new Date(moneyRecaps[0]?.generatedAt ?? 0).getTime();
+  if (weeklyWants && moneyWants && latestWeekly && latestMoney) {
+    const weeklyAt = new Date(latestWeekly.generatedAt).getTime();
+    const moneyAt = new Date(latestMoney.generatedAt).getTime();
     showWeekly = weeklyAt >= moneyAt;
     showMoney = !showWeekly;
   }
