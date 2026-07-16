@@ -298,7 +298,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
 
                         {/* Description */}
                         <div>
-                          <label className="text-xxs font-bold text-warm-500 dark:text-warm-300 uppercase">
+                          <label className="text-xxs font-bold text-warm-600 dark:text-warm-300 uppercase">
                             Description (Optional)
                           </label>
                           <textarea
@@ -322,11 +322,11 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
 
                         {/* Habit multi-select */}
                         <div>
-                          <label className="text-xxs font-bold text-warm-500 dark:text-warm-300 uppercase mb-2 block">
+                          <label className="text-xxs font-bold text-warm-600 dark:text-warm-300 uppercase mb-2 block">
                             Linked habits
                           </label>
                           {habits.length === 0 ? (
-                            <p className="text-xs text-warm-500 dark:text-warm-300">
+                            <p className="text-xs text-warm-600 dark:text-warm-300">
                               Add a habit first to link it to a challenge.
                             </p>
                           ) : (

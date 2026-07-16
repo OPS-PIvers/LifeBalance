@@ -10,7 +10,7 @@
  * match the rest of the system.
  */
 export const FIELD_BASE =
-  'w-full p-3 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn outline-hidden text-brand-900 dark:text-brand-100 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/40 transition-all duration-(--duration-fast) ease-(--ease-standard) placeholder:text-brand-400 dark:placeholder:text-brand-500 disabled:opacity-50 disabled:bg-brand-50 dark:disabled:bg-brand-700/50';
+  'w-full p-3 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn outline-hidden text-brand-900 dark:text-brand-100 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/40 transition-all duration-(--duration-fast) ease-(--ease-standard) placeholder:text-brand-400 dark:placeholder:text-brand-450 disabled:opacity-50 disabled:bg-brand-50 dark:disabled:bg-brand-700/50';
 
 /** Error-state overrides, layered on top of FIELD_BASE when a field is invalid. */
 export const FIELD_ERROR =

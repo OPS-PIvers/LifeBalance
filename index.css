@@ -95,13 +95,16 @@
   --color-brand-100: #f0eee9;
   --color-brand-200: #e3e0d8;
   --color-brand-300: #cbc7bb;
-  --color-brand-400: #a8a399;
-  /* Dark-mode muted-text tier. brand-500 measures 3.56:1 on brand-800 cards
-     (fails WCAG AA 4.5:1), so dark muted/hint text uses this half-step instead:
-     4.95:1 on brand-800, 5.7:1 on brand-900, while staying visibly dimmer than
-     brand-400 secondary text. Dark-mode-only — light mode keeps brand-500. */
-  --color-brand-450: #94907f;
-  --color-brand-500: #7c776c;
+  /* Text tiers 400/450/500 are THEME-SPLIT: the values here are the LIGHT-mode
+     ramp, retuned so tertiary text (400) meets WCAG AA 4.5:1 on brand-50/white
+     (the old #a8a399 measured 2.5:1). The original lighter values are restored
+     under `.dark` below — on dark surfaces they already passed AA and the
+     darker light values would fail there. Non-text uses of brand-400 (idle
+     icons, drag handles, the Unbudgeted bucket chip) darken slightly with it,
+     which also clears the 3:1 non-text minimum they previously missed. */
+  --color-brand-400: #767165; /* light tertiary text — 4.54:1 on brand-50 */
+  --color-brand-450: #6e685d; /* light half-step — 5.2:1 on brand-50 */
+  --color-brand-500: #655f55; /* light secondary text — 5.9:1 on brand-50 */
   --color-brand-600: #565249;
   --color-brand-700: #3a3731;
   --color-brand-800: #242220;
@@ -131,9 +134,14 @@
   --color-warm-800: #533619;
   --color-warm-900: #382512;
 
-  /* Semantic money — retuned for harmony with the new accents. */
-  --color-money-pos: #1f8f63;
-  --color-money-neg: #d4483f;
+  /* Semantic money — retuned for harmony with the new accents. Like the
+     brand text tiers above, pos/neg are THEME-SPLIT: these light values pass
+     WCAG AA 4.5:1 for small sign-colored amounts on white/brand-50 (the old
+     #1f8f63 / #d4483f measured 4.06 / 4.38), and white-on-money-neg
+     destructive buttons now measure 4.97:1. `.dark` restores the originals
+     (dark text already goes through posDark/negDark). */
+  --color-money-pos: #1b7f57;
+  --color-money-neg: #c93e35;
   --color-money-bgPos: #eef6f1;
   --color-money-bgNeg: #fbeeec;
   /* Dark-mode text counterparts for the semantic money colors. Set to
@@ -181,7 +189,21 @@
   --duration-base: 200ms;
   --duration-slow: 320ms;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
-  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/*
+  Dark-mode values for the theme-split tokens above. The muted text tiers and
+  money semantics were tuned for dark surfaces first; the lighter originals
+  live here so `text-brand-400` etc. keep their established dark-mode look
+  while the @theme (light) values were darkened for WCAG AA. See the comments
+  in @theme. brand-450: 4.95:1 on brand-800, 5.7:1 on brand-900.
+*/
+.dark {
+  --color-brand-400: #a8a399;
+  --color-brand-450: #94907f;
+  --color-brand-500: #7c776c;
+  --color-money-pos: #1f8f63;
+  --color-money-neg: #d4483f;
 }
 
 /*

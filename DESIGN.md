@@ -41,8 +41,9 @@ All colors are CSS variables in `@theme`; use the Tailwind utility (`bg-accent-6
 | `brand-100` | `#f0eee9` | Hover fill; muted chip bg |
 | `brand-200` | `#e3e0d8` | **Default hairline border (light)** |
 | `brand-300` | `#cbc7bb` | Drag handles; dashed borders |
-| `brand-400` | `#a8a399` | Placeholder / tertiary text; idle icons |
-| `brand-500` | `#7c776c` | Secondary text |
+| `brand-400` | `#767165` light / `#a8a399` dark | Placeholder / tertiary text; idle icons |
+| `brand-450` | `#6e685d` light / `#94907f` dark | Muted/hint half-step between 400 and 500 |
+| `brand-500` | `#655f55` light / `#7c776c` dark | Secondary text |
 | `brand-600` | `#565249` | Body text (light, secondary surfaces) |
 | `brand-700` | `#3a3731` | Borders (dark); strong text |
 | `brand-800` | `#242220` | **Surface background (dark)** |
@@ -70,15 +71,19 @@ Habits, household, gamification, streaks.
 |---|---|---|
 | `warm-50` | `#faf4ea` | Subtle habit/household tint |
 | `warm-100/200` | `#f4e6cf` / `#e9cb9f` | Habit chip fill/border |
-| **`warm-500`** | **`#b87a29`** | **PRIMARY — `warning` button, habit emphasis** |
-| `warm-600` | `#97611f` | Warm hover |
+| **`warm-500`** | **`#b87a29`** | **PRIMARY — habit emphasis, icons, fills** |
+| `warm-600` | `#97611f` | Warm text on light (AA); `warning` button bg |
+| `warm-700` | `#744a1b` | Warning button hover |
+
+Amber text on light surfaces uses `warm-600`+ (`warm-500` is 3.6:1 on white —
+fine for icons/fills, below AA for text).
 
 ### Semantic — money & habits
 
 | Token | Hex | Use |
 |---|---|---|
-| `money-pos` | `#1f8f63` | Positive amounts, success |
-| `money-neg` | `#d4483f` | Negative amounts, destructive |
+| `money-pos` | `#1b7f57` light / `#1f8f63` dark | Positive amounts, success |
+| `money-neg` | `#c93e35` light / `#d4483f` dark | Negative amounts, destructive |
 | `money-bgPos` | `#eef6f1` | Positive row/chip tint |
 | `money-bgNeg` | `#fbeeec` | Destructive hover/tint |
 | `habit-streak` | `#ea6a26` | Streak flame |
@@ -151,7 +156,6 @@ No `backdrop-blur`. No bespoke `shadow-[...]`. No `shadow-premium`/glass (remove
 | `--duration-base` | 200ms (dialog/route fade, list enter) |
 | `--duration-slow` | 320ms (larger reveals) |
 | `--ease-standard` | `cubic-bezier(0.2,0,0,1)` |
-| `--ease-spring` | `cubic-bezier(0.175,0.885,0.32,1.275)` |
 
 Use as `duration-(--duration-fast) ease-(--ease-standard)`. Entrance animations
 come from `tailwindcss-animate` (`animate-in fade-in …`). **All motion is
@@ -317,7 +321,7 @@ Money    money-pos / money-neg / money-bgPos / money-bgNeg
 Habit    habit-streak / habit-gold / habit-blue
 Radius   sm .375 · btn .5 · card .75 · lg 1rem (hero)
 Shadow   shadow-raised (hero) · shadow-nav · shadow-btn-primary[-hover] · shadow-btn-secondary
-Motion   --duration-fast 120 · base 200 · slow 320 · --ease-standard · --ease-spring
+Motion   --duration-fast 120 · base 200 · slow 320 · --ease-standard
 Z-index  sticky 40 · dropdown 50 · banner 55 · modal 60 · popover 70 · toast 110
 Misc     --text-xxs 10px · --spacing-safe (safe-area-inset-bottom)
 Utils    surface-section · hairline-divider · scroll-contain-y · no-scrollbar · skeleton

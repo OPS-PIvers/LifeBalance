@@ -78,7 +78,7 @@ describe('Button', () => {
   it('applies warning variant classes', () => {
     render(<Button variant="warning">Warning</Button>);
     const button = screen.getByRole('button', { name: /warning/i });
-    expect(button).toHaveClass('bg-warm-500');
+    expect(button).toHaveClass('bg-warm-600');
     expect(button).toHaveClass('text-white');
   });
 
