@@ -166,42 +166,49 @@ describe('BudgetBuckets', () => {
     expect(mockUpdateBucketLimit).toHaveBeenCalledWith('b1', 600);
   });
 
-  it('opens the transactions detail sheet to show a bucket\'s transactions', async () => {
+  it('expands a bucket inline to show its transactions, and collapses on second tap', async () => {
     render(<BudgetBuckets />);
 
     // Initially transaction should not be visible
     expect(screen.queryByText('Grocery Store')).not.toBeInTheDocument();
 
-    // Click the bucket row to open its transactions sheet. The aria-label
-    // reflects the bucket's transaction count.
+    // Click the bucket row to expand it. The aria-label reflects the bucket's
+    // transaction count.
     const toggleButton = screen.getByRole('button', { name: /View 1 transactions for Groceries/i });
+    expect(toggleButton).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(toggleButton);
 
-    // Check the detail sheet opened with the bucket's transactions
+    // The inline list shows the bucket's transactions
+    expect(toggleButton).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText('1 transaction')).toBeInTheDocument();
     expect(screen.getByText('Grocery Store')).toBeInTheDocument();
     expect(screen.getByText('$50.00')).toBeInTheDocument();
+
+    // Second tap collapses
+    fireEvent.click(toggleButton);
+    expect(toggleButton).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Grocery Store')).not.toBeInTheDocument();
   });
 
-  it('opens edit transaction modal from the transactions sheet, closing the sheet first (no stacked Drawers)', async () => {
+  it('shows the empty-state line when expanding a bucket with no transactions this period', async () => {
     render(<BudgetBuckets />);
 
-    // Open the transactions sheet first
+    fireEvent.click(screen.getByRole('button', { name: /View 0 transactions for Dining Out/i }));
+    expect(screen.getByText('No transactions yet this period')).toBeInTheDocument();
+  });
+
+  it('opens the edit transaction modal from the inline list', async () => {
+    render(<BudgetBuckets />);
+
+    // Expand the bucket first
     const toggleButton = screen.getByRole('button', { name: /View 1 transactions for Groceries/i });
     fireEvent.click(toggleButton);
-    expect(screen.getByText('1 transaction')).toBeInTheDocument();
 
     // Click edit transaction
     const editButton = screen.getByTitle('Edit transaction');
     fireEvent.click(editButton);
 
     expect(screen.getByTestId('edit-transaction-modal')).toBeInTheDocument();
-
-    // The bucket-detail sheet must be closed (not merely covered) before the
-    // Edit Transaction sheet opens, so the two Drawers are never both open at
-    // once (which would stack two backdrops and two competing focus traps).
-    expect(screen.queryByText('1 transaction')).not.toBeInTheDocument();
-    expect(screen.queryByText('Grocery Store')).not.toBeInTheDocument();
   });
 
   it('deletes transaction when confirmed', async () => {

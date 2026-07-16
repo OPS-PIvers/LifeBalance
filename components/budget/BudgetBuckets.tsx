@@ -1,23 +1,25 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { format, parseISO } from 'date-fns';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
-import { Plus, Edit, Trash2, Wallet } from 'lucide-react';
+import { Plus, Wallet } from 'lucide-react';
 import { sumMoney } from '@/utils/money';
-import { BudgetBucket, Transaction, INCOME_CATEGORY } from '@/types/schema';
+import { BudgetBucket, Transaction, INCOME_CATEGORY, CREDIT_CARD_CATEGORY } from '@/types/schema';
 import { isCalendarBudgetedCategory } from '@/utils/categories';
 import BucketFormModal from '@/components/modals/BucketFormModal';
 import toast from 'react-hot-toast';
 import EditTransactionModal from '@/components/modals/EditTransactionModal';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import Select from '@/components/ui/Select';
 import EmptyState from '@/components/ui/EmptyState';
-import { SurfaceList, Row } from '@/components/ui/Section';
+import { SurfaceList } from '@/components/ui/Section';
 import { BudgetBucketCard } from './BudgetBucketCard';
+
+// Referentially stable fallback for buckets with no transactions this period,
+// so BudgetBucketCard's memo comparator doesn't see a fresh [] every render.
+const EMPTY_TRANSACTIONS: Transaction[] = [];
 
 const UNBUDGETED_BUCKET: BudgetBucket = {
   id: 'unbudgeted',
@@ -63,6 +65,12 @@ const BudgetBuckets: React.FC = () => {
 
       // Exclude Income (handled elsewhere)
       if (tx.category === INCOME_CATEGORY) return;
+
+      // Credit-card spend never counts toward buckets — `calculateBucketSpent`
+      // skips the sentinel too (it's surfaced by CreditCardActivityWidget
+      // instead), so dropping it here keeps each bucket's expanded list
+      // exactly explaining its `bucketSpentMap` figure.
+      if (tx.category === CREDIT_CARD_CATEGORY) return;
 
       let bucketId = tx.category ? nameToIdMap.get(tx.category.toLowerCase()) : undefined;
 
@@ -127,16 +135,6 @@ const BudgetBuckets: React.FC = () => {
     setEditingTransaction(transaction);
     setIsEditTransactionModalOpen(true);
   }, []);
-
-  // Close the bucket-detail sheet before opening the Edit Transaction sheet.
-  // EditTransactionModal renders its own Drawer, so leaving the bucket-detail
-  // Drawer open would stack two Drawers (double backdrop, competing focus
-  // traps). Mirrors the old actionTransaction-drawer pattern of closing
-  // itself before handing off to the edit/delete handlers.
-  const handleEditTransactionFromSheet = useCallback((transaction: Transaction) => {
-    setExpandedBucketId(null);
-    handleEditTransaction(transaction);
-  }, [handleEditTransaction]);
 
   const handleDeleteTransaction = useCallback((id: string) => {
     setTransactionToDelete(id);
@@ -236,13 +234,6 @@ const BudgetBuckets: React.FC = () => {
   const sourcePreview = reallocateModal?.sourceId ? getSourceDetails(reallocateModal.sourceId) : null;
   const remainingAfterTransfer = sourcePreview ? sourcePreview.balance - amountToCover : 0;
 
-
-  // The bucket whose transactions the detail Drawer is currently showing.
-  const expandedBucketTransactions = expandedBucketId ? (transactionsByBucket.get(expandedBucketId) || []) : [];
-  const expandedBucketName = expandedBucketId === UNBUDGETED_BUCKET.id
-    ? UNBUDGETED_BUCKET.name
-    : buckets.find(b => b.id === expandedBucketId)?.name;
-
   return (
     <div className="space-y-4">
       {(transactionsByBucket.has(UNBUDGETED_BUCKET.id) || buckets.length > 0) && (
@@ -256,7 +247,7 @@ const BudgetBuckets: React.FC = () => {
                 verified: sumMoney(transactionsByBucket.get(UNBUDGETED_BUCKET.id)!.map(t => t.amount)),
                 pending: 0
               }}
-              transactionCount={transactionsByBucket.get(UNBUDGETED_BUCKET.id)!.length}
+              transactions={transactionsByBucket.get(UNBUDGETED_BUCKET.id)!}
               isExpanded={expandedBucketId === UNBUDGETED_BUCKET.id}
               isEditingLimit={false}
               onExpand={handleExpand}
@@ -265,19 +256,22 @@ const BudgetBuckets: React.FC = () => {
               onSaveLimit={() => {}} // No-op
               onCancelEdit={() => {}} // No-op
               onReallocate={handleReallocate}
+              onEditTransaction={handleEditTransaction}
+              onDeleteTransaction={handleDeleteTransaction}
             />
           )}
 
           {buckets.map(bucket => {
             const spent = bucketSpentMap.get(bucket.id) || { verified: 0, pending: 0 };
-            const bucketTransactions = transactionsByBucket.get(bucket.id) || [];
+            // Stable empty fallback so untouched buckets keep memo equality.
+            const bucketTransactions = transactionsByBucket.get(bucket.id) || EMPTY_TRANSACTIONS;
 
             return (
               <BudgetBucketCard
                 key={bucket.id}
                 bucket={bucket}
                 spent={spent}
-                transactionCount={bucketTransactions.length}
+                transactions={bucketTransactions}
                 isExpanded={expandedBucketId === bucket.id}
                 isEditingLimit={editingLimitId === bucket.id}
                 onExpand={handleExpand}
@@ -286,6 +280,8 @@ const BudgetBuckets: React.FC = () => {
                 onSaveLimit={saveLimit}
                 onCancelEdit={cancelEditLimit}
                 onReallocate={handleReallocate}
+                onEditTransaction={handleEditTransaction}
+                onDeleteTransaction={handleDeleteTransaction}
               />
             );
           })}
@@ -422,71 +418,6 @@ const BudgetBuckets: React.FC = () => {
             </Button>
           </div>
         </div>
-      </Drawer>
-
-      {/* Bucket Transactions Detail Drawer — replaces the old inline accordion.
-          Tapping a bucket row opens this sheet with a flat, hairline-divided
-          list of its transactions instead of expanding a nested bordered panel. */}
-      <Drawer
-        isOpen={!!expandedBucketId}
-        onClose={() => setExpandedBucketId(null)}
-        title={expandedBucketName ?? 'Transactions'}
-      >
-        {expandedBucketTransactions.length === 0 ? (
-          <EmptyState
-            variant="plain"
-            title="No transactions"
-            description="This bucket has no transactions yet."
-          />
-        ) : (
-          <>
-            <p className="px-1 mb-2 text-xs font-semibold text-brand-400 dark:text-brand-450 uppercase tracking-wider">
-              {expandedBucketTransactions.length} transaction{expandedBucketTransactions.length === 1 ? '' : 's'}
-            </p>
-            <SurfaceList>
-              {expandedBucketTransactions.map(tx => (
-                <Row key={tx.id} className="justify-between">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-brand-900 dark:text-brand-100 truncate text-sm">{tx.merchant}</p>
-                    <p className="text-xs text-brand-500 dark:text-brand-400 flex items-center gap-2 mt-0.5">
-                      {format(parseISO(tx.date), 'MMM d')}
-                      {tx.status === 'pending_review' && (
-                        <Badge variant="warning" size="sm">Pending</Badge>
-                      )}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <span className={`font-mono tabular-nums font-bold text-sm mr-1 ${
-                      tx.status === 'pending_review' ? 'text-brand-400 dark:text-brand-450' : 'text-brand-900 dark:text-brand-100'
-                    }`}>
-                      {fmt(tx.amount)}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => handleEditTransactionFromSheet(tx)}
-                      className="text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300"
-                      title="Edit transaction"
-                      aria-label={`Edit transaction: ${tx.merchant || 'Unnamed'}`}
-                    >
-                      <Edit size={14} />
-                    </Button>
-                    <Button
-                      variant="ghost-destructive"
-                      size="icon-sm"
-                      onClick={() => handleDeleteTransaction(tx.id)}
-                      className="text-brand-400 dark:text-brand-450 hover:text-money-neg dark:hover:text-money-negDark"
-                      title="Delete transaction"
-                      aria-label={`Delete transaction: ${tx.merchant || 'Unnamed'}`}
-                    >
-                      <Trash2 size={14} />
-                    </Button>
-                  </div>
-                </Row>
-              ))}
-            </SurfaceList>
-          </>
-        )}
       </Drawer>
     </div>
   );
