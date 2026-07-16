@@ -123,7 +123,7 @@ describe('HabitCard', () => {
     render(<HabitCard habit={mockHabit} />);
 
     // Click menu trigger
-    await user.click(screen.getByLabelText('Habit options menu'));
+    await user.click(screen.getByLabelText('Options for Test Habit'));
 
     // Check for dropdown content (using role="menu")
     expect(screen.getByRole('menu')).toBeInTheDocument();
@@ -139,7 +139,7 @@ describe('HabitCard', () => {
     render(<HabitCard habit={mockHabit} />);
 
     // Click menu trigger
-    await user.click(screen.getByLabelText('Habit options menu'));
+    await user.click(screen.getByLabelText('Options for Test Habit'));
 
     // Check for Drawer content
     expect(screen.getByTestId('mobile-drawer')).toBeInTheDocument();
@@ -185,7 +185,7 @@ describe('HabitCard - core row interactions (ListRow migration regression)', () 
     const user = userEvent.setup();
     render(<HabitCard habit={mockHabit} />);
 
-    await user.click(screen.getByLabelText('Habit options menu'));
+    await user.click(screen.getByLabelText('Options for Test Habit'));
 
     expect(screen.getByRole('menu')).toBeInTheDocument();
     expect(mockHouseholdContext.toggleHabit).not.toHaveBeenCalled();
@@ -269,7 +269,7 @@ describe('HabitCard - auto-applied freeze protection (Plan 25)', () => {
     const user = userEvent.setup();
     render(<HabitCard habit={baseHabit} />);
 
-    await user.click(screen.getByLabelText('Habit options menu'));
+    await user.click(screen.getByLabelText('Options for Test Habit'));
 
     expect(screen.queryByText(/Repair Streak/)).not.toBeInTheDocument();
   });

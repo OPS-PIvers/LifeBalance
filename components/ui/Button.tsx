@@ -59,12 +59,17 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       'ghost-inverted': 'bg-transparent text-white/80 hover:text-white hover:bg-white/10',
     };
 
+    // sm/md/icon-sm render below the 44px touch-target floor, so they carry an
+    // invisible before: pseudo-element that extends the hit area (vertically
+    // only for text buttons — horizontal rows of small buttons would otherwise
+    // overlap zones) without changing the visual size. The base classes below
+    // include `relative`, which the pseudo anchors to.
     const sizes = {
-      sm: 'px-3 py-1 text-xs',
-      md: 'px-4 py-2 text-sm',
+      sm: "px-3 py-1 text-xs before:absolute before:inset-x-0 before:-inset-y-2.5 before:content-['']",
+      md: "px-4 py-2 text-sm before:absolute before:inset-x-0 before:-inset-y-1 before:content-['']",
       lg: 'px-6 py-3 text-base',
       icon: 'p-2 min-w-11 min-h-11',
-      'icon-sm': 'p-1.5 min-w-9 min-h-9',
+      'icon-sm': "p-1.5 min-w-9 min-h-9 before:absolute before:-inset-1 before:content-['']",
     };
 
     return (

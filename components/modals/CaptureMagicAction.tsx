@@ -72,7 +72,7 @@ export const CaptureMagicAction: React.FC<CaptureMagicActionProps> = ({
           type="submit"
           aria-label="Submit magic action"
           disabled={!magicInput.trim() || magicLoading}
-          className="p-2 bg-warm-500 text-white rounded-btn hover:bg-warm-600 disabled:opacity-50 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
+          className="min-w-11 min-h-11 flex items-center justify-center bg-warm-500 text-white rounded-btn hover:bg-warm-600 disabled:opacity-50 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
         >
           {magicLoading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
         </button>

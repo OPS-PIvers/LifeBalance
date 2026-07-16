@@ -168,11 +168,26 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       // keyboard is open (visual viewport height); otherwise 100dvh as before.
       className="flex flex-col h-[var(--app-height,100dvh)] overflow-hidden bg-brand-50 dark:bg-brand-900 transition-colors"
     >
+      {/* Skip link — the toolbar is 4 tab stops repeated on every page; this
+          is the first focusable element so keyboard/SR users can jump past it. */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-toast focus:px-4 focus:py-2 focus:rounded-btn focus:bg-accent-600 focus:text-white focus:font-semibold focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+        onClick={() => document.getElementById('main-content')?.focus()}
+      >
+        Skip to main content
+      </a>
+
       <div className="flex-none">
         <TopToolbar />
       </div>
 
-      <main className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain relative scroll-smooth w-full">
+      <main
+        id="main-content"
+        // Focusable as a skip-link target only; not in the tab order.
+        tabIndex={-1}
+        className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain relative scroll-smooth w-full focus:outline-hidden"
+      >
         <div className="pb-8">
           {/* key=pathname resets the boundary on navigation so a crashed page
               does not stay crashed after the user navigates away */}

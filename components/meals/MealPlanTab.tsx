@@ -914,7 +914,9 @@ const MealPlanTab: React.FC = () => {
                         onClick={handleJumpToToday}
                         aria-label="Jump to today"
                         title="Today"
-                        className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-450 dark:hover:text-brand-300 dark:hover:bg-brand-700/50 shrink-0"
+                        // before: extends the 32px visual button to a ≥44px hit
+                        // area without changing the slim header row's density.
+                        className="relative before:absolute before:-inset-1.5 before:content-[''] p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-450 dark:hover:text-brand-300 dark:hover:bg-brand-700/50 shrink-0"
                     >
                         <CalendarDays className="w-4 h-4" />
                     </button>
@@ -924,7 +926,7 @@ const MealPlanTab: React.FC = () => {
                     onClick={() => setIsWeeklyPlanOpen(true)}
                     aria-label="Plan my week"
                     title="Plan my week"
-                    className="p-2 text-accent-600 hover:text-accent-700 hover:bg-accent-50 rounded-full transition-colors active:scale-95 dark:text-accent-300 dark:hover:text-accent-200 dark:hover:bg-accent-900/30 shrink-0"
+                    className="relative before:absolute before:-inset-1.5 before:content-[''] p-2 text-accent-600 hover:text-accent-700 hover:bg-accent-50 rounded-full transition-colors active:scale-95 dark:text-accent-300 dark:hover:text-accent-200 dark:hover:bg-accent-900/30 shrink-0"
                 >
                     <Sparkles className="w-4 h-4" />
                 </button>
@@ -933,7 +935,7 @@ const MealPlanTab: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => setIsWeekMenuOpen(v => !v)}
-                        className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-450 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
+                        className="relative before:absolute before:-inset-1.5 before:content-[''] p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-450 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
                         aria-label="More week actions"
                         aria-haspopup="menu"
                         aria-expanded={isWeekMenuOpen}

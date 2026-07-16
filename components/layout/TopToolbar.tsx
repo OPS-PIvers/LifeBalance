@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Star, TrendingUp, User } from 'lucide-react';
 import { useFinance, useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
@@ -86,9 +86,35 @@ const TopToolbar: React.FC = () => {
   // non-negative, so a -$0.004 never renders a red "$0.00".
   const isPositive = safeToSpend > -0.005;
 
+  // The toolbar figures update silently after a habit toggle / transaction —
+  // announce changes through a debounced polite live region so screen-reader
+  // users hear the new values without hunting back up to the header. The ref
+  // guard skips the initial render (announcing on mount would be noise).
+  const [liveMessage, setLiveMessage] = useState('');
+  const prevFiguresRef = useRef<{ sts: number; pts: number } | null>(null);
+  useEffect(() => {
+    const prev = prevFiguresRef.current;
+    prevFiguresRef.current = { sts: safeToSpend, pts: dailyPoints };
+    if (!prev || (prev.sts === safeToSpend && prev.pts === dailyPoints)) return;
+    const timer = setTimeout(() => {
+      const parts: string[] = [];
+      if (prev.sts !== safeToSpend && isModuleEnabled('money')) {
+        parts.push(`Safe to spend ${fmt(safeToSpend)}`);
+      }
+      if (prev.pts !== dailyPoints && isModuleEnabled('habits')) {
+        parts.push(`${dailyPoints} points today`);
+      }
+      if (parts.length > 0) setLiveMessage(parts.join('. '));
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [safeToSpend, dailyPoints, fmt, isModuleEnabled]);
+
   return (
     <>
       <div className="relative z-dropdown">
+        <span className="sr-only" role="status">
+          {liveMessage}
+        </span>
         <header className="z-sticky w-full bg-brand-800 dark:bg-brand-900 border-b border-brand-700 px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-3 flex items-center text-white">
           {/* Left Container: Safe-to-Spend (money domain — Plan 090). When money
               is off it's simply omitted; the right cluster uses `ml-auto` to stay
