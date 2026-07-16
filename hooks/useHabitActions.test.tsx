@@ -1,5 +1,6 @@
+import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, render, screen, fireEvent, act } from '@testing-library/react';
 import { format, startOfWeek, subDays } from 'date-fns';
 import type { Habit, HouseholdMember, Household } from '@/types/schema';
 
@@ -76,6 +77,7 @@ import { streakForHabit } from '@/utils/habitLogic';
 // so we read its captured call args to assert on the whitelisted update payload.
 // getDocs backs the prior-submissions lookup for back-dated threshold submissions.
 import { updateDoc, getDocs } from 'firebase/firestore';
+import toast from 'react-hot-toast';
 
 const updateDocMock = vi.mocked(updateDoc);
 const getDocsMock = vi.mocked(getDocs);
@@ -1011,5 +1013,52 @@ describe('useHabitActions.toggleHabit (stale deselect — date-aware reversal)',
     expect(member).toBeDefined();
     expect(member!.data['points.total']).toEqual({ __increment: -10 });
     expect(member!.data['points.daily']).toBeUndefined();
+  });
+});
+
+describe('useHabitActions.toggleHabit (points toast Undo action)', () => {
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    commitCount = 0;
+    incrementMock.mockClear();
+    vi.mocked(toast).mockClear();
+  });
+
+  it('renders an Undo action in the points toast that fires the reverse toggle', async () => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const habit = baseHabit({ completedDates: [], count: 0 });
+    const { result, rerender } = renderHook(
+      ({ habits }: { habits: Habit[] }) =>
+        useHabitActions(HOUSEHOLD_ID, currentUser, habits, householdSettings),
+      { initialProps: { habits: [habit] } }
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'up');
+    });
+
+    // The points toast is the last plain toast() call; its body carries Undo.
+    const toastBody = vi.mocked(toast).mock.calls.at(-1)?.[0];
+    expect(toastBody).toBeDefined();
+    render(toastBody as React.ReactElement);
+    const undo = screen.getByRole('button', { name: 'Undo' });
+
+    // Simulate the Firestore listener echoing the committed toggle before the
+    // user reaches for Undo (the real flow), then reverse it.
+    rerender({
+      habits: [{ ...habit, count: 1, totalCount: 1, completedDates: [today], streakDays: 1 }],
+    });
+    const commitsBefore = commitCount;
+    await act(async () => {
+      fireEvent.click(undo);
+    });
+
+    expect(commitCount).toBe(commitsBefore + 1);
+    const lastHousehold = capturedUpdates.filter(u => u.ref.__path === householdPath).at(-1);
+    expect(lastHousehold!.data['points.total']).toEqual({ __increment: -10 });
+    // ... and the completion date is removed again (a true reversal).
+    const lastHabit = capturedUpdates.filter(u => u.ref.__path === `${householdPath}/habits/h1`).at(-1);
+    expect(lastHabit!.data['completedDates']).toEqual({ __arrayRemove: [today] });
   });
 });
