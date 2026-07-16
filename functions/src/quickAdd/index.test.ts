@@ -1101,6 +1101,19 @@ Date: 07/01/2026`;
     expect(message).not.toMatch(/amount must be a valid number/);
   });
 
+  it("empty emailText alongside a valid amount is ignored — the expense still lands", async () => {
+    // A Wallet/Transaction automation built by duplicating the email one can
+    // carry a leftover empty emailText row next to perfectly good fields. The
+    // request must succeed, not 400 with an email-wiring hint.
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { emailText: "", amount: 13.31, merchant: "Chipotle" } }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ success: true });
+  });
+
   it("whitespace-only emailText gets the same empty-emailText 400", async () => {
     const res = makeRes();
     await asHandler(quickAddExpense)(
