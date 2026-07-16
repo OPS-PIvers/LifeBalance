@@ -442,6 +442,10 @@ export const quickAddExpense = onRequest(
     }
     const emailProvided =
       typeof rawEmailText === "string" && rawEmailText.trim() !== "";
+    // A field counts as "missing" when absent OR blank — a Shortcut with an
+    // empty variable sends "" and must not block other values.
+    const isBlank = (v: unknown): boolean =>
+      v === undefined || v === null || (typeof v === "string" && !v.trim());
     if (emailKeyPresent && !emailProvided) {
       if (
         rawEmailText !== undefined &&
@@ -452,20 +456,34 @@ export const quickAddExpense = onRequest(
         errorResponse(res, 400, "emailText must be a string", "BAD_REQUEST");
         return;
       }
-      // The email Shortcut ran but the body never made it into the request.
-      // The usual mis-wiring is the emailText field not pointing at the "Get
-      // Text from Input" output — say so precisely, because this message is
-      // exactly what the Shortcut's own notification shows the user.
-      await logApiCall(householdId, apiKey.substring(0, 16), "expense", req.body, 400);
-      errorResponse(
-        res,
-        400,
-        "emailText was empty — the automation ran but no email body reached the " +
-          "server. In the Shortcut, set emailText to the Text output of " +
-          "“Get Text from Input” and set that action's input to Shortcut Input.",
-        "BAD_REQUEST"
-      );
-      return;
+      // An empty emailText is only fatal when there's nothing else to build
+      // the transaction from. A dictionary that carries a leftover empty
+      // emailText row NEXT TO a valid amount (e.g. a Wallet automation built
+      // by duplicating the email one) must not be rejected — fall through and
+      // let normal amount/merchant validation run.
+      if (isBlank(rawAmount)) {
+        // The email Shortcut ran but the body never made it into the request.
+        // Two real-world causes, in observed order of likelihood: (1) fetch-only
+        // mail accounts (Gmail/Workspace in Apple Mail) trigger the automation
+        // before the message body has downloaded, so "Get Text from Input"
+        // coerces the email to "" — a Wait action fixes it; (2) the emailText
+        // field isn't pointing at the "Get Text from Input" output. This message
+        // is exactly what the Shortcut's own notification shows the user.
+        await logApiCall(householdId, apiKey.substring(0, 16), "expense", req.body, 400);
+        errorResponse(
+          res,
+          400,
+          "emailText was empty — the automation ran but no email body reached the " +
+            "server. Most often the email body hadn't downloaded yet (Gmail/" +
+            "Workspace accounts are fetch-only): add a Wait action of 10–20 seconds " +
+            "before “Get Text from Input”. Also check emailText is set to that " +
+            "action's Text output and its input is Shortcut Input. (If this " +
+            "automation isn't email-based, delete the emailText row from its " +
+            "dictionary.)",
+          "BAD_REQUEST"
+        );
+        return;
+      }
     }
     if (emailProvided) {
       if (rawEmailText.length > 100000) {
@@ -487,10 +505,6 @@ export const quickAddExpense = onRequest(
         );
         return;
       }
-      // A field counts as "missing" when absent OR blank — a Shortcut with an
-      // empty variable sends "" and must not block the parser's value.
-      const isBlank = (v: unknown): boolean =>
-        v === undefined || v === null || (typeof v === "string" && !v.trim());
       if (isBlank(rawAmount)) {
         // No readable amount but a known merchant → fall through as a $0
         // "awaiting amount" stub (capture beats completeness, same philosophy
