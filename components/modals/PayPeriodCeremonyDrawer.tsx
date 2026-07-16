@@ -159,7 +159,7 @@ const PayPeriodCeremonyDrawer: React.FC<PayPeriodCeremonyDrawerProps> = ({ event
       header={
         <div className="px-4 pb-3 pt-1">
           <p className="text-sm text-brand-600 dark:text-brand-300">
-            {event.paycheckTitle} · <span className="font-mono font-semibold tabular-nums text-money-pos">+{fmt(event.paycheckAmount)}</span>
+            {event.paycheckTitle} · <span className="font-mono font-semibold tabular-nums text-money-pos dark:text-money-posDark">+{fmt(event.paycheckAmount)}</span>
           </p>
           <p className="text-xs text-brand-400 dark:text-brand-450 mt-0.5">
             {event.kind === 'roll' && event.previousPeriodId

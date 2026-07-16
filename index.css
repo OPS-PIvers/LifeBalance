@@ -126,11 +126,13 @@
   /* Semantic money — retuned for harmony with the new accents. Like the
      brand text tiers above, pos/neg are THEME-SPLIT: these light values pass
      WCAG AA 4.5:1 for small sign-colored amounts on white/brand-50 (the old
-     #1f8f63 / #d4483f measured 4.06 / 4.38), and white-on-money-neg
-     destructive buttons now measure 4.97:1. `.dark` restores the originals
-     (dark text already goes through posDark/negDark). */
+     #1f8f63 / #d4483f measured 4.06 / 4.38) AND on their own tinted surfaces:
+     money-neg on money-bgNeg is 5.05:1 (a revealed swipe-action label — the
+     old #c93e35 measured 4.39 there), white-on-money-neg destructive buttons
+     5.72:1. `.dark` values are slightly darkened fills so white 10px badge
+     text passes (dark TEXT goes through posDark/negDark). */
   --color-money-pos: #1b7f57;
-  --color-money-neg: #c93e35;
+  --color-money-neg: #b93830;
   --color-money-bgPos: #eef6f1;
   --color-money-bgNeg: #fbeeec;
   /* Dark-mode text counterparts for the semantic money colors. Set to
@@ -185,14 +187,17 @@
   money semantics were tuned for dark surfaces first; the lighter originals
   live here so `text-brand-400` etc. keep their established dark-mode look
   while the @theme (light) values were darkened for WCAG AA. See the comments
-  in @theme. brand-450: 4.95:1 on brand-800, 5.7:1 on brand-900.
+  in @theme. brand-450: 4.95:1 on brand-800, 5.7:1 on brand-900. money-neg is
+  a FILL color in dark mode (CountBadge, notification dot — dark text uses
+  negDark): #cc433a keeps white 10px badge text at 4.74:1 (the old #d4483f
+  measured 4.38) while staying ≥3:1 as an icon/dot on brand-800/900.
 */
 .dark {
   --color-brand-400: #a8a399;
   --color-brand-450: #94907f;
   --color-brand-500: #7c776c;
   --color-money-pos: #1f8f63;
-  --color-money-neg: #d4483f;
+  --color-money-neg: #cc433a;
 }
 
 /*

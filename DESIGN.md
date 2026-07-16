@@ -83,7 +83,7 @@ fine for icons/fills, below AA for text).
 | Token | Hex | Use |
 |---|---|---|
 | `money-pos` | `#1b7f57` light / `#1f8f63` dark | Positive amounts, success |
-| `money-neg` | `#c93e35` light / `#d4483f` dark | Negative amounts, destructive |
+| `money-neg` | `#b93830` light / `#cc433a` dark | Negative amounts, destructive (dark value is a FILL — dark-mode text uses `money-negDark`) |
 | `money-bgPos` | `#eef6f1` | Positive row/chip tint |
 | `money-bgNeg` | `#fbeeec` | Destructive hover/tint |
 | `habit-streak` | `#ea6a26` | Streak flame |

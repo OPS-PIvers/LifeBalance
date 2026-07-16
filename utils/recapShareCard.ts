@@ -72,13 +72,13 @@ const CARD_HEIGHT = 1350;
 const COLORS = {
   brand50: '#f8f7f4',
   brand200: '#e3e0d8',
-  brand500: '#7c776c',
+  brand500: '#655f55',
   brand900: '#161512',
   accent600: '#285742',
   accent700: '#214636',
   warm500: '#b87a29',
-  moneyPos: '#1f8f63',
-  moneyNeg: '#d4483f',
+  moneyPos: '#1b7f57',
+  moneyNeg: '#b93830',
 };
 
 /** Loads the self-hosted brand fonts so canvas text renders as Besley/Schibsted Grotesk. */
