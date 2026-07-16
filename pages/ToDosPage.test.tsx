@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
+import type { ReactElement } from 'react';
+import { ThemeProvider } from '@/contexts/ThemeContext';
 import ToDosPage from './ToDosPage';
+
+// TodoRow's SwipeActionRow reads the resolved theme from ThemeContext.
+const render = (ui: ReactElement) => rtlRender(<ThemeProvider>{ui}</ThemeProvider>);
 import { useTodos, useHouseholdCore, type TodosContextValue, type HouseholdCoreContextValue } from '@/contexts/FirebaseHouseholdContext';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { format, subDays, addDays, startOfToday } from 'date-fns';

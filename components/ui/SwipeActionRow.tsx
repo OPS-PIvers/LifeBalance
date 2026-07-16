@@ -3,7 +3,7 @@ import { animate, motion, useMotionValue, useTransform, type PanInfo } from 'fra
 import type { LucideIcon } from 'lucide-react';
 import { haptic, type HapticPattern } from '@/utils/haptics';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useTheme } from '@/contexts/ThemeContext';
 import { cn } from '@/utils/cn';
 
 /**
@@ -119,8 +119,12 @@ export const SwipeActionRow: React.FC<SwipeActionRowProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const x = useMotionValue(0);
   const [open, setOpen] = useState<OpenSide>(null);
-  const isDark = useMediaQuery('(prefers-color-scheme: dark)') ||
-    (typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
+  // The app's theme is class-driven (ThemeContext resolves 'system' and stamps
+  // `.dark`). Deriving from the OS media query instead would desync the
+  // JS-painted rail backgrounds from the Tailwind `dark:` label tokens when
+  // the OS scheme and the chosen app theme differ (dark rail + light-theme
+  // labels fails AA).
+  const isDark = useTheme().resolvedTheme === 'dark';
 
   const hasStart = Boolean(startActions?.length);
   const hasEnd = Boolean(endActions?.length);
