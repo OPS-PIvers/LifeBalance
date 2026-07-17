@@ -71,8 +71,6 @@ describe('chartTheme', () => {
     expect(DARK_CHART_THEME.trendRamp).toHaveLength(5);
     expect(LIGHT_CHART_THEME.heatmapRamp).toHaveLength(5);
     expect(DARK_CHART_THEME.heatmapRamp).toHaveLength(5);
-    expect(LIGHT_CHART_THEME.seriesPrimaryGradient).toHaveLength(2);
-    expect(DARK_CHART_THEME.seriesPrimaryGradient).toHaveLength(2);
   });
 
   it('all color values are well-formed hex or rgba strings', () => {
@@ -84,7 +82,6 @@ describe('chartTheme', () => {
         theme.seriesMuted,
         theme.seriesReference,
         theme.seriesPrimary,
-        ...theme.seriesPrimaryGradient,
         ...theme.trendRamp,
         theme.trendOther,
         ...theme.heatmapRamp,

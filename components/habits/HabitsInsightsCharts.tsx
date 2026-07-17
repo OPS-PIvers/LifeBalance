@@ -138,7 +138,7 @@ const HabitsInsightsCharts: React.FC = () => {
               <Tooltip content={<CustomTooltip suffix=" pts" />} />
               <Legend iconType="circle" wrapperStyle={{ paddingTop: 10, fontSize: 12 }} />
               <Bar dataKey="Last Week" fill="var(--color-brand-300)" radius={[4, 4, 4, 4]} />
-              <Bar dataKey="This Week" fill="var(--color-accent-600)" radius={[4, 4, 4, 4]} />
+              <Bar dataKey="This Week" fill={chartTheme.seriesPrimary} radius={[4, 4, 4, 4]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -166,7 +166,7 @@ const HabitsInsightsCharts: React.FC = () => {
               <Radar
                 name="Points"
                 dataKey="points"
-                stroke="var(--color-accent-600)"
+                stroke={chartTheme.seriesPrimary}
                 strokeWidth={2}
                 fill="var(--color-accent-500)"
                 fillOpacity={0.35}
@@ -231,7 +231,7 @@ const HabitsInsightsCharts: React.FC = () => {
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartTheme.gridStroke} />
               <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: chartTheme.axisText, fontSize: 11 }} dy={10} />
               <Tooltip content={<CustomTooltip suffix=" completions" />} />
-              <Bar dataKey="count" name="Completions" fill="var(--color-accent-600)" radius={[4, 4, 4, 4]} />
+              <Bar dataKey="count" name="Completions" fill={chartTheme.seriesPrimary} radius={[4, 4, 4, 4]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

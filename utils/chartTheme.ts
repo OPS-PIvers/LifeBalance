@@ -39,8 +39,6 @@ export interface ChartTheme {
   seriesReference: string;
   /** Primary data line/area stroke — accent-600 (light, 8.29:1 on white) / accent-400 (dark, 3.95:1 on brand-800). */
   seriesPrimary: string;
-  /** Gradient fill stops for the primary series area, top → bottom. */
-  seriesPrimaryGradient: readonly [string, string];
   /** Ranked ramp for stacked/multi-series category charts, deepest/most-prominent first. */
   trendRamp: readonly [string, string, string, string, string];
   /** Catch-all "Other" bucket color for trend charts — same tone as axisText/seriesMuted. */
@@ -73,7 +71,6 @@ export const LIGHT_CHART_THEME: ChartTheme = {
   seriesMuted: '#767165', // brand-400
   seriesReference: '#b93830', // money-neg
   seriesPrimary: '#285742', // accent-600
-  seriesPrimaryGradient: ['#285742', '#285742'],
   trendRamp: ['#285742', '#356f54', '#538a70', '#84ad97', '#b3cdbd'], // accent-600..200
   trendOther: '#767165', // brand-400
   heatmapRamp: ['#e3e0d8', '#b3cdbd', '#84ad97', '#356f54', '#214636'], // brand-200, accent-200/300/500/700
@@ -95,7 +92,6 @@ export const DARK_CHART_THEME: ChartTheme = {
   seriesMuted: '#a8a399', // brand-400 (dark)
   seriesReference: '#cc433a', // money-neg (dark fill variant)
   seriesPrimary: '#538a70', // accent-400 — 3.95:1 on brand-800 (accent-600 is only ~1.9:1)
-  seriesPrimaryGradient: ['#538a70', '#538a70'],
   trendRamp: ['#538a70', '#84ad97', '#b3cdbd', '#d8e6dd', '#eef3ef'], // accent-400..50, shifted lighter for dark-surface legibility
   trendOther: '#a8a399', // brand-400 (dark)
   heatmapRamp: ['#3a3731', '#356f54', '#538a70', '#84ad97', '#b3cdbd'], // brand-700 (no-activity), accent-500/400/300/200
