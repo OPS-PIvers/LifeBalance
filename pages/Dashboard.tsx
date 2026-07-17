@@ -46,7 +46,7 @@ import { PointRebalanceCard } from '@/components/dashboard/PointRebalanceCard';
 import { CreateChallengePayload, CREDIT_CARD_CATEGORY } from '@/types/schema';
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
 import { CreditCardActivityWidget } from '@/components/dashboard/CreditCardActivityWidget';
-import { Section, SurfaceList, Stat } from '@/components/ui/Section';
+import { Section, SurfaceList, Stat, StatGroup } from '@/components/ui/Section';
 import { ShowMoreRow } from '@/components/ui/ShowMoreRow';
 import PageHeader from '@/components/ui/PageHeader';
 import { getVisibleOrderedWidgetIds } from '@/utils/dashboardLayout';
@@ -459,7 +459,10 @@ const Dashboard: React.FC = () => {
         Nothing needs your review.
       </p>
       {(isModuleEnabled('habits') && habitsToday.total > 0) || isModuleEnabled('money') ? (
-        <div className="mt-4 flex flex-wrap items-start gap-x-10 gap-y-3">
+        // StatGroup is the house wrapper for Stat rows; justify-start + the
+        // wider gap keep the hero's left-set editorial alignment (the default
+        // justify-between would spread two figures to opposite edges).
+        <StatGroup className="mt-4 justify-start gap-x-10">
           {isModuleEnabled('habits') && habitsToday.total > 0 && (
             <Stat
               label={habitsToday.done === habitsToday.total ? 'habits — day complete' : 'habits done today'}
@@ -478,7 +481,7 @@ const Dashboard: React.FC = () => {
               }`}
             />
           )}
-        </div>
+        </StatGroup>
       ) : null}
     </section>
   );
