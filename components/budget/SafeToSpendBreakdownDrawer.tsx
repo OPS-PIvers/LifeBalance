@@ -1,12 +1,13 @@
 import React, { useMemo } from 'react';
-import { Wallet, Receipt, Clock, PiggyBank } from 'lucide-react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
-import { useFormatCurrency } from '@/hooks/useFormatCurrency';
+import { useFormatCurrency, useHouseholdCurrency } from '@/hooks/useFormatCurrency';
 import { Drawer } from '@/components/ui/Drawer';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
 import ProgressBar from '@/components/ui/ProgressBar';
+import { cn } from '@/utils/cn';
 import { computeSafeToSpendDistribution } from '@/utils/safeToSpendDistribution';
 import { calculateDailyPace, calculateBucketDailyPace, getDaysLeft } from '@/utils/spendPace';
+import { splitCurrencyParts } from '@/utils/currencyParts';
 
 /** Fill color by spend ratio — same ramp as BudgetHistory's bucket drawer. */
 const progressColor = (spent: number, limit: number) => {
@@ -28,9 +29,13 @@ const progressColor = (spent: number, limit: number) => {
  *
  *   Safe to Spend = Σ max(0, bucket remaining) + Unallocated (leftover)
  *
- * All math lives in {@link computeSafeToSpendDistribution}; this component is
- * presentational. Default export so it can be React.lazy-loaded (keeping the
- * Drawer/framer-motion off the boot bundle).
+ * The drawer is the metric's editorial moment. The figure gets a magazine-scale
+ * Besley treatment (a big ink integer with a smaller, muted currency symbol +
+ * cents), and the decomposition beneath reads as a bank-ledger statement —
+ * hairline-ruled rows, mono/tabular figures — rather than a generic icon-chip
+ * stat list. Presentation only: all math lives in
+ * {@link computeSafeToSpendDistribution}. Default export so it can be
+ * React.lazy-loaded (keeping the Drawer/framer-motion off the boot bundle).
  */
 interface SafeToSpendBreakdownDrawerProps {
   open: boolean;
@@ -39,6 +44,7 @@ interface SafeToSpendBreakdownDrawerProps {
 
 const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({ open, onClose }) => {
   const { safeToSpendBreakdown: breakdown, buckets, bucketSpentMap } = useFinance();
+  const currency = useHouseholdCurrency();
   const fmt = useFormatCurrency();
 
   const distribution = useMemo(
@@ -60,49 +66,96 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
   if (breakdown === undefined || distribution === null) return null;
 
   const { rows, leftover, overAllocated } = distribution;
+  const parts = splitCurrencyParts(breakdown.safeToSpend, currency);
+  const { negative } = parts;
+
+  // Editorial caption under the hero figure. When a next paycheck is known we
+  // reuse the exact pace string that previously sat below the waterfall (copy
+  // unchanged, just relocated); otherwise a neutral sentence-case descriptor
+  // that only appears when the pace line was already hidden.
+  const caption = negative
+    ? 'Spending has outrun this paycheck'
+    : dailyPace !== null
+      ? `≈ ${fmt(dailyPace)}/day until payday`
+      : 'Available before your next paycheck';
+
+  const heroTone = negative
+    ? 'text-money-neg dark:text-money-negDark'
+    : 'text-brand-900 dark:text-brand-50';
+  const heroMuted = negative
+    ? 'text-money-neg dark:text-money-negDark'
+    : 'text-brand-400 dark:text-brand-450';
 
   return (
     <Drawer isOpen={open} onClose={onClose} title="Safe to spend">
       <div className="flex flex-col gap-5">
-        {/* 1. Waterfall — how the pool is computed. */}
+        {/* Editorial hero — the metric's signature moment. Type + spacing only:
+            a magazine-scale Besley integer, a smaller muted symbol + cents, and
+            a single broadsheet hairline rule beneath. No box, no shadow. */}
+        <div className="border-b border-brand-200 dark:border-brand-700 pb-5">
+          <div className="flex items-start gap-0.5">
+            <span
+              className={cn(
+                'font-display font-medium leading-none tracking-tight text-2xl mt-2',
+                heroMuted
+              )}
+            >
+              {negative ? '−' : ''}
+              {parts.symbolFirst ? parts.symbol : ''}
+            </span>
+            <span
+              className={cn(
+                'font-display font-semibold leading-none tracking-tight tabular-nums text-6xl',
+                heroTone
+              )}
+            >
+              {parts.integer}
+            </span>
+            <span
+              className={cn(
+                'font-display font-medium leading-none tracking-tight tabular-nums text-2xl mt-2',
+                heroMuted
+              )}
+            >
+              {parts.decimalSeparator}
+              {parts.fraction}
+              {!parts.symbolFirst ? ` ${parts.symbol}` : ''}
+            </span>
+          </div>
+          <p className="mt-3 text-sm font-medium text-brand-500 dark:text-brand-400">{caption}</p>
+        </div>
+
+        {/* 1. Ledger — how the pool is computed. */}
         <Section title="How it's calculated">
           <SurfaceList>
-            <WaterfallRow
-              icon={<Wallet size={16} />}
+            <LedgerRow
               label="Checking balance"
               sub="Available cash"
               value={fmt(breakdown.checkingBalance)}
             />
-            <WaterfallRow
-              icon={<Receipt size={16} />}
+            <LedgerRow
               label="Unpaid bills this period"
               sub="Due before your next paycheck"
-              value={breakdown.unpaidBills >= 0.005 ? `- ${fmt(breakdown.unpaidBills)}` : fmt(0)}
+              value={breakdown.unpaidBills >= 0.005 ? `− ${fmt(breakdown.unpaidBills)}` : fmt(0)}
               negative={breakdown.unpaidBills >= 0.005}
             />
             {breakdown.pendingSpend > 0 && (
-              <WaterfallRow
-                icon={<Clock size={16} />}
+              <LedgerRow
                 label="Pending transactions"
                 sub="Spent but not yet cleared"
-                value={`- ${fmt(breakdown.pendingSpend)}`}
+                value={`− ${fmt(breakdown.pendingSpend)}`}
                 negative
               />
             )}
             <Row className="justify-between bg-brand-50 dark:bg-brand-700/30">
-              <span className="text-sm font-semibold text-brand-800 dark:text-brand-100">
+              <span className="font-display text-sm font-semibold tracking-tight text-brand-800 dark:text-brand-100">
                 Safe to Spend
               </span>
-              <span className="font-mono text-sm font-bold tabular-nums text-brand-900 dark:text-brand-50">
+              <span className="stat-num text-base font-bold text-brand-900 dark:text-brand-50">
                 {fmt(breakdown.safeToSpend)}
               </span>
             </Row>
           </SurfaceList>
-          {dailyPace !== null && (
-            <p className="px-1 pt-2 text-xs font-semibold text-brand-700 dark:text-brand-200">
-              ≈ {fmt(dailyPace)}/day until payday
-            </p>
-          )}
         </Section>
 
         {/* 2. Distribution across buckets + leftover. */}
@@ -119,11 +172,12 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
                       {row.name}
                     </span>
                     <span
-                      className={`font-mono text-sm font-semibold tabular-nums shrink-0 ${
+                      className={cn(
+                        'stat-num text-sm font-semibold shrink-0',
                         row.isOver
                           ? 'text-money-neg dark:text-money-negDark'
                           : 'text-brand-700 dark:text-brand-200'
-                      }`}
+                      )}
                     >
                       {fmt(row.remaining)}
                     </span>
@@ -150,22 +204,18 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
               );
             })}
 
-            {/* Leftover / over-allocated row. */}
-            <Row className="justify-between">
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="text-brand-500 dark:text-brand-400 shrink-0">
-                  <PiggyBank size={16} />
-                </span>
-                <span className="text-sm font-semibold text-brand-800 dark:text-brand-100">
-                  {overAllocated ? 'Over-allocated' : 'Unallocated'}
-                </span>
-              </div>
+            {/* Leftover / over-allocated row — the ledger's closing line. */}
+            <Row className="justify-between bg-brand-50 dark:bg-brand-700/30">
+              <span className="font-display text-sm font-semibold tracking-tight text-brand-800 dark:text-brand-100">
+                {overAllocated ? 'Over-allocated' : 'Unallocated'}
+              </span>
               <span
-                className={`font-mono text-sm font-bold tabular-nums shrink-0 ${
+                className={cn(
+                  'stat-num text-base font-bold shrink-0',
                   overAllocated
                     ? 'text-money-neg dark:text-money-negDark'
                     : 'text-brand-900 dark:text-brand-50'
-                }`}
+                )}
               >
                 {fmt(leftover)}
               </span>
@@ -188,27 +238,28 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
   );
 };
 
-const WaterfallRow: React.FC<{
-  icon: React.ReactNode;
+/**
+ * A single bank-statement line: description + muted sub on the left, a
+ * right-aligned mono figure on the right. No icon chip — the ledger reads as
+ * broadsheet type, hierarchy coming from weight + the hairline rule that `Row`
+ * draws between lines.
+ */
+const LedgerRow: React.FC<{
   label: string;
   sub: string;
   value: string;
   negative?: boolean;
-}> = ({ icon, label, sub, value, negative = false }) => (
-  <Row className="justify-between">
-    <div className="flex items-center gap-3 min-w-0">
-      <span className="w-9 h-9 rounded-card bg-brand-100 border border-brand-200 flex items-center justify-center text-brand-500 shrink-0 dark:bg-brand-700/50 dark:border-brand-700 dark:text-brand-300">
-        {icon}
-      </span>
-      <div className="min-w-0">
-        <p className="text-sm font-semibold text-brand-800 dark:text-brand-100 truncate">{label}</p>
-        <p className="text-xxs text-brand-400 dark:text-brand-450">{sub}</p>
-      </div>
+}> = ({ label, sub, value, negative = false }) => (
+  <Row className="justify-between gap-3">
+    <div className="min-w-0">
+      <p className="text-sm font-medium text-brand-800 dark:text-brand-100 truncate">{label}</p>
+      <p className="text-xxs text-brand-400 dark:text-brand-450">{sub}</p>
     </div>
     <span
-      className={`font-mono text-sm font-bold tabular-nums shrink-0 ${
-        negative ? 'text-money-neg dark:text-money-negDark' : 'text-brand-900 dark:text-brand-50'
-      }`}
+      className={cn(
+        'stat-num text-sm font-semibold shrink-0',
+        negative ? 'text-money-neg dark:text-money-negDark' : 'text-brand-800 dark:text-brand-100'
+      )}
     >
       {value}
     </span>
