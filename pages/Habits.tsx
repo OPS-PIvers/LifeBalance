@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
 import Eyebrow from '@/components/ui/Eyebrow';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
-import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { ViewSwitcher } from '@/components/ui/ViewSwitcher';
 import HabitCreatorWizard from '@/components/modals/HabitCreatorWizard';
 import SmartHabitAdjustModal from '@/components/modals/SmartHabitAdjustModal';
 import SmartHabitReorderModal from '@/components/modals/SmartHabitReorderModal';
@@ -38,8 +38,8 @@ import toast from 'react-hot-toast';
 import { format, subDays } from 'date-fns';
 
 // Habits' IA is 3 top-level tabs (consolidated from 6 — 2026-07 critique):
-// Track, Progress (History + Insights + Coach behind a segment toggle),
-// Rewards (+ Challenges behind a segment toggle). Coach folded into Progress
+// Track, Progress (History + Insights + Coach behind an inline view switcher),
+// Rewards (+ Challenges behind an inline view switcher). Coach folded into Progress
 // in the round-3 critique: it duplicated a Dashboard widget and opened on a
 // pitch, which didn't earn a top-level slot. ONE state value holds the full
 // location: the legacy view keys stay valid so every existing
@@ -256,7 +256,7 @@ const Habits: React.FC = () => {
   const [showArchived, setShowArchived] = useState(false);
   // Controlled so the toolbar points glance can deep-link straight to Rewards.
   // `activeView` may be a legacy view key ('history', 'challenges', …) — the
-  // Tabs bar renders its top-level group and the group's SegmentedControl
+  // Tabs bar renders its top-level group and the group's inline ViewSwitcher
   // renders the specific view (same pattern as Money's 4-tab IA).
   const [activeView, setActiveView] = useDeepLinkTab('track', HABIT_TABS);
   const activeTab = topTabOf(activeView);
@@ -532,9 +532,11 @@ const Habits: React.FC = () => {
 
           <TabsContent value="progress">
             <div className="space-y-4">
-              <SegmentedControl
+              {/* Content header: the sub-view dropdown IS the panel's title
+                  (GitHub-mobile pattern) — one tab row above, the view choice
+                  reads as part of the content, not a second nav tier. */}
+              <ViewSwitcher
                 name="Progress view"
-                size="sm"
                 tone="warm"
                 options={[
                   { value: 'history', label: 'History' },
@@ -556,9 +558,8 @@ const Habits: React.FC = () => {
 
           <TabsContent value="rewards">
             <div className="space-y-4">
-              <SegmentedControl
+              <ViewSwitcher
                 name="Rewards view"
-                size="sm"
                 tone="warm"
                 options={[
                   // Label only — the legacy 'rewards' view key is load-bearing
