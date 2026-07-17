@@ -138,12 +138,26 @@ const HabitsSkeleton: React.FC = () => (
  */
 const KidChoresGroup: React.FC<{ kid: HouseholdMember; chores: Habit[] }> = ({ kid, chores }) => {
   const { toggleHabit } = useGamification();
+  // Guard against rapid double-taps on a chore row: toggleHabit's batch write
+  // is async, so a second tap before the first resolves would double-credit
+  // points/streak. Rows disable while their toggle is in flight.
+  const [pendingChoreIds, setPendingChoreIds] = useState<ReadonlySet<string>>(new Set());
   const today = getLocalDateString();
   const doneCount = chores.filter(h => isHabitCompletedInCurrentPeriod(h, today)).length;
 
-  const handleToggle = (habit: Habit, done: boolean) => {
+  const handleToggle = async (habit: Habit, done: boolean) => {
+    if (pendingChoreIds.has(habit.id)) return;
     haptic(done ? 'light' : 'success');
-    void toggleHabit(habit.id, done ? 'down' : 'up');
+    setPendingChoreIds(prev => new Set(prev).add(habit.id));
+    try {
+      await toggleHabit(habit.id, done ? 'down' : 'up');
+    } finally {
+      setPendingChoreIds(prev => {
+        const next = new Set(prev);
+        next.delete(habit.id);
+        return next;
+      });
+    }
   };
 
   return (
@@ -174,10 +188,11 @@ const KidChoresGroup: React.FC<{ kid: HouseholdMember; chores: Habit[] }> = ({ k
             <li key={h.id}>
               <button
                 type="button"
-                onClick={() => handleToggle(h, done)}
+                disabled={pendingChoreIds.has(h.id)}
+                onClick={() => void handleToggle(h, done)}
                 aria-pressed={done}
                 aria-label={`Toggle chore: ${h.title}, currently ${done ? 'done' : 'not done'}`}
-                className={`w-full flex items-center gap-3 rounded-card px-3 py-2 border text-left transition-colors active:scale-[0.99] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900 ${
+                className={`w-full flex items-center gap-3 rounded-card px-3 py-2 border text-left transition-colors active:scale-[0.99] disabled:opacity-60 disabled:pointer-events-none focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900 ${
                   done
                     ? 'bg-warm-50 border-warm-200 hover:bg-warm-100 dark:bg-warm-900/20 dark:border-warm-800 dark:hover:bg-warm-900/30'
                     : 'bg-white border-brand-200 hover:bg-brand-50 dark:bg-brand-800 dark:border-brand-700 dark:hover:bg-brand-700/40'

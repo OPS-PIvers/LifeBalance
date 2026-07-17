@@ -920,12 +920,18 @@ const MealPlanTab: React.FC = () => {
       const targetIndex = differenceInCalendarDays(target, rangeStart);
       setStripWindow(w => extendStripWindowTo(w, targetIndex, stripDays.length));
       setSelectedDate(target);
-      // Focus can't move synchronously here — if the window just grew to
-      // include this day, its chip doesn't exist in the DOM yet. The
-      // pendingFocusDateRef effect above picks this up once it's mounted
+      // If the target chip already exists in the DOM (the window didn't need
+      // to grow), focus synchronously — same as the pre-windowing behavior
       // (focus() works on tabIndex=-1 elements; the roving tabIndex catches
-      // up on the re-render).
-      pendingFocusDateRef.current = targetStr;
+      // up on the re-render). Only when the chip isn't materialized yet does
+      // focus defer to the pendingFocusDateRef effect above, which fires once
+      // the just-grown window commits.
+      const existingChip = stripRef.current?.querySelector<HTMLElement>(`[data-date="${targetStr}"]`);
+      if (existingChip) {
+        existingChip.focus();
+      } else {
+        pendingFocusDateRef.current = targetStr;
+      }
     },
     [selectedDate, stripDays, rangeStart]
   );
