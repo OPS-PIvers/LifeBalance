@@ -67,8 +67,12 @@ export function buildRecapShareContent(
 const CARD_WIDTH = 1080;
 const CARD_HEIGHT = 1350;
 
-// DESIGN.md token hex values (index.css @theme) — canvas can't consume Tailwind
-// classes, so the brand-*/accent-*/warm-* colors actually drawn are copied here.
+// DESIGN.md token hex values (index.css @theme, light values only — the share
+// card is a fixed light "printed card" look, not theme-reactive) — canvas
+// can't consume Tailwind classes or CSS custom properties, so the
+// brand-*/accent-*/warm-*/money-* colors actually drawn are copied here.
+// KEEP IN SYNC WITH index.css's `@theme` block; verified against the current
+// token values as of the chart dark-theming pass (utils/chartTheme.ts).
 const COLORS = {
   brand50: '#f8f7f4',
   brand200: '#e3e0d8',

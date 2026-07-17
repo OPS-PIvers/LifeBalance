@@ -9,21 +9,20 @@ import {
 import { format } from 'date-fns';
 import { PiggyBank } from 'lucide-react';
 import { CustomTooltip } from '@/components/analytics/CustomTooltip';
+import { useChartTheme } from '@/hooks/useChartTheme';
 
 /**
  * Net worth trend chart (F-MONEY-09). Reads the bounded live window of
  * server-written daily `NetWorthSnapshot` docs (`netWorthHistory`, newest
  * first) and plots them oldest-first. Matches the editorial styling of the
- * sibling charts in `BudgetTrends.tsx` (evergreen area fill, hairline grid).
+ * sibling charts in `BudgetTrends.tsx` (evergreen area fill, hairline grid,
+ * both themes first-class via `useChartTheme()` — see `utils/chartTheme.ts`).
  */
-
-const AXIS_TICK = { fill: '#a8a399', fontSize: 11 } as const;
-const GRID_STROKE = 'rgba(168,163,153,0.25)';
-const LINE_COLOR = '#285742'; // accent-800 (evergreen)
 
 const NetWorthTrendChart: React.FC = () => {
   const { netWorthHistory } = useFinance();
   const fmt = useFormatCurrency();
+  const chartTheme = useChartTheme();
 
   const data = useMemo(
     () =>
@@ -69,19 +68,19 @@ const NetWorthTrendChart: React.FC = () => {
               <AreaChart data={data}>
                 <defs>
                   <linearGradient id="net-worth-gradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={LINE_COLOR} stopOpacity={0.35} />
-                    <stop offset="95%" stopColor={LINE_COLOR} stopOpacity={0.03} />
+                    <stop offset="5%" stopColor={chartTheme.seriesPrimary} stopOpacity={0.35} />
+                    <stop offset="95%" stopColor={chartTheme.seriesPrimary} stopOpacity={0.03} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={GRID_STROKE} />
-                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={AXIS_TICK} dy={10} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartTheme.gridStroke} />
+                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: chartTheme.axisText, fontSize: 11 }} dy={10} />
                 <YAxis hide />
                 <Tooltip content={<CustomTooltip formatter={(val: number) => fmt(val)} />} />
                 <Area
                   type="monotone"
                   dataKey="netWorth"
                   name="Net worth"
-                  stroke={LINE_COLOR}
+                  stroke={chartTheme.seriesPrimary}
                   strokeWidth={2}
                   fill="url(#net-worth-gradient)"
                 />
