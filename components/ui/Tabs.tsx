@@ -209,7 +209,10 @@ export const TabsTrigger: React.FC<{
       onClick={() => !disabled && context.onValueChange(value)}
       disabled={disabled}
       className={cn(
-        'relative inline-flex flex-none items-center justify-center gap-2 text-sm font-semibold tracking-tight rounded-sm transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
+        // grow (never shrink, basis auto): when the strip fits, triggers stretch
+        // to fill the trough like SegmentedControl's flex-1; when it doesn't,
+        // each keeps its content width and the scroller + edge fades take over.
+        'relative inline-flex grow shrink-0 items-center justify-center gap-2 text-sm font-semibold tracking-tight rounded-sm transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
         // sm renders a 36px-tall trigger — below the 44px touch-target floor —
         // so it carries Button's invisible before: hit-area extender (vertical
         // only: adjacent triggers in the strip would overlap horizontally).

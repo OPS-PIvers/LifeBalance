@@ -462,6 +462,21 @@ const BudgetAccounts: React.FC = () => {
         </div>
       )}
 
+      {/* Add Account Button — rendered when at least one account exists, positioned
+          directly after the Liabilities section. When zero accounts exist, the
+          EmptyState below provides the primary action. */}
+      {(assetAccounts.length > 0 || liabilityAccounts.length > 0) && (
+        <Button
+          variant="dashed"
+          size="sm"
+          onClick={() => setIsAddModalOpen(true)}
+          className="w-full py-2.5 rounded-card"
+          leftIcon={<Plus size={16} />}
+        >
+          Add Account
+        </Button>
+      )}
+
       {/* Savings Goals (Plan 24) — near the existing per-account monthlyGoal
           affordance above, per the design spike. */}
       <SavingsGoals />
@@ -536,17 +551,6 @@ const BudgetAccounts: React.FC = () => {
           }
         />
       )}
-
-       {/* Add Account Button — compact inline row, not a tall full-width dashed block */}
-       <Button
-        variant="dashed"
-        size="sm"
-        onClick={() => setIsAddModalOpen(true)}
-        className="w-full py-2.5 rounded-card"
-        leftIcon={<Plus size={16} />}
-      >
-        Add Account
-      </Button>
 
       {/* Add Account Drawer */}
       <Drawer
