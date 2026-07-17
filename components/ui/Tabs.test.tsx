@@ -144,6 +144,30 @@ describe('Tabs', () => {
     });
   });
 
+  describe('sub-view menu ARIA pass-through', () => {
+    it('forwards aria-haspopup/aria-expanded to the trigger button and omits them by default', () => {
+      render(
+        <Tabs defaultValue="tab1">
+          <TabsList>
+            <TabsTrigger value="tab1">Tab 1</TabsTrigger>
+            <TabsTrigger value="tab2" aria-haspopup="menu" aria-expanded={false}>
+              Tab 2
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="tab1">Content 1</TabsContent>
+          <TabsContent value="tab2">Content 2</TabsContent>
+        </Tabs>
+      );
+
+      const plain = screen.getByRole('tab', { name: 'Tab 1' });
+      const menuTab = screen.getByRole('tab', { name: 'Tab 2' });
+      expect(plain).not.toHaveAttribute('aria-haspopup');
+      expect(plain).not.toHaveAttribute('aria-expanded');
+      expect(menuTab).toHaveAttribute('aria-haspopup', 'menu');
+      expect(menuTab).toHaveAttribute('aria-expanded', 'false');
+    });
+  });
+
   describe('keyboard navigation', () => {
     function renderTabs() {
       return render(

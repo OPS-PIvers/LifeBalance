@@ -183,7 +183,22 @@ export const TabsTrigger: React.FC<{
   children: React.ReactNode;
   className?: string;
   disabled?: boolean;
-}> = ({ value, children, className, disabled }) => {
+  /**
+   * Set when the trigger anchors a sub-view menu (see TabSubViewMenu): the tab
+   * both selects its panel AND opens a popover of sub-views, so assistive tech
+   * needs the menu-button semantics on top of role=tab. Pass-through only —
+   * the trigger itself never opens anything.
+   */
+  'aria-haspopup'?: React.AriaAttributes['aria-haspopup'];
+  'aria-expanded'?: boolean;
+}> = ({
+  value,
+  children,
+  className,
+  disabled,
+  'aria-haspopup': ariaHasPopup,
+  'aria-expanded': ariaExpanded,
+}) => {
   const context = React.useContext(TabsContext);
   if (!context) throw new Error('TabsTrigger must be used within Tabs');
   const size = React.useContext(TabsSizeContext);
@@ -204,6 +219,8 @@ export const TabsTrigger: React.FC<{
       role="tab"
       aria-selected={isActive}
       aria-controls={panelId}
+      aria-haspopup={ariaHasPopup}
+      aria-expanded={ariaExpanded}
       tabIndex={isActive ? 0 : -1}
       data-tabs-value={value}
       onClick={() => !disabled && context.onValueChange(value)}
