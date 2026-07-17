@@ -217,6 +217,10 @@ export const TodoRow = React.memo(function TodoRow({
                 aria-expanded={subtasksExpanded}
                 aria-label={`${subtasksExpanded ? 'Hide' : 'Show'} subtasks — ${progress.done} of ${progress.total} done`}
                 className={cn(
+                  // The chip renders ~16px tall; the invisible before: extender
+                  // (Button's established pattern) stretches the hit area to
+                  // ≥44px without changing the visual size.
+                  "relative before:absolute before:inset-x-0 before:-inset-y-3.5 before:content-['']",
                   'flex items-center gap-1 font-semibold transition-colors',
                   progress.allDone
                     ? 'text-accent-600 dark:text-accent-300'

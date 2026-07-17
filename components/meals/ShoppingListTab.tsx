@@ -650,7 +650,7 @@ const ShoppingListTab: React.FC = () => {
                             onClick={() => setIsRestockDrawerOpen(true)}
                             aria-label="Quick restock"
                             aria-haspopup="dialog"
-                            className="p-2 text-brand-500 hover:text-accent-600 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-400 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
+                            className="relative before:absolute before:-inset-1 before:content-[''] p-2 text-brand-500 hover:text-accent-600 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-400 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
                         >
                             <Zap className="w-5 h-5" />
                         </button>
@@ -665,7 +665,7 @@ const ShoppingListTab: React.FC = () => {
                             aria-label={`Sort: ${SHOPPING_SORT_LABELS[sortMode]}`}
                             aria-expanded={isSortOpen}
                             aria-haspopup="menu"
-                            className={`p-2 rounded-full transition-colors hover:bg-brand-100 dark:hover:bg-brand-700/50 ${
+                            className={`relative before:absolute before:-inset-1 before:content-[''] p-2 rounded-full transition-colors hover:bg-brand-100 dark:hover:bg-brand-700/50 ${
                                 sortMode !== 'entry'
                                     ? 'text-accent-600 dark:text-accent-300'
                                     : 'text-brand-500 hover:text-accent-600 dark:text-brand-400 dark:hover:text-accent-300'
@@ -716,7 +716,7 @@ const ShoppingListTab: React.FC = () => {
                                 aria-label="Filter by store"
                                 aria-expanded={isFilterOpen}
                                 aria-haspopup="menu"
-                                className="p-2 text-brand-500 hover:text-accent-600 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-400 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
+                                className="relative before:absolute before:-inset-1 before:content-[''] p-2 text-brand-500 hover:text-accent-600 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-400 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
                             >
                                 <Filter className="w-5 h-5" />
                             </button>
@@ -737,7 +737,7 @@ const ShoppingListTab: React.FC = () => {
                         aria-label="Shopping list actions"
                         aria-haspopup="menu"
                         aria-expanded={menuOpen}
-                        className="p-2 text-brand-500 hover:text-accent-600 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-400 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
+                        className="relative before:absolute before:-inset-1 before:content-[''] p-2 text-brand-500 hover:text-accent-600 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-400 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
                     >
                         {isOptimizing
                             ? <Loader2 className="w-5 h-5 animate-spin" />
@@ -823,6 +823,9 @@ const ShoppingListTab: React.FC = () => {
                 <div className="hairline-divider">
                     <EmptyState
                         size="compact"
+                        // h2: this renders directly under the page h1, so h3
+                        // (the default) would skip a heading level.
+                        headingLevel="h2"
                         icon={<ShoppingCart className="w-7 h-7" />}
                         title={filterStore ? `Nothing for ${filterStore}` : 'Your list is empty'}
                         description={filterStore ? 'No items match this store filter.' : 'Add an item above to start your shopping list.'}
@@ -847,9 +850,14 @@ const ShoppingListTab: React.FC = () => {
                             {/* Section header between groups (store / store-section
                                 modes only — shoppingGroupLabel is null for flat modes) */}
                             {isNewGroup && (
-                                <div className="hairline-divider px-3 pt-2.5 pb-1 text-xxs font-semibold uppercase tracking-wide text-brand-500 dark:text-brand-400 bg-brand-50/60 dark:bg-brand-900/40">
+                                /* h2 (not div): these group labels are the only
+                                   heading level between the page h1 and row
+                                   content, so give them real heading semantics
+                                   for screen-reader navigation. Same classes —
+                                   no visual change. */
+                                <h2 className="hairline-divider px-3 pt-2.5 pb-1 text-xxs font-semibold uppercase tracking-wide text-brand-500 dark:text-brand-400 bg-brand-50/60 dark:bg-brand-900/40">
                                     {label}
-                                </div>
+                                </h2>
                             )}
                             <ShoppingItemRow
                                 item={item}

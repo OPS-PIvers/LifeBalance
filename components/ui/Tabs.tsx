@@ -209,8 +209,16 @@ export const TabsTrigger: React.FC<{
       onClick={() => !disabled && context.onValueChange(value)}
       disabled={disabled}
       className={cn(
-        'inline-flex flex-none items-center justify-center gap-2 text-sm font-semibold tracking-tight rounded-sm transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
-        size === 'sm' ? 'min-h-9 px-2.5 py-1.5' : 'min-h-11 px-3 py-2',
+        'relative inline-flex flex-none items-center justify-center gap-2 text-sm font-semibold tracking-tight rounded-sm transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
+        // sm renders a 36px-tall trigger — below the 44px touch-target floor —
+        // so it carries Button's invisible before: hit-area extender (vertical
+        // only: adjacent triggers in the strip would overlap horizontally).
+        // -inset-y-1.5 (not -1): the active trigger gains a 1px border, which
+        // shrinks the padding box the pseudo anchors to — 6px each side keeps
+        // both states ≥44px.
+        size === 'sm'
+          ? "min-h-9 px-2.5 py-1.5 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+          : 'min-h-11 px-3 py-2',
         isActive
           ? 'bg-white text-accent-700 border border-brand-200 dark:bg-brand-700 dark:text-accent-200 dark:border-brand-600'
           : 'text-brand-500 hover:text-brand-700 hover:bg-white/60 dark:text-brand-400 dark:hover:text-brand-200 dark:hover:bg-brand-700/50',

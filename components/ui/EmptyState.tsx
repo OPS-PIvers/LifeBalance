@@ -52,6 +52,12 @@ export interface EmptyStateProps
    * "no meals planned" in a per-day agenda slot, a cleared shopping list).
    */
   size?: EmptyStateSize;
+  /**
+   * Heading element for the title. Defaults to `h3` (most empty states sit
+   * inside an h2-titled section); pass `h2` when the empty state renders
+   * directly under a page `h1` so the outline doesn't skip a level.
+   */
+  headingLevel?: 'h2' | 'h3';
 }
 
 const ICON_BADGE_SIZE: Record<EmptyStateSize, string> = {
@@ -84,6 +90,7 @@ const EmptyState: React.FC<EmptyStateProps> = ({
   variant = 'plain',
   tone = 'default',
   size = 'default',
+  headingLevel: Heading = 'h3',
   className,
   ...props
 }) => (
@@ -109,9 +116,9 @@ const EmptyState: React.FC<EmptyStateProps> = ({
         {icon}
       </div>
     )}
-    <h3 className={cn('font-display font-semibold text-brand-900 dark:text-brand-100', TITLE_SIZE[size])}>
+    <Heading className={cn('font-display font-semibold text-brand-900 dark:text-brand-100', TITLE_SIZE[size])}>
       {title}
-    </h3>
+    </Heading>
     {description && (
       <p className={cn('text-brand-500 dark:text-brand-400 mt-1 max-w-xs', size === 'compact' ? 'text-xs' : 'text-sm')}>
         {description}

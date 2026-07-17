@@ -104,7 +104,8 @@ export const MoneyRecapDrawer: React.FC<MoneyRecapDrawerProps> = ({ recap, isOpe
                       <span className="stat-num text-sm font-semibold text-brand-700 dark:text-brand-200">
                         {fmt(b.spent, { decimals: 0 })}
                       </span>
-                      <span className="text-xs text-brand-400 dark:text-brand-500">
+                      {/* dark:brand-450: brand-500 on the brand-800 drawer is 3.56:1 (< 4.5). */}
+                      <span className="text-xs text-brand-400 dark:text-brand-450">
                         / {fmt(b.limit, { decimals: 0 })}
                       </span>
                       {b.overUnder !== 0 && (

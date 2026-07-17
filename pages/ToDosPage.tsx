@@ -861,6 +861,11 @@ const ToDosPage: React.FC = () => {
         onClick={() => setAssigneeFilter(null)}
         aria-pressed={assigneeFilter === null}
         className={cn(
+          // The pill renders ~34px tall; the invisible before: extender
+          // (Button's established pattern) stretches the hit area past 44px
+          // without changing the visual size. Vertical only — adjacent pills
+          // in the row would otherwise overlap each other's zones.
+          "relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']",
           'flex items-center px-3 py-1.5 rounded-btn border text-sm font-medium whitespace-nowrap transition-colors duration-(--duration-fast) ease-(--ease-standard)',
           assigneeFilter === null
             ? 'bg-accent-600 text-white border-accent-600 dark:bg-accent-600 dark:border-accent-600'
@@ -877,6 +882,7 @@ const ToDosPage: React.FC = () => {
           aria-label={`Filter to ${member.displayName || 'User'}`}
           aria-pressed={assigneeFilter === member.uid}
           className={cn(
+            "relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']",
             'flex items-center gap-2 px-3 py-1.5 rounded-btn border transition-colors duration-(--duration-fast) ease-(--ease-standard) whitespace-nowrap',
             assigneeFilter === member.uid
               ? 'bg-accent-600 text-white border-accent-600 dark:bg-accent-600 dark:border-accent-600'
