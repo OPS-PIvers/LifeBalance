@@ -58,6 +58,8 @@ import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
 import { Section, SurfaceList, Row, DisclosureRow } from '@/components/ui/Section';
+import SectionHeading from '@/components/ui/SectionHeading';
+import Eyebrow from '@/components/ui/Eyebrow';
 import PageHeader from '@/components/ui/PageHeader';
 import { Drawer } from '@/components/ui/Drawer';
 import { Badge } from '@/components/ui/Badge';
@@ -681,13 +683,13 @@ const Settings: React.FC = () => {
           <SurfaceList>
             {/* Appearance / Theme */}
             <Row className="flex-col items-stretch gap-3">
-              <span className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">Appearance</span>
+              <Eyebrow>Appearance</Eyebrow>
               <ThemeToggle />
             </Row>
 
             {/* Text size */}
             <Row className="flex-col items-stretch gap-3">
-              <span className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">Text Size</span>
+              <Eyebrow>Text Size</Eyebrow>
               <SegmentedControl
                 name="Text size"
                 options={FONT_SCALE_OPTIONS}
@@ -718,7 +720,7 @@ const Settings: React.FC = () => {
             {/* Plan (Plan 050b) — only shown once billing is live; dormant by default. */}
             {billingEnabled && (
               <Row className="flex-col items-stretch gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">Plan</span>
+                <Eyebrow>Plan</Eyebrow>
                 {getPlan(householdSettings) === 'premium' ? (
                   <div className="flex items-center gap-2">
                     <span className="inline-flex items-center gap-1.5 text-xs font-bold text-warm-700 bg-warm-50 border border-warm-200 px-2.5 py-0.5 rounded-full dark:bg-warm-500/15 dark:text-warm-300 dark:border-warm-500/30">
@@ -858,23 +860,26 @@ const Settings: React.FC = () => {
               the first row of this surface so the Household group stays to a
               single members box (fewer bordered panels). */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between px-1">
-              <p className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">
-                Members
-              </p>
-              {currentUser?.role === 'admin' && (
-                <Button
-                  onClick={handleAddMember}
-                  variant="subtle"
-                  size="icon-sm"
-                  title="Add Member"
-                  aria-label="Add Member"
-                  className="rounded-full"
-                >
-                  <Plus size={18} />
-                </Button>
-              )}
-            </div>
+            <SectionHeading
+              as="h3"
+              className="px-1"
+              action={
+                currentUser?.role === 'admin' && (
+                  <Button
+                    onClick={handleAddMember}
+                    variant="subtle"
+                    size="icon-sm"
+                    title="Add Member"
+                    aria-label="Add Member"
+                    className="rounded-full"
+                  >
+                    <Plus size={18} />
+                  </Button>
+                )
+              }
+            >
+              Members
+            </SectionHeading>
             <SurfaceList>
               {/* Shared Household Points — TopToolbar already shows the current
                   daily/weekly totals persistently, so this collapses to a single
@@ -1036,9 +1041,7 @@ const Settings: React.FC = () => {
               below remain the escape hatch for anything a preset doesn't
               cover exactly. */}
           <div className="px-1">
-            <p className="text-xs font-semibold text-brand-600 dark:text-brand-300 mb-2 uppercase tracking-wide">
-              Quick presets
-            </p>
+            <Eyebrow className="block mb-2">Quick presets</Eyebrow>
             <div className="flex flex-wrap gap-2">
               {MODULE_PRESETS.map((preset) => (
                 <Button
@@ -1182,7 +1185,7 @@ const Settings: React.FC = () => {
       <div className="space-y-6">
         {/* API Key Management */}
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 px-1">API Keys</p>
+          <SectionHeading as="h3" className="px-1">API Keys</SectionHeading>
           <ApiKeyManager
             householdId={householdId || ''}
             userId={user?.uid || ''}
@@ -1194,7 +1197,7 @@ const Settings: React.FC = () => {
 
         {/* Setup Guide */}
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 px-1">Setup Guide</p>
+          <SectionHeading as="h3" className="px-1">Setup Guide</SectionHeading>
           <ShortcutSetupGuide apiKey={sessionApiKey} />
         </div>
       </div>
