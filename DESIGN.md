@@ -120,11 +120,37 @@ Three self-hosted variable fonts (woff2, `font-display: swap`, per-subset
   ("Hi, Paul Ivers"), `Section` titles, the Safe-to-Spend figure, dialog titles.
   Pair with `tracking-tight` and `font-semibold`.
 - **Body and controls are `font-sans`** (the default — no class needed).
-- **Section header** (`Section` primitive): `font-display text-sm font-semibold
-  tracking-tight text-brand-700 dark:text-brand-200`.
-- **Eyebrow / field label:** `text-xs font-bold uppercase tracking-wider
-  text-brand-400 dark:text-brand-500`. Micro-labels use `text-xxs` (10px).
-- **Page title:** `font-display text-2xl font-semibold tracking-tight`.
+- **Page title** (`PageHeader`): `font-display text-xl font-semibold tracking-tight`.
+- **Section / sub-section header** (`Section` title + `SectionHeading`):
+  `font-display text-sm font-semibold tracking-tight text-brand-700
+  dark:text-brand-200`.
+- **Eyebrow / field label** (`Eyebrow`): `text-xs font-semibold uppercase
+  tracking-wider`. Micro-labels use `text-xxs` (10px).
+
+### Two labeling voices — pick by register, not by habit
+
+Labels come in **exactly two voices**, and each has a job. A single voice
+everywhere reads as generic AI slop (the uppercase-tracked-eyebrow-everywhere
+tell); mixing them at random reads as noise. The rule is about *what is being
+labeled*, not where it sits:
+
+| Voice | Primitive | Labels… | Case | Example |
+|---|---|---|---|---|
+| **Editorial serif** | `SectionHeading` / `Section` title | a **content grouping** — a region of the page a reader scans and navigates by | Sentence case | "This week", "Members", "Backups & Import", "Setup Guide" |
+| **Micro-caps eyebrow** | `Eyebrow` | a **control, field, or datum** — a form-field group, a stat caption, a status | UPPERCASE | "APPEARANCE", "TEXT SIZE", "QUICK PRESETS", the "SPENT" / "CONSISTENCY" stat captions |
+
+Decision test: *does it name a section of content, or does it label a widget/
+value?* Content → serif `SectionHeading`. Widget/value → `Eyebrow`. When both
+appear on one surface (Settings sub-screens), the serif heading names the group
+and the eyebrow tags the controls inside it — the two cadences give the page a
+scannable rhythm instead of one flat wall of caps.
+
+- Use `SectionHeading` for a **sub-section under a `Section`** — it renders the
+  serif spec through the *same* `sectionHeadingClasses` the `Section` title uses,
+  so the two never drift. It defaults to `<h3>`; pass `as` to keep the outline
+  correct (a `Section` title is the surface's `<h2>`).
+- Never hand-roll either voice inline (`text-xs uppercase tracking-wider …`) —
+  reach for the primitive so the register stays a deliberate choice.
 
 ---
 

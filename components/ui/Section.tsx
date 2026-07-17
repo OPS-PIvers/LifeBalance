@@ -1,6 +1,7 @@
 import React from 'react';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import { sectionHeadingClasses } from '@/components/ui/SectionHeading';
 
 /**
  * Grouped-flat surface primitives — the canonical way to organize list content
@@ -45,9 +46,10 @@ export const Section: React.FC<SectionProps> = ({
     {(title || action) && (
       <div className="flex items-end justify-between px-1 mb-1.5">
         {title ? (
-          <h2 className="font-display text-sm font-semibold tracking-tight text-brand-700 dark:text-brand-200">
-            {title}
-          </h2>
+          // The section masthead (`h2`) — the editorial serif voice, sharing
+          // its exact spec with the standalone `SectionHeading` sub-header
+          // primitive so the two never drift (see DESIGN.md §3).
+          <h2 className={sectionHeadingClasses}>{title}</h2>
         ) : (
           <span />
         )}
