@@ -2,8 +2,9 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
-import { Plus, Wallet } from 'lucide-react';
+import { Plus, Wallet, AlertTriangle } from 'lucide-react';
 import { sumMoney } from '@/utils/money';
+import { getBucketsOverspendSummary } from '@/utils/bucketOverspend';
 import { BudgetBucket, Transaction, INCOME_CATEGORY, CREDIT_CARD_CATEGORY } from '@/types/schema';
 import { isCalendarBudgetedCategory } from '@/utils/categories';
 import BucketFormModal from '@/components/modals/BucketFormModal';
@@ -100,6 +101,21 @@ const BudgetBuckets: React.FC = () => {
 
     return map;
   }, [transactions, currentPeriodId, buckets]);
+
+  // Group-level overspend: sum every real bucket's overage so the consequence is
+  // felt at the collection level, not only per card. Excludes the Unbudgeted
+  // pseudo-bucket (it has no limit). Buckets are an overlay on checking, so this
+  // is a tracking signal, not money removed from anywhere.
+  const overspendSummary = useMemo(
+    () =>
+      getBucketsOverspendSummary(
+        buckets.map(b => ({
+          spent: bucketSpentMap.get(b.id) || { verified: 0, pending: 0 },
+          limit: b.limit,
+        }))
+      ),
+    [buckets, bucketSpentMap]
+  );
 
   const [reallocateModal, setReallocateModal] = useState<{ sourceId: string | null, targetId: string | null } | null>(null);
 
@@ -236,6 +252,20 @@ const BudgetBuckets: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {/* Group-level overspend banner — totals the overage across buckets so it
+          registers before you scroll the list. Plain tinted row, no side-stripe. */}
+      {overspendSummary.overspentCount > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-card border border-money-neg/25 bg-money-bgNeg px-4 py-3 dark:border-money-neg/30 dark:bg-money-neg/10">
+          <span className="flex items-center gap-2 text-sm font-semibold text-money-neg dark:text-money-negDark">
+            <AlertTriangle size={16} aria-hidden="true" />
+            {overspendSummary.overspentCount} bucket{overspendSummary.overspentCount === 1 ? '' : 's'} over budget
+          </span>
+          <span className="font-mono text-sm font-bold tabular-nums text-money-neg dark:text-money-negDark">
+            {fmt(overspendSummary.totalOverage)} over
+          </span>
+        </div>
+      )}
+
       {(transactionsByBucket.has(UNBUDGETED_BUCKET.id) || buckets.length > 0) && (
         <SurfaceList>
           {/* Unbudgeted Bucket (if any) */}
