@@ -676,6 +676,13 @@ describe('ToDosPage', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Switch to prioritized list' }));
       expect(localStorage.getItem(ARRANGEMENT_KEY)).toBe('matrix');
       expect(screen.getByText('Do First')).toBeInTheDocument(); // stacked quadrant sections
+      // The urgent/important axis is sr-only INSIDE the heading (no visible
+      // caps subtitle) so heading navigation announces title + axis together.
+      // (\s? because dom-accessibility-api drops the span-boundary space that
+      // browsers/screen readers preserve from the DOM text.)
+      expect(
+        screen.getByRole('heading', { name: /Do First\s?\(Urgent & Important\)/ })
+      ).toBeInTheDocument();
 
       fireEvent.click(screen.getByRole('button', { name: 'Switch to matrix grid' }));
       expect(localStorage.getItem(ARRANGEMENT_KEY)).toBe('grid');

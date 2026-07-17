@@ -93,6 +93,14 @@ fine for icons/fills, below AA for text).
 **Rule:** money values use `money-pos`/`money-neg`. Primary actions use `accent`.
 Habit/household flourishes use `warm`/`habit-*`. Don't cross these wires.
 
+**Contrast rule:** the base `money-pos`/`money-neg` are text-safe on light
+surfaces only (`money-pos` 4.98:1 on white / 4.64:1 on brand-50; `money-neg`
+5.72:1 / 5.34:1). On dark surfaces they are fills, not text — `money-neg` is
+only 3.34:1 on a brand-800 card. Small (non-WCAG-large) sign-colored text must
+always pair `dark:text-money-posDark` / `dark:text-money-negDark` (10.4:1 /
+8.3:1 on brand-800); only big/bold mono figures (≥24px, or ≥18.66px bold) may
+rely on the base tokens as WCAG-large text.
+
 ---
 
 ## 3. Typography

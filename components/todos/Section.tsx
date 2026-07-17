@@ -12,6 +12,13 @@ import { TodoRow } from './TodoRow';
 export interface SectionProps {
   title: string;
   subtitle: string;
+  /**
+   * Render the subtitle for screen readers only. The Eisenhower quadrant
+   * sections use this: their verb titles ("Do First") already encode the
+   * urgent/important axis, so a visible caps subtitle would double-encode it —
+   * the axis still reaches assistive tech through the sr-only text.
+   */
+  subtitleSrOnly?: boolean;
   items: ToDo[];
   color: SectionColor;
   onComplete: (id: string) => void;
@@ -42,7 +49,7 @@ export interface SectionProps {
 // Uses a custom memo comparator: when `selectedIds` changes, re-render is skipped unless
 // at least one of this section's own items changed its selected/deselected state.
 // This prevents toggling an item in one section from re-rendering the other two sections.
-export const Section = React.memo(function Section({ title, subtitle, items, color, onComplete, onUncomplete, onEdit, onDelete, onDuplicate, onMoveToTomorrow, onToggleImportant, onMore, onToggleSubtask, memberMap, isSelectionMode, selectedIds, onToggleSelection, maxVisible }: SectionProps) {
+export const Section = React.memo(function Section({ title, subtitle, subtitleSrOnly, items, color, onComplete, onUncomplete, onEdit, onDelete, onDuplicate, onMoveToTomorrow, onToggleImportant, onMore, onToggleSubtask, memberMap, isSelectionMode, selectedIds, onToggleSelection, maxVisible }: SectionProps) {
   // Show-more state for capped lists (hooks must run before the empty early-return).
   const [expanded, setExpanded] = useState(false);
 
@@ -64,9 +71,16 @@ export const Section = React.memo(function Section({ title, subtitle, items, col
       <div className="flex items-baseline justify-between mb-2 px-1">
         <div className="flex items-center gap-2">
           <div className={`w-2 h-2 rounded-full ${sectionDotColors[color]}`}></div>
-          <h2 className="font-display text-base font-semibold text-brand-900 dark:text-brand-50 tracking-tight">{title}</h2>
+          <h2 className="font-display text-base font-semibold text-brand-900 dark:text-brand-50 tracking-tight">
+            {title}
+            {/* Inside the h2 so heading-navigation screen-reader users hear
+                "Do First, (Urgent & Important)" as one heading (review note). */}
+            {subtitleSrOnly && <span className="sr-only"> ({subtitle})</span>}
+          </h2>
         </div>
-        <span className="text-xs font-semibold text-brand-400 dark:text-brand-450 uppercase tracking-wider">{subtitle}</span>
+        {!subtitleSrOnly && (
+          <span className="text-xs font-semibold text-brand-400 dark:text-brand-450 uppercase tracking-wider">{subtitle}</span>
+        )}
       </div>
 
       <SurfaceList className="[&>*:first-child]:border-t-0 [&>*:first-child_.hairline-divider]:border-t-0">
@@ -111,6 +125,7 @@ export const Section = React.memo(function Section({ title, subtitle, items, col
     prev.color === next.color &&
     prev.title === next.title &&
     prev.subtitle === next.subtitle &&
+    prev.subtitleSrOnly === next.subtitleSrOnly &&
     prev.maxVisible === next.maxVisible &&
     prev.onComplete === next.onComplete &&
     prev.onUncomplete === next.onUncomplete &&

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Star, TrendingUp, User } from 'lucide-react';
+import { Gift, Star, TrendingUp, User } from 'lucide-react';
 import { useFinance, useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
@@ -156,8 +156,10 @@ const TopToolbar: React.FC = () => {
                 onClick={() => navigate('/habits', { state: { tab: 'rewards' } })}
               >
                 {/* Plan 080d-2 — pending kid-redemption-request badge. Dormant unless
-                    Kid Mode is on and there is at least one request awaiting review. */}
-                <CountBadge count={pendingRedemptionCount} className="-top-2 z-10 ring-brand-800" />
+                    Kid Mode is on and there is at least one request awaiting review.
+                    The Gift icon matches the Rewards tab this button opens, so the
+                    numeral has visible meaning (the aria-label above spells it out). */}
+                <CountBadge count={pendingRedemptionCount} icon={Gift} className="-top-2 z-10 ring-brand-800" />
                 {/* Daily Points (warm gold star) */}
                 <div className="flex flex-col items-end">
                   <div className="flex items-center gap-1">
