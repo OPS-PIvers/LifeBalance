@@ -1,6 +1,6 @@
 import { render as rtlRender, screen, within, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { ConfirmDialogHost } from '@/components/ui/ConfirmDialogHost';
@@ -120,10 +120,6 @@ const findConfirmDialog = (itemName: string) =>
   screen.findByRole('dialog', { name: `Delete this ${itemName}?` });
 
 describe('ActionQueueItemCard delete confirmation', () => {
-  beforeEach(() => {
-    document.body.innerHTML = '';
-  });
-
   describe('swipe-rail Delete', () => {
     it('opens the confirm dialog without deleting the to-do', async () => {
       const handlers = makeHandlers();
