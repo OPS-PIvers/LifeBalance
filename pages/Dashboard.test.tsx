@@ -97,7 +97,7 @@ const renderDashboard = () =>
     </MemoryRouter>
   );
 
-const TRENDS_LABEL = 'View money trends';
+const TRENDS_LABEL = 'View trends';
 
 describe('Dashboard module visibility (Plan 090)', () => {
   beforeEach(() => {
