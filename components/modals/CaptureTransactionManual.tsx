@@ -106,14 +106,25 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
   // primitive wires its own aria-describedby; Amount is a custom control).
   const amountErrorId = useId();
 
-  // Clears one field's error once the user has fixed it, and drops the
-  // summary alert when no per-field errors remain.
+  // Builds the summary alert text from the currently-invalid fields.
+  const summarizeErrors = (errors: FieldErrors) => {
+    const missing = [
+      errors.amount && 'Amount',
+      errors.merchant && 'Merchant',
+      errors.date && 'Date',
+    ].filter((label): label is string => Boolean(label));
+    return missing.length > 0 ? `Please fix: ${missing.join(', ')}` : '';
+  };
+
+  // Clears one field's error once the user has fixed it, narrowing the
+  // summary alert to the remaining invalid fields (and dropping it entirely
+  // when none remain).
   const clearFieldError = (field: keyof FieldErrors) => {
     if (!fieldErrors[field]) return;
     const next = { ...fieldErrors };
     delete next[field];
     setFieldErrors(next);
-    if (Object.keys(next).length === 0) setFormError('');
+    setFormError(summarizeErrors(next));
   };
 
   // Focus the amount field on desktop; never on touch (avoids iOS keyboard pop).
@@ -198,12 +209,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
     }
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      const missing = [
-        errors.amount && 'Amount',
-        errors.merchant && 'Merchant',
-        errors.date && 'Date',
-      ].filter((label): label is string => Boolean(label));
-      const msg = `Please fix: ${missing.join(', ')}`;
+      const msg = summarizeErrors(errors);
       setFormError(msg);
       toast.error(msg);
       return;

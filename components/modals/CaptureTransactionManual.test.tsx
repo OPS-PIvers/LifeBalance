@@ -336,12 +336,13 @@ describe('CaptureTransactionManual', () => {
     expect(screen.getByText('Enter an amount')).toBeInTheDocument();
     expect(screen.getByText('Enter a merchant')).toBeInTheDocument();
 
-    // Fixing the merchant clears ONLY the merchant error.
+    // Fixing the merchant clears ONLY the merchant error, and the summary
+    // alert narrows to the remaining invalid fields.
     fireEvent.change(screen.getByPlaceholderText('e.g. Starbucks'), { target: { value: 'Pizza Place' } });
     expect(screen.queryByText('Enter a merchant')).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText('e.g. Starbucks')).toHaveAttribute('aria-invalid', 'false');
     expect(screen.getByText('Enter an amount')).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Please fix: Amount');
 
     // Fixing the amount clears the last error AND the summary alert.
     fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '25.00' } });
