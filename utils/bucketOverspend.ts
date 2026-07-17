@@ -31,8 +31,10 @@ export function getBucketOverspend(spent: BucketSpent, limit: number): BucketOve
   const committed = addMoney(spent.verified, spent.pending);
   const isOverspent = committed > limit;
   const overage = isOverspent ? subtractMoney(committed, limit) : 0;
+  // Lower bound clamps net-negative committed spend (refunds exceeding
+  // purchases) to 0% so the bar never renders a negative fill.
   const percent =
-    limit > 0 ? Math.min(100, (committed / limit) * 100) : committed > 0 ? 100 : 0;
+    limit > 0 ? Math.min(100, Math.max(0, (committed / limit) * 100)) : committed > 0 ? 100 : 0;
   return { committed, isOverspent, overage, percent };
 }
 

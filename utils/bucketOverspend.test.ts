@@ -30,6 +30,14 @@ describe('getBucketOverspend', () => {
     expect(r.isOverspent).toBe(false);
   });
 
+  it('clamps net-negative committed spend (refunds exceed purchases) to 0%', () => {
+    const r = getBucketOverspend({ verified: -50, pending: 0 }, 500);
+    expect(r.committed).toBe(-50);
+    expect(r.isOverspent).toBe(false);
+    expect(r.overage).toBe(0);
+    expect(r.percent).toBe(0);
+  });
+
   it('treats spend exactly at the limit as not overspent', () => {
     const r = getBucketOverspend({ verified: 500, pending: 0 }, 500);
     expect(r.isOverspent).toBe(false);
