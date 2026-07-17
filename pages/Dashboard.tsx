@@ -97,6 +97,12 @@ const Dashboard: React.FC = () => {
   // as the day-complete celebration) and the Safe-to-Spend figure the toolbar
   // shows — no new derivations, just the two numbers that answer "how is today
   // going?" when there's nothing to triage.
+  //
+  // COST: this subscribes Dashboard to the full gamification slice (there is
+  // no narrower `habits`-only hook today), so every habit toggle re-renders
+  // Dashboard even while the queue hero is showing and `glanceHero` is never
+  // mounted. Acceptable for now; if Dashboard re-render cost becomes a pain
+  // point, add `habits` to a narrower slice and consume that instead.
   const { habits } = useGamification();
   const fmt = useFormatCurrency();
   const habitsToday = useMemo(() => getDayCompleteStatus(habits), [habits]);
