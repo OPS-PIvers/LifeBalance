@@ -107,7 +107,11 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
 
   const buttonClasses = cn(
     "relative flex items-center justify-center w-14 h-14 rounded-card transition-colors duration-(--duration-fast) ease-(--ease-standard) z-10",
-    !isActive && "bg-brand-100 dark:bg-brand-700 border border-brand-200 dark:border-brand-600 text-brand-400 dark:text-brand-450 group-hover/card:border-brand-300 dark:group-hover/card:border-brand-500 group-hover/card:bg-brand-200/60 dark:group-hover/card:bg-brand-600",
+    // brand-450/brand-400 (not 400/450): the in-progress threshold count is
+    // 18px/700 — below the WCAG large-text cutoff (18.66px bold) — so it needs
+    // 4.5:1. brand-450 on brand-100 = 4.76:1 light; dark brand-400 on
+    // brand-700 = 4.72:1 (the old 400/450 pair measured 4.19/3.70).
+    !isActive && "bg-brand-100 dark:bg-brand-700 border border-brand-200 dark:border-brand-600 text-brand-450 dark:text-brand-400 group-hover/card:border-brand-300 dark:group-hover/card:border-brand-500 group-hover/card:bg-brand-200/60 dark:group-hover/card:bg-brand-600",
     isActive && isPositive && "bg-money-pos text-white border-0",
     isActive && !isPositive && "bg-money-neg text-white border-0",
     // Threshold visual overrides — in-progress positive threshold uses an evergreen tint

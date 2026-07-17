@@ -71,7 +71,9 @@ const ActivityLogCard: React.FC<ActivityLogCardProps> = ({ activityLog }) => (
                   {entry.summary}
                 </span>
               </span>
-              <span className="shrink-0 text-xs text-brand-400 dark:text-brand-500 tabular-nums">
+              {/* dark:brand-450 (not 500): brand-500 on the brand-800 card is 3.56:1;
+                  brand-450 is 4.95:1 — the timestamp is small text so it needs 4.5. */}
+              <span className="shrink-0 text-xs text-brand-400 dark:text-brand-450 tabular-nums">
                 {relativeTime(entry.timestamp)}
               </span>
             </Row>

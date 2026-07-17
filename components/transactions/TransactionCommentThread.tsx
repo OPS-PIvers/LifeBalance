@@ -118,7 +118,9 @@ export const TransactionCommentThread: React.FC<TransactionCommentThreadProps> =
           <Loader2 className="w-4 h-4 animate-spin" />
         </div>
       ) : comments.length === 0 ? (
-        <p className="text-xs text-brand-400 dark:text-brand-500">
+        // dark:brand-450 on the metadata texts here: brand-500 on the brand-800
+        // card is 3.56:1; brand-450 is 4.95:1 (small text needs 4.5).
+        <p className="text-xs text-brand-400 dark:text-brand-450">
           No comments yet. Add one if you want to flag or explain this transaction.
         </p>
       ) : (
@@ -127,7 +129,7 @@ export const TransactionCommentThread: React.FC<TransactionCommentThreadProps> =
             <li key={c.id} className="flex items-start justify-between gap-2 group">
               <div className="min-w-0">
                 <p className="text-sm text-brand-800 dark:text-brand-100 break-words">{c.text}</p>
-                <p className="text-[11px] text-brand-400 dark:text-brand-500 mt-0.5">
+                <p className="text-[11px] text-brand-400 dark:text-brand-450 mt-0.5">
                   {nameFor(c.authorUid)} · {timeAgo(c.createdAt)}
                 </p>
               </div>
