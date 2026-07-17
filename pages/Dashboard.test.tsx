@@ -170,33 +170,47 @@ describe('Dashboard action queue cap', () => {
   });
 });
 
-describe('Dashboard action queue position', () => {
+describe('Dashboard hero slot (impeccable r6)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setEnabledModules(['habits', 'money', 'plan', 'todos', 'meals', 'shopping']);
   });
 
-  it('renders the Action Queue above the widgets when it has items', () => {
+  it('leads with the "Needs you" queue hero above the widgets when the queue has items', () => {
     queueItems = [{ id: 'q-0' }];
     renderDashboard();
-    const queueHeading = screen.getByText(/Action Queue/);
+    const queueHeading = screen.getByRole('heading', { name: /Needs you/ });
+    expect(screen.getByText('1 item in your Action Queue')).toBeInTheDocument();
     const creditCardWidget = screen.getByText('CREDIT_CARD_WIDGET');
     // DOCUMENT_POSITION_FOLLOWING on creditCardWidget relative to queueHeading
     // means queueHeading comes first in the DOM.
     expect(
       queueHeading.compareDocumentPosition(creditCardWidget) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
+    // The glance hero never renders alongside the queue hero.
+    expect(screen.queryByRole('heading', { name: /All caught up/ })).not.toBeInTheDocument();
   });
 
-  it('keeps the "All caught up" Action Queue below the widgets when empty', () => {
+  it('leads with the "All caught up" glance hero above the widgets when the queue is empty', () => {
     queueItems = [];
     renderDashboard();
-    const queueHeading = screen.getByText('Action Queue');
+    const glanceHeading = screen.getByRole('heading', { name: /All caught up/ });
+    // Money is enabled, so the Safe-to-Spend glance figure renders.
+    expect(screen.getByText('safe to spend')).toBeInTheDocument();
     const creditCardWidget = screen.getByText('CREDIT_CARD_WIDGET');
-    // DOCUMENT_POSITION_PRECEDING on creditCardWidget relative to queueHeading
-    // means queueHeading comes after in the DOM.
     expect(
-      queueHeading.compareDocumentPosition(creditCardWidget) & Node.DOCUMENT_POSITION_PRECEDING
+      glanceHeading.compareDocumentPosition(creditCardWidget) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
+    // The old bottom-of-page empty-queue card is gone — the hero owns the message.
+    expect(screen.getAllByRole('heading', { name: /All caught up/ })).toHaveLength(1);
+  });
+
+  it('hides the glance figures for disabled modules', () => {
+    queueItems = [];
+    setEnabledModules([]);
+    renderDashboard();
+    expect(screen.getByRole('heading', { name: /All caught up/ })).toBeInTheDocument();
+    expect(screen.queryByText('safe to spend')).not.toBeInTheDocument();
+    expect(screen.queryByText(/habits done today|habits — day complete/)).not.toBeInTheDocument();
   });
 });
