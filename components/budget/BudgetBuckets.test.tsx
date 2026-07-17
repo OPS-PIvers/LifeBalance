@@ -129,8 +129,14 @@ describe('BudgetBuckets', () => {
 
   it('shows overspending alert and fix button for overspent bucket', () => {
     render(<BudgetBuckets />);
-    expect(screen.getByText('Over by $100.00')).toBeInTheDocument();
+    expect(screen.getByText('$100.00 over budget')).toBeInTheDocument();
     expect(screen.getByText('Fix')).toBeInTheDocument();
+  });
+
+  it('surfaces the group-level total overage banner', () => {
+    render(<BudgetBuckets />);
+    expect(screen.getByText('1 bucket over budget')).toBeInTheDocument();
+    expect(screen.getByText('$100.00 over')).toBeInTheDocument();
   });
 
   it('opens the Reallocate Modal when Fix button is clicked', () => {

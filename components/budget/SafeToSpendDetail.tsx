@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronDown, Wallet, Receipt, Clock } from 'lucide-react';
+import { ChevronDown, Wallet, Receipt, Clock, BookOpen } from 'lucide-react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
 import { cn } from '@/utils/cn';
 import { calculateDailyPace } from '@/utils/spendPace';
+import { MoneyModelPrimer } from '@/components/budget/MoneyModelPrimer';
 
 /**
  * Read-only Safe-to-Spend breakdown surfaced at the BOTTOM of the Money →
@@ -23,6 +24,7 @@ export const SafeToSpendDetail: React.FC = () => {
   const { safeToSpendBreakdown: breakdown } = useFinance();
   const fmt = useFormatCurrency();
   const [expanded, setExpanded] = useState(false);
+  const [primerOpen, setPrimerOpen] = useState(false);
 
   const dailyPace = useMemo(
     () => (breakdown ? calculateDailyPace(breakdown) : null),
@@ -77,6 +79,14 @@ export const SafeToSpendDetail: React.FC = () => {
                 Your available cash after bills due before your next paycheck and pending
                 (un-cleared) transactions. Bucket limits are not subtracted from this number.
               </p>
+              <button
+                type="button"
+                onClick={() => setPrimerOpen(true)}
+                className="mt-2.5 inline-flex items-center gap-1.5 text-xs font-semibold text-accent-600 hover:text-accent-700 dark:text-accent-200 dark:hover:text-accent-100 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-xs"
+              >
+                <BookOpen size={13} aria-hidden="true" />
+                How LifeBalance thinks about money
+              </button>
             </div>
           </div>
         )}
@@ -99,6 +109,8 @@ export const SafeToSpendDetail: React.FC = () => {
           />
         </button>
       </SurfaceList>
+
+      <MoneyModelPrimer isOpen={primerOpen} onClose={() => setPrimerOpen(false)} />
     </Section>
   );
 };

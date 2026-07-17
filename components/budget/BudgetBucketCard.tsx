@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import ProgressBar from '@/components/ui/ProgressBar';
 import { bucketColorClass } from '@/data/bucketColors';
+import { getBucketOverspend } from '@/utils/bucketOverspend';
 import { cn } from '@/utils/cn';
 
 interface BudgetBucketCardProps {
@@ -79,9 +80,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
   onDeleteTransaction,
 }) => {
   const fmt = useFormatCurrency();
-  const totalCommitted = spent.verified + spent.pending;
-  const percent = Math.min(100, (totalCommitted / bucket.limit) * 100);
-  const isOverspent = totalCommitted > bucket.limit;
+  const { isOverspent, overage, percent } = getBucketOverspend(spent, bucket.limit);
   const transactionCount = transactions.length;
   const detailId = `bucket-transactions-${bucket.id}`;
 
@@ -216,12 +215,21 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
         </div>
       </div>
 
-      {/* Progress Bar */}
+      {/* Progress Bar — an overspent bucket gets a distinct treatment: the whole
+          track tints into the negative-money zone (not just the fill) so the bar
+          reads as "past the line" at a glance, no side-stripe or boxed alert. */}
       <ProgressBar
         value={percent}
         barClassName={isOverspent ? 'bg-money-neg' : bucketColorClass(bucket.color)}
-        ariaLabel={`${bucket.name} spending: ${Math.round(percent)}% of ${fmt(bucket.limit, { decimals: 0 })} limit`}
-        className="h-2 bg-brand-100 dark:bg-brand-700"
+        ariaLabel={
+          isOverspent
+            ? `${bucket.name} spending: ${fmt(overage)} over the ${fmt(bucket.limit, { decimals: 0 })} limit`
+            : `${bucket.name} spending: ${Math.round(percent)}% of ${fmt(bucket.limit, { decimals: 0 })} limit`
+        }
+        className={cn(
+          'h-2',
+          isOverspent ? 'bg-money-bgNeg dark:bg-money-neg/20' : 'bg-brand-100 dark:bg-brand-700'
+        )}
       />
 
       {/* Inline transactions disclosure — the current-period transactions that
@@ -287,12 +295,13 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
         </div>
       )}
 
-      {/* Overspend line — plain typography, no boxed alert */}
+      {/* Overspend line — plain typography, no boxed alert. States the overage
+          in dollars so the consequence is felt, not just a maxed bar. */}
       {isOverspent && (
         <div className="flex items-center justify-between">
           <span className="flex items-center gap-1.5 text-money-neg dark:text-money-negDark text-xs font-bold">
             <AlertTriangle size={14} />
-            Over by {fmt(totalCommitted - bucket.limit)}
+            {fmt(overage)} over budget
           </span>
           <Button
             variant="outline"

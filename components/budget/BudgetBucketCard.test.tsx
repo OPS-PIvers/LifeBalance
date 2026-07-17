@@ -212,7 +212,7 @@ describe('BudgetBucketCard', () => {
   it('shows the overspend line and calls onReallocate when Fix is clicked', () => {
     render(<BudgetBucketCard {...defaultProps} spent={{ verified: 600, pending: 0 }} />);
 
-    expect(screen.getByText('Over by $100.00')).toBeInTheDocument();
+    expect(screen.getByText('$100.00 over budget')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Fix'));
     expect(defaultProps.onReallocate).toHaveBeenCalledWith('bucket1');
   });

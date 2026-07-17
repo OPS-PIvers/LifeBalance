@@ -25,6 +25,11 @@ vi.mock('lucide-react', () => ({
   Wallet: () => <div data-testid="wallet" />,
   Receipt: () => <div data-testid="receipt" />,
   Clock: () => <div data-testid="clock" />,
+  BookOpen: () => <div data-testid="book-open" />,
+  // Used by the MoneyModelPrimer drawer (rendered when the primer opens).
+  PiggyBank: () => <div data-testid="piggy-bank" />,
+  LayoutGrid: () => <div data-testid="layout-grid" />,
+  X: () => <div data-testid="x" />,
 }));
 
 describe('SafeToSpendDetail', () => {
@@ -96,6 +101,20 @@ describe('SafeToSpendDetail', () => {
       'aria-expanded',
       'true'
     );
+  });
+
+  it('opens the money-model primer from the disclosure', () => {
+    setBreakdown();
+    render(<SafeToSpendDetail />);
+
+    // The primer trigger only appears inside the expanded breakdown.
+    fireEvent.click(screen.getByRole('button', { name: 'How is this calculated?' }));
+
+    const trigger = screen.getByRole('button', { name: /How LifeBalance thinks about money/i });
+    fireEvent.click(trigger);
+
+    // Primer drawer content is now visible (buckets-are-not-envelopes section).
+    expect(screen.getByText('Buckets are a lens, not envelopes')).toBeInTheDocument();
   });
 
   it('only shows the Pending transactions row when pendingSpend > 0', () => {
