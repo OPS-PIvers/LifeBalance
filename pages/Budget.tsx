@@ -7,7 +7,7 @@ import TransactionMasterList from '@/components/budget/TransactionMasterList';
 import MoneyOverview from '@/components/budget/MoneyOverview';
 import SettleUpView from '@/components/transactions/SettleUpView';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
-import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { ViewSwitcher } from '@/components/ui/ViewSwitcher';
 import PageHeader from '@/components/ui/PageHeader';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Skeleton, SkeletonText } from '@/components/ui/Skeleton';
@@ -23,7 +23,8 @@ const BudgetTrends = React.lazy(loadBudgetTrends);
 
 // Money's IA is 4 top-level tabs (the old 7 overflowed the phone viewport —
 // 2026-07 critique P2), three of which pair two views behind an inline
-// segment toggle. ONE state value holds the full location: the six legacy
+// view switcher in the content header. ONE state value holds the full
+// location: the six legacy
 // view keys stay valid and select their group's tab WITH the right segment,
 // so every existing `navigate('/budget', { state: { tab: 'trends' } })`
 // deep-link keeps working unchanged.
@@ -111,7 +112,7 @@ const Budget: React.FC = () => {
   // Controlled so the toolbar Safe-to-Spend glance / Home Analytics button can
   // deep-link straight to a view. `activeView` may be a legacy view key
   // ('trends', 'buckets', …) — the Tabs bar renders its top-level group and
-  // the group's SegmentedControl renders the specific view.
+  // the group's inline ViewSwitcher renders the specific view.
   const [activeView, setActiveView] = useDeepLinkTab('overview', MONEY_TABS);
   const activeTab = topTabOf(activeView);
   // Re-clicking the active group tab resets its segment to the default
@@ -164,9 +165,11 @@ const Budget: React.FC = () => {
             </TabsContent>
             <TabsContent value="activity">
               <div className="space-y-4">
-                <SegmentedControl
+                {/* Content header: the sub-view dropdown IS the panel's title
+                    (GitHub-mobile pattern) — one tab row above, the view choice
+                    reads as part of the content, not a second nav tier. */}
+                <ViewSwitcher
                   name="Activity view"
-                  size="sm"
                   options={[
                     { value: 'transactions', label: 'Transactions' },
                     { value: 'trends', label: 'Trends' },
@@ -192,9 +195,8 @@ const Budget: React.FC = () => {
             </TabsContent>
             <TabsContent value="planned">
               <div className="space-y-4">
-                <SegmentedControl
+                <ViewSwitcher
                   name="Planned view"
-                  size="sm"
                   options={[
                     { value: 'calendar', label: 'Calendar' },
                     { value: 'subscriptions', label: 'Subscriptions' },
@@ -207,9 +209,8 @@ const Budget: React.FC = () => {
             </TabsContent>
             <TabsContent value="balances">
               <div className="space-y-4">
-                <SegmentedControl
+                <ViewSwitcher
                   name="Balances view"
-                  size="sm"
                   options={[
                     { value: 'buckets', label: 'Buckets' },
                     { value: 'accounts', label: 'Accounts' },
