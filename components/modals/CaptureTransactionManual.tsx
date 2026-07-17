@@ -13,6 +13,14 @@ import { Switch } from '@/components/ui/Switch';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 
+/** Per-field validation messages, set on a failed submit attempt and cleared
+ *  field-by-field as the user fixes each input. */
+interface FieldErrors {
+  amount?: string;
+  merchant?: string;
+  date?: string;
+}
+
 interface CaptureTransactionManualProps {
   initialData?: {
     amount?: string;
@@ -92,6 +100,21 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
   const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+
+  // Error-message element id for the bare Amount input (the shared <Input>
+  // primitive wires its own aria-describedby; Amount is a custom control).
+  const amountErrorId = useId();
+
+  // Clears one field's error once the user has fixed it, and drops the
+  // summary alert when no per-field errors remain.
+  const clearFieldError = (field: keyof FieldErrors) => {
+    if (!fieldErrors[field]) return;
+    const next = { ...fieldErrors };
+    delete next[field];
+    setFieldErrors(next);
+    if (Object.keys(next).length === 0) setFormError('');
+  };
 
   // Focus the amount field on desktop; never on touch (avoids iOS keyboard pop).
   const amountInputRef = useAutoFocus<HTMLInputElement>();
@@ -156,35 +179,36 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
   // field (there's no prior transaction to preserve a store from).
 
   const handleManualSave = async () => {
-    if (!amount || !merchant) {
-      const msg = "Please fill in required fields";
-      setFormError(msg);
-      toast.error(msg);
-      return;
-    }
-
-    // Validate merchant is not just whitespace
+    // Validate every required field at once so a failed submit flags each
+    // offending input (red border + aria-invalid + inline message) instead of
+    // surfacing one generic error at a time.
     const trimmedMerchant = merchant.trim();
-    if (!trimmedMerchant) {
-      const msg = "Please enter a merchant name";
-      setFormError(msg);
-      toast.error(msg);
-      return;
-    }
-
     const parsedAmount = parseFloat(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      const msg = "Please enter a valid amount";
-      setFormError(msg);
-      toast.error(msg);
-      return;
+    const errors: FieldErrors = {};
+    if (!amount) {
+      errors.amount = 'Enter an amount';
+    } else if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      errors.amount = 'Enter an amount greater than zero';
+    }
+    if (!trimmedMerchant) {
+      errors.merchant = 'Enter a merchant';
     }
     if (!transactionDate) {
-      const msg = "Please select a date";
+      errors.date = 'Select a date';
+    }
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      const missing = [
+        errors.amount && 'Amount',
+        errors.merchant && 'Merchant',
+        errors.date && 'Date',
+      ].filter((label): label is string => Boolean(label));
+      const msg = `Please fix: ${missing.join(', ')}`;
       setFormError(msg);
       toast.error(msg);
       return;
     }
+    setFieldErrors({});
     // Future dates are allowed - logic sets status to pending_review if future
     const today = getLocalDateString();
     const isFuture = transactionDate > today;
@@ -277,35 +301,53 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
       }}
       noValidate
     >
-      <div className="flex justify-center">
-        <div className="relative">
-          <span className="absolute left-0 top-1/2 -translate-y-1/2 text-3xl font-bold text-brand-400 dark:text-brand-400">$</span>
-          <input
-            ref={amountInputRef}
-            type="number"
-            inputMode="decimal"
-            value={amount}
-            aria-label="Amount"
-            onChange={(e) => {
-              const value = e.target.value;
-              if (value === '' || parseFloat(value) >= 0) setAmount(value);
-            }}
-            onKeyDown={(e) => {
-              if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
-            }}
-            placeholder="0.00"
-            step="0.01"
-            min="0"
-            className="w-full min-h-11 pl-8 text-4xl font-mono font-bold text-brand-800 dark:text-brand-100 placeholder:text-brand-200 outline-hidden text-center bg-transparent"
-          />
+      <div>
+        <div className="flex justify-center">
+          <div className="relative">
+            <span className="absolute left-0 top-1/2 -translate-y-1/2 text-3xl font-bold text-brand-400 dark:text-brand-400">$</span>
+            <input
+              ref={amountInputRef}
+              type="number"
+              inputMode="decimal"
+              value={amount}
+              aria-label="Amount"
+              required
+              aria-invalid={!!fieldErrors.amount}
+              aria-describedby={fieldErrors.amount ? amountErrorId : undefined}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === '' || parseFloat(value) >= 0) setAmount(value);
+                if (value && parseFloat(value) > 0) clearFieldError('amount');
+              }}
+              onKeyDown={(e) => {
+                if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
+              }}
+              placeholder="0.00"
+              step="0.01"
+              min="0"
+              className={`w-full min-h-11 pl-8 text-4xl font-mono font-bold text-brand-800 dark:text-brand-100 placeholder:text-brand-200 outline-hidden text-center bg-transparent border-b-2 ${
+                fieldErrors.amount ? 'border-money-neg dark:border-money-negDark' : 'border-transparent'
+              }`}
+            />
+          </div>
         </div>
+        {fieldErrors.amount && (
+          <p id={amountErrorId} className="mt-1 text-sm text-money-neg dark:text-money-negDark font-medium text-center">
+            {fieldErrors.amount}
+          </p>
+        )}
       </div>
 
       <Input
         label="Merchant"
         type="text"
         value={merchant}
-        onChange={(e) => setMerchant(e.target.value)}
+        required
+        error={fieldErrors.merchant}
+        onChange={(e) => {
+          setMerchant(e.target.value);
+          if (e.target.value.trim()) clearFieldError('merchant');
+        }}
         placeholder="e.g. Starbucks"
         list={storeListId}
         autoComplete="off"
@@ -323,7 +365,12 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
         label="Date"
         type="date"
         value={transactionDate}
-        onChange={(e) => setTransactionDate(e.target.value)}
+        required
+        error={fieldErrors.date}
+        onChange={(e) => {
+          setTransactionDate(e.target.value);
+          if (e.target.value) clearFieldError('date');
+        }}
       />
 
       {/* Category doesn't apply to credit-card charges — hidden when the

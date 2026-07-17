@@ -12,6 +12,9 @@
 export const FIELD_BASE =
   'w-full p-3 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn outline-hidden text-brand-900 dark:text-brand-100 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/40 transition-all duration-(--duration-fast) ease-(--ease-standard) placeholder:text-brand-400 dark:placeholder:text-brand-450 disabled:opacity-50 disabled:bg-brand-50 dark:disabled:bg-brand-700/50';
 
-/** Error-state overrides, layered on top of FIELD_BASE when a field is invalid. */
+/** Error-state overrides, layered on top of FIELD_BASE when a field is invalid.
+ *  The explicit `dark:` variants are required: tailwind-merge only dedupes
+ *  same-variant conflicts, so without them FIELD_BASE's `dark:border-brand-700`
+ *  would keep winning in dark mode and the invalid border would never show. */
 export const FIELD_ERROR =
-  'border-money-neg focus:border-money-neg focus:ring-money-neg/40';
+  'border-money-neg dark:border-money-negDark focus:border-money-neg dark:focus:border-money-negDark focus:ring-money-neg/40 dark:focus:ring-money-negDark/40';
