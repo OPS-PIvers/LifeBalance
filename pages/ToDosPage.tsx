@@ -952,12 +952,13 @@ const ToDosPage: React.FC = () => {
 
       {/* Compact header unit: title + toggle/select-all row read as one block
           (tight gap, no PageHeader padding tax) since the Plan tab-strip
-          already labels this page "To-Dos". */}
+          already labels this page "To-Dos". An h2, not h1 — the page-level h1
+          is ListsPage's "Plan" masthead above the tab strip. */}
       <div className="pt-4 flex items-center justify-between gap-3">
         <div className="min-w-0 flex items-center gap-3">
-          <h1 className="font-display text-xl font-semibold tracking-tight text-brand-900 dark:text-brand-50 whitespace-nowrap shrink-0">
+          <h2 className="font-display text-xl font-semibold tracking-tight text-brand-900 dark:text-brand-50 whitespace-nowrap shrink-0">
             {isSelectionMode ? 'Select tasks' : 'To-dos'}
-          </h1>
+          </h2>
           {!isSelectionMode && (
             <>
               <Tabs value={viewMode} onValueChange={(val) => setViewMode(val as 'active' | 'completed')}>
@@ -1645,7 +1646,7 @@ const CompletedSection = React.memo(function CompletedSection({ title, items, on
         <div className="animate-in slide-in-from-bottom-4 duration-(--duration-slow)">
             <div className="flex items-center gap-2 mb-2 px-1">
                 {collapsible ? (
-                    <h2 className="min-w-0">
+                    <h3 className="min-w-0">
                         <button
                             type="button"
                             onClick={() => setExpanded(v => !v)}
@@ -1664,9 +1665,9 @@ const CompletedSection = React.memo(function CompletedSection({ title, items, on
                                 )}
                             />
                         </button>
-                    </h2>
+                    </h3>
                 ) : (
-                    <h2 className="text-xs font-semibold text-brand-400 dark:text-brand-450 uppercase tracking-wider">{title}</h2>
+                    <h3 className="text-xs font-semibold text-brand-400 dark:text-brand-450 uppercase tracking-wider">{title}</h3>
                 )}
                 <div className="h-px bg-brand-200 dark:bg-brand-700 flex-1"></div>
             </div>
