@@ -439,6 +439,7 @@ const Dashboard: React.FC = () => {
              is off; the greeting then occupies the full header width. */
           isModuleEnabled('money') && (
             <button
+              type="button"
               onClick={() => navigate('/budget', { state: { tab: 'trends' } })}
               className="shrink-0 p-2.5 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-card text-brand-500 dark:text-brand-400 hover:text-accent-700 dark:hover:text-accent-300 hover:border-brand-300 dark:hover:border-brand-600 active:scale-[0.98] transition-[transform,colors] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900"
               aria-label="View trends"

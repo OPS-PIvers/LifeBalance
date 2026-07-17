@@ -112,6 +112,7 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
       {/* Primary methods — the two highest-frequency ways to add an expense. */}
       <div className="space-y-3">
         <button
+          type="button"
           onClick={onManual}
           className={PRIMARY_BUTTON_CLASSES}
         >
@@ -129,6 +130,7 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
         </button>
 
         <button
+          type="button"
           onClick={onScan}
           className={PRIMARY_BUTTON_CLASSES}
         >
@@ -151,6 +153,7 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
       <div className="space-y-2 pt-1">
         <p className="px-1 text-xs font-medium text-brand-500 dark:text-brand-400">More ways to add</p>
         <button
+          type="button"
           onClick={() => fileInputRef.current?.click()}
           className={SECONDARY_BUTTON_CLASSES}
         >
