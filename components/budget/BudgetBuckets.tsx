@@ -123,9 +123,6 @@ const BudgetBuckets: React.FC = () => {
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [editingBucket, setEditingBucket] = useState<BudgetBucket | undefined>(undefined);
 
-  // Edit Limit Inline State (Parent only tracks WHO is editing)
-  const [editingLimitId, setEditingLimitId] = useState<string | null>(null);
-
   // Expandable transaction list state
   const [expandedBucketId, setExpandedBucketId] = useState<string | null>(null);
 
@@ -161,23 +158,6 @@ const BudgetBuckets: React.FC = () => {
     await deleteTransaction(transactionToDelete);
     setTransactionToDelete(null);
   }, [deleteTransaction, transactionToDelete]);
-
-  const startEditingLimit = useCallback((id: string) => {
-    setEditingLimitId(id);
-  }, []);
-
-  const saveLimit = useCallback((id: string, val: number) => {
-    // Only update if value actually changed
-    const bucket = buckets.find(b => b.id === id);
-    if (bucket && bucket.limit !== val) {
-      updateBucketLimit(id, val);
-    }
-    setEditingLimitId(null);
-  }, [updateBucketLimit, buckets]);
-
-  const cancelEditLimit = useCallback(() => {
-    setEditingLimitId(null);
-  }, []);
 
   const handleExpand = useCallback((id: string) => {
     setExpandedBucketId(prev => (prev === id ? null : id));
@@ -279,12 +259,9 @@ const BudgetBuckets: React.FC = () => {
               }}
               transactions={transactionsByBucket.get(UNBUDGETED_BUCKET.id)!}
               isExpanded={expandedBucketId === UNBUDGETED_BUCKET.id}
-              isEditingLimit={false}
+              editable={false}
               onExpand={handleExpand}
-              onEditBucket={() => {}} // No-op
-              onStartEditingLimit={() => {}} // No-op
-              onSaveLimit={() => {}} // No-op
-              onCancelEdit={() => {}} // No-op
+              onEditBucket={() => {}} // No-op (pencil hidden via editable={false})
               onReallocate={handleReallocate}
               onEditTransaction={handleEditTransaction}
               onDeleteTransaction={handleDeleteTransaction}
@@ -303,12 +280,8 @@ const BudgetBuckets: React.FC = () => {
                 spent={spent}
                 transactions={bucketTransactions}
                 isExpanded={expandedBucketId === bucket.id}
-                isEditingLimit={editingLimitId === bucket.id}
                 onExpand={handleExpand}
                 onEditBucket={handleEditBucket}
-                onStartEditingLimit={startEditingLimit}
-                onSaveLimit={saveLimit}
-                onCancelEdit={cancelEditLimit}
                 onReallocate={handleReallocate}
                 onEditTransaction={handleEditTransaction}
                 onDeleteTransaction={handleDeleteTransaction}

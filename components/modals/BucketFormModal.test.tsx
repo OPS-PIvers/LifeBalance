@@ -168,7 +168,8 @@ describe('BucketFormModal', () => {
     expect(colorOptions.length).toBeGreaterThan(0);
 
     // Verify selecting a color via label
-    const blueOption = screen.getByLabelText(/select blue/i);
+    // r6 hue retune renamed the 'blue' key's label to "Slate blue".
+    const blueOption = screen.getByLabelText(/select slate blue/i);
     fireEvent.click(blueOption);
 
     expect(blueOption).toBeChecked();

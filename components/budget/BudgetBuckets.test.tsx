@@ -149,27 +149,16 @@ describe('BudgetBuckets', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
-  it('allows inline editing of bucket limit', async () => {
+  it('opens the bucket editor from the one edit entry (r6: no inline limit edit)', async () => {
     render(<BudgetBuckets />);
 
-    // Click on limit to edit
-    const limitDisplay = screen.getByText('$500');
-    fireEvent.click(limitDisplay);
+    // The limit is plain read-only text on the row now.
+    expect(screen.getByText('$500')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Edit limit for Groceries')).not.toBeInTheDocument();
 
-    // Check input appears
-    const input = screen.getByLabelText('Edit limit for Groceries');
-    expect(input).toBeInTheDocument();
-    expect(input).toHaveValue(500);
-
-    // Change value
-    fireEvent.change(input, { target: { value: '600' } });
-    expect(input).toHaveValue(600);
-
-    // Click save
-    const saveButton = screen.getByLabelText('Save limit');
-    fireEvent.click(saveButton);
-
-    expect(mockUpdateBucketLimit).toHaveBeenCalledWith('b1', 600);
+    // The pencil is the single edit affordance — it opens the full drawer.
+    fireEvent.click(screen.getByLabelText('Edit Groceries bucket'));
+    expect(screen.getByTestId('bucket-form-modal')).toBeInTheDocument();
   });
 
   it('expands a bucket inline to show its transactions, and collapses on second tap', async () => {

@@ -45,8 +45,13 @@ const PageHeader: React.FC<PageHeaderProps> = ({
   className,
 }) => {
   const Tag = as as React.ElementType;
+  // A nested masthead (as="h2", e.g. the Shopping tab under the Plan page's
+  // banner) must not mint a SECOND banner landmark — screen-reader landmark
+  // navigation should find one banner per page. Only the route-level h1
+  // masthead renders as <header>.
+  const Wrapper: React.ElementType = as === 'h1' ? 'header' : 'div';
   return (
-  <header
+  <Wrapper
     className={cn(
       'px-5 pt-5 pb-4 flex justify-between gap-3',
       align === 'end' ? 'items-end' : 'items-start',
@@ -67,7 +72,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
       )}
     </div>
     {actions && <div className="shrink-0">{actions}</div>}
-  </header>
+  </Wrapper>
   );
 };
 

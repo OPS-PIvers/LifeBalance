@@ -91,6 +91,29 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
     />
     <Drawer isOpen={isOpen} onClose={onClose} title={editingBucket ? 'Edit Bucket' : 'New Bucket'}>
       <div className="space-y-4">
+        {/* This drawer is the ONE edit entry per bucket (impeccable r6), and
+            changing the limit is by far the most common edit — so when editing,
+            the limit leads and takes focus. Creating keeps name-first (you name
+            a thing before you budget it). */}
+        {editingBucket && (
+          <Input
+            id="bucket-limit"
+            label="Monthly Limit"
+            type="number"
+            placeholder="0.00"
+            min={0}
+            step="0.01"
+            value={limit}
+            onChange={e => setLimit(e.target.value)}
+            className="font-mono"
+            icon={<span>$</span>}
+            // data-autofocus: the Drawer's focus trap prefers this element over
+            // its default first-focusable (the close button) — plain autoFocus
+            // gets clobbered by the trap's open effect.
+            data-autofocus
+          />
+        )}
+
         <Input
           id="bucket-name"
           label="Bucket Name"
@@ -98,21 +121,26 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
           placeholder="e.g. Coffee"
           value={name}
           onChange={e => setName(e.target.value)}
-          autoFocus={!editingBucket}
+          // Same data-autofocus mechanism as the limit field below: the focus
+          // trap clobbers plain autoFocus, so the creation path must mark its
+          // first field too or focus lands on the drawer's close button.
+          data-autofocus={!editingBucket ? true : undefined}
         />
 
-        <Input
-          id="bucket-limit"
-          label="Monthly Limit"
-          type="number"
-          placeholder="0.00"
-          min={0}
-          step="0.01"
-          value={limit}
-          onChange={e => setLimit(e.target.value)}
-          className="font-mono"
-          icon={<span>$</span>}
-        />
+        {!editingBucket && (
+          <Input
+            id="bucket-limit"
+            label="Monthly Limit"
+            type="number"
+            placeholder="0.00"
+            min={0}
+            step="0.01"
+            value={limit}
+            onChange={e => setLimit(e.target.value)}
+            className="font-mono"
+            icon={<span>$</span>}
+          />
+        )}
 
         <div>
           <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase block mb-2">Color</label>
@@ -149,14 +177,19 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
           {editingBucket ? 'Save Changes' : 'Create Bucket'}
         </Button>
 
+        {/* Danger row — separated from Save by a hairline + air (echoes the
+            Settings Danger Zone idiom) so a thumb aiming at Save can't land on
+            Delete. The ConfirmDialog above stays as the second gate. */}
         {editingBucket && (
-          <Button
-            onClick={handleDelete}
-            variant="ghost-danger"
-            className="w-full py-3 mt-1"
-          >
-            <Trash2 size={16} /> Delete Bucket
-          </Button>
+          <div className="mt-6 pt-4 border-t border-brand-200 dark:border-brand-700">
+            <Button
+              onClick={handleDelete}
+              variant="ghost-danger"
+              className="w-full py-3"
+            >
+              <Trash2 size={16} /> Delete Bucket
+            </Button>
+          </div>
         )}
       </div>
     </Drawer>

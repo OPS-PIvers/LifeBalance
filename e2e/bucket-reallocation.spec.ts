@@ -40,13 +40,12 @@ test.describe('Bucket reallocation (Test Mode)', () => {
     await drawer.getByRole('button', { name: 'Confirm' }).click();
     await expect(drawer).not.toBeVisible();
 
-    // Both limits updated (asserted via the edit-limit buttons' aria-labels):
-    // Gas 150 → 200, Groceries 600 → 550. Totals conserve (750 both sides).
-    await expect(
-      page.getByRole('button', { name: 'Edit limit for Gas, currently $200' })
-    ).toBeVisible();
-    await expect(
-      page.getByRole('button', { name: 'Edit limit for Groceries, currently $550' })
-    ).toBeVisible();
+    // Both limits updated: Gas 150 → 200, Groceries 600 → 550. Totals conserve
+    // (750 both sides). The inline edit-limit buttons are gone (r6: one edit
+    // entry per bucket), so assert via each card's progress-bar aria-label,
+    // which bakes in the new limit: Gas $200 spend / $200 limit = 100%;
+    // Groceries $45.50 seeded spend / $550 limit rounds to 8%.
+    await expect(page.getByLabel('Gas spending: 100% of $200 limit')).toBeVisible();
+    await expect(page.getByLabel('Groceries spending: 8% of $550 limit')).toBeVisible();
   });
 });

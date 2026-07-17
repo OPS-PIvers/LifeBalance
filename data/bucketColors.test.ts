@@ -11,7 +11,8 @@ describe('bucketColors', () => {
   it('every key maps to itself with a bg class and label', () => {
     for (const key of BUCKET_COLOR_KEYS) {
       expect(BUCKET_COLORS[key].id).toBe(key);
-      expect(BUCKET_COLORS[key].bg).toMatch(/^bg-[a-z]+-500$/);
+      // r6 retune: each key renders a muted OKLCH arbitrary-value class.
+      expect(BUCKET_COLORS[key].bg).toMatch(/^bg-\[oklch\([0-9._ ]+\)\]$/);
       expect(BUCKET_COLORS[key].label.length).toBeGreaterThan(0);
     }
   });
@@ -37,8 +38,6 @@ describe('bucketColors', () => {
       };
       for (const [raw, key] of Object.entries(legacy)) {
         expect(normalizeBucketColorKey(raw)).toBe(key);
-        // Round-trips back to the identical class — zero visual change.
-        expect(bucketColorClass(raw)).toBe(raw);
       }
     });
 
@@ -57,7 +56,7 @@ describe('bucketColors', () => {
 
   describe('bucketColorClass', () => {
     it('resolves a key to its bg class', () => {
-      expect(bucketColorClass('blue')).toBe('bg-blue-500');
+      expect(bucketColorClass('blue')).toBe(BUCKET_COLORS.blue.bg);
     });
     it('passes through any already-valid bg-* class unchanged', () => {
       // The legacy picker classes...

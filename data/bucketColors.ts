@@ -34,17 +34,22 @@ export interface BucketColor {
   bg: string;
 }
 
-// Keys map 1:1 to the eight legacy `bg-<name>-500` options, so migrating an
-// existing bucket preserves its exact color.
+// Keys are frozen persisted DATA (1:1 with the eight legacy `bg-<name>-500`
+// options), but the rendered hue behind each key was retuned in impeccable r6:
+// the raw Tailwind 500s were saturated screen-brights that sat outside the
+// warm-paper identity. Each value is now a muted, warmth-adjusted OKLCH of the
+// same hue family (C ≈ 0.09–0.13, L ≈ 0.50–0.63) so eight categories stay
+// distinguishable while sitting IN the app's palette. Labels renamed to match
+// what the hues actually are now; keys never change (zero data migration).
 export const BUCKET_COLORS: Record<BucketColorKey, BucketColor> = {
-  emerald: { id: 'emerald', label: 'Emerald', bg: 'bg-emerald-500' },
-  blue: { id: 'blue', label: 'Blue', bg: 'bg-blue-500' },
-  purple: { id: 'purple', label: 'Purple', bg: 'bg-purple-500' },
-  orange: { id: 'orange', label: 'Orange', bg: 'bg-orange-500' },
-  pink: { id: 'pink', label: 'Pink', bg: 'bg-pink-500' },
-  red: { id: 'red', label: 'Red', bg: 'bg-red-500' },
-  indigo: { id: 'indigo', label: 'Indigo', bg: 'bg-indigo-500' },
-  cyan: { id: 'cyan', label: 'Cyan', bg: 'bg-cyan-500' },
+  emerald: { id: 'emerald', label: 'Sage', bg: 'bg-[oklch(0.56_0.09_155)]' },
+  blue: { id: 'blue', label: 'Slate blue', bg: 'bg-[oklch(0.55_0.09_250)]' },
+  purple: { id: 'purple', label: 'Plum', bg: 'bg-[oklch(0.52_0.09_320)]' },
+  orange: { id: 'orange', label: 'Terracotta', bg: 'bg-[oklch(0.62_0.12_55)]' },
+  pink: { id: 'pink', label: 'Dusty rose', bg: 'bg-[oklch(0.60_0.09_10)]' },
+  red: { id: 'red', label: 'Brick', bg: 'bg-[oklch(0.52_0.13_25)]' },
+  indigo: { id: 'indigo', label: 'Indigo', bg: 'bg-[oklch(0.50_0.10_280)]' },
+  cyan: { id: 'cyan', label: 'Teal', bg: 'bg-[oklch(0.58_0.08_200)]' },
 };
 
 export const BUCKET_COLOR_KEYS = Object.keys(BUCKET_COLORS) as BucketColorKey[];

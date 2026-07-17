@@ -111,10 +111,15 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
 
       {/* Primary methods — the two highest-frequency ways to add an expense. */}
       <div className="space-y-3">
+        {/* Each card gets an explicit punctuated aria-label — the computed name
+            from the visual content is an unpunctuated run-on ("Manual EntryType
+            in an expenseINSTANT…"), which is a wall of words in a screen
+            reader. The label overrides the content for the accessible name. */}
         <button
           type="button"
           onClick={onManual}
           className={PRIMARY_BUTTON_CLASSES}
+          aria-label="Manual entry: type in an expense. Instant, updates your budget immediately."
         >
           <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-money-bgPos dark:bg-money-pos/15 text-money-pos dark:text-money-posDark">
             <Type size={24} />
@@ -125,7 +130,6 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
           </div>
           <Badge variant="success" size="sm">
             INSTANT
-            <span className="sr-only">. Updates your budget immediately.</span>
           </Badge>
         </button>
 
@@ -133,6 +137,7 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
           type="button"
           onClick={onScan}
           className={PRIMARY_BUTTON_CLASSES}
+          aria-label="Scan receipt: snap a photo, we read the total. Review, shows in the Action Queue before affecting your budget."
         >
           <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-accent-50 dark:bg-accent-800/40 text-accent-600 dark:text-accent-300">
             <Camera size={24} />
@@ -143,7 +148,6 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
           </div>
           <Badge variant="warning" size="sm">
             REVIEW
-            <span className="sr-only">. Shows in the Action Queue before affecting your budget.</span>
           </Badge>
         </button>
       </div>
@@ -156,6 +160,7 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
           type="button"
           onClick={() => fileInputRef.current?.click()}
           className={SECONDARY_BUTTON_CLASSES}
+          aria-label="Upload image: bank statement or receipt screenshot. Review, shows in the Action Queue before affecting your budget."
         >
           <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-brand-100 dark:bg-brand-700/50 text-brand-500 dark:text-brand-400 shrink-0">
             <Upload size={18} />
@@ -166,7 +171,6 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
           </div>
           <Badge variant="warning" size="sm">
             REVIEW
-            <span className="sr-only">. Shows in the Action Queue before affecting your budget.</span>
           </Badge>
         </button>
       </div>
