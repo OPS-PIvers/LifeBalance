@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
+import { Gift } from 'lucide-react';
 import CountBadge from './CountBadge';
 
 describe('CountBadge', () => {
@@ -33,6 +34,17 @@ describe('CountBadge', () => {
   it('is aria-hidden (the host control owns the accessible label)', () => {
     const { container } = render(<CountBadge count={3} />);
     expect(container.firstChild).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('renders an optional icon before the count', () => {
+    const { container } = render(<CountBadge count={2} icon={Gift} />);
+    expect(container.querySelector('svg')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+  });
+
+  it('renders no icon by default', () => {
+    const { container } = render(<CountBadge count={2} />);
+    expect(container.querySelector('svg')).toBeNull();
   });
 
   it('merges position/ring overrides via className', () => {

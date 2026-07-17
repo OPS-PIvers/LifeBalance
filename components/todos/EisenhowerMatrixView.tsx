@@ -49,7 +49,11 @@ export const EisenhowerMatrixView: React.FC<EisenhowerMatrixViewProps> = ({
       <Section
         key={q}
         title={QUADRANT_SECTIONS[q].title}
+        // The verb title already encodes the axis — the visible caps subtitle
+        // double-encoded it, so it's sr-only here (matches the 2×2 grid view,
+        // which carries the axis in each cell's aria-label/tooltip only).
         subtitle={QUADRANT_SECTIONS[q].subtitle}
+        subtitleSrOnly
         items={quadrants[q]}
         color={QUADRANT_SECTIONS[q].color}
         maxVisible={q === 'later' ? 5 : undefined}

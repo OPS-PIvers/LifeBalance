@@ -112,7 +112,7 @@ const RecentlyDeletedDrawer: React.FC<RecentlyDeletedDrawerProps> = ({ isOpen, o
                       disabled={busy}
                       aria-label={`Permanently delete ${trashItemTitle(item)}`}
                     >
-                      <Trash2 size={15} className="text-money-neg" />
+                      <Trash2 size={15} className="text-money-neg dark:text-money-negDark" />
                     </Button>
                   </div>
                 </Row>
