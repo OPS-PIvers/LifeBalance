@@ -519,7 +519,10 @@ const Habits: React.FC = () => {
                 size="sm"
                 tone="warm"
                 options={[
-                  { value: 'rewards', label: 'Rewards' },
+                  // Label only — the legacy 'rewards' view key is load-bearing
+                  // (deep links, topTabOf, persisted state) and must not change.
+                  // "Store" avoids the Rewards > Rewards duplicate.
+                  { value: 'rewards', label: 'Store' },
                   { value: 'challenges', label: 'Challenges' },
                 ]}
                 value={rewardsSegment}
