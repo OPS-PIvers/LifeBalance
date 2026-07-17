@@ -135,7 +135,11 @@ const SettleUpView: React.FC = () => {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-brand-700 dark:text-brand-100">
                         <span className="font-semibold">{fromName}</span>
-                        <ArrowRight size={13} className="inline mx-1.5 text-brand-400 align-middle" />
+                        {/* The arrow is decorative — without this, AT (and DOM
+                            text) reads "Jordanyou" with no relation between
+                            the names. */}
+                        <span className="sr-only"> owes </span>
+                        <ArrowRight size={13} className="inline mx-1.5 text-brand-400 align-middle" aria-hidden="true" />
                         <span className="font-semibold">{toName}</span>
                       </p>
                       <p className="text-sm font-semibold tabular-nums text-money-neg dark:text-money-negDark">

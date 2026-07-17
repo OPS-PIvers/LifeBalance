@@ -889,7 +889,9 @@ const ShortcutSetupGuide: React.FC<ShortcutSetupGuideProps> = ({ apiKey }) => {
       <div className="flex items-start gap-2 px-1">
         <Smartphone className="w-5 h-5 text-brand-500 dark:text-brand-400 shrink-0 mt-0.5" />
         <div>
-          <h4 className="font-semibold text-sm text-brand-900 dark:text-brand-100">Lock Screen shortcuts</h4>
+          {/* h3 (not h4): the parent Settings Section renders an h2, and a
+              skipped level breaks AT outline navigation. */}
+          <h3 className="font-semibold text-sm text-brand-900 dark:text-brand-100">Lock Screen shortcuts</h3>
           <p className="text-sm text-brand-500 dark:text-brand-400 mt-1">
             Swap the flashlight or camera button for a shortcut: long-press the Lock Screen →
             Customize → tap a button.

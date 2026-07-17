@@ -266,7 +266,17 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
   };
 
   return (
-    <div className="space-y-6">
+    // A real <form> so Enter in Amount/Merchant submits (round-3 critique:
+    // keyboard users had to reach for the Save button). Every non-submit
+    // button inside is explicitly type="button".
+    <form
+      className="space-y-6"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void handleManualSave();
+      }}
+      noValidate
+    >
       <div className="flex justify-center">
         <div className="relative">
           <span className="absolute left-0 top-1/2 -translate-y-1/2 text-3xl font-bold text-brand-400 dark:text-brand-400">$</span>
@@ -286,7 +296,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
             placeholder="0.00"
             step="0.01"
             min="0"
-            className="w-full pl-8 text-4xl font-mono font-bold text-brand-800 dark:text-brand-100 placeholder:text-brand-200 outline-hidden text-center bg-transparent"
+            className="w-full min-h-11 pl-8 text-4xl font-mono font-bold text-brand-800 dark:text-brand-100 placeholder:text-brand-200 outline-hidden text-center bg-transparent"
           />
         </div>
       </div>
@@ -517,12 +527,12 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
       )}
 
       <Button
-        onClick={handleManualSave}
+        type="submit"
         isLoading={isSubmitting}
         className="w-full py-4"
       >
         Save Transaction
       </Button>
-    </div>
+    </form>
   );
 };
