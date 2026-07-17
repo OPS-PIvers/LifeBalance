@@ -174,7 +174,21 @@ export const PulseStripWidget: React.FC = React.memo(() => {
         {/* Consistency — the bridge metric (slate-teal) */}
         {showHabits && (
         <PulseCell label="Consistency">
-          {metrics.consistencyTotal > 0 ? (
+          {metrics.consistencyTotal > 0 && metrics.consistencyDone === 0 ? (
+            // Morning zero state: before the first completion of the day, a
+            // "0%" reads as a failing grade the user hasn't earned yet. Show a
+            // neutral invitation instead; the percentage takes over as soon as
+            // one habit is done.
+            <>
+              <span className="stat-num text-2xl font-bold text-habit-blue">
+                {metrics.consistencyTotal}
+              </span>
+              <span className="mt-1 flex items-center gap-1 text-xs font-medium text-brand-400 dark:text-brand-450">
+                <Target size={12} aria-hidden="true" />
+                {metrics.consistencyTotal === 1 ? 'habit waiting' : 'habits waiting'}
+              </span>
+            </>
+          ) : metrics.consistencyTotal > 0 ? (
             <>
               <span className="stat-num text-2xl font-bold text-habit-blue">
                 {metrics.consistencyPercent}%

@@ -149,6 +149,85 @@ describe('PulseStripWidget', () => {
     expect(screen.getByText('no habits')).toBeInTheDocument();
   });
 
+  it('shows inviting "habits waiting" copy (no percentage) before the first completion of the day', () => {
+    // Two daily habits, neither completed today — the morning zero state.
+    const value = {
+      transactions: [makeTransaction()],
+      habits: [
+        makeHabit({ id: 'h-1', completedDates: [] }),
+        makeHabit({ id: 'h-2', title: 'Stretch', completedDates: [] }),
+      ],
+      weeklyPoints: 0,
+    };
+    vi.mocked(useFinance).mockReturnValue(value as unknown as ReturnType<typeof useFinance>);
+    vi.mocked(useGamification).mockReturnValue(
+      value as unknown as ReturnType<typeof useGamification>,
+    );
+
+    render(<PulseStripWidget />);
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('habits waiting')).toBeInTheDocument();
+    expect(screen.queryByText('0%')).not.toBeInTheDocument();
+    expect(screen.queryByText('0/2 today')).not.toBeInTheDocument();
+  });
+
+  it('uses the singular "habit waiting" when exactly one habit is due', () => {
+    const value = {
+      transactions: [makeTransaction()],
+      habits: [makeHabit({ completedDates: [] })],
+      weeklyPoints: 0,
+    };
+    vi.mocked(useFinance).mockReturnValue(value as unknown as ReturnType<typeof useFinance>);
+    vi.mocked(useGamification).mockReturnValue(
+      value as unknown as ReturnType<typeof useGamification>,
+    );
+
+    render(<PulseStripWidget />);
+    expect(screen.getByText('1')).toBeInTheDocument();
+    expect(screen.getByText('habit waiting')).toBeInTheDocument();
+    expect(screen.queryByText('0%')).not.toBeInTheDocument();
+  });
+
+  it('switches to the percentage once at least one habit is completed today', () => {
+    const value = {
+      transactions: [makeTransaction()],
+      habits: [
+        makeHabit({ id: 'h-1', completedDates: ['2026-06-16'] }),
+        makeHabit({ id: 'h-2', title: 'Stretch', completedDates: [] }),
+      ],
+      weeklyPoints: 0,
+    };
+    vi.mocked(useFinance).mockReturnValue(value as unknown as ReturnType<typeof useFinance>);
+    vi.mocked(useGamification).mockReturnValue(
+      value as unknown as ReturnType<typeof useGamification>,
+    );
+
+    render(<PulseStripWidget />);
+    expect(screen.getByText('50%')).toBeInTheDocument();
+    expect(screen.getByText('1/2 today')).toBeInTheDocument();
+    expect(screen.queryByText(/waiting/)).not.toBeInTheDocument();
+  });
+
+  it('still shows 100% when every habit is already done', () => {
+    const value = {
+      transactions: [makeTransaction()],
+      habits: [
+        makeHabit({ id: 'h-1', completedDates: ['2026-06-16'] }),
+        makeHabit({ id: 'h-2', title: 'Stretch', completedDates: ['2026-06-16'] }),
+      ],
+      weeklyPoints: 0,
+    };
+    vi.mocked(useFinance).mockReturnValue(value as unknown as ReturnType<typeof useFinance>);
+    vi.mocked(useGamification).mockReturnValue(
+      value as unknown as ReturnType<typeof useGamification>,
+    );
+
+    render(<PulseStripWidget />);
+    expect(screen.getByText('100%')).toBeInTheDocument();
+    expect(screen.getByText('2/2 today')).toBeInTheDocument();
+    expect(screen.queryByText(/waiting/)).not.toBeInTheDocument();
+  });
+
   it('stays quiet when the only enabled domain (habits) is empty, despite stale spend data', () => {
     // Money is OFF but a transaction still exists (stale). Habits ON but empty.
     // The guard must weigh only enabled-domain content, so the widget hides
