@@ -42,14 +42,16 @@ test.describe('Transaction review drawer (Test Mode, stub seed)', () => {
 
     // Bucket progress: Entertainment now shows the verified spend.
     await bottomNav(page).getByRole('link', { name: 'Money', exact: true }).click();
-    // Buckets is the default segment of the Budget tab (Money IA is 4
-    // top-level tabs since the 2026-07 consolidation).
+    // Tapping the multi-view Budget tab opens its sub-view menu
+    // (TabSubViewMenu); picking Buckets navigates to the buckets view.
     await page.getByRole('tab', { name: 'Budget' }).click();
+    await page.getByRole('menuitemradio', { name: 'Buckets' }).click();
     await expect(page.getByText(usd(STUB_AMOUNT), { exact: true })).toBeVisible();
 
     // Master list: the row exists and is no longer marked Pending.
-    // (Transactions is the default segment of the Activity tab.)
+    // (Activity is multi-view too — pick Transactions from its sub-view menu.)
     await page.getByRole('tab', { name: 'Activity' }).click();
+    await page.getByRole('menuitemradio', { name: 'Transactions' }).click();
     const row = page.getByText('Apple Pay', { exact: true });
     await expect(row).toBeVisible();
     await expect(page.getByText('Pending', { exact: true })).not.toBeVisible();

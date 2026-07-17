@@ -1,17 +1,17 @@
-import React, { useState, useMemo, Suspense } from 'react';
+import React, { useState, useMemo, useRef, Suspense } from 'react';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Habit, HouseholdMember } from '@/types/schema';
 import { Skeleton } from '@/components/ui/Skeleton';
 import HabitCategoryList from '@/components/habits/HabitCategoryList';
 import {
-  Sparkles, CalendarPlus,
+  Sparkles, CalendarPlus, ChevronDown,
   ListChecks, Check, Flame, Star, Archive,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
 import Eyebrow from '@/components/ui/Eyebrow';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
-import { ViewSwitcher } from '@/components/ui/ViewSwitcher';
+import { TabSubViewMenu, type TabSubViewOption } from '@/components/ui/TabSubViewMenu';
 import HabitCreatorWizard from '@/components/modals/HabitCreatorWizard';
 import SmartHabitAdjustModal from '@/components/modals/SmartHabitAdjustModal';
 import SmartHabitReorderModal from '@/components/modals/SmartHabitReorderModal';
@@ -38,13 +38,16 @@ import toast from 'react-hot-toast';
 import { format, subDays } from 'date-fns';
 
 // Habits' IA is 3 top-level tabs (consolidated from 6 — 2026-07 critique):
-// Track, Progress (History + Insights + Coach behind an inline view switcher),
-// Rewards (+ Challenges behind an inline view switcher). Coach folded into Progress
-// in the round-3 critique: it duplicated a Dashboard widget and opened on a
-// pitch, which didn't earn a top-level slot. ONE state value holds the full
-// location: the legacy view keys stay valid so every existing
+// Track, Progress (History + Insights + Coach), Rewards (Store + Challenges).
+// The multi-view groups' sub-views are chosen from a popover menu anchored
+// under the tab itself (TabSubViewMenu): tapping the tab opens its menu,
+// picking an item navigates. Coach folded into Progress in the round-3
+// critique: it duplicated a Dashboard widget and opened on a pitch, which
+// didn't earn a top-level slot. ONE state value holds the full location: the
+// legacy view keys stay valid so every existing
 // `navigate('/habits', { state: { tab } })` deep-link keeps working and
-// selects the right group WITH the right segment.
+// selects the right group WITH the right segment (deep-links never open the
+// menu — it opens only from user taps).
 const HABIT_TABS = [
   'track',
   // Progress group ('history' = its default segment)
@@ -70,6 +73,22 @@ const topTabOf = (value: string): 'track' | 'progress' | 'rewards' => {
       return 'track';
   }
 };
+
+/** The multi-view groups — tabs whose tap opens a sub-view menu. */
+type HabitGroup = 'progress' | 'rewards';
+
+const isHabitGroup = (value: string): value is HabitGroup =>
+  value === 'progress' || value === 'rewards';
+
+// Rewards' options are static; Progress' are built in-component (Coach is
+// gated on powerToolsEnabled). Labels double as the active trigger's text.
+const REWARDS_OPTIONS: TabSubViewOption<HabitTabValue>[] = [
+  // Label only — the legacy 'rewards' view key is load-bearing (deep links,
+  // topTabOf, persisted state) and must not change. "Store" avoids the
+  // Rewards > Rewards duplicate.
+  { value: 'rewards', label: 'Store' },
+  { value: 'challenges', label: 'Challenges' },
+];
 
 // Lazy-loaded so the heavy modal/Drawer dependencies stay out of the Habits boot
 // bundle and only load when a tab's "manage" CTA is actually used (mirrors the
@@ -256,13 +275,37 @@ const Habits: React.FC = () => {
   const [showArchived, setShowArchived] = useState(false);
   // Controlled so the toolbar points glance can deep-link straight to Rewards.
   // `activeView` may be a legacy view key ('history', 'challenges', …) — the
-  // Tabs bar renders its top-level group and the group's inline ViewSwitcher
-  // renders the specific view (same pattern as Money's 4-tab IA).
+  // Tabs bar renders its top-level group (the active trigger's label showing
+  // the specific view) and the panel renders that view's content (same
+  // pattern as Money's 4-tab IA).
   const [activeView, setActiveView] = useDeepLinkTab('track', HABIT_TABS);
   const activeTab = topTabOf(activeView);
+  // Which multi-view tab's sub-view menu is open (null = none). Opened only by
+  // taps on a group trigger — never by deep-links or keyboard arrow roving.
+  const [openMenu, setOpenMenu] = useState<HabitGroup | null>(null);
+  const tabBarRef = useRef<HTMLDivElement>(null);
+  // Reached only by single-view taps (Track) and the tablist's arrow-key
+  // activation (taps on multi-view triggers are intercepted in capture phase
+  // below) — keyboard selection-follows-focus keeps its existing
+  // land-on-default behavior.
   const selectTab = (value: string) => {
     // Entering a group via its top trigger shows the group's default segment.
     setActiveView(value === 'progress' ? 'history' : value);
+  };
+  // Tapping (or Enter/Space-ing) a multi-view trigger toggles its sub-view
+  // menu WITHOUT changing the selected tab; navigation happens only when a
+  // menu item is picked. stopPropagation in the capture phase keeps the event
+  // from ever reaching the trigger's own onClick. While the menu is open its
+  // backdrop covers the tab bar, so a re-tap lands there and closes (the
+  // toggle's other half).
+  const handleTabBarClickCapture = (e: React.MouseEvent) => {
+    const value = (e.target as HTMLElement)
+      .closest('[data-tabs-value]')
+      ?.getAttribute('data-tabs-value');
+    if (value && isHabitGroup(value)) {
+      e.stopPropagation();
+      setOpenMenu((prev) => (prev === value ? null : value));
+    }
   };
   // Coach is a Progress segment gated on powerToolsEnabled: a stale
   // `?tab=coach` deep-link while the flag is off degrades to History instead
@@ -272,6 +315,36 @@ const Habits: React.FC = () => {
     : activeView === 'coach' && powerToolsEnabled ? 'coach'
     : 'history';
   const rewardsSegment: HabitTabValue = activeView === 'challenges' ? 'challenges' : 'rewards';
+  // Coach is flag-gated, so Progress' menu options are built here (the other
+  // groups' are static module constants).
+  const progressOptions = useMemo<TabSubViewOption<HabitTabValue>[]>(
+    () => [
+      { value: 'history', label: 'History' },
+      { value: 'insights', label: 'Insights' },
+      ...(powerToolsEnabled ? [{ value: 'coach' as const, label: 'Coach' }] : []),
+    ],
+    [powerToolsEnabled]
+  );
+  const groupOptions: Record<HabitGroup, TabSubViewOption<HabitTabValue>[]> = {
+    progress: progressOptions,
+    rewards: REWARDS_OPTIONS,
+  };
+  const groupSegment: Record<HabitGroup, HabitTabValue> = {
+    progress: progressSegment,
+    rewards: rewardsSegment,
+  };
+  // Multi-view trigger content: the CURRENT sub-view name while its group is
+  // active, the group name otherwise — always with the small caret that
+  // signals "this tab opens a menu". The caret is aria-hidden, so the
+  // inactive accessible name stays the plain group name (e2e contract).
+  const groupTrigger = (group: HabitGroup, groupName: string) => (
+    <>
+      {activeTab === group
+        ? (groupOptions[group].find((o) => o.value === groupSegment[group])?.label ?? groupName)
+        : groupName}
+      <ChevronDown size={12} aria-hidden="true" className="-ml-1.5 opacity-70" />
+    </>
+  );
   // Global search deep-link (v1.1): scroll-to + briefly flash the specific
   // habit row selected in SearchOverlay, on top of the tab-level jump above.
   const highlightHabitId = useDeepLinkHighlight();
@@ -461,12 +534,46 @@ const Habits: React.FC = () => {
         <div className="px-4 mb-4">
           {/* Text-only triggers (matching Money's tab bar) — icons made the
               consolidated bar overflow 375px, which is the exact problem this
-              consolidation removes. */}
-          <TabsList>
-            <TabsTrigger value="track">Track</TabsTrigger>
-            <TabsTrigger value="progress">Progress</TabsTrigger>
-            <TabsTrigger value="rewards">Rewards</TabsTrigger>
-          </TabsList>
+              consolidation removes. text-[13px] + px-2.5 buy the room the
+              sub-view labels + carets need at that width. The relative wrapper
+              is the anchor container for TabSubViewMenu; the capture handler
+              intercepts multi-view taps before Tabs sees them. */}
+          <div ref={tabBarRef} className="relative" onClickCapture={handleTabBarClickCapture}>
+            <TabsList>
+              <TabsTrigger value="track" className="text-[13px] px-2.5">
+                Track
+              </TabsTrigger>
+              <TabsTrigger
+                value="progress"
+                className="text-[13px] px-2.5"
+                aria-haspopup="menu"
+                aria-expanded={openMenu === 'progress'}
+              >
+                {groupTrigger('progress', 'Progress')}
+              </TabsTrigger>
+              <TabsTrigger
+                value="rewards"
+                className="text-[13px] px-2.5"
+                aria-haspopup="menu"
+                aria-expanded={openMenu === 'rewards'}
+              >
+                {groupTrigger('rewards', 'Rewards')}
+              </TabsTrigger>
+            </TabsList>
+            {openMenu && (
+              <TabSubViewMenu
+                isOpen
+                onClose={() => setOpenMenu(null)}
+                options={groupOptions[openMenu]}
+                value={groupSegment[openMenu]}
+                onSelect={setActiveView}
+                name={openMenu === 'progress' ? 'Progress view' : 'Rewards view'}
+                anchorValue={openMenu}
+                anchorRef={tabBarRef}
+                tone="warm"
+              />
+            )}
+          </div>
         </div>
 
         {/* Main Content */}
@@ -530,53 +637,25 @@ const Habits: React.FC = () => {
             )}
           </TabsContent>
 
+          {/* No in-panel view chooser: the sub-view lives in the tab itself
+              (tap the tab → TabSubViewMenu popover), so each panel renders
+              its current segment directly. */}
           <TabsContent value="progress">
-            <div className="space-y-4">
-              {/* Content header: the sub-view dropdown IS the panel's title
-                  (GitHub-mobile pattern) — one tab row above, the view choice
-                  reads as part of the content, not a second nav tier. */}
-              <ViewSwitcher
-                name="Progress view"
-                tone="warm"
-                options={[
-                  { value: 'history', label: 'History' },
-                  { value: 'insights', label: 'Insights' },
-                  ...(powerToolsEnabled ? [{ value: 'coach', label: 'Coach' }] : []),
-                ]}
-                value={progressSegment}
-                onChange={setActiveView}
-              />
-              {progressSegment === 'coach' ? (
-                <HabitCoach />
-              ) : progressSegment === 'history' ? (
-                <HabitHistoryCalendar />
-              ) : (
-                <HabitsInsightsTab />
-              )}
-            </div>
+            {progressSegment === 'coach' ? (
+              <HabitCoach />
+            ) : progressSegment === 'history' ? (
+              <HabitHistoryCalendar />
+            ) : (
+              <HabitsInsightsTab />
+            )}
           </TabsContent>
 
           <TabsContent value="rewards">
-            <div className="space-y-4">
-              <ViewSwitcher
-                name="Rewards view"
-                tone="warm"
-                options={[
-                  // Label only — the legacy 'rewards' view key is load-bearing
-                  // (deep links, topTabOf, persisted state) and must not change.
-                  // "Store" avoids the Rewards > Rewards duplicate.
-                  { value: 'rewards', label: 'Store' },
-                  { value: 'challenges', label: 'Challenges' },
-                ]}
-                value={rewardsSegment}
-                onChange={setActiveView}
-              />
-              {rewardsSegment === 'rewards' ? (
-                <HabitsRewardsTab />
-              ) : (
-                <HabitsChallengesTab onOpenChallengeHub={() => setIsChallengeHubOpen(true)} />
-              )}
-            </div>
+            {rewardsSegment === 'rewards' ? (
+              <HabitsRewardsTab />
+            ) : (
+              <HabitsChallengesTab onOpenChallengeHub={() => setIsChallengeHubOpen(true)} />
+            )}
           </TabsContent>
         </div>
       </Tabs>
