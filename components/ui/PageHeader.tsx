@@ -2,6 +2,12 @@ import React from 'react';
 import { cn } from '@/utils/cn';
 
 export interface PageHeaderProps {
+  /**
+   * Heading level — `h1` for a route-level masthead (the default), `h2` when
+   * the masthead sits INSIDE a page that already has an `h1` (e.g. the
+   * Shopping tab under the Plan page's masthead), so each page keeps one h1.
+   */
+  as?: 'h1' | 'h2';
   /** Page title, rendered in the editorial display face. */
   title: React.ReactNode;
   /** Optional one-line subtitle beneath the title. */
@@ -30,13 +36,16 @@ export interface PageHeaderProps {
  * consistent than a per-page hero/utility split.
  */
 const PageHeader: React.FC<PageHeaderProps> = ({
+  as = 'h1',
   title,
   subtitle,
   actions,
   align = 'start',
   titleId,
   className,
-}) => (
+}) => {
+  const Tag = as as React.ElementType;
+  return (
   <header
     className={cn(
       'px-5 pt-5 pb-4 flex justify-between gap-3',
@@ -45,12 +54,12 @@ const PageHeader: React.FC<PageHeaderProps> = ({
     )}
   >
     <div className="min-w-0">
-      <h1
+      <Tag
         id={titleId}
         className="font-display text-xl font-semibold tracking-tight text-brand-900 dark:text-brand-50"
       >
         {title}
-      </h1>
+      </Tag>
       {subtitle && (
         <div className="mt-0.5 text-sm text-brand-500 dark:text-brand-400 font-medium">
           {subtitle}
@@ -59,6 +68,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
     </div>
     {actions && <div className="shrink-0">{actions}</div>}
   </header>
-);
+  );
+};
 
 export default PageHeader;

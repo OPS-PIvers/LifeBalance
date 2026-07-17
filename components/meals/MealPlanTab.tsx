@@ -1164,9 +1164,11 @@ const MealPlanTab: React.FC = () => {
       <div className="space-y-3">
         <div className="flex items-end justify-between px-1">
             <div>
-                <h3 className="font-display text-xl font-semibold text-brand-900 dark:text-brand-50 tracking-tight leading-none">
+                {/* h2: the Meals tab's top-level heading under the Plan page
+                    masthead (ListsPage h1). */}
+                <h2 className="font-display text-xl font-semibold text-brand-900 dark:text-brand-50 tracking-tight leading-none">
                     {format(selectedDate, 'EEEE')}
-                </h3>
+                </h2>
                 <p className="text-sm text-brand-500 dark:text-brand-400 font-medium mt-1">
                     {format(selectedDate, 'MMMM d')}
                     {selectedDateStr === todayStr && <span className="text-accent-600 dark:text-accent-300 font-bold"> · Today</span>}

@@ -636,6 +636,7 @@ const ShoppingListTab: React.FC = () => {
             trigger shows a spinner while AI Optimize runs so feedback survives a
             closed menu. */}
         <PageHeader
+            as="h2"
             className="px-0 pt-4 pb-2"
             title="Shopping list"
             actions={
@@ -823,9 +824,9 @@ const ShoppingListTab: React.FC = () => {
                 <div className="hairline-divider">
                     <EmptyState
                         size="compact"
-                        // h2: this renders directly under the page h1, so h3
-                        // (the default) would skip a heading level.
-                        headingLevel="h2"
+                        // h3: nests under the "Shopping list" h2 above (the
+                        // page h1 is the Plan masthead in ListsPage).
+                        headingLevel="h3"
                         icon={<ShoppingCart className="w-7 h-7" />}
                         title={filterStore ? `Nothing for ${filterStore}` : 'Your list is empty'}
                         description={filterStore ? 'No items match this store filter.' : 'Add an item above to start your shopping list.'}

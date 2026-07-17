@@ -71,12 +71,14 @@ export const Section = React.memo(function Section({ title, subtitle, subtitleSr
       <div className="flex items-baseline justify-between mb-2 px-1">
         <div className="flex items-center gap-2">
           <div className={`w-2 h-2 rounded-full ${sectionDotColors[color]}`}></div>
-          <h2 className="font-display text-base font-semibold text-brand-900 dark:text-brand-50 tracking-tight">
+          <h3 className="font-display text-base font-semibold text-brand-900 dark:text-brand-50 tracking-tight">
             {title}
-            {/* Inside the h2 so heading-navigation screen-reader users hear
-                "Do First, (Urgent & Important)" as one heading (review note). */}
+            {/* Inside the heading so heading-navigation screen-reader users hear
+                "Do First, (Urgent & Important)" as one heading (review note).
+                h3: nests under ToDosPage's h2 "To-dos" (page h1 is the Plan
+                masthead in ListsPage). */}
             {subtitleSrOnly && <span className="sr-only"> ({subtitle})</span>}
-          </h2>
+          </h3>
         </div>
         {!subtitleSrOnly && (
           <span className="text-xs font-semibold text-brand-400 dark:text-brand-450 uppercase tracking-wider">{subtitle}</span>
