@@ -49,12 +49,8 @@ describe('BudgetBucketCard', () => {
     spent: mockSpent,
     transactions: [] as Transaction[],
     isExpanded: false,
-    isEditingLimit: false,
     onExpand: vi.fn(),
     onEditBucket: vi.fn(),
-    onStartEditingLimit: vi.fn(),
-    onSaveLimit: vi.fn(),
-    onCancelEdit: vi.fn(),
     onReallocate: vi.fn(),
     onEditTransaction: vi.fn(),
     onDeleteTransaction: vi.fn(),
@@ -81,82 +77,28 @@ describe('BudgetBucketCard', () => {
     expect(progressBar).toHaveClass('bg-green-500');
   });
 
-  it('switches to edit mode when isEditingLimit is true', () => {
-    render(<BudgetBucketCard {...defaultProps} isEditingLimit={true} />);
-
-    const input = screen.getByLabelText('Edit limit for Groceries');
-    expect(input).toBeInTheDocument();
-    expect(input).toHaveValue(500);
-    expect(input).toHaveFocus();
-  });
-
-  it('calls onStartEditingLimit when limit text is clicked', () => {
+  // The inline limit-edit affordance was collapsed into the ONE edit entry
+  // (the pencil → full drawer) in impeccable r6 — the limit figure is plain
+  // read-only data on the row now.
+  it('renders the limit as plain text with no inline edit affordance', () => {
     render(<BudgetBucketCard {...defaultProps} />);
 
-    fireEvent.click(screen.getByText('$500'));
-    expect(defaultProps.onStartEditingLimit).toHaveBeenCalledWith('bucket1');
+    expect(screen.queryByLabelText(/Edit limit for/)).not.toBeInTheDocument();
+    // The limit figure is not interactive.
+    expect(screen.getByText('$500').closest('button')).toBeNull();
   });
 
-  it('calls onStartEditingLimit when limit text is activated via keyboard (Enter)', () => {
+  it('opens the full bucket editor from the one edit entry (pencil)', () => {
     render(<BudgetBucketCard {...defaultProps} />);
 
-    const limitElement = screen.getByLabelText('Edit limit for Groceries, currently $500');
-    limitElement.focus();
-    fireEvent.keyDown(limitElement, { key: 'Enter' });
-
-    expect(defaultProps.onStartEditingLimit).toHaveBeenCalledWith('bucket1');
+    fireEvent.click(screen.getByLabelText('Edit Groceries bucket'));
+    expect(defaultProps.onEditBucket).toHaveBeenCalledWith(mockBucket);
   });
 
-  it('calls onStartEditingLimit when limit text is activated via keyboard (Space)', () => {
-    render(<BudgetBucketCard {...defaultProps} />);
+  it('hides the edit pencil for read-only pseudo-buckets (editable={false})', () => {
+    render(<BudgetBucketCard {...defaultProps} editable={false} />);
 
-    const limitElement = screen.getByLabelText('Edit limit for Groceries, currently $500');
-    limitElement.focus();
-    fireEvent.keyDown(limitElement, { key: ' ' });
-
-    expect(defaultProps.onStartEditingLimit).toHaveBeenCalledWith('bucket1');
-  });
-
-  it('calls onSaveLimit when save button is clicked', () => {
-    render(<BudgetBucketCard {...defaultProps} isEditingLimit={true} />);
-
-    const input = screen.getByLabelText('Edit limit for Groceries');
-    fireEvent.change(input, { target: { value: '600' } });
-
-    fireEvent.click(screen.getByLabelText('Save limit'));
-    expect(defaultProps.onSaveLimit).toHaveBeenCalledWith('bucket1', 600);
-  });
-
-  it('calls onSaveLimit when Enter is pressed', () => {
-    render(<BudgetBucketCard {...defaultProps} isEditingLimit={true} />);
-
-    const input = screen.getByLabelText('Edit limit for Groceries');
-    fireEvent.change(input, { target: { value: '600' } });
-    fireEvent.keyDown(input, { key: 'Enter' });
-
-    expect(defaultProps.onSaveLimit).toHaveBeenCalledWith('bucket1', 600);
-  });
-
-  it('calls onCancelEdit when Escape is pressed', () => {
-    render(<BudgetBucketCard {...defaultProps} isEditingLimit={true} />);
-
-    const input = screen.getByLabelText('Edit limit for Groceries');
-    fireEvent.keyDown(input, { key: 'Escape' });
-
-    expect(defaultProps.onCancelEdit).toHaveBeenCalled();
-  });
-
-  it('syncs local state when entering edit mode', () => {
-    const { rerender } = render(<BudgetBucketCard {...defaultProps} />);
-
-    // Initial render - not editing
-    expect(screen.queryByLabelText('Edit limit for Groceries')).not.toBeInTheDocument();
-
-    // Re-render with editing enabled
-    rerender(<BudgetBucketCard {...defaultProps} isEditingLimit={true} />);
-
-    const input = screen.getByLabelText('Edit limit for Groceries');
-    expect(input).toHaveValue(500);
+    expect(screen.queryByLabelText('Edit Groceries bucket')).not.toBeInTheDocument();
   });
 
   it('calls onExpand when the bucket row is clicked', () => {

@@ -1,6 +1,6 @@
-import React, { useState, memo } from 'react';
+import React, { memo } from 'react';
 import { format, parseISO } from 'date-fns';
-import { ChevronDown, Pencil, Check, AlertTriangle, Edit, Trash2 } from 'lucide-react';
+import { ChevronDown, Pencil, AlertTriangle, Edit, Trash2 } from 'lucide-react';
 import { BudgetBucket, Transaction } from '@/types/schema';
 import { Button } from '@/components/ui/Button';
 import { Row } from '@/components/ui/Section';
@@ -23,12 +23,13 @@ interface BudgetBucketCardProps {
   transactions: Transaction[];
   /** Whether the inline transactions list is currently expanded. */
   isExpanded: boolean;
-  isEditingLimit: boolean;
+  /**
+   * False for read-only pseudo-buckets (Unbudgeted): hides the edit pencil
+   * instead of rendering a no-op affordance.
+   */
+  editable?: boolean;
   onExpand: (id: string) => void;
   onEditBucket: (bucket: BudgetBucket) => void;
-  onStartEditingLimit: (id: string) => void;
-  onSaveLimit: (id: string, limit: number) => void;
-  onCancelEdit: () => void;
   onReallocate: (targetId: string) => void;
   onEditTransaction: (transaction: Transaction) => void;
   onDeleteTransaction: (id: string) => void;
@@ -44,12 +45,9 @@ const arePropsEqual = (prev: BudgetBucketCardProps, next: BudgetBucketCardProps)
     prev.spent.pending === next.spent.pending &&
     prev.transactions === next.transactions &&
     prev.isExpanded === next.isExpanded &&
-    prev.isEditingLimit === next.isEditingLimit &&
+    prev.editable === next.editable &&
     prev.onExpand === next.onExpand &&
     prev.onEditBucket === next.onEditBucket &&
-    prev.onStartEditingLimit === next.onStartEditingLimit &&
-    prev.onSaveLimit === next.onSaveLimit &&
-    prev.onCancelEdit === next.onCancelEdit &&
     prev.onReallocate === next.onReallocate &&
     prev.onEditTransaction === next.onEditTransaction &&
     prev.onDeleteTransaction === next.onDeleteTransaction
@@ -60,21 +58,19 @@ const arePropsEqual = (prev: BudgetBucketCardProps, next: BudgetBucketCardProps)
  * A single grouped-flat row for one budget bucket — lives inside the page-level
  * `SurfaceList` in `BudgetBuckets`. Tapping the name/chevron expands the row
  * inline (disclosure pattern, same as `CreditCardActivityWidget`) to list the
- * transactions that hit this bucket in the current period. The limit edit and
- * the bucket edit (pencil) keep their own dedicated affordances, so expanding
- * never collides with editing.
+ * transactions that hit this bucket in the current period. The pencil is the
+ * ONE edit affordance — it opens the full bucket drawer with the limit as its
+ * first, focused field (impeccable r6 collapsed the old separate inline
+ * limit-edit, which made two look-alike edit entries per row).
  */
 export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
   bucket,
   spent,
   transactions,
   isExpanded,
-  isEditingLimit,
+  editable = true,
   onExpand,
   onEditBucket,
-  onStartEditingLimit,
-  onSaveLimit,
-  onCancelEdit,
   onReallocate,
   onEditTransaction,
   onDeleteTransaction,
@@ -83,40 +79,6 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
   const { isOverspent, overage, percent } = getBucketOverspend(spent, bucket.limit);
   const transactionCount = transactions.length;
   const detailId = `bucket-transactions-${bucket.id}`;
-
-  // Local state for limit editing to prevent parent re-renders on keystroke.
-  const [localLimit, setLocalLimit] = useState(() => bucket.limit.toString());
-
-  // Reset the draft value whenever an edit session starts/ends or the persisted
-  // limit changes — the standard "adjust state during render" pattern (no
-  // effect). This also covers the case where the PARENT cancels editing
-  // (e.g. backdrop click) without going through this component's handlers, so
-  // reopening never shows a stale unsaved value.
-  const [prevIsEditing, setPrevIsEditing] = useState(isEditingLimit);
-  const [prevLimit, setPrevLimit] = useState(bucket.limit);
-  if (isEditingLimit !== prevIsEditing || bucket.limit !== prevLimit) {
-    setPrevIsEditing(isEditingLimit);
-    setPrevLimit(bucket.limit);
-    setLocalLimit(bucket.limit.toString());
-  }
-
-  const handleSaveLimit = () => {
-    const val = parseFloat(localLimit);
-    if (!isNaN(val)) {
-      onSaveLimit(bucket.id, val);
-    } else {
-      // Invalid input: discard the draft (reset handled on reopen) and close.
-      onCancelEdit();
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSaveLimit();
-    } else if (e.key === 'Escape') {
-      onCancelEdit();
-    }
-  };
 
   return (
     <Row className="flex-col items-stretch gap-2.5">
@@ -152,48 +114,11 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
               )}
               <span className="text-brand-300 dark:text-brand-500 font-light">/</span>
 
-              {isEditingLimit ? (
-                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    value={localLimit}
-                    onChange={e => setLocalLimit(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    className="w-16 p-1 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-btn text-right font-mono font-bold dark:text-brand-100 outline-hidden focus:ring-2 focus:ring-accent-500/40"
-                    autoFocus
-                    aria-label={`Edit limit for ${bucket.name}`}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={handleSaveLimit}
-                    className="text-money-pos dark:text-money-posDark hover:bg-money-bgPos dark:hover:bg-money-pos/15"
-                    aria-label="Save limit"
-                  >
-                    <Check size={14} />
-                  </Button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onStartEditingLimit(bucket.id);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      onStartEditingLimit(bucket.id);
-                    }
-                  }}
-                  aria-label={`Edit limit for ${bucket.name}, currently ${fmt(bucket.limit, { decimals: 0 })}`}
-                  className="font-mono tabular-nums text-brand-400 dark:text-brand-450 border-b border-dashed border-brand-300 dark:border-brand-600 cursor-pointer hover:text-brand-600 dark:hover:text-brand-300 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-xs"
-                >
-                  {fmt(bucket.limit, { decimals: 0 })}
-                </button>
-              )}
+              {/* The limit is plain data here — editing it goes through the ONE
+                  edit entry (the pencil → full drawer, limit field focused). */}
+              <span className="font-mono tabular-nums text-brand-400 dark:text-brand-450">
+                {fmt(bucket.limit, { decimals: 0 })}
+              </span>
             </div>
             {spent.pending > 0 && (
               <span className="text-xxs text-warm-600 dark:text-warm-400">
@@ -202,16 +127,18 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
             )}
           </div>
 
-          {/* Edit Button */}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => onEditBucket(bucket)}
-            className="min-w-11 min-h-11 sm:min-w-0 sm:min-h-0 text-brand-300 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300"
-            aria-label={`Edit ${bucket.name} bucket`}
-          >
-            <Pencil size={14} />
-          </Button>
+          {/* The one edit entry per bucket. Hidden for read-only pseudo-buckets. */}
+          {editable && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => onEditBucket(bucket)}
+              className="min-w-11 min-h-11 sm:min-w-0 sm:min-h-0 text-brand-300 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300"
+              aria-label={`Edit ${bucket.name} bucket`}
+            >
+              <Pencil size={14} />
+            </Button>
+          )}
         </div>
       </div>
 

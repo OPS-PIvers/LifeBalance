@@ -251,6 +251,13 @@ Pill shape, hairline border, compact text. Canonical:
 (`{bg} {text} {border}`) — accent for selected, `brand-100/brand-500/brand-200`
 for neutral, semantic tints for money/store/quick-list. Don't invent per-chip hex.
 
+**Picker rule (r6):** a **pick-one form field always uses `Select`**
+([ui/Select.tsx](components/ui/Select.tsx)) — never a row of single-select
+chips. Chips are reserved for **multi-select tagging** (habit chips on
+capture/review) and **filtering/browsing views**; they never stand in for a
+form field with exactly one answer. Consistency comes from this role split,
+not from one control everywhere.
+
 ### Inputs
 
 `w-full p-3 rounded-btn bg-brand-50 border border-brand-200 focus:ring-2

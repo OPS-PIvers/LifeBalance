@@ -26,10 +26,11 @@ interface SelectableChipProps {
 }
 
 /**
- * A single unified selection-chip treatment, shared by the habit-suggestion
- * chips and the budget-category chips below. Moved here from ActionQueueItem so
- * both review surfaces (the Action Queue drawer and the on-open review drawer)
- * share one chip language.
+ * A single unified selection-chip treatment for the habit-suggestion chips
+ * (multi-select tagging — the one legitimate chip form role per DESIGN.md §6's
+ * picker rule; the pick-one budget category is a `Select`). Moved here from
+ * ActionQueueItem so both review surfaces (the Action Queue drawer and the
+ * on-open review drawer) share one chip language.
  */
 const SelectableChip: React.FC<SelectableChipProps> = ({ selected, onClick, children, showSuggestionDot }) => (
   <button
@@ -66,7 +67,7 @@ export interface TransactionReviewFormProps {
  * as props) has no list-render cost.
  *
  * Layout is mobile-first, top → bottom: merchant, a hero $ amount field, a
- * Date + Account grid, budget-category chips, habit chips, then the approve CTA
+ * Date + Account grid, budget-category select, habit chips, then the approve CTA
  * and a secondary delete row. There is no separate "edit" sub-mode — every
  * field is editable inline, so a single Approve verifies + categorises + tags
  * the account + credits habits in ONE atomic context call.
@@ -143,7 +144,7 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
   const [isRecurring, setIsRecurring] = useState(false);
 
   // Credit-tagged transactions carry no budget category (credit spend is
-  // tracked on the card, not against buckets), so the category chips hide and
+  // tracked on the card, not against buckets), so the category select hides and
   // the Charge/Payment toggle shows instead.
   const isSelectedAccountCredit = useMemo(
     () => accounts.find(a => a.id === accountId)?.type === 'credit',

@@ -22,8 +22,11 @@ const getFocusableElements = (container: HTMLElement): HTMLElement[] =>
 
 /**
  * Focus trap for modal dialogs / bottom sheets. While `active`:
- * - moves focus into the container on open (first focusable, else the container,
- *   which should carry `tabIndex={-1}`),
+ * - moves focus into the container on open — an element marked
+ *   `data-autofocus` wins (React's `autoFocus` focuses during commit, but this
+ *   effect runs after and would clobber it with the first focusable, usually
+ *   the close button), else the first focusable, else the container (which
+ *   should carry `tabIndex={-1}`),
  * - traps Tab / Shift+Tab so focus wraps within the container,
  * - restores focus to the previously-focused element on close/unmount.
  *
@@ -41,8 +44,9 @@ export function useFocusTrap<T extends HTMLElement>(active: boolean) {
     const previouslyFocused = document.activeElement as HTMLElement | null;
     const container = containerRef.current;
     if (container) {
+      const preferred = container.querySelector<HTMLElement>('[data-autofocus]');
       const focusables = getFocusableElements(container);
-      (focusables[0] ?? container).focus();
+      (preferred ?? focusables[0] ?? container).focus();
     }
 
     return () => {
