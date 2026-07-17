@@ -24,6 +24,8 @@ import HabitsChallengesTab from '@/components/habits/HabitsChallengesTab';
 import HabitsInsightsTab from '@/components/habits/HabitsInsightsTab';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { usePowerToolsEnabled } from '@/hooks/usePowerToolsEnabled';
+import { useDayCompleteCelebration } from '@/hooks/useDayCompleteCelebration';
+import { LazyMount } from '@/components/ui/LazyMount';
 import { useDeepLinkTab } from '@/hooks/useDeepLinkTab';
 import { useDeepLinkHighlight } from '@/hooks/useDeepLinkHighlight';
 import { useScrollToHighlight } from '@/hooks/useScrollToHighlight';
@@ -74,6 +76,8 @@ const topTabOf = (value: string): 'track' | 'progress' | 'rewards' => {
 // Dashboard's lazy-modal pattern).
 const ChallengeHubModal = React.lazy(() => import('@/components/modals/ChallengeHubModal'));
 const PastDayLogModal = React.lazy(() => import('@/components/modals/PastDayLogModal'));
+// Peak-end "day complete" moment — lazy so its (motion) chunk stays off boot.
+const DayCompleteCelebration = React.lazy(() => import('@/components/habits/DayCompleteCelebration'));
 
 const HabitsSkeleton: React.FC = () => (
   <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe pt-6" aria-busy="true" aria-live="polite">
@@ -273,6 +277,11 @@ const Habits: React.FC = () => {
   const highlightHabitId = useDeepLinkHighlight();
   useScrollToHighlight(highlightHabitId);
   const [isCatchingUp, setIsCatchingUp] = useState(false);
+
+  // Peak-end: fire the "day complete" moment when the last due daily habit is
+  // finished (once per local day per device). Provider-agnostic — reads the
+  // gamification slice, so it works the same in Test Mode.
+  const dayComplete = useDayCompleteCelebration();
 
   // Group Habits by Category (with Sorting)
   // Sort habits by order first. Exclude kid chores (assignedTo set) up front so the
@@ -591,6 +600,13 @@ const Habits: React.FC = () => {
           <PastDayLogModal isOpen={isPastDayLogOpen} onClose={() => setIsPastDayLogOpen(false)} />
         )}
       </Suspense>
+
+      {/* Peak-end celebration — lazy-mounted only once the day is first completed. */}
+      <LazyMount when={dayComplete.isOpen && dayComplete.summary !== null}>
+        {dayComplete.isOpen && dayComplete.summary && (
+          <DayCompleteCelebration summary={dayComplete.summary} onClose={dayComplete.close} />
+        )}
+      </LazyMount>
     </div>
   );
 };

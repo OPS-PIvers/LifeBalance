@@ -418,6 +418,25 @@ html[data-font-scale='130'] {
 }
 
 /*
+ * Day-complete celebration confetti (components/habits/DayCompleteCelebration).
+ * The component skips rendering confetti entirely under prefers-reduced-motion,
+ * so no reduced-motion variant is needed here.
+ */
+@keyframes dc-confetti-fall {
+  0% {
+    transform: translateY(-12%) rotate(0deg);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(112vh) rotate(600deg);
+    opacity: 0;
+  }
+}
+
+/*
  * Global reduced-motion guard. When the user asks the OS for reduced motion,
  * collapse animations/transitions to near-instant instead of removing state
  * changes entirely. Gates CSS animations; component-level Framer Motion is
