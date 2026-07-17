@@ -48,14 +48,14 @@ export function computeSetupChecklistItems(inputs: SetupChecklistInputs): SetupC
       title: 'Turn on notifications',
       description: 'Get habit reminders, bill alerts, and streak warnings.',
       done: inputs.notificationsEnabled,
-      route: '/settings',
+      route: '/settings?section=notifications',
     },
     {
       id: 'invite',
       title: 'Invite a household member',
       description: 'Share your invite code so everyone can pitch in.',
       done: inputs.hasSecondMember,
-      route: '/settings',
+      route: '/settings?section=household',
     },
   ];
 
@@ -65,7 +65,7 @@ export function computeSetupChecklistItems(inputs: SetupChecklistInputs): SetupC
       title: 'Connect a bank account',
       description: 'Keep balances in sync automatically.',
       done: inputs.plaidConnected,
-      route: '/settings',
+      route: '/settings?section=money',
     });
   }
 
