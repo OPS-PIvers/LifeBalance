@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
-import { useFinance, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { useFormatCurrency } from '@/hooks/useFormatCurrency';
+import { useFinance } from '@/contexts/FirebaseHouseholdContext';
+import { useFormatCurrency, useHouseholdCurrency } from '@/hooks/useFormatCurrency';
 import { Drawer } from '@/components/ui/Drawer';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
 import ProgressBar from '@/components/ui/ProgressBar';
@@ -8,7 +8,6 @@ import { cn } from '@/utils/cn';
 import { computeSafeToSpendDistribution } from '@/utils/safeToSpendDistribution';
 import { calculateDailyPace, calculateBucketDailyPace, getDaysLeft } from '@/utils/spendPace';
 import { splitCurrencyParts } from '@/utils/currencyParts';
-import { DEFAULT_CURRENCY } from '@/utils/formatCurrency';
 
 /** Fill color by spend ratio — same ramp as BudgetHistory's bucket drawer. */
 const progressColor = (spent: number, limit: number) => {
@@ -30,11 +29,11 @@ const progressColor = (spent: number, limit: number) => {
  *
  *   Safe to Spend = Σ max(0, bucket remaining) + Unallocated (leftover)
  *
- * Impeccable r5 — the drawer is the metric's editorial MOMENT. The figure gets
- * a magazine-scale Besley treatment (a big ink integer with a smaller, muted
- * currency symbol + cents), and the decomposition beneath reads as a bank-ledger
- * statement — hairline-ruled rows, mono/tabular figures — rather than a generic
- * icon-chip stat list. Presentation only: all math lives in
+ * The drawer is the metric's editorial moment. The figure gets a magazine-scale
+ * Besley treatment (a big ink integer with a smaller, muted currency symbol +
+ * cents), and the decomposition beneath reads as a bank-ledger statement —
+ * hairline-ruled rows, mono/tabular figures — rather than a generic icon-chip
+ * stat list. Presentation only: all math lives in
  * {@link computeSafeToSpendDistribution}. Default export so it can be
  * React.lazy-loaded (keeping the Drawer/framer-motion off the boot bundle).
  */
@@ -45,8 +44,7 @@ interface SafeToSpendBreakdownDrawerProps {
 
 const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({ open, onClose }) => {
   const { safeToSpendBreakdown: breakdown, buckets, bucketSpentMap } = useFinance();
-  const { householdSettings } = useHouseholdCore();
-  const currency = householdSettings?.currency || DEFAULT_CURRENCY;
+  const currency = useHouseholdCurrency();
   const fmt = useFormatCurrency();
 
   const distribution = useMemo(
@@ -75,12 +73,11 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
   // reuse the exact pace string that previously sat below the waterfall (copy
   // unchanged, just relocated); otherwise a neutral sentence-case descriptor
   // that only appears when the pace line was already hidden.
-  const caption =
-    dailyPace !== null
+  const caption = negative
+    ? 'Spending has outrun this paycheck'
+    : dailyPace !== null
       ? `≈ ${fmt(dailyPace)}/day until payday`
-      : negative
-        ? 'Spending has outrun this paycheck'
-        : 'Available before your next paycheck';
+      : 'Available before your next paycheck';
 
   const heroTone = negative
     ? 'text-money-neg dark:text-money-negDark'
