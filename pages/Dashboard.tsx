@@ -2,10 +2,10 @@ import React, { useState, useCallback, useMemo, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
-import { useFinance, useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
+import { useFinance, useTodos, useHouseholdCore, useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { AccountPicker } from '@/components/budget/AccountPicker';
-import { TrendingUp, Check, CheckCircle2, Clock, Eye, Trash2, X } from 'lucide-react';
+import { TrendingUp, Check, Clock, Eye, Trash2, X } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
 // Lazy-loaded so their heavy dependencies (e.g. recharts) stay out of the
 // initial Dashboard bundle and only load when a modal is actually opened.
@@ -46,11 +46,12 @@ import { PointRebalanceCard } from '@/components/dashboard/PointRebalanceCard';
 import { CreateChallengePayload, CREDIT_CARD_CATEGORY } from '@/types/schema';
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
 import { CreditCardActivityWidget } from '@/components/dashboard/CreditCardActivityWidget';
-import { Section, SurfaceList } from '@/components/ui/Section';
+import { Section, SurfaceList, Stat } from '@/components/ui/Section';
 import { ShowMoreRow } from '@/components/ui/ShowMoreRow';
 import PageHeader from '@/components/ui/PageHeader';
-import EmptyState from '@/components/ui/EmptyState';
 import { getVisibleOrderedWidgetIds } from '@/utils/dashboardLayout';
+import { getDayCompleteStatus } from '@/utils/dayComplete';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 
 // Cap the Action Queue like the sibling widgets (which cap at 5; the queue gets
 // one extra row since it's the page's primary triage surface). useActionQueue
@@ -65,6 +66,7 @@ const Dashboard: React.FC = () => {
     accounts,
     buckets,
     transactions,
+    safeToSpendBreakdown,
     payCalendarItem,
     deferCalendarItem,
     deleteCalendarItem,
@@ -89,6 +91,16 @@ const Dashboard: React.FC = () => {
 
   // --- ACTION QUEUE LOGIC ---
   const { actionQueue } = useActionQueue();
+
+  // Data for the empty-queue "today at a glance" hero (impeccable r6): today's
+  // due-habit progress (same "positive daily you can finish today" definition
+  // as the day-complete celebration) and the Safe-to-Spend figure the toolbar
+  // shows — no new derivations, just the two numbers that answer "how is today
+  // going?" when there's nothing to triage.
+  const { habits } = useGamification();
+  const fmt = useFormatCurrency();
+  const habitsToday = useMemo(() => getDayCompleteStatus(habits), [habits]);
+  const safeToSpend = safeToSpendBreakdown?.safeToSpend ?? 0;
 
   // F-XCUT-02: per-member Dashboard widget order/visibility. The Action
   // Queue and voice-command banner stay structural (fixed position); only
@@ -345,86 +357,124 @@ const Dashboard: React.FC = () => {
     return <DashboardSkeleton />;
   }
 
-  // Action Queue — triage of what needs attention. Swipe right to approve,
-  // swipe left to defer, long-press (or "Select") for bulk approve/defer/
-  // delete. Extracted once so it can render in either of two page positions
-  // (top when it has items, its original spot when empty) without duplicating
-  // the JSX.
-  const actionQueueSection = (
-    <Section
-      title={
-        <span className="flex items-center gap-2">
-          <span
-            className={`w-2 h-2 rounded-full ${actionQueue.length > 0 ? 'bg-habit-streak motion-safe:animate-pulse' : 'bg-money-pos'}`}
-            aria-hidden="true"
-          />
-          Action Queue {actionQueue.length > 0 && `(${actionQueue.length})`}
-        </span>
-      }
-      action={
-        actionQueue.length > 0 ? (
-          selectionMode ? (
-            <button
-              onClick={exitSelectionMode}
-              className="text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-200 px-2 -mx-1 min-h-11 -my-3"
-            >
-              Cancel
-            </button>
-          ) : (
-            <button
-              onClick={() => enterSelectionMode()}
-              className="text-xs font-semibold text-accent-700 dark:text-accent-300 hover:underline px-2 -mx-1 min-h-11 -my-3"
-            >
-              Select
-            </button>
-          )
-        ) : undefined
-      }
-    >
-      {actionQueue.length > 0 ? (
-        <SurfaceList>
-          {visibleQueueItems.map(item => (
-            <ActionQueueItemCard
-              key={item.id}
-              item={item}
-              isExpanded={expandedId === item.id}
-              setExpandedId={setExpandedId}
-              openPaySheet={openPaySheet}
-              selectionMode={selectionMode}
-              isSelected={selectedIds.has(item.id)}
-              onToggleSelect={toggleSelect}
-              onEnterSelectionMode={enterSelectionMode}
-              onSwipeApprove={handleSwipeApprove}
-              onSwipeDefer={handleSwipeDefer}
-              buckets={buckets}
-              transactions={transactions}
-              members={members}
-              updateToDo={updateToDo}
-              deleteToDo={deleteToDo}
-              completeToDo={completeToDo}
-              deferCalendarItem={deferCalendarItem}
-              deleteCalendarItem={deleteCalendarItem}
-              deleteTransaction={deleteTransaction}
+  // --- TIER 1: the page's single focal point (impeccable r6) ---
+  // The hero slot always leads the page in the editorial register (Besley
+  // heading set directly on the canvas, no card) so ONE thing wins the eye:
+  // the Action Queue when there's something to act on, otherwise a "today at
+  // a glance" moment. Everything below demotes to the quieter, denser widget
+  // stack. The hero heading sits between the page masthead (`text-xl`) and
+  // the section register (`text-sm`) on the type scale.
+  const heroHeadingClasses =
+    'font-display text-lg font-semibold tracking-tight text-brand-900 dark:text-brand-50';
+
+  const queueHero = (
+    <section aria-labelledby="action-queue-heading">
+      <div className="flex items-end justify-between px-1 mb-2">
+        <div className="min-w-0">
+          <h2 id="action-queue-heading" className={`${heroHeadingClasses} flex items-center gap-2`}>
+            <span
+              className="w-2 h-2 rounded-full bg-habit-streak motion-safe:animate-pulse"
+              aria-hidden="true"
             />
-          ))}
-          {!selectionMode && (
-            <ShowMoreRow
-              hiddenCount={actionQueue.length - MAX_VISIBLE_QUEUE_ITEMS}
-              expanded={queueExpanded}
-              onToggle={() => setQueueExpanded(v => !v)}
-              noun="item"
+            Needs you
+          </h2>
+          {/* Keeps the "Action Queue" product name visible here — toasts and
+              capture copy all say "Check your Action Queue", so the hero's
+              warmer headline must not orphan that term. */}
+          <p className="mt-0.5 text-sm text-brand-500 dark:text-brand-400">
+            {actionQueue.length} item{actionQueue.length === 1 ? '' : 's'} in your Action Queue
+          </p>
+        </div>
+        {selectionMode ? (
+          <button
+            onClick={exitSelectionMode}
+            className="text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-200 px-2 -mx-1 min-h-11 -my-3"
+          >
+            Cancel
+          </button>
+        ) : (
+          <button
+            onClick={() => enterSelectionMode()}
+            className="text-xs font-semibold text-accent-700 dark:text-accent-300 hover:underline px-2 -mx-1 min-h-11 -my-3"
+          >
+            Select
+          </button>
+        )}
+      </div>
+      <SurfaceList>
+        {visibleQueueItems.map(item => (
+          <ActionQueueItemCard
+            key={item.id}
+            item={item}
+            isExpanded={expandedId === item.id}
+            setExpandedId={setExpandedId}
+            openPaySheet={openPaySheet}
+            selectionMode={selectionMode}
+            isSelected={selectedIds.has(item.id)}
+            onToggleSelect={toggleSelect}
+            onEnterSelectionMode={enterSelectionMode}
+            onSwipeApprove={handleSwipeApprove}
+            onSwipeDefer={handleSwipeDefer}
+            buckets={buckets}
+            transactions={transactions}
+            members={members}
+            updateToDo={updateToDo}
+            deleteToDo={deleteToDo}
+            completeToDo={completeToDo}
+            deferCalendarItem={deferCalendarItem}
+            deleteCalendarItem={deleteCalendarItem}
+            deleteTransaction={deleteTransaction}
+          />
+        ))}
+        {!selectionMode && (
+          <ShowMoreRow
+            hiddenCount={actionQueue.length - MAX_VISIBLE_QUEUE_ITEMS}
+            expanded={queueExpanded}
+            onToggle={() => setQueueExpanded(v => !v)}
+            noun="item"
+          />
+        )}
+      </SurfaceList>
+    </section>
+  );
+
+  // Empty-queue hero: the "all caught up" identity moves up here (the old
+  // bottom-of-page EmptyState card is gone — it duplicated this message) with
+  // the two figures that answer "how is today going?": due-habit progress and
+  // Safe to Spend. Each figure hides with its module; with both off the hero
+  // is just the reassurance line.
+  const glanceHero = (
+    <section aria-labelledby="today-glance-heading" className="px-1">
+      <h2 id="today-glance-heading" className={`${heroHeadingClasses} flex items-center gap-2`}>
+        <span className="w-2 h-2 rounded-full bg-money-pos" aria-hidden="true" />
+        All caught up
+      </h2>
+      <p className="mt-0.5 text-sm text-brand-500 dark:text-brand-400">
+        Nothing needs your review.
+      </p>
+      {(isModuleEnabled('habits') && habitsToday.total > 0) || isModuleEnabled('money') ? (
+        <div className="mt-4 flex flex-wrap items-start gap-x-10 gap-y-3">
+          {isModuleEnabled('habits') && habitsToday.total > 0 && (
+            <Stat
+              label={habitsToday.done === habitsToday.total ? 'habits — day complete' : 'habits done today'}
+              value={`${habitsToday.done}/${habitsToday.total}`}
+              valueClassName="text-2xl text-habit-blue"
             />
           )}
-        </SurfaceList>
-      ) : (
-        <EmptyState
-          variant="surface"
-          icon={<CheckCircle2 />}
-          title="All caught up"
-          description="Nothing needs your attention right now."
-        />
-      )}
-    </Section>
+          {isModuleEnabled('money') && (
+            <Stat
+              label="safe to spend"
+              value={fmt(safeToSpend)}
+              valueClassName={`text-2xl ${
+                safeToSpend > -0.005
+                  ? 'text-money-pos dark:text-money-posDark'
+                  : 'text-money-neg dark:text-money-negDark'
+              }`}
+            />
+          )}
+        </div>
+      ) : null}
+    </section>
   );
 
   return (
@@ -451,14 +501,16 @@ const Dashboard: React.FC = () => {
         }
       />
 
-      <div className="px-4 space-y-6">
+      <div className="px-4">
 
-        {/* Action Queue jumps to the top of the stack whenever it has items —
-            it's the page's primary triage surface, so it shouldn't sit below
-            the widgets when there's something to act on. When it's empty, it
-            stays in its original spot below the widgets (see below) so the
-            "All caught up" state doesn't dominate the top of the page. */}
-        {actionQueue.length > 0 && actionQueueSection}
+        {/* TIER 1 — the hero slot: the queue when it has items, the "today at
+            a glance" moment when it doesn't. Always the page's focal point. */}
+        {actionQueue.length > 0 ? queueHero : glanceHero}
+
+        {/* TIER 2 — the demoted widget stack: tighter rhythm than the air
+            around the hero, so it reads as one denser supporting list rather
+            than five peer surfaces competing with the hero for weight. */}
+        <div className="mt-8 space-y-4">
 
         {/* F-XCUT-02: the widgets below render in each member's customized
             order (Settings → Dashboard widgets), defaulting to this order.
@@ -568,9 +620,7 @@ const Dashboard: React.FC = () => {
           </Section>
         )}
 
-        {/* Empty-queue case: the "All caught up" section stays in its original
-            position below the widgets rather than leading the page. */}
-        {actionQueue.length === 0 && actionQueueSection}
+        </div>
 
       </div>
 
