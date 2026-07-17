@@ -162,7 +162,12 @@ const SEED_TRANSACTIONS: Transaction[] = [
     id: 'tx2', amount: 120.00, merchant: 'PG&E', category: 'Utilities',
     date: getLocalDateString(),
     status: 'verified', isRecurring: true, source: 'manual',
-    autoCategorized: false, payPeriodId: MOCK_PAY_PERIOD_ID
+    autoCategorized: false, payPeriodId: MOCK_PAY_PERIOD_ID,
+    // Attributed to the OTHER adult (Jordan) with a fresh timestamp so the
+    // "Since you were here" partner-activity card has real data to show in Test
+    // Mode once a prior visit baseline exists (see utils/partnerActivity).
+    createdBy: 'test-partner-id',
+    createdAt: new Date(Date.now() - 2 * 3600000).toISOString(),
   },
   // NOTE: intentionally no seeded Apple Pay $0 "awaiting amount" stub in the
   // DEFAULT seeds. A pending_review transaction adds a "pending review" badge

@@ -39,6 +39,7 @@ import { HabitCoachWidget } from '@/components/dashboard/HabitCoachWidget';
 import { KidsChoresWidget } from '@/components/dashboard/KidsChoresWidget';
 import { ActivityFeedWidget } from '@/components/dashboard/ActivityFeedWidget';
 import { PulseStripWidget } from '@/components/dashboard/PulseStripWidget';
+import { PartnerActivityWidget } from '@/components/dashboard/PartnerActivityWidget';
 import { RecapSlot } from '@/components/dashboard/RecapSlot';
 import { SetupChecklistCard } from '@/components/dashboard/SetupChecklistCard';
 import { PointRebalanceCard } from '@/components/dashboard/PointRebalanceCard';
@@ -469,6 +470,11 @@ const Dashboard: React.FC = () => {
               // The Pulse strip — "This week" at a glance (money + habits
               // balance, the app's thesis metric).
               return <PulseStripWidget key={id} />;
+            case 'partnerActivity':
+              // "Since you were here" — a warm, dismissible digest of what
+              // OTHER housemates added since this device's last visit (money
+              // domain; self-nulls when empty/first-visit or money is off).
+              return <PartnerActivityWidget key={id} />;
             case 'dailyHabits':
               // Today's Habits — smart-ranked compact tracker (habits
               // domain — Plan 090).
