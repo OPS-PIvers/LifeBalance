@@ -22,6 +22,7 @@ export interface DashboardWidgetDef {
 // from a member's `dashboardLayout`.
 export const DASHBOARD_WIDGETS: readonly DashboardWidgetDef[] = [
   { id: 'pulseStrip', label: 'This Week Pulse', description: 'Money + habits balance at a glance' },
+  { id: 'partnerActivity', label: 'Since You Were Here', description: 'What housemates added since your last visit' },
   { id: 'dailyHabits', label: "Today's Habits", description: 'Smart-ranked habit tracker' },
   { id: 'creditCardActivity', label: 'Credit Card Activity', description: 'Charges vs. paydowns this period' },
   { id: 'weeklyRecap', label: 'Weekly Recap', description: 'Sunday summary card' },
