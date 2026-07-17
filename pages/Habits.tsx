@@ -289,6 +289,10 @@ const Habits: React.FC = () => {
   // below) — keyboard selection-follows-focus keeps its existing
   // land-on-default behavior.
   const selectTab = (value: string) => {
+    // Defensive invariant: a tab change (however triggered — keyboard roving
+    // or a future programmatic onValueChange) always dismisses any open menu,
+    // so a stale group's menu can never float over the newly-active tab.
+    setOpenMenu(null);
     // Entering a group via its top trigger shows the group's default segment.
     setActiveView(value === 'progress' ? 'history' : value);
   };

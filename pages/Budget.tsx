@@ -168,6 +168,10 @@ const Budget: React.FC = () => {
   // below, before the trigger's onClick can change the Tabs value) — keyboard
   // selection-follows-focus keeps its existing land-on-default behavior.
   const selectTab = (value: string) => {
+    // Defensive invariant: a tab change (however triggered — keyboard roving
+    // or a future programmatic onValueChange) always dismisses any open menu,
+    // so a stale group's menu can never float over the newly-active tab.
+    setOpenMenu(null);
     const tab = topTabOf(value);
     setActiveView(tab === 'overview' ? 'overview' : DEFAULT_SEGMENT[tab]);
   };
