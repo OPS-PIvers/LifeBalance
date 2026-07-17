@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useGamification } from '@/contexts/FirebaseHouseholdContext';
+import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { streakForHabit } from '@/utils/habitLogic';
 import {
@@ -44,6 +44,7 @@ const safeLocalStorage = (): Storage | null => {
  */
 export const useDayCompleteCelebration = (): DayCompleteCelebrationState => {
   const { habits, dailyPoints } = useGamification();
+  const { isLoading } = useHouseholdCore();
   const [isOpen, setIsOpen] = useState(false);
   const [summary, setSummary] = useState<DayCompleteSummary | null>(null);
 
@@ -60,6 +61,12 @@ export const useDayCompleteCelebration = (): DayCompleteCelebrationState => {
   }, [dailyPoints]);
 
   useEffect(() => {
+    // Don't measure while the household is still loading: the habit list is
+    // empty (or partial) then, and a baseline taken against it would register a
+    // false "not complete" — so a user whose habits load in already-complete
+    // would see the moment pop on mount. The baseline must come from real data.
+    if (isLoading) return;
+
     const today = getLocalDateString();
     const status = getDayCompleteStatus(habits, today);
     const prev = wasCompleteRef.current;
@@ -80,7 +87,7 @@ export const useDayCompleteCelebration = (): DayCompleteCelebrationState => {
 
     setSummary({ total: status.total, dailyPoints: dailyPointsRef.current, topStreak });
     setIsOpen(true);
-  }, [habits]);
+  }, [habits, isLoading]);
 
   const close = useCallback(() => setIsOpen(false), []);
 

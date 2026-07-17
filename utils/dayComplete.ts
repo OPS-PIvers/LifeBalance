@@ -10,9 +10,10 @@ import { isHabitPaused, isHabitCompletedInCurrentPeriod } from '@/utils/habitLog
  * moment should fire. Kept dependency-light and injectable (`today`, `storage`)
  * so the decision is fully unit-testable — see `dayComplete.test.ts`.
  *
- * "Due today" deliberately mirrors the authoritative daily-consistency count
- * (PulseStripWidget / the Habits Track tab), scoped to habits you can actually
- * *finish today*:
+ * "Due today" is deliberately NARROWER than the PulseStrip consistency count
+ * (which includes negative/archived/paused daily habits): this trigger scopes
+ * to habits you can actually *finish today*, so the celebration can fire even
+ * while, e.g., an untriggered negative habit still shows on the Track tab:
  *   - `period === 'daily'` — weekly habits are due sometime this week, not today,
  *     so they never gate the daily moment;
  *   - `type === 'positive'` — a negative habit (e.g. "late-night snack") is never

@@ -121,13 +121,8 @@ const DayCompleteCelebration: React.FC<DayCompleteCelebrationProps> = ({ summary
       {/* Confetti burst (motion only) — behind the card, non-interactive. */}
       {!reduceMotion && confetti.length > 0 && (
         <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
-          <style>{`
-            @keyframes dc-confetti-fall {
-              0%   { transform: translateY(-12%) rotate(0deg); opacity: 0; }
-              8%   { opacity: 1; }
-              100% { transform: translateY(112vh) rotate(600deg); opacity: 0; }
-            }
-          `}</style>
+          {/* dc-confetti-fall keyframes live in index.css alongside the app's
+              other global animations. */}
           {confetti.map((p, i) => (
             <span
               key={i}
