@@ -86,7 +86,7 @@ export function selectPartnerActivity({
   // than shown as an anonymous row.
   const nameByUid = new Map(members.map(m => [m.uid, m.displayName]));
 
-  const items: PartnerActivityItem[] = [];
+  const items: { item: PartnerActivityItem; createdMs: number }[] = [];
 
   for (const tx of transactions) {
     const memberUid = tx.createdBy;
@@ -104,17 +104,22 @@ export function selectPartnerActivity({
     if (Math.abs(tx.amount) < minAmount) continue;
 
     items.push({
-      id: tx.id,
-      memberUid,
-      memberName,
-      merchant: tx.merchant,
-      amount: tx.amount,
-      createdAt: tx.createdAt,
+      item: {
+        id: tx.id,
+        memberUid,
+        memberName,
+        merchant: tx.merchant,
+        amount: tx.amount,
+        createdAt: tx.createdAt,
+      },
+      // Reuse the timestamp parsed above so the sort compares plain numbers
+      // instead of re-parsing ISO strings O(N log N) times.
+      createdMs,
     });
   }
 
-  items.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-  return items.slice(0, limit);
+  items.sort((a, b) => b.createdMs - a.createdMs);
+  return items.slice(0, limit).map(entry => entry.item);
 }
 
 /**

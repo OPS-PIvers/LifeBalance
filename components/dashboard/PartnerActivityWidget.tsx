@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import { useFinance, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
-import { readLastVisit, writeLastVisit } from '@/utils/lastVisit';
+import { getSessionBaseline } from '@/utils/lastVisit';
 import { selectPartnerActivity, partnerNames } from '@/utils/partnerActivity';
 
 /**
@@ -32,17 +32,12 @@ export const PartnerActivityWidget: React.FC = () => {
   const { isModuleEnabled } = useModuleVisibility();
   const fmt = useFormatCurrency();
 
-  // Capture the previous visit ONCE (before we advance the marker below), so the
-  // digest reflects "since you were last here" for the life of this mount.
-  const [baselineVisit] = useState<string | null>(() => readLastVisit());
+  // Capture the previous visit ONCE per app session and advance the marker.
+  // getSessionBaseline is module-cached, so StrictMode's remount (and any later
+  // Dashboard remount this session) gets the SAME frozen baseline instead of
+  // re-reading the "just now" value the first mount wrote.
+  const [baselineVisit] = useState<string | null>(() => getSessionBaseline(new Date().toISOString()));
   const [dismissed, setDismissed] = useState(false);
-
-  // Advance the per-device marker to now on mount. Idempotent under StrictMode's
-  // double-effect; the baseline above is already frozen so this can't erase the
-  // current digest.
-  useEffect(() => {
-    writeLastVisit(new Date().toISOString());
-  }, []);
 
   const items = useMemo(
     () =>
@@ -85,7 +80,7 @@ export const PartnerActivityWidget: React.FC = () => {
         <Row className="bg-warm-50/60 dark:bg-warm-500/10">
           <p className="text-sm text-brand-700 dark:text-brand-200">
             <span className="font-semibold text-warm-700 dark:text-warm-300">{who}</span>{' '}
-            {names.length === 1 ? 'added' : 'were'} busy while you were away.
+            {names.length === 1 ? 'was' : 'were'} busy while you were away.
           </p>
         </Row>
         {items.map(item => {

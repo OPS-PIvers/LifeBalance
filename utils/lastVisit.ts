@@ -28,3 +28,28 @@ export function writeLastVisit(nowISO: string): void {
     // Storage unavailable — the card just won't have a baseline next open.
   }
 }
+
+/**
+ * The frozen "previous visit" baseline for this app SESSION (module lifetime).
+ *
+ * The first call reads the stored marker, advances it to `nowISO`, and caches
+ * the prior value; every later call (a remount of the widget, StrictMode's
+ * double mount, navigating away and back) returns the same cached baseline
+ * without touching storage again. Without this cache, a remount's read would
+ * see the timestamp the previous mount just wrote ("just now") and the digest
+ * would always be empty after the first mount.
+ */
+let sessionBaseline: string | null | undefined;
+
+export function getSessionBaseline(nowISO: string): string | null {
+  if (sessionBaseline === undefined) {
+    sessionBaseline = readLastVisit();
+    writeLastVisit(nowISO);
+  }
+  return sessionBaseline;
+}
+
+/** Test-only: forget the cached session baseline so each test starts fresh. */
+export function resetSessionBaselineForTests(): void {
+  sessionBaseline = undefined;
+}
