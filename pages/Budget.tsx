@@ -147,7 +147,14 @@ const Budget: React.FC = () => {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="activity">Activity</TabsTrigger>
             <TabsTrigger value="planned">Planned</TabsTrigger>
-            <TabsTrigger value="balances">Balances</TabsTrigger>
+            {/* Label only — the legacy 'balances' view/tab key is load-bearing
+                (deep-links, topTabOf, DEFAULT_SEGMENT, persisted state) and
+                must not change. "Budget" replaces the old "Balances" label,
+                which promised literal account balances but actually opens on
+                Buckets (budget categories, not balances) — a naming mismatch
+                (2026-07 audit P3). Matches the Activity/Planned pattern of an
+                umbrella noun over the group's two segments. */}
+            <TabsTrigger value="balances">Budget</TabsTrigger>
           </TabsList>
 
           {/* View container */}

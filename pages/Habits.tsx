@@ -29,6 +29,7 @@ import { useDeepLinkHighlight } from '@/hooks/useDeepLinkHighlight';
 import { useScrollToHighlight } from '@/hooks/useScrollToHighlight';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { isHabitCompletedInCurrentPeriod, signedHabitPoints } from '@/utils/habitLogic';
+import { haptic } from '@/utils/haptics';
 import { getCatchUpEligibleHabits } from '@/utils/catchUpHabits';
 import { generateCsvExport } from '@/utils/exportUtils';
 import toast from 'react-hot-toast';
@@ -125,15 +126,39 @@ const HabitsSkeleton: React.FC = () => (
 );
 
 /**
- * KidChoresGroup — a read-only summary of one managed kid's assigned chores,
- * shown to the parent on the Habits page (Plan 080c-4). There is intentionally
- * no toggle here; parents track kid chores from inside the kid view. Warm-amber
- * accents match the redesigned household/gamification side. Rendered only when
- * Kid Mode is on and the kid has at least one chore, so it is dormant by default.
+ * KidChoresGroup — a summary of one managed kid's assigned chores, shown to
+ * the parent on the Habits page (Plan 080c-4). Each chore row is toggleable
+ * by the parent — e.g. to mark a chore done on the kid's behalf when they
+ * report it verbally — through the SAME `toggleHabit` path every other habit
+ * uses (hooks/useHabitActions.tsx), so points/streak semantics are identical:
+ * the assignee's own `points` doc is credited (habitPointsTargetRef routes on
+ * `habit.assignedTo`), never the shared household pool. Warm-amber accents
+ * match the redesigned household/gamification side. Rendered only when Kid
+ * Mode is on and the kid has at least one chore, so it is dormant by default.
  */
 const KidChoresGroup: React.FC<{ kid: HouseholdMember; chores: Habit[] }> = ({ kid, chores }) => {
+  const { toggleHabit } = useGamification();
+  // Guard against rapid double-taps on a chore row: toggleHabit's batch write
+  // is async, so a second tap before the first resolves would double-credit
+  // points/streak. Rows disable while their toggle is in flight.
+  const [pendingChoreIds, setPendingChoreIds] = useState<ReadonlySet<string>>(new Set());
   const today = getLocalDateString();
   const doneCount = chores.filter(h => isHabitCompletedInCurrentPeriod(h, today)).length;
+
+  const handleToggle = async (habit: Habit, done: boolean) => {
+    if (pendingChoreIds.has(habit.id)) return;
+    haptic(done ? 'light' : 'success');
+    setPendingChoreIds(prev => new Set(prev).add(habit.id));
+    try {
+      await toggleHabit(habit.id, done ? 'down' : 'up');
+    } finally {
+      setPendingChoreIds(prev => {
+        const next = new Set(prev);
+        next.delete(habit.id);
+        return next;
+      });
+    }
+  };
 
   return (
     <div className="surface-section p-4">
@@ -153,50 +178,58 @@ const KidChoresGroup: React.FC<{ kid: HouseholdMember; chores: Habit[] }> = ({ k
         </div>
       </div>
 
-      {/* Read-only chore rows */}
+      {/* Chore rows — each is a button so the parent can toggle completion on
+          the kid's behalf (e.g. when the kid reports a chore done verbally)
+          via the same toggleHabit path every other habit uses. */}
       <ul className="space-y-2">
         {chores.map(h => {
           const done = isHabitCompletedInCurrentPeriod(h, today);
           return (
-            <li
-              key={h.id}
-              className={`flex items-center gap-3 rounded-card px-3 py-2 border ${
-                done
-                  ? 'bg-warm-50 border-warm-200 dark:bg-warm-900/20 dark:border-warm-800'
-                  : 'bg-white border-brand-200 dark:bg-brand-800 dark:border-brand-700'
-              }`}
-            >
-              <span
-                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
+            <li key={h.id}>
+              <button
+                type="button"
+                disabled={pendingChoreIds.has(h.id)}
+                onClick={() => void handleToggle(h, done)}
+                aria-pressed={done}
+                aria-label={`Toggle chore: ${h.title}, currently ${done ? 'done' : 'not done'}`}
+                className={`w-full flex items-center gap-3 rounded-card px-3 py-2 border text-left transition-colors active:scale-[0.99] disabled:opacity-60 disabled:pointer-events-none focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900 ${
                   done
-                    ? 'bg-warm-500 text-white'
-                    : 'bg-brand-100 text-brand-300 dark:bg-brand-700 dark:text-brand-450'
+                    ? 'bg-warm-50 border-warm-200 hover:bg-warm-100 dark:bg-warm-900/20 dark:border-warm-800 dark:hover:bg-warm-900/30'
+                    : 'bg-white border-brand-200 hover:bg-brand-50 dark:bg-brand-800 dark:border-brand-700 dark:hover:bg-brand-700/40'
                 }`}
-                aria-hidden="true"
               >
-                <Check size={14} strokeWidth={3} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className={`text-sm font-semibold truncate ${done ? 'text-warm-800 dark:text-warm-200' : 'text-brand-700 dark:text-brand-200'}`}>
-                  {h.title}
-                </p>
-                <div className="flex items-center gap-2 text-xxs font-medium text-brand-400 dark:text-brand-450">
-                  <span className="inline-flex items-center gap-0.5">
-                    <Star size={10} className="fill-current text-habit-gold" aria-hidden="true" />
-                    {signedHabitPoints(h)} pts
-                  </span>
-                  {h.streakDays > 0 && (
-                    <span className="inline-flex items-center gap-0.5 text-habit-streak">
-                      <Flame size={10} aria-hidden="true" />
-                      <span aria-hidden="true">{h.streakDays}</span>
-                      <span className="sr-only">{h.streakDays} day streak</span>
+                <span
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
+                    done
+                      ? 'bg-warm-500 text-white'
+                      : 'bg-brand-100 text-brand-300 dark:bg-brand-700 dark:text-brand-450'
+                  }`}
+                  aria-hidden="true"
+                >
+                  <Check size={14} strokeWidth={3} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className={`text-sm font-semibold truncate ${done ? 'text-warm-800 dark:text-warm-200' : 'text-brand-700 dark:text-brand-200'}`}>
+                    {h.title}
+                  </p>
+                  <div className="flex items-center gap-2 text-xxs font-medium text-brand-400 dark:text-brand-450">
+                    <span className="inline-flex items-center gap-0.5">
+                      <Star size={10} className="fill-current text-habit-gold" aria-hidden="true" />
+                      {signedHabitPoints(h)} pts
                     </span>
-                  )}
+                    {h.streakDays > 0 && (
+                      <span className="inline-flex items-center gap-0.5 text-habit-streak">
+                        <Flame size={10} aria-hidden="true" />
+                        <span aria-hidden="true">{h.streakDays}</span>
+                        <span className="sr-only">{h.streakDays} day streak</span>
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <span className={`text-xxs font-bold uppercase tracking-wide ${done ? 'text-warm-600 dark:text-warm-300' : 'text-brand-400 dark:text-brand-450'}`}>
-                {done ? 'Done' : 'To do'}
-              </span>
+                <span className={`text-xxs font-bold uppercase tracking-wide ${done ? 'text-warm-600 dark:text-warm-300' : 'text-brand-400 dark:text-brand-450'}`}>
+                  {done ? 'Done' : 'To do'}
+                </span>
+              </button>
             </li>
           );
         })}
