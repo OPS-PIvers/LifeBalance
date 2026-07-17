@@ -8,6 +8,7 @@ import {
 } from 'recharts';
 import { CustomTooltip } from '@/components/analytics/CustomTooltip';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { useChartTheme } from '@/hooks/useChartTheme';
 import {
   calculateHabitConsistency,
   calculateHeatmapData,
@@ -44,17 +45,11 @@ const CHART_OPTIONS: { value: InsightsChartId; label: string }[] = [
   { value: 'pattern', label: 'Pattern' },
 ];
 
-// Evergreen heatmap ramp (replaces the generic slate→emerald set).
-const HEATMAP_RAMP = ['#e3e0d8', '#b3cdbd', '#84ad97', '#356f54', '#214636'] as const;
-
-// Shared axis/grid styling, tuned to read in both themes (brand-400 / hairline).
-const AXIS_TICK = { fill: '#a8a399', fontSize: 11 } as const;
-const GRID_STROKE = 'rgba(168,163,153,0.25)';
-
 const HabitsInsightsCharts: React.FC = () => {
   const { habits } = useGamification();
   const { transactions } = useFinance();
   const [activeChart, setActiveChart] = useState<InsightsChartId>('effort');
+  const chartTheme = useChartTheme();
 
   const radarData = useMemo(() => calculateHabitConsistency(habits), [habits]);
   const heatmapData = useMemo(() => calculateHeatmapData(habits), [habits]);
@@ -97,8 +92,8 @@ const HabitsInsightsCharts: React.FC = () => {
                   <stop offset="95%" stopColor="var(--color-warm-500)" stopOpacity={0.2} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={GRID_STROKE} />
-              <XAxis dataKey="date" axisLine={false} tickLine={false} tick={AXIS_TICK} dy={10} />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartTheme.gridStroke} />
+              <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: chartTheme.axisText, fontSize: 11 }} dy={10} />
               <YAxis yAxisId="left" orientation="left" hide />
               <YAxis yAxisId="right" orientation="right" hide />
               <Tooltip content={<CustomTooltip suffix=" pts" />} />
@@ -138,8 +133,8 @@ const HabitsInsightsCharts: React.FC = () => {
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={weeklyComparisonData}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={GRID_STROKE} />
-              <XAxis dataKey="day" axisLine={false} tickLine={false} tick={AXIS_TICK} dy={10} />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartTheme.gridStroke} />
+              <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: chartTheme.axisText, fontSize: 11 }} dy={10} />
               <Tooltip content={<CustomTooltip suffix=" pts" />} />
               <Legend iconType="circle" wrapperStyle={{ paddingTop: 10, fontSize: 12 }} />
               <Bar dataKey="Last Week" fill="var(--color-brand-300)" radius={[4, 4, 4, 4]} />
@@ -203,7 +198,7 @@ const HabitsInsightsCharts: React.FC = () => {
               key={day.date}
               aria-hidden="true"
               className="w-3 h-3 sm:w-4 sm:h-4 rounded-[3px] transition-transform hover:scale-125"
-              style={{ backgroundColor: HEATMAP_RAMP[day.intensity] ?? HEATMAP_RAMP[0] }}
+              style={{ backgroundColor: chartTheme.heatmapRamp[day.intensity] ?? chartTheme.heatmapRamp[0] }}
               title={`${day.formattedDate}: ${day.count} completions`}
             />
           ))}
@@ -212,7 +207,7 @@ const HabitsInsightsCharts: React.FC = () => {
         <div className="flex items-center justify-end gap-2 mt-4 text-xxs font-bold text-brand-400 dark:text-brand-450 uppercase tracking-wide">
           <span>Less</span>
           <div className="flex gap-1">
-            {HEATMAP_RAMP.map((color, i) => (
+            {chartTheme.heatmapRamp.map((color, i) => (
               <div key={i} className="w-3 h-3 rounded-[2px]" style={{ backgroundColor: color }} />
             ))}
           </div>
@@ -233,8 +228,8 @@ const HabitsInsightsCharts: React.FC = () => {
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={dayOfWeekData}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={GRID_STROKE} />
-              <XAxis dataKey="label" axisLine={false} tickLine={false} tick={AXIS_TICK} dy={10} />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartTheme.gridStroke} />
+              <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: chartTheme.axisText, fontSize: 11 }} dy={10} />
               <Tooltip content={<CustomTooltip suffix=" completions" />} />
               <Bar dataKey="count" name="Completions" fill="var(--color-accent-600)" radius={[4, 4, 4, 4]} />
             </BarChart>

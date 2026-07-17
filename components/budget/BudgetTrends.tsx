@@ -16,6 +16,7 @@ import { calculateBurnDown } from '@/utils/analytics/financialMetrics';
 import { calculateCategoryTrend } from '@/utils/analytics/analyticsHelper';
 import { Section } from '@/components/ui/Section';
 import { usePowerToolsEnabled } from '@/hooks/usePowerToolsEnabled';
+import { useChartTheme } from '@/hooks/useChartTheme';
 import BudgetHistory from './BudgetHistory';
 import NetWorthTrendChart from './NetWorthTrendChart';
 
@@ -27,17 +28,10 @@ import NetWorthTrendChart from './NetWorthTrendChart';
  * Editorial-finance styling: solid grouped surfaces, hairline borders, no glass
  * or heavy shadows. Chart fills use the evergreen money accent (gradients are
  * permitted ONLY inside data-viz per the spec). Both themes are first-class —
- * axis/grid colors are tuned to read on the paper-light and brand-900 dark bg.
+ * axis/grid/series colors come from `useChartTheme()` (see `utils/chartTheme.ts`),
+ * which picks the palette from `useTheme().resolvedTheme` so they read
+ * correctly on both the paper-light and brand-800 dark chart card.
  */
-
-// Evergreen money ramp for the trend areas; deepest for the top category.
-const TREND_COLORS = ['#285742', '#356f54', '#538a70', '#84ad97', '#b3cdbd'];
-const OTHER_COLOR = '#a8a399'; // brand-400
-
-// Axis/grid styling shared by both charts. Uses brand-400 so ticks read in both
-// themes without a JS theme lookup.
-const AXIS_TICK = { fill: '#a8a399', fontSize: 11 } as const;
-const GRID_STROKE = 'rgba(168,163,153,0.25)';
 
 const ChartCard: React.FC<{
   title: string;
@@ -63,6 +57,7 @@ const BudgetTrends: React.FC = () => {
   const { transactions, currentPeriodId, buckets, loadAllTransactions } = useFinance();
   const powerToolsEnabled = usePowerToolsEnabled();
   const fmt = useFormatCurrency();
+  const chartTheme = useChartTheme();
 
   // The trend charts span up to 6 months — load the full transaction history
   // (beyond the live 90-day window) when this tab mounts so trends aren't
@@ -121,8 +116,8 @@ const BudgetTrends: React.FC = () => {
             <div role="img" aria-label={burnDownLabel} className="h-full">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={burnDownData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={GRID_STROKE} />
-                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={AXIS_TICK} dy={10} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartTheme.gridStroke} />
+                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: chartTheme.axisText, fontSize: 11 }} dy={10} />
                 <YAxis hide />
                 <Tooltip content={<CustomTooltip formatter={(val: number) => fmt(val)} />} />
 
@@ -131,7 +126,7 @@ const BudgetTrends: React.FC = () => {
                   type="linear"
                   dataKey="idealPacing"
                   name="Ideal pace"
-                  stroke="#a8a399"
+                  stroke={chartTheme.seriesMuted}
                   strokeDasharray="5 5"
                   strokeWidth={2}
                   dot={false}
@@ -141,7 +136,7 @@ const BudgetTrends: React.FC = () => {
                   type="linear"
                   dataKey="budget"
                   name="Budget cap"
-                  stroke="#d4483f"
+                  stroke={chartTheme.seriesReference}
                   strokeWidth={1}
                   strokeOpacity={0.5}
                   dot={false}
@@ -151,9 +146,9 @@ const BudgetTrends: React.FC = () => {
                   type="monotone"
                   dataKey="spent"
                   name="Actual spent"
-                  stroke="#285742"
+                  stroke={chartTheme.seriesPrimary}
                   strokeWidth={3}
-                  dot={{ r: 3, fill: '#285742' }}
+                  dot={{ r: 3, fill: chartTheme.seriesPrimary }}
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -170,37 +165,43 @@ const BudgetTrends: React.FC = () => {
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={trendData}>
                 <defs>
-                  {trendCategories.map((cat, idx) => (
-                    <linearGradient key={cat} id={`trend-gradient-${idx}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={TREND_COLORS[idx % TREND_COLORS.length]} stopOpacity={0.85} />
-                      <stop offset="95%" stopColor={TREND_COLORS[idx % TREND_COLORS.length]} stopOpacity={0.1} />
-                    </linearGradient>
-                  ))}
+                  {trendCategories.map((cat, idx) => {
+                    const color = chartTheme.trendRamp[idx % chartTheme.trendRamp.length] ?? chartTheme.trendRamp[0];
+                    return (
+                      <linearGradient key={cat} id={`trend-gradient-${idx}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={color} stopOpacity={0.85} />
+                        <stop offset="95%" stopColor={color} stopOpacity={0.1} />
+                      </linearGradient>
+                    );
+                  })}
                   <linearGradient id="trend-gradient-other" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={OTHER_COLOR} stopOpacity={0.7} />
-                    <stop offset="95%" stopColor={OTHER_COLOR} stopOpacity={0.1} />
+                    <stop offset="5%" stopColor={chartTheme.trendOther} stopOpacity={0.7} />
+                    <stop offset="95%" stopColor={chartTheme.trendOther} stopOpacity={0.1} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={GRID_STROKE} />
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={AXIS_TICK} dy={10} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartTheme.gridStroke} />
+                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: chartTheme.axisText, fontSize: 11 }} dy={10} />
                 <Tooltip content={<CustomTooltip formatter={(val: number) => fmt(val)} />} />
 
-                {trendCategories.map((cat, idx) => (
-                  <Area
-                    key={cat}
-                    type="monotone"
-                    dataKey={cat}
-                    stackId="1"
-                    stroke={TREND_COLORS[idx % TREND_COLORS.length]}
-                    fill={`url(#trend-gradient-${idx})`}
-                  />
-                ))}
+                {trendCategories.map((cat, idx) => {
+                  const color = chartTheme.trendRamp[idx % chartTheme.trendRamp.length] ?? chartTheme.trendRamp[0];
+                  return (
+                    <Area
+                      key={cat}
+                      type="monotone"
+                      dataKey={cat}
+                      stackId="1"
+                      stroke={color}
+                      fill={`url(#trend-gradient-${idx})`}
+                    />
+                  );
+                })}
                 <Area
                   key="Other"
                   type="monotone"
                   dataKey="Other"
                   stackId="1"
-                  stroke={OTHER_COLOR}
+                  stroke={chartTheme.trendOther}
                   fill="url(#trend-gradient-other)"
                 />
               </AreaChart>
