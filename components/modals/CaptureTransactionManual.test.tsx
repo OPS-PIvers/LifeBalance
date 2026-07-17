@@ -266,6 +266,91 @@ describe('CaptureTransactionManual', () => {
     });
   });
 
+  it('flags each empty required field with aria-invalid and an aria-describedby message on submit', () => {
+    render(
+      <CaptureTransactionManual
+        onAddTransaction={mockOnAddTransaction}
+        onClose={mockOnClose}
+        dynamicCategories={mockCategories}
+        habits={mockHabits}
+        transactions={mockTransactions}
+        stores={[]}
+        accounts={[]}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Save Transaction'));
+    expect(mockOnAddTransaction).not.toHaveBeenCalled();
+
+    // Amount: invalid + message wired via aria-describedby.
+    const amountInput = screen.getByPlaceholderText('0.00');
+    expect(amountInput).toHaveAttribute('aria-invalid', 'true');
+    const amountMsg = screen.getByText('Enter an amount');
+    expect(amountInput.getAttribute('aria-describedby')).toBe(amountMsg.id);
+
+    // Merchant: invalid + message wired via aria-describedby.
+    const merchantInput = screen.getByPlaceholderText('e.g. Starbucks');
+    expect(merchantInput).toHaveAttribute('aria-invalid', 'true');
+    const merchantMsg = screen.getByText('Enter a merchant');
+    expect(merchantInput.getAttribute('aria-describedby')).toBe(merchantMsg.id);
+
+    // Date defaults to today, so it stays valid.
+    expect(screen.getByLabelText(/date/i)).toHaveAttribute('aria-invalid', 'false');
+
+    // The summary alert names the missing fields.
+    expect(screen.getByRole('alert')).toHaveTextContent('Please fix: Amount, Merchant');
+  });
+
+  it('marks the genuinely required inputs with the required attribute', () => {
+    render(
+      <CaptureTransactionManual
+        onAddTransaction={mockOnAddTransaction}
+        onClose={mockOnClose}
+        dynamicCategories={mockCategories}
+        habits={mockHabits}
+        transactions={mockTransactions}
+        stores={[]}
+        accounts={[]}
+      />
+    );
+
+    expect(screen.getByPlaceholderText('0.00')).toBeRequired();
+    expect(screen.getByPlaceholderText('e.g. Starbucks')).toBeRequired();
+    expect(screen.getByLabelText(/date/i)).toBeRequired();
+  });
+
+  it('clears a field error as soon as the user fixes that field', () => {
+    render(
+      <CaptureTransactionManual
+        onAddTransaction={mockOnAddTransaction}
+        onClose={mockOnClose}
+        dynamicCategories={mockCategories}
+        habits={mockHabits}
+        transactions={mockTransactions}
+        stores={[]}
+        accounts={[]}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Save Transaction'));
+    expect(screen.getByText('Enter an amount')).toBeInTheDocument();
+    expect(screen.getByText('Enter a merchant')).toBeInTheDocument();
+
+    // Fixing the merchant clears ONLY the merchant error, and the summary
+    // alert narrows to the remaining invalid fields.
+    fireEvent.change(screen.getByPlaceholderText('e.g. Starbucks'), { target: { value: 'Pizza Place' } });
+    expect(screen.queryByText('Enter a merchant')).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText('e.g. Starbucks')).toHaveAttribute('aria-invalid', 'false');
+    expect(screen.getByText('Enter an amount')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Please fix: Amount');
+
+    // Fixing the amount clears the last error AND the summary alert.
+    fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '25.00' } });
+    expect(screen.queryByText('Enter an amount')).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText('0.00')).toHaveAttribute('aria-invalid', 'false');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('populates from initialData', async () => {
     render(
       <CaptureTransactionManual
