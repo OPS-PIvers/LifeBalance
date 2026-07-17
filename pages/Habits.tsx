@@ -34,35 +34,35 @@ import { generateCsvExport } from '@/utils/exportUtils';
 import toast from 'react-hot-toast';
 import { format, subDays } from 'date-fns';
 
-// Habits' IA is 4 top-level tabs (the old 6 overflowed the phone viewport —
-// 2026-07 critique P2): Track, Progress (History + Insights behind a segment
-// toggle), Rewards (+ Challenges behind a segment toggle), Coach. ONE state
-// value holds the full location: the legacy view keys stay valid so every
-// existing `navigate('/habits', { state: { tab } })` deep-link keeps working
-// and selects the right group WITH the right segment.
+// Habits' IA is 3 top-level tabs (consolidated from 6 — 2026-07 critique):
+// Track, Progress (History + Insights + Coach behind a segment toggle),
+// Rewards (+ Challenges behind a segment toggle). Coach folded into Progress
+// in the round-3 critique: it duplicated a Dashboard widget and opened on a
+// pitch, which didn't earn a top-level slot. ONE state value holds the full
+// location: the legacy view keys stay valid so every existing
+// `navigate('/habits', { state: { tab } })` deep-link keeps working and
+// selects the right group WITH the right segment.
 const HABIT_TABS = [
   'track',
-  // Progress group ('progress' = its default segment)
-  'progress', 'history', 'insights',
+  // Progress group ('history' = its default segment)
+  'progress', 'history', 'insights', 'coach',
   // Rewards group
   'rewards', 'challenges',
-  'coach',
 ] as const;
 
 type HabitTabValue = (typeof HABIT_TABS)[number];
 
 /** Collapse any tab value (incl. legacy view keys) to its top-level tab. */
-const topTabOf = (value: string): 'track' | 'progress' | 'rewards' | 'coach' => {
+const topTabOf = (value: string): 'track' | 'progress' | 'rewards' => {
   switch (value) {
     case 'history':
     case 'insights':
+    case 'coach':
     case 'progress':
       return 'progress';
     case 'rewards':
     case 'challenges':
       return 'rewards';
-    case 'coach':
-      return 'coach';
     default:
       return 'track';
   }
@@ -227,7 +227,13 @@ const Habits: React.FC = () => {
     // Entering a group via its top trigger shows the group's default segment.
     setActiveView(value === 'progress' ? 'history' : value);
   };
-  const progressSegment: HabitTabValue = activeView === 'insights' ? 'insights' : 'history';
+  // Coach is a Progress segment gated on powerToolsEnabled: a stale
+  // `?tab=coach` deep-link while the flag is off degrades to History instead
+  // of an empty view.
+  const progressSegment: HabitTabValue =
+    activeView === 'insights' ? 'insights'
+    : activeView === 'coach' && powerToolsEnabled ? 'coach'
+    : 'history';
   const rewardsSegment: HabitTabValue = activeView === 'challenges' ? 'challenges' : 'rewards';
   // Global search deep-link (v1.1): scroll-to + briefly flash the specific
   // habit row selected in SearchOverlay, on top of the tab-level jump above.
@@ -367,14 +373,7 @@ const Habits: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe">
-      {/* 'coach' stays in the deep-link allowlist but its trigger/content are
-          gated on powerToolsEnabled — fall back to Track so a stale
-          ?tab=coach link can't land on an empty tab body while the flag is
-          off. */}
-      <Tabs
-        value={!powerToolsEnabled && activeTab === 'coach' ? 'track' : activeTab}
-        onValueChange={selectTab}
-      >
+      <Tabs value={activeTab} onValueChange={selectTab}>
         {/* Compact PageHeader (title+subtitle) with the overflow menu as its
             actions slot, replacing the hand-rolled pt-8/text-3xl header — see
             UX content audit Batch 4. */}
@@ -418,14 +417,13 @@ const Habits: React.FC = () => {
             primary bottom-nav-adjacent navigation (only "Track" is the
             daily-use default). */}
         <div className="px-4 mb-4">
-          {/* Text-only triggers (matching Money's 4-tab bar) — with the 16px
-              icons the four tabs overflowed 375px by ~60px, which is the exact
-              problem this consolidation removes. */}
+          {/* Text-only triggers (matching Money's tab bar) — icons made the
+              consolidated bar overflow 375px, which is the exact problem this
+              consolidation removes. */}
           <TabsList>
             <TabsTrigger value="track">Track</TabsTrigger>
             <TabsTrigger value="progress">Progress</TabsTrigger>
             <TabsTrigger value="rewards">Rewards</TabsTrigger>
-            {powerToolsEnabled && <TabsTrigger value="coach">Coach</TabsTrigger>}
           </TabsList>
         </div>
 
@@ -499,19 +497,20 @@ const Habits: React.FC = () => {
                 options={[
                   { value: 'history', label: 'History' },
                   { value: 'insights', label: 'Insights' },
+                  ...(powerToolsEnabled ? [{ value: 'coach', label: 'Coach' }] : []),
                 ]}
                 value={progressSegment}
                 onChange={setActiveView}
               />
-              {progressSegment === 'history' ? <HabitHistoryCalendar /> : <HabitsInsightsTab />}
+              {progressSegment === 'coach' ? (
+                <HabitCoach />
+              ) : progressSegment === 'history' ? (
+                <HabitHistoryCalendar />
+              ) : (
+                <HabitsInsightsTab />
+              )}
             </div>
           </TabsContent>
-
-          {powerToolsEnabled && (
-            <TabsContent value="coach">
-              <HabitCoach />
-            </TabsContent>
-          )}
 
           <TabsContent value="rewards">
             <div className="space-y-4">
