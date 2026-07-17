@@ -117,6 +117,8 @@ export const Row: React.FC<RowProps> = ({
 );
 
 export interface DisclosureRowProps {
+  /** Optional id for the underlying button (e.g. programmatic focus restoration). */
+  id?: string;
   /** Optional leading icon slot (typically a lucide icon element). */
   icon?: React.ReactNode;
   /** Row title — required. */
@@ -145,6 +147,7 @@ export interface DisclosureRowProps {
  * a flat always-visible `Section` or opens in a `Drawer` bottom sheet.
  */
 export const DisclosureRow: React.FC<DisclosureRowProps> = ({
+  id,
   icon,
   title,
   subtitle,
@@ -156,6 +159,7 @@ export const DisclosureRow: React.FC<DisclosureRowProps> = ({
   disabled = false,
 }) => (
   <button
+    id={id}
     type="button"
     onClick={onClick}
     disabled={disabled}

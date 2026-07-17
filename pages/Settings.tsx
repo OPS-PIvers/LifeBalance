@@ -143,6 +143,9 @@ type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 const isSettingsSection = (value: string | null): value is SettingsSection =>
   value !== null && (SETTINGS_SECTIONS as readonly string[]).includes(value);
 
+/** Stable DOM id for an index navigation row — used to restore focus on back. */
+const sectionRowId = (key: SettingsSection) => `settings-section-row-${key}`;
+
 const SECTION_TITLES: Record<SettingsSection, string> = {
   profile: 'Profile & Appearance',
   notifications: 'Notifications',
@@ -198,7 +201,11 @@ const Settings: React.FC = () => {
 
   const openSection = (next: SettingsSection) => {
     pushedFromIndexRef.current = true;
-    setSearchParams({ section: next });
+    // Only touch the `section` key — any other query params (e.g. tracking
+    // or referral params) survive the drill-down untouched.
+    const params = new URLSearchParams(searchParams);
+    params.set('section', next);
+    setSearchParams(params);
   };
 
   const goBackToIndex = () => {
@@ -208,17 +215,30 @@ const Settings: React.FC = () => {
     } else {
       // Deep-linked straight into a sub-screen — there is no index entry
       // behind us, so replace instead of popping out of Settings entirely.
-      setSearchParams({}, { replace: true });
+      // Delete only the `section` key so other query params are preserved.
+      const params = new URLSearchParams(searchParams);
+      params.delete('section');
+      setSearchParams(params, { replace: true });
     }
   };
 
-  // On push/pop: reset scroll and move focus to the sub-screen heading so
-  // keyboard and screen-reader users land on the new context.
+  // On push: reset scroll and move focus to the sub-screen heading so
+  // keyboard and screen-reader users land on the new context. On pop back
+  // to the index: restore focus to the row that opened the sub-screen
+  // (falling back to the index heading if it can't be found — e.g. after
+  // an unexpected DOM change), instead of dropping focus to <body>.
   const headingRef = useRef<HTMLSpanElement>(null);
+  const indexHeadingRef = useRef<HTMLSpanElement>(null);
+  const lastSectionRef = useRef<SettingsSection | null>(null);
   useEffect(() => {
     window.scrollTo(0, 0);
     if (section !== null) {
+      lastSectionRef.current = section;
       headingRef.current?.focus();
+    } else if (lastSectionRef.current !== null) {
+      const row = document.getElementById(sectionRowId(lastSectionRef.current));
+      lastSectionRef.current = null;
+      (row ?? indexHeadingRef.current)?.focus();
     }
   }, [section]);
 
@@ -1383,7 +1403,13 @@ const Settings: React.FC = () => {
     <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe">
       {section === null ? (
         <>
-          <PageHeader title="Settings" />
+          <PageHeader
+            title={
+              <span ref={indexHeadingRef} tabIndex={-1} className="focus:outline-hidden">
+                Settings
+              </span>
+            }
+          />
           <div className="max-w-2xl mx-auto px-4 space-y-6">
 
             {isGlobalAdmin && (
@@ -1400,42 +1426,49 @@ const Settings: React.FC = () => {
             <nav aria-label="Settings sections">
               <SurfaceList>
                 <DisclosureRow
+                  id={sectionRowId('profile')}
                   icon={<User className="w-5 h-5" />}
                   title="Profile & Appearance"
                   subtitle="Theme, text size, high contrast"
                   onClick={() => openSection('profile')}
                 />
                 <DisclosureRow
+                  id={sectionRowId('notifications')}
                   icon={<Bell className="w-5 h-5" />}
                   title="Notifications"
                   subtitle="Alerts and reminders on this device"
                   onClick={() => openSection('notifications')}
                 />
                 <DisclosureRow
+                  id={sectionRowId('household')}
                   icon={<Users className="w-5 h-5" />}
                   title="Household"
                   subtitle="Members, invite code, points"
                   onClick={() => openSection('household')}
                 />
                 <DisclosureRow
+                  id={sectionRowId('money')}
                   icon={<Landmark className="w-5 h-5" />}
                   title="Money"
                   subtitle="Currency and calendar feed"
                   onClick={() => openSection('money')}
                 />
                 <DisclosureRow
+                  id={sectionRowId('modules')}
                   icon={<LayoutGrid className="w-5 h-5" />}
                   title="Modules & Dashboard"
                   subtitle="Pages, tabs, and widgets"
                   onClick={() => openSection('modules')}
                 />
                 <DisclosureRow
+                  id={sectionRowId('shortcuts')}
                   icon={<Smartphone className="w-5 h-5" />}
                   title="iOS Shortcuts"
                   subtitle="Capture from your iPhone"
                   onClick={() => openSection('shortcuts')}
                 />
                 <DisclosureRow
+                  id={sectionRowId('data')}
                   icon={<Database className="w-5 h-5" />}
                   title="Data & Account"
                   subtitle="Backups, sign out, danger zone"

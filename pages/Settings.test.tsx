@@ -1,8 +1,14 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within, fireEvent } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import Settings from './Settings';
+
+/** Exposes the router's current path + query so tests can assert URL state. */
+const LocationProbe: React.FC = () => {
+  const location = useLocation();
+  return <div data-testid="location-probe">{location.pathname + location.search}</div>;
+};
 
 // ---- Context mocks ---------------------------------------------------------
 
@@ -132,6 +138,7 @@ const renderSettings = (initialEntry = '/settings') =>
   render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <Settings />
+      <LocationProbe />
     </MemoryRouter>
   );
 
@@ -232,6 +239,57 @@ describe('Settings index + sub-screens', () => {
 
     expect(screen.getByLabelText('Currency')).toBeInTheDocument();
     expect(screen.getByTestId('calendar-feed-card')).toBeInTheDocument();
+  });
+
+  it('preserves unrelated query params when drilling in and backing out', () => {
+    renderSettings('/settings?ref=partner');
+
+    fireEvent.click(screen.getByText('Profile & Appearance'));
+    let url = screen.getByTestId('location-probe').textContent ?? '';
+    expect(url).toContain('ref=partner');
+    expect(url).toContain('section=profile');
+
+    fireEvent.click(screen.getByRole('button', { name: /back to settings/i }));
+    url = screen.getByTestId('location-probe').textContent ?? '';
+    expect(url).toContain('ref=partner');
+    expect(url).not.toContain('section=');
+  });
+
+  it('preserves unrelated query params when backing out of a deep link', () => {
+    // Deep link: no pushed index entry, so back takes the replace path.
+    renderSettings('/settings?section=money&ref=partner');
+
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Money');
+    fireEvent.click(screen.getByRole('button', { name: /back to settings/i }));
+
+    const url = screen.getByTestId('location-probe').textContent ?? '';
+    expect(url).toContain('ref=partner');
+    expect(url).not.toContain('section=');
+    expect(screen.getByRole('navigation', { name: /settings sections/i })).toBeInTheDocument();
+  });
+
+  it('restores focus to the originating index row on back', () => {
+    renderSettings();
+
+    fireEvent.click(screen.getByText('Money'));
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Money');
+
+    fireEvent.click(screen.getByRole('button', { name: /back to settings/i }));
+
+    const nav = screen.getByRole('navigation', { name: /settings sections/i });
+    const moneyRow = within(nav).getByText('Money').closest('button');
+    expect(moneyRow).not.toBeNull();
+    expect(document.activeElement).toBe(moneyRow);
+  });
+
+  it('restores focus to the matching index row after backing out of a deep link', () => {
+    renderSettings('/settings?section=shortcuts');
+
+    fireEvent.click(screen.getByRole('button', { name: /back to settings/i }));
+
+    const nav = screen.getByRole('navigation', { name: /settings sections/i });
+    const shortcutsRow = within(nav).getByText('iOS Shortcuts').closest('button');
+    expect(document.activeElement).toBe(shortcutsRow);
   });
 
   it('ignores unknown section params and shows the index', () => {
