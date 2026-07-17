@@ -24,14 +24,15 @@ import { cn } from '@/utils/cn';
 export const sectionHeadingClasses =
   'font-display text-sm font-semibold tracking-tight text-brand-700 dark:text-brand-200';
 
-export interface SectionHeadingProps {
+export interface SectionHeadingProps
+  extends Omit<React.HTMLAttributes<HTMLDivElement>, 'children' | 'id' | 'className'> {
   /** Heading level — keep the outline correct (a `Section` title is the `h2`). */
   as?: 'h2' | 'h3' | 'h4';
   /** Optional muted line beneath the heading (sentence case, not a metadata caption). */
   description?: React.ReactNode;
   /** Optional trailing content (an icon button, a link) aligned to the heading. */
   action?: React.ReactNode;
-  /** id for the underlying heading element, for `aria-labelledby` wiring. */
+  /** id for the underlying heading element (not the wrapper), for `aria-labelledby` wiring. */
   id?: string;
   /** Extra classes for the wrapper (e.g. `px-1` to match a surface's gutter). */
   className?: string;
@@ -45,10 +46,13 @@ const SectionHeading: React.FC<SectionHeadingProps> = ({
   id,
   className,
   children,
+  ...rest
 }) => {
   const Tag = as as React.ElementType;
   return (
-    <div className={cn('flex items-center justify-between gap-3', className)}>
+    /* items-end matches the `Section` title wrapper, so an `action` slot sits
+       identically in both primitives even when a heading wraps. */
+    <div {...rest} className={cn('flex items-end justify-between gap-3', className)}>
       <div className="min-w-0">
         <Tag id={id} className={sectionHeadingClasses}>
           {children}
