@@ -121,7 +121,10 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
           placeholder="e.g. Coffee"
           value={name}
           onChange={e => setName(e.target.value)}
-          autoFocus={!editingBucket}
+          // Same data-autofocus mechanism as the limit field below: the focus
+          // trap clobbers plain autoFocus, so the creation path must mark its
+          // first field too or focus lands on the drawer's close button.
+          data-autofocus={!editingBucket ? true : undefined}
         />
 
         {!editingBucket && (

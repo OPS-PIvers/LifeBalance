@@ -86,7 +86,9 @@ export async function addManualExpense(
   // The capture drawer opens on the multi-type menu view, titled "Capture"
   // while the type selector is visible (it specializes per flow after that).
   const captureDrawer = page.getByRole('dialog', { name: /Capture/i });
-  await captureDrawer.getByRole('button', { name: /Manual Entry/ }).click();
+  // The card's accessible name is its explicit punctuated aria-label
+  // ("Manual entry: type in an expense. …", sentence case) — impeccable r6.
+  await captureDrawer.getByRole('button', { name: /Manual entry/i }).click();
 
   // Same drawer, title flips to "Manual Entry".
   const manualDrawer = page.getByRole('dialog', { name: /Manual Entry/i });
