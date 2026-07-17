@@ -118,19 +118,41 @@ describe('MealPlanTab', () => {
     vi.clearAllMocks();
   });
 
-  it('starts the week on Monday', () => {
+  it('only materializes a bounded window of day chips up front', () => {
     // Set date to Wednesday, Oct 25, 2023
     const testDate = new Date(2023, 9, 25); // Month is 0-indexed: 9 = Oct
     vi.setSystemTime(testDate);
 
     render(<MealPlanTab />);
 
-    // The strip is a continuous scrollable run of days spanning 8 weeks back /
-    // 12 forward, anchored to a Monday-start week. From Wed Oct 25, the range
-    // begins Monday Aug 28 — a Sunday start would begin Sunday Aug 27 instead.
+    // The strip's logical range spans 8 weeks back / 12 forward from today,
+    // but only a bounded window around the selected day is rendered as DOM
+    // chips up front — the far start of that range (~2 months back) is not
+    // materialized until navigation reaches it.
+    expect(screen.getByLabelText(/^Wednesday, October 25/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Monday, August 28/)).not.toBeInTheDocument();
+  });
+
+  it('extends the day strip window as keyboard navigation walks back to its start, still anchored to Monday', () => {
+    // Set date to Wednesday, Oct 25, 2023
+    const testDate = new Date(2023, 9, 25); // Month is 0-indexed: 9 = Oct
+    vi.setSystemTime(testDate);
+
+    render(<MealPlanTab />);
+
+    const stripGroup = screen.getByRole('group', { name: /Pick a day/i });
+    // Walk all the way back to the very first day of the strip's range (58
+    // ArrowLeft presses from Oct 25 reaches Aug 28; a few extra presses just
+    // no-op once the range's start boundary is hit). This both exercises the
+    // window-extension logic (each chip must be materialized and focusable
+    // as navigation reaches it) and confirms the range still begins on a
+    // Monday, not a Sunday — a Sunday start would begin Aug 27 instead.
+    for (let i = 0; i < 65; i++) {
+      fireEvent.keyDown(stripGroup, { key: 'ArrowLeft' });
+    }
+
     expect(screen.getByLabelText(/^Monday, August 28/)).toBeInTheDocument();
     expect(screen.queryByLabelText(/^Sunday, August 27/)).not.toBeInTheDocument();
-    expect(screen.getByLabelText(/^Wednesday, October 25/)).toBeInTheDocument();
   });
 
   it('orders ingredient-selector items after the highest existing order, not list length', () => {

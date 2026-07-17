@@ -71,8 +71,8 @@ test.describe('LifeBalance smoke (Test Mode)', () => {
     await expect(page).toHaveURL(/#\/budget$/);
     // Money opens on the Overview tab; "Groceries" is a seeded bucket
     // (SEED_BUCKETS in MockHouseholdContext). Buckets is the default segment
-    // of the Balances tab (4-tab Money IA), so switch to it first.
-    await page.getByRole('tab', { name: 'Balances' }).click();
+    // of the Budget tab (4-tab Money IA), so switch to it first.
+    await page.getByRole('tab', { name: 'Budget' }).click();
     await expect(page.getByText('Groceries').first()).toBeVisible();
 
     // --- Habits ---

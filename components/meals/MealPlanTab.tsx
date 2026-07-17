@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { useMealPlan, useShopping, useHouseholdCore, useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
 import { Plus, Trash2, Edit2, ChevronRight, ShoppingCart, Copy, CheckCircle2, MoreVertical, MoreHorizontal, BookOpen, CalendarDays, Eye, Info, Utensils, ChefHat, Printer } from 'lucide-react';
@@ -9,7 +9,7 @@ import { decideMealCookedHabitToggle } from '@/utils/mealCookedHabit';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { calculateWeeklyMealCost } from '@/utils/mealCost';
 import toast from 'react-hot-toast';
-import { format, startOfWeek, addDays, parseISO } from 'date-fns';
+import { format, startOfWeek, addDays, parseISO, differenceInCalendarDays } from 'date-fns';
 import { IngredientSelectorModal } from './IngredientSelectorModal';
 import { CookbookModal } from './CookbookModal';
 import { RecipeModal } from './RecipeModal';
@@ -34,6 +34,7 @@ import clsx from 'clsx';
 import { groupMealPlanByDay } from '@/utils/mealPlanFormatter';
 import { groupShoppingListByStore } from '@/utils/shoppingListFormatter';
 import { buildPrintWeekHtml } from '@/utils/printWeekHtml';
+import { initialStripWindow, extendStripWindowTo, type StripWindow } from '@/utils/dateStripWindow';
 
 // Scrollable date-strip range, in weeks either side of the current week. The
 // strip is one continuous run of days (not week pages), so navigation is a
@@ -209,10 +210,22 @@ const MealPlanTab: React.FC = () => {
   // week, Copy last week, Shop for this week) to the week containing the
   // selected day, even though navigation is now a free-scrolling day strip.
   const weekStart = useMemo(() => startOfWeek(selectedDate, { weekStartsOn: 1 }), [selectedDate]);
-  // The full run of days rendered in the scrollable strip. Anchored to the
-  // current week and pre-formatted once — the strip render never calls `format`.
+
+  // Declared here (rather than alongside scrollStripTo below) because the
+  // windowing effects immediately below need it.
+  const stripRef = useRef<HTMLDivElement>(null);
+
+  // Anchor for the whole strip range — stable across renders (computed once,
+  // like stripDays below), shared by both the day-list generator and the
+  // index math the windowing helpers below use.
+  const rangeStart = useMemo(() => addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), -7 * STRIP_WEEKS_BACK), []);
+
+  // The full logical run of days the strip can navigate to. Anchored to the
+  // current week and pre-formatted once — this is cheap (plain objects, no
+  // DOM). What actually gets RENDERED is a bounded window into this array
+  // (see stripWindow below) — materializing all ~150 days as chips up front
+  // was the perf issue this windowing fixes.
   const stripDays = useMemo(() => {
-    const rangeStart = addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), -7 * STRIP_WEEKS_BACK);
     return Array.from({ length: 7 * (STRIP_WEEKS_BACK + STRIP_WEEKS_FORWARD + 1) }, (_, i) => {
       const date = addDays(rangeStart, i);
       return {
@@ -223,7 +236,90 @@ const MealPlanTab: React.FC = () => {
         ariaLabel: format(date, 'EEEE, MMMM d'),
       };
     });
-  }, []);
+  }, [rangeStart]);
+
+  // Index of `selectedDate` into stripDays — the anchor the window is
+  // centered/extended around.
+  const selectedIndex = useMemo(
+    () => differenceInCalendarDays(selectedDate, rangeStart),
+    [selectedDate, rangeStart]
+  );
+
+  // Bounded window of stripDays indices that are actually materialized as DOM
+  // chips. Starts centered on the initially-selected day (always "today" —
+  // see the selectedDate useState above) and only ever grows (never shrinks)
+  // as navigation approaches its edges, via extendStripWindowTo. Because it
+  // never shrinks, today's chip — included in the initial window — is always
+  // present, which keeps "Jump to today" and the Home key trivially safe.
+  const [stripWindow, setStripWindow] = useState<StripWindow>(() =>
+    initialStripWindow(selectedIndex, stripDays.length)
+  );
+
+  // Keep the window covering the current selection regardless of how it
+  // changed (click, keyboard, jump-to-today) — a single source of truth so
+  // every call site that moves selectedDate doesn't have to remember to
+  // extend the window itself. This adjusts state DURING RENDER (React's
+  // documented pattern for deriving state from a changed value — see
+  // "Adjusting state when a prop changes" in the React docs) rather than in
+  // an effect: an effect-driven extension would commit the render with the
+  // OLD window first, then schedule a second render to grow it, which can
+  // show a flash of the previous (unextended) strip content for a frame.
+  // extendStripWindowTo returns the same object reference when no growth is
+  // needed, so this bails out of the extra setState on the common case
+  // (selection still well inside the window).
+  const [lastExtendedIndex, setLastExtendedIndex] = useState(selectedIndex);
+  if (lastExtendedIndex !== selectedIndex) {
+    setLastExtendedIndex(selectedIndex);
+    const extended = extendStripWindowTo(stripWindow, selectedIndex, stripDays.length);
+    if (extended !== stripWindow) {
+      setStripWindow(extended);
+    }
+  }
+
+  // Rendered subset of stripDays — the only days that become DOM chips.
+  const visibleStripDays = useMemo(
+    () => stripDays.slice(stripWindow.start, stripWindow.end),
+    [stripDays, stripWindow]
+  );
+
+  // Focus-follow for keyboard nav (see handleStripKeyDown): when the target
+  // day required the window to grow, its chip doesn't exist in the DOM yet at
+  // the moment of the keypress, so focus() can't be called synchronously —
+  // this effect retries once the (possibly just-extended) window has
+  // committed and the chip is materialized.
+  const pendingFocusDateRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pendingFocusDateRef.current) return;
+    const el = stripRef.current?.querySelector<HTMLElement>(`[data-date="${pendingFocusDateRef.current}"]`);
+    if (el) {
+      el.focus();
+      pendingFocusDateRef.current = null;
+    }
+  }, [selectedDate, stripWindow]);
+
+  // Scroll-position stability: when the window grows BACKWARD (start
+  // decreases — new chips prepended before the current viewport, e.g. while
+  // the user free-scrolls left and handleStripScroll extends the window),
+  // the browser keeps scrollLeft in raw pixels, which visually shoves the
+  // already-visible content to the right. Compensate by the exact width of
+  // what was prepended, before the browser paints (useLayoutEffect).
+  // Deliberate navigation (keyboard/jump-to-today) also grows the window
+  // this way, but scrollStripTo re-centers with an absolute offsetLeft
+  // afterward, so this adjustment is harmlessly overwritten in that case.
+  const prevWindowStartRef = useRef(stripWindow.start);
+  useLayoutEffect(() => {
+    const container = stripRef.current;
+    const prependedCount = prevWindowStartRef.current - stripWindow.start;
+    if (container && prependedCount > 0) {
+      const first = container.children[0] as HTMLElement | undefined;
+      const second = container.children[1] as HTMLElement | undefined;
+      const stride = first && second ? second.offsetLeft - first.offsetLeft : 0;
+      if (stride > 0) {
+        container.scrollLeft += prependedCount * stride;
+      }
+    }
+    prevWindowStartRef.current = stripWindow.start;
+  }, [stripWindow.start]);
 
   const addIngredientsToShoppingList = async (mealIngredients: MealIngredient[]) => {
       const ingredientsToAdd = mealIngredients.filter(ing => {
@@ -741,7 +837,7 @@ const MealPlanTab: React.FC = () => {
   }, [mealPlan]);
 
   // --- Scrollable strip mechanics -------------------------------------------
-  const stripRef = useRef<HTMLDivElement>(null);
+  // (stripRef is declared earlier, alongside the windowing state that needs it)
   const didInitialScrollRef = useRef(false);
 
   // Center a day chip in the strip; instant on first paint, smooth afterwards.
@@ -779,11 +875,17 @@ const MealPlanTab: React.FC = () => {
       if (!first || !second) return;
       const stride = second.offsetLeft - first.offsetLeft;
       if (stride <= 0) return;
+      // rawIdx is relative to the first RENDERED chip — offset by the
+      // window's start to get the index into the full stripDays list.
       const rawIdx = Math.round((container.scrollLeft + container.clientWidth / 2 - first.offsetLeft) / stride);
-      const day = stripDays[Math.min(stripDays.length - 1, Math.max(0, rawIdx))];
+      const globalIdx = Math.min(stripDays.length - 1, Math.max(0, stripWindow.start + rawIdx));
+      const day = stripDays[globalIdx];
       if (day) setVisibleMonth(format(day.date, 'MMMM yyyy'));
+      // Grow the materialized window as the user free-scrolls near an edge —
+      // purely additive (no recentering), so it doesn't fight manual scroll.
+      setStripWindow(w => extendStripWindowTo(w, globalIdx, stripDays.length));
     });
-  }, [stripDays]);
+  }, [stripDays, stripWindow.start]);
   useEffect(() => () => cancelAnimationFrame(scrollRafRef.current), []);
 
   // Roving tabindex for the day strip: only the selected chip is a tab stop
@@ -812,22 +914,34 @@ const MealPlanTab: React.FC = () => {
       const last = stripDays[stripDays.length - 1]?.dateStr;
       const targetStr = format(target, 'yyyy-MM-dd');
       if ((first && targetStr < first) || (last && targetStr > last)) return;
+      // Grow the window (if needed) and select in the same handler so React
+      // batches both updates into one render — the target's chip is
+      // guaranteed to exist in the DOM once this commits.
+      const targetIndex = differenceInCalendarDays(target, rangeStart);
+      setStripWindow(w => extendStripWindowTo(w, targetIndex, stripDays.length));
       setSelectedDate(target);
-      // Every day chip is already mounted, so focus can move synchronously
-      // (focus() works on tabIndex=-1 elements; the roving tabIndex catches up
-      // on the re-render). An rAF here can be throttled in background tabs.
-      stripRef.current?.querySelector<HTMLElement>(`[data-date="${targetStr}"]`)?.focus();
+      // Focus can't move synchronously here — if the window just grew to
+      // include this day, its chip doesn't exist in the DOM yet. The
+      // pendingFocusDateRef effect above picks this up once it's mounted
+      // (focus() works on tabIndex=-1 elements; the roving tabIndex catches
+      // up on the re-render).
+      pendingFocusDateRef.current = targetStr;
     },
-    [selectedDate, stripDays]
+    [selectedDate, stripDays, rangeStart]
   );
 
   const handleJumpToToday = useCallback(() => {
     const todayDateStr = format(new Date(), 'yyyy-MM-dd');
+    // Today's chip is always in the window (see stripWindow's invariant
+    // above), so no extension is needed here — but stay defensive in case
+    // that invariant ever changes.
+    const todayIndex = differenceInCalendarDays(new Date(), rangeStart);
+    setStripWindow(w => extendStripWindowTo(w, todayIndex, stripDays.length));
     if (selectedDateStr !== todayDateStr) setSelectedDate(new Date());
     // Re-center explicitly — when today is already selected the centering
     // effect won't re-run because selectedDateStr is unchanged.
     scrollStripTo(todayDateStr);
-  }, [scrollStripTo, selectedDateStr]);
+  }, [scrollStripTo, selectedDateStr, rangeStart, stripDays.length]);
 
   // Weekly dinner cost rollup (F-MEALS-01) — informational only, skips
   // planned dinners without a linked meal or without an estimatedCost rather
@@ -963,7 +1077,7 @@ const MealPlanTab: React.FC = () => {
             aria-label="Pick a day (arrow keys to move, Home for today)"
             className="relative flex gap-1 overflow-x-auto no-scrollbar snap-x"
         >
-            {stripDays.map(day => {
+            {visibleStripDays.map(day => {
                 const { dateStr } = day;
                 const count = countByDate.get(dateStr) || 0;
                 const isSelected = dateStr === selectedDateStr;
