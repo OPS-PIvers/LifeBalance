@@ -506,7 +506,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
               )}
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex flex-row gap-2">
               <Button
                 variant="success"
                 disabled={!payAmountValid}
@@ -514,7 +514,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                   openPaySheet(item.id, parsedPayAmount);
                   setExpandedId(null);
                 }}
-                className="w-full sm:flex-1"
+                className="flex-1"
                 leftIcon={<Check size={16} />}
               >
                 Approve
@@ -525,7 +525,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                   await deferCalendarItem(item.id);
                   setExpandedId(null);
                 }}
-                className="w-full sm:flex-1"
+                className="flex-1"
                 leftIcon={<Clock size={16} />}
               >
                 Defer
@@ -538,7 +538,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                     setExpandedId(null);
                   }, 'calendar item');
                 }}
-                className="w-full sm:flex-1"
+                className="flex-1"
                 leftIcon={<Trash2 size={16} />}
               >
                 Delete
@@ -551,7 +551,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
              <p className="text-xs text-brand-500 dark:text-brand-400 mb-3">
                Mark this task as complete or delay it:
              </p>
-             <div className="flex flex-col sm:flex-row gap-2">
+             <div className="flex flex-row gap-2">
                <Button
                  variant="success"
                  onClick={async () => {
@@ -564,7 +564,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                      toast.error('Failed to complete to-do');
                    }
                  }}
-                 className="w-full sm:flex-1"
+                 className="flex-1"
                  leftIcon={<Check size={16} />}
                >
                  Complete
@@ -606,7 +606,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                      toast.error('Failed to defer task. Please try again.');
                    }
                  }}
-                 className="w-full sm:flex-1"
+                 className="flex-1"
                  leftIcon={<Clock size={16} />}
                >
                  Defer
@@ -620,7 +620,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                      toast.success('Task deleted');
                    });
                  }}
-                 className="w-full sm:flex-1"
+                 className="flex-1"
                  leftIcon={<Trash2 size={16} />}
                >
                  Delete
