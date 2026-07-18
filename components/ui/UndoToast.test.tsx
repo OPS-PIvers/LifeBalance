@@ -20,6 +20,14 @@ describe('UndoToast', () => {
     expect(onUndo).toHaveBeenCalledTimes(1);
   });
 
+  it('renders a custom action label (bulk approve uses "Review") and wires it to onUndo', () => {
+    const onUndo = vi.fn();
+    render(<UndoToast message="Approved 3 items" onUndo={onUndo} actionLabel="Review" />);
+    expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Review' }));
+    expect(onUndo).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps a comfortable (>=44px) tap target on the Undo button', () => {
     render(<UndoToast message="To-Do completed" onUndo={() => {}} />);
     const button = screen.getByRole('button', { name: 'Undo' });
