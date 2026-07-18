@@ -493,7 +493,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
               )}
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex flex-row gap-2">
               <Button
                 variant="success"
                 disabled={!payAmountValid}
@@ -501,7 +501,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                   openPaySheet(item.id, parsedPayAmount);
                   setExpandedId(null);
                 }}
-                className="w-full sm:flex-1"
+                className="flex-1"
                 leftIcon={<Check size={16} />}
               >
                 Approve
@@ -512,7 +512,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                   await deferCalendarItem(item.id);
                   setExpandedId(null);
                 }}
-                className="w-full sm:flex-1"
+                className="flex-1"
                 leftIcon={<Clock size={16} />}
               >
                 Defer
@@ -525,7 +525,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                     setExpandedId(null);
                   }, 'calendar item');
                 }}
-                className="w-full sm:flex-1"
+                className="flex-1"
                 leftIcon={<Trash2 size={16} />}
               >
                 Delete
