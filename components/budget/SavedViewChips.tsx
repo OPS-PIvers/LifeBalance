@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/Button';
 import { Popover } from '@/components/ui/Popover';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import CountBadge from '@/components/ui/CountBadge';
 
 interface SavedView {
   id: string;
@@ -115,17 +116,13 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
           variant="secondary"
           size="icon"
           onClick={() => (isOpen ? closeMenu() : setIsOpen(true))}
-          aria-label="Saved views"
+          aria-label={views.length > 0 ? `Saved views, ${views.length} saved` : 'Saved views'}
           aria-haspopup="dialog"
           aria-expanded={isOpen}
           className="h-11 relative"
         >
           <Bookmark size={16} />
-          {views.length > 0 && (
-            <span className="absolute -top-1 -right-1 bg-accent-600 text-white px-1 rounded-full text-xxs leading-tight min-w-[16px] text-center">
-              {views.length}
-            </span>
-          )}
+          <CountBadge count={views.length} className="bg-accent-600" />
         </Button>
 
         <Popover

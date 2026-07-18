@@ -86,23 +86,31 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
             <p className="font-semibold tracking-tight text-brand-900 dark:text-brand-100 truncate text-base">{tx.merchant}</p>
             {getSourceIcon(tx.source, tx.isRecurring)}
           </div>
-          <p className="text-xs font-medium text-brand-500 dark:text-brand-400 truncate flex items-center gap-1.5 mt-0.5">
-            {format(parseISO(tx.date), 'MMM d, yyyy')}
-            <span className="w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
-            <span className="font-medium text-brand-600 dark:text-brand-300">{tx.category}</span>
+          {/* Meta line — `truncate` on a flex CONTAINER can't ellipsize: the
+              flex children just clipped mid-word ("Grocer", "Utiliti") at
+              narrow widths. At 375px the date alone fills the column, so below
+              `sm` the line WRAPS and the category/store drop whole onto a
+              second line instead of chopping; from `sm` up it stays one line
+              with each shrinkable segment (`truncate min-w-0`) ellipsizing
+              itself. Row heights may grow a line on mobile — fine, the
+              virtualizer measures rows dynamically via measureElement. */}
+          <p className="text-xs font-medium text-brand-500 dark:text-brand-400 min-w-0 flex flex-wrap sm:flex-nowrap items-center gap-x-1.5 gap-y-0.5 mt-0.5">
+            <span className="shrink-0 whitespace-nowrap">{format(parseISO(tx.date), 'MMM d, yyyy')}</span>
+            <span className="shrink-0 w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
+            <span className="truncate min-w-0 font-medium text-brand-600 dark:text-brand-300">{tx.category}</span>
             {tx.store && (
               <>
-                <span className="w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
-                <span className="font-medium text-brand-600 dark:text-brand-300">{tx.store}</span>
+                <span className="shrink-0 w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
+                <span className="truncate min-w-0 font-medium text-brand-600 dark:text-brand-300">{tx.store}</span>
               </>
             )}
             {/* F-DASH-04: this row is one slice of a receipt split into several
                 categorized transactions — a purely visual grouping cue. */}
             {tx.receiptGroupId && (
               <>
-                <span className="w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
+                <span className="shrink-0 w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
                 <span
-                  className="inline-flex items-center gap-0.5 font-medium text-brand-600 dark:text-brand-300"
+                  className="shrink-0 inline-flex items-center gap-0.5 font-medium text-brand-600 dark:text-brand-300"
                   aria-label="Part of a split receipt"
                   title="Part of a split receipt"
                 >
@@ -115,9 +123,9 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
                 addTransactionComment/deleteTransactionComment. */}
             {!!tx.commentCount && tx.commentCount > 0 && (
               <>
-                <span className="w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
+                <span className="shrink-0 w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
                 <span
-                  className="inline-flex items-center gap-0.5 font-medium text-brand-600 dark:text-brand-300"
+                  className="shrink-0 inline-flex items-center gap-0.5 font-medium text-brand-600 dark:text-brand-300"
                   aria-label={`${tx.commentCount} comment${tx.commentCount === 1 ? '' : 's'}`}
                 >
                   <MessageSquare size={11} />
