@@ -233,7 +233,7 @@ const Budget: React.FC = () => {
               anchor container for TabSubViewMenu; the capture handler
               intercepts multi-view taps before Tabs sees them. */}
           <div ref={tabBarRef} className="relative mb-6" onClickCapture={handleTabBarClickCapture}>
-            <TabsList>
+            <TabsList equalWidth>
               <TabsTrigger value="overview" className="text-[13px] px-1.5">
                 Overview
               </TabsTrigger>

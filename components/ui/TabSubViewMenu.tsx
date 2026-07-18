@@ -121,7 +121,13 @@ export const TabSubViewMenu = <T extends string>({
               }}
               className={cn(
                 'w-full min-h-11 flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden',
-                'hover:bg-brand-50 dark:hover:bg-brand-700/40 focus:bg-brand-50 dark:focus:bg-brand-700/40',
+                // focus-visible (not focus) for the row highlight: initial
+                // focus lands programmatically on the checked row when the
+                // menu opens, and after a touch/pointer open that must show
+                // ONLY the checkmark — a painted row would read as a stuck
+                // pre-selection. Keyboard roving (ArrowUp/Down moves real
+                // focus) still qualifies as :focus-visible and paints it.
+                'hover:bg-brand-50 dark:hover:bg-brand-700/40 focus-visible:bg-brand-50 dark:focus-visible:bg-brand-700/40 active:bg-brand-50 dark:active:bg-brand-700/40',
                 checked ? toneStyles.checkedText : 'text-brand-700 dark:text-brand-200'
               )}
             >

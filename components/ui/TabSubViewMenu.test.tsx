@@ -112,6 +112,19 @@ describe('TabSubViewMenu', () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
+  it('row highlight is gated on focus-visible, not plain focus (touch-open shows only the checkmark)', () => {
+    render(<Harness value="trends" />);
+
+    // Initial focus lands programmatically on the checked row; after a touch
+    // open that focus is NOT :focus-visible, so the background must be bound
+    // to the focus-visible variant — a plain focus:bg- would paint the row the
+    // moment the menu opens and read as a stuck pre-selection.
+    for (const item of screen.getAllByRole('menuitemradio')) {
+      expect(item.className).toContain('focus-visible:bg-');
+      expect(item.className).not.toMatch(/(?:^|\s)focus:bg-/);
+    }
+  });
+
   it('ArrowDown moves focus to the next option', () => {
     render(<Harness />);
 

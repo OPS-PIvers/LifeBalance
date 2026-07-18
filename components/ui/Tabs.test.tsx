@@ -168,6 +168,59 @@ describe('Tabs', () => {
     });
   });
 
+  describe('equal-width strips', () => {
+    it('equalWidth zeroes the flex basis on every trigger; default keeps content basis', () => {
+      const { rerender } = render(
+        <Tabs defaultValue="tab1">
+          <TabsList equalWidth>
+            <TabsTrigger value="tab1">Tab 1</TabsTrigger>
+            <TabsTrigger value="tab2">Tab 2</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      );
+
+      for (const tab of screen.getAllByRole('tab')) {
+        expect(tab.className).toContain('basis-0');
+      }
+
+      rerender(
+        <Tabs defaultValue="tab1">
+          <TabsList>
+            <TabsTrigger value="tab1">Tab 1</TabsTrigger>
+            <TabsTrigger value="tab2">Tab 2</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      );
+
+      for (const tab of screen.getAllByRole('tab')) {
+        expect(tab.className).not.toContain('basis-0');
+      }
+    });
+  });
+
+  describe('menu-anchor open state', () => {
+    it('an expanded inactive trigger holds the hover-strength tint; collapsed does not', () => {
+      const renderWithExpanded = (expanded: boolean) => (
+        <Tabs defaultValue="tab1">
+          <TabsList>
+            <TabsTrigger value="tab1">Tab 1</TabsTrigger>
+            <TabsTrigger value="tab2" aria-haspopup="menu" aria-expanded={expanded}>
+              Tab 2
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      );
+      const { rerender } = render(renderWithExpanded(true));
+
+      expect(screen.getByRole('tab', { name: 'Tab 2' }).className).toContain('bg-white/60');
+
+      rerender(renderWithExpanded(false));
+      // Only the hover:/active: variants remain — no resting tint.
+      const collapsed = screen.getByRole('tab', { name: 'Tab 2' });
+      expect(collapsed.className).not.toMatch(/(?:^|\s)bg-white\/60/);
+    });
+  });
+
   describe('keyboard navigation', () => {
     function renderTabs() {
       return render(
