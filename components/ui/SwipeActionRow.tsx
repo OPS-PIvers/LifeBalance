@@ -41,6 +41,14 @@ export interface SwipeAction {
   ariaLabel?: string;
   /** Visual tone: background tint + icon/label color. */
   tone: 'positive' | 'destructive' | 'warm';
+  /**
+   * Pre-commit disclosure shown in the rail as the drag approaches the commit
+   * threshold — WHAT this swipe will actually do (e.g. "$12.40 → Joint
+   * Checking"), not just the icon. Only rendered for the side's PRIMARY
+   * action (the one a full swipe fires). Purely visual: convey the same
+   * information via `ariaLabel` for assistive tech.
+   */
+  detail?: string;
   /** Fired on commit-swipe or on tapping the stuck-open button. */
   onAction: () => void;
   /** Haptic fired alongside the action. Default 'light'. */
@@ -145,6 +153,21 @@ export const SwipeActionRow: React.FC<SwipeActionRowProps> = ({
   // seeing what will happen before you're committed to it.
   const startOpacity = useTransform(x, [8, 32], [0, 1]);
   const endOpacity = useTransform(x, [-32, -8], [1, 0]);
+  // The primary action's `detail` disclosure fades in once the drag travels
+  // past the stuck-open width — i.e. when the gesture starts heading for a
+  // COMMIT rather than a reveal — so the "what will happen" text is readable
+  // before the point of no return. Function-form so the ramp re-derives from
+  // the CURRENT action count each frame (like bgColor above).
+  const detailReveal = (latest: number, count: number) => {
+    const from = OPEN_PX * count + 8;
+    return Math.min(1, Math.max(0, (Math.abs(latest) - from) / 48));
+  };
+  const startDetailOpacity = useTransform(x, (latest: number) =>
+    latest > 0 ? detailReveal(latest, startActions?.length ?? 0) : 0
+  );
+  const endDetailOpacity = useTransform(x, (latest: number) =>
+    latest < 0 ? detailReveal(latest, endActions?.length ?? 0) : 0
+  );
   // Gentle grow as the swipe approaches commit territory.
   const startScale = useTransform(x, [64, 200], [1, 1.2]);
   const endScale = useTransform(x, [-200, -64], [1.2, 1]);
@@ -218,6 +241,34 @@ export const SwipeActionRow: React.FC<SwipeActionRowProps> = ({
     // reads as "the edge button expanding"), secondaries inline toward the
     // content. actions[0] is primary, so the end side reverses render order.
     const ordered = side === 'end' ? [...actions].reverse() : actions;
+    // Pre-commit disclosure for the primary action: rendered INSIDE the zone
+    // just past the buttons (the tinted area a commit-length drag uncovers),
+    // so a swipe headed for the threshold reads what it is about to commit.
+    // aria-hidden — it is a drag-time visual only; callers carry the same
+    // information in the action's ariaLabel. Sized for a 375px-wide row: the
+    // commit distance there is ~206px, so ~118px of the 136px column is
+    // uncovered beside one 88px button — two clamped text-xxs lines keep
+    // "$12.40 → Joint Checking" readable, longer names ellipsize.
+    const primary = actions[0];
+    const detailNode = primary?.detail ? (
+      <motion.div
+        aria-hidden="true"
+        style={{ opacity: side === 'start' ? startDetailOpacity : endDetailOpacity }}
+        className={cn(
+          'pointer-events-none flex w-[136px] shrink-0 flex-col justify-center',
+          side === 'start' ? 'items-start pr-2 text-left' : 'items-end pl-2 text-right'
+        )}
+      >
+        <span
+          className={cn(
+            'line-clamp-2 text-xxs font-bold leading-tight break-words',
+            TONE_TEXT[primary.tone]
+          )}
+        >
+          {primary.detail}
+        </span>
+      </motion.div>
+    ) : null;
     return (
       <motion.div
         style={{ opacity: side === 'start' ? startOpacity : endOpacity }}
@@ -226,6 +277,7 @@ export const SwipeActionRow: React.FC<SwipeActionRowProps> = ({
           side === 'start' ? 'left-0' : 'right-0'
         )}
       >
+        {side === 'end' ? detailNode : null}
         {ordered.map((action, index) => {
           const Icon = action.icon;
           const isPrimary = action === actions[0];
@@ -253,6 +305,7 @@ export const SwipeActionRow: React.FC<SwipeActionRowProps> = ({
             </motion.button>
           );
         })}
+        {side === 'start' ? detailNode : null}
       </motion.div>
     );
   };

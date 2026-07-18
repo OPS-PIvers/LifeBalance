@@ -39,6 +39,12 @@ interface ActionQueueItemProps {
   // Mobile triage: swipe gestures (right = instant approve, left = defer)
   onSwipeApprove: (item: ActionQueueItem) => void;
   onSwipeDefer: (item: ActionQueueItem) => void;
+  /** Pre-commit disclosure for the approve swipe — WHAT approving will commit
+      (amount + smart-guessed target account, e.g. "$12.40 → Joint Checking").
+      Computed by the parent (it mirrors handleSwipeApprove's account logic)
+      and shown in the rail near the commit threshold + in the approve
+      button's accessible name. */
+  approveDetail?: string;
 
   // Data props passed down from parent to avoid consuming context. `buckets` and
   // `transactions` back the swipe pre-check (a category must be inferable before
@@ -78,7 +84,8 @@ const areActionQueueItemPropsEqual = (
       prev.onToggleSelect !== next.onToggleSelect ||
       prev.onEnterSelectionMode !== next.onEnterSelectionMode ||
       prev.onSwipeApprove !== next.onSwipeApprove ||
-      prev.onSwipeDefer !== next.onSwipeDefer) {
+      prev.onSwipeDefer !== next.onSwipeDefer ||
+      prev.approveDetail !== next.approveDetail) {
     return false;
   }
 
@@ -152,6 +159,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
   onEnterSelectionMode,
   onSwipeApprove,
   onSwipeDefer,
+  approveDetail,
   buckets,
   transactions,
   members,
@@ -330,9 +338,14 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
         startActions={[{
           icon: Check,
           label: approveLabel,
-          ariaLabel: `${approveLabel} ${itemLabel}`,
+          // The disclosure joins the accessible name too, so keyboard/AT users
+          // hear what approving will commit — the rail text itself is visual.
+          ariaLabel: `${approveLabel} ${itemLabel}${approveDetail ? ` · ${approveDetail}` : ''}`,
           tone: 'positive',
           onAction: approveAction,
+          // Pre-commit reassurance (error prevention): the rail names the
+          // amount + target account as the drag nears the commit threshold.
+          detail: approveDetail,
         }]}
         endActions={[
           // Primary (full swipe / outer edge): defer.

@@ -81,6 +81,30 @@ describe('SwipeActionRow', () => {
     expect(buttons[1]).toHaveTextContent('Defer');
   });
 
+  it('renders the primary action\'s pre-commit detail disclosure in the rail', () => {
+    render(
+      <SwipeActionRow
+        startActions={[{ ...completeAction, label: 'Approve', detail: '$12.40 → Joint Checking' }]}
+      >
+        <div>Row content</div>
+      </SwipeActionRow>
+    );
+    // The disclosure is a drag-time visual (hidden from AT — the action's
+    // ariaLabel carries the same information for keyboard/AT users).
+    const detail = screen.getByText('$12.40 → Joint Checking');
+    expect(detail).toBeInTheDocument();
+    expect(detail.closest('[aria-hidden="true"]')).not.toBeNull();
+  });
+
+  it('renders no detail disclosure when the primary action has none', () => {
+    render(
+      <SwipeActionRow startActions={[completeAction]} endActions={[deleteAction]}>
+        <div>Row content</div>
+      </SwipeActionRow>
+    );
+    expect(screen.queryByText(/→/)).not.toBeInTheDocument();
+  });
+
   it('renders a static row (no action zones) when disabled', () => {
     render(
       <SwipeActionRow startActions={[completeAction]} endActions={[deleteAction]} disabled>
