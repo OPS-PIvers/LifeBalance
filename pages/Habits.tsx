@@ -579,11 +579,14 @@ const Habits: React.FC = () => {
               />
             )}
           </div>
-          {/* One-time coach hint for the tab-popover nav — first visit only;
-              opening any tab menu, the ×, or navigating away latches it off
-              for good (shared with the Money page). */}
-          <SubViewHint menuOpened={openMenu !== null} className="mt-3" />
         </div>
+        {/* One-time coach hint for the tab-popover nav — first visit only;
+            opening any tab menu, the ×, or navigating away latches it off for
+            good (shared with the Money page). Sibling of the tab-bar wrapper,
+            not a child (review): inside the wrapper its dismissal shrank the
+            wrapper and jumped the main content up; out here the wrapper's own
+            spacing stays put and only the hint's slot collapses. */}
+        <SubViewHint menuOpened={openMenu !== null} className="mx-4 -mt-1 mb-4" />
 
         {/* Main Content */}
         <div className="px-4 pb-6">
