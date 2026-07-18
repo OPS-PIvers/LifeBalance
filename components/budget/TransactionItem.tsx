@@ -86,17 +86,9 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
             <p className="font-semibold tracking-tight text-brand-900 dark:text-brand-100 truncate text-base">{tx.merchant}</p>
             {getSourceIcon(tx.source, tx.isRecurring)}
           </div>
-          {/* Meta line — `truncate` on a flex CONTAINER can't ellipsize: the
-              flex children just clipped mid-word ("Grocer", "Utiliti") at
-              narrow widths. At 375px the date alone fills the column, so below
-              `sm` the line WRAPS and the category/store drop whole onto a
-              second line instead of chopping; from `sm` up it stays one line
-              with each shrinkable segment (`truncate min-w-0`) ellipsizing
-              itself. Each separator dot is grouped WITH its following content
-              in one flex item so a wrap never strands a trailing dot on the
-              previous line ("Jul 18, 2026 •"). Row heights may grow a line on
-              mobile — fine, the virtualizer measures rows dynamically via
-              measureElement. */}
+          {/* flex-wrap below sm: dot+label pairs stay together (no stranded trailing
+              dot on wrap); each leaf span owns its own `truncate min-w-0` because
+              truncate on a flex container clips children mid-word. */}
           <p className="text-xs font-medium text-brand-500 dark:text-brand-400 min-w-0 flex flex-wrap sm:flex-nowrap items-center gap-x-1.5 gap-y-0.5 mt-0.5">
             <span className="shrink-0 whitespace-nowrap">{format(parseISO(tx.date), 'MMM d, yyyy')}</span>
             <span className="flex min-w-0 items-center gap-1.5">
