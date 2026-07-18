@@ -51,7 +51,11 @@ vi.mock('firebase/firestore', () => {
         capturedDeletes.push({ ref });
       },
       commit: vi.fn(async () => {
-        if (commitShouldThrow) throw new Error('permission-denied');
+        if (commitShouldThrow) {
+          throw Object.assign(new Error('Missing or insufficient permissions.'), {
+            code: 'permission-denied',
+          });
+        }
         commitCount++;
       }),
     })),
@@ -158,7 +162,11 @@ describe('makeAddTransactionComment', () => {
     });
 
     await expect(addTransactionComment(TXN_ID, 'hello')).rejects.toThrow();
-    expect(toastErrorMock).toHaveBeenCalledWith('Failed to add comment');
+    // Cause-specific copy: the permission-denied code surfaces as the
+    // membership/re-sign-in hint from describeError, not a generic failure.
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      expect.stringContaining("don't have permission")
+    );
   });
 });
 

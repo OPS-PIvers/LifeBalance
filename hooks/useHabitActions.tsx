@@ -38,6 +38,7 @@ import {
 } from '@/utils/habitLogic';
 import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
 import toast from 'react-hot-toast';
+import { describeError } from '@/utils/errorMessages';
 import { CalendarDays, RotateCcw, Star, TrendingDown, PartyPopper, Gift } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { addDays, format, parseISO, startOfWeek } from 'date-fns';
@@ -117,7 +118,7 @@ export const useHabitActions = (
       return docRef.id;
     } catch (error) {
       console.error('[addHabit] Failed to create habit:', error);
-      toast.error('Failed to create habit. Please try again.');
+      toast.error(describeError(error, 'create the habit'));
       throw error;
     }
   }, [householdId, currentUser]);
@@ -182,7 +183,7 @@ export const useHabitActions = (
       toast.success('Habit archived');
     } catch (error) {
       console.error('[archiveHabit] Failed to archive habit:', error);
-      toast.error('Failed to archive habit. Please try again.');
+      toast.error(describeError(error, 'archive the habit'));
       throw error;
     }
   }, [householdId]);
@@ -197,7 +198,7 @@ export const useHabitActions = (
       toast.success('Habit restored');
     } catch (error) {
       console.error('[unarchiveHabit] Failed to unarchive habit:', error);
-      toast.error('Failed to restore habit. Please try again.');
+      toast.error(describeError(error, 'restore the habit'));
       throw error;
     }
   }, [householdId]);
@@ -221,7 +222,7 @@ export const useHabitActions = (
       toast.success('Habits reordered');
     } catch (error) {
       console.error('[reorderHabits] Failed:', error);
-      toast.error('Failed to reorder habits');
+      toast.error(describeError(error, 'reorder the habits'));
       throw error;
     }
   }, [householdId]);
@@ -727,7 +728,7 @@ export const useHabitActions = (
       toast.success(count > 0 ? `Logged +${count} submission(s)` : 'Reflection saved');
     } catch (error) {
       console.error('[addHabitSubmission] Failed:', error);
-      toast.error('Failed to add submission');
+      toast.error(describeError(error, 'add the submission'));
     }
   }, [householdId, currentUser]);
 
@@ -843,7 +844,7 @@ export const useHabitActions = (
       toast.success('Submission deleted');
     } catch (error) {
       console.error('[deleteHabitSubmission] Failed:', error);
-      toast.error('Failed to delete submission');
+      toast.error(describeError(error, 'delete the submission'));
     }
   }, [householdId]);
 
@@ -947,7 +948,7 @@ export const useHabitActions = (
       toast('Day cleared', { icon: toastIcon(RotateCcw) });
     } catch (error) {
       console.error('[resetHabitDay] Failed:', error);
-      toast.error('Failed to clear day');
+      toast.error(describeError(error, 'clear the day'));
     }
   }, [householdId]);
 
@@ -1036,7 +1037,7 @@ export const useHabitActions = (
       toast.success('Submission updated');
     } catch (error) {
       console.error('[updateHabitSubmission] Failed:', error);
-      toast.error('Failed to update submission');
+      toast.error(describeError(error, 'update the submission'));
     }
   }, [householdId]);
 
@@ -1053,7 +1054,7 @@ export const useHabitActions = (
       toast.success(pausedUntil ? 'Habit paused' : 'Habit resumed');
     } catch (error) {
       console.error('[setHabitPause] Failed to update pause:', error);
-      toast.error('Failed to update pause');
+      toast.error(describeError(error, 'update the pause'));
       throw error;
     }
   }, [householdId]);

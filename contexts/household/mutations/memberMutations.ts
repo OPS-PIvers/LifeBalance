@@ -8,6 +8,7 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
+import { describeError } from '@/utils/errorMessages';
 import { HouseholdMember } from '@/types/schema';
 import { getFunctionsInstance } from '@/firebase.config';
 
@@ -65,7 +66,7 @@ export function makeAddMember(deps: {
       toast.success('Member added successfully');
     } catch (error) {
       console.error('[addMember] Failed:', error);
-      toast.error('Failed to add member');
+      toast.error(describeError(error, 'add the member'));
       throw error;
     }
   };
@@ -90,7 +91,7 @@ export function makeMemberCrudMutations(deps: {
       toast.success('Member updated successfully');
     } catch (error) {
       console.error('[updateMember] Failed:', error);
-      toast.error('Failed to update member');
+      toast.error(describeError(error, 'update the member'));
       throw error;
     }
   };
@@ -118,7 +119,7 @@ export function makeMemberCrudMutations(deps: {
       toast.success('Member removed successfully');
     } catch (error) {
       console.error('[removeMember] Failed:', error);
-      toast.error('Failed to remove member');
+      toast.error(describeError(error, 'remove the member'));
       throw error;
     }
   };

@@ -8,6 +8,7 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
+import { describeError } from '@/utils/errorMessages';
 import { TaskTemplate, Household } from '@/types/schema';
 import { buildToDosFromTemplate } from '@/utils/taskTemplates';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -41,7 +42,7 @@ export function makeTaskTemplateMutations(deps: {
       toast.success('Template created');
     } catch (error) {
       console.error('[addTaskTemplate] Failed:', error);
-      toast.error('Failed to create template');
+      toast.error(describeError(error, 'create the template'));
       throw error;
     }
   };
@@ -72,7 +73,7 @@ export function makeTaskTemplateSettingsMutations(deps: {
       toast.success('Template updated');
     } catch (error) {
       console.error('[updateTaskTemplate] Failed:', error);
-      toast.error('Failed to update template');
+      toast.error(describeError(error, 'update the template'));
     }
   };
 
@@ -87,7 +88,7 @@ export function makeTaskTemplateSettingsMutations(deps: {
       toast.success('Template deleted');
     } catch (error) {
       console.error('[deleteTaskTemplate] Failed:', error);
-      toast.error('Failed to delete template');
+      toast.error(describeError(error, 'delete the template'));
     }
   };
 

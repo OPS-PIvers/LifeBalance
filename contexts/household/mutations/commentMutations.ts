@@ -9,6 +9,7 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
+import { describeError } from '@/utils/errorMessages';
 import { TransactionComment } from '@/types/schema';
 import { transactionCommentConverter } from '@/utils/firestoreConverters';
 
@@ -110,7 +111,7 @@ export function makeAddTransactionComment(deps: {
       await batch.commit();
     } catch (error) {
       console.error('[addTransactionComment] Failed:', error);
-      toast.error('Failed to add comment');
+      toast.error(describeError(error, 'add the comment'));
       throw error;
     }
   };
@@ -141,7 +142,7 @@ export function makeDeleteTransactionComment(deps: {
       await batch.commit();
     } catch (error) {
       console.error('[deleteTransactionComment] Failed:', error);
-      toast.error('Failed to delete comment');
+      toast.error(describeError(error, 'delete the comment'));
       throw error;
     }
   };

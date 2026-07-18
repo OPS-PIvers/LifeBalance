@@ -6,6 +6,7 @@ import {
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import toast from 'react-hot-toast';
+import { describeError } from '@/utils/errorMessages';
 import { Household, HouseholdMember } from '@/types/schema';
 import { getFunctionsInstance } from '@/firebase.config';
 import { getBillingEnabled } from '@/services/appConfig';
@@ -75,7 +76,7 @@ export function makeAddKidProfile(deps: {
         toast.error('Kid profile limit reached. Upgrade to add more.');
       } else {
         console.error('[addKidProfile] Failed:', error);
-        toast.error('Failed to add kid profile');
+        toast.error(describeError(error, 'add the kid profile'));
       }
       throw error;
     }
@@ -105,7 +106,7 @@ export function makeKidProfileCrudMutations(deps: {
       await updateDoc(doc(db, `households/${householdId}/members`, memberId), updates);
     } catch (error) {
       console.error('[updateKidProfile] Failed:', error);
-      toast.error('Failed to update kid profile');
+      toast.error(describeError(error, 'update the kid profile'));
       throw error;
     }
   };
@@ -120,7 +121,7 @@ export function makeKidProfileCrudMutations(deps: {
       toast.success('Kid profile removed');
     } catch (error) {
       console.error('[removeKidProfile] Failed:', error);
-      toast.error('Failed to remove kid profile');
+      toast.error(describeError(error, 'remove the kid profile'));
       throw error;
     }
   };

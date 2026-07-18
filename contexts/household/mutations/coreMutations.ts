@@ -12,6 +12,7 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
+import { describeError } from '@/utils/errorMessages';
 import { Sparkles } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { DietaryProfile, Habit, HabitSubmission, Insight, ModuleKey, Transaction } from '@/types/schema';
@@ -203,7 +204,7 @@ export function makeRefreshInsight(deps: {
       toast.success('New insight generated!', { id: 'insight-loading', icon: toastIcon(Sparkles) });
     } catch (error) {
       console.error("Failed to generate insight:", error);
-      toast.error('Failed to generate insight', { id: 'insight-loading' });
+      toast.error(describeError(error, 'generate an insight'), { id: 'insight-loading' });
     } finally {
       setIsGeneratingInsight(false);
     }
@@ -258,7 +259,7 @@ export function makeRefreshHabitPatterns(deps: {
       toast.success('Habit coach updated!', { id: 'habit-patterns-loading', icon: toastIcon(Sparkles) });
     } catch (error) {
       console.error('Failed to analyze habit patterns:', error);
-      toast.error('Failed to analyze habit patterns', { id: 'habit-patterns-loading' });
+      toast.error(describeError(error, 'analyze habit patterns'), { id: 'habit-patterns-loading' });
     } finally {
       setIsGeneratingHabitPatterns(false);
     }

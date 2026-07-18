@@ -13,6 +13,7 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
+import { describeError } from '@/utils/errorMessages';
 import { Snowflake } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { parseISO, format, subDays } from 'date-fns';
@@ -283,7 +284,7 @@ export function makeAddChallenge(deps: {
       toast.success('Family challenge created');
     } catch (error) {
       console.error('[addChallenge] Failed:', error);
-      toast.error('Failed to create challenge');
+      toast.error(describeError(error, 'create the challenge'));
       throw error;
     }
   };
@@ -428,7 +429,7 @@ export function makeRedeemReward(deps: {
         toast.error('Not enough points');
       } else {
         console.error('[redeemReward] Transaction failed:', error);
-        toast.error('Failed to redeem reward');
+        toast.error(describeError(error, 'redeem the reward'));
       }
     }
   };
@@ -461,7 +462,7 @@ export function makeAddReward(deps: {
       toast.success('Reward added');
     } catch (error) {
       console.error('[addReward] Failed:', error);
-      toast.error('Failed to add reward');
+      toast.error(describeError(error, 'add the reward'));
       throw error;
     }
   };
@@ -504,7 +505,7 @@ export function makeRewardCrudMutations(deps: {
       toast.success('Reward updated');
     } catch (error) {
       console.error('[updateReward] Failed:', error);
-      toast.error('Failed to update reward');
+      toast.error(describeError(error, 'update the reward'));
       throw error;
     }
   };
@@ -517,7 +518,7 @@ export function makeRewardCrudMutations(deps: {
       toast.success('Reward deleted');
     } catch (error) {
       console.error('[deleteReward] Failed:', error);
-      toast.error('Failed to delete reward');
+      toast.error(describeError(error, 'delete the reward'));
       throw error;
     }
   };
@@ -601,7 +602,7 @@ export function makeRequestRedemption(deps: {
       }
     } catch (error) {
       console.error('[requestRedemption] Failed:', error);
-      toast.error('Could not send your request. Try again.');
+      toast.error(describeError(error, 'send your request'));
       throw error;
     }
   };
@@ -679,7 +680,7 @@ export function makeRedemptionResolutionMutations(deps: {
       }
     } catch (error) {
       console.error('[approveRedemption] Failed:', error);
-      toast.error('Could not approve the request. Try again.');
+      toast.error(describeError(error, 'approve the request'));
       throw error;
     }
   };
@@ -705,7 +706,7 @@ export function makeRedemptionResolutionMutations(deps: {
       toast.success('Request dismissed');
     } catch (error) {
       console.error('[denyRedemption] Failed:', error);
-      toast.error('Could not dismiss the request. Try again.');
+      toast.error(describeError(error, 'dismiss the request'));
       throw error;
     }
   };
