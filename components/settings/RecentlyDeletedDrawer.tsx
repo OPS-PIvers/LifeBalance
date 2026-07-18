@@ -9,6 +9,7 @@ import {
   TRASH_RETENTION_DAYS,
   daysUntilPurge,
   trashItemTitle,
+  trashItemSubtitle,
   type TrashedItem,
 } from '@/utils/trash';
 import { RotateCcw, Trash2 } from 'lucide-react';
@@ -21,7 +22,7 @@ interface RecentlyDeletedDrawerProps {
 
 /**
  * F-XCUT-03 — "Recently Deleted" recovery view. Lists soft-deleted records
- * (todos, shopping items, meals, planned meals, habits) from the unified trash,
+ * (todos, shopping items, meals, planned meals, habits, transactions) from the unified trash,
  * newest-first, each with a one-tap Restore. Records auto-purge after
  * {@link TRASH_RETENTION_DAYS} days.
  *
@@ -65,8 +66,8 @@ const RecentlyDeletedDrawer: React.FC<RecentlyDeletedDrawerProps> = ({ isOpen, o
     <Drawer isOpen={isOpen} onClose={onClose} title="Recently Deleted">
       <div className="px-4 space-y-4">
         <p className="text-xs text-brand-500 dark:text-brand-400">
-          Deleted to-dos, shopping items, meals, planned meals, and habits can be
-          restored here for {TRASH_RETENTION_DAYS} days before they are removed for good.
+          Deleted to-dos, shopping items, meals, planned meals, habits, and transactions
+          can be restored here for {TRASH_RETENTION_DAYS} days before they are removed for good.
         </p>
 
         {trashedItems.length === 0 ? (
@@ -81,6 +82,7 @@ const RecentlyDeletedDrawer: React.FC<RecentlyDeletedDrawerProps> = ({ isOpen, o
           <SurfaceList>
             {trashedItems.map((item) => {
               const daysLeft = daysUntilPurge(item.deletedAt, now);
+              const subtitle = trashItemSubtitle(item);
               const busy = busyId === item.id;
               return (
                 <Row key={item.id}>
@@ -90,6 +92,7 @@ const RecentlyDeletedDrawer: React.FC<RecentlyDeletedDrawerProps> = ({ isOpen, o
                     </p>
                     <p className="text-xs text-brand-500 dark:text-brand-400">
                       {TRASH_DOMAIN_META[item.domain].label}
+                      {subtitle ? ` · ${subtitle}` : ''}
                       {' · '}
                       {daysLeft > 0 ? `${daysLeft}d left` : 'purges soon'}
                     </p>

@@ -8,6 +8,7 @@ import {
   query,
   orderBy,
   limit,
+  increment,
   serverTimestamp,
   Timestamp,
   type Firestore,
@@ -15,11 +16,14 @@ import {
   type DocumentData,
   type QueryDocumentSnapshot,
 } from 'firebase/firestore';
+import toast from 'react-hot-toast';
+import type { Account } from '@/types/schema';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import {
   TRASH_DOMAIN_META,
   trashDocId,
   isTrashDomain,
+  transactionRestoreImpact,
   type TrashDomain,
   type TrashedItem,
 } from '@/utils/trash';
@@ -45,6 +49,9 @@ interface TrashDeps {
   householdId: string | null;
   /** UID to stamp as `deletedBy` on the trash mirror, when known. */
   deletedBy?: string | null;
+  /** Live accounts — required to re-apply a restored TRANSACTION's balance
+   *  impact (unused by the other domains, which have no balance side-effect). */
+  accounts?: Account[];
 }
 
 function isPermissionDenied(error: unknown): boolean {
@@ -100,12 +107,21 @@ export async function softDeleteDoc(
 /**
  * Restore a trashed record: re-create the original document from its mirrored
  * data and remove the trash doc, atomically.
+ *
+ * TRANSACTION domain: the money-path atomicity invariant (CLAUDE.md) also
+ * applies in reverse — `deleteTransaction` reversed the row's effective balance
+ * impact, so restoring a VERIFIED transaction re-applies that impact on its
+ * target account in the SAME writeBatch (a `pending_review` row never touched a
+ * balance, so its restore doesn't either). If the tagged account has been
+ * deleted since, the row is restored WITHOUT a balance mutation and a toast
+ * explains why (the simpler safe degradation — see
+ * {@link transactionRestoreImpact}).
  */
 export async function restoreTrashedItem(
   deps: TrashDeps,
   item: TrashedItem
 ): Promise<void> {
-  const { db, householdId } = deps;
+  const { db, householdId, accounts } = deps;
   if (!householdId) throw new Error('Household not selected');
 
   const { collection: sourceCollection } = TRASH_DOMAIN_META[item.domain];
@@ -114,8 +130,26 @@ export async function restoreTrashedItem(
     doc(db, `households/${householdId}/${sourceCollection}`, item.originalId),
     item.data
   );
+
+  let balanceSkipped = false;
+  if (item.domain === 'transaction') {
+    const impact = transactionRestoreImpact(item.data, accounts ?? []);
+    if (impact.outcome === 'apply') {
+      batch.update(doc(db, `households/${householdId}/accounts`, impact.accountId), {
+        balance: increment(impact.delta),
+        lastUpdated: serverTimestamp(),
+      });
+    } else if (impact.outcome === 'missing-account') {
+      balanceSkipped = true;
+    }
+  }
+
   batch.delete(doc(db, `households/${householdId}/trash`, item.id));
   await batch.commit();
+
+  if (balanceSkipped) {
+    toast('Balance not adjusted — the account this transaction was tagged to no longer exists.');
+  }
 }
 
 /** Permanently delete a trashed record now (no recovery). */

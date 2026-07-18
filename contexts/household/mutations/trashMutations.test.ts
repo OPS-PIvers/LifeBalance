@@ -14,7 +14,7 @@ import { softDeleteDoc, restoreTrashedItem, purgeTrashedItem, attachTrashListene
 import type { TrashedItem } from '@/utils/trash';
 
 interface Ref { __path: string }
-interface BatchOp { op: 'set' | 'delete'; ref: Ref; data?: Record<string, unknown> }
+interface BatchOp { op: 'set' | 'update' | 'delete'; ref: Ref; data?: Record<string, unknown> }
 
 let batchOps: BatchOp[] = [];
 let committedCount = 0;
@@ -38,9 +38,11 @@ vi.mock('firebase/firestore', () => {
     deleteDoc: (ref: unknown) => deleteDocMock(ref),
     writeBatch: vi.fn(() => ({
       set: (ref: Ref, data: Record<string, unknown>) => { batchOps.push({ op: 'set', ref, data }); },
+      update: (ref: Ref, data: Record<string, unknown>) => { batchOps.push({ op: 'update', ref, data }); },
       delete: (ref: Ref) => { batchOps.push({ op: 'delete', ref }); },
       commit: () => commitMock(),
     })),
+    increment: vi.fn((n: number) => ({ __increment: n })),
     onSnapshot: vi.fn((_q: unknown, onNext: (snap: unknown) => void, onError: (err: unknown) => void) => {
       snapshotHandler = onNext;
       errorHandler = onError;
@@ -54,8 +56,13 @@ vi.mock('firebase/firestore', () => {
   };
 });
 
+vi.mock('react-hot-toast', () => ({
+  default: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }),
+}));
+
 // Grab the mocked Timestamp for constructing snapshot data.
 import { Timestamp } from 'firebase/firestore';
+import toast from 'react-hot-toast';
 
 const db = {} as never;
 const householdId = 'household-1';
@@ -69,6 +76,7 @@ beforeEach(() => {
   snapshotHandler = null;
   errorHandler = null;
   unsubscribeMock.mockClear();
+  vi.mocked(toast).mockClear();
 });
 
 describe('softDeleteDoc', () => {
@@ -146,6 +154,77 @@ describe('restoreTrashedItem', () => {
 
   it('throws when no household is selected', async () => {
     await expect(restoreTrashedItem({ db, householdId: null }, sampleItem)).rejects.toThrow('Household not selected');
+  });
+});
+
+describe('restoreTrashedItem — transaction domain (balance re-apply)', () => {
+  const accounts = [
+    { id: 'acc-check', name: 'Checking', type: 'checking', balance: 500, lastUpdated: '' },
+    { id: 'acc-card', name: 'Visa', type: 'credit', balance: 200, lastUpdated: '' },
+  ] as never[];
+
+  const txItem = (data: Record<string, unknown>): TrashedItem => ({
+    id: 'transaction_tx-1',
+    domain: 'transaction',
+    originalId: 'tx-1',
+    data,
+    deletedAt: '2026-07-14T00:00:00.000Z',
+    deletedBy: 'user-1',
+  });
+
+  it('re-creates a verified expense AND re-applies its checking debit in one batch', async () => {
+    await restoreTrashedItem(
+      { db, householdId, accounts },
+      txItem({ amount: 42.5, merchant: 'Target', category: 'Shopping', status: 'verified' })
+    );
+    expect(committedCount).toBe(1);
+    const setOp = batchOps.find((o) => o.op === 'set');
+    const updateOp = batchOps.find((o) => o.op === 'update');
+    const delOp = batchOps.find((o) => o.op === 'delete');
+    expect(setOp?.ref.__path).toBe('households/household-1/transactions/tx-1');
+    expect(updateOp?.ref.__path).toBe('households/household-1/accounts/acc-check');
+    expect(updateOp?.data?.balance).toEqual({ __increment: -42.5 });
+    expect(delOp?.ref.__path).toBe('households/household-1/trash/transaction_tx-1');
+  });
+
+  it('re-applies a verified credit-card charge to the card (debt back up)', async () => {
+    await restoreTrashedItem(
+      { db, householdId, accounts },
+      txItem({ amount: 30, category: 'Dining', status: 'verified', accountId: 'acc-card' })
+    );
+    const updateOp = batchOps.find((o) => o.op === 'update');
+    expect(updateOp?.ref.__path).toBe('households/household-1/accounts/acc-card');
+    expect(updateOp?.data?.balance).toEqual({ __increment: 30 });
+  });
+
+  it('does NOT touch a balance for a pending_review row', async () => {
+    await restoreTrashedItem(
+      { db, householdId, accounts },
+      txItem({ amount: 42.5, category: 'Shopping', status: 'pending_review' })
+    );
+    expect(batchOps.some((o) => o.op === 'update')).toBe(false);
+    expect(committedCount).toBe(1);
+  });
+
+  it('restores the row WITHOUT a balance mutation when the tagged account is gone', async () => {
+    await restoreTrashedItem(
+      { db, householdId, accounts },
+      txItem({ amount: 42.5, category: 'Shopping', status: 'verified', accountId: 'acc-deleted' })
+    );
+    expect(batchOps.some((o) => o.op === 'update')).toBe(false);
+    const setOp = batchOps.find((o) => o.op === 'set');
+    expect(setOp?.ref.__path).toBe('households/household-1/transactions/tx-1');
+    expect(committedCount).toBe(1);
+    // The toast is the only user-visible signal that the balance was skipped.
+    expect(toast).toHaveBeenCalledWith(expect.stringContaining('no longer exists'));
+  });
+
+  it('does not toast for a restore that applies (or needs no) balance movement', async () => {
+    await restoreTrashedItem(
+      { db, householdId, accounts },
+      txItem({ amount: 42.5, category: 'Shopping', status: 'verified' })
+    );
+    expect(toast).not.toHaveBeenCalled();
   });
 });
 

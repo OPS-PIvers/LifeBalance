@@ -956,10 +956,32 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Verified & Categorized!');
   }, [transactions, accounts]);
 
-  const deleteTransaction = useCallback(async (id: string) => {
-    setTransactions(prev => prev.filter(t => t.id !== id));
-    toast.success('Mock: Transaction deleted');
+  // F-XCUT-03: push a soft-deleted record into the in-memory trash mirror so
+  // Test Mode exercises the same restore/purge flow as the real listener.
+  // (Declared before the earliest deleter that uses it — deleteTransaction.)
+  const pushToTrash = useCallback((domain: TrashDomain, item: { id: string } & Record<string, unknown>) => {
+    setTrashedItems(prev => [
+      {
+        id: trashDocId(domain, item.id),
+        domain,
+        originalId: item.id,
+        data: { ...item },
+        deletedAt: new Date().toISOString(),
+        deletedBy: 'test-user-id',
+      },
+      ...prev.filter(t => t.id !== trashDocId(domain, item.id)),
+    ]);
   }, []);
+
+  const deleteTransaction = useCallback(async (id: string) => {
+    setTransactions(prev => {
+      const target = prev.find(t => t.id === id);
+      // F-XCUT-03 parity: deleted transactions land in Recently Deleted too.
+      if (target) pushToTrash('transaction', target as unknown as { id: string } & Record<string, unknown>);
+      return prev.filter(t => t.id !== id);
+    });
+    toast.success('Mock: Transaction deleted');
+  }, [pushToTrash]);
 
   // Test-Mode parity for the Merge action (plan 03 PR-3): applies the same
   // field-level winner set as the real context, deletes the dupe, and
@@ -1138,22 +1160,6 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     };
     setChallenges(prev => [...prev, newChallenge]);
     toast.success('Mock: Family challenge created');
-  }, []);
-
-  // F-XCUT-03: push a soft-deleted record into the in-memory trash mirror so
-  // Test Mode exercises the same restore/purge flow as the real listener.
-  const pushToTrash = useCallback((domain: TrashDomain, item: { id: string } & Record<string, unknown>) => {
-    setTrashedItems(prev => [
-      {
-        id: trashDocId(domain, item.id),
-        domain,
-        originalId: item.id,
-        data: { ...item },
-        deletedAt: new Date().toISOString(),
-        deletedBy: 'test-user-id',
-      },
-      ...prev.filter(t => t.id !== trashDocId(domain, item.id)),
-    ]);
   }, []);
 
   const deleteHabit = useCallback(async (id: string) => {
@@ -1441,6 +1447,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       case 'meal': setMeals(prev => [...prev.filter(m => m.id !== item.originalId), data as unknown as Meal]); break;
       case 'mealPlanItem': setMealPlan(prev => [...prev.filter(p => p.id !== item.originalId), data as unknown as MealPlanItem]); break;
       case 'habit': setHabits(prev => [...prev.filter(h => h.id !== item.originalId), data as unknown as Habit]); break;
+      // Balance parity note: the mock deleteTransaction doesn't reverse a
+      // balance, so its restore doesn't re-apply one either (the real context
+      // does both — see trashMutations.restoreTrashedItem).
+      case 'transaction': setTransactions(prev => [...prev.filter(t => t.id !== item.originalId), data as unknown as Transaction]); break;
     }
     setTrashedItems(prev => prev.filter(t => t.id !== item.id));
     toast.success('Mock: Item restored');

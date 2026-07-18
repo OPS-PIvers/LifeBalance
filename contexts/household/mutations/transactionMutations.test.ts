@@ -11,7 +11,11 @@ interface CapturedWrite {
 
 let capturedSets: CapturedWrite[] = [];
 let capturedUpdates: CapturedWrite[] = [];
+let capturedDeletes: CapturedWrite[] = [];
 let commitCount = 0;
+// Errors thrown by successive commit() calls (shifted per commit) — lets a test
+// exercise the trash-mirror permission-denied fallback in deleteTransaction.
+let commitErrors: unknown[] = [];
 
 vi.mock('firebase/firestore', () => {
   return {
@@ -40,8 +44,12 @@ vi.mock('firebase/firestore', () => {
       update: (ref: { __path: string }, data: Record<string, unknown>) => {
         capturedUpdates.push({ ref, data });
       },
-      delete: vi.fn(),
+      delete: (ref: { __path: string }) => {
+        capturedDeletes.push({ ref });
+      },
       commit: vi.fn(async () => {
+        const err = commitErrors.shift();
+        if (err) throw err;
         commitCount++;
       }),
     })),
@@ -54,7 +62,7 @@ vi.mock('react-hot-toast', () => ({
 
 vi.mock('@/services/analytics', () => ({ track: vi.fn() }));
 
-import { makeAddTransaction } from './transactionMutations';
+import { makeAddTransaction, makeDeleteTransaction } from './transactionMutations';
 import type { Account, Transaction } from '@/types/schema';
 
 const HOUSEHOLD_ID = 'house1';
@@ -96,7 +104,9 @@ describe('makeAddTransaction — credit-card payment funding transfer', () => {
   beforeEach(() => {
     capturedSets = [];
     capturedUpdates = [];
+    capturedDeletes = [];
     commitCount = 0;
+    commitErrors = [];
     vi.clearAllMocks();
   });
 
@@ -154,5 +164,92 @@ describe('makeAddTransaction — credit-card payment funding transfer', () => {
     expect(capturedUpdates).toHaveLength(1);
     expect(capturedUpdates[0]!.ref.__path).toBe(accountPath('acc-card'));
     expect(capturedUpdates[0]!.data?.['balance']).toEqual({ __increment: 100 });
+  });
+});
+
+describe('makeDeleteTransaction — trash mirror + balance reversal', () => {
+  const verifiedTx: Transaction = {
+    id: 'tx-1',
+    amount: 42.5,
+    merchant: 'Target',
+    category: 'Shopping',
+    date: '2026-07-10',
+    status: 'verified',
+    isRecurring: false,
+    source: 'manual',
+    autoCategorized: false,
+    createdBy: 'user-1',
+    createdAt: '2026-07-10T00:00:00.000Z',
+    payPeriodId: 'pp-1',
+  };
+
+  const deleteDeps = (transactions: Transaction[]) => ({
+    db,
+    householdId: HOUSEHOLD_ID,
+    transactions,
+    accounts,
+    user: { uid: 'user-1' },
+  });
+
+  beforeEach(() => {
+    capturedSets = [];
+    capturedUpdates = [];
+    capturedDeletes = [];
+    commitCount = 0;
+    commitErrors = [];
+    vi.clearAllMocks();
+  });
+
+  it('mirrors the row into trash, reverses the balance, and deletes — one batch', async () => {
+    const { deleteTransaction } = makeDeleteTransaction(deleteDeps([verifiedTx]));
+    await deleteTransaction('tx-1');
+
+    expect(commitCount).toBe(1);
+
+    // Trash mirror: full row minus the synthetic id, stamped with deletedBy.
+    expect(capturedSets).toHaveLength(1);
+    const mirror = capturedSets[0]!;
+    expect(mirror.ref.__path).toBe(`households/${HOUSEHOLD_ID}/trash/transaction_tx-1`);
+    expect(mirror.data).toMatchObject({ domain: 'transaction', originalId: 'tx-1', deletedBy: 'user-1' });
+    const mirrored = mirror.data!['data'] as Record<string, unknown>;
+    expect(mirrored).toMatchObject({ amount: 42.5, merchant: 'Target', status: 'verified' });
+    expect(mirrored).not.toHaveProperty('id');
+
+    // Verified untagged expense → checking credited back.
+    expect(capturedUpdates).toHaveLength(1);
+    expect(capturedUpdates[0]!.ref.__path).toBe(accountPath('acc-check'));
+    expect(capturedUpdates[0]!.data?.['balance']).toEqual({ __increment: 42.5 });
+
+    // Original row removed in the same batch.
+    expect(capturedDeletes.some(d => d.ref.__path === `households/${HOUSEHOLD_ID}/transactions/tx-1`)).toBe(true);
+  });
+
+  it('moves NO balance for a pending_review row but still mirrors it', async () => {
+    const pending: Transaction = { ...verifiedTx, status: 'pending_review' };
+    const { deleteTransaction } = makeDeleteTransaction(deleteDeps([pending]));
+    await deleteTransaction('tx-1');
+
+    expect(capturedUpdates).toHaveLength(0);
+    expect(capturedSets).toHaveLength(1);
+    expect((capturedSets[0]!.data!['data'] as Record<string, unknown>).status).toBe('pending_review');
+  });
+
+  it('falls back to a plain delete (no mirror) when the trash write is permission-denied', async () => {
+    commitErrors = [{ code: 'permission-denied' }];
+    const { deleteTransaction } = makeDeleteTransaction(deleteDeps([verifiedTx]));
+    await deleteTransaction('tx-1');
+
+    // Second batch committed: balance reversal + delete, but NO trash mirror.
+    expect(commitCount).toBe(1);
+    const fallbackSets = capturedSets.filter(s => s.ref.__path.includes('/trash/'));
+    expect(fallbackSets).toHaveLength(1); // only the first (failed) batch had it
+    expect(capturedDeletes.filter(d => d.ref.__path.endsWith('/transactions/tx-1'))).toHaveLength(2);
+  });
+
+  it('rethrows a non-permission commit error without retrying', async () => {
+    commitErrors = [new Error('network down')];
+    const { deleteTransaction } = makeDeleteTransaction(deleteDeps([verifiedTx]));
+    await expect(deleteTransaction('tx-1')).rejects.toThrow('network down');
+    expect(commitCount).toBe(0);
   });
 });
