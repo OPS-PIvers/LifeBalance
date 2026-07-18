@@ -92,46 +92,51 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
               `sm` the line WRAPS and the category/store drop whole onto a
               second line instead of chopping; from `sm` up it stays one line
               with each shrinkable segment (`truncate min-w-0`) ellipsizing
-              itself. Row heights may grow a line on mobile — fine, the
-              virtualizer measures rows dynamically via measureElement. */}
+              itself. Each separator dot is grouped WITH its following content
+              in one flex item so a wrap never strands a trailing dot on the
+              previous line ("Jul 18, 2026 •"). Row heights may grow a line on
+              mobile — fine, the virtualizer measures rows dynamically via
+              measureElement. */}
           <p className="text-xs font-medium text-brand-500 dark:text-brand-400 min-w-0 flex flex-wrap sm:flex-nowrap items-center gap-x-1.5 gap-y-0.5 mt-0.5">
             <span className="shrink-0 whitespace-nowrap">{format(parseISO(tx.date), 'MMM d, yyyy')}</span>
-            <span className="shrink-0 w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
-            <span className="truncate min-w-0 font-medium text-brand-600 dark:text-brand-300">{tx.category}</span>
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="shrink-0 w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
+              <span className="truncate min-w-0 font-medium text-brand-600 dark:text-brand-300">{tx.category}</span>
+            </span>
             {tx.store && (
-              <>
+              <span className="flex min-w-0 items-center gap-1.5">
                 <span className="shrink-0 w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
                 <span className="truncate min-w-0 font-medium text-brand-600 dark:text-brand-300">{tx.store}</span>
-              </>
+              </span>
             )}
             {/* F-DASH-04: this row is one slice of a receipt split into several
                 categorized transactions — a purely visual grouping cue. */}
             {tx.receiptGroupId && (
-              <>
+              <span className="flex shrink-0 items-center gap-1.5">
                 <span className="shrink-0 w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
                 <span
-                  className="shrink-0 inline-flex items-center gap-0.5 font-medium text-brand-600 dark:text-brand-300"
+                  className="inline-flex items-center gap-0.5 font-medium text-brand-600 dark:text-brand-300"
                   aria-label="Part of a split receipt"
                   title="Part of a split receipt"
                 >
                   <Scissors size={11} />
                   Split
                 </span>
-              </>
+              </span>
             )}
             {/* Plan 23: denormalized comment count, read-only — bumped by
                 addTransactionComment/deleteTransactionComment. */}
             {!!tx.commentCount && tx.commentCount > 0 && (
-              <>
+              <span className="flex shrink-0 items-center gap-1.5">
                 <span className="shrink-0 w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
                 <span
-                  className="shrink-0 inline-flex items-center gap-0.5 font-medium text-brand-600 dark:text-brand-300"
+                  className="inline-flex items-center gap-0.5 font-medium text-brand-600 dark:text-brand-300"
                   aria-label={`${tx.commentCount} comment${tx.commentCount === 1 ? '' : 's'}`}
                 >
                   <MessageSquare size={11} />
                   {tx.commentCount}
                 </span>
-              </>
+              </span>
             )}
           </p>
         </div>
