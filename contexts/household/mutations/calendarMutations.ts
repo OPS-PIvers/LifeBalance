@@ -81,7 +81,7 @@ export function makeUpdateCalendarItem(deps: {
 }) {
   const { db, householdId, calendarItems } = deps;
 
-  const updateCalendarItem = async (item: CalendarItem) => {
+  const updateCalendarItem = async (item: CalendarItem, opts?: MutationOpts) => {
     if (!householdId) return;
 
     try {
@@ -133,7 +133,7 @@ export function makeUpdateCalendarItem(deps: {
 
       const sanitizedUpdates = sanitizeFirestoreData(updates);
       await updateDoc(doc(db, `households/${householdId}/calendarItems`, item.id), sanitizedUpdates);
-      toast.success('Event updated');
+      if (!opts?.silent) toast.success('Event updated');
     } catch (error) {
       console.error('[updateCalendarItem] Failed:', error);
       toast.error('Failed to update event. Please try again.');

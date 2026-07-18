@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, Suspense } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -32,6 +32,13 @@ import {
   nextDeferDate,
 } from '@/utils/actionQueueSmart';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
+import {
+  captureDeferUndo,
+  findRecurringDeferArtifacts,
+  type DeferUndoDescriptor,
+} from '@/utils/bulkDeferUndo';
+import { UndoToast } from '@/components/ui/UndoToast';
+import { getLocalDateString } from '@/utils/dateHelpers';
 import { Button } from '@/components/ui/Button';
 import { InsightWidget } from '@/components/dashboard/InsightWidget';
 import { DailyHabitsWidget } from '@/components/dashboard/DailyHabitsWidget';
@@ -66,9 +73,11 @@ const Dashboard: React.FC = () => {
     accounts,
     buckets,
     transactions,
+    calendarItems,
     safeToSpendBreakdown,
     payCalendarItem,
     deferCalendarItem,
+    updateCalendarItem,
     deleteCalendarItem,
     updateTransactionCategory,
     updateTransaction,
@@ -249,6 +258,7 @@ const Dashboard: React.FC = () => {
     setIsBulkApprovePickerOpen(false);
     setIsBulkRunning(true);
     let approved = 0;
+    let approvedMoney = 0;
     let skipped = 0;
     for (const item of selectedItems) {
       try {
@@ -265,6 +275,7 @@ const Dashboard: React.FC = () => {
           }
           await payCalendarItem(item.id, account.id, { silent: true });
           approved++;
+          approvedMoney++;
         } else if (isTransactionQueueItem(item)) {
           if (item.needsAmount) {
             skipped++;
@@ -279,6 +290,7 @@ const Dashboard: React.FC = () => {
             accountOverrideId ?? suggestAccountIdForTransaction(item, accounts, transactions);
           await updateTransactionCategory(item.id, category, item.relatedHabitIds ?? [], accountId);
           approved++;
+          approvedMoney++;
         }
       } catch (error) {
         console.error('[ActionQueue] Bulk approve failed for item:', item.id, error);
@@ -286,10 +298,32 @@ const Dashboard: React.FC = () => {
       }
     }
     setIsBulkRunning(false);
-    if (approved > 0) toast.success(`Approved ${approved} item${approved === 1 ? '' : 's'}`);
+    if (approved > 0) {
+      if (approvedMoney > 0) {
+        // Full undo of bulk approvals is deliberately NOT offered — reversing
+        // balance deltas across N documents is riskier than a recovery deep
+        // link. Instead, "Review" jumps to Money → Transactions where each
+        // just-verified row can be inspected/edited individually.
+        toast(
+          (t) => (
+            <UndoToast
+              message={`Approved ${approved} item${approved === 1 ? '' : 's'}`}
+              actionLabel="Review"
+              onUndo={() => {
+                toast.dismiss(t.id);
+                navigate('/budget', { state: { tab: 'transactions' } });
+              }}
+            />
+          ),
+          { duration: 6000, icon: toastIcon(Check) }
+        );
+      } else {
+        toast.success(`Approved ${approved} item${approved === 1 ? '' : 's'}`);
+      }
+    }
     if (skipped > 0) toast(`${skipped} left in the queue (needs an amount, category, or account)`, { icon: toastIcon(Eye) });
     exitSelectionMode();
-  }, [selectedItems, accounts, buckets, transactions, completeToDo, payCalendarItem, updateTransactionCategory, exitSelectionMode]);
+  }, [selectedItems, accounts, buckets, transactions, completeToDo, payCalendarItem, updateTransactionCategory, exitSelectionMode, navigate]);
 
   const handleBulkApprove = useCallback(() => {
     // Only money items involve an account; a to-dos-only selection completes
@@ -302,12 +336,80 @@ const Dashboard: React.FC = () => {
     }
   }, [selectedItems, accounts, runBulkApprove]);
 
+  // Undoing a bulk defer restores each item's captured prior state by looping
+  // the existing single-item mutations in reverse (utils/bulkDeferUndo.ts has
+  // the per-kind contract). Recurring-instance defers created new docs whose
+  // ids only the Firestore listener knows, so the restore reads the LATEST
+  // calendarItems through a ref — the toast closure would otherwise be frozen
+  // on the pre-defer snapshot.
+  const calendarItemsRef = useRef(calendarItems);
+  useEffect(() => {
+    calendarItemsRef.current = calendarItems;
+  }, [calendarItems]);
+
+  const undoBulkDefer = useCallback(
+    async (undos: readonly DeferUndoDescriptor[], preExistingCalendarIds: ReadonlySet<string>) => {
+      let restored = 0;
+      let failed = 0;
+      for (const undo of undos) {
+        try {
+          if (undo.kind === 'todo') {
+            await updateToDo(undo.id, { completeByDate: undo.previousDate });
+          } else if (undo.kind === 'transaction') {
+            // A prior snooze of `undefined` is restored as "today" — lexically
+            // NOT greater than today, so isReviewSnoozed treats it exactly like
+            // no snooze and the row re-enters the queue (updateTransaction's
+            // Partial<Transaction> can't express a field delete).
+            await updateTransaction(
+              undo.id,
+              { reviewSnoozedUntil: undo.previousSnooze ?? getLocalDateString() },
+              { silent: true }
+            );
+          } else if (undo.kind === 'calendar-single') {
+            await updateCalendarItem(undo.item, { silent: true });
+          } else {
+            const artifacts = findRecurringDeferArtifacts(
+              calendarItemsRef.current,
+              preExistingCalendarIds,
+              undo
+            );
+            if (!artifacts) {
+              // Can't identify the created docs unambiguously — skip rather
+              // than risk deleting the wrong one.
+              failed++;
+              continue;
+            }
+            // Tombstone first: if the second delete fails mid-undo, the user
+            // is left with an extra visible copy at the deferred date
+            // (recoverable in the UI) rather than a tombstone silently hiding
+            // the original occurrence with its copy already gone.
+            await deleteCalendarItem(artifacts.tombstoneId, { silent: true });
+            await deleteCalendarItem(artifacts.deferredCopyId, { silent: true });
+          }
+          restored++;
+        } catch (error) {
+          console.error('[ActionQueue] Undo defer failed:', undo, error);
+          failed++;
+        }
+      }
+      if (restored > 0) toast.success(`Restored ${restored} item${restored === 1 ? '' : 's'}`);
+      if (failed > 0) toast.error(`Couldn't restore ${failed} item${failed === 1 ? '' : 's'}`);
+    },
+    [updateToDo, updateTransaction, updateCalendarItem, deleteCalendarItem]
+  );
+
   const handleBulkDefer = useCallback(async () => {
     setIsBulkRunning(true);
+    // Snapshot BEFORE mutating: per-item prior state (for the reverse loop)
+    // and the set of calendar doc ids that already existed (so undo can pick
+    // out the docs a recurring-instance defer created).
+    const preExistingCalendarIds: ReadonlySet<string> = new Set(calendarItems.map(i => i.id));
+    const undos: DeferUndoDescriptor[] = [];
     let deferred = 0;
     let failed = 0;
     for (const item of selectedItems) {
       try {
+        const undo = captureDeferUndo(item);
         if (isCalendarQueueItem(item)) {
           await deferCalendarItem(item.id, { silent: true });
         } else if (isTodoQueueItem(item)) {
@@ -315,6 +417,7 @@ const Dashboard: React.FC = () => {
         } else {
           await updateTransaction(item.id, { reviewSnoozedUntil: nextDeferDate(item.date) }, { silent: true });
         }
+        undos.push(undo);
         deferred++;
       } catch (error) {
         console.error('[ActionQueue] Bulk defer failed for item:', item.id, error);
@@ -322,10 +425,23 @@ const Dashboard: React.FC = () => {
       }
     }
     setIsBulkRunning(false);
-    if (deferred > 0) toast.success(`Deferred ${deferred} item${deferred === 1 ? '' : 's'}`);
+    if (deferred > 0) {
+      toast(
+        (t) => (
+          <UndoToast
+            message={`Deferred ${deferred} item${deferred === 1 ? '' : 's'}`}
+            onUndo={() => {
+              toast.dismiss(t.id);
+              void undoBulkDefer(undos, preExistingCalendarIds);
+            }}
+          />
+        ),
+        { duration: 6000, icon: toastIcon(Clock) }
+      );
+    }
     if (failed > 0) toast.error(`Failed to defer ${failed} item${failed === 1 ? '' : 's'}`);
     exitSelectionMode();
-  }, [selectedItems, deferCalendarItem, updateToDo, updateTransaction, exitSelectionMode]);
+  }, [selectedItems, calendarItems, deferCalendarItem, updateToDo, updateTransaction, undoBulkDefer, exitSelectionMode]);
 
   const handleBulkDelete = useCallback(() => {
     const items = selectedItems;

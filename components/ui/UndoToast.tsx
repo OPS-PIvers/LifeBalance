@@ -4,6 +4,11 @@ export interface UndoToastProps {
   /** e.g. `Deleted "Oat milk"` or `To-Do completed` — the toast body text. */
   message: string;
   onUndo: () => void;
+  /** Action button label; defaults to "Undo". The Dashboard's bulk approve
+   *  reuses this body with a "Review" action (approvals are deliberately NOT
+   *  undone — reversing balance deltas across N docs is riskier than a review
+   *  deep link). */
+  actionLabel?: string;
 }
 
 /**
@@ -17,7 +22,7 @@ export interface UndoToastProps {
  * App.tsx), so light-tint text is correct in both themes — no dark: pair
  * needed here.
  */
-export const UndoToast: React.FC<UndoToastProps> = ({ message, onUndo }) => (
+export const UndoToast: React.FC<UndoToastProps> = ({ message, onUndo, actionLabel = 'Undo' }) => (
   <div className="flex min-w-0 items-center gap-2">
     {/* min-w-0 + truncate keep a long message from pushing Undo off-screen */}
     <span className="min-w-0 flex-1 truncate text-sm" title={message}>{message}</span>
@@ -27,7 +32,7 @@ export const UndoToast: React.FC<UndoToastProps> = ({ message, onUndo }) => (
       onClick={onUndo}
       className="-my-3 min-h-[44px] min-w-[44px] shrink-0 px-3 text-sm font-semibold text-accent-300 hover:text-accent-200 focus:outline-hidden focus:underline"
     >
-      Undo
+      {actionLabel}
     </button>
   </div>
 );
