@@ -9,6 +9,7 @@ import { getLocalDateString } from '@/utils/dateHelpers';
 import { signedHabitPoints } from '@/utils/habitLogic';
 import { calculateChallengeProgress } from '@/utils/challengeCalculator';
 import { verifyKidPin } from '@/utils/kidPin';
+import { resolveAvatarColor } from '@/utils/avatarColor';
 import ProgressBar from '@/components/ui/ProgressBar';
 import { Badge } from '@/components/ui/Badge';
 import type { Habit, RewardItem } from '@/types/schema';
@@ -211,7 +212,7 @@ const KidDashboard: React.FC = () => {
           <div className="flex items-center gap-3 min-w-0">
             <div
               className="w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-extrabold text-white shrink-0"
-              style={{ backgroundColor: activeKid.avatarColor ?? '#b87a29' }}
+              style={{ backgroundColor: resolveAvatarColor(activeKid.avatarColor, activeKid.uid) }}
             >
               {activeKid.avatarEmoji ?? activeKid.displayName.charAt(0).toUpperCase()}
             </div>

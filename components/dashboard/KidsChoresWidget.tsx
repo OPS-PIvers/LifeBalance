@@ -3,6 +3,7 @@ import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdC
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { isHabitCompletedInCurrentPeriod } from '@/utils/habitLogic';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { resolveAvatarColor } from '@/utils/avatarColor';
 import type { Habit, HouseholdMember } from '@/types/schema';
 import { Star, Sparkles } from 'lucide-react';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
@@ -64,7 +65,7 @@ export const KidsChoresWidget: React.FC = React.memo(() => {
                 {/* Avatar */}
                 <div
                   className="w-9 h-9 rounded-card flex items-center justify-center text-sm font-extrabold text-white shrink-0"
-                  style={{ backgroundColor: kid.avatarColor ?? '#b87a29' }}
+                  style={{ backgroundColor: resolveAvatarColor(kid.avatarColor, kid.uid) }}
                   aria-hidden="true"
                 >
                   {kid.avatarEmoji ?? kid.displayName.charAt(0).toUpperCase()}

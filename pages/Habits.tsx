@@ -34,6 +34,7 @@ import { useScrollToHighlight } from '@/hooks/useScrollToHighlight';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { isHabitCompletedInCurrentPeriod, signedHabitPoints } from '@/utils/habitLogic';
 import { haptic } from '@/utils/haptics';
+import { resolveAvatarColor } from '@/utils/avatarColor';
 import { getCatchUpEligibleHabits } from '@/utils/catchUpHabits';
 import { generateCsvExport } from '@/utils/exportUtils';
 import toast from 'react-hot-toast';
@@ -191,7 +192,7 @@ const KidChoresGroup: React.FC<{ kid: HouseholdMember; chores: Habit[] }> = ({ k
       <div className="flex items-center gap-3 mb-3">
         <div
           className="w-9 h-9 rounded-card flex items-center justify-center text-sm font-extrabold text-white shrink-0"
-          style={{ backgroundColor: kid.avatarColor ?? '#b87a29' }}
+          style={{ backgroundColor: resolveAvatarColor(kid.avatarColor, kid.uid) }}
         >
           {kid.avatarEmoji ?? kid.displayName.charAt(0).toUpperCase()}
         </div>

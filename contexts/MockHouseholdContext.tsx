@@ -246,7 +246,7 @@ const SEED_MEMBERS: HouseholdMember[] = [
   {
     uid: 'kid_leo', displayName: 'Leo', role: 'kid',
     isManaged: true, managedByUid: 'test-user-id',
-    avatarColor: '#7c3aed', avatarEmoji: '🦊',
+    avatarColor: '#9f5618', avatarEmoji: '🦊', // terracotta from utils/avatarColor AVATAR_COLORS
     points: { daily: 15, weekly: 60, total: 220 }, allowanceCents: 0
   }
 ];

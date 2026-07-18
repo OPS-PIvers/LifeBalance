@@ -11,7 +11,7 @@ const createMockUser = (): User => {
     uid: 'test-user-id',
     email: 'test@example.com',
     displayName: 'Test User',
-    photoURL: 'https://ui-avatars.com/api/?name=Test+User&background=6366f1&color=fff',
+    photoURL: 'https://ui-avatars.com/api/?name=Test+User&background=285742&color=fff',
     emailVerified: true,
     isAnonymous: false,
     metadata: {
@@ -24,7 +24,7 @@ const createMockUser = (): User => {
       displayName: 'Test User',
       email: 'test@example.com',
       phoneNumber: null,
-      photoURL: 'https://ui-avatars.com/api/?name=Test+User&background=6366f1&color=fff',
+      photoURL: 'https://ui-avatars.com/api/?name=Test+User&background=285742&color=fff',
     }],
     refreshToken: 'mock-refresh-token',
     tenantId: null,
