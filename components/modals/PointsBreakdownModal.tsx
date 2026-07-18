@@ -13,6 +13,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
 import { SurfaceList, Row } from '@/components/ui/Section';
+import { HabitsModelPrimerLink } from '@/components/habits/HabitsModelPrimer';
 
 interface PointsBreakdownModalProps {
   isOpen: boolean;
@@ -419,6 +420,9 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
         {view === 'total' && "Total points are estimated from lifetime counts."}
         {view === 'weekly' && "Points are calculated based on completed days this week."}
         {view === 'daily' && "Points earned today."}
+        {/* Primer entry point: the drawer portals to document.body after this
+            one, so it stacks on top; same quiet-link idiom as the Track tab. */}
+        <HabitsModelPrimerLink className="mt-1.5 flex justify-center" />
       </div>
     </Drawer>
   );
