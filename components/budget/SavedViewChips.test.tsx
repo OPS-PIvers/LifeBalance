@@ -33,7 +33,9 @@ const renderChips = (onApply = vi.fn()) => {
   return onApply;
 };
 
-const openMenu = () => fireEvent.click(screen.getByLabelText('Saved views'));
+// The trigger's aria-label announces the saved count when views exist
+// ("Saved views, 2 saved"), so match on the prefix.
+const openMenu = () => fireEvent.click(screen.getByLabelText(/^Saved views/));
 
 describe('SavedViewChips', () => {
   beforeEach(() => {
@@ -65,7 +67,8 @@ describe('SavedViewChips', () => {
       ])
     );
     renderChips();
-    expect(screen.getByLabelText('Saved views')).toHaveTextContent('2');
+    // The visible CountBadge chip shows the count AND the aria-label announces it.
+    expect(screen.getByLabelText('Saved views, 2 saved')).toHaveTextContent('2');
   });
 
   it('saves a new view from the menu', () => {

@@ -123,11 +123,11 @@ describe('TransactionMasterList Summary Widget', () => {
     expect(screen.getAllByText('Expense').length).toBeGreaterThan(0);
     expect(screen.getByText('-$2,150.50')).toBeInTheDocument();
 
-    expect(screen.getAllByText('Net').length).toBeGreaterThan(0);
+    // The count rides as the Net stat's caption (no separate "Count" stat —
+    // it wrapped onto an orphan line at 375px).
+    expect(screen.getAllByText('Net · 3 transactions').length).toBeGreaterThan(0);
     expect(screen.getByText('+$2,849.50')).toBeInTheDocument();
-
-    expect(screen.getAllByText('Count').length).toBeGreaterThan(0);
-    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.queryByText('Count')).not.toBeInTheDocument();
   });
 
   it('updates summary when filtered by search', () => {
@@ -146,7 +146,8 @@ describe('TransactionMasterList Summary Widget', () => {
     // Expense (-$2,000.00) and Net (-$2,000.00) now render identically: the
     // shared formatter renders negatives as "-$2,000.00" (Intl) for both lines.
     expect(screen.getAllByText('-$2,000.00').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText('1')).toBeInTheDocument();
+    // Singular caption for a single matching transaction.
+    expect(screen.getByText('Net · 1 transaction')).toBeInTheDocument();
   });
 
   it('updates summary when filtered by category', () => {
@@ -168,10 +169,34 @@ describe('TransactionMasterList Summary Widget', () => {
 
     expect(screen.getByText('-$0.00')).toBeInTheDocument();
 
-    // Find the count element specifically to avoid ambiguity with filter badges.
-    // Stat renders the value first, then the label underneath it.
-    const countLabel = screen.getByText('Count');
-    const countValue = countLabel.previousElementSibling;
-    expect(countValue).toHaveTextContent('1');
+    // The count is folded into the Net stat's caption.
+    expect(screen.getByText('Net · 1 transaction')).toBeInTheDocument();
+  });
+
+  it('gives the icon-only header controls accessible names and active state', () => {
+    render(<TransactionMasterList />);
+
+    // Filter button: bare name when nothing is active.
+    expect(screen.getByRole('button', { name: 'Filters' })).toBeInTheDocument();
+
+    // Selection toggles expose a toggle state via aria-pressed.
+    const toggles = screen.getAllByRole('button', { name: 'Toggle selection mode' });
+    expect(toggles.length).toBeGreaterThan(0);
+    toggles.forEach(t => expect(t).toHaveAttribute('aria-pressed', 'false'));
+
+    fireEvent.click(toggles[0]!);
+    screen.getAllByRole('button', { name: 'Toggle selection mode' })
+      .forEach(t => expect(t).toHaveAttribute('aria-pressed', 'true'));
+  });
+
+  it('announces and shows the active filter count on the Filters button', () => {
+    render(<TransactionMasterList />);
+    const selects = screen.getAllByRole('combobox');
+    fireEvent.change(selects[0]!, { target: { value: 'Housing' } });
+
+    // aria-label carries the active count, and the visible CountBadge chip shows it.
+    const filtersBtn = screen.getByRole('button', { name: 'Filters, 1 active' });
+    expect(filtersBtn).toBeInTheDocument();
+    expect(filtersBtn.querySelector('[aria-hidden="true"]')).toHaveTextContent('1');
   });
 });

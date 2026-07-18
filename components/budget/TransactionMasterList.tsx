@@ -13,6 +13,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import EmptyState from '@/components/ui/EmptyState';
+import CountBadge from '@/components/ui/CountBadge';
 import { StatGroup, Stat } from '@/components/ui/Section';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import toast from 'react-hot-toast';
@@ -434,12 +435,14 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
         <StatGroup>
           <Stat label="Income" value={`+${fmt(summary.income)}`} valueClassName="text-money-pos dark:text-money-posDark" />
           <Stat label="Expense" value={`-${fmt(summary.expense)}`} valueClassName="text-money-neg dark:text-money-negDark" />
+          {/* The transaction count rides as the Net stat's caption instead of a
+              fourth Stat — at 375px a "Count" figure wrapped alone onto its own
+              orphan line under the three money figures. */}
           <Stat
-            label="Net"
+            label={`Net · ${summary.count} transaction${summary.count === 1 ? '' : 's'}`}
             value={`${net >= 0 ? '+' : ''}${fmt(net)}`}
             valueClassName={net >= 0 ? 'text-money-pos dark:text-money-posDark' : 'text-money-neg dark:text-money-negDark'}
           />
-          <Stat label="Count" value={summary.count} />
         </StatGroup>
       </CollapsibleSection>
 
@@ -477,15 +480,11 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
                variant="secondary"
                size="icon"
                onClick={() => setIsFilterDrawerOpen(true)}
-               aria-label="Filters"
+               aria-label={activeFilterCount > 0 ? `Filters, ${activeFilterCount} active` : 'Filters'}
                className="h-11 relative"
              >
                <Filter size={16} />
-               {activeFilterCount > 0 && (
-                 <span className="absolute -top-1 -right-1 bg-accent-600 text-white px-1 rounded-full text-xxs leading-tight min-w-[16px] text-center">
-                   {activeFilterCount}
-                 </span>
-               )}
+               <CountBadge count={activeFilterCount} className="bg-accent-600" />
              </Button>
 
              <Button
@@ -493,6 +492,7 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
               variant={isSelectionMode ? 'primary' : 'subtle'}
               size="icon"
               aria-label="Toggle selection mode"
+              aria-pressed={isSelectionMode}
               className="h-11"
             >
               <Layers size={16} />
@@ -538,6 +538,7 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
             leftIcon={<Layers size={16} />}
             title="Toggle selection mode"
             aria-label="Toggle selection mode"
+            aria-pressed={isSelectionMode}
             className="ml-auto"
           >
             <span className="hidden sm:inline">{isSelectionMode ? 'Done' : 'Select'}</span>

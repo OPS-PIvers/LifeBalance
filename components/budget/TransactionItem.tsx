@@ -86,21 +86,26 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
             <p className="font-semibold tracking-tight text-brand-900 dark:text-brand-100 truncate text-base">{tx.merchant}</p>
             {getSourceIcon(tx.source, tx.isRecurring)}
           </div>
-          <p className="text-xs font-medium text-brand-500 dark:text-brand-400 truncate flex items-center gap-1.5 mt-0.5">
-            {format(parseISO(tx.date), 'MMM d, yyyy')}
-            <span className="w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
-            <span className="font-medium text-brand-600 dark:text-brand-300">{tx.category}</span>
+          {/* flex-wrap below sm: dot+label pairs stay together (no stranded trailing
+              dot on wrap); each leaf span owns its own `truncate min-w-0` because
+              truncate on a flex container clips children mid-word. */}
+          <p className="text-xs font-medium text-brand-500 dark:text-brand-400 min-w-0 flex flex-wrap sm:flex-nowrap items-center gap-x-1.5 gap-y-0.5 mt-0.5">
+            <span className="shrink-0 whitespace-nowrap">{format(parseISO(tx.date), 'MMM d, yyyy')}</span>
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="shrink-0 w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
+              <span className="truncate min-w-0 font-medium text-brand-600 dark:text-brand-300">{tx.category}</span>
+            </span>
             {tx.store && (
-              <>
-                <span className="w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
-                <span className="font-medium text-brand-600 dark:text-brand-300">{tx.store}</span>
-              </>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="shrink-0 w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
+                <span className="truncate min-w-0 font-medium text-brand-600 dark:text-brand-300">{tx.store}</span>
+              </span>
             )}
             {/* F-DASH-04: this row is one slice of a receipt split into several
                 categorized transactions — a purely visual grouping cue. */}
             {tx.receiptGroupId && (
-              <>
-                <span className="w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
+              <span className="flex shrink-0 items-center gap-1.5">
+                <span className="shrink-0 w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
                 <span
                   className="inline-flex items-center gap-0.5 font-medium text-brand-600 dark:text-brand-300"
                   aria-label="Part of a split receipt"
@@ -109,13 +114,13 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
                   <Scissors size={11} />
                   Split
                 </span>
-              </>
+              </span>
             )}
             {/* Plan 23: denormalized comment count, read-only — bumped by
                 addTransactionComment/deleteTransactionComment. */}
             {!!tx.commentCount && tx.commentCount > 0 && (
-              <>
-                <span className="w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
+              <span className="flex shrink-0 items-center gap-1.5">
+                <span className="shrink-0 w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
                 <span
                   className="inline-flex items-center gap-0.5 font-medium text-brand-600 dark:text-brand-300"
                   aria-label={`${tx.commentCount} comment${tx.commentCount === 1 ? '' : 's'}`}
@@ -123,7 +128,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
                   <MessageSquare size={11} />
                   {tx.commentCount}
                 </span>
-              </>
+              </span>
             )}
           </p>
         </div>
