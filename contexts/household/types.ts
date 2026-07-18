@@ -212,7 +212,7 @@ export interface HouseholdContextType {
 
   // Calendar Actions
   addCalendarItem: (item: CalendarItem) => Promise<void>;
-  updateCalendarItem: (item: CalendarItem) => Promise<void>;
+  updateCalendarItem: (item: CalendarItem, opts?: MutationOpts) => Promise<void>;
   deleteCalendarItem: (id: string, opts?: MutationOpts) => Promise<void>;
   /** Mark a calendar item paid/received. Optional `actualAmount` records what
    *  was really paid (variable bills) — it drives the balance delta and the

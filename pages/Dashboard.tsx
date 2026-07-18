@@ -366,7 +366,7 @@ const Dashboard: React.FC = () => {
               { silent: true }
             );
           } else if (undo.kind === 'calendar-single') {
-            await updateCalendarItem(undo.item);
+            await updateCalendarItem(undo.item, { silent: true });
           } else {
             const artifacts = findRecurringDeferArtifacts(
               calendarItemsRef.current,
