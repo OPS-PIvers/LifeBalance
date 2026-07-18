@@ -9,6 +9,7 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
+import { describeError } from '@/utils/errorMessages';
 import { SavingsGoal } from '@/types/schema';
 import { addMoney, roundMoney } from '@/utils/money';
 
@@ -103,7 +104,7 @@ export function makeSavingsGoalMutations(deps: {
         toast.error('Could not find that savings goal.');
         return;
       }
-      toast.error('Could not add your contribution. Please try again.');
+      toast.error(describeError(error, 'add your contribution'));
       throw error;
     }
   };

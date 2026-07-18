@@ -84,6 +84,7 @@ import {
 import { ParsedShoppingList, ParsedTodoList, ParsedExpense } from '@/services/geminiService.types';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import toast from 'react-hot-toast';
+import { describeError } from '@/utils/errorMessages';
 import { isSameDay, isSameWeek, parseISO, format, startOfWeek, addMonths } from 'date-fns';
 import { mergeById, collectMissingMealIds } from '@/contexts/household/selectors';
 import { attachTodoListeners } from '@/contexts/household/listeners/todoListeners';
@@ -824,7 +825,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         }
       }, (error) => {
         console.error('[members] listener failed:', error);
-        toast.error('Failed to sync household members. Try refreshing.');
+        toast.error(describeError(error, 'sync household members', 'read'));
       })
     );
 

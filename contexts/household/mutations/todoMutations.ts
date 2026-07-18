@@ -20,6 +20,7 @@ import {
   type DocumentData,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
+import { describeError } from '@/utils/errorMessages';
 import { todoConverter } from '@/utils/firestoreConverters';
 import { ToDo, HouseholdMember } from '@/types/schema';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
@@ -290,7 +291,7 @@ export function makeLoadOlderCompletedTodos(deps: {
       setHasMoreCompletedTodos(snap.docs.length === TODO_COMPLETED_PAGE_SIZE);
     } catch (error) {
       console.error('[loadOlderCompletedTodos] Failed:', error);
-      toast.error('Failed to load older completed tasks');
+      toast.error(describeError(error, 'load older completed tasks', 'read'));
     } finally {
       setIsLoadingOlderTodos(false);
     }

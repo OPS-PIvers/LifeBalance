@@ -11,6 +11,7 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
+import { describeError } from '@/utils/errorMessages';
 import { parseISO } from 'date-fns';
 import { mealPlanItemConverter } from '@/utils/firestoreConverters';
 import { Meal, MealPlanItem } from '@/types/schema';
@@ -48,7 +49,7 @@ export function makeAddMeal(deps: {
       return docRef.id;
     } catch (error) {
       console.error('[addMeal] Failed:', error);
-      toast.error('Failed to add meal');
+      toast.error(describeError(error, 'add the meal'));
       throw error;
     }
   };
@@ -75,7 +76,7 @@ export function makeMealCrudMutations(deps: {
       toast.success('Meal updated');
     } catch (error) {
       console.error('[updateMeal] Failed:', error);
-      toast.error('Failed to update meal');
+      toast.error(describeError(error, 'update the meal'));
     }
   };
 
@@ -86,7 +87,7 @@ export function makeMealCrudMutations(deps: {
       toast.success('Meal deleted');
     } catch (error) {
       console.error('[deleteMeal] Failed:', error);
-      toast.error('Failed to delete meal');
+      toast.error(describeError(error, 'delete the meal'));
     }
   };
 
@@ -182,7 +183,7 @@ export function makeAddMealPlanItem(deps: {
     } catch (error) {
       console.error('[addMealPlanItem] Failed:', error);
       if (!options?.suppressToast) {
-        toast.error('Failed to add to plan');
+        toast.error(describeError(error, 'add it to the plan'));
       }
       if (options?.throwOnError) {
         throw error;
@@ -219,7 +220,7 @@ export function makeMealPlanItemEditMutations(deps: {
       toast.success('Plan updated');
     } catch (error) {
       console.error('[updateMealPlanItem] Failed:', error);
-      toast.error('Failed to update plan');
+      toast.error(describeError(error, 'update the plan'));
     }
   };
 
@@ -232,7 +233,7 @@ export function makeMealPlanItemEditMutations(deps: {
       toast.success('Removed from plan');
     } catch (error) {
       console.error('[deleteMealPlanItem] Failed:', error);
-      toast.error('Failed to remove from plan');
+      toast.error(describeError(error, 'remove it from the plan'));
     }
   };
 

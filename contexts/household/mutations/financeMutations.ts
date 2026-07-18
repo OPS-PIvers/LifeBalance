@@ -20,6 +20,7 @@ import {
   type DocumentData,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
+import { describeError } from '@/utils/errorMessages';
 import { format, subDays, parseISO } from 'date-fns';
 import {
   Account,
@@ -162,7 +163,7 @@ export function makeAccountMutations(deps: {
       await batch.commit();
     } catch (error) {
       console.error('[reorderAccounts] Failed:', error);
-      toast.error('Failed to reorder accounts');
+      toast.error(describeError(error, 'reorder the accounts'));
       throw error;
     }
   };
@@ -243,7 +244,7 @@ export function makeBucketCrudMutations(deps: {
       toast.success('Bucket budgets set');
     } catch (error) {
       console.error('[setBucketLimits] Failed:', error);
-      toast.error('Failed to update bucket budgets. Please try again.');
+      toast.error(describeError(error, 'update the bucket budgets'));
       throw error;
     }
   };
@@ -279,7 +280,7 @@ export function makeBucketCrudMutations(deps: {
       toast.success('Changes saved');
     } catch (error) {
       console.error('[saveCeremonyChanges] Failed:', error);
-      toast.error('Failed to save changes. Please try again.');
+      toast.error(describeError(error, 'save your changes'));
       throw error;
     }
   };
@@ -418,7 +419,7 @@ export function makeResetBucketsForNewPeriod(deps: {
       toast.success('Buckets reset for new pay period');
     } catch (error) {
       console.error('[resetBucketsForNewPeriod] Failed:', error);
-      toast.error('Failed to reset period. Please try again.');
+      toast.error(describeError(error, 'reset the period'));
       throw error; // Re-throw so handlePaycheckApproval can catch it
     }
   };
@@ -468,7 +469,7 @@ export function makeInitializeFirstPeriod(deps: {
       toast.success('Pay period tracking initialized!');
     } catch (error) {
       console.error('[initializeFirstPeriod] Failed:', error);
-      toast.error('Failed to initialize period tracking');
+      toast.error(describeError(error, 'start period tracking'));
       throw error; // Re-throw so handlePaycheckApproval can catch it
     }
   };
@@ -519,7 +520,7 @@ export function makeHandlePaycheckApproval(deps: {
       await resetBucketsForNewPeriod(paycheckDate, externalBatch);
     } catch (error) {
       console.error('[handlePaycheckApproval] Failed:', error);
-      toast.error('Failed to process paycheck approval. Please try again.');
+      toast.error(describeError(error, 'process the paycheck approval'));
       throw error;
     }
   };
@@ -569,7 +570,7 @@ export function makeTransactionLoaders(deps: {
       setHasMoreTransactions(snap.docs.length === TRANSACTION_PAGE_SIZE);
     } catch (error) {
       console.error('[loadOlderTransactions] Failed:', error);
-      toast.error('Failed to load older transactions');
+      toast.error(describeError(error, 'load older transactions', 'read'));
     } finally {
       setIsLoadingOlderTransactions(false);
     }
@@ -590,7 +591,7 @@ export function makeTransactionLoaders(deps: {
       return mergeById(recentTransactionsRef.current, older);
     } catch (error) {
       console.error('[loadAllTransactions] Failed:', error);
-      toast.error('Failed to load full transaction history');
+      toast.error(describeError(error, 'load the full transaction history', 'read'));
       return recentTransactionsRef.current;
     } finally {
       setIsLoadingOlderTransactions(false);
@@ -630,7 +631,7 @@ export function makeLoadAllBucketHistory(deps: {
       setHasMoreBucketHistory(false);
     } catch (error) {
       console.error('[loadAllBucketHistory] Failed:', error);
-      toast.error('Failed to load full budget history');
+      toast.error(describeError(error, 'load the full budget history', 'read'));
     } finally {
       setIsLoadingOlderBucketHistory(false);
     }

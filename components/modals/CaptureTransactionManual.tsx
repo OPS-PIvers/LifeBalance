@@ -1,6 +1,7 @@
 import React, { useId, useState, useMemo } from 'react';
 import { Check, CheckCircle2, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { describeError } from '@/utils/errorMessages';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { Transaction, Habit, Store, Account, CalendarItem, CREDIT_CARD_CATEGORY } from '@/types/schema';
 import { suggestHabitsForTransaction } from '@/utils/habitSuggestions';
@@ -285,11 +286,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
       onClose();
     } catch (error) {
       console.error("Failed to save transaction:", error, newTransaction);
-      let errorMsg = 'Unknown error';
-      if (error instanceof Error) {
-        errorMsg = error.message;
-      }
-      toast.error(errorMsg);
+      toast.error(describeError(error, 'save the transaction'));
     } finally {
       setIsSubmitting(false);
     }

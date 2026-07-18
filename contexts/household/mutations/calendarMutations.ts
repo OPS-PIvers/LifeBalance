@@ -12,6 +12,7 @@ import {
   type WriteBatch,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
+import { describeError } from '@/utils/errorMessages';
 import { format, parseISO, addDays, startOfToday, isAfter, isValid } from 'date-fns';
 import { Account, CalendarItem, Household } from '@/types/schema';
 import type { MutationOpts } from '@/contexts/household/types';
@@ -62,7 +63,7 @@ export function makeAddCalendarItem(deps: {
       toast.success('Event added');
     } catch (error) {
       console.error('[addCalendarItem] Failed:', error);
-      toast.error('Failed to add event. Please try again.');
+      toast.error(describeError(error, 'add the event'));
       throw error;
     }
   };
@@ -136,7 +137,7 @@ export function makeUpdateCalendarItem(deps: {
       if (!opts?.silent) toast.success('Event updated');
     } catch (error) {
       console.error('[updateCalendarItem] Failed:', error);
-      toast.error('Failed to update event. Please try again.');
+      toast.error(describeError(error, 'update the event'));
       throw error;
     }
   };
@@ -196,7 +197,7 @@ export function makeCalendarDeleteMutations(deps: {
       if (!opts?.silent) toast.success('Instance deleted');
     } catch (error) {
       console.error('[deleteRecurringInstance] Failed:', error);
-      toast.error('Failed to delete instance. Please try again.');
+      toast.error(describeError(error, 'delete this occurrence'));
       throw error;
     }
   };
@@ -233,7 +234,7 @@ export function makeDeleteCalendarItem(deps: {
       }
     } catch (error) {
       console.error('[deleteCalendarItem] Failed:', error);
-      toast.error('Failed to delete event. Please try again.');
+      toast.error(describeError(error, 'delete the event'));
       throw error;
     }
   };
@@ -492,7 +493,7 @@ export function makePayCalendarItem(deps: {
       }
     } catch (error) {
       console.error('[payCalendarItem] Failed:', error);
-      toast.error('Failed to process payment. Please try again.');
+      toast.error(describeError(error, 'record the payment'));
       throw error;
     }
   };

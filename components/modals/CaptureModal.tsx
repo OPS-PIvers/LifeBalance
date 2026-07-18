@@ -3,6 +3,7 @@ import {
   X, Loader2, Wallet, CheckSquare, ShoppingBag
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { describeError } from '@/utils/errorMessages';
 import { useFinance, useGamification, useHouseholdCore, useShopping, useTodos } from '@/contexts/FirebaseHouseholdContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import type { ReceiptData, MagicActionResponse } from '@/services/geminiService.types';
@@ -395,8 +396,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
         await addTransaction(newTransaction);
         toast.success("Receipt scanned! Check your Action Queue.");
         handleClose();
-      } catch {
-        toast.error("Failed to analyze receipt. Try manual entry.");
+      } catch (error) {
+        toast.error(describeError(error, 'scan the receipt', 'read'));
         setView('manual');
       }
     }
@@ -459,7 +460,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
       toast.success(`Found ${transactions.length || 1} transaction(s)`);
     } catch (error) {
       console.error('AI processing error:', error);
-      toast.error(`AI analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(describeError(error, 'analyze the image', 'read'));
       setView('manual');
     }
   };
@@ -523,8 +524,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
       try {
         await addTransactions(selectedTx.map(buildPayload));
         toast.success(`${selectedTx.length} transaction(s) added to Action Queue!`);
-      } catch {
-        toast.error('Failed to add transactions');
+      } catch (error) {
+        toast.error(describeError(error, 'add the transactions'));
       }
       handleClose();
       return;
@@ -533,7 +534,12 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
     const results = await Promise.allSettled(selectedTx.map(tx => addTransaction(buildPayload(tx))));
     const succeeded = results.filter(r => r.status === 'fulfilled').length;
     if (succeeded > 0) toast.success(`${succeeded} transaction(s) added to Action Queue!`);
-    else toast.error('Failed to add transactions');
+    else {
+      const firstRejection = results.find(
+        (r): r is PromiseRejectedResult => r.status === 'rejected'
+      );
+      toast.error(describeError(firstRejection?.reason, 'add the transactions'));
+    }
     handleClose();
   };
 
@@ -571,8 +577,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
       toast.success('Receipt scanned! Check your Action Queue.');
       setPendingMatch(null);
       handleClose();
-    } catch {
-      toast.error('Failed to add transaction');
+    } catch (error) {
+      toast.error(describeError(error, 'add the transaction'));
     } finally {
       setIsResolvingMatch(false);
     }
@@ -613,8 +619,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
       });
       toast.success('Task added');
       handleClose();
-    } catch {
-      toast.error('Failed to add task');
+    } catch (error) {
+      toast.error(describeError(error, 'add the task'));
     }
   };
 
@@ -639,8 +645,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
       });
       toast.success('Added to list');
       handleClose();
-    } catch {
-      toast.error('Failed to add item');
+    } catch (error) {
+      toast.error(describeError(error, 'add the item'));
     }
   };
 

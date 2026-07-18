@@ -12,6 +12,7 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
+import { describeError } from '@/utils/errorMessages';
 import { Info } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { ShoppingItem, GroceryCatalogItem, Store, QuickStockList, Household } from '@/types/schema';
@@ -49,7 +50,7 @@ export function makeShoppingListMutations(deps: {
       toast.success('Added to shopping list');
     } catch (error) {
       console.error('[addShoppingItem] Failed:', error);
-      toast.error('Failed to add item');
+      toast.error(describeError(error, 'add the item'));
     }
   };
 
@@ -72,7 +73,7 @@ export function makeShoppingListMutations(deps: {
       // Toast handled by caller or generic success
     } catch (error) {
       console.error('[addShoppingItems] Failed:', error);
-      toast.error('Failed to add items');
+      toast.error(describeError(error, 'add the items'));
       throw error;
     }
   };
@@ -88,7 +89,7 @@ export function makeShoppingListMutations(deps: {
       });
     } catch (error) {
       console.error('[updateShoppingItem] Failed:', error);
-      toast.error('Failed to update item');
+      toast.error(describeError(error, 'update the item'));
     }
   };
 
@@ -103,7 +104,7 @@ export function makeShoppingListMutations(deps: {
       await batch.commit();
     } catch (error) {
       console.error('[reorderShoppingItems] Failed:', error);
-      toast.error('Failed to reorder items');
+      toast.error(describeError(error, 'reorder the items'));
     }
   };
 
@@ -114,7 +115,7 @@ export function makeShoppingListMutations(deps: {
       toast.success('Removed from shopping list');
     } catch (error) {
       console.error('[deleteShoppingItem] Failed:', error);
-      toast.error('Failed to remove item');
+      toast.error(describeError(error, 'remove the item'));
     }
   };
 
@@ -128,7 +129,7 @@ export function makeShoppingListMutations(deps: {
       toast.success('Store added');
     } catch (error) {
       console.error('[addStore] Failed:', error);
-      toast.error('Failed to add store');
+      toast.error(describeError(error, 'add the store'));
     }
   };
 
@@ -141,7 +142,7 @@ export function makeShoppingListMutations(deps: {
       toast.success('Categories updated');
     } catch (error) {
       console.error('[updateGroceryCategories] Failed:', error);
-      toast.error('Failed to update categories');
+      toast.error(describeError(error, 'update the categories'));
     }
   };
 
@@ -155,7 +156,7 @@ export function makeShoppingListMutations(deps: {
       toast.success('Template created');
     } catch (error) {
       console.error('[addQuickStockList] Failed:', error);
-      toast.error('Failed to create template');
+      toast.error(describeError(error, 'create the template'));
     }
   };
 
@@ -188,7 +189,7 @@ export function makeShoppingListMutations(deps: {
       return docRef.id;
     } catch (error) {
       console.error('[addGroceryCatalogItem] Failed:', error);
-      toast.error('Failed to add to history');
+      toast.error(describeError(error, 'update your purchase history'));
       throw error;
     }
   };
@@ -200,7 +201,7 @@ export function makeShoppingListMutations(deps: {
       toast.success('Item updated');
     } catch (error) {
       console.error('[updateGroceryCatalogItem] Failed:', error);
-      toast.error('Failed to update item');
+      toast.error(describeError(error, 'update the item'));
     }
   };
 
@@ -211,7 +212,7 @@ export function makeShoppingListMutations(deps: {
       toast.success('Removed from history');
     } catch (error) {
       console.error('[deleteGroceryCatalogItem] Failed:', error);
-      toast.error('Failed to remove item');
+      toast.error(describeError(error, 'remove the item'));
     }
   };
 
@@ -310,7 +311,7 @@ export function makeToggleShoppingItemPurchased(deps: {
 
     } catch (error) {
       console.error('[toggleShoppingItemPurchased] Failed:', error);
-      toast.error('Failed to update status');
+      toast.error(describeError(error, 'update the status'));
     }
   };
 
@@ -346,7 +347,7 @@ export function makeClearPurchasedShoppingItems(deps: {
       toast.success(`Cleared ${purchasedItems.length} items`);
     } catch (error) {
       console.error('[clearPurchasedShoppingItems] Failed:', error);
-      toast.error('Failed to clear items');
+      toast.error(describeError(error, 'clear the items'));
     }
   };
 
@@ -377,7 +378,7 @@ export function makeStoreSettingsMutations(deps: {
       toast.success('Store updated');
     } catch (error) {
       console.error('[updateStore] Failed:', error);
-      toast.error('Failed to update store');
+      toast.error(describeError(error, 'update the store'));
     }
   };
 
@@ -393,7 +394,7 @@ export function makeStoreSettingsMutations(deps: {
       toast.success('Template updated');
     } catch (error) {
       console.error('[updateQuickStockList] Failed:', error);
-      toast.error('Failed to update template');
+      toast.error(describeError(error, 'update the template'));
     }
   };
 
@@ -409,7 +410,7 @@ export function makeStoreSettingsMutations(deps: {
       toast.success('Template deleted');
     } catch (error) {
       console.error('[deleteQuickStockList] Failed:', error);
-      toast.error('Failed to delete template');
+      toast.error(describeError(error, 'delete the template'));
     }
   };
 
@@ -432,7 +433,7 @@ export function makeStoreSettingsMutations(deps: {
       });
     } catch (error) {
       console.error('[reorderStores] Failed:', error);
-      toast.error('Failed to reorder stores');
+      toast.error(describeError(error, 'reorder the stores'));
       throw error;
     }
   };
@@ -485,7 +486,7 @@ export function makeDeleteStore(deps: {
       toast.success('Store deleted');
     } catch (error) {
       console.error('[deleteStore] Failed:', error);
-      toast.error('Failed to delete store');
+      toast.error(describeError(error, 'delete the store'));
     }
   };
 

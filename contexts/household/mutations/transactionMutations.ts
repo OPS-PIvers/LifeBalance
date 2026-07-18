@@ -9,6 +9,7 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
+import { describeError } from '@/utils/errorMessages';
 import React from 'react';
 import { Star } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
@@ -677,7 +678,7 @@ export function makeUpdateTransaction(deps: {
       if (!opts?.silent) toast.success('Transaction updated!');
     } catch (error) {
       console.error('[updateTransaction] Failed:', error);
-      toast.error('Failed to update transaction');
+      toast.error(describeError(error, 'update the transaction'));
       throw error;
     }
   };
@@ -735,7 +736,7 @@ export function makeDeleteTransaction(deps: {
       if (!opts?.silent) toast.success('Transaction deleted');
     } catch (error) {
       console.error('[deleteTransaction] Failed:', error);
-      toast.error('Failed to delete transaction');
+      toast.error(describeError(error, 'delete the transaction'));
       throw error;
     }
   };
@@ -804,7 +805,7 @@ export function makeMergeTransactions(deps: {
       toast.success('Transactions merged');
     } catch (error) {
       console.error('[mergeTransactions] Failed:', error);
-      toast.error('Failed to merge transactions');
+      toast.error(describeError(error, 'merge the transactions'));
       throw error;
     }
   };
@@ -831,7 +832,7 @@ export function makeKeepBothTransactions(deps: {
       track('duplicate_kept_both');
     } catch (error) {
       console.error('[keepBothTransactions] Failed:', error);
-      toast.error('Failed to update transaction');
+      toast.error(describeError(error, 'update the transaction'));
       throw error;
     }
   };
@@ -925,7 +926,7 @@ export function makeSplitTransaction(deps: {
       toast.success('Transaction split successfully');
     } catch (error) {
       console.error('[splitTransaction] Failed:', error);
-      toast.error('Failed to split transaction');
+      toast.error(describeError(error, 'split the transaction'));
       throw error;
     }
   };
@@ -973,7 +974,7 @@ export function makeSetTransactionSplit(deps: {
       });
     } catch (error) {
       console.error('[setTransactionSplit] Failed:', error);
-      toast.error('Failed to save split');
+      toast.error(describeError(error, 'save the split'));
       throw error;
     }
   };
@@ -1014,7 +1015,7 @@ export function makeMarkSplitSettled(deps: {
       });
     } catch (error) {
       console.error('[markSplitSettled] Failed:', error);
-      toast.error('Failed to update split');
+      toast.error(describeError(error, 'update the split'));
       throw error;
     }
   };
