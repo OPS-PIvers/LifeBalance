@@ -13,17 +13,26 @@
  * `contexts/household/mutations/trashMutations.ts`.
  */
 
+import type { Account, Transaction } from '@/types/schema';
+import { accountImpactOf, resolveTargetAccount } from '@/utils/accountImpact';
+import { formatCurrency } from '@/utils/formatCurrency';
+import { roundMoney } from '@/utils/money';
+
 /** Records are recoverable for this many days after deletion, then purged. */
 export const TRASH_RETENTION_DAYS = 30;
 
-/** Domains that participate in the unified trash. Each is a plain single-doc
- *  delete whose original can be re-created verbatim on restore. */
+/** Domains that participate in the unified trash. Most are plain single-doc
+ *  deletes whose original can be re-created verbatim on restore; `transaction`
+ *  additionally re-applies its account-balance impact on restore (mirroring the
+ *  reversal `deleteTransaction` performed) — see
+ *  {@link transactionRestoreImpact} and `trashMutations.restoreTrashedItem`. */
 export type TrashDomain =
   | 'todo'
   | 'shoppingItem'
   | 'meal'
   | 'mealPlanItem'
-  | 'habit';
+  | 'habit'
+  | 'transaction';
 
 export interface TrashDomainMeta {
   /** Source subcollection under `households/{id}/` the record was deleted from. */
@@ -38,6 +47,7 @@ export const TRASH_DOMAIN_META: Record<TrashDomain, TrashDomainMeta> = {
   meal: { collection: 'meals', label: 'Meal' },
   mealPlanItem: { collection: 'mealPlan', label: 'Planned meal' },
   habit: { collection: 'habits', label: 'Habit' },
+  transaction: { collection: 'transactions', label: 'Transaction' },
 };
 
 /** A soft-deleted record as read back from the `trash` subcollection. */
@@ -116,4 +126,94 @@ export function trashItemTitle(item: TrashedItem): string {
     pick('itemName') ??
     TRASH_DOMAIN_META[item.domain].label
   );
+}
+
+// ---------------------------------------------------------------------------
+// Transaction-specific helpers (Recently Deleted parity for transactions).
+// A deleted transaction is mirrored verbatim like every other domain, but its
+// restore must also RE-APPLY the balance impact that `deleteTransaction`
+// reversed — the pure computation for that lives here so it is unit-testable
+// away from Firestore.
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the trash mirror `data` for a transaction: the full row minus the
+ * synthetic `id` (which is never persisted — the converter injects it on read,
+ * and the restore path re-creates the doc under `originalId`).
+ */
+export function transactionTrashData(tx: Transaction): Record<string, unknown> {
+  const data: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(tx)) {
+    if (key === 'id' || value === undefined) continue;
+    data[key] = value;
+  }
+  return data;
+}
+
+/**
+ * Domain-specific detail line for the Recently Deleted list. For a transaction
+ * this is "amount · date" (e.g. `$45.20 · 2026-07-03`) so a row is identifiable
+ * beyond its merchant title; other domains have no extra detail (null).
+ */
+export function trashItemSubtitle(item: TrashedItem): string | null {
+  if (item.domain !== 'transaction') return null;
+  const parts: string[] = [];
+  const amount = item.data.amount;
+  if (typeof amount === 'number' && Number.isFinite(amount)) {
+    parts.push(formatCurrency(amount));
+  }
+  const date = item.data.date;
+  if (typeof date === 'string' && date.trim()) {
+    parts.push(date.trim());
+  }
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+/** Outcome of computing the balance side-effect of restoring a transaction. */
+export type TransactionRestoreImpact =
+  /** Apply `delta` to `accountId`'s balance in the same batch as the restore. */
+  | { outcome: 'apply'; accountId: string; delta: number }
+  /** No balance movement needed (pending_review, zero/invalid amount, or no
+   *  account to route to) — restore the row only. */
+  | { outcome: 'none' }
+  /** The tagged account no longer exists: restore the row WITHOUT any balance
+   *  mutation (safe degradation — see rationale in the function docs). */
+  | { outcome: 'missing-account' };
+
+/**
+ * Compute the account-balance side-effect of restoring a trashed transaction —
+ * the exact inverse of the reversal `deleteTransaction` applied:
+ *
+ * - `pending_review` never touched a balance, so restoring it must not either.
+ * - A verified row re-applies its effective impact on its target account
+ *   (income credits, expense debits, credit-card charge raises debt, payment
+ *   lowers it — all via {@link accountImpactOf}).
+ * - Untagged rows route to the checking account, matching `deleteTransaction`.
+ * - If the TAGGED account has been deleted since, we deliberately do NOT use
+ *   `resolveTargetAccount`'s checking fallback: the money semantics of the
+ *   original account (esp. a credit card's charge/payment signs) don't
+ *   translate to checking, so the row is restored with no balance mutation and
+ *   the caller explains why. This is the simpler safe option.
+ */
+export function transactionRestoreImpact(
+  data: Record<string, unknown>,
+  accounts: Account[]
+): TransactionRestoreImpact {
+  const amount = data.amount;
+  if (typeof amount !== 'number' || !Number.isFinite(amount)) return { outcome: 'none' };
+  if (data.status !== 'verified') return { outcome: 'none' };
+
+  const accountId =
+    typeof data.accountId === 'string' && data.accountId.trim() ? data.accountId.trim() : undefined;
+  if (accountId && !accounts.some((a) => a.id === accountId)) {
+    return { outcome: 'missing-account' };
+  }
+  const target = resolveTargetAccount(accountId, accounts);
+  if (!target) return { outcome: 'none' };
+
+  const category = typeof data.category === 'string' ? data.category : '';
+  const creditPayment = data.creditPayment === true;
+  const delta = roundMoney(accountImpactOf({ amount, category, creditPayment }, target));
+  if (delta === 0) return { outcome: 'none' };
+  return { outcome: 'apply', accountId: target.id, delta };
 }

@@ -20,6 +20,8 @@ import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge
 import { processToggleHabit } from '@/utils/habitLogic';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { roundMoney } from '@/utils/money';
+import { trashDocId, transactionTrashData } from '@/utils/trash';
+import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { track } from '@/services/analytics';
 import { shouldTrackFirstTime, FIRST_TRANSACTION_FLAG } from '@/utils/firstTimeFlags';
 
@@ -687,15 +689,16 @@ export function makeUpdateTransaction(deps: {
 
 /**
  * deleteTransaction — original closure captured `householdId`, `transactions`,
- * `accounts`.
+ * `accounts`; `user` was added for the trash mirror's `deletedBy` stamp.
  */
 export function makeDeleteTransaction(deps: {
   db: Firestore;
   householdId: string | null;
   transactions: Transaction[];
   accounts: Account[];
+  user: { uid: string } | null;
 }) {
-  const { db, householdId, transactions, accounts } = deps;
+  const { db, householdId, transactions, accounts, user } = deps;
 
   const deleteTransaction = async (id: string, opts?: MutationOpts) => {
     if (!householdId) return;
@@ -707,30 +710,57 @@ export function makeDeleteTransaction(deps: {
         return;
       }
 
-      // Atomically restore the target account balance and delete the
+      // Atomically restore the target account balance, mirror the row into the
+      // unified trash (F-XCUT-03 — Recently Deleted parity), and delete the
       // transaction in a single writeBatch so they can never partially apply
       // (server-side delta avoids lost updates from concurrent edits / stale
       // local state).
-      const deleteBatch = writeBatch(db);
+      //
+      // `withTrashMirror` mirrors softDeleteDoc's graceful degradation: if the
+      // trash write is permission-denied (rules not deployed for `trash`), the
+      // delete is retried WITHOUT the mirror so deleting keeps working — it just
+      // isn't recoverable.
+      const buildDeleteBatch = (withTrashMirror: boolean) => {
+        const deleteBatch = writeBatch(db);
 
-      // VERIFIED-ONLY, ACCOUNT-ROUTED BALANCE: reverse only the EFFECTIVE impact,
-      // on the account the transaction was tagged to. A verified transaction had
-      // applied its account-aware impact, so deleting it reverses that (e.g.
-      // deleting a verified card charge lowers the card's debt again); a
-      // pending_review transaction never touched any balance, so deleting it must
-      // NOT move a balance (its effective impact is 0).
-      const target = resolveTargetAccount(transaction.accountId, accounts);
-      const balanceDelta = -effectiveAccountImpact(transaction, target);
-      if (balanceDelta !== 0 && target) {
-        deleteBatch.update(doc(db, `households/${householdId}/accounts`, target.id), {
-          balance: increment(roundMoney(balanceDelta)),
-          lastUpdated: serverTimestamp(),
-        });
+        // VERIFIED-ONLY, ACCOUNT-ROUTED BALANCE: reverse only the EFFECTIVE impact,
+        // on the account the transaction was tagged to. A verified transaction had
+        // applied its account-aware impact, so deleting it reverses that (e.g.
+        // deleting a verified card charge lowers the card's debt again); a
+        // pending_review transaction never touched any balance, so deleting it must
+        // NOT move a balance (its effective impact is 0).
+        const target = resolveTargetAccount(transaction.accountId, accounts);
+        const balanceDelta = -effectiveAccountImpact(transaction, target);
+        if (balanceDelta !== 0 && target) {
+          deleteBatch.update(doc(db, `households/${householdId}/accounts`, target.id), {
+            balance: increment(roundMoney(balanceDelta)),
+            lastUpdated: serverTimestamp(),
+          });
+        }
+
+        if (withTrashMirror) {
+          // Mirror the full row (minus the synthetic id) so Recently Deleted can
+          // restore it verbatim; restore re-applies the balance impact reversed
+          // above (see trashMutations.restoreTrashedItem).
+          deleteBatch.set(doc(db, `households/${householdId}/trash`, trashDocId('transaction', id)), {
+            domain: 'transaction',
+            originalId: id,
+            data: sanitizeFirestoreData(transactionTrashData(transaction)),
+            deletedAt: serverTimestamp(),
+            deletedBy: user?.uid ?? null,
+          });
+        }
+
+        deleteBatch.delete(doc(db, `households/${householdId}/transactions`, id));
+        return deleteBatch;
+      };
+
+      try {
+        await buildDeleteBatch(true).commit();
+      } catch (error) {
+        if ((error as { code?: string } | null)?.code !== 'permission-denied') throw error;
+        await buildDeleteBatch(false).commit();
       }
-
-      deleteBatch.delete(doc(db, `households/${householdId}/transactions`, id));
-
-      await deleteBatch.commit();
 
       if (!opts?.silent) toast.success('Transaction deleted');
     } catch (error) {

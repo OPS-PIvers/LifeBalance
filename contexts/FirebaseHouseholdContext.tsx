@@ -1812,8 +1812,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }, [householdId, transactions, householdSettings, accounts]);
 
   const deleteTransaction = useCallback(async (id: string, opts?: MutationOpts) => {
-    await makeDeleteTransaction({ db, householdId, transactions, accounts }).deleteTransaction(id, opts);
-  }, [householdId, transactions, accounts]);
+    await makeDeleteTransaction({ db, householdId, transactions, accounts, user }).deleteTransaction(id, opts);
+  }, [householdId, transactions, accounts, user]);
 
   const mergeTransactions = useCallback(async (keeperId: string, dupeId: string) => {
     await makeMergeTransactions({ db, householdId, transactions, accounts }).mergeTransactions(keeperId, dupeId);
@@ -2225,8 +2225,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // --- ACTIONS: UNIFIED TRASH (F-XCUT-03) ---
 
   const restoreTrashedItem = useCallback(async (item: TrashedItem) => {
-    await restoreTrashedItemMutation({ db, householdId }, item);
-  }, [householdId]);
+    // `accounts` lets a restored TRANSACTION re-apply its balance impact in the
+    // same batch (no-op for every other domain).
+    await restoreTrashedItemMutation({ db, householdId, accounts }, item);
+  }, [householdId, accounts]);
 
   const purgeTrashedItem = useCallback(async (item: TrashedItem) => {
     await purgeTrashedItemMutation({ db, householdId }, item);

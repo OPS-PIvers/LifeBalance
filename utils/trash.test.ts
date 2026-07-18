@@ -7,8 +7,12 @@ import {
   isTrashExpired,
   daysUntilPurge,
   trashItemTitle,
+  trashItemSubtitle,
+  transactionTrashData,
+  transactionRestoreImpact,
   type TrashedItem,
 } from '@/utils/trash';
+import type { Account, Transaction } from '@/types/schema';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -36,7 +40,8 @@ describe('isTrashDomain', () => {
     for (const key of Object.keys(TRASH_DOMAIN_META)) {
       expect(isTrashDomain(key)).toBe(true);
     }
-    expect(isTrashDomain('transaction')).toBe(false);
+    expect(isTrashDomain('transaction')).toBe(true);
+    expect(isTrashDomain('account')).toBe(false);
     expect(isTrashDomain(42)).toBe(false);
     expect(isTrashDomain(null)).toBe(false);
   });
@@ -87,5 +92,135 @@ describe('trashItemTitle', () => {
   it('falls back to the domain label when nothing usable is present', () => {
     expect(trashItemTitle(makeItem({ domain: 'habit', data: {} }))).toBe('Habit');
     expect(trashItemTitle(makeItem({ domain: 'meal', data: { name: '   ' } }))).toBe('Meal');
+    expect(trashItemTitle(makeItem({ domain: 'transaction', data: {} }))).toBe('Transaction');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Transaction-domain helpers (Recently Deleted parity for transactions)
+// ---------------------------------------------------------------------------
+
+describe('TRASH_DOMAIN_META — transaction', () => {
+  it('maps the transaction domain to the transactions subcollection', () => {
+    expect(TRASH_DOMAIN_META.transaction).toEqual({ collection: 'transactions', label: 'Transaction' });
+  });
+});
+
+describe('transactionTrashData', () => {
+  it('mirrors the full row minus the synthetic id and undefined fields', () => {
+    const tx: Transaction = {
+      id: 'tx-1',
+      amount: 42.5,
+      merchant: 'Target',
+      category: 'Shopping',
+      date: '2026-07-10',
+      status: 'verified',
+      isRecurring: false,
+      source: 'manual',
+      autoCategorized: false,
+      createdBy: 'user-1',
+      createdAt: '2026-07-10T00:00:00.000Z',
+      payPeriodId: 'pp-1',
+      accountId: undefined,
+    };
+    const data = transactionTrashData(tx);
+    expect(data).not.toHaveProperty('id');
+    expect(data).not.toHaveProperty('accountId'); // undefined dropped
+    expect(data).toMatchObject({
+      amount: 42.5,
+      merchant: 'Target',
+      category: 'Shopping',
+      status: 'verified',
+      payPeriodId: 'pp-1',
+    });
+  });
+});
+
+describe('trashItemSubtitle', () => {
+  it('is amount · date for a transaction', () => {
+    const item = makeItem({
+      domain: 'transaction',
+      data: { merchant: 'Target', amount: 45.2, date: '2026-07-03' },
+    });
+    expect(trashItemSubtitle(item)).toBe('$45.20 · 2026-07-03');
+  });
+  it('degrades to just the pieces that exist', () => {
+    expect(trashItemSubtitle(makeItem({ domain: 'transaction', data: { amount: 5 } }))).toBe('$5.00');
+    expect(trashItemSubtitle(makeItem({ domain: 'transaction', data: { date: '2026-01-02' } }))).toBe('2026-01-02');
+    expect(trashItemSubtitle(makeItem({ domain: 'transaction', data: {} }))).toBeNull();
+  });
+  it('is null for every other domain', () => {
+    expect(trashItemSubtitle(makeItem({ domain: 'todo', data: { amount: 5, date: '2026-01-02' } }))).toBeNull();
+  });
+});
+
+describe('transactionRestoreImpact', () => {
+  const accounts: Account[] = [
+    { id: 'acc-check', name: 'Checking', type: 'checking', balance: 500, lastUpdated: '' },
+    { id: 'acc-save', name: 'Savings', type: 'savings', balance: 900, lastUpdated: '' },
+    { id: 'acc-card', name: 'Visa', type: 'credit', balance: 200, lastUpdated: '' },
+  ];
+
+  it('re-applies a verified untagged expense as a checking debit', () => {
+    expect(
+      transactionRestoreImpact({ amount: 42.5, category: 'Shopping', status: 'verified' }, accounts)
+    ).toEqual({ outcome: 'apply', accountId: 'acc-check', delta: -42.5 });
+  });
+
+  it('re-applies verified income as a checking credit', () => {
+    expect(
+      transactionRestoreImpact({ amount: 5000, category: 'Income', status: 'verified' }, accounts)
+    ).toEqual({ outcome: 'apply', accountId: 'acc-check', delta: 5000 });
+  });
+
+  it('re-applies a verified credit-card charge as debt (+amount on the card)', () => {
+    expect(
+      transactionRestoreImpact(
+        { amount: 30, category: 'Dining', status: 'verified', accountId: 'acc-card' },
+        accounts
+      )
+    ).toEqual({ outcome: 'apply', accountId: 'acc-card', delta: 30 });
+  });
+
+  it('re-applies a verified credit-card payment as −amount on the card', () => {
+    expect(
+      transactionRestoreImpact(
+        { amount: 100, category: 'Credit Card', status: 'verified', accountId: 'acc-card', creditPayment: true },
+        accounts
+      )
+    ).toEqual({ outcome: 'apply', accountId: 'acc-card', delta: -100 });
+  });
+
+  it('never moves a balance for a pending_review row (it never debited)', () => {
+    expect(
+      transactionRestoreImpact({ amount: 42.5, category: 'Shopping', status: 'pending_review' }, accounts)
+    ).toEqual({ outcome: 'none' });
+  });
+
+  it('reports missing-account when the TAGGED account has been deleted since', () => {
+    expect(
+      transactionRestoreImpact(
+        { amount: 42.5, category: 'Shopping', status: 'verified', accountId: 'acc-gone' },
+        accounts
+      )
+    ).toEqual({ outcome: 'missing-account' });
+  });
+
+  it('is none when there is no account to route to at all', () => {
+    expect(
+      transactionRestoreImpact({ amount: 42.5, category: 'Shopping', status: 'verified' }, [])
+    ).toEqual({ outcome: 'none' });
+  });
+
+  it('is none for a zero or malformed amount', () => {
+    expect(transactionRestoreImpact({ amount: 0, category: 'Shopping', status: 'verified' }, accounts)).toEqual({ outcome: 'none' });
+    expect(transactionRestoreImpact({ amount: 'x', category: 'Shopping', status: 'verified' }, accounts)).toEqual({ outcome: 'none' });
+    expect(transactionRestoreImpact({ category: 'Shopping', status: 'verified' }, accounts)).toEqual({ outcome: 'none' });
+  });
+
+  it('rounds the delta to whole cents', () => {
+    expect(
+      transactionRestoreImpact({ amount: 10.001, category: 'Shopping', status: 'verified' }, accounts)
+    ).toEqual({ outcome: 'apply', accountId: 'acc-check', delta: -10 });
   });
 });
