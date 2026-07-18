@@ -379,8 +379,12 @@ const Dashboard: React.FC = () => {
               failed++;
               continue;
             }
-            await deleteCalendarItem(artifacts.deferredCopyId, { silent: true });
+            // Tombstone first: if the second delete fails mid-undo, the user
+            // is left with an extra visible copy at the deferred date
+            // (recoverable in the UI) rather than a tombstone silently hiding
+            // the original occurrence with its copy already gone.
             await deleteCalendarItem(artifacts.tombstoneId, { silent: true });
+            await deleteCalendarItem(artifacts.deferredCopyId, { silent: true });
           }
           restored++;
         } catch (error) {
