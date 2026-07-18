@@ -7,6 +7,7 @@ import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Popover } from '@/components/ui/Popover';
 import CountBadge from '@/components/ui/CountBadge';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
+import { pickAvatarColor, resolveAvatarColor } from '@/utils/avatarColor';
 
 interface ProfileMenuProps {
   isOpen: boolean;
@@ -56,7 +57,9 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({
       return;
     }
     try {
-      await addKidProfile({ displayName: trimmedName });
+      // New profiles pick from the token-derived avatar palette (utils/avatarColor)
+      // so no off-palette hue is ever written for new members.
+      await addKidProfile({ displayName: trimmedName, avatarColor: pickAvatarColor(trimmedName) });
     } catch {
       // addKidProfile surfaces its own error toast.
     }
@@ -167,7 +170,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({
               {kid.avatarColor ? (
                 <div
                   className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 text-white"
-                  style={{ backgroundColor: kid.avatarColor }}
+                  style={{ backgroundColor: resolveAvatarColor(kid.avatarColor, kid.uid) }}
                 >
                   {kid.avatarEmoji ?? kid.displayName.charAt(0)}
                 </div>
