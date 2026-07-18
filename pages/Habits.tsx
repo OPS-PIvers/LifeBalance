@@ -12,6 +12,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import Eyebrow from '@/components/ui/Eyebrow';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { TabSubViewMenu, type TabSubViewOption } from '@/components/ui/TabSubViewMenu';
+import { SubViewHint } from '@/components/ui/SubViewHint';
 import HabitCreatorWizard from '@/components/modals/HabitCreatorWizard';
 import SmartHabitAdjustModal from '@/components/modals/SmartHabitAdjustModal';
 import SmartHabitReorderModal from '@/components/modals/SmartHabitReorderModal';
@@ -347,7 +348,7 @@ const Habits: React.FC = () => {
       {activeTab === group
         ? (groupOptions[group].find((o) => o.value === groupSegment[group])?.label ?? groupName)
         : groupName}
-      <ChevronDown size={12} aria-hidden="true" className="-ml-1.5 opacity-70" />
+      <ChevronDown size={12} aria-hidden="true" className="-ml-1.5" />
     </>
   );
   // Global search deep-link (v1.1): scroll-to + briefly flash the specific
@@ -580,6 +581,13 @@ const Habits: React.FC = () => {
             )}
           </div>
         </div>
+        {/* One-time coach hint for the tab-popover nav — first visit only;
+            opening any tab menu, the ×, or navigating away latches it off for
+            good (shared with the Money page). Sibling of the tab-bar wrapper,
+            not a child (review): inside the wrapper its dismissal shrank the
+            wrapper and jumped the main content up; out here the wrapper's own
+            spacing stays put and only the hint's slot collapses. */}
+        <SubViewHint menuOpened={openMenu !== null} className="mx-4 -mt-1 mb-4" />
 
         {/* Main Content */}
         <div className="px-4 pb-6">

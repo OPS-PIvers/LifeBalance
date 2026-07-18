@@ -9,6 +9,7 @@ import MoneyOverview from '@/components/budget/MoneyOverview';
 import SettleUpView from '@/components/transactions/SettleUpView';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { TabSubViewMenu } from '@/components/ui/TabSubViewMenu';
+import { SubViewHint } from '@/components/ui/SubViewHint';
 import PageHeader from '@/components/ui/PageHeader';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Skeleton, SkeletonText } from '@/components/ui/Skeleton';
@@ -201,7 +202,7 @@ const Budget: React.FC = () => {
       {activeTab === group
         ? (GROUP_OPTIONS[group].find((o) => o.value === segmentOf(group))?.label ?? GROUP_LABELS[group])
         : GROUP_LABELS[group]}
-      <ChevronDown size={12} aria-hidden="true" className="-ml-1.5 opacity-70" />
+      <ChevronDown size={12} aria-hidden="true" className="-ml-1.5" />
     </>
   );
   // Global search deep-link (v1.1): scroll-to + briefly flash the specific
@@ -274,6 +275,13 @@ const Budget: React.FC = () => {
               />
             )}
           </div>
+
+          {/* One-time coach hint for the tab-popover nav — first visit only;
+              opening any tab menu, the ×, or navigating away latches it off
+              for good (shared with the Habits page). Negative top margin
+              tucks it under the tab bar's mb-6 without shifting the layout
+              once it's gone. */}
+          <SubViewHint menuOpened={openMenu !== null} className="-mt-3 mb-6" />
 
           {/* View container */}
           <div>
