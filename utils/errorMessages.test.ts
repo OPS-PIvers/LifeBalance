@@ -40,6 +40,14 @@ describe('describeError', () => {
     expect(msg).not.toContain('anything');
   });
 
+  it("read failures get plain retry copy offline — no false 'will sync' promise", () => {
+    setOnLine(false);
+    const msg = describeError(new Error('anything'), 'load older transactions', 'read');
+    expect(msg).toContain("You're offline");
+    expect(msg).toContain('try again');
+    expect(msg).not.toContain('sync');
+  });
+
   it('treats Firestore unavailable as offline/connectivity copy', () => {
     setOnLine(true);
     const msg = describeError(fbError('unavailable'), 'add the item');

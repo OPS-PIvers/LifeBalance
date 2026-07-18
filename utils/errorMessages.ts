@@ -61,8 +61,16 @@ function isOffline(): boolean {
  * @param action Imperative lowercase phrase, e.g. "save the transaction",
  *               "add the item". Slots into "Couldn't <action>." and
  *               "You don't have permission to <action>."
+ * @param kind   'write' (default) failures get the honest offline-persistence
+ *               note (Firestore queues writes and syncs them on reconnect);
+ *               'read' failures (loading history, AI calls) just fail offline —
+ *               nothing queues — so they get plain retry copy instead.
  */
-export function describeError(err: unknown, action: string): string {
+export function describeError(
+  err: unknown,
+  action: string,
+  kind: 'write' | 'read' = 'write'
+): string {
   // Gemini daily-AI-quota errors already carry crafted user-facing copy
   // ("Daily AI quota exceeded (N requests/day). Try again tomorrow.") —
   // pass it through rather than regressing it to something vaguer.
@@ -73,7 +81,9 @@ export function describeError(err: unknown, action: string): string {
   const code = isFirebaseErrorLike(err) ? normalizeCode(err.code) : null;
 
   if ((code !== null && NETWORK_CODES.has(code)) || isOffline() || isNetworkishError(err)) {
-    return `You're offline — couldn't ${action} right now. Saved changes will sync automatically when you reconnect.`;
+    return kind === 'write'
+      ? `You're offline — couldn't ${action} right now. Saved changes will sync automatically when you reconnect.`
+      : `You're offline — couldn't ${action} right now. Check your connection and try again.`;
   }
 
   switch (code) {

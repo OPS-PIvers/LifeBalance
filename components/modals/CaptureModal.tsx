@@ -397,7 +397,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
         toast.success("Receipt scanned! Check your Action Queue.");
         handleClose();
       } catch (error) {
-        toast.error(describeError(error, 'scan the receipt'));
+        toast.error(describeError(error, 'scan the receipt', 'read'));
         setView('manual');
       }
     }
@@ -460,7 +460,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
       toast.success(`Found ${transactions.length || 1} transaction(s)`);
     } catch (error) {
       console.error('AI processing error:', error);
-      toast.error(describeError(error, 'analyze the image'));
+      toast.error(describeError(error, 'analyze the image', 'read'));
       setView('manual');
     }
   };

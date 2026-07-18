@@ -570,7 +570,7 @@ export function makeTransactionLoaders(deps: {
       setHasMoreTransactions(snap.docs.length === TRANSACTION_PAGE_SIZE);
     } catch (error) {
       console.error('[loadOlderTransactions] Failed:', error);
-      toast.error(describeError(error, 'load older transactions'));
+      toast.error(describeError(error, 'load older transactions', 'read'));
     } finally {
       setIsLoadingOlderTransactions(false);
     }
@@ -591,7 +591,7 @@ export function makeTransactionLoaders(deps: {
       return mergeById(recentTransactionsRef.current, older);
     } catch (error) {
       console.error('[loadAllTransactions] Failed:', error);
-      toast.error(describeError(error, 'load the full transaction history'));
+      toast.error(describeError(error, 'load the full transaction history', 'read'));
       return recentTransactionsRef.current;
     } finally {
       setIsLoadingOlderTransactions(false);
@@ -631,7 +631,7 @@ export function makeLoadAllBucketHistory(deps: {
       setHasMoreBucketHistory(false);
     } catch (error) {
       console.error('[loadAllBucketHistory] Failed:', error);
-      toast.error(describeError(error, 'load the full budget history'));
+      toast.error(describeError(error, 'load the full budget history', 'read'));
     } finally {
       setIsLoadingOlderBucketHistory(false);
     }

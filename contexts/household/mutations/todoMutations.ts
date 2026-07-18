@@ -291,7 +291,7 @@ export function makeLoadOlderCompletedTodos(deps: {
       setHasMoreCompletedTodos(snap.docs.length === TODO_COMPLETED_PAGE_SIZE);
     } catch (error) {
       console.error('[loadOlderCompletedTodos] Failed:', error);
-      toast.error(describeError(error, 'load older completed tasks'));
+      toast.error(describeError(error, 'load older completed tasks', 'read'));
     } finally {
       setIsLoadingOlderTodos(false);
     }

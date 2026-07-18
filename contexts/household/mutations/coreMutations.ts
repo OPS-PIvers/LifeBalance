@@ -204,7 +204,7 @@ export function makeRefreshInsight(deps: {
       toast.success('New insight generated!', { id: 'insight-loading', icon: toastIcon(Sparkles) });
     } catch (error) {
       console.error("Failed to generate insight:", error);
-      toast.error(describeError(error, 'generate an insight'), { id: 'insight-loading' });
+      toast.error(describeError(error, 'generate an insight', 'read'), { id: 'insight-loading' });
     } finally {
       setIsGeneratingInsight(false);
     }
@@ -259,7 +259,7 @@ export function makeRefreshHabitPatterns(deps: {
       toast.success('Habit coach updated!', { id: 'habit-patterns-loading', icon: toastIcon(Sparkles) });
     } catch (error) {
       console.error('Failed to analyze habit patterns:', error);
-      toast.error(describeError(error, 'analyze habit patterns'), { id: 'habit-patterns-loading' });
+      toast.error(describeError(error, 'analyze habit patterns', 'read'), { id: 'habit-patterns-loading' });
     } finally {
       setIsGeneratingHabitPatterns(false);
     }
