@@ -18,6 +18,7 @@ import SmartHabitReorderModal from '@/components/modals/SmartHabitReorderModal';
 import { HabitCoach } from '@/components/habits/HabitCoach';
 import HabitHistoryCalendar from '@/components/habits/HabitHistoryCalendar';
 import HabitsHeaderMenu from '@/components/habits/HabitsHeaderMenu';
+import { HabitsModelPrimerLink } from '@/components/habits/HabitsModelPrimer';
 import PageHeader from '@/components/ui/PageHeader';
 import HabitsRewardsTab from '@/components/habits/HabitsRewardsTab';
 import HabitsChallengesTab from '@/components/habits/HabitsChallengesTab';
@@ -639,6 +640,11 @@ const Habits: React.FC = () => {
                 </div>
               </section>
             )}
+
+            {/* Quiet primer disclosure (same idiom as SafeToSpendDetail's
+                money-primer link): the streak/multiplier/freeze math explained
+                one tap from the daily surface instead of 4 taps deep. */}
+            <HabitsModelPrimerLink className="px-1" />
           </TabsContent>
 
           {/* No in-panel view chooser: the sub-view lives in the tab itself
