@@ -64,7 +64,7 @@ describe('pickAvatarColor', () => {
 describe('resolveAvatarColor (map-on-read, no migration)', () => {
   it('returns palette colors unchanged (case-insensitively)', () => {
     expect(resolveAvatarColor('#285742', 'seed')).toBe('#285742');
-    expect(resolveAvatarColor('#285742'.toUpperCase(), 'seed')).toBe('#285742');
+    expect(resolveAvatarColor('#97611F', 'seed')).toBe('#97611f');
   });
 
   it('maps a legacy violet hex to the nearest palette color, deterministically', () => {
