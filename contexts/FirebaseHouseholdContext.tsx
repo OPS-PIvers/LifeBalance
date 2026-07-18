@@ -825,7 +825,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         }
       }, (error) => {
         console.error('[members] listener failed:', error);
-        toast.error(describeError(error, 'sync household members'));
+        toast.error(describeError(error, 'sync household members', 'read'));
       })
     );
 
