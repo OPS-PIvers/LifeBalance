@@ -1,33 +1,9 @@
-// Member/kid avatar identity colors.
-//
-// `HouseholdMember.avatarColor` is persisted DATA (an arbitrary hex string on
-// legacy docs), which historically let off-palette hues — including violet —
-// onto always-visible surfaces (ProfileMenu kid rows, KidsChoresWidget,
-// KidDashboard). The app's identity is explicitly no-purple (see DESIGN.md):
-// evergreen `accent-*`, amber `warm-*`, plus the muted categorical hues of
-// data/bucketColors.ts.
-//
-// This module constrains avatars to a token-derived palette with a pure
-// MAP-ON-READ (`resolveAvatarColor`) — no Firestore migration, no write-backs.
-// Legacy hex values are mapped to the nearest palette color deterministically;
-// non-hex strings and missing values hash (stably) into the palette.
+// Constrains persisted `HouseholdMember.avatarColor` (arbitrary legacy hex) to a
+// token-derived palette via pure map-on-read — no Firestore migration/write-backs.
 
-/**
- * The avatar palette. Hex values are hardcoded (they're used in inline
- * `style={{ backgroundColor }}`, same as the stored data they replace) but each
- * is derived from a token family:
- *  - evergreen  = `--color-accent-600` (index.css @theme, the primary accent)
- *  - amber      = `--color-warm-600`
- *  - the rest are sRGB conversions of the muted OKLCH categorical hues in
- *    data/bucketColors.ts (impeccable r6 retune), darkened to L 0.48–0.53 so
- *    white initials stay legible: sage oklch(0.50 0.09 155), slate blue
- *    oklch(0.50 0.09 250), terracotta oklch(0.53 0.12 55), dusty rose
- *    oklch(0.52 0.09 10), teal oklch(0.51 0.08 200), indigo oklch(0.48 0.10 280).
- *
- * Every entry keeps a WCAG contrast ratio ≥ 4.5:1 against the fixed white
- * initials/emoji foreground (asserted in avatarColor.test.ts) in both themes —
- * the chip's own background is the contrast surface, so theme doesn't matter.
- */
+// Hardcoded hex (consumed by inline `style`) derived from token families: accent-600,
+// warm-600, and darkened sRGB conversions of data/bucketColors.ts OKLCH hues;
+// every entry ≥4.5:1 WCAG vs the white initials (asserted in avatarColor.test.ts).
 export const AVATAR_COLORS = [
   '#285742', // evergreen (accent-600) — 8.3:1 vs white
   '#97611f', // amber (warm-600) — 5.2:1
