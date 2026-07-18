@@ -546,7 +546,7 @@ const Habits: React.FC = () => {
               is the anchor container for TabSubViewMenu; the capture handler
               intercepts multi-view taps before Tabs sees them. */}
           <div ref={tabBarRef} className="relative" onClickCapture={handleTabBarClickCapture}>
-            <TabsList>
+            <TabsList equalWidth>
               <TabsTrigger value="track" className="text-[13px] px-2.5">
                 Track
               </TabsTrigger>

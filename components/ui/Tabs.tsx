@@ -22,10 +22,15 @@ interface TabsContextValue {
 const TabsContext = React.createContext<TabsContextValue | null>(null);
 
 // Separate from TabsContext (which is scoped to the whole Tabs root) because
-// size is a per-TabsList concern — a page could in principle render more than
-// one TabsList under a single Tabs root. Defaults to 'md' when no TabsList
-// ancestor is present (shouldn't happen in practice, but keeps TabsTrigger safe).
-const TabsSizeContext = React.createContext<'md' | 'sm'>('md');
+// size/equalWidth are per-TabsList concerns — a page could in principle render
+// more than one TabsList under a single Tabs root. Defaults apply when no
+// TabsList ancestor is present (shouldn't happen in practice, but keeps
+// TabsTrigger safe).
+interface TabsListStyle {
+  size: 'md' | 'sm';
+  equalWidth: boolean;
+}
+const TabsListStyleContext = React.createContext<TabsListStyle>({ size: 'md', equalWidth: false });
 
 // Tabs: a routed/tabpanel control (role=tablist/tab/tabpanel + arrow-key roving
 // focus + animated TabsContent). Shares the pill-in-trough track + white active
@@ -91,11 +96,21 @@ export const TabsList: React.FC<
      * bottom-nav-adjacent navigation.
      */
     size?: 'md' | 'sm';
+    /**
+     * Give every trigger the same width (equal shares of the trough) instead
+     * of content-sized-then-grown widths, so a short label ("Track") doesn't
+     * render a visibly narrower tab than its siblings. Opt-in: only safe when
+     * the strip is known to fit its container (page-level bars with 2–4 tabs).
+     * Leave off for strips that can overflow into the scroller — `basis-0`
+     * would collapse overflowing triggers to min-content and wrap labels.
+     */
+    equalWidth?: boolean;
   } & Omit<React.ComponentPropsWithoutRef<'div'>, 'role' | 'onKeyDown'>
 > = ({
   children,
   className,
   size = 'md',
+  equalWidth = false,
   ...rest
 }) => {
   const context = React.useContext(TabsContext);
@@ -156,8 +171,10 @@ export const TabsList: React.FC<
   const fadeBase =
     'pointer-events-none absolute inset-y-0 w-8 rounded-xl from-brand-100 dark:from-brand-800 to-transparent transition-opacity duration-(--duration-fast) ease-(--ease-standard)';
 
+  const listStyle = React.useMemo<TabsListStyle>(() => ({ size, equalWidth }), [size, equalWidth]);
+
   return (
-    <TabsSizeContext.Provider value={size}>
+    <TabsListStyleContext.Provider value={listStyle}>
       {/* Caller className lands on the wrapper (layout: margins, inline-flex)
           so the edge fades always hug the pill itself. */}
       <div className={cn('relative', className)}>
@@ -174,7 +191,7 @@ export const TabsList: React.FC<
         <div aria-hidden="true" className={cn(fadeBase, 'left-0 bg-gradient-to-r', overflow.left ? 'opacity-100' : 'opacity-0')} />
         <div aria-hidden="true" className={cn(fadeBase, 'right-0 bg-gradient-to-l', overflow.right ? 'opacity-100' : 'opacity-0')} />
       </div>
-    </TabsSizeContext.Provider>
+    </TabsListStyleContext.Provider>
   );
 };
 
@@ -201,7 +218,7 @@ export const TabsTrigger: React.FC<{
 }) => {
   const context = React.useContext(TabsContext);
   if (!context) throw new Error('TabsTrigger must be used within Tabs');
-  const size = React.useContext(TabsSizeContext);
+  const { size, equalWidth } = React.useContext(TabsListStyleContext);
 
   const { registerTab, unregisterTab, idPrefix } = context;
   const { triggerId, panelId } = useTabIds(value, idPrefix);
@@ -229,7 +246,14 @@ export const TabsTrigger: React.FC<{
         // grow (never shrink, basis auto): when the strip fits, triggers stretch
         // to fill the trough like SegmentedControl's flex-1; when it doesn't,
         // each keeps its content width and the scroller + edge fades take over.
-        'relative inline-flex grow shrink-0 items-center justify-center gap-2 text-sm font-semibold tracking-tight rounded-sm transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
+        // active:scale gives the tap itself a visible response (matches Button)
+        // — matters most for menu-anchor tabs, where tapping doesn't move the
+        // active pill but opens a popover instead.
+        'relative inline-flex grow shrink-0 items-center justify-center gap-2 text-sm font-semibold tracking-tight rounded-sm transition-all duration-(--duration-fast) ease-(--ease-standard) active:scale-[0.98] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
+        // equalWidth strips zero the flex basis so grow deals every trigger an
+        // identical share of the trough (min-width:auto still floors each at
+        // its content width, so labels never truncate or wrap).
+        equalWidth && 'basis-0',
         // sm renders a 36px-tall trigger — below the 44px touch-target floor —
         // so it carries Button's invisible before: hit-area extender (vertical
         // only: adjacent triggers in the strip would overlap horizontally).
@@ -241,7 +265,13 @@ export const TabsTrigger: React.FC<{
           : 'min-h-11 px-3 py-2',
         isActive
           ? 'bg-white text-accent-700 border border-brand-200 dark:bg-brand-700 dark:text-accent-200 dark:border-brand-600'
-          : 'text-brand-500 hover:text-brand-700 hover:bg-white/60 dark:text-brand-400 dark:hover:text-brand-200 dark:hover:bg-brand-700/50',
+          : cn(
+              'text-brand-500 hover:text-brand-700 hover:bg-white/60 active:bg-white/60 dark:text-brand-400 dark:hover:text-brand-200 dark:hover:bg-brand-700/50 dark:active:bg-brand-700/50',
+              // Menu-anchor tab with its popover open: hold the hover-strength
+              // tint while the menu is up so the trigger visibly owns the
+              // popover beneath it (quiet — half the active pill's chrome).
+              ariaExpanded && 'bg-white/60 text-brand-700 dark:bg-brand-700/50 dark:text-brand-200'
+            ),
         disabled && 'opacity-50 cursor-not-allowed',
         className
       )}
