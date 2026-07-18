@@ -74,7 +74,7 @@ type Handlers = ReturnType<typeof makeHandlers>;
 const renderCard = (
   item: ActionQueueItem,
   handlers: Handlers,
-  { isExpanded = false }: { isExpanded?: boolean } = {}
+  { isExpanded = false, approveDetail }: { isExpanded?: boolean; approveDetail?: string } = {}
 ) => {
   const ui: ReactElement = (
     <ThemeProvider>
@@ -92,6 +92,7 @@ const renderCard = (
         onEnterSelectionMode={() => {}}
         onSwipeApprove={() => {}}
         onSwipeDefer={() => {}}
+        approveDetail={approveDetail}
         buckets={[]}
         transactions={[]}
         members={[]}
@@ -118,6 +119,37 @@ const getRailDeleteButton = (itemLabel: string): HTMLElement => {
  *  never confused with the (also role="dialog") review drawer. */
 const findConfirmDialog = (itemName: string) =>
   screen.findByRole('dialog', { name: `Delete this ${itemName}?` });
+
+describe('ActionQueueItemCard approve pre-commit disclosure', () => {
+  it('shows the amount + target account in the approve rail and its accessible name', () => {
+    const handlers = makeHandlers();
+    renderCard(transactionItem, handlers, { approveDetail: '$25.00 → Joint Checking' });
+
+    // Visual rail disclosure (drag-time affordance, aria-hidden)...
+    expect(screen.getByText('$25.00 → Joint Checking')).toBeInTheDocument();
+    // ...and the same information on the approve button's accessible name, so
+    // the tap/keyboard path (stuck-open rail button) carries it too.
+    const approveButton = screen
+      .getAllByRole('button', { hidden: true })
+      .find(b => b.getAttribute('aria-label')?.startsWith('Approve Coffee'));
+    expect(approveButton).toBeDefined();
+    expect(approveButton).toHaveAttribute(
+      'aria-label',
+      'Approve Coffee · $25.00 → Joint Checking'
+    );
+  });
+
+  it('falls back to the plain approve affordance when no disclosure is provided', () => {
+    const handlers = makeHandlers();
+    renderCard(transactionItem, handlers);
+
+    const approveButton = screen
+      .getAllByRole('button', { hidden: true })
+      .find(b => b.getAttribute('aria-label') === 'Approve Coffee');
+    expect(approveButton).toBeDefined();
+    expect(screen.queryByText(/→/)).not.toBeInTheDocument();
+  });
+});
 
 describe('ActionQueueItemCard delete confirmation', () => {
   describe('swipe-rail Delete', () => {

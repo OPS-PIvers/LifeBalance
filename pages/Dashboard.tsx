@@ -31,6 +31,13 @@ import {
   suggestCategoryForTransaction,
   nextDeferDate,
 } from '@/utils/actionQueueSmart';
+import {
+  approveTargetAccountForTransaction,
+  approveDetailLabel,
+  calendarApproveDetail,
+  approvedToastMessage,
+} from '@/utils/approveDisclosure';
+import { resolveTargetAccount } from '@/utils/accountImpact';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import {
   captureDeferUndo,
@@ -179,6 +186,26 @@ const Dashboard: React.FC = () => {
     );
   }, [actionQueue]);
 
+  // Pre-commit reassurance for the swipe rail (error prevention): what an
+  // instant approve WILL commit — amount + smart-guessed account — mirroring
+  // handleSwipeApprove's resolution exactly, so the rail never promises a
+  // different account than the mutation targets. To-dos have no money detail.
+  const approveDetails = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of actionQueue) {
+      if (isTransactionQueueItem(item)) {
+        // A $0 stub deflects into the review drawer instead of committing, so
+        // a money disclosure would over-promise there.
+        if (item.needsAmount) continue;
+        const account = approveTargetAccountForTransaction(item, accounts, transactions);
+        map.set(item.id, approveDetailLabel(fmt(item.amount), account?.name));
+      } else if (isCalendarQueueItem(item)) {
+        map.set(item.id, calendarApproveDetail(item, accounts, transactions, fmt(item.amount)));
+      }
+    }
+    return map;
+  }, [actionQueue, accounts, transactions, fmt]);
+
   // Swipe right — instant approve with smart defaults. The card already
   // deflects transactions that can't be instant-approved ($0 stubs, no
   // resolvable category) into the review panel, so every item arriving here
@@ -198,10 +225,12 @@ const Dashboard: React.FC = () => {
           return;
         }
         await payCalendarItem(item.id, account.id, { silent: true });
+        // Cause-carrying confirmation: name the amount AND the account the
+        // smart default picked, so a wrong guess is noticed immediately.
         toast.success(
           item.type === 'expense'
-            ? `Paid from ${account.name}`
-            : `Received into ${account.name}`
+            ? `Paid ${fmt(item.amount)} from ${account.name}`
+            : `Received ${fmt(item.amount)} into ${account.name}`
         );
         return;
       }
@@ -219,13 +248,58 @@ const Dashboard: React.FC = () => {
         setExpandedId(item.id);
         return;
       }
-      await updateTransactionCategory(item.id, category, item.relatedHabitIds ?? [], accountId);
-      toast.success(`Approved · ${category}`);
+      // Resolve the account the balance impact WILL land on (same rule the
+      // mutation applies) BEFORE committing, so the toast can name it.
+      const targetAccount = resolveTargetAccount(accountId ?? item.accountId, accounts);
+      // Snapshot the pre-approve state for undo — the mutation re-tags the
+      // account and rewrites the category.
+      const prior = { category: item.category, accountId: item.accountId };
+      const relatedHabitIds = item.relatedHabitIds ?? [];
+      await updateTransactionCategory(item.id, category, relatedHabitIds, accountId);
+      const message = approvedToastMessage(fmt(item.amount), targetAccount?.name);
+      if (relatedHabitIds.length > 0) {
+        // No Undo when the approve also incremented habits/points — reverting
+        // the transaction alone would leave the points applied, and a
+        // re-approve would then double-count them. The enriched message still
+        // names amount + account.
+        toast.success(message);
+        return;
+      }
+      // Cause-carrying undo: revert to pending_review and restore the prior
+      // category/tag through updateTransaction, whose writeBatch reverses the
+      // balance delta atomically with the status flip (verified→pending has an
+      // effective impact of 0, so the old target account is credited back).
+      toast(
+        (t) => (
+          <UndoToast
+            message={message}
+            onUndo={() => {
+              toast.dismiss(t.id);
+              void (async () => {
+                try {
+                  await updateTransaction(
+                    item.id,
+                    // An empty accountId explicitly clears a tag the smart
+                    // approve added (updateTransaction deletes the field).
+                    { status: 'pending_review', category: prior.category, accountId: prior.accountId ?? '' },
+                    { silent: true }
+                  );
+                  toast.success('Moved back to review');
+                } catch (error) {
+                  console.error('[ActionQueue] Undo approve failed:', error);
+                  toast.error('Couldn’t undo — find it in Money → Transactions.');
+                }
+              })();
+            }}
+          />
+        ),
+        { duration: 6000, icon: toastIcon(Check) }
+      );
     } catch (error) {
       console.error('[ActionQueue] Swipe approve failed:', error);
       toast.error('Failed to approve. Please try again.');
     }
-  }, [accounts, buckets, transactions, completeToDo, payCalendarItem, updateTransactionCategory, openPaySheet]);
+  }, [accounts, buckets, transactions, completeToDo, payCalendarItem, updateTransactionCategory, updateTransaction, openPaySheet, fmt]);
 
   // Swipe left — instant defer: bills/to-dos move a day forward, pending
   // transactions snooze out of the queue until tomorrow.
@@ -537,6 +611,7 @@ const Dashboard: React.FC = () => {
             onEnterSelectionMode={enterSelectionMode}
             onSwipeApprove={handleSwipeApprove}
             onSwipeDefer={handleSwipeDefer}
+            approveDetail={approveDetails.get(item.id)}
             buckets={buckets}
             transactions={transactions}
             members={members}

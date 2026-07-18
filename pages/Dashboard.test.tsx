@@ -35,9 +35,15 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
 // factory only closes over `queueItems` (read at render time), so declaring it
 // after the hoisted vi.mock is safe.
 let queueItems: Array<{ id: string }> = [];
-vi.mock('@/hooks/useActionQueue', () => ({
-  useActionQueue: () => ({ actionQueue: queueItems }),
-}));
+vi.mock('@/hooks/useActionQueue', async (importOriginal) => {
+  // Keep the REAL type guards (isTransactionQueueItem etc.) — the approve
+  // pre-commit disclosure memo runs them at render over the seeded queue.
+  const actual = await importOriginal<typeof import('@/hooks/useActionQueue')>();
+  return {
+    ...actual,
+    useActionQueue: () => ({ actionQueue: queueItems }),
+  };
+});
 
 // Gated single-domain widgets — stub to identifiable text so the visibility
 // gating is observable regardless of their self-null-on-empty-data behavior.
