@@ -904,7 +904,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     category: string,
     relatedHabitIds?: string[],
     accountId?: string | null,
-    overrides?: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean; creditPayment?: boolean; isRecurring?: boolean },
+    overrides?: { amount?: number; merchant?: string; date?: string; notes?: string; clearNeedsAmount?: boolean; creditPayment?: boolean; isRecurring?: boolean },
   ) => {
     const clearAccount = accountId === null;
     // Balance parity (computed OUTSIDE the setState updaters — StrictMode
@@ -940,6 +940,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       };
       // `null` explicitly clears a previously-tagged account.
       if (clearAccount) delete next.accountId;
+      // Notes parity: persist-only-when-non-empty — '' clears stored notes.
+      if (overrides?.notes !== undefined) {
+        if (overrides.notes.trim()) next.notes = overrides.notes.trim();
+        else delete next.notes;
+      }
       // Persist-only-when-true parity with the Firestore mutation: an explicit
       // false override removes a stored Charge/Payment flag.
       if (overrides?.creditPayment !== undefined) {

@@ -87,6 +87,10 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
     ? transactions.find(t => t.id === transaction.possibleDuplicateOf)
     : undefined;
   const [isMerging, setIsMerging] = useState(false);
+  // "Keep both" clears the flag in Firestore, but the host drawer passes a
+  // SNAPSHOT transaction (deliberately — stable cycle indices), so the prop
+  // never updates. Hide the banner locally after a successful dismiss.
+  const [duplicateDismissed, setDuplicateDismissed] = useState(false);
 
   // An income transaction (e.g. a Venmo/paycheck deposit) has no budget bucket,
   // so `buildTransactionCategoryOptions` never contains INCOME_CATEGORY. Prepend
@@ -100,6 +104,8 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
   }, [buckets, isIncome]);
 
   const [merchant, setMerchant] = useState(() => transaction.merchant);
+  // Optional free-text "what was bought" note (Transaction.notes).
+  const [notes, setNotes] = useState(() => transaction.notes ?? '');
   // $0 "awaiting amount" stubs open blank so the user must enter the real charge
   // (the approve CTA stays disabled until amount > 0); everything else prefills.
   const [amount, setAmount] = useState(() => (transaction.needsAmount ? '' : String(transaction.amount)));
@@ -139,9 +145,13 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
   }
   const [showAllHabits, setShowAllHabits] = useState(false);
   const [creditPayment, setCreditPayment] = useState(() => transaction.creditPayment ?? false);
-  // Recurring (subscription) toggle — defaults OFF; the host drawer remounts
-  // the form per transaction (keyed), so it resets between review items.
+  // Recurring toggle — defaults OFF; the host drawer remounts the form per
+  // transaction (keyed), so it resets between review items. When ON, a nested
+  // subscription switch (default ON, preserving prior behavior) decides
+  // whether the created CalendarItem lands on the Subscriptions tab or is a
+  // plain recurring bill (F-MONEY-05: recurring alone ≠ subscription).
   const [isRecurring, setIsRecurring] = useState(false);
+  const [isSubscription, setIsSubscription] = useState(true);
 
   // Credit-tagged transactions carry no budget category (credit spend is
   // tracked on the card, not against buckets), so the category select hides and
@@ -190,9 +200,13 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
     // Only send the fields that actually changed. Passing `overrides.amount`
     // makes the context use it (not the stale local amount, which is 0 for a
     // stub) for the checking-balance delta, so the entered amount debits once.
-    const overrides: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean; creditPayment?: boolean; isRecurring?: boolean } = {};
+    const overrides: { amount?: number; merchant?: string; date?: string; notes?: string; clearNeedsAmount?: boolean; creditPayment?: boolean; isRecurring?: boolean } = {};
     if (transaction.needsAmount || parsedAmount !== transaction.amount) overrides.amount = parsedAmount;
     if (trimmedMerchant !== transaction.merchant) overrides.merchant = trimmedMerchant;
+    // Sent only on a real change; an emptied field clears stored notes (the
+    // context turns '' into a deleteField()).
+    const trimmedNotes = notes.trim();
+    if (trimmedNotes !== (transaction.notes ?? '')) overrides.notes = trimmedNotes;
     // Only send a date override for a real, non-empty change — an emptied date
     // field must NOT overwrite the stored date (and the context guards against
     // writing an undefined payPeriodId for a blank date).
@@ -238,7 +252,9 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
             isPaid: false,
             isRecurring: true,
             frequency: 'monthly',
-            isSubscription: true,
+            // Explicit false when the nested switch is off — a recurring bill
+            // that is NOT a subscription (F-MONEY-05).
+            isSubscription,
             ...(accountId ? { accountId } : {}),
           });
         } catch (calendarError) {
@@ -282,6 +298,7 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
   const handleKeepBothDuplicate = async () => {
     try {
       await keepBothTransactions(transaction.id);
+      setDuplicateDismissed(true);
     } catch (error) {
       console.error('Failed to dismiss duplicate flag:', error);
       toast.error('Failed to update transaction');
@@ -290,7 +307,7 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
 
   return (
     <div className="space-y-4">
-      {possibleDuplicate && (
+      {possibleDuplicate && !duplicateDismissed && (
         <div className="rounded-card border border-warm-200 bg-warm-50 px-3 py-2.5 space-y-2 dark:border-warm-700 dark:bg-warm-900/20">
           <div className="flex items-start gap-2">
             <Copy size={14} className="mt-0.5 shrink-0 text-warm-600 dark:text-warm-400" />
@@ -328,6 +345,14 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
         value={merchant}
         onChange={e => setMerchant(e.target.value)}
         placeholder="e.g. Starbucks"
+      />
+
+      <Input
+        label="What was it? (Optional)"
+        type="text"
+        value={notes}
+        onChange={e => setNotes(e.target.value)}
+        placeholder="e.g. Minecraft, dog food"
       />
 
       {/* Hero amount field — the primary action for an "awaiting amount" stub. */}
@@ -513,8 +538,20 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
               aria-labelledby="review-recurring-label"
             />
           </div>
+          {isRecurring && (
+            <div className="flex items-center justify-between pt-1">
+              <span id="review-subscription-label" className="text-sm font-medium text-brand-700 dark:text-brand-200">This is a subscription</span>
+              <Switch
+                checked={isSubscription}
+                onCheckedChange={setIsSubscription}
+                aria-labelledby="review-subscription-label"
+              />
+            </div>
+          )}
           <p className="text-xs text-brand-400 dark:text-brand-400">
-            Creates a monthly entry on your Subscriptions tab.
+            {isRecurring && !isSubscription
+              ? 'Creates a monthly bill on your calendar.'
+              : 'Creates a monthly entry on your Subscriptions tab.'}
           </p>
         </div>
       )}

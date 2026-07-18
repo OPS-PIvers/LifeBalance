@@ -59,6 +59,8 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
   // State with lazy initialization
   const [amount, setAmount] = useState(() => initialData?.amount || '');
   const [merchant, setMerchant] = useState(() => initialData?.merchant || '');
+  // Optional free-text "what was bought" note (Transaction.notes).
+  const [notes, setNotes] = useState('');
 
   const [category, setCategory] = useState(() => {
     if (initialData?.category && dynamicCategories.includes(initialData.category)) {
@@ -84,6 +86,10 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
   );
 
   const [isRecurring, setIsRecurring] = useState(false);
+  // Nested under Recurring: whether the created CalendarItem is a subscription
+  // (default ON, preserving prior behavior) or a plain recurring bill
+  // (F-MONEY-05: recurring alone ≠ subscription).
+  const [isSubscription, setIsSubscription] = useState(true);
 
   // Fix: credit-card payment funded FROM an asset account (full transfer).
   // Only meaningful when the selected account is a credit card AND the kind is
@@ -244,6 +250,8 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
       autoCategorized: false,
       relatedHabitIds: selectedHabitIds.length > 0 ? selectedHabitIds : undefined,
       store: resolveStoreName(stores, merchant),
+      // Only carry a non-empty note (addTransaction omits blank optional fields).
+      notes: notes.trim() || undefined,
       accountId: accountId || undefined,
       // Only meaningful for a credit account; a charge (false) raises the card's
       // balance, a payment (true) pays it down. Undefined for asset accounts.
@@ -271,7 +279,9 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
             isPaid: false,
             isRecurring: true,
             frequency: 'monthly',
-            isSubscription: true,
+            // Explicit false when the nested switch is off — a recurring bill
+            // that is NOT a subscription (F-MONEY-05).
+            isSubscription,
             ...(accountId ? { accountId } : {}),
           });
         } catch (calendarError) {
@@ -363,6 +373,14 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
           <option key={s.id} value={s.name} />
         ))}
       </datalist>
+
+      <Input
+        label="What was it? (Optional)"
+        type="text"
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        placeholder="e.g. Minecraft, dog food"
+      />
 
       <Input
         label="Date"
@@ -555,8 +573,20 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
                   aria-labelledby="recurring-label"
                 />
               </div>
+              {isRecurring && (
+                <div className="flex items-center justify-between pt-1">
+                  <span id="subscription-label" className="text-sm font-medium text-brand-700 dark:text-brand-200">This is a subscription</span>
+                  <Switch
+                    checked={isSubscription}
+                    onCheckedChange={setIsSubscription}
+                    aria-labelledby="subscription-label"
+                  />
+                </div>
+              )}
               <p className="text-xs text-brand-400 dark:text-brand-400">
-                Creates a monthly entry on your Subscriptions tab.
+                {isRecurring && !isSubscription
+                  ? 'Creates a monthly bill on your calendar.'
+                  : 'Creates a monthly entry on your Subscriptions tab.'}
               </p>
             </div>
           )}

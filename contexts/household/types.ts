@@ -232,7 +232,7 @@ export interface HouseholdContextType {
    *  lands on that account (used by the Action Queue's smart approve); pass
    *  `null` to EXPLICITLY clear a previously-tagged account (the impact then
    *  re-routes to checking). Optional `overrides` co-commit an inline edit
-   *  (amount/merchant/date, plus clearing the `needsAmount` stub flag) in the
+   *  (amount/merchant/date/notes, plus clearing the `needsAmount` stub flag) in the
    *  SAME atomic batch, so verify + edit + account + habits + points can never
    *  diverge; `overrides.amount` (not the possibly-stale stored amount) drives
    *  the checking-balance delta. `overrides.creditPayment` co-commits the
@@ -244,7 +244,7 @@ export interface HouseholdContextType {
     category: string,
     relatedHabitIds?: string[],
     accountId?: string | null,
-    overrides?: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean; creditPayment?: boolean; isRecurring?: boolean },
+    overrides?: { amount?: number; merchant?: string; date?: string; notes?: string; clearNeedsAmount?: boolean; creditPayment?: boolean; isRecurring?: boolean },
   ) => Promise<void>;
   updateTransaction: (id: string, updates: Partial<Transaction>, opts?: MutationOpts) => Promise<void>;
   deleteTransaction: (id: string, opts?: MutationOpts) => Promise<void>;
