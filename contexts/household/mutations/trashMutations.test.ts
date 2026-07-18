@@ -62,6 +62,7 @@ vi.mock('react-hot-toast', () => ({
 
 // Grab the mocked Timestamp for constructing snapshot data.
 import { Timestamp } from 'firebase/firestore';
+import toast from 'react-hot-toast';
 
 const db = {} as never;
 const householdId = 'household-1';
@@ -75,6 +76,7 @@ beforeEach(() => {
   snapshotHandler = null;
   errorHandler = null;
   unsubscribeMock.mockClear();
+  vi.mocked(toast).mockClear();
 });
 
 describe('softDeleteDoc', () => {
@@ -213,6 +215,16 @@ describe('restoreTrashedItem — transaction domain (balance re-apply)', () => {
     const setOp = batchOps.find((o) => o.op === 'set');
     expect(setOp?.ref.__path).toBe('households/household-1/transactions/tx-1');
     expect(committedCount).toBe(1);
+    // The toast is the only user-visible signal that the balance was skipped.
+    expect(toast).toHaveBeenCalledWith(expect.stringContaining('no longer exists'));
+  });
+
+  it('does not toast for a restore that applies (or needs no) balance movement', async () => {
+    await restoreTrashedItem(
+      { db, householdId, accounts },
+      txItem({ amount: 42.5, category: 'Shopping', status: 'verified' })
+    );
+    expect(toast).not.toHaveBeenCalled();
   });
 });
 
