@@ -35,6 +35,8 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
   // already populated; the prev-tracker below re-populates on later changes.
   const [amount, setAmount] = useState(() => transaction ? transaction.amount.toString() : '');
   const [merchant, setMerchant] = useState(() => transaction?.merchant ?? '');
+  // Optional free-text "what was bought" note (Transaction.notes).
+  const [notes, setNotes] = useState(() => transaction?.notes ?? '');
   const [category, setCategory] = useState(() => transaction?.category ?? '');
   const [accountId, setAccountId] = useState(() => transaction?.accountId || '');
   const [creditPayment, setCreditPayment] = useState(() => transaction?.creditPayment ?? false);
@@ -80,6 +82,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
     if (transaction) {
       setAmount(transaction.amount.toString());
       setMerchant(transaction.merchant);
+      setNotes(transaction.notes ?? '');
       setCategory(transaction.category);
       setAccountId(transaction.accountId || '');
       setCreditPayment(transaction.creditPayment ?? false);
@@ -140,6 +143,9 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
       await updateTransaction(transaction.id, {
         amount: amountNum,
         merchant: merchant.trim(),
+        // Always pass the key so emptying the field clears stored notes (the
+        // context removes a now-empty value via deleteField).
+        notes: notes.trim(),
         // Credit-tagged spend carries the sentinel, never a bucket category.
         category: isSelectedAccountCredit ? CREDIT_CARD_CATEGORY : category,
         store: resolveStore(merchant),
@@ -216,6 +222,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
         source: 'manual',
         autoCategorized: transaction.autoCategorized ?? false,
         store: resolveStore(merchant),
+        notes: notes.trim() || undefined,
         accountId: accountId || undefined,
         creditPayment: isSelectedAccountCredit && creditPayment ? true : undefined
         // Let addTransaction handle ID and timestamps
@@ -274,6 +281,16 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
             <option key={s.id} value={s.name} />
           ))}
         </datalist>
+
+        <Input
+          id="edit-notes"
+          label="What was it? (Optional)"
+          type="text"
+          disabled={isSaving}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="e.g. Minecraft, dog food"
+        />
 
         {/* Merging Store into Merchant removed the way to intentionally clear a
             stored Store, so surface it as a dismissible chip. Dismissing it

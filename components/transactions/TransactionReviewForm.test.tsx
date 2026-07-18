@@ -323,6 +323,26 @@ describe('TransactionReviewForm', () => {
 
       expect(mockKeepBothTransactions).toHaveBeenCalledWith('tx1');
       expect(mockOnDone).not.toHaveBeenCalled();
+      // The host drawer passes a SNAPSHOT transaction, so the prop never
+      // updates — the banner must hide via local state after the dismiss.
+      expect(screen.queryByText(/possible duplicate of/i)).not.toBeInTheDocument();
+    });
+
+    it('keeps the banner visible when keepBothTransactions fails', async () => {
+      const user = userEvent.setup();
+      mockKeepBothTransactions.mockRejectedValueOnce(new Error('offline'));
+      mockTransactions.push(otherTx);
+      render(
+        <TransactionReviewForm
+          transaction={{ ...baseTx, possibleDuplicateOf: 'tx2' }}
+          onDone={mockOnDone}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /keep both/i }));
+
+      expect(mockToast.error).toHaveBeenCalledWith('Failed to update transaction');
+      expect(screen.getByText(/possible duplicate of/i)).toBeInTheDocument();
     });
   });
 
@@ -468,6 +488,51 @@ describe('TransactionReviewForm', () => {
     });
   });
 
+  describe('purchase note ("What was it?")', () => {
+    it('passes a typed note through as an override on approve', async () => {
+      const user = userEvent.setup();
+      render(<TransactionReviewForm transaction={baseTx} onDone={mockOnDone} />);
+
+      await user.type(screen.getByLabelText(/what was it/i), 'Minecraft');
+      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+
+      const call = mockUpdateTransactionCategory.mock.calls[0]!;
+      expect(call[4]).toMatchObject({ notes: 'Minecraft' });
+    });
+
+    it('prefills stored notes and sends no override when unchanged', async () => {
+      const user = userEvent.setup();
+      render(
+        <TransactionReviewForm
+          transaction={{ ...baseTx, notes: 'dog food' }}
+          onDone={mockOnDone}
+        />
+      );
+
+      expect(screen.getByLabelText(/what was it/i)).toHaveValue('dog food');
+      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+
+      const call = mockUpdateTransactionCategory.mock.calls[0]!;
+      expect(call[4]).toBeUndefined();
+    });
+
+    it('emptying the field on a transaction that had notes sends a clearing override', async () => {
+      const user = userEvent.setup();
+      render(
+        <TransactionReviewForm
+          transaction={{ ...baseTx, notes: 'dog food' }}
+          onDone={mockOnDone}
+        />
+      );
+
+      await user.clear(screen.getByLabelText(/what was it/i));
+      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+
+      const call = mockUpdateTransactionCategory.mock.calls[0]!;
+      expect(call[4]).toMatchObject({ notes: '' });
+    });
+  });
+
   describe('recurring (subscription) toggle', () => {
     it('renders the toggle defaulted OFF and approves without any recurring side effects when untouched', async () => {
       const user = userEvent.setup();
@@ -511,6 +576,30 @@ describe('TransactionReviewForm', () => {
         isSubscription: true,
       });
       expect(mockOnDone).toHaveBeenCalled();
+    });
+
+    it('reveals a nested subscription switch (default ON) when Recurring is ON, and OFF creates a plain calendar bill', async () => {
+      const user = userEvent.setup();
+      render(<TransactionReviewForm transaction={baseTx} onDone={mockOnDone} />);
+
+      // Hidden until Recurring is ON.
+      expect(screen.queryByRole('checkbox', { name: /this is a subscription/i })).not.toBeInTheDocument();
+      await user.click(screen.getByRole('checkbox', { name: /recurring transaction/i }));
+
+      const subToggle = screen.getByRole('checkbox', { name: /this is a subscription/i });
+      expect(subToggle).toBeChecked();
+
+      // Turning it OFF flips the helper copy and the created item's flag.
+      await user.click(subToggle);
+      expect(screen.getByText(/creates a monthly bill on your calendar/i)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+
+      expect(mockAddCalendarItem).toHaveBeenCalledTimes(1);
+      expect(mockAddCalendarItem.mock.calls[0]![0]).toMatchObject({
+        isRecurring: true,
+        frequency: 'monthly',
+        isSubscription: false,
+      });
     });
 
     it('a calendar-creation failure after a successful approve toasts a partial error but still advances', async () => {

@@ -523,6 +523,84 @@ describe('CaptureTransactionManual', () => {
     });
   });
 
+  it('reveals a nested subscription switch (default ON) when Recurring is ON, and OFF creates a plain calendar bill', async () => {
+    const mockOnAddCalendarItem = vi.fn().mockResolvedValue(undefined);
+    render(
+      <CaptureTransactionManual
+        onAddTransaction={mockOnAddTransaction}
+        onAddCalendarItem={mockOnAddCalendarItem}
+        onClose={mockOnClose}
+        dynamicCategories={mockCategories}
+        habits={[]}
+        transactions={mockTransactions}
+        stores={[]}
+        accounts={[]}
+      />
+    );
+    fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '60.00' } });
+    fireEvent.change(screen.getByPlaceholderText('e.g. Starbucks'), { target: { value: 'City Utilities' } });
+    fireEvent.click(screen.getByRole('button', { name: /add details/i }));
+
+    // Hidden until Recurring is ON; defaults ON once revealed.
+    expect(screen.queryByRole('checkbox', { name: /this is a subscription/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('checkbox', { name: /recurring transaction/i }));
+    const subToggle = screen.getByRole('checkbox', { name: /this is a subscription/i });
+    expect(subToggle).toBeChecked();
+
+    // Turning it OFF flips the helper copy and the created item's flag.
+    fireEvent.click(subToggle);
+    expect(screen.getByText('Creates a monthly bill on your calendar.')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Save Transaction'));
+
+    await waitFor(() => expect(mockOnAddCalendarItem).toHaveBeenCalledTimes(1));
+    expect(mockOnAddCalendarItem.mock.calls[0]![0]).toMatchObject({
+      isRecurring: true,
+      frequency: 'monthly',
+      isSubscription: false,
+    });
+  });
+
+  it('includes a typed purchase note on the saved transaction, and omits it when blank', async () => {
+    render(
+      <CaptureTransactionManual
+        onAddTransaction={mockOnAddTransaction}
+        onClose={mockOnClose}
+        dynamicCategories={mockCategories}
+        habits={[]}
+        transactions={mockTransactions}
+        stores={[]}
+        accounts={[]}
+      />
+    );
+    fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '19.99' } });
+    fireEvent.change(screen.getByPlaceholderText('e.g. Starbucks'), { target: { value: 'Target' } });
+    fireEvent.change(screen.getByPlaceholderText('e.g. Minecraft, dog food'), { target: { value: '  Minecraft  ' } });
+    fireEvent.click(screen.getByText('Save Transaction'));
+
+    await waitFor(() => expect(mockOnAddTransaction).toHaveBeenCalledTimes(1));
+    expect(mockOnAddTransaction.mock.calls[0]![0]).toMatchObject({ notes: 'Minecraft' });
+  });
+
+  it('omits notes entirely when the field is left blank', async () => {
+    render(
+      <CaptureTransactionManual
+        onAddTransaction={mockOnAddTransaction}
+        onClose={mockOnClose}
+        dynamicCategories={mockCategories}
+        habits={[]}
+        transactions={mockTransactions}
+        stores={[]}
+        accounts={[]}
+      />
+    );
+    fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '19.99' } });
+    fireEvent.change(screen.getByPlaceholderText('e.g. Starbucks'), { target: { value: 'Target' } });
+    fireEvent.click(screen.getByText('Save Transaction'));
+
+    await waitFor(() => expect(mockOnAddTransaction).toHaveBeenCalledTimes(1));
+    expect(mockOnAddTransaction.mock.calls[0]![0].notes).toBeUndefined();
+  });
+
   it('does not create a calendar entry when Recurring is OFF', async () => {
     const mockOnAddCalendarItem = vi.fn().mockResolvedValue(undefined);
     render(

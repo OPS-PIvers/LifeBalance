@@ -86,6 +86,12 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
             <p className="font-semibold tracking-tight text-brand-900 dark:text-brand-100 truncate text-base">{tx.merchant}</p>
             {getSourceIcon(tx.source, tx.isRecurring)}
           </div>
+          {/* Optional "what was bought" note — a quiet one-line subtitle. The
+              virtualizer measures rows dynamically (measureElement), so the
+              extra line is safe. */}
+          {tx.notes && (
+            <p className="text-xs text-brand-400 dark:text-brand-450 truncate">{tx.notes}</p>
+          )}
           {/* flex-wrap below sm: dot+label pairs stay together (no stranded trailing
               dot on wrap); each leaf span owns its own `truncate min-w-0` because
               truncate on a flex container clips children mid-word. */}
@@ -225,6 +231,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
     p.source === n.source &&
     p.isRecurring === n.isRecurring &&
     p.store === n.store &&
+    p.notes === n.notes &&
     p.commentCount === n.commentCount &&
     p.receiptGroupId === n.receiptGroupId &&
     // Ignored props: payPeriodId, autoCategorized, relatedHabitIds

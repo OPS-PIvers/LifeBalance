@@ -97,7 +97,11 @@ export const MoneyPulseWidget: React.FC = () => {
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-brand-800 dark:text-brand-100 truncate">{tx.merchant}</p>
-                <p className="text-xxs text-brand-400 dark:text-brand-450 font-medium">{tx.relativeDate}</p>
+                {/* Optional "what was bought" note rides the timestamp line, kept quiet. */}
+                <p className="text-xxs text-brand-400 dark:text-brand-450 font-medium truncate">
+                  {tx.relativeDate}
+                  {tx.notes ? ` · ${tx.notes}` : ''}
+                </p>
               </div>
             </div>
             <span className="font-mono font-bold tabular-nums text-brand-900 dark:text-brand-50 text-sm shrink-0">

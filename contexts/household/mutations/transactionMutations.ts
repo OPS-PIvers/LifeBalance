@@ -340,7 +340,7 @@ export function makeUpdateTransactionCategory(deps: {
     category: string,
     relatedHabitIds?: string[],
     accountId?: string | null,
-    overrides?: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean; creditPayment?: boolean; isRecurring?: boolean },
+    overrides?: { amount?: number; merchant?: string; date?: string; notes?: string; clearNeedsAmount?: boolean; creditPayment?: boolean; isRecurring?: boolean },
   ) => {
     if (!householdId || !currentUser) return;
 
@@ -428,6 +428,11 @@ export function makeUpdateTransactionCategory(deps: {
       ...(existingTx.reviewSnoozedUntil ? { reviewSnoozedUntil: deleteField() } : {}),
       ...(editedAmount !== undefined ? { amount: editedAmount } : {}),
       ...(overrides?.merchant !== undefined ? { merchant: overrides.merchant } : {}),
+      // Optional "what was bought" note. Persist-only-when-non-empty: an
+      // explicit '' override clears stored notes via deleteField().
+      ...(overrides?.notes !== undefined
+        ? (overrides.notes.trim() ? { notes: overrides.notes.trim() } : { notes: deleteField() })
+        : {}),
       // Truthy guard (not `!== undefined`): a blank date must not write an
       // undefined payPeriodId (WriteBatch.update throws on undefined). With the
       // truthy guard, editedPayPeriodId is only computed when a date is present.
@@ -635,6 +640,12 @@ export function makeUpdateTransaction(deps: {
       }
       if (sanitizedUpdates.notes === undefined || sanitizedUpdates.notes === '') {
         delete sanitizedUpdates.notes;
+        // Clearing notes: omitting the field leaves the old value in Firestore,
+        // so a caller explicitly emptying previously-set notes must remove them
+        // with deleteField() (same rule as `store` above).
+        if ('notes' in updates && !updates.notes && transaction.notes) {
+          sanitizedUpdates.notes = deleteField();
+        }
       } else if (typeof sanitizedUpdates.notes === 'string') {
         sanitizedUpdates.notes = sanitizedUpdates.notes.trim();
       }
