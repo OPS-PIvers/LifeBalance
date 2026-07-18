@@ -962,9 +962,7 @@ const ToDosPage: React.FC = () => {
           {!isSelectionMode && (
             <>
               <Tabs value={viewMode} onValueChange={(val) => setViewMode(val as 'active' | 'completed')}>
-                {/* Default (md) size: this inline toggle was the app's only
-                    sub-44px touch target at `sm` (36px measured) — keep the
-                    full min-h-11 target even though it sits in the header. */}
+                {/* size="sm" (36px) was the app's only sub-44px touch target; default md keeps min-h-11. */}
                 <TabsList className="w-auto inline-flex">
                   <TabsTrigger value="active">Active</TabsTrigger>
                   <TabsTrigger value="completed">{completedBadge}</TabsTrigger>

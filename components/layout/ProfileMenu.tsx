@@ -57,8 +57,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({
       return;
     }
     try {
-      // New profiles pick from the token-derived avatar palette (utils/avatarColor)
-      // so no off-palette hue is ever written for new members.
+      // Palette-derived (utils/avatarColor): no off-palette hue is ever written for new profiles.
       await addKidProfile({ displayName: trimmedName, avatarColor: pickAvatarColor(trimmedName) });
     } catch {
       // addKidProfile surfaces its own error toast.
