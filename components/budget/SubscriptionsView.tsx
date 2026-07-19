@@ -63,7 +63,12 @@ const SubscriptionsView: React.FC = () => {
           <span className="stat-num text-sm font-medium text-brand-700 dark:text-brand-200">
             {fmt(monthlyEquivalent)}/mo
           </span>
+          {/* self-end overrides the primitive's self-center (a row-layout
+              vertical-centering default): in this COLUMN stack self-center
+              acts horizontally, centering each toggle under its amount text
+              so rows with wider amounts showed visibly offset toggles. */}
           <Switch
+            className="self-end"
             checked={isSubscription}
             onCheckedChange={(next) => toggleSubscription(entry, next)}
             aria-label={`Mark ${item.title} as a subscription`}
