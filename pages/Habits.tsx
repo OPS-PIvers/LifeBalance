@@ -12,6 +12,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import Eyebrow from '@/components/ui/Eyebrow';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { TabSubViewMenu, type TabSubViewOption } from '@/components/ui/TabSubViewMenu';
+import { tabValueAtPoint } from '@/components/ui/tabValueAtPoint';
 import { SubViewHint } from '@/components/ui/SubViewHint';
 import HabitCreatorWizard from '@/components/modals/HabitCreatorWizard';
 import SmartHabitAdjustModal from '@/components/modals/SmartHabitAdjustModal';
@@ -303,12 +304,23 @@ const Habits: React.FC = () => {
   // menu WITHOUT changing the selected tab; navigation happens only when a
   // menu item is picked. stopPropagation in the capture phase keeps the event
   // from ever reaching the trigger's own onClick. While the menu is open its
-  // backdrop covers the tab bar, so a re-tap lands there and closes (the
-  // toggle's other half).
+  // backdrop covers the tab bar, so taps arrive here with the backdrop as
+  // target — hit-testing recovers the intended trigger so a tap on ANOTHER
+  // tab acts in one tap (switch menus, or navigate for a single-view tab)
+  // instead of just dismissing; a re-tap on the same tab still closes.
   const handleTabBarClickCapture = (e: React.MouseEvent) => {
-    const value = (e.target as HTMLElement)
+    let value = (e.target as HTMLElement)
       .closest('[data-tabs-value]')
       ?.getAttribute('data-tabs-value');
+    if (!value && openMenu) {
+      value = tabValueAtPoint(tabBarRef.current, e.clientX, e.clientY) ?? undefined;
+      if (value && !isHabitGroup(value)) {
+        // Single-view tab (Track) under the backdrop: dismiss + navigate.
+        e.stopPropagation();
+        selectTab(value);
+        return;
+      }
+    }
     if (value && isHabitGroup(value)) {
       e.stopPropagation();
       setOpenMenu((prev) => (prev === value ? null : value));
@@ -569,6 +581,10 @@ const Habits: React.FC = () => {
             </TabsList>
             {openMenu && (
               <TabSubViewMenu
+                // Remount on group switch (tab-to-tab tap while open) so the
+                // focus trap re-initializes onto the NEW menu's checked item
+                // and the entrance animation replays under the new anchor.
+                key={openMenu}
                 isOpen
                 onClose={() => setOpenMenu(null)}
                 options={groupOptions[openMenu]}
