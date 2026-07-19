@@ -588,7 +588,10 @@ const Habits: React.FC = () => {
                 isOpen
                 onClose={() => setOpenMenu(null)}
                 options={groupOptions[openMenu]}
-                value={groupSegment[openMenu]}
+                // Checked = "you are here": only when this menu's group is the
+                // active tab. Previewing another group's menu (tab-to-tab tap)
+                // checks nothing — its default segment isn't the current page.
+                value={activeTab === openMenu ? groupSegment[openMenu] : undefined}
                 onSelect={setActiveView}
                 name={openMenu === 'progress' ? 'Progress view' : 'Rewards view'}
                 anchorValue={openMenu}

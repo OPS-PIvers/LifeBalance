@@ -284,7 +284,10 @@ const Budget: React.FC = () => {
                 isOpen
                 onClose={() => setOpenMenu(null)}
                 options={GROUP_OPTIONS[openMenu]}
-                value={segmentOf(openMenu)}
+                // Checked = "you are here": only when this menu's group is the
+                // active tab. Previewing another group's menu (tab-to-tab tap)
+                // checks nothing — its default segment isn't the current page.
+                value={activeTab === openMenu ? segmentOf(openMenu) : undefined}
                 onSelect={setActiveView}
                 name={GROUP_MENU_NAMES[openMenu]}
                 anchorValue={openMenu}

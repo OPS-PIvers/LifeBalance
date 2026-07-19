@@ -12,8 +12,13 @@ export interface TabSubViewMenuProps<T extends string> {
   isOpen: boolean;
   onClose: () => void;
   options: TabSubViewOption<T>[];
-  /** The currently-selected (checked) sub-view. */
-  value: T;
+  /**
+   * The currently-selected (checked) sub-view. The checkmark means "you are
+   * here" — omit it when the menu's group is NOT the active tab (previewing
+   * another group's menu), so no item is checked and initial focus falls to
+   * the first row instead.
+   */
+  value?: T;
   /** Called with the picked sub-view; the menu closes itself first. */
   onSelect: (value: T) => void;
   /** Accessible name for the menu (e.g. "Activity view"). */

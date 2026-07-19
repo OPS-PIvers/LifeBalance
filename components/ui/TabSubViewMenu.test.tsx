@@ -15,7 +15,8 @@ type OptionValue = (typeof OPTIONS)[number]['value'];
  *  `[data-tabs-value]` trigger and the menu anchored inside it. */
 const Harness: React.FC<{
   isOpen?: boolean;
-  value?: OptionValue;
+  /** `null` renders the menu with NO current sub-view (inactive-group preview). */
+  value?: OptionValue | null;
   options?: readonly { value: OptionValue; label: string }[];
   onClose?: () => void;
   onSelect?: (value: OptionValue) => void;
@@ -30,7 +31,7 @@ const Harness: React.FC<{
         isOpen={isOpen}
         onClose={onClose}
         options={[...options]}
-        value={value}
+        value={value ?? undefined}
         onSelect={onSelect}
         name="Activity view"
         anchorValue="activity"
@@ -73,6 +74,24 @@ describe('TabSubViewMenu', () => {
     // useFocusTrap prefers [data-autofocus] — initial focus lands on the
     // checked item.
     expect(current).toHaveFocus();
+  });
+
+  it('checks nothing without a value (previewing an inactive group), focusing the first row', () => {
+    // The checkmark means "you are here" — while a DIFFERENT group's menu is
+    // open (tab-to-tab tap from another page), no item may claim to be the
+    // current location (IMG_1731: on Transactions, Planned's menu showed
+    // "Calendar ✓").
+    render(<Harness value={null} />);
+
+    const items = screen.getAllByRole('menuitemradio');
+    for (const item of items) {
+      expect(item).toHaveAttribute('aria-checked', 'false');
+      expect(item.querySelector('svg')).toBeNull();
+      // No [data-autofocus] row either — useFocusTrap falls back to the first
+      // focusable (unassertable here: jsdom's zero-rect rows are filtered out
+      // of the trap's focusable list).
+      expect(item).not.toHaveAttribute('data-autofocus');
+    }
   });
 
   it('selecting an option fires onSelect with its value and closes first', () => {
