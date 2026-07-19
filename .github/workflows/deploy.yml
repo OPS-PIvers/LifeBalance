@@ -4,6 +4,18 @@ on:
   push:
     branches:
       - main
+  # Manual redeploy of whatever main currently is (e.g. after a deploy race
+  # or a failed run) without needing an empty commit.
+  workflow_dispatch:
+
+# Serialize deploys: without this, back-to-back merges run their deploys in
+# parallel and whichever finishes LAST wins — an older build can overwrite a
+# newer one (happened 2026-07-18: #1030's deploy finished after #1031's and
+# reverted prod to a pre-#1031 build). Queued runs are superseded so only the
+# newest pending commit deploys after the in-flight run completes.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
