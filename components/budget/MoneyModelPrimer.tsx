@@ -46,7 +46,7 @@ const SECTIONS: PrimerSection[] = [
   {
     icon: <LayoutGrid size={16} />,
     title: 'Buckets are a lens, not envelopes',
-    body: 'Budget buckets group your spending so you can see where it goes. They sit on top of the same checking pool. Going over a bucket does not move money out of anywhere and does not lower Safe to Spend. A bucket is a target you set, not a wallet that empties.',
+    body: 'Budget buckets group your spending so you can see where it goes. They sit on top of the same checking pool. Every purchase lowers Safe to Spend the same way no matter which bucket it lands in. Going over a bucket adds no extra hit, and no other bucket has to cover the overage. A bucket is a target you set, not a wallet that empties.',
   },
 ];
 
