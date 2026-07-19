@@ -89,6 +89,17 @@ describe('Switch', () => {
     expect(label?.className).toContain('self-center');
   });
 
+  it('caller alignment override replaces the default self-center', () => {
+    // In a COLUMN stack (SubscriptionsView's amount-over-toggle column) the
+    // default self-center acts horizontally and centers the toggle under its
+    // amount text, so call sites pass self-end — cn's tailwind-merge must
+    // drop self-center in favor of it or the override silently loses.
+    render(<Switch checked={false} onCheckedChange={() => {}} className="self-end" />);
+    const label = screen.getByRole('checkbox').parentElement;
+    expect(label?.className).toContain('self-end');
+    expect(label?.className).not.toContain('self-center');
+  });
+
   it('track is not itself a peer', () => {
     const { container } = render(<Switch checked={false} onCheckedChange={() => {}} />);
     const track = container.querySelector('input + div');
