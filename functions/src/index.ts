@@ -306,16 +306,23 @@ export const sendtodoreminders = onSchedule("every 15 minutes", async () => {
       // transaction re-reads the live doc and only one claimant can flip
       // reminderSentAt from null. A send failure after the claim just drops
       // one reminder, which is the safer failure mode.
-      const claimed = await db.runTransaction(async (tx) => {
+      const claimResult = await db.runTransaction(async (tx) => {
         const liveSnap = await tx.get(todoDoc.ref);
         const live = liveSnap.data();
-        if (!liveSnap.exists || live?.reminderSentAt != null || live?.isCompleted === true) {
-          return false;
+        if (!liveSnap.exists || live === undefined || live.reminderSentAt != null || live.isCompleted === true) {
+          return null;
+        }
+        // Re-validate on the LIVE doc — a concurrent edit may have moved
+        // dueTime/reminderMinutesBefore and re-armed the todo, in which case
+        // the stale snapshot's window must not claim (and later notify with)
+        // the old time.
+        if (!shouldSendTodoReminder(live, nowMs, timezone)) {
+          return null;
         }
         tx.update(todoDoc.ref, { reminderSentAt: new Date(nowMs).toISOString() });
-        return true;
+        return live;
       });
-      if (!claimed) continue;
+      if (!claimResult) continue;
 
       logger.info(`Household ${group.householdId}: sending todo reminder for ${todoDoc.id} to ${assignee.member.uid}`);
       await sendNotificationToUser(

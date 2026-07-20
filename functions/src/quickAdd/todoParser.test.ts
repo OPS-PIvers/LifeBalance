@@ -30,6 +30,11 @@ describe("parseTodoPhrase", () => {
       expect(parseTodoPhrase("dentist next friday", TODAY).dueDate).toBe("2026-07-31");
       // A bare weekday equal to today's weekday means next week.
       expect(parseTodoPhrase("dentist monday", TODAY).dueDate).toBe("2026-07-27");
+      // "next monday" said ON a Monday also means the coming Monday (+7):
+      // colloquially "next <today's weekday>" refers to next week's
+      // occurrence, not the week after. Bare and "next" forms only diverge
+      // when the weekday is still ahead in the current week.
+      expect(parseTodoPhrase("dentist next monday", TODAY).dueDate).toBe("2026-07-27");
     });
 
     it("relative spans", () => {
