@@ -49,7 +49,7 @@ export function computeReminderAtMs(
   if (typeof dueTime !== "string" || !TIME_RE.test(dueTime)) return null;
   if (
     typeof reminderMinutesBefore !== "number" ||
-    !Number.isFinite(reminderMinutesBefore) ||
+    !Number.isInteger(reminderMinutesBefore) ||
     reminderMinutesBefore < 0
   ) {
     return null;

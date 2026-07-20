@@ -9,8 +9,9 @@ import { addDays, format, getDay, parseISO } from "date-fns";
 //   - due date:  today / tonight / tomorrow / weekday names ("friday",
 //                "on friday", "next friday") / "next week" / "in N days" /
 //                "M/D" or "M/D/YYYY" / "july 25" / "25 july"
-//   - due time:  "at 3pm", "at 3:30 pm", "at 15:00", "at 9" (24-hour when no
-//                am/pm), "at noon", "at midnight"
+//   - due time:  "at 3pm", "at 3:30 pm", "at 15:00", "at 09:30", "at noon",
+//                "at midnight" — bare hours 1–12 without am/pm are ambiguous
+//                and deliberately NOT parsed
 //   - reminder:  "remind me N minutes/hours before", "remind me an hour
 //                before", "remind me the day before", bare "remind me" /
 //                "with (a) reminder" = at the due time (0)
@@ -100,9 +101,13 @@ function extractTime(input: string): Extraction<string> | null {
     const value = m[1].toLowerCase() === "noon" ? "12:00" : "00:00";
     return { value, cleaned: input.replace(m[0], " ") };
   }
-  // "at 3pm" / "at 3:30 pm" / "3pm" / "at 15:00" / "at 9"
-  // am/pm forms may omit "at"; the bare-24h form requires "at" so ordinary
-  // numbers in the task text ("buy 3 lemons") are never misread as times.
+  // "at 3pm" / "at 3:30 pm" / "3pm" / "at 15:00" / "at 09:30"
+  // am/pm forms may omit "at"; 24-hour forms require "at" so ordinary numbers
+  // in the task text ("buy 3 lemons") are never misread as times. Without
+  // am/pm, only UNAMBIGUOUS 24-hour values parse: hours 13–23, or a
+  // zero-padded HH:mm ("09:30"). A bare "at 3" is ambiguous in dictation
+  // (usually means 3 PM) — guessing either way risks a wrong-time alarm, so
+  // it is deliberately left in the task text instead.
   m = input.match(/\bat (\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?\b/i)
     ?? input.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)\b/i);
   if (m && m[1]) {
@@ -112,7 +117,12 @@ function extractTime(input: string): Extraction<string> | null {
     if (minute > 59) return null;
     if (meridiem === "pm" && hour >= 1 && hour <= 12) hour = (hour % 12) + 12;
     else if (meridiem === "am" && hour >= 1 && hour <= 12) hour = hour % 12;
-    else if (meridiem === undefined && (hour > 23 || (m[2] === undefined && m[1].length > 2))) return null;
+    else if (meridiem === undefined) {
+      const explicit24h = m[2] !== undefined && m[1].length === 2; // "09:30", "15:00"
+      if (hour > 23) return null;
+      if (hour < 13 && !explicit24h) return null;
+      if (m[2] === undefined && m[1].length > 2) return null;
+    }
     if (hour > 23) return null;
     return { value: `${two(hour)}:${two(minute)}`, cleaned: input.replace(m[0], " ") };
   }

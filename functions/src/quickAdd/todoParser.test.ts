@@ -68,10 +68,17 @@ describe("parseTodoPhrase", () => {
       expect(parseTodoPhrase("wake at 12am", TODAY).dueTime).toBe("00:00");
     });
 
-    it("24-hour and bare-hour forms require 'at'", () => {
+    it("24-hour forms require 'at' and must be unambiguous", () => {
       expect(parseTodoPhrase("meeting at 15:00", TODAY).dueTime).toBe("15:00");
-      expect(parseTodoPhrase("meeting at 9", TODAY).dueTime).toBe("09:00");
+      expect(parseTodoPhrase("meeting at 09:30", TODAY).dueTime).toBe("09:30");
       expect(parseTodoPhrase("buy 3 lemons", TODAY).dueTime).toBeUndefined();
+      // Ambiguous bare hours without am/pm are deliberately NOT parsed —
+      // "at 3" usually means 3 PM in dictation, so guessing 03:00 would set
+      // a wrong-time alarm. The phrase stays in the task text instead.
+      expect(parseTodoPhrase("call dentist at 3", TODAY).dueTime).toBeUndefined();
+      expect(parseTodoPhrase("call dentist at 3", TODAY).text).toBe("call dentist at 3");
+      expect(parseTodoPhrase("meeting at 9", TODAY).dueTime).toBeUndefined();
+      expect(parseTodoPhrase("meeting at 9:30", TODAY).dueTime).toBeUndefined();
     });
 
     it("noon and midnight require 'at'", () => {
