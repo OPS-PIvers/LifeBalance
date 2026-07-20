@@ -29,6 +29,11 @@ export const REMINDER_LATE_CUTOFF_MS = 60 * 60 * 1000;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
+const MONTH_ABBREVIATIONS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+] as const;
+
 /**
  * Computes the UTC instant (epoch ms) at which this todo's reminder should
  * fire: (completeByDate + dueTime in `timezone`) − reminderMinutesBefore.
@@ -111,16 +116,15 @@ export function buildTodoReminderBody(
       // today (e.g. a "1 day before" reminder).
       const localToday = formatInTimeZone(new Date(nowMs), timezone, "yyyy-MM-dd");
       if (completeByDate !== localToday) {
-        // Human-readable date ("Jul 20"), not the raw ISO string. The noon-UTC
-        // anchor keeps the calendar day stable when re-formatting into any
-        // member timezone (|offset| < 12h), avoiding a midnight DST/offset
-        // off-by-one.
-        const displayDate = formatInTimeZone(
-          new Date(`${completeByDate}T12:00:00Z`),
-          timezone,
-          "MMM d"
-        );
-        label = `${label} on ${displayDate}`;
+        // Human-readable date ("Jul 20"), formatted straight from the stored
+        // string — completeByDate IS the assignee-local calendar date, so any
+        // Date/timezone round-trip can only shift the day (a noon-UTC anchor
+        // already breaks for UTC+13/+14 assignees).
+        const [, moStr = "", dayStr = ""] = completeByDate.split("-");
+        const monthAbbr = MONTH_ABBREVIATIONS[parseInt(moStr, 10) - 1];
+        if (monthAbbr) {
+          label = `${label} on ${monthAbbr} ${parseInt(dayStr, 10)}`;
+        }
       }
     } catch (_e) {
       label = dueTime;

@@ -91,6 +91,13 @@ describe("buildTodoReminderBody", () => {
     );
   });
 
+  it("renders the stored calendar date verbatim for UTC+13/+14 assignees", () => {
+    // A day-before reminder for an Auckland (UTC+13 DST) assignee: any
+    // Date-object round-trip of the date string would render Jul 21.
+    const nowMs = DUE_UTC_MS - 2 * 1440 * 60 * 1000; // Kiritimati-local Jul 19
+    expect(buildTodoReminderBody(base, "Pacific/Kiritimati", nowMs)).toContain("on Jul 20");
+  });
+
   it("appends the due date when it is not the assignee-local today", () => {
     // 1-day-before reminder fires on 2026-07-19 local
     const nowMs = DUE_UTC_MS - 1440 * 60 * 1000;
