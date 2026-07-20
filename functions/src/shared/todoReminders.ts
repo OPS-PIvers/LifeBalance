@@ -86,9 +86,9 @@ export function shouldSendTodoReminder(
 }
 
 /**
- * Push body helper: "<task text> — due at 3:00 PM" (or "due now" for a
- * 0-offset firing exactly at the due time is still phrased with the time —
- * the assignee wants to know WHEN it's due, not when we happened to send).
+ * Push body helper: "<task text> — due at 3:00 PM". A 0-offset reminder is
+ * phrased the same way — the assignee wants to know WHEN it's due, not when
+ * we happened to send.
  */
 export function buildTodoReminderBody(
   todo: ReminderTodo,

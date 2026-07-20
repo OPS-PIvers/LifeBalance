@@ -1537,6 +1537,27 @@ describe("quickAddTodo", () => {
     expect("reminderSentAt" in written).toBe(false);
   });
 
+  it("a reminder with no assignedTo defaults to the API key's owner", async () => {
+    configureValidKey({ habits: false, expenses: false, shoppingList: false, todos: true });
+    const add = vi.fn(() => Promise.resolve({ id: "todo-selfremind" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/todos`] = { add };
+    configureCollections();
+
+    const res = makeRes();
+    await asHandler(quickAddTodo)(
+      makeReq({
+        body: { text: "Call dentist", dueTime: "15:00", reminderMinutesBefore: 30, today: TODO_TODAY },
+      }),
+      res
+    );
+
+    expect(res.statusCode).toBe(200);
+    const written = add.mock.calls[0]?.[0] as Record<string, unknown>;
+    // KEY_CREATED_BY is the configured key owner in the test harness.
+    expect(typeof written.assignedTo).toBe("string");
+    expect(written.assignedTo).toBe(written.createdBy);
+  });
+
   it("omits the time fields entirely when not provided", async () => {
     configureValidKey({ habits: false, expenses: false, shoppingList: false, todos: true });
     const add = vi.fn(() => Promise.resolve({ id: "todo-plain" }));

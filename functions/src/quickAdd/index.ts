@@ -1947,6 +1947,26 @@ export const quickAddTodo = onRequest(
         assignedTo = matched.uid;
       }
 
+      // F-TODO-14: a reminder push goes to the ASSIGNEE, so an unassigned
+      // timed reminder would never fire — and would pollute the 15-minute
+      // reminder scan forever (matches the query, skipped in memory, never
+      // stamped). The app's edit drawer already requires an assignee; here we
+      // default to the API key's owner ("remind ME"), or reject when there is
+      // no one to anchor to.
+      if (reminderMinutesBefore !== undefined && assignedTo === undefined) {
+        if (validation.keyCreatedBy) {
+          assignedTo = validation.keyCreatedBy;
+        } else {
+          errorResponse(
+            res, 400,
+            "reminderMinutesBefore requires assignedTo (reminders are delivered to the assignee)",
+            "BAD_REQUEST"
+          );
+          await logApiCall(householdId, apiKey.substring(0, 16), "todo", req.body, 400);
+          return;
+        }
+      }
+
       // 6. Create the to-do document.
       const todoData: Record<string, unknown> = {
         text: taskText,
