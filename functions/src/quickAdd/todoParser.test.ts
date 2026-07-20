@@ -96,6 +96,11 @@ describe("parseTodoPhrase", () => {
     it("word forms", () => {
       expect(parseTodoPhrase("dentist at 3pm remind me an hour before", TODAY).reminderMinutesBefore).toBe(60);
       expect(parseTodoPhrase("dentist at 3pm remind me the day before", TODAY).reminderMinutesBefore).toBe(1440);
+      // "the morning before" intentionally maps to 1 day (1440) like "the day
+      // before" — a fixed hours-before offset would land at the wrong moment
+      // relative to arbitrary due times (e.g. 8h before a 3pm task is 7am the
+      // SAME day, not the morning before).
+      expect(parseTodoPhrase("dentist at 3pm remind me the morning before", TODAY).reminderMinutesBefore).toBe(1440);
     });
 
     it("lenient suffix: 'remind me 30 minutes' (no 'before') still counts", () => {
