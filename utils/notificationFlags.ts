@@ -33,6 +33,8 @@ export function computeAnyNotificationsEnabled(
   if (!prefs) return true;
 
   const weeklyRecapEnabled = prefs.weeklyRecap?.enabled !== false;
+  // F-TODO-14: todoReminders is fail-open like weeklyRecap — absent means ON.
+  const todoRemindersEnabled = prefs.todoReminders?.enabled !== false;
 
   return (
     prefs.habitReminders?.enabled === true ||
@@ -41,6 +43,7 @@ export function computeAnyNotificationsEnabled(
     prefs.streakWarnings?.enabled === true ||
     prefs.billReminders?.enabled === true ||
     prefs.dailyBriefing?.enabled === true ||
-    weeklyRecapEnabled
+    weeklyRecapEnabled ||
+    todoRemindersEnabled
   );
 }

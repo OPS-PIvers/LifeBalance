@@ -109,6 +109,21 @@ describe('buildNextRecurringTodo', () => {
     expect(next!.points).toBe(5);
   });
 
+  it('carries dueTime and reminder to the next instance, re-armed (F-TODO-14)', () => {
+    const completed: ToDo = {
+      ...baseTodo,
+      dueTime: '18:00',
+      reminderMinutesBefore: 30,
+      reminderSentAt: '2026-07-14T17:30:00.000Z',
+      recurrence: { frequency: 'weekly' },
+    };
+    const next = buildNextRecurringTodo(completed, '2026-07-14');
+    expect(next!.dueTime).toBe('18:00');
+    expect(next!.reminderMinutesBefore).toBe(30);
+    // The fresh instance's reminder must be re-armed.
+    expect('reminderSentAt' in next!).toBe(false);
+  });
+
   it('omits optional fields that are absent', () => {
     const completed: ToDo = { ...baseTodo, recurrence: { frequency: 'weekly' } };
     const next = buildNextRecurringTodo(completed, '2026-07-14');

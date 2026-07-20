@@ -641,6 +641,7 @@ service cloud.firestore {
                                 'text', 'completeByDate', 'isCompleted', 'completedAt',
                                 'assignedTo', 'priority', 'notes', 'source',
                                 'isImportant', 'points',
+                                'dueTime', 'reminderMinutesBefore', 'reminderSentAt',
                                 'recurrence', 'subtasks',
                                 'createdBy', 'createdAt'
                               ]) &&
@@ -656,6 +657,13 @@ service cloud.firestore {
                               (request.resource.data.get('isImportant', null) == null || isValidBoolean(request.resource.data.isImportant)) &&
                               // Managed-kid completion credit (Plan 080c) — optional number
                               isValidOptionalNumber(request.resource.data.get('points', null)) &&
+                              // Timed reminders (F-TODO-14) — optional HH:mm due time,
+                              // minutes-before offset, and the server-stamped sent marker
+                              // (clients may only write it as null to re-arm; the Admin
+                              // SDK bypasses rules for the actual stamp).
+                              isValidOptionalString(request.resource.data.get('dueTime', null), 5) &&
+                              isValidOptionalNumber(request.resource.data.get('reminderMinutesBefore', null)) &&
+                              isValidOptionalString(request.resource.data.get('reminderSentAt', null), 40) &&
                               // Recurring to-dos (F-TODO-01) — optional map {frequency, parentRecurringId?}
                               (request.resource.data.get('recurrence', null) == null ||
                                 (request.resource.data.recurrence is map &&

@@ -9,9 +9,17 @@ const basePrefs: NotificationPreferences = {
   streakWarnings: { enabled: false, time: '20:00' },
   billReminders: { enabled: false, daysBeforeDue: 3, time: '09:00' },
   weeklyRecap: { enabled: false },
+  // F-TODO-14: todoReminders is also fail-open, so "everything off" baselines
+  // must disable it explicitly too.
+  todoReminders: { enabled: false },
 };
 
 describe('computeAnyNotificationsEnabled', () => {
+  it('is true when todoReminders is absent (fail-open) even with everything else off', () => {
+    const { todoReminders: _omitted, ...withoutTodoReminders } = basePrefs;
+    expect(computeAnyNotificationsEnabled(withoutTodoReminders, ['token1'])).toBe(true);
+  });
+
   it('is false with no tokens, regardless of prefs', () => {
     expect(computeAnyNotificationsEnabled({ ...basePrefs, habitReminders: { enabled: true, time: '08:00' } }, [])).toBe(false);
     expect(computeAnyNotificationsEnabled({ ...basePrefs, habitReminders: { enabled: true, time: '08:00' } }, undefined)).toBe(false);

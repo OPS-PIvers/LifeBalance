@@ -91,5 +91,12 @@ export function buildNextRecurringTodo(
   if (completed.source !== undefined) next.source = completed.source;
   if (completed.isImportant !== undefined) next.isImportant = completed.isImportant;
   if (completed.points !== undefined) next.points = completed.points;
+  // F-TODO-14: a recurring timed chore keeps its time and reminder on every
+  // spawned instance. reminderSentAt is deliberately NOT carried — the fresh
+  // instance's reminder is re-armed.
+  if (completed.dueTime !== undefined) next.dueTime = completed.dueTime;
+  if (completed.reminderMinutesBefore !== undefined) {
+    next.reminderMinutesBefore = completed.reminderMinutesBefore;
+  }
   return next;
 }

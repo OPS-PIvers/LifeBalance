@@ -12,6 +12,7 @@ import {
   type HouseholdMember,
 } from "./shared/notifications";
 import { findBillsDueOnDate, type BillCalendarItem } from "./shared/bills";
+import { shouldSendTodoReminder, buildTodoReminderBody } from "./shared/todoReminders";
 import { writeProactiveInsight, type ProactiveCapHouseholdDoc } from "./insights/writeProactiveInsight";
 import {
   computeHabitsPending,
@@ -240,6 +241,72 @@ export const sendactionqueuereminders = onSchedule(
     }
   }
 );
+
+/**
+ * F-TODO-14: Scheduled function running every 15 minutes to deliver per-task
+ * timed reminders (dueTime − reminderMinutesBefore, in the assignee's
+ * timezone). Unlike the four hourly summary jobs this deliberately IGNORES
+ * digestMode — a time-specific reminder is an alarm, not a briefing — and the
+ * todoReminders pref is fail-open (absent = enabled), matching weeklyRecap.
+ * Exactly-once delivery is enforced by stamping `reminderSentAt` on the todo;
+ * client edits to the date/time/offset re-arm it by writing null.
+ */
+export const sendtodoreminders = onSchedule("every 15 minutes", async () => {
+  logger.info("Checking for timed to-do reminders to send");
+
+  const groups = await loadNotifiableMembersByHousehold(db);
+  const nowMs = Date.now();
+
+  for (const group of groups) {
+    // Gate on member eligibility BEFORE querying todos so households with no
+    // reachable assignee cost zero extra reads on this 96×/day schedule.
+    const eligibleMembers = new Map<string, { member: HouseholdMember; ref: admin.firestore.DocumentReference }>();
+    for (const memberDoc of group.memberDocs) {
+      const member = memberDoc.data() as HouseholdMember;
+      const prefs = member.notificationPreferences;
+      if (prefs?.todoReminders?.enabled === false) continue;
+      if (!member.fcmTokens || member.fcmTokens.length === 0) continue;
+      eligibleMembers.set(member.uid, { member, ref: memberDoc.ref });
+    }
+    if (eligibleMembers.size === 0) continue;
+
+    // Candidate todos: active with a reminder configured. Date/time filtering
+    // happens in memory (per-assignee timezone math can't be expressed in the
+    // query). Composite index: todos(isCompleted ASC, reminderMinutesBefore ASC).
+    const todosSnapshot = await group.householdRef
+      .collection("todos")
+      .where("isCompleted", "==", false)
+      .where("reminderMinutesBefore", ">=", 0)
+      .get();
+
+    for (const todoDoc of todosSnapshot.docs) {
+      const todo = todoDoc.data();
+      const assignee = typeof todo.assignedTo === "string" ? eligibleMembers.get(todo.assignedTo) : undefined;
+      if (!assignee) continue;
+
+      const timezone = assignee.member.notificationPreferences?.timezone || "UTC";
+      if (!shouldSendTodoReminder(todo, nowMs, timezone)) continue;
+
+      // Stamp BEFORE sending so a crash between send and stamp can't produce
+      // a duplicate on the next run; a send failure after the stamp just
+      // drops one reminder, which is the safer failure mode.
+      await todoDoc.ref.update({ reminderSentAt: new Date(nowMs).toISOString() });
+
+      logger.info(`Household ${group.householdId}: sending todo reminder for ${todoDoc.id} to ${assignee.member.uid}`);
+      await sendNotificationToUser(
+        assignee.member.fcmTokens ?? [],
+        "To-Do Reminder",
+        buildTodoReminderBody(todo, timezone, nowMs),
+        {
+          type: "todo_reminder",
+          url: "/lists",
+        },
+        assignee.ref,
+        { householdId: group.householdId, recipientUid: assignee.member.uid, type: "todo_reminder" }
+      );
+    }
+  }
+});
 
 /**
  * Scheduled function: Runs every hour to check for streak warnings
