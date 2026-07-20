@@ -257,9 +257,9 @@ export const sendtodoreminders = onSchedule("every 15 minutes", async () => {
   const groups = await loadNotifiableMembersByHousehold(db);
   const nowMs = Date.now();
 
-  for (const group of groups) {
-    // Gate on member eligibility BEFORE querying todos so households with no
-    // reachable assignee cost zero extra reads on this 96×/day schedule.
+  // Gate on member eligibility BEFORE querying todos so households with no
+  // reachable assignee cost zero extra reads on this 96×/day schedule.
+  const eligibleGroups = groups.flatMap((group) => {
     const eligibleMembers = new Map<string, { member: HouseholdMember; ref: admin.firestore.DocumentReference }>();
     for (const memberDoc of group.memberDocs) {
       const member = memberDoc.data() as HouseholdMember;
@@ -268,16 +268,29 @@ export const sendtodoreminders = onSchedule("every 15 minutes", async () => {
       if (!member.fcmTokens || member.fcmTokens.length === 0) continue;
       eligibleMembers.set(member.uid, { member, ref: memberDoc.ref });
     }
-    if (eligibleMembers.size === 0) continue;
+    return eligibleMembers.size > 0 ? [{ group, eligibleMembers }] : [];
+  });
 
-    // Candidate todos: active with a reminder configured. Date/time filtering
-    // happens in memory (per-assignee timezone math can't be expressed in the
-    // query). Composite index: todos(isCompleted ASC, reminderMinutesBefore ASC).
-    const todosSnapshot = await group.householdRef
-      .collection("todos")
-      .where("isCompleted", "==", false)
-      .where("reminderMinutesBefore", ">=", 0)
-      .get();
+  // Candidate todos: active with a reminder configured. Date/time filtering
+  // happens in memory (per-assignee timezone math can't be expressed in the
+  // query). Composite index: todos(isCompleted ASC, reminderMinutesBefore ASC).
+  // Reads fan out in parallel across households; the stamp+send pass below
+  // stays sequential so `reminderSentAt` can never race into a double-send.
+  const todoSnapshots = await Promise.all(
+    eligibleGroups.map(({ group }) =>
+      group.householdRef
+        .collection("todos")
+        .where("isCompleted", "==", false)
+        .where("reminderMinutesBefore", ">=", 0)
+        .get()
+    )
+  );
+
+  for (let i = 0; i < eligibleGroups.length; i++) {
+    const entry = eligibleGroups[i];
+    const todosSnapshot = todoSnapshots[i];
+    if (!entry || !todosSnapshot) continue; // same-length arrays; guard for noUncheckedIndexedAccess
+    const { group, eligibleMembers } = entry;
 
     for (const todoDoc of todosSnapshot.docs) {
       const todo = todoDoc.data();

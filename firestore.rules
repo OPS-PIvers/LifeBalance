@@ -665,8 +665,13 @@ service cloud.firestore {
                               // todo still carries the stamp through. The Admin SDK bypasses
                               // rules for the actual stamp, so no client can forge a "sent"
                               // marker to suppress a reminder.)
-                              isValidOptionalString(request.resource.data.get('dueTime', null), 5) &&
-                              isValidOptionalNumber(request.resource.data.get('reminderMinutesBefore', null)) &&
+                              (request.resource.data.get('dueTime', null) == null ||
+                                (request.resource.data.dueTime is string &&
+                                 request.resource.data.dueTime.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$'))) &&
+                              (request.resource.data.get('reminderMinutesBefore', null) == null ||
+                                (request.resource.data.reminderMinutesBefore is int &&
+                                 request.resource.data.reminderMinutesBefore >= 0 &&
+                                 request.resource.data.reminderMinutesBefore <= 10080)) &&
                               (request.resource.data.get('reminderSentAt', null) == null ||
                                 (resource != null &&
                                  request.resource.data.reminderSentAt == resource.data.get('reminderSentAt', null))) &&
