@@ -1471,6 +1471,90 @@ describe("quickAddTodo", () => {
     expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
   });
 
+  it("returns 400 when dueTime is not HH:mm 24-hour", async () => {
+    configureValidKey({ habits: false, expenses: false, shoppingList: false, todos: true });
+    const res = makeRes();
+    await asHandler(quickAddTodo)(
+      makeReq({ body: { text: "Take out trash", dueTime: "3pm" } }),
+      res
+    );
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+  });
+
+  it("returns 400 when reminderMinutesBefore is provided without dueTime", async () => {
+    configureValidKey({ habits: false, expenses: false, shoppingList: false, todos: true });
+    const res = makeRes();
+    await asHandler(quickAddTodo)(
+      makeReq({ body: { text: "Take out trash", reminderMinutesBefore: 30 } }),
+      res
+    );
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+  });
+
+  it("returns 400 when reminderMinutesBefore is negative or non-integer", async () => {
+    configureValidKey({ habits: false, expenses: false, shoppingList: false, todos: true });
+    for (const bad of [-5, 2.5, "soon"]) {
+      const res = makeRes();
+      await asHandler(quickAddTodo)(
+        makeReq({ body: { text: "Take out trash", dueTime: "15:00", reminderMinutesBefore: bad } }),
+        res
+      );
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+    }
+  });
+
+  it("writes dueTime and reminderMinutesBefore (F-TODO-14), accepting a numeric string", async () => {
+    configureValidKey({ habits: false, expenses: false, shoppingList: false, todos: true });
+    const add = vi.fn(() => Promise.resolve({ id: "todo-timed" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/todos`] = { add };
+    configureCollections();
+
+    const res = makeRes();
+    await asHandler(quickAddTodo)(
+      makeReq({
+        body: {
+          text: "Call dentist",
+          dueDate: "2026-08-01",
+          dueTime: "15:00",
+          reminderMinutesBefore: "30",
+          today: TODO_TODAY,
+        },
+      }),
+      res
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      success: true,
+      data: { dueTime: "15:00", reminderMinutesBefore: 30 },
+    });
+    const written = add.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(written).toMatchObject({ dueTime: "15:00", reminderMinutesBefore: 30 });
+    // The sent marker must not be pre-set — the reminder job stamps it.
+    expect("reminderSentAt" in written).toBe(false);
+  });
+
+  it("omits the time fields entirely when not provided", async () => {
+    configureValidKey({ habits: false, expenses: false, shoppingList: false, todos: true });
+    const add = vi.fn(() => Promise.resolve({ id: "todo-plain" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/todos`] = { add };
+    configureCollections();
+
+    const res = makeRes();
+    await asHandler(quickAddTodo)(
+      makeReq({ body: { text: "Take out trash", today: TODO_TODAY } }),
+      res
+    );
+
+    expect(res.statusCode).toBe(200);
+    const written = add.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect("dueTime" in written).toBe(false);
+    expect("reminderMinutesBefore" in written).toBe(false);
+  });
+
   it("creates a to-do defaulting the due date to caller-local today (200)", async () => {
     configureValidKey({ habits: false, expenses: false, shoppingList: false, todos: true });
     const add = vi.fn(() => Promise.resolve({ id: "todo1" }));

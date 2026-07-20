@@ -1759,7 +1759,10 @@ export const quickAddBillPay = onRequest(
  * POST /quickAddTodo
  * Create a shared household to-do via iOS Shortcuts / Siri (F-TODO-07).
  *
- * Accepts `{ text, dueDate?, assignedTo?, isImportant?, today? }`. `dueDate`
+ * Accepts `{ text, dueDate?, dueTime?, reminderMinutesBefore?, assignedTo?,
+ * isImportant?, today? }`. `dueTime` (F-TODO-14) is HH:mm 24-hour wall-clock
+ * in the assignee's timezone; `reminderMinutesBefore` (non-negative integer
+ * minutes of lead time, 0 = at the due time) requires `dueTime`. `dueDate`
  * defaults to the caller-local "today" (forwarded the same way
  * quickAddExpense/quickAddHabit already do — Cloud Functions run in UTC).
  * `assignedTo` is resolved against the household's members: an exact uid
@@ -1816,6 +1819,8 @@ export const quickAddTodo = onRequest(
     const {
       text,
       dueDate: rawDueDate,
+      dueTime: rawDueTime,
+      reminderMinutesBefore: rawReminder,
       assignedTo: rawAssignedTo,
       isImportant: rawIsImportant,
       today: rawToday,
@@ -1847,6 +1852,35 @@ export const quickAddTodo = onRequest(
       dueDate = rawDueDate;
     } else {
       dueDate = today;
+    }
+
+    // F-TODO-14: optional due time + reminder lead time. Mirrors the client
+    // form's constraint: a reminder is only meaningful anchored to a time.
+    let dueTime: string | undefined;
+    if (rawDueTime !== undefined && rawDueTime !== null && rawDueTime !== "") {
+      if (typeof rawDueTime !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(rawDueTime)) {
+        errorResponse(res, 400, "dueTime must be in HH:mm 24-hour format", "BAD_REQUEST");
+        return;
+      }
+      dueTime = rawDueTime;
+    }
+
+    let reminderMinutesBefore: number | undefined;
+    if (rawReminder !== undefined && rawReminder !== null && rawReminder !== "") {
+      const parsed = typeof rawReminder === "string" ? Number(rawReminder) : rawReminder;
+      if (typeof parsed !== "number" || !Number.isInteger(parsed) || parsed < 0 || parsed > 10080) {
+        errorResponse(
+          res, 400,
+          "reminderMinutesBefore must be a non-negative integer number of minutes (max 10080)",
+          "BAD_REQUEST"
+        );
+        return;
+      }
+      if (dueTime === undefined) {
+        errorResponse(res, 400, "reminderMinutesBefore requires dueTime", "BAD_REQUEST");
+        return;
+      }
+      reminderMinutesBefore = parsed;
     }
 
     if (rawIsImportant !== undefined && rawIsImportant !== null) {
@@ -1904,6 +1938,8 @@ export const quickAddTodo = onRequest(
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         ...(assignedTo ? { assignedTo } : {}),
         ...(isImportant ? { isImportant: true } : {}),
+        ...(dueTime !== undefined ? { dueTime } : {}),
+        ...(reminderMinutesBefore !== undefined ? { reminderMinutesBefore } : {}),
         ...(validation.keyCreatedBy ? { createdBy: validation.keyCreatedBy } : {}),
       };
 
@@ -1924,6 +1960,8 @@ export const quickAddTodo = onRequest(
           completeByDate: dueDate,
           assignedTo: assignedTo ?? null,
           isImportant,
+          dueTime: dueTime ?? null,
+          reminderMinutesBefore: reminderMinutesBefore ?? null,
         },
       });
     } catch (error) {
