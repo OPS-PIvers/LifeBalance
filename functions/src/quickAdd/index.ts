@@ -1957,12 +1957,13 @@ export const quickAddTodo = onRequest(
         if (validation.keyCreatedBy) {
           assignedTo = validation.keyCreatedBy;
         } else {
+          // No logApiCall: validation-error 400s in this endpoint don't log
+          // (only household-data failures like the assignedTo 404 do).
           errorResponse(
             res, 400,
             "reminderMinutesBefore requires assignedTo (reminders are delivered to the assignee)",
             "BAD_REQUEST"
           );
-          await logApiCall(householdId, apiKey.substring(0, 16), "todo", req.body, 400);
           return;
         }
       }
