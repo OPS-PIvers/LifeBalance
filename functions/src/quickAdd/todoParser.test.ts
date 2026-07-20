@@ -68,7 +68,7 @@ describe("parseTodoPhrase", () => {
       expect(parseTodoPhrase("wake at 12am", TODAY).dueTime).toBe("00:00");
     });
 
-    it("24-hour forms require 'at' and must be unambiguous", () => {
+    it("zero-padded 24h HH:mm and hours 13-23 parse; bare hours without am/pm do not", () => {
       expect(parseTodoPhrase("meeting at 15:00", TODAY).dueTime).toBe("15:00");
       expect(parseTodoPhrase("meeting at 09:30", TODAY).dueTime).toBe("09:30");
       expect(parseTodoPhrase("buy 3 lemons", TODAY).dueTime).toBeUndefined();
