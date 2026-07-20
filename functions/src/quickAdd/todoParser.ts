@@ -38,10 +38,11 @@ const MONTHS = [
   "august", "september", "october", "november", "december",
 ] as const;
 
-/** Next calendar occurrence of `weekday` strictly AFTER interpretation rules:
- *  bare/"on" weekday = the next occurrence (today counts as 7 days out only
- *  when prefixed "next"); "next <weekday>" = the occurrence in 1–7 days, then
- *  +7 more when the bare occurrence would be within this week's remainder. */
+/** Next calendar occurrence of `weekday`. A weekday equal to today's is
+ *  ALWAYS 7 days out ("monday" and "next monday" said on a Monday both mean
+ *  the coming Monday); "next" adds an extra 7 only when the weekday is still
+ *  ahead in the current week ("friday" = this Friday, "next friday" = the one
+ *  after). */
 function nextWeekday(today: Date, weekday: number, isNext: boolean): Date {
   const delta = (weekday - getDay(today) + 7) % 7;
   const days = delta === 0 ? 7 : delta;
