@@ -111,7 +111,16 @@ export function buildTodoReminderBody(
       // today (e.g. a "1 day before" reminder).
       const localToday = formatInTimeZone(new Date(nowMs), timezone, "yyyy-MM-dd");
       if (completeByDate !== localToday) {
-        label = `${label} on ${completeByDate}`;
+        // Human-readable date ("Jul 20"), not the raw ISO string. The noon-UTC
+        // anchor keeps the calendar day stable when re-formatting into any
+        // member timezone (|offset| < 12h), avoiding a midnight DST/offset
+        // off-by-one.
+        const displayDate = formatInTimeZone(
+          new Date(`${completeByDate}T12:00:00Z`),
+          timezone,
+          "MMM d"
+        );
+        label = `${label} on ${displayDate}`;
       }
     } catch (_e) {
       label = dueTime;

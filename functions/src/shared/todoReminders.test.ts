@@ -95,7 +95,7 @@ describe("buildTodoReminderBody", () => {
     // 1-day-before reminder fires on 2026-07-19 local
     const nowMs = DUE_UTC_MS - 1440 * 60 * 1000;
     expect(buildTodoReminderBody(base, TZ, nowMs)).toBe(
-      "Call dentist — due at 3:00 PM on 2026-07-20"
+      "Call dentist — due at 3:00 PM on Jul 20"
     );
   });
 
