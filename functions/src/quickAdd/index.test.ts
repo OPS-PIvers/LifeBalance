@@ -1555,6 +1555,91 @@ describe("quickAddTodo", () => {
     expect("reminderMinutesBefore" in written).toBe(false);
   });
 
+  it("parse: true extracts date/time/reminder from a natural phrase (F-TODO-15)", async () => {
+    configureValidKey({ habits: false, expenses: false, shoppingList: false, todos: true });
+    const add = vi.fn(() => Promise.resolve({ id: "todo-parsed" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/todos`] = { add };
+    configureCollections();
+
+    const res = makeRes();
+    await asHandler(quickAddTodo)(
+      makeReq({
+        body: {
+          text: "Call dentist tomorrow at 3pm, remind me 30 minutes before",
+          parse: true,
+          today: TODO_TODAY, // 2026-07-14
+        },
+      }),
+      res
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      success: true,
+      data: {
+        text: "Call dentist",
+        completeByDate: "2026-07-15",
+        dueTime: "15:00",
+        reminderMinutesBefore: 30,
+      },
+    });
+    const written = add.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(written).toMatchObject({
+      text: "Call dentist",
+      completeByDate: "2026-07-15",
+      dueTime: "15:00",
+      reminderMinutesBefore: 30,
+    });
+  });
+
+  it("explicit structured fields override parsed values", async () => {
+    configureValidKey({ habits: false, expenses: false, shoppingList: false, todos: true });
+    const add = vi.fn(() => Promise.resolve({ id: "todo-override" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/todos`] = { add };
+    configureCollections();
+
+    const res = makeRes();
+    await asHandler(quickAddTodo)(
+      makeReq({
+        body: {
+          text: "Call dentist tomorrow at 3pm",
+          parse: true,
+          dueDate: "2026-09-01",
+          dueTime: "08:30",
+          today: TODO_TODAY,
+        },
+      }),
+      res
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      success: true,
+      data: { text: "Call dentist", completeByDate: "2026-09-01", dueTime: "08:30" },
+    });
+  });
+
+  it("without parse, natural phrases are stored verbatim (backward compat)", async () => {
+    configureValidKey({ habits: false, expenses: false, shoppingList: false, todos: true });
+    const add = vi.fn(() => Promise.resolve({ id: "todo-verbatim" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/todos`] = { add };
+    configureCollections();
+
+    const res = makeRes();
+    await asHandler(quickAddTodo)(
+      makeReq({ body: { text: "Call dentist tomorrow at 3pm", today: TODO_TODAY } }),
+      res
+    );
+
+    expect(res.statusCode).toBe(200);
+    const written = add.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(written).toMatchObject({
+      text: "Call dentist tomorrow at 3pm",
+      completeByDate: TODO_TODAY,
+    });
+    expect("dueTime" in written).toBe(false);
+  });
+
   it("creates a to-do defaulting the due date to caller-local today (200)", async () => {
     configureValidKey({ habits: false, expenses: false, shoppingList: false, todos: true });
     const add = vi.fn(() => Promise.resolve({ id: "todo1" }));
