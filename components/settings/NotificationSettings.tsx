@@ -60,6 +60,12 @@ const DEFAULT_PREFERENCES: NotificationPreferences = {
   monthlyMoneyRecap: {
     enabled: true
   },
+  // F-TODO-14: per-task timed reminders default ON (fail-open) — the real
+  // opt-in is setting a time + reminder on a task; this is just the master
+  // opt-out. Fires at each task's own time, so no time control here.
+  todoReminders: {
+    enabled: true
+  },
   // Digest mode defaults OFF — opt-in consolidation of the four per-type
   // reminders above into one push at a single time.
   digestMode: DEFAULT_DIGEST_MODE,
@@ -103,6 +109,7 @@ const mergePreferences = (current?: NotificationPreferences): NotificationPrefer
   weeklyRecap: { enabled: true, ...current?.weeklyRecap },
   reflectionReminder: { enabled: false, time: '20:30', ...current?.reflectionReminder },
   monthlyMoneyRecap: { enabled: true, ...current?.monthlyMoneyRecap },
+  todoReminders: { enabled: true, ...current?.todoReminders },
   digestMode: { ...DEFAULT_DIGEST_MODE, ...current?.digestMode },
   dailyBriefing: { enabled: false, time: '08:00', ...current?.dailyBriefing },
   timezone: current?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -391,6 +398,29 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                 </select>
               </div>
             )}
+          </div>
+        </Row>
+
+        {/* F-TODO-14: per-task timed reminders — fires at each task's own
+            time − lead time, so no time control here. Unaffected by Digest
+            Mode (a timed reminder is an alarm, not a briefing). */}
+        <Row className="items-start">
+          <div className="w-10 h-10 bg-accent-50 dark:bg-accent-500/15 rounded-btn flex items-center justify-center shrink-0">
+            <ListTodo className="w-5 h-5 text-accent-600 dark:text-accent-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <h4 className="font-semibold text-brand-900 dark:text-brand-100">Task Reminders</h4>
+                <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">Per-task alerts for to-dos with a due time and reminder set.</p>
+              </div>
+              <Switch
+                id="notif-todo-reminders"
+                aria-label="Timed task reminders"
+                checked={preferences.todoReminders?.enabled ?? true}
+                onCheckedChange={() => handleToggle('todoReminders')}
+              />
+            </div>
           </div>
         </Row>
 

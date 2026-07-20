@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Trash2, Edit2, AlertCircle, Clock, User, Copy, MoreVertical, Calendar, Star, CheckSquare, ChevronDown, ListChecks, Repeat, FileText } from 'lucide-react';
+import { Check, Trash2, Edit2, AlertCircle, Clock, User, Copy, MoreVertical, Calendar, Star, CheckSquare, ChevronDown, ListChecks, Repeat, FileText, Bell } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, startOfToday } from 'date-fns';
 import { ToDo, HouseholdMember } from '@/types/schema';
 import { DEFAULT_TODO_POINTS } from '@/utils/todoPoints';
@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/Button';
 import { UndoToast } from '@/components/ui/UndoToast';
 import { cn } from '@/utils/cn';
 import { type SectionColor, dateColorMap } from './todoDisplay';
+import { formatDueTime } from '@/utils/todoTime';
 
 // Moved verbatim from pages/ToDosPage.tsx (Plan 27) — extracted because both
 // the list arrangement (still in ToDosPage) and the Eisenhower matrix view
@@ -62,6 +63,11 @@ export const TodoRow = React.memo(function TodoRow({
   // Parse the due date once per row render to avoid repeated parseISO calls
   const dueDate = parseISO(item.completeByDate);
   const isOverdue = isBefore(dueDate, startOfToday());
+
+  // F-TODO-14: optional due time-of-day, shown after the date label. The bell
+  // marks a task with a reminder configured.
+  const dueTimeLabel = formatDueTime(item.dueTime);
+  const hasReminder = dueTimeLabel !== null && typeof item.reminderMinutesBefore === 'number';
 
   // F-TODO-08: subtask checklist progress + expand/collapse state.
   const progress = subtaskProgress(item.subtasks);
@@ -160,7 +166,7 @@ export const TodoRow = React.memo(function TodoRow({
             {isOverdue ? (
               <span className="flex items-center gap-1 font-semibold text-money-neg dark:text-money-negDark">
                 <AlertCircle size={11} />
-                Overdue ({format(dueDate, 'MMM d')})
+                Overdue ({format(dueDate, 'MMM d')}{dueTimeLabel ? ` · ${dueTimeLabel}` : ''})
               </span>
             ) : (
               <span className={`flex items-center gap-1 font-semibold ${dateColorMap[color]}`}>
@@ -168,6 +174,8 @@ export const TodoRow = React.memo(function TodoRow({
                 {isToday(dueDate) ? 'Today' :
                  isTomorrow(dueDate) ? 'Tomorrow' :
                  format(dueDate, 'MMM d')}
+                {dueTimeLabel && ` · ${dueTimeLabel}`}
+                {hasReminder && <Bell size={11} aria-label="Reminder set" />}
               </span>
             )}
 

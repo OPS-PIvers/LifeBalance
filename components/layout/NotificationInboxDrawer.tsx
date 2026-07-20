@@ -22,6 +22,7 @@ const TYPE_ICON: Record<NotificationLogType, React.ReactNode> = {
   budget_alert: <TrendingDown size={16} />,
   weekly_recap: <PiggyBank size={16} />,
   monthly_money_recap: <Wallet size={16} />,
+  todo_reminder: <Bell size={16} />,
 };
 
 /**

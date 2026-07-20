@@ -98,6 +98,17 @@ export function makeTodoCrudMutations(deps: {
     }
     try {
       const sanitizedUpdates = sanitizeFirestoreData(updates);
+      // F-TODO-14: any edit that changes WHEN the reminder should fire re-arms
+      // it. reminderSentAt is the server job's sent marker; writing null makes
+      // the todo eligible again (null and absent both mean "not sent yet").
+      // Only added when the caller didn't set reminderSentAt itself and the
+      // edit actually touches a scheduling field, so unrelated updates (star,
+      // subtasks, notes...) stay byte-identical to today's writes.
+      const touchesReminderSchedule =
+        'completeByDate' in updates || 'dueTime' in updates || 'reminderMinutesBefore' in updates;
+      if (touchesReminderSchedule && !('reminderSentAt' in updates)) {
+        sanitizedUpdates.reminderSentAt = null;
+      }
       await updateDoc(doc(db, `households/${householdId}/todos`, id), sanitizedUpdates);
     } catch (error) {
       console.error('[updateToDo] Failed:', error);

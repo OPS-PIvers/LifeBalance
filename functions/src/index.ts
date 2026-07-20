@@ -12,6 +12,7 @@ import {
   type HouseholdMember,
 } from "./shared/notifications";
 import { findBillsDueOnDate, type BillCalendarItem } from "./shared/bills";
+import { shouldSendTodoReminder, buildTodoReminderBody } from "./shared/todoReminders";
 import { writeProactiveInsight, type ProactiveCapHouseholdDoc } from "./insights/writeProactiveInsight";
 import {
   computeHabitsPending,
@@ -240,6 +241,104 @@ export const sendactionqueuereminders = onSchedule(
     }
   }
 );
+
+/**
+ * F-TODO-14: Scheduled function running every 15 minutes to deliver per-task
+ * timed reminders (dueTime − reminderMinutesBefore, in the assignee's
+ * timezone). Unlike the four hourly summary jobs this deliberately IGNORES
+ * digestMode — a time-specific reminder is an alarm, not a briefing — and the
+ * todoReminders pref is fail-open (absent = enabled), matching weeklyRecap.
+ * Exactly-once delivery is enforced by stamping `reminderSentAt` on the todo;
+ * client edits to the date/time/offset re-arm it by writing null.
+ */
+export const sendtodoreminders = onSchedule("every 15 minutes", async () => {
+  logger.info("Checking for timed to-do reminders to send");
+
+  const groups = await loadNotifiableMembersByHousehold(db);
+  const nowMs = Date.now();
+
+  // Gate on member eligibility BEFORE querying todos so households with no
+  // reachable assignee cost zero extra reads on this 96×/day schedule.
+  const eligibleGroups = groups.flatMap((group) => {
+    const eligibleMembers = new Map<string, { member: HouseholdMember; ref: admin.firestore.DocumentReference }>();
+    for (const memberDoc of group.memberDocs) {
+      const member = memberDoc.data() as HouseholdMember;
+      const prefs = member.notificationPreferences;
+      if (prefs?.todoReminders?.enabled === false) continue;
+      if (!member.fcmTokens || member.fcmTokens.length === 0) continue;
+      eligibleMembers.set(member.uid, { member, ref: memberDoc.ref });
+    }
+    return eligibleMembers.size > 0 ? [{ group, eligibleMembers }] : [];
+  });
+
+  // Candidate todos: active with a reminder configured. Date/time filtering
+  // happens in memory (per-assignee timezone math can't be expressed in the
+  // query). Composite index: todos(isCompleted ASC, reminderMinutesBefore ASC).
+  // Reads fan out in parallel across households; the stamp+send pass below
+  // stays sequential so `reminderSentAt` can never race into a double-send.
+  const todoSnapshots = await Promise.all(
+    eligibleGroups.map(({ group }) =>
+      group.householdRef
+        .collection("todos")
+        .where("isCompleted", "==", false)
+        .where("reminderMinutesBefore", ">=", 0)
+        .get()
+    )
+  );
+
+  for (let i = 0; i < eligibleGroups.length; i++) {
+    const entry = eligibleGroups[i];
+    const todosSnapshot = todoSnapshots[i];
+    if (!entry || !todosSnapshot) continue; // same-length arrays; guard for noUncheckedIndexedAccess
+    const { group, eligibleMembers } = entry;
+
+    for (const todoDoc of todosSnapshot.docs) {
+      const todo = todoDoc.data();
+      const assignee = typeof todo.assignedTo === "string" ? eligibleMembers.get(todo.assignedTo) : undefined;
+      if (!assignee) continue;
+
+      const timezone = assignee.member.notificationPreferences?.timezone || "UTC";
+      if (!shouldSendTodoReminder(todo, nowMs, timezone)) continue;
+
+      // Claim BEFORE sending, via a transaction, so neither a crash between
+      // send and stamp NOR an overlapping invocation (a slow run still going
+      // when the next 15-minute trigger fires) can double-send: the
+      // transaction re-reads the live doc and only one claimant can flip
+      // reminderSentAt from null. A send failure after the claim just drops
+      // one reminder, which is the safer failure mode.
+      const claimResult = await db.runTransaction(async (tx) => {
+        const liveSnap = await tx.get(todoDoc.ref);
+        const live = liveSnap.data();
+        if (!liveSnap.exists || live === undefined || live.reminderSentAt != null || live.isCompleted === true) {
+          return null;
+        }
+        // Re-validate on the LIVE doc — a concurrent edit may have moved
+        // dueTime/reminderMinutesBefore and re-armed the todo, in which case
+        // the stale snapshot's window must not claim (and later notify with)
+        // the old time.
+        if (!shouldSendTodoReminder(live, nowMs, timezone)) {
+          return null;
+        }
+        tx.update(todoDoc.ref, { reminderSentAt: new Date(nowMs).toISOString() });
+        return live;
+      });
+      if (!claimResult) continue;
+
+      logger.info(`Household ${group.householdId}: sending todo reminder for ${todoDoc.id} to ${assignee.member.uid}`);
+      await sendNotificationToUser(
+        assignee.member.fcmTokens ?? [],
+        "To-Do Reminder",
+        buildTodoReminderBody(claimResult, timezone, nowMs),
+        {
+          type: "todo_reminder",
+          url: "/lists",
+        },
+        assignee.ref,
+        { householdId: group.householdId, recipientUid: assignee.member.uid, type: "todo_reminder" }
+      );
+    }
+  }
+});
 
 /**
  * Scheduled function: Runs every hour to check for streak warnings

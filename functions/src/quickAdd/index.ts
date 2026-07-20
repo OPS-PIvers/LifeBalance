@@ -47,6 +47,7 @@ import {
   type BillCalendarItem,
 } from "./billMatch";
 import { fuzzyMatchMember, type MemberLike } from "./todoMatch";
+import { parseTodoPhrase } from "./todoParser";
 
 /** The category new paid bills are filed under (mirrors utils/categories.ts). */
 const BUDGETED_IN_CALENDAR = "Budgeted in Calendar";
@@ -1759,7 +1760,14 @@ export const quickAddBillPay = onRequest(
  * POST /quickAddTodo
  * Create a shared household to-do via iOS Shortcuts / Siri (F-TODO-07).
  *
- * Accepts `{ text, dueDate?, assignedTo?, isImportant?, today? }`. `dueDate`
+ * Accepts `{ text, parse?, dueDate?, dueTime?, reminderMinutesBefore?,
+ * assignedTo?, isImportant?, today? }`. When `parse === true` (F-TODO-15) the
+ * server first runs the deterministic natural-language parser
+ * (todoParser.ts) over `text` — "Call dentist tomorrow at 3pm, remind me 30
+ * minutes before" — and any explicit structured field still overrides its
+ * parsed counterpart. `dueTime` (F-TODO-14) is HH:mm 24-hour wall-clock
+ * in the assignee's timezone; `reminderMinutesBefore` (non-negative integer
+ * minutes of lead time, 0 = at the due time) requires `dueTime`. `dueDate`
  * defaults to the caller-local "today" (forwarded the same way
  * quickAddExpense/quickAddHabit already do — Cloud Functions run in UTC).
  * `assignedTo` is resolved against the household's members: an exact uid
@@ -1815,7 +1823,10 @@ export const quickAddTodo = onRequest(
     // 4. Parse and validate the request body
     const {
       text,
+      parse: rawParse,
       dueDate: rawDueDate,
+      dueTime: rawDueTime,
+      reminderMinutesBefore: rawReminder,
       assignedTo: rawAssignedTo,
       isImportant: rawIsImportant,
       today: rawToday,
@@ -1838,6 +1849,12 @@ export const quickAddTodo = onRequest(
         ? rawToday
         : format(new Date(), "yyyy-MM-dd");
 
+    // F-TODO-15: optional deterministic natural-language parsing. Runs before
+    // the structured-field validation; every explicit field below still
+    // overrides its parsed counterpart.
+    const parsed = rawParse === true ? parseTodoPhrase(text.trim(), today) : null;
+    const taskText = parsed ? parsed.text : text.trim();
+
     let dueDate: string;
     if (rawDueDate !== undefined && rawDueDate !== null && rawDueDate !== "") {
       if (typeof rawDueDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(rawDueDate)) {
@@ -1846,7 +1863,42 @@ export const quickAddTodo = onRequest(
       }
       dueDate = rawDueDate;
     } else {
-      dueDate = today;
+      dueDate = parsed?.dueDate ?? today;
+    }
+
+    // F-TODO-14: optional due time + reminder lead time. Mirrors the client
+    // form's constraint: a reminder is only meaningful anchored to a time.
+    let dueTime: string | undefined;
+    if (rawDueTime !== undefined && rawDueTime !== null && rawDueTime !== "") {
+      if (typeof rawDueTime !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(rawDueTime)) {
+        errorResponse(res, 400, "dueTime must be in HH:mm 24-hour format", "BAD_REQUEST");
+        return;
+      }
+      dueTime = rawDueTime;
+    } else {
+      dueTime = parsed?.dueTime;
+    }
+
+    let reminderMinutesBefore: number | undefined;
+    if (rawReminder !== undefined && rawReminder !== null && rawReminder !== "") {
+      const parsedNum = typeof rawReminder === "string" ? Number(rawReminder) : rawReminder;
+      if (typeof parsedNum !== "number" || !Number.isInteger(parsedNum) || parsedNum < 0 || parsedNum > 10080) {
+        errorResponse(
+          res, 400,
+          "reminderMinutesBefore must be a non-negative integer number of minutes (max 10080)",
+          "BAD_REQUEST"
+        );
+        return;
+      }
+      if (dueTime === undefined) {
+        errorResponse(res, 400, "reminderMinutesBefore requires dueTime", "BAD_REQUEST");
+        return;
+      }
+      reminderMinutesBefore = parsedNum;
+    } else if (parsed?.reminderMinutesBefore !== undefined && dueTime !== undefined) {
+      // Parser output is already anchored, but an explicit rawDueTime of ""
+      // could have cleared the anchor — re-check before adopting.
+      reminderMinutesBefore = parsed.reminderMinutesBefore;
     }
 
     if (rawIsImportant !== undefined && rawIsImportant !== null) {
@@ -1855,7 +1907,7 @@ export const quickAddTodo = onRequest(
         return;
       }
     }
-    const isImportant = rawIsImportant === true;
+    const isImportant = rawIsImportant === true || (rawIsImportant == null && parsed?.isImportant === true);
 
     if (rawAssignedTo !== undefined && rawAssignedTo !== null && rawAssignedTo !== "") {
       if (typeof rawAssignedTo !== "string" || rawAssignedTo.length > 100) {
@@ -1895,15 +1947,38 @@ export const quickAddTodo = onRequest(
         assignedTo = matched.uid;
       }
 
+      // F-TODO-14: a reminder push goes to the ASSIGNEE, so an unassigned
+      // timed reminder would never fire — and would pollute the 15-minute
+      // reminder scan forever (matches the query, skipped in memory, never
+      // stamped). The app's edit drawer already requires an assignee; here we
+      // default to the API key's owner ("remind ME"), or reject when there is
+      // no one to anchor to.
+      if (reminderMinutesBefore !== undefined && assignedTo === undefined) {
+        if (validation.keyCreatedBy) {
+          assignedTo = validation.keyCreatedBy;
+        } else {
+          // No logApiCall: validation-error 400s in this endpoint don't log
+          // (only household-data failures like the assignedTo 404 do).
+          errorResponse(
+            res, 400,
+            "reminderMinutesBefore requires assignedTo (reminders are delivered to the assignee)",
+            "BAD_REQUEST"
+          );
+          return;
+        }
+      }
+
       // 6. Create the to-do document.
       const todoData: Record<string, unknown> = {
-        text: text.trim(),
+        text: taskText,
         completeByDate: dueDate,
         isCompleted: false,
         source: "shortcut",
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         ...(assignedTo ? { assignedTo } : {}),
         ...(isImportant ? { isImportant: true } : {}),
+        ...(dueTime !== undefined ? { dueTime } : {}),
+        ...(reminderMinutesBefore !== undefined ? { reminderMinutesBefore } : {}),
         ...(validation.keyCreatedBy ? { createdBy: validation.keyCreatedBy } : {}),
       };
 
@@ -1917,13 +1992,15 @@ export const quickAddTodo = onRequest(
       // 8. Return success
       jsonResponse(res, 200, {
         success: true,
-        message: `Added to-do: ${text.trim()}`,
+        message: `Added to-do: ${taskText}`,
         data: {
           todoId: todoRef.id,
-          text: text.trim(),
+          text: taskText,
           completeByDate: dueDate,
           assignedTo: assignedTo ?? null,
           isImportant,
+          dueTime: dueTime ?? null,
+          reminderMinutesBefore: reminderMinutesBefore ?? null,
         },
       });
     } catch (error) {

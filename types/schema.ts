@@ -95,6 +95,16 @@ export interface NotificationPreferences {
     time: string; // HH:MM format (24-hour) — member-local send time
   };
 
+  // F-TODO-14 (timed to-do reminders): per-member opt-out for per-task pushes
+  // at (dueTime − reminderMinutesBefore). Absent/undefined is treated as
+  // enabled (fail-open, like weeklyRecap) — only an explicit `enabled: false`
+  // suppresses them. Deliberately NOT suppressed by digestMode: a
+  // time-specific reminder is an alarm, not a briefing, so batching it into a
+  // morning digest would defeat its purpose.
+  todoReminders?: {
+    enabled: boolean;
+  };
+
   // General notification settings
   timezone?: string; // IANA timezone (e.g., 'America/New_York')
 }
@@ -938,6 +948,24 @@ export interface ToDo {
   // auto-spawns the next instance (completeByDate advanced by `frequency`)
   // in the SAME writeBatch as the completion (see makeCompleteToDo). Absent on
   // every existing todo — non-recurring behavior is unchanged.
+  // F-TODO-14 (timed reminders): optional due TIME-OF-DAY on completeByDate,
+  // HH:mm 24-hour wall-clock in the ASSIGNEE's timezone (interpreted at send
+  // time via their notificationPreferences.timezone, matching every scheduled
+  // job). Display/sort only unless a reminder is also set. Absent on every
+  // existing todo — no migration.
+  dueTime?: string;
+
+  // F-TODO-14: minutes of lead time before dueTime at which the assignee gets
+  // a push (0 = at the due time). Only meaningful when dueTime is set — the UI
+  // enforces that. Absent = no reminder.
+  reminderMinutesBefore?: number;
+
+  // F-TODO-14: set (ISO timestamp) by the server job once the reminder push is
+  // sent, so the 15-minute scan never double-sends. Client writes null to
+  // RE-ARM when the date/time/offset is edited; null and absent both mean
+  // "not sent yet".
+  reminderSentAt?: string | null;
+
   recurrence?: {
     frequency: 'weekly' | 'bi-weekly' | 'monthly';
     // Stable id of the FIRST todo in the recurring chain (denormalized onto each
@@ -1088,7 +1116,8 @@ export type NotificationLogType =
   | 'bill_reminder'
   | 'budget_alert'
   | 'weekly_recap'
-  | 'monthly_money_recap';
+  | 'monthly_money_recap'
+  | 'todo_reminder';
 
 /**
  * In-app notification inbox entry (F-NOTIF-02) — one doc per push sent, at

@@ -6,6 +6,7 @@ import { getLocalDateString } from '@/utils/dateHelpers';
 import { quadrantForTodo, QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhower';
 import { toggleSubtask, appendSubtask, removeSubtask, subtasksFromTexts, subtaskWriteErrorMessage, isPermissionDeniedError, subtaskProgress } from '@/utils/subtasks';
 import { TODO_FREQUENCIES, TODO_FREQUENCY_LABELS, type TodoFrequency } from '@/utils/todoRecurrence';
+import { REMINDER_OFFSET_OPTIONS, compareDueTimes } from '@/utils/todoTime';
 import { ToDo, HouseholdMember, Subtask } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { haptic } from '@/utils/haptics';
@@ -179,6 +180,11 @@ const ToDosPage: React.FC = () => {
   const [completeByDate, setCompleteByDate] = useState(getLocalDateString());
   const [assignedTo, setAssignedTo] = useState('');
   const [isImportant, setIsImportant] = useState(false);
+  // F-TODO-14: optional due time-of-day (HH:mm, '' = none) and reminder lead
+  // time in minutes (null = no reminder). The reminder picker is only enabled
+  // once a due time is set — a reminder needs a time to anchor to.
+  const [dueTime, setDueTime] = useState('');
+  const [reminderMinutesBefore, setReminderMinutesBefore] = useState<number | null>(null);
   // F-TODO-01: recurrence cadence for the full add/edit form. 'none' = one-off.
   const [recurrence, setRecurrence] = useState<'none' | TodoFrequency>('none');
   // Shared notes surfaced in the editor drawer — visible to all household members
@@ -233,9 +239,10 @@ const ToDosPage: React.FC = () => {
       }
     });
 
-    // Sort by date using pre-parsed timestamps
+    // Sort by date using pre-parsed timestamps; within the same day, timed
+    // to-dos come first ordered by their due time (F-TODO-14).
     const sortByCompleteByDate = (a: ToDo, b: ToDo) =>
-      (dateMap.get(a.id) || 0) - (dateMap.get(b.id) || 0);
+      ((dateMap.get(a.id) || 0) - (dateMap.get(b.id) || 0)) || compareDueTimes(a, b);
 
     return {
       immediate: immediate.sort(sortByCompleteByDate),
@@ -256,7 +263,8 @@ const ToDosPage: React.FC = () => {
       if (assigneeFilter !== null && todo.assignedTo !== assigneeFilter) return;
       buckets[quadrantForTodo(todo, currentDate)].push(todo);
     });
-    const byDueDate = (a: ToDo, b: ToDo) => a.completeByDate.localeCompare(b.completeByDate);
+    const byDueDate = (a: ToDo, b: ToDo) =>
+      a.completeByDate.localeCompare(b.completeByDate) || compareDueTimes(a, b);
     QUADRANT_ORDER.forEach(q => buckets[q].sort(byDueDate));
     return buckets;
   }, [todos, currentDate, assigneeFilter]);
@@ -326,6 +334,8 @@ const ToDosPage: React.FC = () => {
     const defaultAssignee = currentUser?.uid ?? (members.length > 0 ? members[0]!.uid : ''); // members[0] is defined: guarded by members.length > 0
     setAssignedTo(defaultAssignee);
     setIsImportant(false);
+    setDueTime('');
+    setReminderMinutesBefore(null);
     setRecurrence('none');
     setNotes('');
     setSubtasks([]);
@@ -374,6 +384,8 @@ const ToDosPage: React.FC = () => {
     setCompleteByDate(todo.completeByDate);
     setAssignedTo(todo.assignedTo);
     setIsImportant(todo.isImportant === true);
+    setDueTime(todo.dueTime ?? '');
+    setReminderMinutesBefore(todo.reminderMinutesBefore ?? null);
     setRecurrence(todo.recurrence?.frequency ?? 'none');
     setNotes(todo.notes ?? '');
     setSubtasks(todo.subtasks ?? []);
@@ -678,15 +690,49 @@ const ToDosPage: React.FC = () => {
       const hadSubtasks = (editingOriginal?.subtasks?.length ?? 0) > 0;
       const subtaskField: Partial<ToDo> =
         subtasks.length > 0 || hadSubtasks ? { subtasks } : {};
+      // F-TODO-14: a reminder is only meaningful anchored to a due time — if
+      // the time was cleared, drop the reminder with it. Like recurrence and
+      // subtasks, only touch these fields when set now or previously set, so
+      // plain (never-timed) edits stay byte-identical to today's writes.
+      const dueTimeValue = dueTime || undefined;
+      const reminderValue = dueTimeValue != null ? reminderMinutesBefore ?? undefined : undefined;
+      const timeFields: Partial<ToDo> = {};
+      if (dueTimeValue !== undefined) {
+        timeFields.dueTime = dueTimeValue;
+      } else if (editingTodo?.dueTime != null) {
+        timeFields.dueTime = undefined; // sanitizer writes null → cleared
+      }
+      if (reminderValue !== undefined) {
+        timeFields.reminderMinutesBefore = reminderValue;
+      } else if (editingTodo?.reminderMinutesBefore != null) {
+        timeFields.reminderMinutesBefore = undefined;
+      }
       if (editingId) {
+        // Scheduling fields go into `updates` only when they actually CHANGED:
+        // updateToDo re-arms the reminder (reminderSentAt: null) whenever a
+        // scheduling key is present, so unconditionally including
+        // completeByDate/dueTime would make a pure notes/text edit within the
+        // late-catch-up window re-deliver an already-sent reminder push.
+        // (Stored values may be null after a clear — normalize for comparison.)
         const updates: Partial<ToDo> = {
           text: trimmedText,
-          completeByDate,
           assignedTo,
           isImportant,
           notes: trimmedNotes,
           ...subtaskField
         };
+        if (completeByDate !== editingTodo?.completeByDate) {
+          updates.completeByDate = completeByDate;
+        }
+        if ((dueTimeValue ?? null) !== (editingTodo?.dueTime ?? null) && 'dueTime' in timeFields) {
+          updates.dueTime = timeFields.dueTime;
+        }
+        if (
+          (reminderValue ?? null) !== (editingTodo?.reminderMinutesBefore ?? null) &&
+          'reminderMinutesBefore' in timeFields
+        ) {
+          updates.reminderMinutesBefore = timeFields.reminderMinutesBefore;
+        }
         // Only touch the recurrence field when it is set now, or when it was
         // previously set and is being turned off — so plain (never-recurring)
         // edits stay byte-identical to today's write.
@@ -707,6 +753,8 @@ const ToDosPage: React.FC = () => {
           isImportant,
           notes: trimmedNotes,
           ...subtaskField,
+          ...(dueTimeValue !== undefined ? { dueTime: dueTimeValue } : {}),
+          ...(reminderValue !== undefined ? { reminderMinutesBefore: reminderValue } : {}),
           ...(recurrenceValue ? { recurrence: recurrenceValue } : {})
         });
         toast.success('Task added');
@@ -1320,6 +1368,48 @@ const ToDosPage: React.FC = () => {
             icon={<Calendar size={18} />}
             className="appearance-none"
           />
+
+          {/* F-TODO-14: optional due time + reminder lead time. The reminder
+              select is disabled until a time anchors it; clearing the time
+              clears the reminder on save (see handleSubmit). */}
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              id="due-time-input"
+              label="Time (optional)"
+              type="time"
+              value={dueTime}
+              onChange={(e) => setDueTime(e.target.value)}
+              className="appearance-none"
+            />
+            <div>
+              <label
+                htmlFor="reminder-select"
+                className="block text-xs font-bold text-brand-400 dark:text-brand-450 uppercase tracking-wider mb-1"
+              >
+                Reminder
+              </label>
+              <select
+                id="reminder-select"
+                value={dueTime && reminderMinutesBefore !== null ? String(reminderMinutesBefore) : ''}
+                onChange={(e) =>
+                  setReminderMinutesBefore(e.target.value === '' ? null : Number(e.target.value))
+                }
+                disabled={!dueTime}
+                className="w-full text-base sm:text-sm px-3 py-2.5 border border-brand-200 dark:border-brand-700 rounded-btn bg-white dark:bg-brand-900 text-brand-900 dark:text-brand-100 outline-hidden focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 disabled:opacity-50 transition-all duration-(--duration-fast) ease-(--ease-standard)"
+                aria-label="Reminder lead time"
+              >
+                <option value="">No reminder</option>
+                {REMINDER_OFFSET_OPTIONS.map(opt => (
+                  <option key={opt.value} value={String(opt.value)}>{opt.label}</option>
+                ))}
+              </select>
+              {!dueTime && (
+                <p className="mt-1 text-xs text-brand-400 dark:text-brand-450">
+                  Set a time to enable reminders.
+                </p>
+              )}
+            </div>
+          </div>
 
           {/* F-TODO-01: recurrence picker — mirrors CalendarItem's weekly/
               bi-weekly/monthly cadence. 'None' = a one-off task (default). */}

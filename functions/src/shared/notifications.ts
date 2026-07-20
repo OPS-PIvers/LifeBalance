@@ -55,6 +55,13 @@ export interface NotificationPreferences {
     enabled: boolean;
     time: string;
   };
+  // F-TODO-14 (timed to-do reminders): per-member opt-out for per-task pushes.
+  // Absent/undefined is treated as enabled (fail-open, like weeklyRecap).
+  // Deliberately NOT suppressed by digestMode — a time-specific reminder is an
+  // alarm, not a briefing. Mirrors types/schema.ts NotificationPreferences.
+  todoReminders?: {
+    enabled: boolean;
+  };
   timezone?: string;
 }
 
@@ -103,6 +110,8 @@ export function computeAnyNotificationsEnabled(
   if (!prefs) return true;
 
   const weeklyRecapEnabled = prefs.weeklyRecap?.enabled !== false;
+  // F-TODO-14: todoReminders is fail-open like weeklyRecap — absent means ON.
+  const todoRemindersEnabled = prefs.todoReminders?.enabled !== false;
 
   return (
     prefs.habitReminders?.enabled === true ||
@@ -111,7 +120,8 @@ export function computeAnyNotificationsEnabled(
     prefs.streakWarnings?.enabled === true ||
     prefs.billReminders?.enabled === true ||
     prefs.dailyBriefing?.enabled === true ||
-    weeklyRecapEnabled
+    weeklyRecapEnabled ||
+    todoRemindersEnabled
   );
 }
 
@@ -136,7 +146,8 @@ export interface NotificationLogContext {
     | "bill_reminder"
     | "budget_alert"
     | "weekly_recap"
-    | "monthly_money_recap";
+    | "monthly_money_recap"
+    | "todo_reminder";
 }
 
 /**
