@@ -328,7 +328,7 @@ export const sendtodoreminders = onSchedule("every 15 minutes", async () => {
       await sendNotificationToUser(
         assignee.member.fcmTokens ?? [],
         "To-Do Reminder",
-        buildTodoReminderBody(todo, timezone, nowMs),
+        buildTodoReminderBody(claimResult, timezone, nowMs),
         {
           type: "todo_reminder",
           url: "/lists",
