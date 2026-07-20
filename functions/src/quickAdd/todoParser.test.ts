@@ -93,6 +93,10 @@ describe("parseTodoPhrase", () => {
       expect(parseTodoPhrase("dentist at 3pm remind me the day before", TODAY).reminderMinutesBefore).toBe(1440);
     });
 
+    it("lenient suffix: 'remind me 30 minutes' (no 'before') still counts", () => {
+      expect(parseTodoPhrase("dentist at 3pm remind me 30 minutes", TODAY).reminderMinutesBefore).toBe(30);
+    });
+
     it("bare 'remind me' means at the due time", () => {
       expect(parseTodoPhrase("dentist at 3pm remind me", TODAY).reminderMinutesBefore).toBe(0);
       expect(parseTodoPhrase("dentist at 3pm with a reminder", TODAY).reminderMinutesBefore).toBe(0);

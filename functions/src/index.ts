@@ -300,10 +300,22 @@ export const sendtodoreminders = onSchedule("every 15 minutes", async () => {
       const timezone = assignee.member.notificationPreferences?.timezone || "UTC";
       if (!shouldSendTodoReminder(todo, nowMs, timezone)) continue;
 
-      // Stamp BEFORE sending so a crash between send and stamp can't produce
-      // a duplicate on the next run; a send failure after the stamp just
-      // drops one reminder, which is the safer failure mode.
-      await todoDoc.ref.update({ reminderSentAt: new Date(nowMs).toISOString() });
+      // Claim BEFORE sending, via a transaction, so neither a crash between
+      // send and stamp NOR an overlapping invocation (a slow run still going
+      // when the next 15-minute trigger fires) can double-send: the
+      // transaction re-reads the live doc and only one claimant can flip
+      // reminderSentAt from null. A send failure after the claim just drops
+      // one reminder, which is the safer failure mode.
+      const claimed = await db.runTransaction(async (tx) => {
+        const liveSnap = await tx.get(todoDoc.ref);
+        const live = liveSnap.data();
+        if (!liveSnap.exists || live?.reminderSentAt != null || live?.isCompleted === true) {
+          return false;
+        }
+        tx.update(todoDoc.ref, { reminderSentAt: new Date(nowMs).toISOString() });
+        return true;
+      });
+      if (!claimed) continue;
 
       logger.info(`Household ${group.householdId}: sending todo reminder for ${todoDoc.id} to ${assignee.member.uid}`);
       await sendNotificationToUser(
