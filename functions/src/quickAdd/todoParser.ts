@@ -93,8 +93,9 @@ function extractReminder(input: string): Extraction<number> | null {
 }
 
 function extractTime(input: string): Extraction<string> | null {
-  // "at noon" / "at midnight" (also bare "noon"/"midnight" as a whole word)
-  let m = input.match(/\b(?:at )?(noon|midnight)\b/i);
+  // "at noon" / "at midnight" — "at" is REQUIRED so nouns like "noon
+  // appointment" or "midnight showing" are never misread as times.
+  let m = input.match(/\bat (noon|midnight)\b/i);
   if (m && m[1]) {
     const value = m[1].toLowerCase() === "noon" ? "12:00" : "00:00";
     return { value, cleaned: input.replace(m[0], " ") };

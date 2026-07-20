@@ -74,9 +74,13 @@ describe("parseTodoPhrase", () => {
       expect(parseTodoPhrase("buy 3 lemons", TODAY).dueTime).toBeUndefined();
     });
 
-    it("noon and midnight", () => {
+    it("noon and midnight require 'at'", () => {
       expect(parseTodoPhrase("lunch at noon", TODAY).dueTime).toBe("12:00");
       expect(parseTodoPhrase("backup at midnight", TODAY).dueTime).toBe("00:00");
+      // Bare nouns are never misread as times.
+      expect(parseTodoPhrase("book noon appointment", TODAY).dueTime).toBeUndefined();
+      expect(parseTodoPhrase("book noon appointment", TODAY).text).toBe("book noon appointment");
+      expect(parseTodoPhrase("get midnight showing tickets", TODAY).dueTime).toBeUndefined();
     });
 
     it("a parsed time with no date anchors to today", () => {

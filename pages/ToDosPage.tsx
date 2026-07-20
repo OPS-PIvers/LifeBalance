@@ -708,15 +708,31 @@ const ToDosPage: React.FC = () => {
         timeFields.reminderMinutesBefore = undefined;
       }
       if (editingId) {
+        // Scheduling fields go into `updates` only when they actually CHANGED:
+        // updateToDo re-arms the reminder (reminderSentAt: null) whenever a
+        // scheduling key is present, so unconditionally including
+        // completeByDate/dueTime would make a pure notes/text edit within the
+        // late-catch-up window re-deliver an already-sent reminder push.
+        // (Stored values may be null after a clear — normalize for comparison.)
         const updates: Partial<ToDo> = {
           text: trimmedText,
-          completeByDate,
           assignedTo,
           isImportant,
           notes: trimmedNotes,
-          ...subtaskField,
-          ...timeFields
+          ...subtaskField
         };
+        if (completeByDate !== editingTodo?.completeByDate) {
+          updates.completeByDate = completeByDate;
+        }
+        if ((dueTimeValue ?? null) !== (editingTodo?.dueTime ?? null) && 'dueTime' in timeFields) {
+          updates.dueTime = timeFields.dueTime;
+        }
+        if (
+          (reminderValue ?? null) !== (editingTodo?.reminderMinutesBefore ?? null) &&
+          'reminderMinutesBefore' in timeFields
+        ) {
+          updates.reminderMinutesBefore = timeFields.reminderMinutesBefore;
+        }
         // Only touch the recurrence field when it is set now, or when it was
         // previously set and is being turned off — so plain (never-recurring)
         // edits stay byte-identical to today's write.
