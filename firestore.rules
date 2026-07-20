@@ -659,11 +659,17 @@ service cloud.firestore {
                               isValidOptionalNumber(request.resource.data.get('points', null)) &&
                               // Timed reminders (F-TODO-14) — optional HH:mm due time,
                               // minutes-before offset, and the server-stamped sent marker
-                              // (clients may only write it as null to re-arm; the Admin
-                              // SDK bypasses rules for the actual stamp).
+                              // (clients may only write it as null to re-arm, or leave the
+                              // server-stamped value untouched — request.resource.data is the
+                              // MERGED post-write doc, so an unrelated edit to an already-sent
+                              // todo still carries the stamp through. The Admin SDK bypasses
+                              // rules for the actual stamp, so no client can forge a "sent"
+                              // marker to suppress a reminder.)
                               isValidOptionalString(request.resource.data.get('dueTime', null), 5) &&
                               isValidOptionalNumber(request.resource.data.get('reminderMinutesBefore', null)) &&
-                              isValidOptionalString(request.resource.data.get('reminderSentAt', null), 40) &&
+                              (request.resource.data.get('reminderSentAt', null) == null ||
+                                (resource != null &&
+                                 request.resource.data.reminderSentAt == resource.data.get('reminderSentAt', null))) &&
                               // Recurring to-dos (F-TODO-01) — optional map {frequency, parentRecurringId?}
                               (request.resource.data.get('recurrence', null) == null ||
                                 (request.resource.data.recurrence is map &&
