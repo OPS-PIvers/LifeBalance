@@ -181,6 +181,15 @@ export interface Account {
    *  accounts without a card (savings) or the user hasn't tagged one leave it
    *  unset, and untagged transactions fall back to the checking account. */
   cardLast4?: string;
+  /** Newer multi-card form of the above (Wells Fargo nightly bank-email sync
+   *  groundwork): a checking account can have several debit cards attached.
+   *  Readers should treat the legacy `cardLast4` as an extra (deduped) entry
+   *  of this list rather than a separate value — see `accountMatch.ts`. */
+  cardLast4s?: string[];
+  /** Last 4 digits of the bank ACCOUNT number itself (distinct from a card),
+   *  e.g. parsed from a bank email header like "for account ...5581". Used to
+   *  route nightly bank-email sync rows to the right account. */
+  accountLast4?: string;
   /** Advisory balance from a linked Plaid account (server-written by
    *  `plaidsynctransactions`; see CLAUDE.md Atomicity notes). NEVER overwrites
    *  `balance` — the manual field stays authoritative; these three fields only
@@ -416,6 +425,12 @@ export interface CalendarItem {
    *  bill a subscription (mortgage, car payment, daycare are recurring but not
    *  subscriptions) — the Subscriptions tab groups by this explicit flag. */
   isSubscription?: boolean;
+  /** Bank-descriptor strings (from nightly bank-email sync rows) previously
+   *  learned to map to this bill, e.g. a bank statement descriptor like
+   *  "XCEL ENERGY WEB PYMT" mapped to a "Electric Bill" calendar item. Grows
+   *  as the (future) reconciliation pipeline learns new aliases; not written
+   *  by any endpoint yet — schema/settings groundwork only. */
+  bankDescriptorAliases?: string[];
 }
 
 export type EffortLevel = 'easy' | 'medium' | 'hard' | 'very_hard';

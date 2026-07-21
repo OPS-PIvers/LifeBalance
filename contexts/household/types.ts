@@ -178,6 +178,16 @@ export interface HouseholdContextType {
   /** Set (or clear, with an empty string) the last-4 card digits used to
    *  auto-route incoming Shortcut/Wells-Fargo-email transactions to this account. */
   setAccountCardLast4: (id: string, cardLast4: string) => Promise<void>;
+  /** Set (or clear) the bank account-number last-4 and the full list of
+   *  tagged debit/credit cards for this account. Migrates the legacy
+   *  `cardLast4` field into `cardLast4s` (clearing the legacy field) so
+   *  readers only need to consult `cardLast4s` going forward — see
+   *  `functions/src/quickAdd/accountMatch.ts`, which still reads both for
+   *  docs not yet migrated. */
+  setAccountCardDetails: (
+    id: string,
+    details: { accountLast4?: string; cardLast4s: string[] }
+  ) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
   /** Soft-delete: hide from active lists/net worth/Safe-to-Spend while keeping
    *  the account doc so historical transactions keep resolving to it. */
@@ -468,7 +478,7 @@ export type FinanceContextValue = Pick<HouseholdContextType,
   | 'transactionWindowStart' | 'isLoadingOlderTransactions' | 'hasMoreTransactions'
   | 'loadOlderTransactions' | 'loadAllTransactions'
   | 'isLoadingOlderBucketHistory' | 'hasMoreBucketHistory' | 'loadAllBucketHistory'
-  | 'addAccount' | 'updateAccountBalance' | 'setAccountGoal' | 'setAccountCardLast4' | 'deleteAccount'
+  | 'addAccount' | 'updateAccountBalance' | 'setAccountGoal' | 'setAccountCardLast4' | 'setAccountCardDetails' | 'deleteAccount'
   | 'archiveAccount' | 'unarchiveAccount'
   | 'updateAccountOrder' | 'reorderAccounts'
   | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal'

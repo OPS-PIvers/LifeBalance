@@ -46,4 +46,24 @@ describe("resolveAccountMap", () => {
       plaid_2: "acc_savings",
     });
   });
+
+  it("matches a mask against an entry of cardLast4s (multi-card list)", () => {
+    const multiCardAccounts: LifeBalanceAccountInput[] = [
+      { id: "acc_checking", name: "Joint Checking", cardLast4s: ["1111", "2222"] },
+    ];
+    const plaidAccounts: PlaidAccountInput[] = [
+      { account_id: "plaid_1", name: "Different Name", mask: "2222" },
+    ];
+    expect(resolveAccountMap(plaidAccounts, multiCardAccounts)).toEqual({ plaid_1: "acc_checking" });
+  });
+
+  it("matches a mask against accountLast4 (a depository account's own last-4)", () => {
+    const depositoryAccounts: LifeBalanceAccountInput[] = [
+      { id: "acc_checking", name: "Main Checking", accountLast4: "5581" },
+    ];
+    const plaidAccounts: PlaidAccountInput[] = [
+      { account_id: "plaid_1", name: "Totally Different Name", mask: "5581" },
+    ];
+    expect(resolveAccountMap(plaidAccounts, depositoryAccounts)).toEqual({ plaid_1: "acc_checking" });
+  });
 });

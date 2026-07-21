@@ -1655,6 +1655,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeAccountMutations({ db, householdId, user }).setAccountCardLast4(id, cardLast4);
   }, [householdId, user]);
 
+  const setAccountCardDetails = useCallback(async (
+    id: string,
+    details: { accountLast4?: string; cardLast4s: string[] }
+  ) => {
+    await makeAccountMutations({ db, householdId, user }).setAccountCardDetails(id, details);
+  }, [householdId, user]);
+
   const deleteAccount = useCallback(async (id: string) => {
     await makeAccountMutations({ db, householdId, user }).deleteAccount(id);
   }, [householdId, user]);
@@ -2337,6 +2344,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateAccountBalance,
     setAccountGoal,
     setAccountCardLast4,
+    setAccountCardDetails,
     deleteAccount,
     archiveAccount,
     unarchiveAccount,
@@ -2375,7 +2383,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     safeToSpend, safeToSpendBreakdown, accounts, buckets, savingsGoals, netWorthHistory, calendarItems, transactions, currentPeriodId, bucketSpentMap, bucketHistory,
     transactionWindowStart, isLoadingOlderTransactions, hasMoreTransactions, loadOlderTransactions, loadAllTransactions,
     isLoadingOlderBucketHistory, hasMoreBucketHistory, loadAllBucketHistory,
-    addAccount, updateAccountBalance, setAccountGoal, setAccountCardLast4, deleteAccount, archiveAccount, unarchiveAccount, updateAccountOrder, reorderAccounts,
+    addAccount, updateAccountBalance, setAccountGoal, setAccountCardLast4, setAccountCardDetails, deleteAccount, archiveAccount, unarchiveAccount, updateAccountOrder, reorderAccounts,
     addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, contributeToGoal,
     addBucket, updateBucket, deleteBucket, updateBucketLimit, setBucketLimits, saveCeremonyChanges, reallocateBucket,
     addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem,

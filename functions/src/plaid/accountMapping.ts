@@ -13,8 +13,12 @@
  * misattribute money, so any Plaid account this module can't confidently place
  * is simply left unmapped (its balance/transactions are skipped until a human
  * maps it via a future settings UI). Confident enough to auto-map:
- *   1. mask (last 4 of account number) equals a LifeBalance account's
- *      `cardLast4` — the same signal quickAdd's `accountMatch.ts` uses, and
+ *   1. mask (last 4 of account number) equals a LifeBalance account's legacy
+ *      `cardLast4`, any entry of `cardLast4s`, or `accountLast4` (the checking
+ *      account's own last-4 — Plaid's mask for a depository account is
+ *      typically the account number, not a card, so this is often the only
+ *      field that matches) — the same signal quickAdd's `accountMatch.ts`
+ *      uses, and
  *   2. exact case-insensitive name match, as a fallback when no mask is set.
  * Pure (no Firestore/Plaid SDK imports) so it unit-tests without emulators.
  */
@@ -31,6 +35,8 @@ export interface LifeBalanceAccountInput {
   id: string;
   name: string;
   cardLast4?: string;
+  cardLast4s?: string[];
+  accountLast4?: string;
 }
 
 /**
@@ -51,9 +57,15 @@ export function resolveAccountMap(
 
   for (const plaidAccount of plaidAccounts) {
     const byMask = plaidAccount.mask
-      ? lifeBalanceAccounts.find(
-          (a) => !claimed.has(a.id) && a.cardLast4 === plaidAccount.mask,
-        )
+      ? lifeBalanceAccounts.find((a) => {
+          if (claimed.has(a.id)) return false;
+          const candidates = [
+            a.cardLast4,
+            ...(a.cardLast4s ?? []),
+            a.accountLast4,
+          ];
+          return candidates.some((c) => c === plaidAccount.mask);
+        })
       : undefined;
     if (byMask) {
       map[plaidAccount.account_id] = byMask.id;

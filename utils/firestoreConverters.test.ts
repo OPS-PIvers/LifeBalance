@@ -94,6 +94,18 @@ describe('accountConverter', () => {
     expect(() => accountConverter.fromFirestore(fakeSnap('acc-3', partial))).not.toThrow();
     const result = accountConverter.fromFirestore(fakeSnap('acc-3', partial));
     expect(result.id).toBe('acc-3');
+    expect(result.cardLast4s).toBeUndefined();
+    expect(result.accountLast4).toBeUndefined();
+  });
+
+  it('(a) carries accountLast4 / cardLast4s through fromFirestore and toFirestore', () => {
+    const withNewFields = { ...wellFormed, accountLast4: '5581', cardLast4s: ['1111', '2222'] };
+    const result = accountConverter.fromFirestore(fakeSnap('acc-4', withNewFields));
+    expect(result.accountLast4).toBe('5581');
+    expect(result.cardLast4s).toEqual(['1111', '2222']);
+    const out = callToFirestore(accountConverter, { ...withNewFields, id: 'acc-4' });
+    expect(out['accountLast4']).toBe('5581');
+    expect(out['cardLast4s']).toEqual(['1111', '2222']);
   });
 });
 
@@ -212,6 +224,16 @@ describe('calendarItemConverter', () => {
   it('(b) partial doc without optional fields does not throw', () => {
     const partial = { title: 'Paycheck', amount: 2000, date: '2024-01-15', type: 'income', isPaid: true };
     expect(() => calendarItemConverter.fromFirestore(fakeSnap('cal-2', partial))).not.toThrow();
+    const result = calendarItemConverter.fromFirestore(fakeSnap('cal-2', partial));
+    expect(result.bankDescriptorAliases).toBeUndefined();
+  });
+
+  it('(a) carries bankDescriptorAliases through fromFirestore and toFirestore', () => {
+    const withAliases = { ...wellFormed, bankDescriptorAliases: ['XCEL ENERGY WEB PYMT'] };
+    const result = calendarItemConverter.fromFirestore(fakeSnap('cal-5', withAliases));
+    expect(result.bankDescriptorAliases).toEqual(['XCEL ENERGY WEB PYMT']);
+    const out = callToFirestore(calendarItemConverter, { ...withAliases, id: 'cal-5' });
+    expect(out['bankDescriptorAliases']).toEqual(['XCEL ENERGY WEB PYMT']);
   });
 
   it('(b) legacy Timestamp date is converted to a local yyyy-MM-dd string', () => {

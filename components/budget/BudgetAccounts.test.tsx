@@ -10,12 +10,14 @@ const {
   updateAccountBalanceMock,
   addAccountMock,
   setAccountGoalMock,
+  setAccountCardDetailsMock,
   deleteAccountMock,
   reorderAccountsMock
 } = vi.hoisted(() => ({
   updateAccountBalanceMock: vi.fn(),
   addAccountMock: vi.fn(),
   setAccountGoalMock: vi.fn(),
+  setAccountCardDetailsMock: vi.fn(() => Promise.resolve()),
   deleteAccountMock: vi.fn(),
   reorderAccountsMock: vi.fn(),
 }));
@@ -59,6 +61,7 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => {
     addAccount: addAccountMock,
     setAccountGoal: setAccountGoalMock,
     setAccountCardLast4: vi.fn(),
+    setAccountCardDetails: setAccountCardDetailsMock,
     deleteAccount: deleteAccountMock,
     archiveAccount: vi.fn(),
     unarchiveAccount: vi.fn(),
@@ -320,5 +323,55 @@ describe('BudgetAccounts', () => {
     // Test Delete trigger
     await user.click(within(drawer3).getByRole('button', { name: /Delete Account/i }));
     expect(screen.getByText('Delete Account?')).toBeInTheDocument();
+  });
+
+  it('folds an uncommitted card chip draft into the save instead of discarding it', async () => {
+    const user = userEvent.setup();
+    render(<BudgetAccounts />);
+
+    // Open "Account Number & Cards" via the mobile Actions drawer for the
+    // checking account.
+    await user.click(screen.getByLabelText('Options for Main Checking'));
+    await user.click(screen.getByRole('button', { name: /Account Number & Cards/i }));
+
+    // Type a card digit draft but never click "Add".
+    await user.type(screen.getByPlaceholderText('Add card last 4 (e.g. 8899)'), '4242');
+
+    await user.click(screen.getByRole('button', { name: /^Save$/i }));
+
+    expect(setAccountCardDetailsMock).toHaveBeenCalledWith('acc1', expect.objectContaining({
+      cardLast4s: ['4242'],
+    }));
+  });
+
+  it('blocks the save with a validation message when the draft is non-empty but not a usable last-4', async () => {
+    const user = userEvent.setup();
+    render(<BudgetAccounts />);
+
+    await user.click(screen.getByLabelText('Options for Main Checking'));
+    await user.click(screen.getByRole('button', { name: /Account Number & Cards/i }));
+
+    // Too short to be a last-4.
+    await user.type(screen.getByPlaceholderText('Add card last 4 (e.g. 8899)'), '42');
+
+    await user.click(screen.getByRole('button', { name: /^Save$/i }));
+
+    expect(setAccountCardDetailsMock).not.toHaveBeenCalled();
+  });
+
+  it('hides card-chip editing for a savings account, matching Add Account', async () => {
+    const user = userEvent.setup();
+    render(<BudgetAccounts />);
+
+    await user.click(screen.getByLabelText('Options for My Savings'));
+    await user.click(screen.getByRole('button', { name: /Account Number & Cards/i }));
+
+    expect(screen.queryByText('Cards on this account')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Add card last 4 (e.g. 8899)')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^Save$/i }));
+    expect(setAccountCardDetailsMock).toHaveBeenCalledWith('acc2', expect.objectContaining({
+      cardLast4s: [],
+    }));
   });
 });
