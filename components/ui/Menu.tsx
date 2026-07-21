@@ -1,4 +1,5 @@
 import React from 'react';
+import { Check } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 
 /**
@@ -18,6 +19,13 @@ export interface MenuItem {
   tone?: MenuItemTone;
   /** Overrides the visible label for screen readers when it needs more context. */
   ariaLabel?: string;
+  /**
+   * Radio-style selection state. When defined (true OR false) the item renders
+   * as `menuitemradio` with `aria-checked`, and a trailing checkmark marks the
+   * selected one — used for mutually-exclusive view choices. Leave undefined
+   * for plain action items.
+   */
+  selected?: boolean;
 }
 
 interface MenuProps {
@@ -95,7 +103,8 @@ export const Menu: React.FC<MenuProps> = ({
           <button
             key={item.key}
             type="button"
-            role="menuitem"
+            role={item.selected !== undefined ? 'menuitemradio' : 'menuitem'}
+            aria-checked={item.selected !== undefined ? item.selected : undefined}
             disabled={item.disabled}
             aria-label={item.ariaLabel}
             onClick={(e) => {
@@ -115,7 +124,14 @@ export const Menu: React.FC<MenuProps> = ({
                 {item.icon}
               </span>
             )}
-            {item.label}
+            <span className="flex-1">{item.label}</span>
+            {item.selected && (
+              <Check
+                size={16}
+                aria-hidden="true"
+                className="text-accent-600 dark:text-accent-300"
+              />
+            )}
           </button>
         );
       })}
