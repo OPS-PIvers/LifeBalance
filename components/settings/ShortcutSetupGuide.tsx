@@ -790,7 +790,10 @@ const ExampleWalkthrough: React.FC<{
       </div>
 
       {/* Part 2 — the web request. Capture shortcuts POST a JSON body; the
-          read/export shortcut GETs and carries only the Authorization header. */}
+          read/export shortcut GETs and carries only the Authorization header.
+          The read label is to-do-specific because getTodos is the only read
+          variant today — a second one (e.g. recipes) would need a per-example
+          header here rather than this single hardcoded string. */}
       <div>
         <PartLabel>{isRead ? 'Fetch your to-dos' : 'Send it to LifeBalance'}</PartLabel>
         {isRead ? (
