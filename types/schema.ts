@@ -8,6 +8,16 @@ export type Role = 'admin' | 'member' | 'kid';
 // top-level footer pages. Home and Settings are always-on and not in this set.
 export type ModuleKey = 'habits' | 'money' | 'plan' | 'todos' | 'meals' | 'shopping';
 
+// The quick-add-API / iOS Shortcut capture input types that can be routed to
+// either land automatically or be held for manual review (see CaptureReviewMode).
+export type CaptureType = 'expense' | 'shopping' | 'todo';
+
+// 'auto' = the capture is added directly; 'review' = it is held (flagged
+// `needsReview` for shopping/todo; expenses already land as `pending_review`
+// transactions) until a household member approves it. Read through
+// utils/captureReview.ts — the single source of truth for the default per type.
+export type CaptureReviewMode = 'auto' | 'review';
+
 export const INCOME_CATEGORY = 'Income';
 
 // Sentinel category for transactions tagged to a CREDIT account. Credit spend
@@ -737,6 +747,11 @@ export interface ShoppingItem {
   notes?: string;
   addedFromMealId?: string; // Traceability
   order?: number;
+  source?: 'manual' | 'voice' | 'shortcut' | 'photo'; // How the item was captured (mirrors ToDo.source)
+  // Held-for-review capture (the household's captureReview setting routed
+  // 'shopping' to 'review'): hidden from the shopping list until approved.
+  // Absent/false = visible as normal. See utils/captureReview.ts.
+  needsReview?: boolean;
 }
 
 export interface Store {
@@ -822,6 +837,17 @@ export interface Household {
   // migration needed). Only an explicit `false` hides a module. Read through
   // utils/moduleVisibility.ts — the single source of truth.
   moduleVisibility?: Partial<Record<ModuleKey, boolean>>;
+
+  // Per-household per-capture-type routing for quick-add-API / iOS Shortcut
+  // captures: whether a capture of this type is added automatically ('auto')
+  // or held for manual review ('review'). Absent map/key falls back to the
+  // DEFAULTS in utils/captureReview.ts (expense→'review', shopping→'auto',
+  // todo→'auto'), which preserve legacy behavior — expense captures have
+  // always landed as `pending_review` transactions awaiting categorization,
+  // while shopping/todo captures have always been added directly. Read
+  // through utils/captureReview.ts — the single source of truth (server twin:
+  // functions/src/quickAdd/captureReview.ts, kept in sync deliberately).
+  captureReview?: Partial<Record<CaptureType, CaptureReviewMode>>;
 
   // F-MEALS-03: standing household dietary restrictions/allergies. Absent means
   // no constraints are recorded — AI meal calls (suggestMeal, generateWeeklyPlan)
@@ -970,6 +996,11 @@ export interface ToDo {
   priority?: 'low' | 'medium' | 'high'; // Priority level (defaults to 'medium')
   notes?: string; // Additional task details
   source?: 'manual' | 'voice' | 'shortcut' | 'photo'; // How the todo was created
+
+  // Held-for-review capture (the household's captureReview setting routed
+  // 'todo' to 'review'): hidden from the to-do list until approved. Absent/
+  // false = visible as normal. See utils/captureReview.ts.
+  needsReview?: boolean;
 
   // Plan 080c (Kid Mode): points credited to a MANAGED-KID assignee on completion
   // (defaults to DEFAULT_TODO_POINTS, see utils/todoPoints.ts). Absent on every
