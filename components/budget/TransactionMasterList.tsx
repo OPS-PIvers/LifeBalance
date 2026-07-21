@@ -123,7 +123,8 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
       (sourceFilter === 'recurring' && tx.isRecurring) ||
       (sourceFilter === 'manual' && tx.source === 'manual') ||
       (sourceFilter === 'camera-scan' && tx.source === 'camera-scan') ||
-      (sourceFilter === 'file-upload' && tx.source === 'file-upload');
+      (sourceFilter === 'file-upload' && tx.source === 'file-upload') ||
+      (sourceFilter === 'bank-sync' && tx.source === 'bank-sync');
 
     // Store Filter
     const matchesStore = storeFilter === 'all' || tx.store === storeFilter;
