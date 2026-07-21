@@ -312,7 +312,7 @@ export function getQuickAddBaseUrl(): string {
  * Get the full URL for a Quick Add endpoint
  */
 export function getQuickAddEndpointUrl(
-  endpoint: "habit" | "expense" | "shopping" | "naturalLanguage" | "bill" | "todo"
+  endpoint: "habit" | "expense" | "shopping" | "naturalLanguage" | "bill" | "todo" | "getTodos"
 ): string {
   const baseUrl = getQuickAddBaseUrl();
   const endpointMap = {
@@ -322,6 +322,8 @@ export function getQuickAddEndpointUrl(
     naturalLanguage: "quickAddNaturalLanguage",
     bill: "quickAddBillPay",
     todo: "quickAddTodo",
+    // Read/export GET endpoint (getTodos) — pulls to-dos OUT of the household.
+    getTodos: "getTodos",
   };
   return `${baseUrl}/${endpointMap[endpoint]}`;
 }

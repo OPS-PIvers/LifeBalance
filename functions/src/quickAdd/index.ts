@@ -51,6 +51,11 @@ import {
 import { fuzzyMatchMember, type MemberLike } from "./todoMatch";
 import { parseTodoPhrase } from "./todoParser";
 
+// Read/export GET endpoint (getTodos). Kept in its own module and re-exported
+// here so this barrel's deploy surface stays complete while the endpoint body
+// lives away from the churny expense-endpoint code below (fewer merge conflicts).
+export { getTodos } from "./getTodos";
+
 /** The category new paid bills are filed under (mirrors utils/categories.ts). */
 const BUDGETED_IN_CALENDAR = "Budgeted in Calendar";
 
