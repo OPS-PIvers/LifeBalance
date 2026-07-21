@@ -911,6 +911,79 @@ describe("quickAddExpense", () => {
     expect(add).not.toHaveBeenCalled();
   });
 
+  it("resolves the account via a cardLast4s-only account (no legacy cardLast4 field)", async () => {
+    const applePayRow = txDoc("ap1", {
+      source: "shortcut",
+      status: "pending_review",
+      amount: 18.86,
+      merchant: "Target",
+      needsAmount: false,
+    });
+    const add = vi.fn(() => Promise.resolve({ id: "txNew" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = {
+      add,
+      whereGetDocs: [applePayRow],
+    };
+    // Only the newer multi-card field carries the digits.
+    collectionOverrides[`households/${HOUSEHOLD_ID}/accounts`] = {
+      getDocs: [{ id: "credit-1", data: () => ({ cardLast4s: ["1111", "8899"] }) }],
+    };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({
+        body: {
+          amount: 18.86,
+          merchant: "TARGET T-2189",
+          cardLast4: "8899",
+          fromBankNotification: true,
+        },
+      }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ merged: true, data: { transactionId: "ap1" } });
+    expect(applePayRow.ref.update).toHaveBeenCalledTimes(1);
+    expect(applePayRow.ref.update.mock.calls[0]?.[0]).toEqual({ accountId: "credit-1" });
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  it("still resolves the account via the legacy cardLast4 field when cardLast4s is absent", async () => {
+    const applePayRow = txDoc("ap1", {
+      source: "shortcut",
+      status: "pending_review",
+      amount: 18.86,
+      merchant: "Target",
+      needsAmount: false,
+    });
+    const add = vi.fn(() => Promise.resolve({ id: "txNew" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = {
+      add,
+      whereGetDocs: [applePayRow],
+    };
+    collectionOverrides[`households/${HOUSEHOLD_ID}/accounts`] = {
+      getDocs: [{ id: "credit-1", data: () => ({ cardLast4: "8899" }) }],
+    };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({
+        body: {
+          amount: 18.86,
+          merchant: "TARGET T-2189",
+          cardLast4: "8899",
+          fromBankNotification: true,
+        },
+      }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ merged: true, data: { transactionId: "ap1" } });
+    expect(applePayRow.ref.update).toHaveBeenCalledTimes(1);
+    expect(applePayRow.ref.update.mock.calls[0]?.[0]).toEqual({ accountId: "credit-1" });
+    expect(add).not.toHaveBeenCalled();
+  });
+
   it("SAFETY: does NOT collapse into a prior BANK-notification row (two real same-price purchases stay separate)", async () => {
     // Two genuinely-separate $5 Starbucks captured via the bank-only shortcut.
     const priorBankRow = txDoc("bn1", {

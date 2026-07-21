@@ -85,6 +85,15 @@ const BudgetAccounts: React.FC = () => {
     };
   }, [accounts]);
 
+  // The account currently open in the "Account Number & Cards" drawer, used to
+  // gate card-chip editing for savings accounts — Add Account already hides
+  // card entry for savings (no debit/credit card routes to a savings account),
+  // so this entry point must match rather than silently offering it anyway.
+  const cardModalAccount = isCardModalOpen
+    ? (accounts.find(a => a.id === isCardModalOpen) ?? null)
+    : null;
+  const isCardModalSavings = cardModalAccount?.type === 'savings';
+
   const handleAddAccount = () => {
     if (!newName || !newBalance) return;
     const isLiability = newType === 'credit';
@@ -177,13 +186,28 @@ const BudgetAccounts: React.FC = () => {
       toast.error('Account number digits must be the last 4 numbers');
       return;
     }
+    // An uncommitted card chip draft (typed but never "Add"ed) would
+    // otherwise be silently discarded on Save. Fold it in as if Added when
+    // it's a valid 4-digit entry; block the save with a clear message when
+    // it's non-empty but not a usable last-4.
+    let finalCardChips = isCardModalSavings ? [] : cardChips;
+    if (!isCardModalSavings && cardChipDraft.trim()) {
+      const draftDigits = cleanChipDigits(cardChipDraft);
+      if (!draftDigits) {
+        toast.error('Card digits must be the last 4 numbers');
+        return;
+      }
+      finalCardChips = cardChips.includes(draftDigits)
+        ? cardChips
+        : [...cardChips, draftDigits];
+    }
     // Await the write and only close on success, so a failed Firestore write
     // surfaces an error (no unhandled rejection) and the drawer stays open to
     // retry.
     try {
       await setAccountCardDetails(isCardModalOpen, {
         accountLast4: rawAccountDigits.slice(-4),
-        cardLast4s: cardChips,
+        cardLast4s: finalCardChips,
       });
       setIsCardModalOpen(null);
       setAccountLast4Digits('');
@@ -719,6 +743,7 @@ const BudgetAccounts: React.FC = () => {
           </p>
         </div>
 
+        {!isCardModalSavings && (
         <div className="space-y-2">
           <label className="text-xs font-semibold text-brand-600 dark:text-brand-300 uppercase tracking-wide">
             Cards on this account
@@ -767,6 +792,7 @@ const BudgetAccounts: React.FC = () => {
             Bank-alert Shortcuts (e.g. Wells Fargo purchase emails) use these to route transactions to the right account.
           </p>
         </div>
+        )}
 
         <Button
           onClick={handleSetCard}

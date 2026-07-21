@@ -54,11 +54,18 @@ export const plaidexchangepublictoken = onCall(
     try {
       const accountsResp = await plaid.accountsGet({ access_token: accessToken });
       const lbAccountsSnap = await db.collection(`households/${householdId}/accounts`).get();
-      const lbAccounts = lbAccountsSnap.docs.map((d) => ({
-        id: d.id,
-        name: (d.data()?.name as string | undefined) ?? "",
-        cardLast4: d.data()?.cardLast4 as string | undefined,
-      }));
+      const lbAccounts = lbAccountsSnap.docs.map((d) => {
+        const data = d.data() ?? {};
+        return {
+          id: d.id,
+          name: (data.name as string | undefined) ?? "",
+          cardLast4: data.cardLast4 as string | undefined,
+          cardLast4s: Array.isArray(data.cardLast4s)
+            ? (data.cardLast4s as string[])
+            : undefined,
+          accountLast4: data.accountLast4 as string | undefined,
+        };
+      });
       accountMap = resolveAccountMap(accountsResp.data.accounts, lbAccounts);
     } catch (err) {
       logger.warn(

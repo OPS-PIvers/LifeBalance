@@ -743,6 +743,11 @@ export const quickAddExpense = onRequest(
               id: d.id,
               cardLast4:
                 typeof data.cardLast4 === "string" ? data.cardLast4 : undefined,
+              cardLast4s:
+                Array.isArray(data.cardLast4s) &&
+                data.cardLast4s.every((c) => typeof c === "string")
+                  ? (data.cardLast4s as string[])
+                  : undefined,
             };
           });
           resolvedAccountId = matchAccountByLast4(rawCardLast4, accountList) ?? undefined;
