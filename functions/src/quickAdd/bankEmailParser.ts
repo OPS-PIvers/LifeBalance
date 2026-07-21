@@ -68,6 +68,13 @@ export interface BankEmailParseInput {
  * Reduce raw HTML (or already-plain text) to searchable plain text, mirroring
  * emailParser.ts's toPlainText — tag-shaped tokens signal HTML, block-level
  * closers become line breaks, everything else becomes a space.
+ *
+ * NOTE (review nit): this is intentionally near-duplicated from
+ * emailParser.ts's toPlainText rather than extracted to a shared helper —
+ * this version adds a final `.trim()` that emailParser.ts's does not, so a
+ * naive extraction would either change emailParser.ts's behavior or need an
+ * options flag. Left as a documented duplication rather than risking that
+ * divergence in an unrelated bugfix change.
  */
 function toPlainText(input: string): string {
   let text = input;
@@ -95,7 +102,17 @@ function toDollars(captured: string): number {
   return parseFloat(captured.replace(/,/g, ""));
 }
 
-/** Today (yyyy-MM-dd) fallback when the caller doesn't supply one. */
+/**
+ * Today (yyyy-MM-dd) fallback when the caller doesn't supply one. The
+ * quickAdd endpoint always forwards the caller's LOCAL date, so this only
+ * runs for direct/test callers — but it's still worth being deliberate
+ * about, because `new Date().toISOString()` is the UTC day: for a US-evening
+ * parse, "today" here can be a full calendar day ahead of the user's actual
+ * local date. `resolveMonthDay`'s ±2-day tolerance (rather than a strict
+ * ">" future check) exists specifically so this UTC skew can't tip a
+ * December 31 withdrawal line into being mis-resolved as next January 1 and
+ * rolled back a whole year.
+ */
 function fallbackToday(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -103,10 +120,20 @@ function fallbackToday(): string {
 /**
  * Resolve an "MM/DD" token against `today` (yyyy-MM-dd): the withdrawal's
  * year is assumed to be the same as today's, UNLESS that would place the
- * date in the future — nightly statements only ever describe the recent
- * past, so a future-looking MM/DD must actually belong to last year (the
- * classic December→January statement-boundary case).
+ * date meaningfully in the future — nightly statements only ever describe
+ * the recent past, so a future-looking MM/DD must actually belong to last
+ * year (the classic December→January statement-boundary case).
+ *
+ * The threshold is "more than 2 days in the future," not "any amount in the
+ * future": `today` can itself be off by up to a day (the UTC `fallbackToday`
+ * skew above, or a caller-supplied local date one day ahead of UTC). A
+ * strict `> today` rollback would then mis-year a legitimate same-day/
+ * next-day withdrawal (e.g. 12/31 read as "tomorrow" under UTC) a full year
+ * into the past. A small tolerance absorbs that ±1-day skew while still
+ * catching the real multi-week/month statement-boundary case.
  */
+const FUTURE_TOLERANCE_DAYS = 2;
+
 function resolveMonthDay(monthDay: string, today: string): string | null {
   const m = monthDay.match(/^(\d{1,2})\/(\d{1,2})$/);
   if (!m) return null;
@@ -122,7 +149,8 @@ function resolveMonthDay(monthDay: string, today: string): string | null {
   if (candidate.getUTCMonth() !== month - 1 || candidate.getUTCDate() !== day) {
     return null; // invalid calendar date (e.g. 02/30)
   }
-  if (candidate.getTime() > todayDate.getTime()) {
+  const toleranceMs = FUTURE_TOLERANCE_DAYS * 24 * 60 * 60 * 1000;
+  if (candidate.getTime() > todayDate.getTime() + toleranceMs) {
     candidate = new Date(Date.UTC(year - 1, month - 1, day));
   }
   return ymd(candidate);
@@ -211,10 +239,19 @@ const ACCOUNT_LAST4_RE = /for account\s*\.{2,3}\s*(\d{4})/i;
 const ENDING_BALANCE_RE = /ending balance\s*\d*\s*:\s*(\()?(-)?\$\s*(-)?([\d,]+\.\d{2})\)?/i;
 const AVAILABLE_BALANCE_RE = /available balance\s*\d*\s*:\s*(\()?(-)?\$\s*(-)?([\d,]+\.\d{2})\)?/i;
 
-/** Resolve one of the ENDING/AVAILABLE_BALANCE_RE matches to a signed decimal-dollar amount. */
+/**
+ * Resolve one of the ENDING/AVAILABLE_BALANCE_RE matches to a signed
+ * decimal-dollar amount. Callers only ever invoke this after already
+ * checking `match[4]` is present (see parseBankEmail), so a missing `digits`
+ * here means a caller stopped doing that — throw loudly rather than
+ * returning NaN, which would silently poison a balance calculation instead
+ * of surfacing the bug.
+ */
 function toSignedDollars(match: RegExpMatchArray): number {
   const [, openParen, sign1, sign2, digits] = match;
-  if (!digits) return NaN;
+  if (!digits) {
+    throw new Error("toSignedDollars called with a match missing its digits group (caller bug).");
+  }
   const negative = openParen === "(" || sign1 === "-" || sign2 === "-";
   const value = toDollars(digits);
   return negative ? -value : value;
@@ -328,14 +365,18 @@ export function parseBankEmail(input: BankEmailParseInput): BankEmailParseResult
   // "As of" footer / a Deposits section, if present) so nothing outside it
   // is mistaken for a withdrawal line. Drop the "Withdrawals" header line
   // itself so it isn't fed into the line-item splitter below.
+  //
+  // Strict mode: the nightly email always has this section, so a missing
+  // header means a format change or the wrong email entirely — without this
+  // guard, falling back to scanning the WHOLE email lets ACH_LINE_RE match
+  // the Balance-summary lines ("Ending balance: $1,277.90" etc.) and
+  // fabricate withdrawals that were never withdrawals.
   const withdrawalsStart = text.search(/^withdrawals\s*$/im);
-  let sectionText: string;
-  if (withdrawalsStart >= 0) {
-    const afterHeaderNewline = text.indexOf("\n", withdrawalsStart);
-    sectionText = afterHeaderNewline >= 0 ? text.slice(afterHeaderNewline + 1) : "";
-  } else {
-    sectionText = text;
+  if (withdrawalsStart < 0) {
+    return { error: "Could not find a \"Withdrawals\" section in the email." };
   }
+  const afterHeaderNewline = text.indexOf("\n", withdrawalsStart);
+  const sectionText = afterHeaderNewline >= 0 ? text.slice(afterHeaderNewline + 1) : "";
   const sectionEnd = sectionText.search(/^(deposits|as of\s)/im);
   const withdrawalsSection = sectionEnd >= 0 ? sectionText.slice(0, sectionEnd) : sectionText;
 

@@ -147,23 +147,23 @@ describe("parseBankEmail", () => {
 
     // ACH/biller lines: synthetic bankRef, no cardLast4, date from YYMMDD token.
     const amex = result.withdrawals.find((w) => w.descriptor.includes("AMERICAN EXPRESS"));
-    expect(amex).toBeDefined();
+    if (!amex) throw new Error("expected an AMERICAN EXPRESS withdrawal");
     expect(amex).toMatchObject({
       amount: 372.0,
       date: "2026-07-20",
     });
-    expect(amex!.cardLast4).toBeUndefined();
-    expect(amex!.bankRef).toMatch(/^synth:[0-9a-f]{8}$/);
+    expect(amex.cardLast4).toBeUndefined();
+    expect(amex.bankRef).toMatch(/^synth:[0-9a-f]{8}$/);
 
     const comcast = result.withdrawals.find((w) => w.descriptor.includes("COMCAST"));
-    expect(comcast).toBeDefined();
+    if (!comcast) throw new Error("expected a COMCAST withdrawal");
     expect(comcast).toMatchObject({
       amount: 153.95,
       date: "2026-07-18",
     });
-    expect(comcast!.cardLast4).toBeUndefined();
-    expect(comcast!.bankRef).toMatch(/^synth:[0-9a-f]{8}$/);
-    expect(comcast!.bankRef).not.toBe(amex!.bankRef);
+    expect(comcast.cardLast4).toBeUndefined();
+    expect(comcast.bankRef).toMatch(/^synth:[0-9a-f]{8}$/);
+    expect(comcast.bankRef).not.toBe(amex.bankRef);
   });
 
   it("produces a stable, deterministic synth: ref for the same ACH line across parses", () => {
@@ -192,6 +192,46 @@ As of 01/02/2027 at 09:00 a.m., Central Time
     expect(result.withdrawals[0]?.date).toBe("2026-12-30");
   });
 
+  it("boundary: an MM/DD only 1 day 'in the future' of today is NOT rolled back a year (±skew tolerance)", () => {
+    // A caller-supplied or UTC-fallback "today" can be off by roughly a day
+    // relative to the withdrawal's true local date (the fallbackToday
+    // footgun the reviewer flagged). Without tolerance, a strict "> today"
+    // future check would treat this 1-day-out MM/DD as "in the future" and
+    // wrongly roll it back a full year to 2025-07-21. With the ±2-day
+    // tolerance it correctly stays in the current year.
+    const body = `
+for account ...1234
+Balance summary
+Ending balance: $500.00
+Available balance1: $500.00
+Withdrawals
+PURCHASE AUTHORIZED ON 07/21 SOME MERCHANT P000000000000001 CARD 1111 $9.99
+As of 07/20/2026 at 09:00 p.m., Central Time
+`;
+    const result = parseBankEmail({ subject: "x", rawBody: body, today: "2026-07-20" });
+    if ("error" in result) throw new Error(result.error);
+    expect(result.withdrawals[0]?.date).toBe("2026-07-21");
+  });
+
+  it("boundary: an MM/DD more than 2 days in the future still rolls back a year", () => {
+    // Beyond the ±2-day skew tolerance, this is unambiguously the statement
+    // year-boundary case (or bad data), not clock skew — must still roll
+    // back to the previous year rather than reporting an impossible future
+    // withdrawal date.
+    const body = `
+for account ...1234
+Balance summary
+Ending balance: $500.00
+Available balance1: $500.00
+Withdrawals
+PURCHASE AUTHORIZED ON 07/23 SOME MERCHANT P000000000000001 CARD 1111 $9.99
+As of 07/20/2026 at 09:00 p.m., Central Time
+`;
+    const result = parseBankEmail({ subject: "x", rawBody: body, today: "2026-07-20" });
+    if ("error" in result) throw new Error(result.error);
+    expect(result.withdrawals[0]?.date).toBe("2025-07-23");
+  });
+
   it("returns a structured error (never throws) on garbage input", () => {
     expect(() =>
       parseBankEmail({ subject: "junk", rawBody: "<div>not a bank email at all</div>" })
@@ -218,6 +258,36 @@ As of 01/02/2027 at 09:00 a.m., Central Time
       rawBody: "for account ...5581\nEnding balance: $1.00\nAvailable balance1: $1.00\nWithdrawals\n",
     });
     expect("error" in result).toBe(true);
+  });
+
+  it("reviewer repro: a missing Withdrawals section header errors instead of scanning the whole email for fake withdrawals", () => {
+    // With no "Withdrawals" header, the old code fell back to scanning the
+    // ENTIRE email body as the withdrawals section — so ACH_LINE_RE (any
+    // line starting with a capital letter and ending in $amount) could match
+    // the Balance-summary lines themselves and fabricate withdrawals out of
+    // "Ending balance: $1,277.90" / "Available balance: $1,165.82". The
+    // nightly email always has a Withdrawals section, so its absence must be
+    // a structured error, never a successful parse.
+    const body = `
+for account ...5581
+Balance summary
+Ending balance: $1,277.90
+Available balance1: $1,165.82
+As of 07/21/2026 at 01:50 a.m., Central Time
+`;
+    const result = parseBankEmail({ subject: "x", rawBody: body, today: TODAY });
+    expect("error" in result).toBe(true);
+    if ("error" in result) {
+      expect(result.error.toLowerCase()).toContain("withdrawals");
+    }
+    if (!("error" in result)) {
+      // Defensive: if this ever regresses to a "success", make sure at
+      // least it didn't fabricate a withdrawal from the balance lines.
+      const fabricated = (result as BankEmailParseSuccess).withdrawals.find((w) =>
+        w.descriptor.toLowerCase().includes("balance")
+      );
+      expect(fabricated).toBeUndefined();
+    }
   });
 
   it("parses a RECURRING PAYMENT AUTHORIZED ON line like a PURCHASE line", () => {
