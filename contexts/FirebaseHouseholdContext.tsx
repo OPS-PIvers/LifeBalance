@@ -134,6 +134,7 @@ import {
   makeAddToDo,
   makeTodoCrudMutations,
   makeCompleteToDo,
+  makeUncompleteToDo,
   makeLoadOlderCompletedTodos,
 } from '@/contexts/household/mutations/todoMutations';
 import {
@@ -2238,6 +2239,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeCompleteToDo({ db, householdId, membersRef }).completeToDo(id);
   }, [householdId]);
 
+  /**
+   * Restores a completed to-do to active, reversing any kid points credit in
+   * the same writeBatch (counterpart of completeToDo — see makeUncompleteToDo).
+   */
+  const uncompleteToDo = useCallback(async (id: string) => {
+    await makeUncompleteToDo({ db, householdId, membersRef }).uncompleteToDo(id);
+  }, [householdId]);
+
   // --- ACTIONS: UNIFIED TRASH (F-XCUT-03) ---
 
   const restoreTrashedItem = useCallback(async (item: TrashedItem) => {
@@ -2503,6 +2512,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateToDo,
     deleteToDo,
     completeToDo,
+    uncompleteToDo,
     taskTemplates,
     addTaskTemplate,
     updateTaskTemplate,
@@ -2510,7 +2520,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     applyTaskTemplate,
   }), [
     todos, isLoadingOlderTodos, hasMoreCompletedTodos, loadOlderCompletedTodos,
-    addToDo, updateToDo, deleteToDo, completeToDo,
+    addToDo, updateToDo, deleteToDo, completeToDo, uncompleteToDo,
     taskTemplates, addTaskTemplate, updateTaskTemplate, deleteTaskTemplate, applyTaskTemplate,
   ]);
 

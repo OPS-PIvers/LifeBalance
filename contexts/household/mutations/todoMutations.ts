@@ -24,8 +24,8 @@ import { describeError } from '@/utils/errorMessages';
 import { todoConverter } from '@/utils/firestoreConverters';
 import { ToDo, HouseholdMember } from '@/types/schema';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
-import { computeTodoCompletionCredit } from '@/utils/todoPoints';
-import { buildNextRecurringTodo } from '@/utils/todoRecurrence';
+import { computeTodoCompletionCredit, buildUncompleteCreditReversal } from '@/utils/todoPoints';
+import { buildNextRecurringTodo, isTodoFrequency } from '@/utils/todoRecurrence';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { TODO_COMPLETED_PAGE_SIZE } from '@/utils/listenerWindows';
 import { mergeById, mapTodoDoc } from '@/contexts/household/selectors';
@@ -262,6 +262,109 @@ export function makeCompleteToDo(deps: {
   };
 
   return { completeToDo };
+}
+
+/**
+ * uncompleteToDo — restore a completed to-do to active, reversing any kid
+ * points the completion credited, atomically (same deps shape as
+ * makeCompleteToDo: `householdId` + the hook-stable `membersRef`).
+ */
+export function makeUncompleteToDo(deps: {
+  db: Firestore;
+  householdId: string | null;
+  membersRef: { current: HouseholdMember[] };
+}) {
+  const { db, householdId, membersRef } = deps;
+
+  /**
+   * Marks a completed to-do as active again ("Mark as incomplete" / undo).
+   *
+   * Counterpart of completeToDo: when the assignee is a MANAGED KID, the
+   * completion credited that kid's member.points in the same writeBatch —
+   * a plain updateToDo(isCompleted: false) would leave the kid over-credited.
+   * This commits the flip AND the negative point increments in ONE writeBatch
+   * so they can never diverge (Atomicity convention, CLAUDE.md).
+   *
+   * Guards:
+   * - Reads the live doc first; if it is already active (`!isCompleted`) it
+   *   returns without writing — restoring twice can never double-reverse.
+   * - `computeTodoCompletionCredit` is the SAME dormancy gate the completion
+   *   used: for a non-kid assignee it returns null and the only write is the
+   *   todo flip (byte-for-byte the prior updateToDo behaviour).
+   * - Note: if the todo's `points` or the assignee's managed status changed
+   *   between completion and restore, the reversal uses the CURRENT values —
+   *   the completion-time credit isn't persisted on the doc.
+   *
+   * Toast Behavior: omitted here; callers show contextual toasts (consistent
+   * with the other to-do mutations).
+   *
+   * @throws Re-throws any caught errors so callers can provide contextual error messages
+   */
+  const uncompleteToDo = async (id: string) => {
+    if (!householdId) {
+      throw new Error('Household not selected');
+    }
+    try {
+      const todoRef = doc(db, `households/${householdId}/todos`, id);
+      const snap = await getDoc(todoRef.withConverter(todoConverter));
+      const todo = snap.data();
+      if (!todo) {
+        throw new Error('To-Do not found');
+      }
+      if (!todo.isCompleted) {
+        return; // already active — idempotent, no double reversal
+      }
+      const credit = computeTodoCompletionCredit(todo, membersRef.current);
+
+      const batch = writeBatch(db);
+      batch.update(todoRef, { isCompleted: false, completedAt: null });
+      if (credit) {
+        const deltas = buildUncompleteCreditReversal(credit.points, todo.completedAt);
+        const pointUpdates: Record<string, unknown> = {};
+        for (const [field, delta] of Object.entries(deltas)) {
+          pointUpdates[field] = increment(delta);
+        }
+        batch.update(doc(db, `households/${householdId}/members`, credit.memberUid), pointUpdates);
+      }
+
+      // F-TODO-01 counterpart: completing a recurring to-do spawns the next
+      // instance in the same batch (see makeCompleteToDo above). Restoring
+      // must reconcile that spawn in the SAME batch too, or the household
+      // ends up with two active copies of the same chore. Identify the
+      // spawned instance the way buildNextRecurringTodo actually links it:
+      // it stamps `recurrence.parentRecurringId` with the CHAIN ROOT id (the
+      // id of the very first instance, reused indefinitely down the chain —
+      // not a back-reference to "the instance that spawned me"), so the
+      // strongest identifier available is "same chain root + same text +
+      // still active". Only delete when EXACTLY ONE such candidate exists:
+      // zero means it was already completed/edited/never spawned (graceful
+      // degradation in completeToDo), more than one means we can't tell
+      // which is "the" spawn — in both cases, leave every candidate alone
+      // rather than guessing.
+      if (todo.recurrence && isTodoFrequency(todo.recurrence.frequency)) {
+        const chainRootId = todo.recurrence.parentRecurringId ?? todo.id;
+        const todosCol = collection(db, `households/${householdId}/todos`).withConverter(todoConverter);
+        const candidatesQuery = query(
+          todosCol,
+          where('isCompleted', '==', false),
+          where('recurrence.parentRecurringId', '==', chainRootId),
+        );
+        const candidatesSnap = await getDocs(candidatesQuery);
+        const matches = candidatesSnap.docs.filter(d => d.data().text === todo.text);
+        const [onlyMatch] = matches;
+        if (matches.length === 1 && onlyMatch) {
+          batch.delete(onlyMatch.ref);
+        }
+      }
+
+      await batch.commit();
+    } catch (error) {
+      console.error('[uncompleteToDo] Failed:', error);
+      throw error; // Re-throw so callers can handle the error with contextual messaging
+    }
+  };
+
+  return { uncompleteToDo };
 }
 
 /**
