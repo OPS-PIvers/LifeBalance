@@ -6,6 +6,7 @@ import CountBadge from '@/components/ui/CountBadge';
 import { preloadOnIdle } from '@/utils/preloadOnIdle';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
+import { needsReview } from '@/hooks/useActionQueue';
 
 // Lazy-loaded so the Capture drawer (tabs, AI capture, presets) stays out of
 // the boot bundle; preloaded on idle below so the first FAB tap is instant.
@@ -29,7 +30,7 @@ const BottomNav: React.FC = () => {
   // tab can show a badge. Subscribes to the narrow finance slice only.
   const { transactions } = useFinance();
   const pendingReviewCount = useMemo(
-    () => transactions.filter((t) => t.status === 'pending_review').length,
+    () => transactions.filter((t) => needsReview(t)).length,
     [transactions]
   );
 

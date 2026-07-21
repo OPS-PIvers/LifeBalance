@@ -625,6 +625,12 @@ export const bankEmailSync = onRequest(
       });
 
       await batch.commit();
+      // The batch (which OVERWRITES the ledger claim with the durable processed
+      // record) has committed. Disown the claim NOW so a failure in the
+      // post-commit steps below (push / logApiCall / response) can never reach
+      // the catch's delete and wipe the durably-written ledger entry — a
+      // structural guarantee, not a reliance on those helpers swallowing errors.
+      claimedByUs = false;
 
       // 12. Summary push + response.
       await pushToBankSyncMembers(
@@ -647,8 +653,10 @@ export const bankEmailSync = onRequest(
     } catch (error) {
       logger.error("Error in bankEmailSync:", error);
       // Release our idempotency claim so a later Apps Script retry can reprocess
-      // this Message-ID (the batch never committed, so no data was written). Only
-      // delete a claim WE created — never one already recorded as processed.
+      // this Message-ID. `claimedByUs` is only still true when the failure struck
+      // BEFORE batch.commit() (it is flipped false the instant the batch commits),
+      // so this can never delete a durably-written ledger record — it only ever
+      // clears a pre-commit "processing" claim, and never one already processed.
       if (claimedByUs) {
         await ledgerRef.delete().catch((delErr) => {
           logger.error("bankEmailSync: failed to release idempotency claim:", delErr);
