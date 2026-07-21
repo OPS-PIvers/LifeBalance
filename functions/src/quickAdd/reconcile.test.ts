@@ -394,8 +394,9 @@ describe("pickReverseDuplicateRow", () => {
   });
 
   it("does NOT fold into a NON-bank (Apple Pay) row — the merge must be cross-source", () => {
-    // Two Apple Pay captures of the same purchase are the forward path's concern
-    // (pickDuplicateShortcutRow); the reverse path only ever targets a bank row.
+    // Two Apple Pay captures of the same purchase are handled by identity dedup
+    // (isLikelyDuplicate), not by either reconcile picker; the reverse path only
+    // ever targets a bank row.
     const candidates = [applePay("ap1", "Target", 18.86)];
     expect(
       pickReverseDuplicateRow({ amount: 18.86, merchant: "Target" }, candidates),
