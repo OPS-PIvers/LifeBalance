@@ -832,6 +832,152 @@ describe("quickAddExpense", () => {
     expect(manual.ref.update).not.toHaveBeenCalled();
   });
 
+  // --- Cross-source dedup of two REAL-amount captures (the reported bug) ---
+
+  it("REGRESSION: fromBankNotification collapses a duplicate real-amount Apple Pay row (untagged) instead of adding a second", async () => {
+    // Apple Pay captured "Target" $18.86 at full amount (a normal pending row,
+    // not a $0 stub); the bank push now reports "TARGET T-2189" $18.86. Both are
+    // untagged, so the shared identity check only ranks them 'possible' — the
+    // old behavior left TWO rows. They must collapse to one.
+    const applePayRow = txDoc("ap1", {
+      source: "shortcut",
+      status: "pending_review",
+      amount: 18.86,
+      merchant: "Target",
+      needsAmount: false,
+      date: "2026-07-20",
+    });
+    const add = vi.fn(() => Promise.resolve({ id: "txNew" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = {
+      add,
+      whereGetDocs: [applePayRow],
+    };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({
+        body: {
+          amount: 18.86,
+          merchant: "TARGET T-2189",
+          date: "2026-07-20",
+          fromBankNotification: true,
+        },
+      }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      merged: true,
+      data: { transactionId: "ap1" },
+    });
+    // No second row created.
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  it("cross-source dedup back-fills the resolved account onto the untagged Apple Pay row", async () => {
+    const applePayRow = txDoc("ap1", {
+      source: "shortcut",
+      status: "pending_review",
+      amount: 18.86,
+      merchant: "Target",
+      needsAmount: false,
+    });
+    const add = vi.fn(() => Promise.resolve({ id: "txNew" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = {
+      add,
+      whereGetDocs: [applePayRow],
+    };
+    // The card last-4 resolves to an account.
+    collectionOverrides[`households/${HOUSEHOLD_ID}/accounts`] = {
+      getDocs: [{ id: "credit-1", data: () => ({ cardLast4: "8899" }) }],
+    };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({
+        body: {
+          amount: 18.86,
+          merchant: "TARGET T-2189",
+          cardLast4: "8899",
+          fromBankNotification: true,
+        },
+      }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ merged: true, data: { transactionId: "ap1" } });
+    expect(applePayRow.ref.update).toHaveBeenCalledTimes(1);
+    expect(applePayRow.ref.update.mock.calls[0]?.[0]).toEqual({ accountId: "credit-1" });
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  it("SAFETY: does NOT collapse into a prior BANK-notification row (two real same-price purchases stay separate)", async () => {
+    // Two genuinely-separate $5 Starbucks captured via the bank-only shortcut.
+    const priorBankRow = txDoc("bn1", {
+      source: "shortcut",
+      status: "pending_review",
+      amount: 5,
+      merchant: "Starbucks",
+      needsAmount: false,
+      fromBankNotification: true,
+    });
+    const add = vi.fn(() => Promise.resolve({ id: "txNew" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = {
+      add,
+      whereGetDocs: [priorBankRow],
+    };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({
+        body: { amount: 5, merchant: "Starbucks", fromBankNotification: true },
+      }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(priorBankRow.ref.update).not.toHaveBeenCalled();
+    expect(res.body).not.toMatchObject({ merged: true });
+    // The newly created row is itself flagged as bank-sourced.
+    const txData = add.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(txData.fromBankNotification).toBe(true);
+  });
+
+  it("SAFETY: does NOT collapse when two matching Apple Pay rows exist (ambiguous → keep both)", async () => {
+    const ap1 = txDoc("ap1", {
+      source: "shortcut",
+      status: "pending_review",
+      amount: 5,
+      merchant: "Starbucks",
+      needsAmount: false,
+    });
+    const ap2 = txDoc("ap2", {
+      source: "shortcut",
+      status: "pending_review",
+      amount: 5,
+      merchant: "Starbucks",
+      needsAmount: false,
+    });
+    const add = vi.fn(() => Promise.resolve({ id: "txNew" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = {
+      add,
+      whereGetDocs: [ap1, ap2],
+    };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({
+        body: { amount: 5, merchant: "Starbucks", fromBankNotification: true },
+      }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(ap1.ref.update).not.toHaveBeenCalled();
+    expect(ap2.ref.update).not.toHaveBeenCalled();
+    expect(res.body).not.toMatchObject({ merged: true });
+  });
+
   it("zero-dollar hold WITH a merchant creates an awaiting-amount stub (needsAmount:true, amount 0, pending_review)", async () => {
     const add = vi.fn(() => Promise.resolve({ id: "tx1" }));
     collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = { add };

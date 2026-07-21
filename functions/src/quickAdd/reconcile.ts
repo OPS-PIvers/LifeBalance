@@ -59,6 +59,13 @@ export interface ReconcileCandidate {
    *  absent — but when present it's used to avoid merging a purchase from one
    *  card into a stub belonging to a different card. */
   accountId?: string;
+  /** True if this row was ITSELF created from a bank-notification capture.
+   *  Used only by {@link pickDuplicateShortcutRow}: a bank-notification
+   *  duplicate is only ever merged INTO a NON-bank capture (the Apple Pay
+   *  "Transaction" automation row), never into another bank-notification row —
+   *  otherwise two genuinely-separate identical purchases captured via the
+   *  bank-only shortcut would collapse into one and lose spend data. */
+  fromBankNotification?: boolean;
 }
 
 /** The incoming bank-notification event, already parsed/normalized. */
@@ -87,6 +94,9 @@ export function normalizeMerchant(name: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+/** Convert a stored (always-positive) dollar amount to integer cents, avoiding float drift. */
+const amountCents = (amount: number): number => Math.round(Math.abs(amount) * 100);
 
 /**
  * Choose the awaiting-amount stub a real bank amount should fill, or `null` to
@@ -157,6 +167,76 @@ export function buildFillUpdates(
   // chosen stub is either untagged or the SAME account, so this only ever sets
   // or re-affirms the correct account for the review/verify step.
   if (incoming.accountId) {
+    updates.accountId = incoming.accountId;
+  }
+  return updates;
+}
+
+/**
+ * Choose an EXISTING real-amount shortcut row that this incoming bank
+ * notification is a cross-source duplicate of, or `null` to write a new row.
+ *
+ * This is the sibling of {@link pickFillTarget} for the case the stub-fill path
+ * can't reach: the Apple Pay "Transaction" automation captured the purchase at
+ * its FULL amount (not a $0 pre-auth hold), so it landed as a normal
+ * `pending_review` row rather than a `needsAmount` stub. Moments later the
+ * bank-notification shortcut reports the SAME purchase under a different
+ * merchant string ("Target" vs "TARGET T-2189") and — because the two captures
+ * are frequently untagged — the shared identity check can only rank the pair as
+ * `'possible'`, so a second row survives. This collapses that pair.
+ *
+ * Money-safety (mirrors pickFillTarget's model — never over-merge two genuinely
+ * separate purchases):
+ *  - Only a NON-stub candidate is eligible (stubs are pickFillTarget's job).
+ *  - Only a candidate NOT itself from a bank notification is eligible — a merge
+ *    must be cross-source (Apple Pay row ← bank notification). This is what
+ *    keeps two real identical purchases captured via the bank-only shortcut from
+ *    collapsing into one.
+ *  - Account must not conflict (a different tagged card ⇒ a different purchase).
+ *  - Amount must match to the cent and the merchant must be {@link merchantSimilar}.
+ *  - EXACTLY ONE candidate must qualify. Zero → new row; two or more → ambiguous,
+ *    so we under-merge (new row the user reconciles) rather than guess.
+ *
+ * Combined with the caller's tight {@link RECONCILE_WINDOW_MS} createdAt window,
+ * a false merge would require two real purchases of the identical amount at a
+ * similar-named merchant within ~30 minutes with exactly one prior Apple Pay
+ * row — and the "exactly one" guard blocks even that (a second such purchase
+ * yields two candidates ⇒ no merge).
+ */
+export function pickDuplicateShortcutRow(
+  incoming: IncomingExpense,
+  candidates: readonly ReconcileCandidate[],
+): ReconcileCandidate | null {
+  const eligible = candidates.filter((c) => {
+    // Stubs are pickFillTarget's domain — never absorb one here.
+    if (c.needsAmount || c.amount === 0) return false;
+    // Only merge a bank notification INTO a non-bank (Apple Pay) capture.
+    if (c.fromBankNotification) return false;
+    // A different tagged card means a different purchase.
+    if (incoming.accountId && c.accountId && c.accountId !== incoming.accountId) {
+      return false;
+    }
+    if (amountCents(c.amount) !== amountCents(incoming.amount)) return false;
+    return merchantSimilar(c.merchant, incoming.merchant);
+  });
+  return eligible.length === 1 ? (eligible[0] ?? null) : null;
+}
+
+/**
+ * Build the Firestore patch that folds a bank-notification duplicate into the
+ * existing Apple Pay row chosen by {@link pickDuplicateShortcutRow}. Unlike
+ * {@link buildFillUpdates}, this deliberately does NOT overwrite the amount or
+ * merchant: the existing row already carries the real amount, and its merchant
+ * ("Target") is usually cleaner than the bank's store-numbered string
+ * ("TARGET T-2189"). The only enrichment is back-filling the resolved account
+ * onto a row that was captured untagged — a strict improvement for review.
+ */
+export function buildDuplicateMergeUpdates(
+  incoming: IncomingExpense,
+  target: ReconcileCandidate,
+): Record<string, unknown> {
+  const updates: Record<string, unknown> = {};
+  if (incoming.accountId && !target.accountId) {
     updates.accountId = incoming.accountId;
   }
   return updates;

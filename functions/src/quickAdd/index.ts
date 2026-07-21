@@ -30,6 +30,8 @@ import {
   RECONCILE_WINDOW_MS,
   pickFillTarget,
   buildFillUpdates,
+  pickDuplicateShortcutRow,
+  buildDuplicateMergeUpdates,
   type ReconcileCandidate,
 } from "./reconcile";
 import {
@@ -805,6 +807,7 @@ export const quickAddExpense = onRequest(
               needsAmount: data.needsAmount === true,
               accountId:
                 typeof data.accountId === "string" ? data.accountId : undefined,
+              fromBankNotification: data.fromBankNotification === true,
             });
           }
 
@@ -856,7 +859,47 @@ export const quickAddExpense = onRequest(
             });
             return;
           }
-          // No unambiguous stub to fill → fall through to identity dedup, then a normal row.
+
+          // No $0 stub to fill, but the Apple Pay "Transaction" automation may
+          // have already captured this SAME purchase at its full amount (a
+          // normal pending row, not a stub) under a different merchant string —
+          // e.g. "Target" from Apple Pay vs "TARGET T-2189" from the bank. That
+          // pair is only ever 'possible' to the shared identity check (both
+          // captures are usually untagged), so it would otherwise survive as two
+          // rows. Collapse it here, with the same tight window + exactly-one +
+          // cross-source guards the stub-fill path uses.
+          const dupTarget = pickDuplicateShortcutRow(
+            { amount, merchant: merchant.trim(), category, accountId: resolvedAccountId },
+            reconcileCandidates
+          );
+          const dupRef = dupTarget ? refById.get(dupTarget.id) : undefined;
+          if (dupTarget && dupRef) {
+            const mergeUpdates = buildDuplicateMergeUpdates(
+              { amount, merchant: merchant.trim(), category, accountId: resolvedAccountId },
+              dupTarget
+            );
+            if (Object.keys(mergeUpdates).length > 0) {
+              await dupRef.update(mergeUpdates);
+            }
+            await logApiCall(householdId, apiKey.substring(0, 16), "expense", req.body, 200);
+            jsonResponse(res, 200, {
+              success: true,
+              merged: true,
+              message: `Already recorded: ${formatCurrency(amount, { currency })} at ${merchant} (matched a recent capture of the same purchase)`,
+              data: {
+                transactionId: dupTarget.id,
+                amount,
+                merchant,
+                category,
+                date: transactionDate,
+                status: "pending_review",
+                accountId: (dupTarget.accountId ?? resolvedAccountId) ?? null,
+              },
+            });
+            return;
+          }
+          // No unambiguous stub or duplicate to fold into → fall through to
+          // identity dedup, then a normal row.
         }
 
         // Cross-path duplicate check: did this same purchase already arrive via
@@ -946,6 +989,11 @@ export const quickAddExpense = onRequest(
         // Apple Pay $0 pre-auth stub: flags the review UI that the real amount
         // still needs to be entered. Omitted for normal (amount > 0) expenses.
         ...(amount === 0 ? { needsAmount: true } : {}),
+        // Marks a row created FROM a bank notification so a later bank
+        // notification never folds into it (pickDuplicateShortcutRow only merges
+        // into a non-bank Apple Pay capture). Omitted otherwise to keep the
+        // stored shape minimal.
+        ...(fromBankNotification ? { fromBankNotification: true } : {}),
         // Plan 03: a weaker ('possible') identity match against an existing
         // row — the review UI surfaces a Merge / Keep-both choice. Omitted
         // when no candidate scored 'possible' (or the dedup lookup failed).
