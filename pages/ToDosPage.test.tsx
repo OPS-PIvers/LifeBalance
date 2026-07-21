@@ -322,10 +322,10 @@ describe('ToDosPage', () => {
       fireEvent.click(screen.getByLabelText('Add new task'));
 
       fireEvent.change(screen.getByLabelText('Task'), { target: { value: 'New Test Task' } });
-      fireEvent.change(screen.getByLabelText('Due Date'), { target: { value: today } });
+      fireEvent.change(screen.getByLabelText('Due date'), { target: { value: today } });
 
       // Select assignee (user1)
-      fireEvent.click(screen.getByLabelText('Assign to Alice Smith'));
+      fireEvent.change(screen.getByLabelText('Assign to'), { target: { value: 'user1' } });
 
       fireEvent.click(screen.getByText('Create task'));
 
