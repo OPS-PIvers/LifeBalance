@@ -1,4 +1,5 @@
 import React from 'react';
+import { Check } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 
 /**
@@ -18,6 +19,19 @@ export interface MenuItem {
   tone?: MenuItemTone;
   /** Overrides the visible label for screen readers when it needs more context. */
   ariaLabel?: string;
+  /**
+   * Radio-style selection state. When defined (true OR false) the item renders
+   * as `menuitemradio` with `aria-checked`, and a trailing checkmark marks the
+   * selected one — used for mutually-exclusive view choices. Leave undefined
+   * for plain action items.
+   */
+  selected?: boolean;
+  /**
+   * Names the radio set this item belongs to. Consecutive items sharing a
+   * group are wrapped in `role="group"` with this label, per the ARIA menu
+   * pattern for `menuitemradio` sets that coexist with plain actions.
+   */
+  group?: string;
 }
 
 interface MenuProps {
@@ -79,23 +93,14 @@ export const Menu: React.FC<MenuProps> = ({
   className,
   stopPropagation = false,
 }) => {
-  return (
-    <Popover
-      isOpen={isOpen}
-      onClose={onClose}
-      role="menu"
-      ariaLabel={ariaLabel}
-      ariaOrientation="vertical"
-      position={position}
-      className={['overflow-hidden py-1', className].filter(Boolean).join(' ')}
-    >
-      {items.map((item) => {
+  const renderItem = (item: MenuItem) => {
         const tone = item.tone ?? 'default';
         return (
           <button
             key={item.key}
             type="button"
-            role="menuitem"
+            role={item.selected !== undefined ? 'menuitemradio' : 'menuitem'}
+            aria-checked={item.selected !== undefined ? item.selected : undefined}
             disabled={item.disabled}
             aria-label={item.ariaLabel}
             onClick={(e) => {
@@ -115,10 +120,51 @@ export const Menu: React.FC<MenuProps> = ({
                 {item.icon}
               </span>
             )}
-            {item.label}
+            <span className="flex-1">{item.label}</span>
+            {item.selected && (
+              <Check
+                size={16}
+                aria-hidden="true"
+                className="text-accent-600 dark:text-accent-300"
+              />
+            )}
           </button>
         );
-      })}
+  };
+
+  return (
+    <Popover
+      isOpen={isOpen}
+      onClose={onClose}
+      role="menu"
+      ariaLabel={ariaLabel}
+      ariaOrientation="vertical"
+      position={position}
+      className={['overflow-hidden py-1', className].filter(Boolean).join(' ')}
+    >
+      {chunkByGroup(items).map((chunk) =>
+        chunk.group ? (
+          <div key={`group-${chunk.group}`} role="group" aria-label={chunk.group}>
+            {chunk.items.map(renderItem)}
+          </div>
+        ) : (
+          chunk.items.map(renderItem)
+        )
+      )}
     </Popover>
   );
 };
+
+/** Split the flat items list into runs of same-`group` (or ungrouped) items. */
+function chunkByGroup(items: MenuItem[]): { group?: string; items: MenuItem[] }[] {
+  const chunks: { group?: string; items: MenuItem[] }[] = [];
+  for (const item of items) {
+    const last = chunks[chunks.length - 1];
+    if (last && last.group === item.group) {
+      last.items.push(item);
+    } else {
+      chunks.push({ group: item.group, items: [item] });
+    }
+  }
+  return chunks;
+}

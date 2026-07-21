@@ -198,6 +198,20 @@ describe('ToDosPage', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /Select multiple/i }));
   };
 
+  // View arrangement now lives in the overflow menu as labeled radio items
+  // (the old single cycle button was removed).
+  const chooseArrangement = (label: string) => {
+    openOverflowMenu();
+    fireEvent.click(screen.getByRole('menuitemradio', { name: label }));
+  };
+
+  // Creation entry points beyond the quick-add bar live behind its "More"
+  // menu: Full details / From template / Scan a list.
+  const openFullAddForm = () => {
+    fireEvent.click(screen.getByRole('button', { name: 'More ways to add' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add new task with full details' }));
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -320,7 +334,7 @@ describe('ToDosPage', () => {
 
     it('adds a new task', async () => {
       setup();
-      fireEvent.click(screen.getByLabelText('Add new task'));
+      openFullAddForm();
 
       fireEvent.change(screen.getByLabelText('Task'), { target: { value: 'New Test Task' } });
       fireEvent.change(screen.getByLabelText('Due date'), { target: { value: today } });
@@ -337,6 +351,14 @@ describe('ToDosPage', () => {
           assignedTo: 'user1'
         }));
       });
+    });
+
+    it('lists Full details / From template / Scan a list in the quick-add "More" menu', () => {
+      setup();
+      fireEvent.click(screen.getByRole('button', { name: 'More ways to add' }));
+      expect(screen.getByRole('menuitem', { name: 'Add new task with full details' })).toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: 'Add tasks from a template' })).toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: 'Scan a list' })).toBeInTheDocument();
     });
 
     it('quick-adds a task from the sticky bar with default date and current-user assignee', async () => {
@@ -451,7 +473,7 @@ describe('ToDosPage', () => {
   describe('Validation', () => {
     it('validates form inputs', async () => {
       setup();
-      fireEvent.click(screen.getByLabelText('Add new task'));
+      openFullAddForm();
 
       // Try submitting empty form
       fireEvent.click(screen.getByText('Create task'));
@@ -484,7 +506,7 @@ describe('ToDosPage', () => {
       });
       render(<ToDosPage />);
 
-      fireEvent.click(screen.getByLabelText('Add new task'));
+      openFullAddForm();
 
       // Button should be disabled or show error on click if not disabled
       const createBtn = screen.getByText('Create task');
@@ -667,7 +689,7 @@ describe('ToDosPage', () => {
       { id: 'q4', text: 'Later Task', completeByDate: farOut, assignedTo: 'user2', isCompleted: false, createdBy: 'user1', createdAt: new Date().toISOString() },
     ];
 
-    it('cycles list → matrix → grid → list and persists each step to localStorage', () => {
+    it('switches list → matrix → grid → list via the overflow menu and persists each step to localStorage', () => {
       setOrientation(true);
       // Use the quadrant fixture so every stacked section has an item — the
       // quick-add bar now lives in a page-level sticky card, so an empty
@@ -675,8 +697,11 @@ describe('ToDosPage', () => {
       // kept alive by the add row.
       setup(quadrantTodos);
 
-      // Default: list arrangement — the toggle offers the prioritized list next.
-      fireEvent.click(screen.getByRole('button', { name: 'Switch to prioritized list' }));
+      // Default: list arrangement. The overflow menu marks it as the current view.
+      openOverflowMenu();
+      expect(screen.getByRole('menuitemradio', { name: 'List view' })).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByRole('menuitemradio', { name: 'Prioritized list' })).toHaveAttribute('aria-checked', 'false');
+      fireEvent.click(screen.getByRole('menuitemradio', { name: 'Prioritized list' }));
       expect(localStorage.getItem(ARRANGEMENT_KEY)).toBe('matrix');
       expect(screen.getByText('Do First')).toBeInTheDocument(); // stacked quadrant sections
       // The urgent/important axis is sr-only INSIDE the heading (no visible
@@ -687,11 +712,11 @@ describe('ToDosPage', () => {
         screen.getByRole('heading', { name: /Do First\s?\(Urgent & Important\)/ })
       ).toBeInTheDocument();
 
-      fireEvent.click(screen.getByRole('button', { name: 'Switch to matrix grid' }));
+      chooseArrangement('2×2 grid');
       expect(localStorage.getItem(ARRANGEMENT_KEY)).toBe('grid');
       expect(screen.getByTestId('grid-cell-do')).toBeInTheDocument();
 
-      fireEvent.click(screen.getByRole('button', { name: 'Switch to standard list' }));
+      chooseArrangement('List view');
       expect(localStorage.getItem(ARRANGEMENT_KEY)).toBe('list');
       expect(screen.getByText('Immediate')).toBeInTheDocument();
     });
@@ -699,7 +724,8 @@ describe('ToDosPage', () => {
     it('falls back to the list arrangement when the stored value is invalid', () => {
       localStorage.setItem(ARRANGEMENT_KEY, 'bogus');
       setup();
-      expect(screen.getByRole('button', { name: 'Switch to prioritized list' })).toBeInTheDocument();
+      openOverflowMenu();
+      expect(screen.getByRole('menuitemradio', { name: 'List view' })).toHaveAttribute('aria-checked', 'true');
       expect(screen.getByText('Immediate')).toBeInTheDocument();
     });
 
@@ -840,8 +866,8 @@ describe('ToDosPage', () => {
 
       // Cycle list → matrix → grid while the drawer is open: the overlay
       // mounts and the latch engages on top of the drawer's existing lock.
-      fireEvent.click(screen.getByRole('button', { name: 'Switch to prioritized list' }));
-      fireEvent.click(screen.getByRole('button', { name: 'Switch to matrix grid' }));
+      chooseArrangement('Prioritized list');
+      chooseArrangement('2×2 grid');
       expect(screen.getByTestId('grid-overlay')).toBeInTheDocument();
 
       // Close the drawer, then exit the grid — nothing holds a lock anymore.
@@ -874,7 +900,7 @@ describe('ToDosPage', () => {
 
     it('is collapsed by default when creating a new task', () => {
       setup();
-      fireEvent.click(screen.getByRole('button', { name: 'Add new task' }));
+      openFullAddForm();
 
       expect(moreOptionsButton()).toHaveAttribute('aria-expanded', 'false');
       // The section stays mounted (so aria-controls always resolves) but is

@@ -45,19 +45,14 @@ type Arrangement = 'list' | 'matrix' | 'grid';
 const isArrangement = (value: string | null): value is Arrangement =>
   value === 'list' || value === 'matrix' || value === 'grid';
 
-// The single toggle button cycles list → matrix → grid → list. The icon always
-// previews the NEXT view (what tapping will switch to), not the current one.
-const ARRANGEMENT_CYCLE: Record<Arrangement, Arrangement> = {
-  list: 'matrix',
-  matrix: 'grid',
-  grid: 'list',
-};
-
-const ARRANGEMENT_TOGGLE: Record<Arrangement, { icon: React.ReactNode; label: string; title: string }> = {
-  list: { icon: <Rows3 size={18} />, label: 'Switch to prioritized list', title: 'Prioritized list (Eisenhower)' },
-  matrix: { icon: <Grid2x2 size={18} />, label: 'Switch to matrix grid', title: 'Matrix grid (2×2, landscape)' },
-  grid: { icon: <List size={18} />, label: 'Switch to standard list', title: 'Standard list' },
-};
+// View choices for the overflow menu — labeled radio-style items (the old
+// single cycle button previewed the NEXT view's icon, which read as mystery
+// meat). Order matches the old cycle: list → prioritized → grid.
+const ARRANGEMENT_OPTIONS: Array<{ value: Arrangement; icon: React.ReactNode; label: string }> = [
+  { value: 'list', icon: <List size={16} />, label: 'List view' },
+  { value: 'matrix', icon: <Rows3 size={16} />, label: 'Prioritized list' },
+  { value: 'grid', icon: <Grid2x2 size={16} />, label: '2×2 grid' },
+];
 
 const ToDosPage: React.FC = () => {
   const {
@@ -122,6 +117,11 @@ const ToDosPage: React.FC = () => {
   // Top-right overflow ("…") menu of secondary actions (Export, Select multiple)
   // — mirrors the Shopping list header so the two pages share one structure.
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // "More ways to add" menu next to the quick-add bar — collapses the old pair
+  // of unlabeled icon buttons (full form / templates) plus Scan a list into
+  // one labeled affordance.
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
 
   // Mobile Action Drawer State
   const [actionTodo, setActionTodo] = useState<ToDo | null>(null);
@@ -867,13 +867,18 @@ const ToDosPage: React.FC = () => {
   // (same pattern as the Shopping list). Export targets the current view;
   // Select-multiple (batch mode) is disabled in the Completed view, matching
   // the previous behaviour.
+  // View arrangement lives here as labeled radio items (replacing the old
+  // icon-cycling toggle). Choosing one persists per-device; the landscape-only
+  // grid behavior (portrait falls back to stacked quadrants) is unchanged.
   const menuItems: MenuItem[] = [
-    {
-      key: 'scan',
-      label: 'Scan a list',
-      icon: <Camera size={16} />,
-      onSelect: () => setIsPhotoImportOpen(true),
-    },
+    ...ARRANGEMENT_OPTIONS.map((option) => ({
+      key: `view-${option.value}`,
+      label: option.label,
+      icon: option.icon,
+      selected: arrangement === option.value,
+      group: 'View',
+      onSelect: () => setArrangementPersisted(option.value),
+    })),
     {
       key: 'export',
       label: 'Export CSV',
@@ -915,7 +920,8 @@ const ToDosPage: React.FC = () => {
           // without changing the visual size. Vertical only — adjacent pills
           // in the row would otherwise overlap each other's zones.
           "relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']",
-          'flex items-center px-3 py-1.5 rounded-btn border text-sm font-medium whitespace-nowrap transition-colors duration-(--duration-fast) ease-(--ease-standard)',
+          'flex items-center px-3 py-1.5 rounded-full border text-sm font-medium whitespace-nowrap transition-colors duration-(--duration-fast) ease-(--ease-standard)',
+          'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
           assigneeFilter === null
             ? 'bg-accent-600 text-white border-accent-600 dark:bg-accent-600 dark:border-accent-600'
             : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50 dark:bg-brand-700/50 dark:text-brand-200 dark:border-brand-600 dark:hover:bg-brand-700'
@@ -932,7 +938,8 @@ const ToDosPage: React.FC = () => {
           aria-pressed={assigneeFilter === member.uid}
           className={cn(
             "relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']",
-            'flex items-center gap-2 px-3 py-1.5 rounded-btn border transition-colors duration-(--duration-fast) ease-(--ease-standard) whitespace-nowrap',
+            'flex items-center gap-2 px-3 py-1.5 rounded-full border transition-colors duration-(--duration-fast) ease-(--ease-standard) whitespace-nowrap',
+            'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
             assigneeFilter === member.uid
               ? 'bg-accent-600 text-white border-accent-600 dark:bg-accent-600 dark:border-accent-600'
               : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50 dark:bg-brand-700/50 dark:text-brand-200 dark:border-brand-600 dark:hover:bg-brand-700'
@@ -951,8 +958,33 @@ const ToDosPage: React.FC = () => {
     </div>
   ) : null;
 
+  // "More ways to add" menu — Full details keeps the quick-add carry-over
+  // behavior (openAddModal seeds the form with whatever is typed in the bar).
+  const addMenuItems: MenuItem[] = [
+    {
+      key: 'details',
+      label: 'Full details',
+      icon: <SlidersHorizontal size={16} />,
+      ariaLabel: 'Add new task with full details',
+      onSelect: openAddModal,
+    },
+    {
+      key: 'template',
+      label: 'From template',
+      icon: <ClipboardList size={16} />,
+      ariaLabel: 'Add tasks from a template',
+      onSelect: () => setIsTemplateDrawerOpen(true),
+    },
+    {
+      key: 'scan',
+      label: 'Scan a list',
+      icon: <Camera size={16} />,
+      onSelect: () => setIsPhotoImportOpen(true),
+    },
+  ];
+
   const stickyQuickAdd = !isSelectionMode && effectiveArrangement !== 'grid' ? (
-    <div className="sticky top-[var(--lists-sticky-top,0px)] z-20 bg-brand-50 dark:bg-brand-900">
+    <div className="sticky top-[var(--lists-sticky-top,0px)] z-sticky bg-brand-50 dark:bg-brand-900">
       <SurfaceList>
         <div className="flex items-center gap-2">
           <QuickAddBar
@@ -967,30 +999,31 @@ const ToDosPage: React.FC = () => {
             submitLabel="Add task"
           />
 
-          {/* Task templates — one-tap creation of a bundle of recurring tasks
-              from a saved template (F-TODO-03, "Quick Task Lists"). */}
-          <button
-            type="button"
-            onClick={() => setIsTemplateDrawerOpen(true)}
-            aria-label="Task templates"
-            title="Add tasks from a template"
-            className="flex-none flex items-center justify-center p-3 rounded-btn text-brand-600 hover:text-brand-900 hover:bg-brand-100 dark:text-brand-300 dark:hover:text-brand-50 dark:hover:bg-brand-700/50 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
-          >
-            <ClipboardList className="w-5 h-5" />
-          </button>
-
-          {/* Details — opens the full form to set a custom due date / assignee /
-              importance. Retains aria-label "Add new task" so it is the page's
-              full-add entry point. */}
-          <button
-            type="button"
-            onClick={openAddModal}
-            aria-label="Add new task"
-            title="Add with date & assignee"
-            className="flex-none flex items-center justify-center p-3 mr-2 rounded-btn text-brand-600 hover:text-brand-900 hover:bg-brand-100 dark:text-brand-300 dark:hover:text-brand-50 dark:hover:bg-brand-700/50 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
-          >
-            <SlidersHorizontal className="w-5 h-5" />
-          </button>
+          {/* One labeled "More" affordance replaces the old pair of unlabeled
+              icon buttons — opens Full details / From template / Scan a list. */}
+          <div className="relative flex-none mr-2">
+            <button
+              type="button"
+              onClick={() => setAddMenuOpen((o) => !o)}
+              aria-label="More ways to add"
+              aria-haspopup="menu"
+              aria-expanded={addMenuOpen}
+              className="min-h-11 flex items-center gap-1 px-3 py-2 rounded-btn text-sm font-medium text-brand-600 hover:text-brand-900 hover:bg-brand-100 dark:text-brand-300 dark:hover:text-brand-50 dark:hover:bg-brand-700/50 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+            >
+              More
+              <ChevronDown size={16} aria-hidden="true" className={cn('transition-transform duration-(--duration-fast) ease-(--ease-standard)', addMenuOpen && 'rotate-180')} />
+            </button>
+            {addMenuOpen && (
+              <Menu
+                isOpen={addMenuOpen}
+                onClose={() => setAddMenuOpen(false)}
+                ariaLabel="More ways to add"
+                position="top-full right-0 mt-2"
+                className="min-w-[208px]"
+                items={addMenuItems}
+              />
+            )}
+          </div>
         </div>
       </SurfaceList>
     </div>
@@ -1009,29 +1042,13 @@ const ToDosPage: React.FC = () => {
             {isSelectionMode ? 'Select tasks' : 'To-dos'}
           </h2>
           {!isSelectionMode && (
-            <>
-              <Tabs value={viewMode} onValueChange={(val) => setViewMode(val as 'active' | 'completed')}>
-                {/* size="sm" (36px) was the app's only sub-44px touch target; default md keeps min-h-11. */}
-                <TabsList className="w-auto inline-flex">
-                  <TabsTrigger value="active">Active</TabsTrigger>
-                  <TabsTrigger value="completed">{completedBadge}</TabsTrigger>
-                </TabsList>
-              </Tabs>
-              {/* Arrangement toggle for the Active view — cycles list →
-                  prioritized (matrix) → 2×2 grid → list; the icon previews the
-                  NEXT view. Stays visible on the Completed tab (it flips what
-                  Active will show on return) — simpler than hiding it. */}
-              <Button
-                variant="ghost-brand"
-                size="icon"
-                onClick={() => setArrangementPersisted(ARRANGEMENT_CYCLE[arrangement])}
-                aria-label={ARRANGEMENT_TOGGLE[arrangement].label}
-                title={ARRANGEMENT_TOGGLE[arrangement].title}
-                className="shrink-0"
-              >
-                {ARRANGEMENT_TOGGLE[arrangement].icon}
-              </Button>
-            </>
+            <Tabs value={viewMode} onValueChange={(val) => setViewMode(val as 'active' | 'completed')}>
+              {/* size="sm" (36px) was the app's only sub-44px touch target; default md keeps min-h-11. */}
+              <TabsList className="w-auto inline-flex">
+                <TabsTrigger value="active">Active</TabsTrigger>
+                <TabsTrigger value="completed">{completedBadge}</TabsTrigger>
+              </TabsList>
+            </Tabs>
           )}
         </div>
         {isSelectionMode ? (
