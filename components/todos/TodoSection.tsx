@@ -1,24 +1,25 @@
 import React, { useState } from 'react';
 import { ToDo, HouseholdMember } from '@/types/schema';
 import { SurfaceList } from '@/components/ui/Section';
+import { sectionHeadingClasses } from '@/components/ui/SectionHeading';
 import { ShowMoreRow } from '@/components/ui/ShowMoreRow';
 import { type SectionColor, sectionDotColors } from './todoDisplay';
 import { TodoRow } from './TodoRow';
 
-// Moved verbatim from pages/ToDosPage.tsx (Plan 27) — used by both the list
+// Extracted from pages/ToDosPage.tsx (Plan 27) — used by both the list
 // arrangement (still in ToDosPage) and the Eisenhower matrix view
-// (components/todos/EisenhowerMatrixView.tsx).
+// (components/todos/EisenhowerMatrixView.tsx). Named TodoSection so it no
+// longer shadows the ui/Section primitive's name.
 
-export interface SectionProps {
+export interface TodoSectionProps {
   title: string;
-  subtitle: string;
   /**
-   * Render the subtitle for screen readers only. The Eisenhower quadrant
-   * sections use this: their verb titles ("Do First") already encode the
-   * urgent/important axis, so a visible caps subtitle would double-encode it —
-   * the axis still reaches assistive tech through the sr-only text.
+   * Rendered for screen readers only, inside the heading — the section titles
+   * carry the meaning visually and a visible caps subtitle would double-encode
+   * it (the Eisenhower verb titles especially). Assistive tech still hears
+   * e.g. "Do First, (Urgent & Important)" as one heading.
    */
-  subtitleSrOnly?: boolean;
+  subtitle: string;
   items: ToDo[];
   color: SectionColor;
   onComplete: (id: string) => void;
@@ -45,7 +46,7 @@ export interface SectionProps {
 // Uses a custom memo comparator: when `selectedIds` changes, re-render is skipped unless
 // at least one of this section's own items changed its selected/deselected state.
 // This prevents toggling an item in one section from re-rendering the other two sections.
-export const Section = React.memo(function Section({ title, subtitle, subtitleSrOnly, items, color, onComplete, onUncomplete, onEdit, onDelete, onMore, memberMap, isSelectionMode, selectedIds, onToggleSelection, maxVisible }: SectionProps) {
+export const TodoSection = React.memo(function TodoSection({ title, subtitle, items, color, onComplete, onUncomplete, onEdit, onDelete, onMore, memberMap, isSelectionMode, selectedIds, onToggleSelection, maxVisible }: TodoSectionProps) {
   // Show-more state for capped lists (hooks must run before the empty early-return).
   const [expanded, setExpanded] = useState(false);
 
@@ -64,21 +65,17 @@ export const Section = React.memo(function Section({ title, subtitle, subtitleSr
 
   return (
     <div className="animate-in slide-in-from-bottom-4 duration-(--duration-slow)">
-      <div className="flex items-baseline justify-between mb-2 px-1">
-        <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${sectionDotColors[color]}`}></div>
-          <h3 className="font-display text-base font-semibold text-brand-900 dark:text-brand-50 tracking-tight">
-            {title}
-            {/* Inside the heading so heading-navigation screen-reader users hear
-                "Do First, (Urgent & Important)" as one heading (review note).
-                h3: nests under ToDosPage's h2 "To-dos" (page h1 is the Plan
-                masthead in ListsPage). */}
-            {subtitleSrOnly && <span className="sr-only"> ({subtitle})</span>}
-          </h3>
-        </div>
-        {!subtitleSrOnly && (
-          <span className="text-xs font-semibold text-brand-400 dark:text-brand-450 uppercase tracking-wider">{subtitle}</span>
-        )}
+      <div className="flex items-center gap-2 mb-2 px-1">
+        <div className={`w-2 h-2 rounded-full ${sectionDotColors[color]}`}></div>
+        {/* Canonical SectionHeading voice (DESIGN.md §3). h3: nests under
+            ToDosPage's h2 "To-dos" (page h1 is the Plan masthead in
+            ListsPage). The subtitle sits inside the heading, sr-only, so
+            heading-navigation screen-reader users hear e.g. "Do First,
+            (Urgent & Important)" as one heading. */}
+        <h3 className={sectionHeadingClasses}>
+          {title}
+          <span className="sr-only"> ({subtitle})</span>
+        </h3>
       </div>
 
       <SurfaceList className="[&>*:first-child]:border-t-0 [&>*:first-child_.hairline-divider]:border-t-0">
@@ -109,7 +106,7 @@ export const Section = React.memo(function Section({ title, subtitle, subtitleSr
       </SurfaceList>
     </div>
   );
-}, (prev: SectionProps, next: SectionProps) => {
+}, (prev: TodoSectionProps, next: TodoSectionProps) => {
   // Fast-path: if the section's items array reference changed, always re-render.
   if (prev.items !== next.items) return false;
   // Check non-set props with reference equality (callbacks are stable via useCallback).
@@ -119,7 +116,6 @@ export const Section = React.memo(function Section({ title, subtitle, subtitleSr
     prev.color === next.color &&
     prev.title === next.title &&
     prev.subtitle === next.subtitle &&
-    prev.subtitleSrOnly === next.subtitleSrOnly &&
     prev.maxVisible === next.maxVisible &&
     prev.onComplete === next.onComplete &&
     prev.onUncomplete === next.onUncomplete &&

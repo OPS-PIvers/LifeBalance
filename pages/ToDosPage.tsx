@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef, useId } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Rows3, Grid2x2, List, Camera, Smartphone, Sparkles, Plus, Repeat } from 'lucide-react';
+import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Rows3, Grid2x2, List, Camera, Smartphone, Sparkles, Plus, Repeat } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { quadrantForTodo, QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhower';
@@ -22,6 +22,9 @@ import EmptyState from '@/components/ui/EmptyState';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { SurfaceList, Row } from '@/components/ui/Section';
+import SectionHeading from '@/components/ui/SectionHeading';
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
+import CountBadge from '@/components/ui/CountBadge';
 import { cn } from '@/utils/cn';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
@@ -30,7 +33,7 @@ import Textarea from '@/components/ui/Textarea';
 import BatchRescheduleModal from '@/components/modals/BatchRescheduleModal';
 import { TodoPhotoImportDrawer } from '@/components/modals/TodoPhotoImportDrawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Section } from '@/components/todos/Section';
+import { TodoSection } from '@/components/todos/TodoSection';
 import { EisenhowerMatrixView } from '@/components/todos/EisenhowerMatrixView';
 import { EisenhowerGridView } from '@/components/todos/EisenhowerGridView';
 import { TaskTemplateDrawer } from '@/components/todos/TaskTemplateDrawer';
@@ -323,12 +326,18 @@ const ToDosPage: React.FC = () => {
   // Derive completed count from already-computed buckets to avoid a fourth pass over todos.
   const completedCount = completedToday.length + completedYesterday.length + completedWeek.length + completedOlder.length;
 
+  // CountBadge primitive, restyled from its default red overlay into an inline
+  // neutral pill (it's a tab count, not a notification). The badge itself is
+  // aria-hidden, so the count also rides along as sr-only text.
   const completedBadge = (
     <span className="flex items-center gap-1.5">
         Completed
-        <span className="bg-brand-200 text-brand-700 dark:bg-brand-700 dark:text-brand-200 px-1.5 py-0.5 rounded-sm text-xs font-normal tabular-nums">
-            {completedCount}
-        </span>
+        <CountBadge
+            count={completedCount}
+            max={99}
+            className="static ml-0 rounded-sm px-1.5 bg-brand-200 text-brand-700 dark:bg-brand-700 dark:text-brand-200 text-xs font-normal tabular-nums ring-0"
+        />
+        <span className="sr-only">{completedCount} completed tasks</span>
     </span>
   );
 
@@ -1053,13 +1062,15 @@ const ToDosPage: React.FC = () => {
         </div>
         {isSelectionMode ? (
           <div className="flex items-center gap-3 shrink-0">
-            <button
+            <Button
+              variant="link"
+              size="sm"
               onClick={handleSelectAll}
-              className="text-sm text-accent-600 dark:text-accent-300 font-medium flex items-center gap-1 hover:text-accent-700 dark:hover:text-accent-200"
+              className="min-h-11 gap-1 px-2 text-accent-600 dark:text-accent-300 hover:text-accent-700 dark:hover:text-accent-200"
+              leftIcon={<CheckSquare size={14} aria-hidden="true" className={selectedIds.size === allActiveCount && allActiveCount > 0 ? 'text-accent-600 dark:text-accent-300' : 'text-brand-300 dark:text-brand-450'} />}
             >
-              <CheckSquare size={14} aria-hidden="true" className={selectedIds.size === allActiveCount && allActiveCount > 0 ? 'text-accent-600 dark:text-accent-300' : 'text-brand-300 dark:text-brand-450'} />
               {selectedIds.size === allActiveCount && allActiveCount > 0 ? 'Deselect all' : 'Select all'}
-            </button>
+            </Button>
             {/* While selecting, a visible Cancel (X) stays in the header so the
                way out is always one tap away — the overflow menu is hidden. */}
             <Button
@@ -1067,8 +1078,8 @@ const ToDosPage: React.FC = () => {
               size="icon"
               onClick={() => setIsSelectionMode(false)}
               className="bg-brand-100 border-brand-200 dark:bg-brand-700 dark:border-brand-600"
-              title="Cancel Selection"
-              aria-label="Cancel Selection"
+              title="Cancel selection"
+              aria-label="Cancel selection"
             >
               <X size={20} />
             </Button>
@@ -1116,7 +1127,7 @@ const ToDosPage: React.FC = () => {
             {/* Immediate Section — Overdue, Today & Tomorrow. Quick-add now lives
                 in the sticky card above (not row one of this section), so an
                 empty Immediate section collapses away entirely. */}
-            <Section
+            <TodoSection
                 title="Immediate"
                 subtitle="Overdue, Today & Tomorrow"
                 items={immediate}
@@ -1133,7 +1144,7 @@ const ToDosPage: React.FC = () => {
             />
 
             {/* Upcoming Section */}
-            <Section
+            <TodoSection
                 title="Upcoming"
                 subtitle="This Week"
                 items={upcoming}
@@ -1151,7 +1162,7 @@ const ToDosPage: React.FC = () => {
             />
 
             {/* On The Radar Section */}
-            <Section
+            <TodoSection
                 title="On the Radar"
                 subtitle="Future"
                 items={radar}
@@ -1225,41 +1236,37 @@ const ToDosPage: React.FC = () => {
           /* Completed View */
           <>
             <CompletedSection
-                title="Completed Today"
+                title="Completed today"
                 items={completedToday}
                 onUncomplete={handleUncomplete}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
-                onMore={setActionTodo}
                 memberMap={memberMap}
             />
             <CompletedSection
-                title="Completed Yesterday"
+                title="Completed yesterday"
                 items={completedYesterday}
                 onUncomplete={handleUncomplete}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
-                onMore={setActionTodo}
                 memberMap={memberMap}
             />
             <CompletedSection
-                title="This Week"
+                title="This week"
                 items={completedWeek}
                 defaultCollapsed
                 onUncomplete={handleUncomplete}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
-                onMore={setActionTodo}
                 memberMap={memberMap}
             />
             <CompletedSection
-                title="Older History"
+                title="Older"
                 items={completedOlder}
                 defaultCollapsed
                 onUncomplete={handleUncomplete}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
-                onMore={setActionTodo}
                 memberMap={memberMap}
             />
 
@@ -1290,9 +1297,12 @@ const ToDosPage: React.FC = () => {
 
       {/* Floating Action Bar (FAB) for Batch Actions */}
       {isSelectionMode && selectedIds.size > 0 && (
-        <div className="fixed bottom-24 left-0 right-0 px-4 md:px-0 flex justify-center z-50 pointer-events-none">
+        /* Same offset/z recipe as TransactionMasterList's batch bar: clears the
+           bottom nav (+ home-indicator inset) and sits at z-dropdown — above
+           the z-sticky nav, below drawers/modals. */
+        <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] left-0 right-0 px-4 flex justify-center z-dropdown pointer-events-none">
           <div className="bg-brand-900 dark:bg-brand-800 text-white p-2 rounded-card shadow-raised border border-brand-700 flex items-center gap-2 pointer-events-auto animate-in slide-in-from-bottom-4">
-            <div className="px-3 font-semibold text-sm border-r border-white/10">
+            <div className="px-3 font-semibold text-sm border-r border-brand-700 dark:border-brand-600">
               {selectedIds.size} selected
             </div>
 
@@ -1619,9 +1629,9 @@ const ToDosPage: React.FC = () => {
         isOpen={showBatchDeleteConfirm}
         onClose={() => !isBatchProcessing && setShowBatchDeleteConfirm(false)}
         onConfirm={handleBatchDelete}
-        title="Batch Delete"
+        title="Delete tasks"
         message={`Are you sure you want to delete ${selectedIds.size} task${selectedIds.size !== 1 ? 's' : ''}? This action cannot be undone.`}
-        confirmLabel={isBatchProcessing ? 'Deleting…' : 'Delete All'}
+        confirmLabel={isBatchProcessing ? 'Deleting…' : 'Delete all'}
         confirmVariant="destructive"
         isConfirming={isBatchProcessing}
       />
@@ -1734,14 +1744,93 @@ const ToDosPage: React.FC = () => {
   );
 };
 
-// Sub-component for completed items
-const CompletedSection = React.memo(function CompletedSection({ title, items, onUncomplete, onDelete, onDuplicate, onMore, memberMap, defaultCollapsed = false }: {
+// A single completed to-do row on the shared Row primitive. Completed rows are
+// rare and terminal, so their two actions (duplicate, delete forever) stay
+// VISIBLE as small icon buttons — no hover-reveal (mobile-only app), no
+// gesture layer, no options-drawer indirection. Restore is the leading
+// RotateCcw circle, mirroring the active row's complete circle.
+const CompletedTodoRow = React.memo(function CompletedTodoRow({ item, assignee, onUncomplete, onDelete, onDuplicate }: {
+  item: ToDo;
+  assignee: HouseholdMember | undefined;
+  onUncomplete: (id: string) => void;
+  onDelete: (id: string) => void;
+  onDuplicate: (todo: ToDo) => void;
+}) {
+    const completedDate = item.completedAt ? parseISO(item.completedAt) : null;
+    return (
+        <Row className="items-start">
+            <HapticCheck
+                checked={true}
+                onCheckedChange={() => onUncomplete(item.id)}
+                className="mt-0.5 shrink-0"
+                aria-label={`Mark as incomplete: ${item.text}`}
+            >
+                <span
+                    title="Mark as incomplete"
+                    className="w-6 h-6 rounded-full border-2 border-brand-300 bg-brand-50 text-brand-400 flex items-center justify-center hover:bg-brand-100 hover:text-accent-600 transition-colors dark:border-brand-600 dark:bg-brand-700/50 dark:text-brand-400 dark:hover:bg-brand-700 dark:hover:text-accent-300"
+                >
+                    <RotateCcw size={14} />
+                </span>
+            </HapticCheck>
+
+            <div className="flex-1 min-w-0">
+                <p className="text-brand-500 dark:text-brand-400 line-through decoration-brand-300 dark:decoration-brand-600">{item.text}</p>
+                <div className="flex items-center gap-3 mt-1 text-xs text-brand-400 dark:text-brand-450">
+                    {completedDate && (
+                        <span className="flex items-center gap-1">
+                            <Check size={10} />
+                            {format(completedDate, 'MMM d, h:mm a')}
+                        </span>
+                    )}
+                    {assignee && (
+                         <span className="flex items-center gap-1">
+                            <User size={10} />
+                            {assignee.displayName?.split(' ')[0]}
+                         </span>
+                    )}
+                </div>
+            </div>
+
+            <div className="flex items-center gap-1 shrink-0">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onDuplicate(item)}
+                    className="min-w-11 min-h-11 text-brand-400 hover:text-accent-600 hover:bg-accent-50 dark:text-brand-450 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
+                    title="Duplicate task"
+                    aria-label={`Duplicate task: ${item.text}`}
+                >
+                    <Copy size={16} />
+                </Button>
+                <Button
+                    variant="ghost-destructive"
+                    size="icon"
+                    onClick={() => showDeleteConfirmation(async () => {
+                        haptic('medium');
+                        await onDelete(item.id);
+                        toast.success('Task deleted');
+                    })}
+                    className="min-w-11 min-h-11"
+                    title="Delete forever"
+                    aria-label={`Delete forever: ${item.text}`}
+                >
+                    <Trash2 size={16} />
+                </Button>
+            </div>
+        </Row>
+    );
+});
+
+// Date-bucketed group of completed to-dos. Recent buckets get the canonical
+// SectionHeading voice (serif, sentence case — a content grouping per
+// DESIGN.md §3); older buckets reuse the shared CollapsibleSection primitive
+// (same heading spec) with the item count as its collapsed summary.
+const CompletedSection = React.memo(function CompletedSection({ title, items, onUncomplete, onDelete, onDuplicate, memberMap, defaultCollapsed = false }: {
   title: string;
   items: ToDo[];
   onUncomplete: (id: string) => void;
   onDelete: (id: string) => void;
   onDuplicate: (todo: ToDo) => void;
-  onMore: (todo: ToDo) => void;
   /** Pre-built member lookup map from page level — avoids rebuilding per-section. */
   memberMap: ReadonlyMap<string, HouseholdMember>;
   /**
@@ -1750,134 +1839,40 @@ const CompletedSection = React.memo(function CompletedSection({ title, items, on
    */
   defaultCollapsed?: boolean;
 }) {
-    // Toggle state for collapsible buckets (hooks must run before the empty early-return).
-    const [expanded, setExpanded] = useState(!defaultCollapsed);
-    const contentId = useId();
-
     if (items.length === 0) return null;
 
-    // The prop is constant per call site, so it safely decides whether the
-    // header renders as a toggle button or the plain always-expanded title.
-    const collapsible = defaultCollapsed;
+    const rows = (
+        <SurfaceList>
+            {items.map(item => (
+                <CompletedTodoRow
+                    key={item.id}
+                    item={item}
+                    assignee={memberMap.get(item.assignedTo)}
+                    onUncomplete={onUncomplete}
+                    onDelete={onDelete}
+                    onDuplicate={onDuplicate}
+                />
+            ))}
+        </SurfaceList>
+    );
 
     return (
         <div className="animate-in slide-in-from-bottom-4 duration-(--duration-slow)">
-            <div className="flex items-center gap-2 mb-2 px-1">
-                {collapsible ? (
-                    <h3 className="min-w-0">
-                        <button
-                            type="button"
-                            onClick={() => setExpanded(v => !v)}
-                            aria-expanded={expanded}
-                            aria-controls={contentId}
-                            className="flex min-h-11 items-center gap-1.5 text-xs font-semibold text-brand-400 dark:text-brand-450 uppercase tracking-wider hover:text-brand-600 dark:hover:text-brand-300 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-sm"
-                        >
-                            {title}
-                            <span className="tabular-nums">({items.length})</span>
-                            <ChevronDown
-                                size={14}
-                                aria-hidden="true"
-                                className={cn(
-                                    'shrink-0 transition-transform duration-(--duration-base) ease-(--ease-standard)',
-                                    expanded && 'rotate-180'
-                                )}
-                            />
-                        </button>
-                    </h3>
-                ) : (
-                    <h3 className="text-xs font-semibold text-brand-400 dark:text-brand-450 uppercase tracking-wider">{title}</h3>
-                )}
-                <div className="h-px bg-brand-200 dark:bg-brand-700 flex-1"></div>
-            </div>
-
-            {(!collapsible || expanded) && (
-            <SurfaceList
-                id={contentId}
-                className={collapsible ? 'animate-in fade-in slide-in-from-top-2 duration-(--duration-base)' : undefined}
-            >
-                {items.map(item => {
-                    const assignee = memberMap.get(item.assignedTo);
-                    const completedDate = item.completedAt ? parseISO(item.completedAt) : null;
-
-                    return (
-                        <Row
-                            key={item.id}
-                            className="group items-start"
-                        >
-                            <HapticCheck
-                                checked={true}
-                                onCheckedChange={() => onUncomplete(item.id)}
-                                className="mt-0.5 shrink-0"
-                                aria-label={`Mark as incomplete: ${item.text}`}
-                            >
-                                <span
-                                    title="Mark as incomplete"
-                                    className="w-6 h-6 rounded-full border-2 border-brand-300 bg-brand-50 text-brand-400 flex items-center justify-center hover:bg-brand-100 hover:text-accent-600 transition-colors dark:border-brand-600 dark:bg-brand-700/50 dark:text-brand-400 dark:hover:bg-brand-700 dark:hover:text-accent-300"
-                                >
-                                    <RotateCcw size={14} />
-                                </span>
-                            </HapticCheck>
-
-                            <div className="flex-1 min-w-0">
-                                <p className="text-brand-500 dark:text-brand-400 line-through decoration-brand-300 dark:decoration-brand-600">{item.text}</p>
-                                <div className="flex items-center gap-3 mt-1 text-xs text-brand-400 dark:text-brand-450">
-                                    {completedDate && (
-                                        <span className="flex items-center gap-1">
-                                            <Check size={10} />
-                                            {format(completedDate, 'MMM d, h:mm a')}
-                                        </span>
-                                    )}
-                                    {assignee && (
-                                         <span className="flex items-center gap-1">
-                                            <User size={10} />
-                                            {assignee.displayName?.split(' ')[0]}
-                                         </span>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Desktop Actions */}
-                            <div className="hidden sm:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Button
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    onClick={() => onDuplicate(item)}
-                                    className="text-brand-400 hover:text-accent-600 hover:bg-accent-50 dark:text-brand-450 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
-                                    title="Duplicate task"
-                                    aria-label={`Duplicate task: ${item.text}`}
-                                >
-                                    <Copy size={14} />
-                                </Button>
-                                <Button
-                                    variant="ghost-destructive"
-                                    size="icon-sm"
-                                    onClick={() => showDeleteConfirmation(async () => {
-                                        haptic('medium');
-                                        await onDelete(item.id);
-                                        toast.success('Task deleted');
-                                    })}
-                                    title="Delete forever"
-                                    aria-label={`Delete forever: ${item.text}`}
-                                >
-                                    <Trash2 size={14} />
-                                </Button>
-                            </div>
-                            {/* Mobile Actions */}
-                            <div className="flex sm:hidden">
-                               <Button
-                                 variant="ghost"
-                                 size="icon"
-                                 onClick={(e) => { e.stopPropagation(); onMore(item); }}
-                                 className="text-brand-300 hover:text-accent-600 active:text-accent-800 active:bg-accent-50 dark:text-brand-450 dark:hover:text-brand-300 dark:active:bg-brand-700/50"
-                                 aria-label={`More options for: ${item.text}`}
-                               >
-                                 <MoreVertical size={20} />
-                               </Button>
-                            </div>
-                        </Row>
-                    );
-                })}
-            </SurfaceList>
+            {defaultCollapsed ? (
+                <CollapsibleSection title={title} summary={items.length}>
+                    {rows}
+                </CollapsibleSection>
+            ) : (
+                <>
+                    <SectionHeading
+                        as="h3"
+                        className="px-1 mb-1.5"
+                        action={<span className="text-xs tabular-nums text-brand-500 dark:text-brand-400">{items.length}</span>}
+                    >
+                        {title}
+                    </SectionHeading>
+                    {rows}
+                </>
             )}
         </div>
     );

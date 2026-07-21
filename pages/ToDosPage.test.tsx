@@ -259,7 +259,7 @@ describe('ToDosPage', () => {
       // Should show "Select all" button
       expect(screen.getByText('Select all')).toBeInTheDocument();
       // Should show the visible Cancel control
-      expect(screen.getByLabelText('Cancel Selection')).toBeInTheDocument();
+      expect(screen.getByLabelText('Cancel selection')).toBeInTheDocument();
     });
 
     it('selects all items', () => {
@@ -310,7 +310,7 @@ describe('ToDosPage', () => {
       expect(screen.getByText(/Are you sure you want to delete/)).toBeInTheDocument();
 
       // Click Confirm Delete
-      fireEvent.click(screen.getByText('Delete All'));
+      fireEvent.click(screen.getByText('Delete all'));
 
       await waitFor(() => {
         expect(mockDeleteToDo).toHaveBeenCalledTimes(2);
@@ -562,7 +562,7 @@ describe('ToDosPage', () => {
       expect(screen.getByText('7 selected')).toBeInTheDocument();
     });
 
-    it('collapses This Week and Older History by default while Completed Today stays expanded', () => {
+    it('collapses This week and Older by default while Completed today stays expanded', () => {
       vi.useFakeTimers();
       try {
         // Friday, June 19 2026 — guarantees a "this week but not today/yesterday" slot.
@@ -607,15 +607,15 @@ describe('ToDosPage', () => {
         expect(screen.queryByText('Done Tuesday')).not.toBeInTheDocument();
         expect(screen.queryByText('Done Long Ago')).not.toBeInTheDocument();
 
-        // Expanding This Week reveals its rows.
-        const weekToggle = screen.getByRole('button', { name: /This Week/ });
+        // Expanding This week reveals its rows.
+        const weekToggle = screen.getByRole('button', { name: /This week/ });
         expect(weekToggle).toHaveAttribute('aria-expanded', 'false');
         fireEvent.click(weekToggle);
         expect(weekToggle).toHaveAttribute('aria-expanded', 'true');
         expect(screen.getByText('Done Tuesday')).toBeInTheDocument();
 
-        // Older History expands independently.
-        fireEvent.click(screen.getByRole('button', { name: /Older History/ }));
+        // Older expands independently.
+        fireEvent.click(screen.getByRole('button', { name: /Older/ }));
         expect(screen.getByText('Done Long Ago')).toBeInTheDocument();
       } finally {
         vi.useRealTimers();
