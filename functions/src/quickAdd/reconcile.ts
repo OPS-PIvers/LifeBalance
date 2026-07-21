@@ -60,15 +60,22 @@ export interface ReconcileCandidate {
    *  card into a stub belonging to a different card. */
   accountId?: string;
   /** True if this row was ITSELF created from a bank-notification capture.
-   *  Used only by {@link pickDuplicateShortcutRow}: a bank-notification
-   *  duplicate is only ever merged INTO a NON-bank capture (the Apple Pay
-   *  "Transaction" automation row), never into another bank-notification row —
-   *  otherwise two genuinely-separate identical purchases captured via the
-   *  bank-only shortcut would collapse into one and lose spend data. */
+   *  Read by the two cross-source dedup pickers with INVERTED guards:
+   *  {@link pickDuplicateShortcutRow} (forward path — bank arrives second)
+   *  only merges INTO a NON-bank capture (the Apple Pay "Transaction" row),
+   *  skipping candidates that are already bank rows; {@link pickReverseDuplicateRow}
+   *  (reverse path — bank arrived first) requires the candidate IS a bank row.
+   *  Either way a bank-notification row is never folded into another
+   *  bank-notification row — otherwise two genuinely-separate identical
+   *  purchases captured via the bank-only shortcut would collapse into one and
+   *  lose spend data. */
   fromBankNotification?: boolean;
 }
 
-/** The incoming bank-notification event, already parsed/normalized. */
+/** The incoming capture, already parsed/normalized. Depending on the call site
+ *  this is either a bank-notification event (the stub-fill and forward-dup paths)
+ *  or a non-bank Apple Pay "Transaction" capture (the reverse-dup path) — the
+ *  shape is identical, only the merge DIRECTION differs. */
 export interface IncomingExpense {
   amount: number;
   merchant: string;
@@ -236,6 +243,96 @@ export function buildDuplicateMergeUpdates(
   target: ReconcileCandidate,
 ): Record<string, unknown> {
   const updates: Record<string, unknown> = {};
+  if (incoming.accountId && !target.accountId) {
+    updates.accountId = incoming.accountId;
+  }
+  return updates;
+}
+
+/**
+ * Mirror of {@link pickDuplicateShortcutRow} for the REVERSE capture ordering.
+ *
+ * {@link pickDuplicateShortcutRow} only fires when the bank push arrives SECOND
+ * (an Apple Pay "Transaction" row is already on file). When the bank push lands
+ * FIRST it becomes a `fromBankNotification: true` real-amount row, and the Apple
+ * Pay automation then reports the SAME purchase moments later under a cleaner
+ * merchant string ("Target" vs the bank's "TARGET T-2189"). That pair is again
+ * only `'possible'` to the shared identity check (both captures are usually
+ * untagged), so without this a second row would survive. This picks the existing
+ * bank-notification row the INCOMING non-bank capture should fold into, or `null`
+ * to write a new row.
+ *
+ * Money-safety is identical to the forward path (never over-merge two genuinely
+ * separate purchases) — only the cross-source direction is flipped:
+ *  - Only a NON-stub candidate is eligible (stubs are pickFillTarget's job).
+ *  - Only a candidate that IS itself from a bank notification is eligible — the
+ *    merge must be cross-source (bank row ← Apple Pay capture), the mirror of the
+ *    forward path's non-bank requirement. This keeps two real identical purchases
+ *    captured via the bank-only shortcut from collapsing into one.
+ *  - Account must not conflict (a different tagged card ⇒ a different purchase).
+ *  - Amount must match to the cent and the merchant must be {@link merchantSimilar}.
+ *  - EXACTLY ONE candidate must qualify. Zero → new row; two or more → ambiguous,
+ *    so we under-merge (new row the user reconciles) rather than guess.
+ *
+ * The caller invokes this ONLY for a non-bank (Apple Pay) incoming capture, so
+ * the surviving row ends up being the Apple Pay capture's data (see
+ * {@link buildReverseDuplicateMergeUpdates}) — the same invariant the forward
+ * path preserves, since the bank descriptor is the uglier of the two.
+ */
+export function pickReverseDuplicateRow(
+  incoming: IncomingExpense,
+  candidates: readonly ReconcileCandidate[],
+): ReconcileCandidate | null {
+  const eligible = candidates.filter((c) => {
+    // Stubs are pickFillTarget's domain — never absorb one here.
+    if (c.needsAmount || c.amount === 0) return false;
+    // Only merge an Apple Pay capture INTO a bank-notification row (the exact
+    // mirror of pickDuplicateShortcutRow's `!c.fromBankNotification` guard).
+    if (!c.fromBankNotification) return false;
+    // A different tagged card means a different purchase.
+    if (incoming.accountId && c.accountId && c.accountId !== incoming.accountId) {
+      return false;
+    }
+    if (amountCents(c.amount) !== amountCents(incoming.amount)) return false;
+    return merchantSimilar(c.merchant, incoming.merchant);
+  });
+  return eligible.length === 1 ? (eligible[0] ?? null) : null;
+}
+
+/**
+ * Build the Firestore patch that folds an incoming non-bank Apple Pay capture
+ * INTO the existing bank-notification row chosen by {@link pickReverseDuplicateRow},
+ * rewriting that row so it becomes the Apple Pay capture — exactly one row
+ * survives and it carries the Apple Pay data.
+ *
+ * Unlike {@link buildDuplicateMergeUpdates} (where the surviving row was ALREADY
+ * the Apple Pay capture, so it kept its data untouched), the surviving document
+ * here is the BANK row, so we:
+ *  - overwrite its merchant with the incoming Apple Pay descriptor ("Target"
+ *    beats the bank's store-numbered "TARGET T-2189"), and
+ *  - clear the `fromBankNotification` flag so the row now reads as the Apple Pay
+ *    capture — preserving the forward path's invariant that the Apple Pay capture
+ *    is the surviving row (and letting a later stray bank notification for the
+ *    same purchase fold in via {@link pickDuplicateShortcutRow} rather than add a
+ *    third row).
+ *
+ * The amount is left untouched (pickReverseDuplicateRow guaranteed an exact-cent
+ * match). The resolved account is back-filled only when the bank row was captured
+ * untagged — a bank-resolved account (from the card last-4) is more reliable than
+ * an untagged Apple Pay capture, so it is never clobbered. Category is overwritten
+ * only when the incoming capture carries a non-default one.
+ */
+export function buildReverseDuplicateMergeUpdates(
+  incoming: IncomingExpense,
+  target: ReconcileCandidate,
+): Record<string, unknown> {
+  const updates: Record<string, unknown> = {
+    merchant: incoming.merchant,
+    fromBankNotification: false,
+  };
+  if (incoming.category && incoming.category !== "Uncategorized") {
+    updates.category = incoming.category;
+  }
   if (incoming.accountId && !target.accountId) {
     updates.accountId = incoming.accountId;
   }
