@@ -100,6 +100,17 @@ export const TodoRow = React.memo(function TodoRow({
     }
   };
 
+  // If the row unmounts with a long-press pending (todo deleted elsewhere,
+  // filter change, navigation), the timer would still fire onMore against
+  // stale state — clear it on unmount.
+  React.useEffect(() => {
+    return () => {
+      if (longPressTimer.current !== null) {
+        window.clearTimeout(longPressTimer.current);
+      }
+    };
+  }, []);
+
   const handlePointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return; // primary button / touch contact only
     pressOrigin.current = { x: e.clientX, y: e.clientY };
@@ -193,6 +204,62 @@ export const TodoRow = React.memo(function TodoRow({
     }
   };
 
+  // Meta line (urgency date/time, reminder bell, details dot, assignee) —
+  // rendered in BOTH selection and normal modes so bulk-select doesn't hide
+  // the row's status; in normal mode it doubles as the button's
+  // aria-describedby target via metaId.
+  const metaLine = (
+    <span id={metaId} className="flex flex-wrap items-center gap-3 mt-1.5 text-xs">
+      {/* Single primary status signal: urgency-colored text, not a bordered pill. */}
+      {isOverdue ? (
+        <span className="flex items-center gap-1 font-semibold text-money-neg dark:text-money-negDark">
+          <AlertCircle size={11} />
+          Overdue ({format(dueDate, 'MMM d')}{dueTimeLabel ? ` · ${dueTimeLabel}` : ''})
+        </span>
+      ) : (
+        <span className={`flex items-center gap-1 font-semibold ${dateColorMap[color]}`}>
+          <Clock size={11} />
+          {isToday(dueDate) ? 'Today' :
+           isTomorrow(dueDate) ? 'Tomorrow' :
+           format(dueDate, 'MMM d')}
+          {dueTimeLabel && ` · ${dueTimeLabel}`}
+          {hasReminder && (
+            <span title="Reminder set">
+              <Bell size={11} aria-hidden="true" />
+              <span className="sr-only">Reminder set</span>
+            </span>
+          )}
+        </span>
+      )}
+
+      {/* Quiet "has details" indicator — notes, subtasks, or recurrence
+          live in the edit drawer; the dot just signals there's more. */}
+      {hasDetails && (
+        <span className="text-brand-300 dark:text-brand-500" data-testid="todo-details-dot">
+          <span aria-hidden="true">•</span>
+          <span className="sr-only">Has details</span>
+        </span>
+      )}
+
+      {assignee && (
+        assignee.photoURL ? (
+          <img
+            src={assignee.photoURL}
+            className="w-4 h-4 rounded-full"
+            alt={assignee.displayName ?? 'Task assignee'}
+          />
+        ) : (
+          /* SVG aria-label is unreliable across AT — hide the icon and carry
+             the assignee name in a sibling sr-only span instead. */
+          <span className="text-brand-400 dark:text-brand-500" title={assignee.displayName ?? 'Task assignee'}>
+            <User size={12} aria-hidden="true" />
+            <span className="sr-only">{assignee.displayName ?? 'Task assignee'}</span>
+          </span>
+        )
+      )}
+    </span>
+  );
+
   const cardInner = (
     <Row
       onClick={() => isSelectionMode && onToggleSelection(item.id)}
@@ -241,6 +308,7 @@ export const TodoRow = React.memo(function TodoRow({
           <p className="font-medium leading-snug text-inherit">
             <span className={isSelected ? 'text-accent-800 dark:text-accent-200' : 'text-brand-900 dark:text-brand-50'}>{item.text}</span>
           </p>
+          {metaLine}
         </div>
       ) : (
         /* Row body — TAP = edit drawer, LONG-PRESS / context-menu = options
@@ -266,47 +334,7 @@ export const TodoRow = React.memo(function TodoRow({
               so AT still announces urgency/reminder/details/assignee — an
               explicit aria-label on the button would otherwise remove this
               whole subtree from the accessibility tree. */}
-          <span id={metaId} className="flex flex-wrap items-center gap-3 mt-1.5 text-xs">
-            {/* Single primary status signal: urgency-colored text, not a bordered pill. */}
-            {isOverdue ? (
-              <span className="flex items-center gap-1 font-semibold text-money-neg dark:text-money-negDark">
-                <AlertCircle size={11} />
-                Overdue ({format(dueDate, 'MMM d')}{dueTimeLabel ? ` · ${dueTimeLabel}` : ''})
-              </span>
-            ) : (
-              <span className={`flex items-center gap-1 font-semibold ${dateColorMap[color]}`}>
-                <Clock size={11} />
-                {isToday(dueDate) ? 'Today' :
-                 isTomorrow(dueDate) ? 'Tomorrow' :
-                 format(dueDate, 'MMM d')}
-                {dueTimeLabel && ` · ${dueTimeLabel}`}
-                {hasReminder && <Bell size={11} aria-label="Reminder set" />}
-              </span>
-            )}
-
-            {/* Quiet "has details" indicator — notes, subtasks, or recurrence
-                live in the edit drawer; the dot just signals there's more. */}
-            {hasDetails && (
-              <span className="text-brand-300 dark:text-brand-500" data-testid="todo-details-dot">
-                <span aria-hidden="true">•</span>
-                <span className="sr-only">Has details</span>
-              </span>
-            )}
-
-            {assignee && (
-              assignee.photoURL ? (
-                <img
-                  src={assignee.photoURL}
-                  className="w-4 h-4 rounded-full"
-                  alt={assignee.displayName ?? 'Task assignee'}
-                />
-              ) : (
-                <span className="text-brand-400 dark:text-brand-500" title={assignee.displayName ?? 'Task assignee'}>
-                  <User size={12} aria-label={assignee.displayName ?? 'Task assignee'} />
-                </span>
-              )
-            )}
-          </span>
+          {metaLine}
         </button>
       )}
     </Row>
