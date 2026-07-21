@@ -141,6 +141,22 @@ function resolveYyMmDd(token: string): string | null {
   return ymd(d);
 }
 
+/**
+ * Scan an ACH descriptor for isolated 6-digit runs and return the yyyy-MM-dd
+ * for the FIRST one that validates as a YYMMDD calendar date (e.g. an
+ * invoice/reference number that happens to be 6 digits, like "123456", is
+ * skipped in favor of a later valid one like "260718").
+ */
+function firstValidYyMmDdInDescriptor(descriptor: string): string | null {
+  const tokens = descriptor.match(/(?<!\d)\d{6}(?!\d)/g);
+  if (!tokens) return null;
+  for (const token of tokens) {
+    const resolved = resolveYyMmDd(token);
+    if (resolved) return resolved;
+  }
+  return null;
+}
+
 function ymd(d: Date): string {
   const y = d.getUTCFullYear();
   const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
@@ -162,35 +178,96 @@ function fnv1a(input: string): string {
   return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
-function synthRef(date: string, amount: number, descriptor: string): string {
+/**
+ * Build a deterministic synth: ref for an ACH/biller line. Within a single
+ * parse call, `counts` tracks how many withdrawals have already produced the
+ * same date|amount|descriptor key: the first occurrence hashes the bare key
+ * (so a normal re-parse of the same email is stable), and the second-and-
+ *-later occurrences fold in an explicit occurrence index so two distinct
+ * same-day, same-amount, same-descriptor charges in one email still get
+ * distinct refs.
+ */
+function synthRef(
+  date: string,
+  amount: number,
+  descriptor: string,
+  counts: Map<string, number>
+): string {
   const normalized = descriptor.trim().toUpperCase().replace(/\s+/g, " ");
-  return `synth:${fnv1a(`${date}|${amount.toFixed(2)}|${normalized}`)}`;
+  const baseKey = `${date}|${amount.toFixed(2)}|${normalized}`;
+  const occurrence = (counts.get(baseKey) ?? 0) + 1;
+  counts.set(baseKey, occurrence);
+  const hashInput = occurrence === 1 ? baseKey : `${baseKey}|${occurrence}`;
+  return `synth:${fnv1a(hashInput)}`;
 }
 
 const ACCOUNT_LAST4_RE = /for account\s*\.{2,3}\s*(\d{4})/i;
 
 // "Available balance1: $1,165.82" — a superscript footnote digit (1) can be
 // glued onto the label by HTML-stripping, so the label match tolerates a
-// trailing digit before the colon.
-const ENDING_BALANCE_RE = /ending balance\s*\d*\s*:\s*\$\s*([\d,]+\.\d{2})/i;
-const AVAILABLE_BALANCE_RE = /available balance\s*\d*\s*:\s*\$\s*([\d,]+\.\d{2})/i;
+// trailing digit before the colon. Also tolerates the three common negative
+// forms a bank might render an overdrawn balance in: "-$45.23", "$-45.23",
+// and "($45.23)" (parens imply negative with no explicit minus sign).
+const ENDING_BALANCE_RE = /ending balance\s*\d*\s*:\s*(\()?(-)?\$\s*(-)?([\d,]+\.\d{2})\)?/i;
+const AVAILABLE_BALANCE_RE = /available balance\s*\d*\s*:\s*(\()?(-)?\$\s*(-)?([\d,]+\.\d{2})\)?/i;
+
+/** Resolve one of the ENDING/AVAILABLE_BALANCE_RE matches to a signed decimal-dollar amount. */
+function toSignedDollars(match: RegExpMatchArray): number {
+  const [, openParen, sign1, sign2, digits] = match;
+  if (!digits) return NaN;
+  const negative = openParen === "(" || sign1 === "-" || sign2 === "-";
+  const value = toDollars(digits);
+  return negative ? -value : value;
+}
 
 // "As of 07/21/2026 at 01:50 a.m., Central Time"
 const AS_OF_RE = /as of\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i;
 
-// Card-purchase line, e.g.
-// "PURCHASE AUTHORIZED ON 07/20 TARGET T-2189 Minneapolis MN
-//  P000000551051569 CARD 2115" then (possibly on the next line) "$18.86".
-// The WF reference token is P or S followed by 9-18 digits.
-const CARD_PURCHASE_RE =
-  /PURCHASE AUTHORIZED ON\s+(\d{1,2}\/\d{1,2})\s+([\s\S]+?)\s+([PS]\d{9,18})\s+CARD\s+(\d{4})\s*\n?\s*\$\s*([\d,]+\.\d{2})/gi;
+// Card-purchase line item, e.g. (after logical-line joining, see
+// splitLogicalLineItems below):
+// "PURCHASE AUTHORIZED ON 07/20 TARGET T-2189 Minneapolis MN P000000551051569 CARD 2115 $18.86"
+// Wells Fargo also renders recurring charges with a different lead verb:
+// "RECURRING PAYMENT AUTHORIZED ON 07/01 NETFLIX.COM P000000551051570 CARD 2115 $15.99"
+// The WF reference token is P or S followed by 9-18 digits. Anchored to the
+// full (already-joined) line so it can never span two logical line items.
+const CARD_LINE_RE =
+  /^(?:PURCHASE|RECURRING PAYMENT) AUTHORIZED ON\s+(\d{1,2}\/\d{1,2})\s+(.+?)\s+([PS]\d{9,18})\s+CARD\s+(\d{4})\s*\$\s*([\d,]+\.\d{2})$/i;
 
-// ACH/biller line with no CARD/ref token, e.g.
+// ACH/biller line item with no CARD/ref token, e.g.
 // "AMERICAN EXPRESS ACH PMT 260720 M6486 JENNIFER IVERS $372.00"
 // "COMCAST-XFINITY CABLE SVCS 260718 0078881 JENNIFER *KING $153.95"
-// Anchored to line start so it never re-matches a card-purchase line (those
-// are consumed first and stripped — see parseBankEmail below).
-const ACH_LINE_RE = /^\s*([A-Z][^\n$]*?)\s*\n?\s*\$\s*([\d,]+\.\d{2})\s*$/gim;
+// Anchored to the full line so it never partially matches a card line (those
+// are tried first — see classifyLineItem below).
+const ACH_LINE_RE = /^([A-Z][^$]*?)\s*\$\s*([\d,]+\.\d{2})$/i;
+
+/**
+ * Split the Withdrawals section into logical line items: each item is one
+ * withdrawal's full text, joining a wrapped descriptor line with a following
+ * amount-only line (the HTML table-cell rendering can put the amount on its
+ * own line) but never merging two DIFFERENT withdrawals together. A line is
+ * "complete" once it ends in a dollar amount; anything left over with no
+ * trailing amount is still returned as its own (unclassifiable) item so the
+ * caller can report it rather than silently dropping it.
+ */
+function splitLogicalLineItems(section: string): string[] {
+  const lines = section
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+
+  const items: string[] = [];
+  let buffer = "";
+  const trailingAmount = /\$\s*[\d,]+\.\d{2}\s*$/;
+  for (const line of lines) {
+    buffer = buffer ? `${buffer} ${line}` : line;
+    if (trailingAmount.test(buffer)) {
+      items.push(buffer);
+      buffer = "";
+    }
+  }
+  if (buffer) items.push(buffer);
+  return items;
+}
 
 /**
  * Parse a Wells Fargo nightly "account update" email into structured
@@ -212,11 +289,11 @@ export function parseBankEmail(input: BankEmailParseInput): BankEmailParseResult
 
   const endingMatch = text.match(ENDING_BALANCE_RE);
   const availableMatch = text.match(AVAILABLE_BALANCE_RE);
-  if (!endingMatch?.[1] || !availableMatch?.[1]) {
+  if (!endingMatch?.[4] || !availableMatch?.[4]) {
     return { error: "Could not find the Balance summary (Ending balance / Available balance)." };
   }
-  const endingBalance = toDollars(endingMatch[1]);
-  const availableBalance = toDollars(availableMatch[1]);
+  const endingBalance = toSignedDollars(endingMatch);
+  const availableBalance = toSignedDollars(availableMatch);
 
   let asOf: string | undefined;
   const asOfMatch = text.match(AS_OF_RE);
@@ -228,63 +305,83 @@ export function parseBankEmail(input: BankEmailParseInput): BankEmailParseResult
 
   // Restrict withdrawal scanning to the Withdrawals section (stop at the
   // "As of" footer / a Deposits section, if present) so nothing outside it
-  // is mistaken for a withdrawal line.
+  // is mistaken for a withdrawal line. Drop the "Withdrawals" header line
+  // itself so it isn't fed into the line-item splitter below.
   const withdrawalsStart = text.search(/^withdrawals\s*$/im);
-  const sectionText = withdrawalsStart >= 0 ? text.slice(withdrawalsStart) : text;
+  let sectionText: string;
+  if (withdrawalsStart >= 0) {
+    const afterHeaderNewline = text.indexOf("\n", withdrawalsStart);
+    sectionText = afterHeaderNewline >= 0 ? text.slice(afterHeaderNewline + 1) : "";
+  } else {
+    sectionText = text;
+  }
   const sectionEnd = sectionText.search(/^(deposits|as of\s)/im);
   const withdrawalsSection = sectionEnd >= 0 ? sectionText.slice(0, sectionEnd) : sectionText;
 
+  const lineItems = splitLogicalLineItems(withdrawalsSection);
+  if (lineItems.length === 0) {
+    return { error: "No withdrawal lines were found in the email body." };
+  }
+
   const withdrawals: BankEmailWithdrawal[] = [];
-  const remaining = withdrawalsSection;
+  const synthCounts = new Map<string, number>();
 
-  // Pass 1: card purchases — consume matched spans so pass 2 (ACH) can't
-  // re-match the descriptor/reference/card portion of the same line.
-  let cardMatch: RegExpExecArray | null;
-  CARD_PURCHASE_RE.lastIndex = 0;
-  const consumedSpans: Array<[number, number]> = [];
-  while ((cardMatch = CARD_PURCHASE_RE.exec(remaining)) !== null) {
-    const [full, monthDay, descriptorRaw, ref, cardLast4, amountRaw] = cardMatch;
-    if (!monthDay || !descriptorRaw || !ref || !cardLast4 || !amountRaw) continue;
-    const date = resolveMonthDay(monthDay, today);
-    if (!date) {
-      return { error: `Could not resolve a valid date from "${monthDay}".` };
+  for (const item of lineItems) {
+    const cardMatch = item.match(CARD_LINE_RE);
+    if (cardMatch) {
+      const [, monthDay, descriptorRaw, ref, cardLast4, amountRaw] = cardMatch;
+      if (!monthDay || !descriptorRaw || !ref || !cardLast4 || !amountRaw) {
+        return { error: `Could not parse the withdrawal line: "${item}"` };
+      }
+      const date = resolveMonthDay(monthDay, today);
+      if (!date) {
+        return { error: `Could not resolve a valid date from "${monthDay}".` };
+      }
+      withdrawals.push({
+        descriptor: descriptorRaw.replace(/\s+/g, " ").trim(),
+        amount: toDollars(amountRaw),
+        date,
+        cardLast4,
+        bankRef: ref,
+      });
+      continue;
     }
-    withdrawals.push({
-      descriptor: descriptorRaw.replace(/\s+/g, " ").trim(),
-      amount: toDollars(amountRaw),
-      date,
-      cardLast4,
-      bankRef: ref,
-    });
-    consumedSpans.push([cardMatch.index, cardMatch.index + full.length]);
-  }
 
-  // Remove consumed card-purchase spans before running the ACH pass.
-  let achSource = remaining;
-  for (const [start, end] of [...consumedSpans].sort((a, b) => b[0] - a[0])) {
-    achSource = achSource.slice(0, start) + "\n" + achSource.slice(end);
-  }
+    // A line that starts like a card purchase/recurring payment but failed
+    // CARD_LINE_RE's strict shape (e.g. an unexpected ref-token prefix) must
+    // never fall through to the generic ACH pattern — that pattern matches
+    // almost any "starts with a capital letter, ends with $amount" line, and
+    // would silently misclassify it instead of reporting the failure.
+    if (/^(?:PURCHASE|RECURRING PAYMENT) AUTHORIZED ON\b/i.test(item)) {
+      return { error: `Could not parse the withdrawal line: "${item}"` };
+    }
 
-  let achMatch: RegExpExecArray | null;
-  ACH_LINE_RE.lastIndex = 0;
-  while ((achMatch = ACH_LINE_RE.exec(achSource)) !== null) {
-    const [, descriptorRaw, amountRaw] = achMatch;
-    if (!descriptorRaw || !amountRaw) continue;
-    const normalizedDescriptor = descriptorRaw.replace(/\s+/g, " ").trim();
-    // Skip section labels / headers / footer text that happen to sit on
-    // their own line with no trailing amount elsewhere ("Withdrawals",
-    // "Balance summary" etc. never reach here since they lack a $ amount,
-    // but guard against an empty or purely-punctuation descriptor anyway).
-    if (!normalizedDescriptor || !/[A-Za-z]/.test(normalizedDescriptor)) continue;
-    const yyMmDdToken = normalizedDescriptor.match(/(?<!\d)(\d{6})(?!\d)/);
-    const date = (yyMmDdToken?.[1] && resolveYyMmDd(yyMmDdToken[1])) || today;
-    const amount = toDollars(amountRaw);
-    withdrawals.push({
-      descriptor: normalizedDescriptor,
-      amount,
-      date,
-      bankRef: synthRef(date, amount, normalizedDescriptor),
-    });
+    const achMatch = item.match(ACH_LINE_RE);
+    if (achMatch) {
+      const [, descriptorRaw, amountRaw] = achMatch;
+      if (!descriptorRaw || !amountRaw) {
+        return { error: `Could not parse the withdrawal line: "${item}"` };
+      }
+      const normalizedDescriptor = descriptorRaw.replace(/\s+/g, " ").trim();
+      if (!normalizedDescriptor) {
+        return { error: `Could not parse the withdrawal line: "${item}"` };
+      }
+      const date = firstValidYyMmDdInDescriptor(normalizedDescriptor) || today;
+      const amount = toDollars(amountRaw);
+      withdrawals.push({
+        descriptor: normalizedDescriptor,
+        amount,
+        date,
+        bankRef: synthRef(date, amount, normalizedDescriptor, synthCounts),
+      });
+      continue;
+    }
+
+    // Strict mode: every non-empty logical line item in the Withdrawals
+    // section must classify as a card or ACH withdrawal — an unrecognized
+    // line is loudly reported rather than silently dropped, so the caller
+    // sends a failure push instead of persisting partial money data.
+    return { error: `Could not parse the withdrawal line: "${item}"` };
   }
 
   if (withdrawals.length === 0) {

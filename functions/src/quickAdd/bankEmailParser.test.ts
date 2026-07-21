@@ -219,4 +219,128 @@ As of 01/02/2027 at 09:00 a.m., Central Time
     });
     expect("error" in result).toBe(true);
   });
+
+  it("parses a RECURRING PAYMENT AUTHORIZED ON line like a PURCHASE line", () => {
+    const body = `
+for account ...5581
+Balance summary
+Ending balance: $500.00
+Available balance1: $500.00
+Withdrawals
+RECURRING PAYMENT AUTHORIZED ON 07/01 NETFLIX.COM 800-123-4567 CA P000000551051570 CARD 2115 $15.99
+As of 07/21/2026 at 01:50 a.m., Central Time
+`;
+    const result = parseBankEmail({ subject: "x", rawBody: body, today: TODAY });
+    if ("error" in result) throw new Error(result.error);
+    expect(result.withdrawals).toHaveLength(1);
+    expect(result.withdrawals[0]).toMatchObject({
+      amount: 15.99,
+      date: "2026-07-01",
+      cardLast4: "2115",
+      bankRef: "P000000551051570",
+    });
+    expect(result.withdrawals[0]?.descriptor).toContain("NETFLIX.COM");
+  });
+
+  it("reviewer repro: a malformed card line never swallows the following line into itself", () => {
+    // The ref token here ("X000000551051569") doesn't match the [PS] prefix
+    // shape, so this line can't classify as a card purchase — with the old
+    // [\s\S]+? descriptor group it would extend across the newline and
+    // merge with (and consume) the next line's $18.86 entirely. Both lines
+    // must now be reported (as an error, since the first is unclassifiable)
+    // without the second amount disappearing.
+    const body = `
+for account ...5581
+Balance summary
+Ending balance: $500.00
+Available balance1: $500.00
+Withdrawals
+PURCHASE AUTHORIZED ON 07/20 TARGET T-2189 Minneapolis MN X000000551051569 CARD 2115 $9.00
+PURCHASE AUTHORIZED ON 07/19 TARGET T-0260 St Louis Park MN P000000853534827 CARD 7752 $18.86
+As of 07/21/2026 at 01:50 a.m., Central Time
+`;
+    const result = parseBankEmail({ subject: "x", rawBody: body, today: TODAY });
+    // Strict mode: the first line is unclassifiable, so the whole parse
+    // fails loudly rather than silently dropping the $18.86 second line.
+    expect("error" in result).toBe(true);
+    if ("error" in result) {
+      expect(result.error).toContain("X000000551051569");
+    }
+  });
+
+  it("returns a structured error for an unrecognized withdrawal line among good ones", () => {
+    const body = `
+for account ...5581
+Balance summary
+Ending balance: $500.00
+Available balance1: $500.00
+Withdrawals
+PURCHASE AUTHORIZED ON 07/20 TARGET T-2189 Minneapolis MN P000000551051569 CARD 2115 $18.86
+AMERICAN EXPRESS ACH PMT 260720 M6486 JENNIFER IVERS $372.00
+THIS LINE IS TOTAL GARBAGE WITH NO AMOUNT AT ALL
+As of 07/21/2026 at 01:50 a.m., Central Time
+`;
+    const result = parseBankEmail({ subject: "x", rawBody: body, today: TODAY });
+    expect("error" in result).toBe(true);
+  });
+
+  it.each([
+    ["-$45.23", -45.23],
+    ["$-45.23", -45.23],
+    ["($45.23)", -45.23],
+  ])("parses negative/overdrawn balance form %s", (form, expected) => {
+    const body = `
+for account ...5581
+Balance summary
+Ending balance: ${form}
+Available balance1: ${form}
+Withdrawals
+PURCHASE AUTHORIZED ON 07/20 TARGET T-2189 Minneapolis MN P000000551051569 CARD 2115 $18.86
+As of 07/21/2026 at 01:50 a.m., Central Time
+`;
+    const result = parseBankEmail({ subject: "x", rawBody: body, today: TODAY });
+    if ("error" in result) throw new Error(result.error);
+    expect(result.endingBalance).toBeCloseTo(expected, 2);
+    expect(result.availableBalance).toBeCloseTo(expected, 2);
+  });
+
+  it("gives two identical same-day ACH charges distinct synth: refs within one email, deterministically across parses", () => {
+    const body = `
+for account ...5581
+Balance summary
+Ending balance: $500.00
+Available balance1: $500.00
+Withdrawals
+AMERICAN EXPRESS ACH PMT 260720 M6486 JENNIFER IVERS $372.00
+AMERICAN EXPRESS ACH PMT 260720 M6486 JENNIFER IVERS $372.00
+As of 07/21/2026 at 01:50 a.m., Central Time
+`;
+    const result1 = parseBankEmail({ subject: "x", rawBody: body, today: TODAY });
+    const result2 = parseBankEmail({ subject: "x", rawBody: body, today: TODAY });
+    if ("error" in result1 || "error" in result2) throw new Error("expected success");
+    expect(result1.withdrawals).toHaveLength(2);
+    // Distinct within one email.
+    expect(result1.withdrawals[0]?.bankRef).not.toBe(result1.withdrawals[1]?.bankRef);
+    // Stable across re-parses of the same email.
+    expect(result1.withdrawals[0]?.bankRef).toBe(result2.withdrawals[0]?.bankRef);
+    expect(result1.withdrawals[1]?.bankRef).toBe(result2.withdrawals[1]?.bankRef);
+  });
+
+  it("reviewer repro: scans all isolated 6-digit runs, using the first one that's a valid YYMMDD", () => {
+    const body = `
+for account ...5581
+Balance summary
+Ending balance: $500.00
+Available balance1: $500.00
+Withdrawals
+ACME INVOICE 123456 REF 260718 JENNIFER IVERS $50.00
+As of 07/21/2026 at 01:50 a.m., Central Time
+`;
+    const result = parseBankEmail({ subject: "x", rawBody: body, today: TODAY });
+    if ("error" in result) throw new Error(result.error);
+    expect(result.withdrawals).toHaveLength(1);
+    // "123456" is not a valid YYMMDD (month 34), so the first valid token
+    // ("260718") must be the one used.
+    expect(result.withdrawals[0]?.date).toBe("2026-07-18");
+  });
 });
