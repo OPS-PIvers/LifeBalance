@@ -1367,6 +1367,17 @@ const ToDosPage: React.FC = () => {
               value={assignedTo}
               onChange={(e) => setAssignedTo(e.target.value)}
             >
+              {/* Keep the rendered value in sync with state: without these
+                  sentinels an empty ('' on create) or orphaned (member left)
+                  assignedTo would visually snap to the first member while
+                  state still held the old value. handleSubmit blocks both
+                  cases with a toast — this just makes the field honest. */}
+              {assignedTo === '' && (
+                <option value="" disabled>Choose a member</option>
+              )}
+              {assignedTo !== '' && !members.some(m => m.uid === assignedTo) && (
+                <option value={assignedTo} disabled>Former member</option>
+              )}
               {members.map(member => (
                 <option key={member.uid} value={member.uid}>
                   {member.displayName ?? 'User'}
@@ -1420,8 +1431,9 @@ const ToDosPage: React.FC = () => {
             />
           </button>
 
-          {moreOpen && (
-          <div id="task-more-options" className="space-y-4">
+          {/* Always mounted (hidden when collapsed) so the expander button's
+              aria-controls never references an absent id. */}
+          <div id="task-more-options" className="space-y-4" hidden={!moreOpen}>
           {/* F-TODO-14: optional due time + reminder lead time. The reminder
               select is disabled until a time anchors it; clearing the time
               clears the reminder on save (see handleSubmit). */}
@@ -1572,7 +1584,6 @@ const ToDosPage: React.FC = () => {
             </div>
           </div>
           </div>
-          )}
 
           <Button
             type="submit"

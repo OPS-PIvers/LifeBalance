@@ -877,8 +877,10 @@ describe('ToDosPage', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Add new task' }));
 
       expect(moreOptionsButton()).toHaveAttribute('aria-expanded', 'false');
-      expect(screen.queryByLabelText('Notes')).not.toBeInTheDocument();
-      expect(screen.queryByLabelText('Repeat')).not.toBeInTheDocument();
+      // The section stays mounted (so aria-controls always resolves) but is
+      // hidden while collapsed.
+      expect(screen.getByLabelText('Notes')).not.toBeVisible();
+      expect(screen.getByLabelText('Repeat')).not.toBeVisible();
     });
 
     it('stays collapsed when editing a task with no secondary fields', () => {
@@ -886,7 +888,7 @@ describe('ToDosPage', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Edit task: Today Task' }));
 
       expect(moreOptionsButton()).toHaveAttribute('aria-expanded', 'false');
-      expect(screen.queryByLabelText('Notes')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Notes')).not.toBeVisible();
     });
 
     it('auto-expands when editing a task that has notes', () => {
