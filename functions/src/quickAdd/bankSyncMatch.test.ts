@@ -15,6 +15,8 @@ import {
   isMessageAlreadyProcessed,
   buildEndingBalanceUpdate,
   getBillPayPeriodId,
+  computeBalanceAsOf,
+  shouldSkipBalanceOverwrite,
   CONFIRM_DATE_TOLERANCE_DAYS,
   type PendingConfirmCandidate,
   type BillPayCandidate,
@@ -462,5 +464,62 @@ describe("isMessageAlreadyProcessed", () => {
 describe("buildEndingBalanceUpdate", () => {
   it("returns an absolute balance overwrite (never an increment)", () => {
     expect(buildEndingBalanceUpdate(1277.9)).toEqual({ balance: 1277.9 });
+  });
+});
+
+describe("computeBalanceAsOf", () => {
+  it("returns the latest withdrawal date when there are withdrawals", () => {
+    expect(computeBalanceAsOf(["2026-07-05", "2026-07-20", "2026-07-12"], "2026-07-21")).toBe(
+      "2026-07-20"
+    );
+  });
+
+  it("handles a single withdrawal", () => {
+    expect(computeBalanceAsOf(["2026-07-15"], "2026-07-21")).toBe("2026-07-15");
+  });
+
+  it("prefers the email's own asOf date over the max withdrawal date", () => {
+    expect(
+      computeBalanceAsOf(["2026-07-05", "2026-07-20", "2026-07-12"], "2026-07-21", "2026-07-18")
+    ).toBe("2026-07-18");
+  });
+
+  it("falls back to the max withdrawal date when asOf is absent", () => {
+    expect(computeBalanceAsOf(["2026-07-05", "2026-07-20", "2026-07-12"], "2026-07-21")).toBe(
+      "2026-07-20"
+    );
+  });
+
+  it("falls back to today when neither asOf nor withdrawals are present", () => {
+    expect(computeBalanceAsOf([], "2026-07-21")).toBe("2026-07-21");
+  });
+
+  it("regression: a no-withdrawal email with an old asOf must not beat a newer stored balanceAsOf", () => {
+    // Motivating scenario: a balance-only (no withdrawal lines) email whose own
+    // "As of 07/05/2026" footer is OLD arrives in a backfill run TODAY
+    // (2026-07-21), after a newer email (as-of 2026-07-20) has already been
+    // applied. Using `today` as the as-of would wrongly compute 2026-07-21,
+    // beat the stored 2026-07-20, and overwrite with a stale balance.
+    const incomingAsOf = computeBalanceAsOf([], "2026-07-21", "2026-07-05");
+    expect(incomingAsOf).toBe("2026-07-05");
+    expect(shouldSkipBalanceOverwrite("2026-07-20", incomingAsOf)).toBe(true);
+  });
+});
+
+describe("shouldSkipBalanceOverwrite", () => {
+  it("skips when the stored as-of date is strictly newer than the incoming one", () => {
+    expect(shouldSkipBalanceOverwrite("2026-07-20", "2026-07-05")).toBe(true);
+  });
+
+  it("does not skip when the incoming date is newer", () => {
+    expect(shouldSkipBalanceOverwrite("2026-07-05", "2026-07-20")).toBe(false);
+  });
+
+  it("does not skip on an equal date (same-or-newer applies normally)", () => {
+    expect(shouldSkipBalanceOverwrite("2026-07-20", "2026-07-20")).toBe(false);
+  });
+
+  it("does not skip when there is no stored as-of date yet (first sync)", () => {
+    expect(shouldSkipBalanceOverwrite(undefined, "2026-07-05")).toBe(false);
   });
 });

@@ -431,3 +431,51 @@ function getPayPeriodForTransactionLexical(
 export function buildEndingBalanceUpdate(endingBalance: number): { balance: number } {
   return { balance: endingBalance };
 }
+
+// ---------------------------------------------------------------------------
+// Only-if-newer balance overwrite guard (out-of-order email safeguard)
+// ---------------------------------------------------------------------------
+
+/**
+ * The email's "balance as-of" date, in descending order of trust:
+ *   1. `emailAsOf` — the date the email ITSELF states in its "As of MM/DD/YYYY"
+ *      footer (`BankEmailParseResult.asOf`). This is the only signal tied to
+ *      when the bank actually captured the balance, so it must win whenever
+ *      present — a backfill can deliver an old email well after its "as of"
+ *      date, and neither of the other two signals reflects that skew.
+ *   2. the LATEST withdrawal date in the parsed email (the ending balance
+ *      reflects everything up through that date) — used only when the email
+ *      didn't state its own as-of date.
+ *   3. `today` (the request's processing date) — the WEAKEST signal, since it
+ *      reflects when we happened to process the email, not when the bank
+ *      captured the balance. Using this as anything but a last resort corrupts
+ *      ordering during a backfill: an old, withdrawal-free, balance-only email
+ *      processed today would otherwise compute an as-of of today, beat a
+ *      correctly-dated stored balanceAsOf, overwrite it with a stale balance,
+ *      and stamp a bogus future balanceAsOf that then blocks genuinely newer
+ *      emails from ever taking effect.
+ */
+export function computeBalanceAsOf(
+  withdrawalDates: readonly string[],
+  today: string,
+  emailAsOf?: string
+): string {
+  if (emailAsOf) return emailAsOf;
+  if (withdrawalDates.length === 0) return today;
+  return withdrawalDates.reduce((max, d) => (d > max ? d : max));
+}
+
+/**
+ * True when the account's stored `balanceAsOf` is strictly newer than the
+ * incoming email's as-of date — i.e. this email is OUT OF ORDER (e.g. a
+ * first-install backfill processing several historical emails newest-first)
+ * and must NOT overwrite the balance. yyyy-MM-dd strings compare lexically.
+ * Same-or-newer incoming dates (the normal case) are never skipped, and an
+ * account with no stored `balanceAsOf` yet (first sync) is never skipped.
+ */
+export function shouldSkipBalanceOverwrite(
+  storedBalanceAsOf: string | undefined,
+  incomingBalanceAsOf: string
+): boolean {
+  return storedBalanceAsOf !== undefined && storedBalanceAsOf > incomingBalanceAsOf;
+}
