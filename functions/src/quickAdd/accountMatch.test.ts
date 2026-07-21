@@ -75,6 +75,31 @@ describe("matchAccountByLast4", () => {
     ];
     expect(matchAccountByLast4("8899", messy)).toBe("b");
   });
+
+  it("matches against cardLast4s[] (multi-card accounts)", () => {
+    const multi: AccountLike[] = [
+      { id: "chk", cardLast4s: ["1111", "2222"] },
+      { id: "sav" },
+    ];
+    expect(matchAccountByLast4("2222", multi)).toBe("chk");
+    expect(matchAccountByLast4("3333", multi)).toBeNull();
+  });
+
+  it("matches when the digits are only in the legacy cardLast4 field alongside cardLast4s", () => {
+    const mixed: AccountLike[] = [
+      { id: "chk", cardLast4: "1234", cardLast4s: ["5555"] },
+    ];
+    expect(matchAccountByLast4("1234", mixed)).toBe("chk");
+    expect(matchAccountByLast4("5555", mixed)).toBe("chk");
+  });
+
+  it("returns null on an ambiguous tie across legacy and list fields on different accounts", () => {
+    const dupes: AccountLike[] = [
+      { id: "a", cardLast4: "9999" },
+      { id: "b", cardLast4s: ["9999"] },
+    ];
+    expect(matchAccountByLast4("9999", dupes)).toBeNull();
+  });
 });
 
 describe("normalizeUsDate", () => {

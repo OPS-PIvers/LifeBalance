@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
-import { Pencil, Check, Plus, Target, Star, GripVertical, Trash2, MoreVertical, Landmark, CreditCard, Banknote, Archive, ArchiveRestore, ChevronDown } from 'lucide-react';
+import { Pencil, Check, Plus, Target, Star, GripVertical, Trash2, MoreVertical, Landmark, CreditCard, Banknote, Archive, ArchiveRestore, ChevronDown, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Account } from '@/types/schema';
 import { roundMoney } from '@/utils/money';
@@ -22,7 +22,7 @@ import { SurfaceList, Row } from '@/components/ui/Section';
 import SavingsGoals from '@/components/budget/SavingsGoals';
 
 const BudgetAccounts: React.FC = () => {
-  const { accounts, updateAccountBalance, addAccount, setAccountGoal, setAccountCardLast4, deleteAccount, archiveAccount, unarchiveAccount, reorderAccounts } = useFinance();
+  const { accounts, updateAccountBalance, addAccount, setAccountGoal, setAccountCardDetails, deleteAccount, archiveAccount, unarchiveAccount, reorderAccounts } = useFinance();
   const [showArchived, setShowArchived] = useState(false);
   const fmt = useFormatCurrency();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -34,14 +34,19 @@ const BudgetAccounts: React.FC = () => {
   const [newType, setNewType] = useState<Account['type']>('checking');
   const [newBalance, setNewBalance] = useState('');
   const [newCardLast4, setNewCardLast4] = useState('');
+  const [newAccountLast4, setNewAccountLast4] = useState('');
 
   // Set Goal Modal
   const [isGoalModalOpen, setIsGoalModalOpen] = useState<string | null>(null);
   const [goalAmount, setGoalAmount] = useState('');
 
-  // Set Card Digits Modal (id of the account being tagged, or null)
+  // Account Number & Cards Modal (id of the account being tagged, or null).
+  // `cardChips` holds the account's tagged debit/credit cards as chips; a
+  // legacy single `cardLast4` is migrated in as the first chip when opened.
   const [isCardModalOpen, setIsCardModalOpen] = useState<string | null>(null);
-  const [cardDigits, setCardDigits] = useState('');
+  const [accountLast4Digits, setAccountLast4Digits] = useState('');
+  const [cardChips, setCardChips] = useState<string[]>([]);
+  const [cardChipDraft, setCardChipDraft] = useState('');
 
   // Delete confirmation
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -97,6 +102,15 @@ const BudgetAccounts: React.FC = () => {
       return;
     }
     const digits = rawDigits.slice(-4);
+
+    // Same 4-digit validation for the account number field.
+    const rawAccountDigits = newAccountLast4.replace(/\D/g, '');
+    if (rawAccountDigits && rawAccountDigits.length < 4) {
+      toast.error('Account number digits must be the last 4 numbers');
+      return;
+    }
+    const accountDigits = rawAccountDigits.slice(-4);
+
     const newAccount: Account = {
       id: crypto.randomUUID(),
       name: newName,
@@ -104,13 +118,15 @@ const BudgetAccounts: React.FC = () => {
       balance: parseFloat(newBalance),
       lastUpdated: new Date().toISOString(),
       order: maxOrder + 1,
-      ...(digits ? { cardLast4: digits } : {}),
+      ...(digits ? { cardLast4s: [digits] } : {}),
+      ...(accountDigits ? { accountLast4: accountDigits } : {}),
     };
     addAccount(newAccount);
     setIsAddModalOpen(false);
     setNewName('');
     setNewBalance('');
     setNewCardLast4('');
+    setNewAccountLast4('');
   };
 
   const handleSetGoal = async () => {
@@ -129,27 +145,53 @@ const BudgetAccounts: React.FC = () => {
     }
   };
 
+  // Normalizes a chip-editor entry to its last 4 digits, or null if the entry
+  // is too short to ever match an incoming card/account number.
+  const cleanChipDigits = (raw: string): string | null => {
+    const digits = raw.replace(/\D/g, '').slice(-4);
+    return digits.length === 4 ? digits : null;
+  };
+
+  const handleAddCardChip = () => {
+    const digits = cleanChipDigits(cardChipDraft);
+    if (!digits) {
+      toast.error('Card digits must be the last 4 numbers');
+      return;
+    }
+    if (cardChips.includes(digits)) {
+      toast.error('That card is already added');
+      return;
+    }
+    setCardChips(chips => [...chips, digits]);
+    setCardChipDraft('');
+  };
+
+  const handleRemoveCardChip = (digits: string) => {
+    setCardChips(chips => chips.filter(c => c !== digits));
+  };
+
   const handleSetCard = async () => {
-    if (isCardModalOpen) {
-      // Reject a partial entry here (before saving) and keep the drawer open so
-      // the user doesn't lose what they typed. An empty input is allowed — it
-      // clears the tag (setAccountCardLast4 handles the deleteField).
-      const rawDigits = cardDigits.replace(/\D/g, '');
-      if (rawDigits && rawDigits.length < 4) {
-        toast.error('Card digits must be the last 4 numbers');
-        return;
-      }
-      // Await the write and only close on success, so a failed Firestore write
-      // surfaces an error (no unhandled rejection) and the drawer stays open to
-      // retry.
-      try {
-        await setAccountCardLast4(isCardModalOpen, cardDigits);
-        setIsCardModalOpen(null);
-        setCardDigits('');
-      } catch (error) {
-        console.error('Failed to save card digits', error);
-        toast.error('Failed to save card digits. Please try again.');
-      }
+    if (!isCardModalOpen) return;
+    const rawAccountDigits = accountLast4Digits.replace(/\D/g, '');
+    if (rawAccountDigits && rawAccountDigits.length < 4) {
+      toast.error('Account number digits must be the last 4 numbers');
+      return;
+    }
+    // Await the write and only close on success, so a failed Firestore write
+    // surfaces an error (no unhandled rejection) and the drawer stays open to
+    // retry.
+    try {
+      await setAccountCardDetails(isCardModalOpen, {
+        accountLast4: rawAccountDigits.slice(-4),
+        cardLast4s: cardChips,
+      });
+      setIsCardModalOpen(null);
+      setAccountLast4Digits('');
+      setCardChips([]);
+      setCardChipDraft('');
+    } catch (error) {
+      console.error('Failed to save account details', error);
+      toast.error('Failed to save account details. Please try again.');
     }
   };
 
@@ -264,6 +306,11 @@ const BudgetAccounts: React.FC = () => {
     const isLiability = account.type === 'credit';
     const isEditing = editingId === account.id;
     const isSavings = account.type === 'savings';
+    // Legacy `cardLast4` is treated as an extra (deduped) entry of `cardLast4s`
+    // for display, mirroring the read-side handling in accountMatch.ts.
+    const allCardLast4s = Array.from(
+      new Set([...(account.cardLast4 ? [account.cardLast4] : []), ...(account.cardLast4s ?? [])])
+    );
     const progress = account.monthlyGoal ? Math.min(100, (account.balance / account.monthlyGoal) * 100) : 0;
     const hitGoal = account.monthlyGoal && account.balance >= account.monthlyGoal;
     const isDragging = draggedId === account.id;
@@ -294,10 +341,16 @@ const BudgetAccounts: React.FC = () => {
                 <Badge variant={isLiability ? 'danger' : 'success'} size="sm" className="uppercase">
                   {account.type}
                 </Badge>
-                {account.cardLast4 && (
+                {allCardLast4s.length > 0 && (
                   <span className="inline-flex items-center gap-1 text-[11px] font-mono text-brand-500 dark:text-brand-400">
                     <CreditCard size={11} aria-hidden />
-                    ···{account.cardLast4}
+                    {allCardLast4s.map(d => `···${d}`).join(', ')}
+                  </span>
+                )}
+                {account.accountLast4 && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-mono text-brand-500 dark:text-brand-400">
+                    <Landmark size={11} aria-hidden />
+                    ···{account.accountLast4}
                   </span>
                 )}
               </div>
@@ -580,6 +633,19 @@ const BudgetAccounts: React.FC = () => {
             onChange={e => setNewBalance(e.target.value)}
             className="font-mono"
           />
+          <div>
+            <Input
+              inputMode="numeric"
+              placeholder="Account number last 4 (optional)"
+              value={newAccountLast4}
+              onChange={e => setNewAccountLast4(e.target.value)}
+              maxLength={19}
+              className="font-mono"
+            />
+            <p className="text-xs text-brand-500 dark:text-brand-400 mt-1">
+              From a bank email like &ldquo;for account &hellip;5581&rdquo; — lets nightly bank-email sync route rows to this account.
+            </p>
+          </div>
           {newType !== 'savings' && (
             <div>
               <Input
@@ -630,29 +696,81 @@ const BudgetAccounts: React.FC = () => {
         </Button>
       </Drawer>
 
-      {/* Card Digits Drawer */}
+      {/* Account Number & Cards Drawer */}
       <Drawer
         isOpen={!!isCardModalOpen}
         onClose={() => setIsCardModalOpen(null)}
-        title="Card Last 4 Digits"
+        title="Account Number & Cards"
       >
-        <p className="text-sm text-brand-500 dark:text-brand-400 mb-4">
-          Enter the last 4 digits of the card tied to this account. Bank-alert
-          Shortcuts (e.g. Wells Fargo purchase emails) use this to route
-          transactions to the right account. Leave blank to clear.
-        </p>
-        <Input
-          inputMode="numeric"
-          placeholder="e.g. 8899"
-          value={cardDigits}
-          onChange={e => setCardDigits(e.target.value)}
-          maxLength={19}
-          className="font-mono mb-4"
-          autoFocus
-        />
+        <div className="space-y-1 mb-5">
+          <label className="text-xs font-semibold text-brand-600 dark:text-brand-300 uppercase tracking-wide">
+            Account number last 4
+          </label>
+          <Input
+            inputMode="numeric"
+            placeholder="e.g. 5581"
+            value={accountLast4Digits}
+            onChange={e => setAccountLast4Digits(e.target.value)}
+            maxLength={19}
+            className="font-mono"
+          />
+          <p className="text-xs text-brand-500 dark:text-brand-400">
+            From a bank email like &ldquo;for account &hellip;5581&rdquo;. Leave blank to clear.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-xs font-semibold text-brand-600 dark:text-brand-300 uppercase tracking-wide">
+            Cards on this account
+          </label>
+          {cardChips.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {cardChips.map(digits => (
+                <span
+                  key={digits}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-brand-100 dark:bg-brand-700/50 pl-3 pr-1.5 py-1 text-xs font-mono text-brand-700 dark:text-brand-200"
+                >
+                  <CreditCard size={11} aria-hidden />
+                  ···{digits}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveCardChip(digits)}
+                    aria-label={`Remove card ending ${digits}`}
+                    className="rounded-full p-0.5 hover:bg-brand-200 dark:hover:bg-brand-600 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+                  >
+                    <X size={11} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <Input
+              inputMode="numeric"
+              placeholder="Add card last 4 (e.g. 8899)"
+              value={cardChipDraft}
+              onChange={e => setCardChipDraft(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleAddCardChip();
+                }
+              }}
+              maxLength={19}
+              className="font-mono flex-1"
+            />
+            <Button variant="secondary" onClick={handleAddCardChip}>
+              Add
+            </Button>
+          </div>
+          <p className="text-xs text-brand-500 dark:text-brand-400">
+            Bank-alert Shortcuts (e.g. Wells Fargo purchase emails) use these to route transactions to the right account.
+          </p>
+        </div>
+
         <Button
           onClick={handleSetCard}
-          className="w-full py-3"
+          className="w-full py-3 mt-5"
         >
           Save
         </Button>
@@ -695,21 +813,27 @@ const BudgetAccounts: React.FC = () => {
                 </Button>
               )}
 
-              {/* Set / edit card last-4 (debit & credit cards) */}
-              {actionAccount.type !== 'savings' && (
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start text-lg py-4"
-                  leftIcon={<CreditCard className="text-brand-500" />}
-                  onClick={() => {
-                    setCardDigits(actionAccount.cardLast4 ?? '');
-                    setIsCardModalOpen(actionAccount.id);
-                    setActionAccount(null);
-                  }}
-                >
-                  {actionAccount.cardLast4 ? 'Edit Card Digits' : 'Add Card Digits'}
-                </Button>
-              )}
+              {/* Account number & cards (migrates the legacy single cardLast4
+                  into the chips list the first time this drawer is opened) */}
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={<CreditCard className="text-brand-500" />}
+                onClick={() => {
+                  setAccountLast4Digits(actionAccount.accountLast4 ?? '');
+                  setCardChips(Array.from(
+                    new Set([
+                      ...(actionAccount.cardLast4 ? [actionAccount.cardLast4] : []),
+                      ...(actionAccount.cardLast4s ?? []),
+                    ])
+                  ));
+                  setCardChipDraft('');
+                  setIsCardModalOpen(actionAccount.id);
+                  setActionAccount(null);
+                }}
+              >
+                Account Number & Cards
+              </Button>
 
               <div className="h-px bg-brand-200 dark:bg-brand-700 my-2" />
 

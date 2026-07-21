@@ -11,10 +11,16 @@
  * value out, no Firestore, trivially unit-testable.
  */
 
-/** The minimal account shape the matcher needs (id + tagged card last 4). */
+/**
+ * The minimal account shape the matcher needs (id + tagged card last-4s).
+ * `cardLast4` is the legacy single-card field; `cardLast4s` is the newer
+ * multi-card list (Wells Fargo nightly sync groundwork — an account can have
+ * several debit cards attached). Both are considered when matching.
+ */
 export interface AccountLike {
   id: string;
   cardLast4?: string;
+  cardLast4s?: string[];
 }
 
 /**
@@ -51,9 +57,10 @@ export function matchAccountByLast4(
 ): string | null {
   const last4 = normalizeCardLast4(cardInput);
   if (!last4) return null;
-  const matches = accounts.filter(
-    (a) => normalizeCardLast4(a.cardLast4) === last4,
-  );
+  const matches = accounts.filter((a) => {
+    const candidates = [a.cardLast4, ...(a.cardLast4s ?? [])];
+    return candidates.some((c) => normalizeCardLast4(c) === last4);
+  });
   return matches.length === 1 ? (matches[0]?.id ?? null) : null;
 }
 

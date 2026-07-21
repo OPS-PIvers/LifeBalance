@@ -1923,6 +1923,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateAccountBalance,
     setAccountGoal: noOp,
     setAccountCardLast4: noOp,
+    setAccountCardDetails: noOp,
     updateAccountOrder: noOp,
     reorderAccounts: noOp,
     addSavingsGoal,

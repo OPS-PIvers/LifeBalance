@@ -106,6 +106,32 @@ export function makeAccountMutations(deps: {
     toast.success(digits ? 'Card digits saved' : 'Card digits cleared');
   };
 
+  const setAccountCardDetails = async (
+    id: string,
+    details: { accountLast4?: string; cardLast4s: string[] }
+  ) => {
+    if (!householdId) return;
+    // Same digit-cleaning as setAccountCardLast4: strip non-digits, keep the
+    // last 4, drop anything that ends up too short to ever match.
+    const cleanLast4 = (raw: string): string | null => {
+      const digits = raw.replace(/\D/g, '').slice(-4);
+      return digits.length === 4 ? digits : null;
+    };
+    const accountLast4 = details.accountLast4 ? cleanLast4(details.accountLast4) : null;
+    const cardLast4s = Array.from(
+      new Set(details.cardLast4s.map(cleanLast4).filter((v): v is string => v !== null))
+    );
+    await updateDoc(doc(db, `households/${householdId}/accounts`, id), {
+      accountLast4: accountLast4 ? accountLast4 : deleteField(),
+      cardLast4s: cardLast4s.length > 0 ? cardLast4s : deleteField(),
+      // Migrate the legacy single-card field into cardLast4s so readers only
+      // need to consult one field going forward (accountMatch.ts still reads
+      // both, for docs edited before this migration point runs).
+      cardLast4: deleteField(),
+    });
+    toast.success('Account details saved');
+  };
+
   const deleteAccount = async (id: string) => {
     if (!householdId) return;
     // Genuine hard-delete is only safe for an account that has never been
@@ -169,7 +195,7 @@ export function makeAccountMutations(deps: {
   };
 
   return {
-    addAccount, updateAccountBalance, setAccountGoal, setAccountCardLast4,
+    addAccount, updateAccountBalance, setAccountGoal, setAccountCardLast4, setAccountCardDetails,
     deleteAccount, archiveAccount, unarchiveAccount, updateAccountOrder, reorderAccounts,
   };
 }
