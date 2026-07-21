@@ -431,3 +431,35 @@ function getPayPeriodForTransactionLexical(
 export function buildEndingBalanceUpdate(endingBalance: number): { balance: number } {
   return { balance: endingBalance };
 }
+
+// ---------------------------------------------------------------------------
+// Only-if-newer balance overwrite guard (out-of-order email safeguard)
+// ---------------------------------------------------------------------------
+
+/**
+ * The email's "balance as-of" date: the LATEST withdrawal date in the parsed
+ * email (the ending balance reflects everything up through that date), or
+ * `today` when the email has no withdrawal lines at all.
+ */
+export function computeBalanceAsOf(
+  withdrawalDates: readonly string[],
+  today: string
+): string {
+  if (withdrawalDates.length === 0) return today;
+  return withdrawalDates.reduce((max, d) => (d > max ? d : max));
+}
+
+/**
+ * True when the account's stored `balanceAsOf` is strictly newer than the
+ * incoming email's as-of date — i.e. this email is OUT OF ORDER (e.g. a
+ * first-install backfill processing several historical emails newest-first)
+ * and must NOT overwrite the balance. yyyy-MM-dd strings compare lexically.
+ * Same-or-newer incoming dates (the normal case) are never skipped, and an
+ * account with no stored `balanceAsOf` yet (first sync) is never skipped.
+ */
+export function shouldSkipBalanceOverwrite(
+  storedBalanceAsOf: string | undefined,
+  incomingBalanceAsOf: string
+): boolean {
+  return storedBalanceAsOf !== undefined && storedBalanceAsOf > incomingBalanceAsOf;
+}

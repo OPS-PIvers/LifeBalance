@@ -18,6 +18,15 @@
  * already reflects every withdrawal, so the single overwrite is the source of
  * truth. Every write for the whole email commits in ONE atomic batch.
  *
+ * Ordering guard: the overwrite is only-if-newer. Each account stores
+ * `balanceAsOf` (yyyy-MM-dd, the latest withdrawal date in the email that last
+ * won, or `today` when that email had none) alongside the balance. An
+ * incoming email whose own as-of date is OLDER than the stored one is applied
+ * for transactions/bills as normal but SKIPS the balance overwrite — this
+ * makes the server structurally immune to out-of-order delivery (e.g. a
+ * first-install backfill processing several historical emails newest-first),
+ * independent of the client-side Gmail `newer_than` fence.
+ *
  * Lives in its own file (re-exported from the quickAdd barrel + functions
  * index) to keep the churny expense-endpoint code and this apart.
  */
@@ -49,6 +58,8 @@ import {
   buildEndingBalanceUpdate,
   matchAccountByAccountLast4,
   getBillPayPeriodId,
+  computeBalanceAsOf,
+  shouldSkipBalanceOverwrite,
   type PendingConfirmCandidate,
   type BillPayCandidate,
   type PaidIncomeLike,
@@ -298,6 +309,13 @@ export const bankEmailSync = onRequest(
         };
       });
       const resolvedAccountId = matchAccountByAccountLast4(parsed.accountLast4, accountsForMatch);
+      // Stored balanceAsOf for the resolved account (only-if-newer guard, below).
+      // Reused from the already-loaded accountsSnap — no extra read.
+      const resolvedAccountBalanceAsOf = (() => {
+        const doc = accountsSnap.docs.find((d) => d.id === resolvedAccountId);
+        const data = doc?.data() as Record<string, unknown> | undefined;
+        return typeof data?.balanceAsOf === "string" ? data.balanceAsOf : undefined;
+      })();
       if (!resolvedAccountId) {
         // Unknown account → WARNING push + no-op (no writes).
         await pushToBankSyncMembers(
@@ -609,11 +627,35 @@ export const bankEmailSync = onRequest(
         }
       }
 
-      // 10. Overwrite the account balance with the email's ending balance.
-      batch.update(db.doc(`households/${householdId}/accounts/${resolvedAccountId}`), {
-        ...buildEndingBalanceUpdate(parsed.endingBalance),
-        lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      // 10. Overwrite the account balance with the email's ending balance —
+      //     but ONLY if this email is not older than the last one we applied.
+      //     A first-install backfill (or any retry storm) can deliver several
+      //     historical emails out of order; without this guard the LAST batch
+      //     write wins regardless of which email is actually newest. The
+      //     email's "balance as-of" date is the latest withdrawal date (the
+      //     ending balance reflects every withdrawal through that date), or
+      //     `today` when there are no withdrawals at all.
+      const incomingBalanceAsOf = computeBalanceAsOf(
+        parsed.withdrawals.map((w) => w.date),
+        today
+      );
+      const balanceSkipped = shouldSkipBalanceOverwrite(
+        resolvedAccountBalanceAsOf,
+        incomingBalanceAsOf
+      );
+      if (balanceSkipped) {
+        logger.info(
+          `bankEmailSync: skipping balance overwrite for account ${resolvedAccountId} — ` +
+            `stored balanceAsOf ${resolvedAccountBalanceAsOf} is newer than incoming ${incomingBalanceAsOf} ` +
+            `(out-of-order email, messageId ${messageId})`
+        );
+      } else {
+        batch.update(db.doc(`households/${householdId}/accounts/${resolvedAccountId}`), {
+          ...buildEndingBalanceUpdate(parsed.endingBalance),
+          balanceAsOf: incomingBalanceAsOf,
+          lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
 
       // 11. Record the ledger entry so re-runs of this Message-ID short-circuit.
       batch.set(ledgerRef, {
@@ -633,11 +675,14 @@ export const bankEmailSync = onRequest(
       claimedByUs = false;
 
       // 12. Summary push + response.
+      const balanceSummary = balanceSkipped
+        ? "Balance: unchanged (older email, out of order)"
+        : `Balance: ${formatCurrency(parsed.endingBalance, { currency })}`;
       await pushToBankSyncMembers(
         householdId,
         "Bank sync complete",
         `${counts.created} new, ${counts.confirmed} confirmed, ${counts.filled} filled, ` +
-          `${counts.billsPaid} bills paid. Balance: ${formatCurrency(parsed.endingBalance, { currency })}`
+          `${counts.billsPaid} bills paid. ${balanceSummary}`
       );
       await logApiCall(householdId, apiKey.substring(0, 16), "bankSync", req.body, 200);
       jsonResponse(res, 200, {
@@ -647,6 +692,7 @@ export const bankEmailSync = onRequest(
           accountId: resolvedAccountId,
           endingBalance: parsed.endingBalance,
           withdrawals: parsed.withdrawals.length,
+          balanceSkipped,
           ...counts,
         },
       });

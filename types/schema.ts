@@ -204,6 +204,12 @@ export interface Account {
    *  transactions keep resolving to it correctly (unlike a hard delete, which
    *  falls back to the checking account via `resolveTargetAccount`). */
   archived?: boolean;
+  /** yyyy-MM-dd "balance as-of" date for the LAST bank-email sync that
+   *  actually overwrote `balance` (the latest withdrawal date in that email,
+   *  or the sync's `today` when it had none). Set only by the server-side
+   *  nightly `bankEmailSync` Cloud Function's only-if-newer overwrite guard —
+   *  informational, not read by any client formula. */
+  balanceAsOf?: string;
 }
 
 /**
