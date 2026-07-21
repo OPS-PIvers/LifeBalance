@@ -33,3 +33,38 @@ export const QUADRANT_SECTIONS: Record<Quadrant, { title: string; subtitle: stri
   delegate: { title: 'Delegate', subtitle: 'Urgent, Not Important', color: 'amber' },
   later: { title: 'Later', subtitle: 'Not Urgent, Not Important', color: 'neutral' },
 };
+
+// Tinted icon-chip classes per SectionColor — the todos-side replacement for
+// borrowing STORE_COLORS on TaskTemplateDrawer (task templates aren't stores;
+// they shouldn't reach into the shopping/store color palette). Built entirely
+// from existing DESIGN.md token families (accent/warm/money/habit/brand).
+export const templateTintClasses: Record<SectionColor, { bg: string; text: string; border: string }> = {
+  rose: { bg: 'bg-money-bgNeg dark:bg-money-neg/15', text: 'text-money-neg dark:text-money-negDark', border: 'border-money-neg/30 dark:border-money-neg/40' },
+  amber: { bg: 'bg-warm-100 dark:bg-warm-800/40', text: 'text-warm-700 dark:text-warm-300', border: 'border-warm-200 dark:border-warm-700' },
+  blue: { bg: 'bg-habit-blue/10 dark:bg-habit-blue/20', text: 'text-habit-blue dark:text-habit-blue', border: 'border-habit-blue/30 dark:border-habit-blue/40' },
+  accent: { bg: 'bg-accent-50 dark:bg-accent-800/40', text: 'text-accent-700 dark:text-accent-200', border: 'border-accent-200 dark:border-accent-700' },
+  neutral: { bg: 'bg-brand-100 dark:bg-brand-700/40', text: 'text-brand-600 dark:text-brand-300', border: 'border-brand-200 dark:border-brand-600' },
+};
+
+// Legacy task-template `color` values were keys into data/storeColors.ts'
+// STORE_COLORS (reused from QuickStockList at the time). Templates already
+// saved in Firestore may still carry one of those ids — map them onto the
+// nearest SectionColor tint so old data keeps a sensible color without this
+// module importing store-color constants into a todos surface.
+const LEGACY_TEMPLATE_COLOR_TO_SECTION: Record<string, SectionColor> = {
+  red: 'rose',
+  pink: 'rose',
+  orange: 'amber',
+  amber: 'amber',
+  green: 'accent',
+  teal: 'accent',
+  blue: 'blue',
+  indigo: 'blue',
+  purple: 'blue',
+  gray: 'neutral',
+};
+
+export function getTemplateTint(colorKey?: string): { bg: string; text: string; border: string } {
+  const section = (colorKey && LEGACY_TEMPLATE_COLOR_TO_SECTION[colorKey]) || 'neutral';
+  return templateTintClasses[section];
+}

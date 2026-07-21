@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
 import { useTodos } from '@/contexts/FirebaseHouseholdContext';
 import { TaskTemplate } from '@/types/schema';
-import { ClipboardList, ChevronDown, Loader2, Plus, Trash2 } from 'lucide-react';
-import { STORE_COLORS, DEFAULT_STORE_COLOR } from '@/data/storeColors';
+import { ClipboardList, ChevronDown, Plus, Trash2 } from 'lucide-react';
+import { getTemplateTint } from '@/components/todos/todoDisplay';
 import { TEMPLATE_ICONS } from '@/data/templateIcons';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import { SurfaceList, Row } from '@/components/ui/Section';
 import Input from '@/components/ui/Input';
 import Textarea from '@/components/ui/Textarea';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import toast from 'react-hot-toast';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { Info } from 'lucide-react';
-import clsx from 'clsx';
+import { cn } from '@/utils/cn';
 
 const templateIconMap = new Map(TEMPLATE_ICONS.map(i => [i.id, i.icon]));
 
@@ -122,96 +123,112 @@ export const TaskTemplateDrawer: React.FC<TaskTemplateDrawerProps> = ({ isOpen, 
           </p>
         )}
 
-        {taskTemplates.map(template => {
-          const colorKey = template.color || DEFAULT_STORE_COLOR;
-          const color = STORE_COLORS[colorKey] ?? STORE_COLORS[DEFAULT_STORE_COLOR]!; // DEFAULT_STORE_COLOR always present
-          const TemplateIcon = (template.icon && templateIconMap.get(template.icon)) || ClipboardList;
-          const isExpanded = expandedIds.has(template.id);
-          const isBusy = busyId === template.id;
+        {taskTemplates.length > 0 && (
+          <SurfaceList>
+            {taskTemplates.map(template => {
+              const tint = getTemplateTint(template.color);
+              const TemplateIcon = (template.icon && templateIconMap.get(template.icon)) || ClipboardList;
+              const isExpanded = expandedIds.has(template.id);
+              const isBusy = busyId === template.id;
 
-          return (
-            <div
-              key={template.id}
-              className="rounded-card border border-brand-200 dark:border-brand-700 overflow-hidden"
-            >
-              <div className="flex items-stretch">
-                <button
-                  type="button"
-                  onClick={() => handleApply(template)}
-                  disabled={busyId !== null}
-                  aria-label={`Add tasks from ${template.name}`}
-                  className="flex-1 flex items-center gap-3 px-3 py-3 text-left min-h-[56px] hover:bg-brand-50 dark:hover:bg-brand-700/30 active:bg-brand-100 dark:active:bg-brand-700/50 transition-colors disabled:opacity-60 disabled:pointer-events-none"
-                >
-                  <span className={clsx(
-                    'shrink-0 w-9 h-9 rounded-full border flex items-center justify-center',
-                    `${color.bg} ${color.text} ${color.border}`
-                  )}>
-                    <TemplateIcon size={16} />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block font-bold tracking-tight text-sm text-brand-800 dark:text-brand-100 truncate">
-                      {template.name}
-                    </span>
-                    <span className="block text-xxs text-brand-400 dark:text-brand-450">
-                      {template.items.length} {template.items.length === 1 ? 'task' : 'tasks'}
-                    </span>
-                  </span>
-                  <span className="ml-auto shrink-0 flex items-center gap-1 text-xs font-medium text-accent-600 dark:text-accent-300">
-                    {isBusy ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <Plus size={14} />
-                    )}
-                    {isBusy ? 'Adding…' : 'Add'}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => toggleExpanded(template.id)}
-                  aria-expanded={isExpanded}
-                  aria-label={`${isExpanded ? 'Hide' : 'Show'} tasks in ${template.name}`}
-                  className="shrink-0 px-3 min-w-11 flex items-center justify-center text-brand-400 hover:text-brand-600 dark:text-brand-450 dark:hover:text-brand-200 border-l border-brand-200 dark:border-brand-700 hover:bg-brand-50 dark:hover:bg-brand-700/30 transition-colors"
-                >
-                  <ChevronDown
-                    size={16}
-                    className={clsx(
-                      'transition-transform duration-(--duration-fast) ease-(--ease-standard)',
-                      !isExpanded && '-rotate-90'
-                    )}
-                  />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(template)}
-                  aria-label={`Delete ${template.name} template`}
-                  className="shrink-0 px-3 min-w-11 flex items-center justify-center text-brand-400 hover:text-money-neg dark:text-brand-450 dark:hover:text-money-negDark border-l border-brand-200 dark:border-brand-700 hover:bg-brand-50 dark:hover:bg-brand-700/30 transition-colors"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-
-              {isExpanded && (
-                <ul className="border-t border-brand-200 dark:border-brand-700 bg-brand-50/50 dark:bg-brand-900/20 py-1 animate-in fade-in slide-in-from-top-2 duration-(--duration-fast)">
-                  {template.items.length === 0 ? (
-                    <li className="px-4 py-2 text-xs text-brand-400 dark:text-brand-450 italic">
-                      No tasks in this template
-                    </li>
-                  ) : template.items.map((item, idx) => (
-                    <li
-                      key={`${template.id}-${idx}`}
-                      className="flex items-center gap-2 px-4 py-1.5 text-sm text-brand-700 dark:text-brand-300"
+              return (
+                <React.Fragment key={template.id}>
+                  <Row className="p-0 items-stretch">
+                    <button
+                      type="button"
+                      onClick={() => handleApply(template)}
+                      disabled={busyId !== null}
+                      aria-label={`Add tasks from ${template.name}`}
+                      className={cn(
+                        'flex-1 flex items-center gap-3 pl-4 pr-2 py-3 min-h-11 text-left',
+                        'hover:bg-brand-50 dark:hover:bg-brand-700/40 active:bg-brand-100 dark:active:bg-brand-700/50',
+                        'transition-colors duration-(--duration-fast) ease-(--ease-standard)',
+                        'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-inset',
+                        'disabled:opacity-60 disabled:pointer-events-none'
+                      )}
                     >
-                      <span className="truncate">{item.text}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          );
-        })}
+                      <span
+                        className={cn(
+                          'shrink-0 w-9 h-9 rounded-full border flex items-center justify-center',
+                          tint.bg,
+                          tint.text,
+                          tint.border
+                        )}
+                      >
+                        <TemplateIcon size={16} />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block font-semibold tracking-tight text-sm text-brand-900 dark:text-brand-50 truncate">
+                          {template.name}
+                        </span>
+                        <span className="block text-xs text-brand-500 dark:text-brand-400">
+                          {template.items.length} {template.items.length === 1 ? 'task' : 'tasks'}
+                        </span>
+                      </span>
+                      <span className="ml-auto shrink-0 flex items-center gap-1 text-xs font-medium text-accent-600 dark:text-accent-300">
+                        <Plus size={14} />
+                        {isBusy ? 'Adding…' : 'Add'}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleExpanded(template.id)}
+                      aria-expanded={isExpanded}
+                      aria-label={`${isExpanded ? 'Hide' : 'Show'} tasks in ${template.name}`}
+                      className={cn(
+                        'shrink-0 min-w-11 min-h-11 flex items-center justify-center',
+                        'text-brand-400 hover:text-brand-600 dark:text-brand-450 dark:hover:text-brand-200',
+                        'hover:bg-brand-50 dark:hover:bg-brand-700/40 transition-colors duration-(--duration-fast) ease-(--ease-standard)',
+                        'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-inset'
+                      )}
+                    >
+                      <ChevronDown
+                        size={16}
+                        className={cn(
+                          'transition-transform duration-(--duration-fast) ease-(--ease-standard)',
+                          !isExpanded && '-rotate-90'
+                        )}
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(template)}
+                      aria-label={`Delete ${template.name} template`}
+                      className={cn(
+                        'shrink-0 min-w-11 min-h-11 flex items-center justify-center',
+                        'text-brand-400 hover:text-money-neg dark:text-brand-450 dark:hover:text-money-negDark',
+                        'hover:bg-brand-50 dark:hover:bg-brand-700/40 transition-colors duration-(--duration-fast) ease-(--ease-standard)',
+                        'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-inset'
+                      )}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </Row>
+
+                  {isExpanded && (
+                    <ul className="hairline-divider bg-brand-50/50 dark:bg-brand-900/20 py-1 animate-in fade-in slide-in-from-top-2 duration-(--duration-fast)">
+                      {template.items.length === 0 ? (
+                        <li className="px-4 py-2 text-xs text-brand-400 dark:text-brand-450 italic">
+                          No tasks in this template
+                        </li>
+                      ) : template.items.map((item, idx) => (
+                        <li
+                          key={`${template.id}-${idx}`}
+                          className="flex items-center gap-2 px-4 py-1.5 text-sm text-brand-700 dark:text-brand-300"
+                        >
+                          <span className="truncate">{item.text}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </SurfaceList>
+        )}
 
         {isCreating ? (
-          <div className="rounded-card border border-brand-200 dark:border-brand-700 p-3 space-y-3">
+          <div className="surface-section p-3 space-y-3">
             <Input
               label="Template name"
               value={newName}
@@ -231,20 +248,20 @@ export const TaskTemplateDrawer: React.FC<TaskTemplateDrawerProps> = ({ isOpen, 
               <Button variant="secondary" size="sm" onClick={() => setIsCreating(false)} disabled={isSavingNew}>
                 Cancel
               </Button>
-              <Button size="sm" onClick={handleSaveNew} disabled={isSavingNew}>
-                {isSavingNew ? <Loader2 size={14} className="animate-spin" /> : 'Save template'}
+              <Button size="sm" onClick={handleSaveNew} isLoading={isSavingNew}>
+                Save template
               </Button>
             </div>
           </div>
         ) : (
-          <button
-            type="button"
+          <Button
+            variant="dashed"
             onClick={() => setIsCreating(true)}
-            className="w-full flex items-center justify-center gap-2 px-3 py-3 rounded-card border border-dashed border-brand-300 dark:border-brand-600 text-sm font-medium text-brand-500 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-700/30 hover:text-brand-700 dark:hover:text-brand-200 transition-colors"
+            leftIcon={<Plus size={16} />}
+            className="w-full min-h-11"
           >
-            <Plus size={16} />
             New template
-          </button>
+          </Button>
         )}
       </div>
     </Drawer>
