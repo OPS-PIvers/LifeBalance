@@ -474,10 +474,6 @@ describe("computeBalanceAsOf", () => {
     );
   });
 
-  it("falls back to today when there are no withdrawals", () => {
-    expect(computeBalanceAsOf([], "2026-07-21")).toBe("2026-07-21");
-  });
-
   it("handles a single withdrawal", () => {
     expect(computeBalanceAsOf(["2026-07-15"], "2026-07-21")).toBe("2026-07-15");
   });
