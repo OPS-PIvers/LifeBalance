@@ -310,6 +310,9 @@ describe('apiKeyService', () => {
       expect(getQuickAddEndpointUrl('expense')).toMatch(/\/quickAddExpense$/);
       expect(getQuickAddEndpointUrl('shopping')).toMatch(/\/quickAddShoppingItem$/);
       expect(getQuickAddEndpointUrl('naturalLanguage')).toMatch(/\/quickAddNaturalLanguage$/);
+      expect(getQuickAddEndpointUrl('bill')).toMatch(/\/quickAddBillPay$/);
+      expect(getQuickAddEndpointUrl('todo')).toMatch(/\/quickAddTodo$/);
+      expect(getQuickAddEndpointUrl('getTodos')).toMatch(/\/getTodos$/);
     });
   });
 });

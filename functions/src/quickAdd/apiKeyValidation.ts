@@ -14,6 +14,13 @@ export interface ApiKeyPermissions {
   // Create a to-do via quickAddTodo (F-TODO-07). Optional so keys minted
   // before this permission existed keep validating (todos defaults off).
   todos?: boolean;
+  // Generic READ/export scope: gates GET endpoints that pull data OUT of the
+  // household (e.g. getTodos). Deliberately a SEPARATE scope from the write-only
+  // quickAdd* permissions so a capture-only key can't exfiltrate data unless
+  // `read` is explicitly enabled, and so future GET endpoints (habits, bills, …)
+  // can reuse it. Optional so keys minted before it existed keep validating
+  // (read defaults off).
+  read?: boolean;
   receiptScanning: boolean;
 }
 
@@ -46,6 +53,7 @@ const RATE_LIMITS = {
   shopping: { limit: 100, windowMs: 60 * 60 * 1000 }, // 100/hour
   bill: { limit: 50, windowMs: 60 * 60 * 1000 }, // 50/hour
   todo: { limit: 100, windowMs: 60 * 60 * 1000 }, // 100/hour
+  read: { limit: 100, windowMs: 60 * 60 * 1000 }, // 100/hour (GET export endpoints)
 };
 
 /**
@@ -146,7 +154,7 @@ export async function validateApiKey(
  */
 export async function checkRateLimit(
   householdId: string,
-  endpointType: "habit" | "expense" | "shopping" | "bill" | "todo"
+  endpointType: "habit" | "expense" | "shopping" | "bill" | "todo" | "read"
 ): Promise<{ allowed: boolean; retryAfterMs?: number }> {
   const config = RATE_LIMITS[endpointType];
   const now = Date.now();
