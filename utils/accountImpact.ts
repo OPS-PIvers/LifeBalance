@@ -47,6 +47,29 @@ export function effectiveAccountImpact(
 }
 
 /**
+ * A row written by the nightly bank-email sync (bankEmailSync Cloud Function).
+ * Matches the FilterControls "Bank Sync" arm convention: `source === 'bank-sync'`
+ * OR a `bankRef` present (the sync also stamps `bankRef` onto rows it
+ * fills/confirms that were originally created by another source).
+ *
+ * WHY IT MATTERS FOR BALANCES: bank-sync rows are born `verified`, but their
+ * account balance was NOT accumulated from the row — the sync sets the account
+ * balance authoritatively to the bank email's ENDING BALANCE, which already
+ * reflects the transaction. So client-side balance bookkeeping (the
+ * reverse/apply deltas on delete, amount edit, merge, and trash restore) must
+ * SKIP these rows entirely: deleting one doesn't make the money reappear at the
+ * bank, and editing its amount doesn't change what the bank said the balance
+ * is. The bank's stated balance stays correct either way.
+ */
+export function isBankSyncTransaction(
+  tx: Pick<Transaction, 'source'> & { bankRef?: string }
+): boolean {
+  // Truthy check (not `!== undefined`) so a malformed empty-string bankRef
+  // doesn't classify a row as bank-sync.
+  return tx.source === 'bank-sync' || !!tx.bankRef;
+}
+
+/**
  * Resolve the account a transaction's balance impact lands on: the tagged
  * account when it exists, otherwise the checking account (backward compatible
  * with untagged transactions). When a transaction is tagged to an account that

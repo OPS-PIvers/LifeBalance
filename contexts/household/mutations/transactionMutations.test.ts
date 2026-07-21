@@ -62,7 +62,7 @@ vi.mock('react-hot-toast', () => ({
 
 vi.mock('@/services/analytics', () => ({ track: vi.fn() }));
 
-import { makeAddTransaction, makeDeleteTransaction, makeUpdateTransactionCategory } from './transactionMutations';
+import { makeAddTransaction, makeDeleteTransaction, makeUpdateTransaction, makeUpdateTransactionCategory } from './transactionMutations';
 import type { Account, Transaction } from '@/types/schema';
 
 const HOUSEHOLD_ID = 'house1';
@@ -234,6 +234,28 @@ describe('makeDeleteTransaction — trash mirror + balance reversal', () => {
     expect((capturedSets[0]!.data!['data'] as Record<string, unknown>).status).toBe('pending_review');
   });
 
+  // BANK-SYNC: the sync sets the account balance authoritatively from the bank
+  // email's ENDING BALANCE (already reflecting the row), so deleting the row
+  // must NOT credit the balance back — the bank's stated balance stays correct.
+  it('reverses NO balance for a verified bank-sync row (source arm) but still mirrors + deletes', async () => {
+    const bankRow: Transaction = { ...verifiedTx, source: 'bank-sync', bankRef: 'P0000123', accountId: 'acc-check' };
+    const { deleteTransaction } = makeDeleteTransaction(deleteDeps([bankRow]));
+    await deleteTransaction('tx-1');
+
+    expect(commitCount).toBe(1);
+    expect(capturedUpdates).toHaveLength(0); // no account write at all
+    expect(capturedSets).toHaveLength(1); // trash mirror still happens
+    expect(capturedDeletes.some(d => d.ref.__path.endsWith('/transactions/tx-1'))).toBe(true);
+  });
+
+  it('reverses NO balance for a bankRef-stamped row even when source is not bank-sync', async () => {
+    const filledRow: Transaction = { ...verifiedTx, source: 'shortcut', bankRef: 'synth:abc', accountId: 'acc-check' };
+    const { deleteTransaction } = makeDeleteTransaction(deleteDeps([filledRow]));
+    await deleteTransaction('tx-1');
+
+    expect(capturedUpdates).toHaveLength(0);
+  });
+
   it('falls back to a plain delete (no mirror) when the trash write is permission-denied', async () => {
     commitErrors = [{ code: 'permission-denied' }];
     const { deleteTransaction } = makeDeleteTransaction(deleteDeps([verifiedTx]));
@@ -309,6 +331,85 @@ describe('makeUpdateTransactionCategory — bank-email-sync needsCategory row', 
     });
     // No account balance update — the row was already verified, so reverse+apply
     // cancel to a zero net delta (the account is unchanged).
+    const balanceUpdates = capturedUpdates.filter(u => u.ref.__path.startsWith(`households/${HOUSEHOLD_ID}/accounts/`));
+    expect(balanceUpdates).toHaveLength(0);
+  });
+
+  it('applies NO balance delta even with an inline amount override on a bank-sync row', async () => {
+    const realBankRow: Transaction = { ...bankSyncRow, source: 'bank-sync', bankRef: 'P0000123' };
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(catDeps([realBankRow]));
+    await updateTransactionCategory('tx-bank', 'Groceries', undefined, undefined, { amount: 55 });
+
+    const txUpdate = capturedUpdates.find(u => u.ref.__path === txnPath('tx-bank'));
+    expect(txUpdate?.data).toMatchObject({ category: 'Groceries', amount: 55 });
+    // The bank's ending balance already reflects the settled transaction;
+    // correcting our recorded amount must not move any account.
+    const balanceUpdates = capturedUpdates.filter(u => u.ref.__path.startsWith(`households/${HOUSEHOLD_ID}/accounts/`));
+    expect(balanceUpdates).toHaveLength(0);
+  });
+});
+
+describe('makeUpdateTransaction — bank-sync rows never delta a balance', () => {
+  beforeEach(() => {
+    capturedSets = [];
+    capturedUpdates = [];
+    capturedDeletes = [];
+    commitCount = 0;
+    commitErrors = [];
+    vi.clearAllMocks();
+  });
+
+  const baseVerified: Transaction = {
+    id: 'tx-1',
+    amount: 42.5,
+    merchant: 'Target',
+    category: 'Shopping',
+    date: '2026-07-10',
+    status: 'verified',
+    isRecurring: false,
+    source: 'manual',
+    autoCategorized: false,
+    createdBy: 'user-1',
+    createdAt: '2026-07-10T00:00:00.000Z',
+    payPeriodId: 'pp-1',
+    accountId: 'acc-check',
+  };
+
+  const updateDeps = (transactions: Transaction[]) => ({
+    db,
+    householdId: HOUSEHOLD_ID,
+    transactions,
+    householdSettings: null,
+    accounts,
+  });
+
+  it('control: an amount edit on a verified MANUAL row deltas the account by (old − new) impact', async () => {
+    const { updateTransaction } = makeUpdateTransaction(updateDeps([baseVerified]));
+    await updateTransaction('tx-1', { amount: 50 });
+
+    // Reverse +42.5, apply −50 → net −7.5 on checking.
+    const balanceUpdate = capturedUpdates.find(u => u.ref.__path === accountPath('acc-check'));
+    expect(balanceUpdate?.data?.['balance']).toEqual({ __increment: -7.5 });
+  });
+
+  it('an amount edit on a bank-sync row applies NO balance delta', async () => {
+    const bankRow: Transaction = { ...baseVerified, source: 'bank-sync', bankRef: 'P0000123' };
+    const { updateTransaction } = makeUpdateTransaction(updateDeps([bankRow]));
+    await updateTransaction('tx-1', { amount: 50 });
+
+    // The doc amount updates, but no account is touched — the account balance
+    // was set from the bank email's ending balance, not from this row.
+    const txUpdate = capturedUpdates.find(u => u.ref.__path === `households/${HOUSEHOLD_ID}/transactions/tx-1`);
+    expect(txUpdate?.data).toMatchObject({ amount: 50 });
+    const balanceUpdates = capturedUpdates.filter(u => u.ref.__path.startsWith(`households/${HOUSEHOLD_ID}/accounts/`));
+    expect(balanceUpdates).toHaveLength(0);
+  });
+
+  it('an account re-tag on a bank-sync row moves NO money between accounts', async () => {
+    const bankRow: Transaction = { ...baseVerified, source: 'bank-sync', bankRef: 'P0000123' };
+    const { updateTransaction } = makeUpdateTransaction(updateDeps([bankRow]));
+    await updateTransaction('tx-1', { accountId: 'acc-save' });
+
     const balanceUpdates = capturedUpdates.filter(u => u.ref.__path.startsWith(`households/${HOUSEHOLD_ID}/accounts/`));
     expect(balanceUpdates).toHaveLength(0);
   });

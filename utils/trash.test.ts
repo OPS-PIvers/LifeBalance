@@ -218,6 +218,22 @@ describe('transactionRestoreImpact', () => {
     expect(transactionRestoreImpact({ category: 'Shopping', status: 'verified' }, accounts)).toEqual({ outcome: 'none' });
   });
 
+  it('is none for a bank-sync row (balance authority is the email ending balance)', () => {
+    expect(
+      transactionRestoreImpact(
+        { amount: 42.5, category: 'Shopping', status: 'verified', source: 'bank-sync', accountId: 'acc-check' },
+        accounts
+      )
+    ).toEqual({ outcome: 'none' });
+    // bankRef-stamped row from another source counts as bank-sync too.
+    expect(
+      transactionRestoreImpact(
+        { amount: 42.5, category: 'Shopping', status: 'verified', source: 'shortcut', bankRef: 'P0000123', accountId: 'acc-check' },
+        accounts
+      )
+    ).toEqual({ outcome: 'none' });
+  });
+
   it('rounds the delta to whole cents', () => {
     expect(
       transactionRestoreImpact({ amount: 10.001, category: 'Shopping', status: 'verified' }, accounts)

@@ -202,6 +202,13 @@ export function transactionRestoreImpact(
   const amount = data.amount;
   if (typeof amount !== 'number' || !Number.isFinite(amount)) return { outcome: 'none' };
   if (data.status !== 'verified') return { outcome: 'none' };
+  // BANK-SYNC EXCEPTION (symmetry with deleteTransaction): a bank-email-sync
+  // row's account balance was set authoritatively from the bank email's ending
+  // balance, so deleting it reversed nothing — restoring it must re-apply
+  // nothing either, or a delete→restore round-trip would inflate the balance.
+  if (data.source === 'bank-sync' || (typeof data.bankRef === 'string' && data.bankRef)) {
+    return { outcome: 'none' };
+  }
 
   const accountId =
     typeof data.accountId === 'string' && data.accountId.trim() ? data.accountId.trim() : undefined;

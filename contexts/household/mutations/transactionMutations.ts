@@ -15,7 +15,7 @@ import { Star } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { Account, Habit, Household, SplitParticipant, Transaction } from '@/types/schema';
 import type { MutationOpts } from '@/contexts/household/types';
-import { effectiveAccountImpact, resolveTargetAccount } from '@/utils/accountImpact';
+import { effectiveAccountImpact, isBankSyncTransaction, resolveTargetAccount } from '@/utils/accountImpact';
 import { splitParticipantKey } from '@/utils/settlement';
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
 import { processToggleHabit } from '@/utils/habitLogic';
@@ -404,11 +404,20 @@ export function makeUpdateTransactionCategory(deps: {
     // credit-card payment pays the card down instead of raising its debt.
     const effectiveCreditPayment = overrides?.creditPayment ?? existingTx.creditPayment;
 
-    const reverseDelta = -effectiveAccountImpact(existingTx, oldTarget);
-    const applyDelta = effectiveAccountImpact(
-      { amount: effectiveAmount, category, creditPayment: effectiveCreditPayment, status: 'verified' },
-      newTarget
-    );
+    // BANK-SYNC EXCEPTION: for a bank-email-sync row the account balance was
+    // set authoritatively from the bank email's ENDING BALANCE (already
+    // reflecting this transaction), not accumulated from the row — so a
+    // categorize with an inline amount edit or account re-tag must not move any
+    // balance either (see isBankSyncTransaction; without this, only the
+    // no-override same-account case cancelled to zero by accident).
+    const isBankSync = isBankSyncTransaction(existingTx);
+    const reverseDelta = isBankSync ? 0 : -effectiveAccountImpact(existingTx, oldTarget);
+    const applyDelta = isBankSync
+      ? 0
+      : effectiveAccountImpact(
+          { amount: effectiveAmount, category, creditPayment: effectiveCreditPayment, status: 'verified' },
+          newTarget
+        );
     const deltasByAccountId = new Map<string, number>();
     if (oldTarget) deltasByAccountId.set(oldTarget.id, (deltasByAccountId.get(oldTarget.id) ?? 0) + reverseDelta);
     if (newTarget) deltasByAccountId.set(newTarget.id, (deltasByAccountId.get(newTarget.id) ?? 0) + applyDelta);
@@ -594,11 +603,21 @@ export function makeUpdateTransaction(deps: {
       const oldTarget = resolveTargetAccount(transaction.accountId, accounts);
       const newTarget = resolveTargetAccount(newAccountId, accounts);
 
-      const reverseDelta = -effectiveAccountImpact(transaction, oldTarget);
-      const applyDelta = effectiveAccountImpact(
-        { amount: newAmount, category: newCategory, creditPayment: newCreditPayment, status: newStatus },
-        newTarget
-      );
+      // BANK-SYNC EXCEPTION: a bank-email-sync row's account balance came
+      // authoritatively from the bank email's ENDING BALANCE (which already
+      // reflects the transaction) — it was never accumulated from this row. An
+      // amount (or category/account/creditPayment) edit is therefore pure
+      // bookkeeping: correcting what we RECORDED about a settled bank
+      // transaction doesn't change what the bank said the balance is, so no
+      // reverse/apply delta may touch any account. See isBankSyncTransaction.
+      const isBankSync = isBankSyncTransaction(transaction);
+      const reverseDelta = isBankSync ? 0 : -effectiveAccountImpact(transaction, oldTarget);
+      const applyDelta = isBankSync
+        ? 0
+        : effectiveAccountImpact(
+            { amount: newAmount, category: newCategory, creditPayment: newCreditPayment, status: newStatus },
+            newTarget
+          );
 
       // Merge by account id: when old and new resolve to the SAME doc, Firestore
       // rejects two writes to it in one batch, so collapse to a single net delta.
@@ -747,8 +766,17 @@ export function makeDeleteTransaction(deps: {
         // deleting a verified card charge lowers the card's debt again); a
         // pending_review transaction never touched any balance, so deleting it must
         // NOT move a balance (its effective impact is 0).
+        //
+        // BANK-SYNC EXCEPTION: a bank-email-sync row (source 'bank-sync' /
+        // bankRef) is verified, but the account balance was set authoritatively
+        // from the bank email's ENDING BALANCE — which already reflects this
+        // transaction — not accumulated from the row. Deleting the row must NOT
+        // credit the money back: the bank's stated balance is still correct.
+        // See isBankSyncTransaction.
         const target = resolveTargetAccount(transaction.accountId, accounts);
-        const balanceDelta = -effectiveAccountImpact(transaction, target);
+        const balanceDelta = isBankSyncTransaction(transaction)
+          ? 0
+          : -effectiveAccountImpact(transaction, target);
         if (balanceDelta !== 0 && target) {
           deleteBatch.update(doc(db, `households/${householdId}/accounts`, target.id), {
             balance: increment(roundMoney(balanceDelta)),
@@ -835,8 +863,13 @@ export function makeMergeTransactions(deps: {
       // of merging two still-pending rows; it only fires when the dupe was
       // independently verified against a (possibly different) account than
       // the keeper, so both accounts are adjusted correctly.
+      // (Bank-sync exception, same as deleteTransaction: a bank-sync dupe's
+      // balance came from the email's ending balance, so deleting it reverses
+      // nothing.)
       const dupeTarget = resolveTargetAccount(dupeTx.accountId, accounts);
-      const dupeBalanceDelta = -effectiveAccountImpact(dupeTx, dupeTarget);
+      const dupeBalanceDelta = isBankSyncTransaction(dupeTx)
+        ? 0
+        : -effectiveAccountImpact(dupeTx, dupeTarget);
       if (dupeBalanceDelta !== 0 && dupeTarget) {
         mergeBatch.update(doc(db, `households/${householdId}/accounts`, dupeTarget.id), {
           balance: increment(roundMoney(dupeBalanceDelta)),
