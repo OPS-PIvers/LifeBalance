@@ -7,7 +7,7 @@ import { getLocalDateString } from '@/utils/dateHelpers';
 import { rollRecurringAnchorForward, isRecurringId, parseRecurringId } from '@/utils/calendarRecurrence';
 import { BUDGETED_IN_CALENDAR } from '@/utils/categories';
 import { hashKidPin } from '@/utils/kidPin';
-import { computeTodoCompletionCredit } from '@/utils/todoPoints';
+import { computeTodoCompletionCredit, buildUncompleteCreditReversal } from '@/utils/todoPoints';
 import { buildNextRecurringTodo } from '@/utils/todoRecurrence';
 import { buildToDosFromTemplate } from '@/utils/taskTemplates';
 import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
@@ -2089,6 +2089,37 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
           : m);
       });
       toast.success('Mock: ToDo completed');
+    }, []),
+    uncompleteToDo: useCallback(async (id: string) => {
+      // Counterpart of completeToDo (see makeUncompleteToDo in the real
+      // context): restores the to-do AND reverses the managed-kid points
+      // credit through the SAME dormancy gate, so Test Mode mirrors the
+      // atomic restore+debit. Idempotent: an already-active todo is a no-op,
+      // so restoring twice can never double-reverse.
+      const todo = todosRef.current.find(t => t.id === id);
+      if (!todo) {
+        toast.error('Mock: ToDo not found');
+        return;
+      }
+      if (!todo.isCompleted) {
+        return; // already active — no double reversal
+      }
+      setTodos(prev => prev.map(t =>
+        t.id === id ? { ...t, isCompleted: false, completedAt: undefined } : t,
+      ));
+      setMembers(prev => {
+        const credit = computeTodoCompletionCredit(todo, prev);
+        if (!credit) return prev;
+        const deltas = buildUncompleteCreditReversal(credit.points, todo.completedAt);
+        return prev.map(m => m.uid === credit.memberUid
+          ? { ...m, points: {
+              daily: m.points.daily + (deltas['points.daily'] ?? 0),
+              weekly: m.points.weekly + (deltas['points.weekly'] ?? 0),
+              total: m.points.total + (deltas['points.total'] ?? 0),
+            } }
+          : m);
+      });
+      toast.success('Mock: ToDo restored');
     }, []),
     addTaskTemplate,
     updateTaskTemplate,

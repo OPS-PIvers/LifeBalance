@@ -152,6 +152,69 @@ describe('MockHouseholdContext completeToDo → kid point credit', () => {
     const after = result.current.members.map(m => ({ uid: m.uid, ...m.points }));
     expect(after).toEqual(before);
   });
+
+  // Points-integrity fix: restoring a completed kid task must REVERSE the
+  // credit through the same dormancy gate (was a plain updateToDo that left
+  // the kid over-credited).
+  it('uncompleteToDo reverses the kid credit — complete→restore is points-neutral', async () => {
+    const { result } = captureHousehold();
+    const before = { ...kidPoints(result) };
+
+    await act(async () => {
+      await result.current.completeToDo('todo_kid_1'); // +5
+    });
+    expect(kidPoints(result).total).toBe(before.total + 5);
+
+    await act(async () => {
+      await result.current.uncompleteToDo('todo_kid_1'); // -5 (same-day → all three)
+    });
+
+    expect(kidPoints(result)).toEqual(before);
+    expect(result.current.todos.find(t => t.id === 'todo_kid_1')?.isCompleted).toBe(false);
+  });
+
+  it('uncompleteToDo is idempotent — restoring twice never double-reverses', async () => {
+    const { result } = captureHousehold();
+    const before = { ...kidPoints(result) };
+
+    await act(async () => {
+      await result.current.completeToDo('todo_kid_1');
+    });
+    await act(async () => {
+      await result.current.uncompleteToDo('todo_kid_1');
+    });
+    await act(async () => {
+      await result.current.uncompleteToDo('todo_kid_1'); // already active → no-op
+    });
+
+    expect(kidPoints(result)).toEqual(before);
+  });
+
+  it('uncompleteToDo does NOT change member points for a non-kid assignee', async () => {
+    const { result } = captureHousehold();
+
+    await act(async () => {
+      await result.current.addToDo({
+        text: 'Water the plants',
+        completeByDate: getLocalDateString(),
+        assignedTo: 'test-user-id',
+        isCompleted: false,
+        points: 50,
+      });
+    });
+    const created = result.current.todos.find(t => t.text === 'Water the plants')!;
+    await act(async () => {
+      await result.current.completeToDo(created.id);
+    });
+    const before = result.current.members.map(m => ({ uid: m.uid, ...m.points }));
+
+    await act(async () => {
+      await result.current.uncompleteToDo(created.id);
+    });
+
+    expect(result.current.members.map(m => ({ uid: m.uid, ...m.points }))).toEqual(before);
+    expect(result.current.todos.find(t => t.id === created.id)?.isCompleted).toBe(false);
+  });
 });
 
 // Plan 080d: the mock rewards store is now stateful (seeded with 2 rewards) and

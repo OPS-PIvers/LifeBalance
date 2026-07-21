@@ -64,6 +64,7 @@ const ToDosPage: React.FC = () => {
     updateToDo,
     deleteToDo,
     completeToDo,
+    uncompleteToDo,
     hasMoreCompletedTodos,
     isLoadingOlderTodos,
     loadOlderCompletedTodos,
@@ -432,16 +433,15 @@ const ToDosPage: React.FC = () => {
 
   const handleUncomplete = useCallback(async (id: string) => {
       try {
-          await updateToDo(id, {
-              isCompleted: false,
-              completedAt: undefined // Clear completion timestamp
-          });
+          // uncompleteToDo (not a plain updateToDo) so a managed-kid assignee's
+          // completion points credit is reversed atomically with the restore.
+          await uncompleteToDo(id);
           toast.success('Task restored to active');
       } catch (error) {
           console.error('Failed to restore task:', error);
           toast.error('Failed to restore task');
       }
-  }, [updateToDo]);
+  }, [uncompleteToDo]);
 
   const handleMoveToTomorrow = useCallback(async (todo: ToDo) => {
       try {

@@ -171,6 +171,7 @@ describe('ToDosPage', () => {
   const mockUpdateToDo = vi.fn();
   const mockDeleteToDo = vi.fn();
   const mockCompleteToDo = vi.fn();
+  const mockUncompleteToDo = vi.fn();
 
   const setup = (todos = mockTodos, members = mockMembers) => {
     setHouseholdMock({
@@ -181,6 +182,7 @@ describe('ToDosPage', () => {
       updateToDo: mockUpdateToDo,
       deleteToDo: mockDeleteToDo,
       completeToDo: mockCompleteToDo,
+      uncompleteToDo: mockUncompleteToDo,
       taskTemplates: [],
       addTaskTemplate: vi.fn(),
       updateTaskTemplate: vi.fn(),
@@ -443,10 +445,9 @@ describe('ToDosPage', () => {
           fireEvent.click(restoreBtn);
 
           await waitFor(() => {
-              expect(mockUpdateToDo).toHaveBeenCalledWith('3', {
-                  isCompleted: false,
-                  completedAt: undefined
-              });
+              // Restore routes through uncompleteToDo (atomic kid-points
+              // reversal), NOT a plain updateToDo.
+              expect(mockUncompleteToDo).toHaveBeenCalledWith('3');
           });
       });
 
