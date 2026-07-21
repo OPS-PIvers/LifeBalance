@@ -1,7 +1,7 @@
 import React from 'react';
 import { QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhower';
 import { ToDo, HouseholdMember } from '@/types/schema';
-import { Section } from './Section';
+import { TodoSection } from './TodoSection';
 import { QUADRANT_SECTIONS } from './todoDisplay';
 
 // Extracted from pages/ToDosPage.tsx (Plan 27) — the
@@ -39,14 +39,13 @@ export const EisenhowerMatrixView: React.FC<EisenhowerMatrixViewProps> = ({
 }) => (
   <>
     {QUADRANT_ORDER.map((q) => (
-      <Section
+      <TodoSection
         key={q}
         title={QUADRANT_SECTIONS[q].title}
-        // The verb title already encodes the axis — the visible caps subtitle
-        // double-encoded it, so it's sr-only here (matches the 2×2 grid view,
+        // The verb title already encodes the axis — TodoSection renders the
+        // subtitle sr-only inside the heading (matches the 2×2 grid view,
         // which carries the axis in each cell's aria-label/tooltip only).
         subtitle={QUADRANT_SECTIONS[q].subtitle}
-        subtitleSrOnly
         items={quadrants[q]}
         color={QUADRANT_SECTIONS[q].color}
         maxVisible={q === 'later' ? 5 : undefined}
