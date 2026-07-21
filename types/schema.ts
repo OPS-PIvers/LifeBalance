@@ -270,7 +270,7 @@ export interface Transaction {
   date: string;
   status: 'verified' | 'pending_review';
   isRecurring: boolean;
-  source: 'manual' | 'camera-scan' | 'file-upload' | 'recurring' | 'shortcut' | 'plaid';
+  source: 'manual' | 'camera-scan' | 'file-upload' | 'recurring' | 'shortcut' | 'plaid' | 'bank-sync';
   autoCategorized: boolean;
   payPeriodId?: string; // Pay period ID (YYYY-MM-DD of period start), empty string if no period tracking
   relatedHabitIds?: string[];

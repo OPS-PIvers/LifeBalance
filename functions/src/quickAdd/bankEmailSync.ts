@@ -546,7 +546,7 @@ export const bankEmailSync = onRequest(
                 isPaid: true,
                 isRecurring: false,
                 parentRecurringId: bill.templateId,
-                source: "shortcut",
+                source: "bank-sync",
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
               });
             } else {
@@ -564,7 +564,7 @@ export const bankEmailSync = onRequest(
               date: bill.date,
               status: "verified",
               isRecurring: bill.isRecurringInstance,
-              source: "shortcut",
+              source: "bank-sync",
               autoCategorized: true,
               payPeriodId: billPayPeriodId,
               accountId: resolvedAccountId,
@@ -594,7 +594,7 @@ export const bankEmailSync = onRequest(
               date: w.date,
               status: "verified",
               isRecurring: false,
-              source: "shortcut",
+              source: "bank-sync",
               autoCategorized: false,
               needsCategory: true,
               payPeriodId,
