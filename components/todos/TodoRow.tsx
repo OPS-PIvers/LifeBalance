@@ -76,6 +76,10 @@ export const TodoRow = React.memo(function TodoRow({
     (item.subtasks?.length ?? 0) > 0 ||
     Boolean(item.recurrence?.frequency);
 
+  // id for the meta line (due/overdue, reminder, details, assignee), wired to
+  // the row button via aria-describedby — see handleBodyClick's button below.
+  const metaId = `todo-row-meta-${item.id}`;
+
   // --- Gesture model (mirrors ShoppingItemRow): TAP on the row body opens the
   // edit drawer; LONG-PRESS anywhere on the body opens the Task-options drawer
   // (as does right-click / the keyboard context-menu key, for pointers that
@@ -253,11 +257,16 @@ export const TodoRow = React.memo(function TodoRow({
           onPointerCancel={cancelLongPress}
           onContextMenu={handleContextMenu}
           aria-label={`Edit task: ${item.text}`}
-          className="flex-1 min-w-0 text-left select-none [-webkit-touch-callout:none] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-sm"
+          aria-describedby={metaId}
+          className="flex-1 min-w-0 text-left select-none [-webkit-touch-callout:none] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-card"
         >
           <span className="block font-medium leading-snug text-brand-900 dark:text-brand-50">{item.text}</span>
 
-          <span className="flex flex-wrap items-center gap-3 mt-1.5 text-xs">
+          {/* aria-describedby (not folded into the button's aria-label above)
+              so AT still announces urgency/reminder/details/assignee — an
+              explicit aria-label on the button would otherwise remove this
+              whole subtree from the accessibility tree. */}
+          <span id={metaId} className="flex flex-wrap items-center gap-3 mt-1.5 text-xs">
             {/* Single primary status signal: urgency-colored text, not a bordered pill. */}
             {isOverdue ? (
               <span className="flex items-center gap-1 font-semibold text-money-neg dark:text-money-negDark">
