@@ -68,7 +68,10 @@ export interface ReconcileCandidate {
   fromBankNotification?: boolean;
 }
 
-/** The incoming bank-notification event, already parsed/normalized. */
+/** The incoming capture, already parsed/normalized. Depending on the call site
+ *  this is either a bank-notification event (the stub-fill and forward-dup paths)
+ *  or a non-bank Apple Pay "Transaction" capture (the reverse-dup path) — the
+ *  shape is identical, only the merge DIRECTION differs. */
 export interface IncomingExpense {
   amount: number;
   merchant: string;

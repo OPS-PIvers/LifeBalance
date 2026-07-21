@@ -929,6 +929,12 @@ export const quickAddExpense = onRequest(
               { amount, merchant: merchant.trim(), category, accountId: resolvedAccountId },
               reverseTarget
             );
+            // No Object.keys guard here (unlike the forward path above): unlike
+            // buildDuplicateMergeUpdates — which can return {} because it only
+            // conditionally sets accountId — buildReverseDuplicateMergeUpdates
+            // ALWAYS returns at least { merchant, fromBankNotification: false }, so
+            // the patch is never empty. Keep that invariant if either field is
+            // ever made conditional, or restore the guard.
             await reverseRef.update(mergeUpdates);
             await logApiCall(householdId, apiKey.substring(0, 16), "expense", req.body, 200);
             jsonResponse(res, 200, {
