@@ -7,6 +7,8 @@ import {
   buildFillUpdates,
   pickDuplicateShortcutRow,
   buildDuplicateMergeUpdates,
+  pickReverseDuplicateRow,
+  buildReverseDuplicateMergeUpdates,
   type ReconcileCandidate,
 } from "./reconcile";
 
@@ -227,9 +229,16 @@ function applePay(
   return { id, merchant, amount, needsAmount: false, ...extra };
 }
 
-/** A row that itself came from a bank notification (never a merge TARGET). */
-function bankRow(id: string, merchant: string, amount: number): ReconcileCandidate {
-  return { id, merchant, amount, needsAmount: false, fromBankNotification: true };
+/** A row that itself came from a bank notification. Never a merge TARGET for the
+ *  forward path (pickDuplicateShortcutRow), but IS the merge target for the
+ *  reverse path (pickReverseDuplicateRow). */
+function bankRow(
+  id: string,
+  merchant: string,
+  amount: number,
+  extra: Partial<ReconcileCandidate> = {},
+): ReconcileCandidate {
+  return { id, merchant, amount, needsAmount: false, fromBankNotification: true, ...extra };
 }
 
 describe("pickDuplicateShortcutRow", () => {
@@ -351,5 +360,169 @@ describe("buildDuplicateMergeUpdates", () => {
         applePay("ap1", "Target", 18.86, { accountId: "credit" }),
       ),
     ).toEqual({});
+  });
+});
+
+// ---------------------------------------------------------------------------
+// pickReverseDuplicateRow — REVERSE capture ordering (bank push arrived FIRST)
+// ---------------------------------------------------------------------------
+
+describe("pickReverseDuplicateRow", () => {
+  it("REVERSE REGRESSION: folds an incoming Apple Pay capture into the earlier bank-notification row for the same purchase", () => {
+    // The reverse of the reported bug: the bank push landed FIRST as
+    // "TARGET T-2189" $18.86 (fromBankNotification), then the Apple Pay
+    // "Transaction" automation reports "Target" $18.86 moments later. Both
+    // untagged → the identity check only ranks them 'possible', so two rows
+    // would survive. This collapses them into the earlier bank row.
+    const candidates = [bankRow("bn1", "TARGET T-2189", 18.86)];
+    const target = pickReverseDuplicateRow(
+      { amount: 18.86, merchant: "Target" },
+      candidates,
+    );
+    expect(target?.id).toBe("bn1");
+  });
+
+  it("SAFETY: returns null when there are no candidates (e.g. every bank row fell outside the ~30-min window)", () => {
+    expect(pickReverseDuplicateRow({ amount: 5, merchant: "Coffee" }, [])).toBeNull();
+  });
+
+  it("does NOT fold into a $0 stub (that is pickFillTarget's job)", () => {
+    const candidates = [stub("s1", "Target")];
+    expect(
+      pickReverseDuplicateRow({ amount: 18.86, merchant: "Target" }, candidates),
+    ).toBeNull();
+  });
+
+  it("does NOT fold into a NON-bank (Apple Pay) row — the merge must be cross-source", () => {
+    // Two Apple Pay captures of the same purchase are the forward path's concern
+    // (pickDuplicateShortcutRow); the reverse path only ever targets a bank row.
+    const candidates = [applePay("ap1", "Target", 18.86)];
+    expect(
+      pickReverseDuplicateRow({ amount: 18.86, merchant: "Target" }, candidates),
+    ).toBeNull();
+  });
+
+  it("SAFETY: does NOT fold when the amount differs by even a cent (two separate purchases)", () => {
+    const candidates = [bankRow("bn1", "Target", 18.86)];
+    expect(
+      pickReverseDuplicateRow({ amount: 18.87, merchant: "Target" }, candidates),
+    ).toBeNull();
+  });
+
+  it("SAFETY: does NOT fold when the merchant is dissimilar (two separate purchases, same amount)", () => {
+    const candidates = [bankRow("bn1", "Whole Foods", 18.86)];
+    expect(
+      pickReverseDuplicateRow({ amount: 18.86, merchant: "Target" }, candidates),
+    ).toBeNull();
+  });
+
+  it("SAFETY: does NOT fold when two matching bank rows exist (ambiguous → keep both)", () => {
+    // Two genuinely-separate identical $5 coffees, each captured via the bank
+    // shortcut → two candidates → under-merge rather than guess which one.
+    const candidates = [
+      bankRow("bn1", "Starbucks", 5),
+      bankRow("bn2", "Starbucks", 5),
+    ];
+    expect(
+      pickReverseDuplicateRow({ amount: 5, merchant: "Starbucks" }, candidates),
+    ).toBeNull();
+  });
+
+  it("SAFETY: does NOT fold into a bank row tagged to a DIFFERENT account than the incoming card", () => {
+    const candidates = [bankRow("bn1", "Target", 18.86, { accountId: "checking" })];
+    expect(
+      pickReverseDuplicateRow(
+        { amount: 18.86, merchant: "Target", accountId: "credit" },
+        candidates,
+      ),
+    ).toBeNull();
+  });
+
+  it("folds into a same-account bank row", () => {
+    const candidates = [bankRow("bn1", "Target", 18.86, { accountId: "credit" })];
+    const target = pickReverseDuplicateRow(
+      { amount: 18.86, merchant: "Target", accountId: "credit" },
+      candidates,
+    );
+    expect(target?.id).toBe("bn1");
+  });
+
+  it("folds into the single eligible bank row while ignoring stubs and Apple Pay rows around it", () => {
+    const candidates = [
+      stub("s1", "Target"),
+      applePay("ap1", "Target", 18.86),
+      bankRow("bn1", "TARGET T-2189", 18.86),
+    ];
+    const target = pickReverseDuplicateRow(
+      { amount: 18.86, merchant: "Target" },
+      candidates,
+    );
+    expect(target?.id).toBe("bn1");
+  });
+});
+
+describe("buildReverseDuplicateMergeUpdates", () => {
+  it("rewrites the surviving bank row into the Apple Pay capture: cleaner merchant + clears the bank flag", () => {
+    const target = bankRow("bn1", "TARGET T-2189", 18.86);
+    const updates = buildReverseDuplicateMergeUpdates(
+      { amount: 18.86, merchant: "Target" },
+      target,
+    );
+    expect(updates).toMatchObject({ merchant: "Target", fromBankNotification: false });
+  });
+
+  it("does NOT overwrite the amount (the exact-cent match is already guaranteed)", () => {
+    const target = bankRow("bn1", "TARGET T-2189", 18.86);
+    const updates = buildReverseDuplicateMergeUpdates(
+      { amount: 18.86, merchant: "Target" },
+      target,
+    );
+    expect(updates).not.toHaveProperty("amount");
+  });
+
+  it("back-fills the resolved account only when the bank row was captured untagged", () => {
+    const untagged = bankRow("bn1", "TARGET T-2189", 18.86);
+    expect(
+      buildReverseDuplicateMergeUpdates(
+        { amount: 18.86, merchant: "Target", accountId: "credit" },
+        untagged,
+      ),
+    ).toMatchObject({ accountId: "credit" });
+
+    // A bank-resolved account (from the card last-4) is more reliable than an
+    // untagged Apple Pay capture, so it is never clobbered.
+    const tagged = bankRow("bn1", "TARGET T-2189", 18.86, { accountId: "checking" });
+    expect(
+      buildReverseDuplicateMergeUpdates(
+        { amount: 18.86, merchant: "Target", accountId: "credit" },
+        tagged,
+      ),
+    ).not.toHaveProperty("accountId");
+  });
+
+  it("overwrites category only when a non-default one is supplied", () => {
+    const target = bankRow("bn1", "TARGET T-2189", 18.86);
+    expect(
+      buildReverseDuplicateMergeUpdates(
+        { amount: 18.86, merchant: "Target", category: "Shopping" },
+        target,
+      ),
+    ).toMatchObject({ category: "Shopping" });
+
+    expect(
+      buildReverseDuplicateMergeUpdates(
+        { amount: 18.86, merchant: "Target", category: "Uncategorized" },
+        target,
+      ),
+    ).not.toHaveProperty("category");
+  });
+
+  it("never sets status (the merged row stays pending_review for review)", () => {
+    const target = bankRow("bn1", "TARGET T-2189", 18.86);
+    const updates = buildReverseDuplicateMergeUpdates(
+      { amount: 18.86, merchant: "Target" },
+      target,
+    );
+    expect(updates).not.toHaveProperty("status");
   });
 });

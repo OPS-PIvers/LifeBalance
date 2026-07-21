@@ -32,6 +32,8 @@ import {
   buildFillUpdates,
   pickDuplicateShortcutRow,
   buildDuplicateMergeUpdates,
+  pickReverseDuplicateRow,
+  buildReverseDuplicateMergeUpdates,
   type ReconcileCandidate,
 } from "./reconcile";
 import {
@@ -905,6 +907,48 @@ export const quickAddExpense = onRequest(
           }
           // No unambiguous stub or duplicate to fold into → fall through to
           // identity dedup, then a normal row.
+        }
+
+        // Reverse ordering (mirror of the block above): this is a NON-bank
+        // Apple Pay "Transaction" capture (amount > 0, not a stub), and the bank
+        // notification for the SAME purchase may have arrived FIRST — landing as
+        // a `fromBankNotification` real-amount row under a uglier merchant string
+        // ("TARGET T-2189" vs "Target"). That pair is only 'possible' to the
+        // identity check (both usually untagged), so it would otherwise survive
+        // as two rows. Fold this capture into that bank row, rewriting it into
+        // the Apple Pay capture so the cleaner data survives — same tight window +
+        // exactly-one + cross-source guards as the forward path.
+        if (!fromBankNotification && amount > 0) {
+          const reverseTarget = pickReverseDuplicateRow(
+            { amount, merchant: merchant.trim(), category, accountId: resolvedAccountId },
+            reconcileCandidates
+          );
+          const reverseRef = reverseTarget ? refById.get(reverseTarget.id) : undefined;
+          if (reverseTarget && reverseRef) {
+            const mergeUpdates = buildReverseDuplicateMergeUpdates(
+              { amount, merchant: merchant.trim(), category, accountId: resolvedAccountId },
+              reverseTarget
+            );
+            await reverseRef.update(mergeUpdates);
+            await logApiCall(householdId, apiKey.substring(0, 16), "expense", req.body, 200);
+            jsonResponse(res, 200, {
+              success: true,
+              merged: true,
+              message: `Already recorded: ${formatCurrency(amount, { currency })} at ${merchant} (matched a recent capture of the same purchase)`,
+              data: {
+                transactionId: reverseTarget.id,
+                amount,
+                merchant,
+                category,
+                date: transactionDate,
+                status: "pending_review",
+                accountId: (reverseTarget.accountId ?? resolvedAccountId) ?? null,
+              },
+            });
+            return;
+          }
+          // No unambiguous bank row to fold into → fall through to identity
+          // dedup, then a normal row.
         }
 
         // Cross-path duplicate check: did this same purchase already arrive via
