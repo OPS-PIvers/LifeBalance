@@ -12,6 +12,9 @@ const basePrefs: NotificationPreferences = {
   // F-TODO-14: todoReminders is also fail-open, so "everything off" baselines
   // must disable it explicitly too.
   todoReminders: { enabled: false },
+  // bankEmailSync is also fail-open, so "everything off" baselines must
+  // disable it explicitly too.
+  bankEmailSync: { enabled: false },
 };
 
 describe('computeAnyNotificationsEnabled', () => {
@@ -93,5 +96,19 @@ describe('computeAnyNotificationsEnabled', () => {
       digestMode: { enabled: false, time: '07:00' },
     };
     expect(computeAnyNotificationsEnabled(prefs, ['token1'])).toBe(false);
+  });
+
+  it('is true when bankEmailSync is the only enabled category (all others explicitly false) and tokens exist', () => {
+    const prefs = { ...basePrefs, bankEmailSync: { enabled: true } };
+    expect(computeAnyNotificationsEnabled(prefs, ['token1'])).toBe(true);
+  });
+
+  it('treats bankEmailSync as enabled by default when absent, even if every other category is off', () => {
+    const { bankEmailSync: _omit, ...rest } = basePrefs;
+    expect(computeAnyNotificationsEnabled(rest, ['token1'])).toBe(true);
+  });
+
+  it('is false when all categories including bankEmailSync are explicitly false', () => {
+    expect(computeAnyNotificationsEnabled(basePrefs, ['token1'])).toBe(false);
   });
 });

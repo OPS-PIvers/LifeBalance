@@ -62,6 +62,13 @@ export interface NotificationPreferences {
   todoReminders?: {
     enabled: boolean;
   };
+  // Nightly bank-email sync summary push (bank-email-sync groundwork). Sent
+  // server-side after the nightly sync run finishes. Optional so legacy docs
+  // deserialize — absent is treated as enabled (default ON, fail-open like
+  // weeklyRecap) since it's opt-out. Mirrors types/schema.ts NotificationPreferences.
+  bankEmailSync?: {
+    enabled: boolean;
+  };
   timezone?: string;
 }
 
@@ -96,6 +103,8 @@ export interface HouseholdMember {
  *   - digestMode: counted enabled only when `.enabled === true`, same as the
  *     four per-type toggles — a member relying solely on the digest (all four
  *     per-type toggles off) must still match the collection-group query.
+ *   - bankEmailSync: fail-open like weeklyRecap/todoReminders — absent means
+ *     ON, only an explicit `enabled: false` opts out.
  *
  * Kept in perfect parity with the client copy in utils/notificationFlags.ts —
  * mirror any change there.
@@ -112,6 +121,8 @@ export function computeAnyNotificationsEnabled(
   const weeklyRecapEnabled = prefs.weeklyRecap?.enabled !== false;
   // F-TODO-14: todoReminders is fail-open like weeklyRecap — absent means ON.
   const todoRemindersEnabled = prefs.todoReminders?.enabled !== false;
+  // bankEmailSync is fail-open like weeklyRecap/todoReminders — absent means ON.
+  const bankEmailSyncEnabled = prefs.bankEmailSync?.enabled !== false;
 
   return (
     prefs.habitReminders?.enabled === true ||
@@ -121,7 +132,8 @@ export function computeAnyNotificationsEnabled(
     prefs.billReminders?.enabled === true ||
     prefs.dailyBriefing?.enabled === true ||
     weeklyRecapEnabled ||
-    todoRemindersEnabled
+    todoRemindersEnabled ||
+    bankEmailSyncEnabled
   );
 }
 

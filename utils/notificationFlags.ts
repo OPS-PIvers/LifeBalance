@@ -19,6 +19,8 @@ import type { NotificationPreferences } from '@/types/schema';
  *   - digestMode: counted enabled only when `.enabled === true`, same as the
  *     four per-type toggles — a member relying solely on the digest (all four
  *     per-type toggles off) must still match the collection-group query.
+ *   - bankEmailSync: fail-open like weeklyRecap/todoReminders — absent means
+ *     ON, only an explicit `enabled: false` opts out.
  *
  * Kept in perfect parity with the server copy in
  * functions/src/shared/notifications.ts — mirror any change there.
@@ -35,6 +37,8 @@ export function computeAnyNotificationsEnabled(
   const weeklyRecapEnabled = prefs.weeklyRecap?.enabled !== false;
   // F-TODO-14: todoReminders is fail-open like weeklyRecap — absent means ON.
   const todoRemindersEnabled = prefs.todoReminders?.enabled !== false;
+  // bankEmailSync is fail-open like weeklyRecap/todoReminders — absent means ON.
+  const bankEmailSyncEnabled = prefs.bankEmailSync?.enabled !== false;
 
   return (
     prefs.habitReminders?.enabled === true ||
@@ -44,6 +48,7 @@ export function computeAnyNotificationsEnabled(
     prefs.billReminders?.enabled === true ||
     prefs.dailyBriefing?.enabled === true ||
     weeklyRecapEnabled ||
-    todoRemindersEnabled
+    todoRemindersEnabled ||
+    bankEmailSyncEnabled
   );
 }
