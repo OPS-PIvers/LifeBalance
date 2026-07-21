@@ -400,23 +400,43 @@ describe("getTodos — filtering and query params", () => {
     expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
   });
 
-  it("caps the read at 500 even when a larger limit is requested", async () => {
+  it("reads with a fixed cap of 500 regardless of the requested limit", async () => {
     const res = makeRes();
     await asHandler(getTodos)(makeReq({ query: { limit: "9999" } }), res);
     expect(res.statusCode).toBe(200);
+    // The Firestore read is always bounded at 500 (not the caller's limit) so
+    // the in-memory filter/sort sees the whole set; `limit` caps the RESULT.
     expect(lastLimit).toBe(500);
   });
 
-  it("uses the default limit of 200 when none is given", async () => {
+  it("reads the fixed cap even when no limit is given", async () => {
     const res = makeRes();
     await asHandler(getTodos)(makeReq(), res);
-    expect(lastLimit).toBe(200);
+    expect(lastLimit).toBe(500);
   });
 
-  it("honors a valid explicit limit below the cap", async () => {
+  it("applies limit as a RESULTS cap AFTER sorting, not to the read", async () => {
+    // 8 open todos with distinct due dates → deterministic sort order.
+    todoDocs = Array.from({ length: 8 }, (_, i) =>
+      todoDoc(`t${i}`, { completeByDate: `2026-07-1${i}` })
+    );
     const res = makeRes();
     await asHandler(getTodos)(makeReq({ query: { limit: "5" } }), res);
-    expect(lastLimit).toBe(5);
+    const body = res.body as { data: { todos: { id: string }[]; count: number } };
+    // Read still bounded at 500; only the RESULT set is capped at 5, and it's
+    // the first 5 by sort order (not the first 5 read).
+    expect(lastLimit).toBe(500);
+    expect(body.data.count).toBe(5);
+    expect(body.data.todos.map((t) => t.id)).toEqual([
+      "t0", "t1", "t2", "t3", "t4",
+    ]);
+  });
+
+  it("returns all matching todos when the count is under the limit", async () => {
+    todoDocs = [todoDoc("a"), todoDoc("b")];
+    const res = makeRes();
+    await asHandler(getTodos)(makeReq(), res);
+    expect((res.body as { data: { count: number } }).data.count).toBe(2);
   });
 
   it("rejects a non-numeric limit with 400", async () => {
@@ -518,5 +538,18 @@ describe("getTodos — JSON response shape", () => {
       (t) => t.id
     );
     expect(ids).toEqual(["earlyTimed", "earlyNoTime", "later"]);
+  });
+
+  it("sorts undated todos (empty completeByDate) last, not first", async () => {
+    todoDocs = [
+      todoDoc("undated", { completeByDate: "" }),
+      todoDoc("dated", { completeByDate: "2026-07-20" }),
+    ];
+    const res = makeRes();
+    await asHandler(getTodos)(makeReq(), res);
+    const ids = (res.body as { data: { todos: { id: string }[] } }).data.todos.map(
+      (t) => t.id
+    );
+    expect(ids).toEqual(["dated", "undated"]);
   });
 });

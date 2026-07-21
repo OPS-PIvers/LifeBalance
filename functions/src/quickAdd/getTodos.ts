@@ -36,9 +36,14 @@ interface HttpResponse {
   set(header: string, value: string): void;
 }
 
-// Default and hard-cap number of to-dos read per request. The read is bounded
-// (like calendarfeed) and filtered/sorted in memory, so it never needs a new
-// composite Firestore index; a household never has anywhere near this many.
+// The Firestore read is bounded at a FIXED cap (like calendarfeed) and
+// filtered/sorted in memory, so it never needs a new composite index — a
+// household never has anywhere near this many to-dos, so the whole set is read
+// and the in-memory filter/sort/slice below sees everything.
+const READ_CAP = 500;
+// `limit` is a RESULTS cap applied AFTER filtering + sorting (not the read
+// bound), so `limit=10` deterministically returns the first 10 sorted, open
+// to-dos rather than "whatever survived filtering the first 10 docs read".
 const DEFAULT_LIMIT = 200;
 const MAX_LIMIT = 500;
 
@@ -250,9 +255,10 @@ export const getTodos = onRequest(
     const assigneeFilter =
       rawAssignedTo && rawAssignedTo !== "" ? rawAssignedTo : undefined;
 
-    // limit: positive integer, default 200, hard-capped at 500.
+    // limit: positive integer, default 200, hard-capped at 500. Applied to the
+    // RESULT set after filtering + sorting (see the slice below), not to the read.
     const rawLimit = firstQueryString(query.limit);
-    let cap = DEFAULT_LIMIT;
+    let resultsLimit = DEFAULT_LIMIT;
     if (rawLimit !== undefined && rawLimit !== "") {
       if (!/^\d+$/.test(rawLimit)) {
         errorResponse(res, 400, "limit must be a positive integer", "BAD_REQUEST");
@@ -263,15 +269,16 @@ export const getTodos = onRequest(
         errorResponse(res, 400, "limit must be a positive integer", "BAD_REQUEST");
         return;
       }
-      cap = Math.min(parsed, MAX_LIMIT);
+      resultsLimit = Math.min(parsed, MAX_LIMIT);
     }
 
     try {
       // 5. Bounded read + in-memory filter/sort (like calendarfeed) — no new
-      //    composite index needed.
+      //    composite index needed. The read cap is fixed (not the caller's
+      //    `limit`) so filtering/sorting sees the whole set.
       const snap = await db
         .collection(`households/${householdId}/todos`)
-        .limit(cap)
+        .limit(READ_CAP)
         .get();
 
       let todos = snap.docs.map((d) =>
@@ -286,10 +293,12 @@ export const getTodos = onRequest(
       }
 
       // Sort by due date asc, then due time asc (untimed last), then createdAt.
+      // Undated to-dos (completeByDate "") sort LAST via a high sentinel, where
+      // "no due date" conventionally lives — not first (as "" < "2026-…" would).
       todos.sort((a, b) => {
-        if (a.completeByDate !== b.completeByDate) {
-          return a.completeByDate < b.completeByDate ? -1 : 1;
-        }
+        const aDate = a.completeByDate || "9999-99-99";
+        const bDate = b.completeByDate || "9999-99-99";
+        if (aDate !== bDate) return aDate < bDate ? -1 : 1;
         const aTime = a.dueTime ?? "99:99";
         const bTime = b.dueTime ?? "99:99";
         if (aTime !== bTime) return aTime < bTime ? -1 : 1;
@@ -298,6 +307,11 @@ export const getTodos = onRequest(
         if (aCreated !== bCreated) return aCreated < bCreated ? -1 : 1;
         return 0;
       });
+
+      // Apply the caller's results cap AFTER sorting so `limit` is deterministic.
+      if (todos.length > resultsLimit) {
+        todos = todos.slice(0, resultsLimit);
+      }
 
       // 6. Log + respond.
       await logApiCall(householdId, apiKey.substring(0, 16), "read", { query }, 200);
