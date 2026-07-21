@@ -8,7 +8,7 @@ import { rollRecurringAnchorForward, isRecurringId, parseRecurringId } from '@/u
 import { BUDGETED_IN_CALENDAR } from '@/utils/categories';
 import { hashKidPin } from '@/utils/kidPin';
 import { computeTodoCompletionCredit, buildUncompleteCreditReversal } from '@/utils/todoPoints';
-import { buildNextRecurringTodo } from '@/utils/todoRecurrence';
+import { buildNextRecurringTodo, isTodoFrequency } from '@/utils/todoRecurrence';
 import { buildToDosFromTemplate } from '@/utils/taskTemplates';
 import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
 import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
@@ -2104,9 +2104,30 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       if (!todo.isCompleted) {
         return; // already active — no double reversal
       }
-      setTodos(prev => prev.map(t =>
-        t.id === id ? { ...t, isCompleted: false, completedAt: undefined } : t,
-      ));
+      // F-TODO-01 counterpart (mirrors makeUncompleteToDo in the real
+      // context): completing a recurring to-do spawns the next instance, so
+      // restoring must reconcile it or the household ends up with two active
+      // copies. Identify the spawn the way buildNextRecurringTodo links it —
+      // same chain root (`recurrence.parentRecurringId`, or this todo's own
+      // id when it IS the root) and same text, still active — and delete
+      // ONLY when exactly one such candidate exists; ambiguous (0 or 2+)
+      // matches leave every candidate untouched rather than guessing.
+      let spawnIdToDelete: string | null = null;
+      if (todo.recurrence && isTodoFrequency(todo.recurrence.frequency)) {
+        const chainRootId = todo.recurrence.parentRecurringId ?? todo.id;
+        const matches = todosRef.current.filter(t =>
+          !t.isCompleted &&
+          t.id !== todo.id &&
+          t.recurrence?.parentRecurringId === chainRootId &&
+          t.text === todo.text,
+        );
+        if (matches.length === 1) {
+          spawnIdToDelete = matches[0]?.id ?? null;
+        }
+      }
+      setTodos(prev => prev
+        .map(t => t.id === id ? { ...t, isCompleted: false, completedAt: undefined } : t)
+        .filter(t => t.id !== spawnIdToDelete));
       setMembers(prev => {
         const credit = computeTodoCompletionCredit(todo, prev);
         if (!credit) return prev;

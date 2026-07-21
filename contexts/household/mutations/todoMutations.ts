@@ -25,7 +25,7 @@ import { todoConverter } from '@/utils/firestoreConverters';
 import { ToDo, HouseholdMember } from '@/types/schema';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { computeTodoCompletionCredit, buildUncompleteCreditReversal } from '@/utils/todoPoints';
-import { buildNextRecurringTodo } from '@/utils/todoRecurrence';
+import { buildNextRecurringTodo, isTodoFrequency } from '@/utils/todoRecurrence';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { TODO_COMPLETED_PAGE_SIZE } from '@/utils/listenerWindows';
 import { mergeById, mapTodoDoc } from '@/contexts/household/selectors';
@@ -326,6 +326,37 @@ export function makeUncompleteToDo(deps: {
         }
         batch.update(doc(db, `households/${householdId}/members`, credit.memberUid), pointUpdates);
       }
+
+      // F-TODO-01 counterpart: completing a recurring to-do spawns the next
+      // instance in the same batch (see makeCompleteToDo above). Restoring
+      // must reconcile that spawn in the SAME batch too, or the household
+      // ends up with two active copies of the same chore. Identify the
+      // spawned instance the way buildNextRecurringTodo actually links it:
+      // it stamps `recurrence.parentRecurringId` with the CHAIN ROOT id (the
+      // id of the very first instance, reused indefinitely down the chain —
+      // not a back-reference to "the instance that spawned me"), so the
+      // strongest identifier available is "same chain root + same text +
+      // still active". Only delete when EXACTLY ONE such candidate exists:
+      // zero means it was already completed/edited/never spawned (graceful
+      // degradation in completeToDo), more than one means we can't tell
+      // which is "the" spawn — in both cases, leave every candidate alone
+      // rather than guessing.
+      if (todo.recurrence && isTodoFrequency(todo.recurrence.frequency)) {
+        const chainRootId = todo.recurrence.parentRecurringId ?? todo.id;
+        const todosCol = collection(db, `households/${householdId}/todos`).withConverter(todoConverter);
+        const candidatesQuery = query(
+          todosCol,
+          where('isCompleted', '==', false),
+          where('recurrence.parentRecurringId', '==', chainRootId),
+        );
+        const candidatesSnap = await getDocs(candidatesQuery);
+        const matches = candidatesSnap.docs.filter(d => d.data().text === todo.text);
+        const [onlyMatch] = matches;
+        if (matches.length === 1 && onlyMatch) {
+          batch.delete(onlyMatch.ref);
+        }
+      }
+
       await batch.commit();
     } catch (error) {
       console.error('[uncompleteToDo] Failed:', error);

@@ -14,11 +14,19 @@ import { getLocalDateString } from '@/utils/dateHelpers';
 import type { HouseholdMember, ToDo } from '@/types/schema';
 
 interface Ref { __path: string; withConverter: (c: unknown) => Ref }
-interface BatchOp { op: 'update'; ref: Ref; data: Record<string, unknown> }
+interface BatchOp {
+  op: 'update' | 'delete';
+  ref: Ref;
+  data?: Record<string, unknown>;
+}
 
 let batchOps: BatchOp[] = [];
 const commitMock = vi.fn(async () => {});
 const getDocMock = vi.fn<(ref: unknown) => unknown>();
+// Candidate docs `getDocs` returns for the recurring-spawn reconciliation
+// query in uncompleteToDo — each entry becomes a fake QueryDocumentSnapshot
+// with a `.ref` (used for batch.delete) and `.data()` returning the ToDo.
+const getDocsCandidates = { current: [] as ToDo[] };
 
 vi.mock('firebase/firestore', () => {
   const makeRef = (path: string): Record<string, unknown> => ({
@@ -29,12 +37,17 @@ vi.mock('firebase/firestore', () => {
     doc: vi.fn((_db: unknown, path: string, id?: string) => makeRef(id ? `${path}/${id}` : path)),
     collection: vi.fn((_db: unknown, path: string) => makeRef(path)),
     getDoc: (ref: unknown) => getDocMock(ref),
-    getDocs: vi.fn(),
+    getDocs: vi.fn(async () => ({
+      docs: getDocsCandidates.current.map(t => ({
+        ref: makeRef(`households/hh-1/todos/${t.id}`),
+        data: () => t,
+      })),
+    })),
     addDoc: vi.fn(),
     updateDoc: vi.fn(),
     deleteDoc: vi.fn(),
-    query: vi.fn(),
-    where: vi.fn(),
+    query: vi.fn((col: unknown, ..._clauses: unknown[]) => col),
+    where: vi.fn((field: string, op: string, value: unknown) => ({ field, op, value })),
     orderBy: vi.fn(),
     limit: vi.fn(),
     startAfter: vi.fn(),
@@ -42,7 +55,7 @@ vi.mock('firebase/firestore', () => {
     writeBatch: vi.fn(() => ({
       update: (ref: Ref, data: Record<string, unknown>) => { batchOps.push({ op: 'update', ref, data }); },
       set: vi.fn(),
-      delete: vi.fn(),
+      delete: (ref: Ref) => { batchOps.push({ op: 'delete', ref }); },
       commit: () => commitMock(),
     })),
     serverTimestamp: vi.fn(() => '__serverTimestamp'),
@@ -87,6 +100,7 @@ beforeEach(() => {
   batchOps = [];
   commitMock.mockClear();
   getDocMock.mockReset();
+  getDocsCandidates.current = [];
 });
 
 describe('makeUncompleteToDo', () => {
@@ -152,5 +166,105 @@ describe('makeUncompleteToDo', () => {
     const { uncompleteToDo } = makeUncompleteToDo({ db, householdId, membersRef });
     await uncompleteToDo('todo-1');
     expect(batchOps).toHaveLength(1);
+  });
+
+  describe('recurring next-instance reconciliation (F-TODO-01 counterpart)', () => {
+    it('deletes the spawned next instance in the SAME batch when restoring a recurring to-do', async () => {
+      const restored = baseTodo({
+        assignedTo: 'parent_1', // no points credit — isolates the spawn-delete assertion
+        recurrence: { frequency: 'weekly' },
+      });
+      mockTodoDoc(restored);
+      // The spawn's parentRecurringId chains back to the root (the restored
+      // todo's own id, since it had no parentRecurringId of its own).
+      getDocsCandidates.current = [{
+        ...restored,
+        id: 'todo-2',
+        isCompleted: false,
+        completedAt: undefined,
+        recurrence: { frequency: 'weekly', parentRecurringId: 'todo-1' },
+      }];
+      const { uncompleteToDo } = makeUncompleteToDo({ db, householdId, membersRef });
+      await uncompleteToDo('todo-1');
+
+      expect(commitMock).toHaveBeenCalledTimes(1);
+      const deleteOp = batchOps.find(o => o.op === 'delete');
+      expect(deleteOp?.ref.__path).toBe('households/hh-1/todos/todo-2');
+      // Same batch as the flip — never a second commit.
+      const flipOp = batchOps.find(o => o.op === 'update' && o.ref.__path === 'households/hh-1/todos/todo-1');
+      expect(flipOp).toBeDefined();
+    });
+
+    it('leaves every candidate untouched when the spawn is ambiguous (2+ matches)', async () => {
+      const restored = baseTodo({
+        assignedTo: 'parent_1',
+        recurrence: { frequency: 'weekly' },
+      });
+      mockTodoDoc(restored);
+      getDocsCandidates.current = [
+        { ...restored, id: 'todo-2', isCompleted: false, completedAt: undefined, recurrence: { frequency: 'weekly', parentRecurringId: 'todo-1' } },
+        { ...restored, id: 'todo-3', isCompleted: false, completedAt: undefined, recurrence: { frequency: 'weekly', parentRecurringId: 'todo-1' } },
+      ];
+      const { uncompleteToDo } = makeUncompleteToDo({ db, householdId, membersRef });
+      await uncompleteToDo('todo-1');
+
+      expect(batchOps.some(o => o.op === 'delete')).toBe(false);
+      expect(batchOps).toHaveLength(1); // only the todo flip
+    });
+
+    it('leaves the next instance untouched when it was already completed', async () => {
+      const restored = baseTodo({
+        assignedTo: 'parent_1',
+        recurrence: { frequency: 'weekly' },
+      });
+      mockTodoDoc(restored);
+      // Already-completed candidates never appear in the `isCompleted == false`
+      // query results, so this simulates the real Firestore filtering.
+      getDocsCandidates.current = [];
+      const { uncompleteToDo } = makeUncompleteToDo({ db, householdId, membersRef });
+      await uncompleteToDo('todo-1');
+
+      expect(batchOps.some(o => o.op === 'delete')).toBe(false);
+      expect(batchOps).toHaveLength(1);
+    });
+
+    it('does not touch a candidate whose text no longer matches (edited)', async () => {
+      const restored = baseTodo({
+        assignedTo: 'parent_1',
+        recurrence: { frequency: 'weekly' },
+      });
+      mockTodoDoc(restored);
+      getDocsCandidates.current = [{
+        ...restored,
+        id: 'todo-2',
+        text: 'Something else entirely',
+        isCompleted: false,
+        completedAt: undefined,
+        recurrence: { frequency: 'weekly', parentRecurringId: 'todo-1' },
+      }];
+      const { uncompleteToDo } = makeUncompleteToDo({ db, householdId, membersRef });
+      await uncompleteToDo('todo-1');
+
+      expect(batchOps.some(o => o.op === 'delete')).toBe(false);
+    });
+
+    it('leaves non-recurring to-dos unchanged (no reconciliation query effect)', async () => {
+      mockTodoDoc(baseTodo({ assignedTo: 'parent_1' })); // no `recurrence` field
+      getDocsCandidates.current = [{
+        id: 'todo-2',
+        text: 'Feed the cat',
+        completeByDate: getLocalDateString(),
+        assignedTo: 'parent_1',
+        isCompleted: false,
+        completedAt: undefined,
+        createdBy: 'parent_1',
+        createdAt: '2026-07-01T00:00:00',
+      }];
+      const { uncompleteToDo } = makeUncompleteToDo({ db, householdId, membersRef });
+      await uncompleteToDo('todo-1');
+
+      expect(batchOps).toHaveLength(1); // only the todo flip
+      expect(batchOps.some(o => o.op === 'delete')).toBe(false);
+    });
   });
 });
