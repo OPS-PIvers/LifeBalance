@@ -1,15 +1,18 @@
 import React, { useMemo, useState } from 'react';
-import { Check, ChevronDown, Copy, Sparkles, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, Copy, Link2, Sparkles, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { subMonths, addMonths, parseISO, format as formatDate } from 'date-fns';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import { Transaction, CREDIT_CARD_CATEGORY, INCOME_CATEGORY } from '@/types/schema';
 import { Switch } from '@/components/ui/Switch';
 import { getAutoSelectedHabitIds, suggestHabitsForTransaction } from '@/utils/habitSuggestions';
 import { suggestAccountIdForTransaction, suggestCategoryForTransaction } from '@/utils/actionQueueSmart';
 import { buildTransactionCategoryOptions } from '@/utils/categories';
+import { getBillLinkCandidates } from '@/utils/billLinkCandidates';
+import { getLocalDateString } from '@/utils/dateHelpers';
 import { roundMoney } from '@/utils/money';
 import { pickKeeper } from '@/utils/transactionMerge';
-import { useFinance, useGamification } from '@/contexts/FirebaseHouseholdContext';
+import { useFinance, useGamification, useExpandedCalendarItems } from '@/contexts/FirebaseHouseholdContext';
 import { cn } from '@/utils/cn';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
@@ -76,9 +79,37 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
   const {
     accounts, buckets, transactions,
     updateTransactionCategory, deleteTransaction, addCalendarItem,
-    mergeTransactions, keepBothTransactions,
+    mergeTransactions, keepBothTransactions, linkBankTransactionToBill,
   } = useFinance();
   const { habits } = useGamification();
+
+  // "Link to bill" (bank-sync reconcile) — only offered for a bank-synced row
+  // still awaiting categorization (see needsReview in useActionQueue.ts). The
+  // candidate list is expanded ~1 month back to ~1 month ahead so a slightly
+  // early/late bank post still finds its bill.
+  const canLinkToBill = !!transaction.bankRef && transaction.status === 'verified' && transaction.needsCategory === true;
+  const [showBillPicker, setShowBillPicker] = useState(false);
+  const [isLinkingBill, setIsLinkingBill] = useState(false);
+  const billWindowStart = useMemo(() => subMonths(parseISO(getLocalDateString()), 1), []);
+  const billWindowEnd = useMemo(() => addMonths(parseISO(getLocalDateString()), 1), []);
+  const expandedForBillLink = useExpandedCalendarItems(billWindowStart, billWindowEnd);
+  const billCandidates = useMemo(
+    () => (canLinkToBill && showBillPicker ? getBillLinkCandidates(expandedForBillLink) : []),
+    [canLinkToBill, showBillPicker, expandedForBillLink]
+  );
+
+  const handleLinkToBill = async (calendarItemId: string) => {
+    setIsLinkingBill(true);
+    try {
+      await linkBankTransactionToBill(transaction.id, calendarItemId);
+      onDone();
+    } catch (error) {
+      console.error('Failed to link transaction to bill:', error);
+      toast.error('Failed to link transaction to bill');
+    } finally {
+      setIsLinkingBill(false);
+    }
+  };
 
   // Plan 03 PR-3: a flagged possible duplicate of another existing row.
   // Resolved by id (not trusted blindly) so a stale/deleted reference never
@@ -336,6 +367,66 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
               Keep both
             </Button>
           </div>
+        </div>
+      )}
+
+      {canLinkToBill && (
+        <div className="rounded-card border border-accent-200 bg-accent-50 px-3 py-2.5 space-y-2 dark:border-accent-700 dark:bg-accent-800/20">
+          {!showBillPicker ? (
+            <button
+              type="button"
+              onClick={() => setShowBillPicker(true)}
+              className="w-full flex items-center gap-2 text-xs font-semibold text-accent-700 dark:text-accent-200"
+            >
+              <Link2 size={14} className="shrink-0" />
+              Is this a bill payment? Link it to a bill
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-accent-700 dark:text-accent-200 flex items-center gap-1.5">
+                  <Link2 size={14} className="shrink-0" />
+                  Pick the bill this pays
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowBillPicker(false)}
+                  className="text-xs text-brand-500 dark:text-brand-400"
+                >
+                  Cancel
+                </button>
+              </div>
+              {billCandidates.length === 0 ? (
+                <p className="text-xs text-brand-500 dark:text-brand-400">
+                  No unpaid bills found in the last/next month.
+                </p>
+              ) : (
+                <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                  {billCandidates.map(bill => (
+                    <button
+                      key={bill.id}
+                      type="button"
+                      disabled={isLinkingBill}
+                      onClick={() => handleLinkToBill(bill.id)}
+                      className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-btn bg-white border border-brand-200 text-left hover:bg-brand-50 disabled:opacity-50 dark:bg-brand-700/50 dark:border-brand-600 dark:hover:bg-brand-700"
+                    >
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-brand-800 dark:text-brand-100 truncate">
+                          {bill.title}
+                        </span>
+                        <span className="block text-xs text-brand-400 dark:text-brand-450">
+                          {formatDate(parseISO(bill.date), 'MMM d, yyyy')}
+                        </span>
+                      </span>
+                      <span className="font-mono font-bold tabular-nums text-brand-900 dark:text-brand-50 shrink-0">
+                        ${bill.amount.toFixed(2)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

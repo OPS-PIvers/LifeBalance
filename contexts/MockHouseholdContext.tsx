@@ -4,7 +4,8 @@ import { toastIcon } from '@/components/ui/toastIcon';
 import { format, addDays, subDays } from 'date-fns';
 import { HouseholdContextType, HouseholdSliceProviders } from './FirebaseHouseholdContext';
 import { getLocalDateString } from '@/utils/dateHelpers';
-import { rollRecurringAnchorForward } from '@/utils/calendarRecurrence';
+import { rollRecurringAnchorForward, isRecurringId, parseRecurringId } from '@/utils/calendarRecurrence';
+import { BUDGETED_IN_CALENDAR } from '@/utils/categories';
 import { hashKidPin } from '@/utils/kidPin';
 import { computeTodoCompletionCredit } from '@/utils/todoPoints';
 import { buildNextRecurringTodo } from '@/utils/todoRecurrence';
@@ -1341,6 +1342,58 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Calendar item deleted');
   }, []);
 
+  // Mirrors makeLinkBankTransactionToBill in calendarMutations.ts — marks the
+  // bill paid at the txn's actual amount (NO account-balance write), files the
+  // transaction as Budgeted in Calendar, and learns the descriptor alias.
+  const linkBankTransactionToBill = useCallback(async (transactionId: string, calendarItemId: string) => {
+    const tx = transactions.find(t => t.id === transactionId);
+    if (!tx || !tx.bankRef || tx.status !== 'verified') return;
+    const descriptor = (tx.merchant || '').trim();
+    if (!descriptor) return;
+
+    const paidAmount = roundMoney(tx.amount);
+    const isRecurringInstance = isRecurringId(calendarItemId);
+
+    if (isRecurringInstance) {
+      const parsed = parseRecurringId(calendarItemId);
+      if (!parsed) return;
+      const { templateId, date: specificDate } = parsed;
+      const template = calendarItems.find(i => i.id === templateId);
+      if (!template || template.type !== 'expense') return;
+      const alreadyPaid = calendarItems.find(
+        i => i.parentRecurringId === templateId && i.date === specificDate && i.isPaid,
+      );
+      if (alreadyPaid) return;
+
+      const paidInstance: CalendarItem = {
+        ...template,
+        id: generateId(),
+        amount: paidAmount,
+        date: specificDate,
+        isPaid: true,
+        isRecurring: false,
+        parentRecurringId: templateId,
+      };
+      setCalendarItems(prev => [
+        ...prev.map(i => i.id === templateId
+          ? { ...i, bankDescriptorAliases: [...(i.bankDescriptorAliases ?? []), descriptor] }
+          : i),
+        paidInstance,
+      ]);
+    } else {
+      const item = calendarItems.find(i => i.id === calendarItemId);
+      if (!item || item.type !== 'expense' || item.isPaid) return;
+      setCalendarItems(prev => prev.map(i => i.id === calendarItemId
+        ? { ...i, isPaid: true, amount: paidAmount, bankDescriptorAliases: [...(i.bankDescriptorAliases ?? []), descriptor] }
+        : i));
+    }
+
+    setTransactions(prev => prev.map(t => t.id === transactionId
+      ? { ...t, category: BUDGETED_IN_CALENDAR, needsCategory: undefined }
+      : t));
+    toast.success('Linked to bill — future syncs will match automatically');
+  }, [transactions, calendarItems]);
+
   // Meal operations
   const addMeal = useCallback(async (meal: Omit<Meal, 'id'>) => {
     const id = generateId();
@@ -1955,6 +2008,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     deleteCalendarItem,
     payCalendarItem: noOp,
     deferCalendarItem: noOp,
+    linkBankTransactionToBill,
     addHabit,
     updateHabit,
     deleteHabit,
