@@ -1,16 +1,14 @@
 import React from 'react';
-import { Check, Trash2, Edit2, AlertCircle, Clock, User, Copy, MoreVertical, Calendar, Star, CheckSquare, ChevronDown, ListChecks, Repeat, FileText, Bell } from 'lucide-react';
+import { Check, Trash2, AlertCircle, Clock, User, CheckSquare, Bell } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, startOfToday } from 'date-fns';
 import { ToDo, HouseholdMember } from '@/types/schema';
-import { DEFAULT_TODO_POINTS } from '@/utils/todoPoints';
-import { subtaskProgress } from '@/utils/subtasks';
 import toast from 'react-hot-toast';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { haptic } from '@/utils/haptics';
 import { HapticCheck } from '@/components/ui/HapticCheck';
 import { SwipeActionRow } from '@/components/ui/SwipeActionRow';
+import { Row } from '@/components/ui/Section';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
-import { Button } from '@/components/ui/Button';
 import { UndoToast } from '@/components/ui/UndoToast';
 import { cn } from '@/utils/cn';
 import { type SectionColor, dateColorMap } from './todoDisplay';
@@ -20,6 +18,15 @@ import { formatDueTime } from '@/utils/todoTime';
 // the list arrangement (still in ToDosPage) and the Eisenhower matrix view
 // (components/todos/EisenhowerMatrixView.tsx) render rows via `Section`,
 // which renders `TodoRow`.
+//
+// Row-diet redesign (owner-approved): the row shows ONLY the complete circle,
+// title, urgency-colored due cluster, a quiet "has details" dot, and the
+// assignee avatar image. All per-row action buttons are gone — the interaction
+// model is: TAP the row body = edit drawer, SWIPE = complete/delete,
+// LONG-PRESS (or right-click / keyboard context-menu key) = Task-options
+// drawer (star / move to tomorrow / duplicate / edit / delete, in ToDosPage).
+
+const LONG_PRESS_MS = 500;
 
 export interface TodoRowProps {
   item: ToDo;
@@ -31,18 +38,15 @@ export interface TodoRowProps {
   onUncomplete: (id: string) => void;
   onEdit: (todo: ToDo) => void;
   onDelete: (id: string) => void;
-  onDuplicate: (todo: ToDo) => void;
-  onMoveToTomorrow: (todo: ToDo) => void;
-  onToggleImportant: (todo: ToDo) => void;
+  /** Opens the Task-options drawer (long-press / context-menu). */
   onMore: (todo: ToDo) => void;
   onToggleSelection: (id: string) => void;
-  // F-TODO-08: toggle a single subtask's done state from the expanded checklist.
-  onToggleSubtask: (todo: ToDo, subtaskId: string) => void;
 }
 
 // Memoized row for a single active to-do.
-// Uses a field-by-field comparator so toggling selection in one row does not
-// re-render sibling rows that haven't changed their selected state.
+// React.memo's default shallow comparator is sufficient: all callbacks are
+// stable via useCallback at page level, and `item`/`assignee` are stable
+// references from the context arrays.
 export const TodoRow = React.memo(function TodoRow({
   item,
   color,
@@ -53,12 +57,8 @@ export const TodoRow = React.memo(function TodoRow({
   onUncomplete,
   onEdit,
   onDelete,
-  onDuplicate,
-  onMoveToTomorrow,
-  onToggleImportant,
   onMore,
   onToggleSelection,
-  onToggleSubtask,
 }: TodoRowProps) {
   // Parse the due date once per row render to avoid repeated parseISO calls
   const dueDate = parseISO(item.completeByDate);
@@ -69,15 +69,90 @@ export const TodoRow = React.memo(function TodoRow({
   const dueTimeLabel = formatDueTime(item.dueTime);
   const hasReminder = dueTimeLabel !== null && typeof item.reminderMinutesBefore === 'number';
 
-  // F-TODO-08: subtask checklist progress + expand/collapse state.
-  const progress = subtaskProgress(item.subtasks);
-  const hasSubtasks = progress.total > 0;
-  const [subtasksExpanded, setSubtasksExpanded] = React.useState(false);
+  // Quiet "has details" indicator — the row no longer expands notes/subtasks
+  // inline; a muted dot after the date signals there's more in the edit drawer.
+  const hasDetails =
+    Boolean(item.notes && item.notes.trim().length > 0) ||
+    (item.subtasks?.length ?? 0) > 0 ||
+    Boolean(item.recurrence?.frequency);
 
-  // Inline notes preview toggle (F-TODO-13) — expands a truncated notes
-  // excerpt without opening the full edit drawer.
-  const [notesOpen, setNotesOpen] = React.useState(false);
-  const hasNotes = Boolean(item.notes && item.notes.trim().length > 0);
+  // --- Gesture model (mirrors ShoppingItemRow): TAP on the row body opens the
+  // edit drawer; LONG-PRESS anywhere on the body opens the Task-options drawer
+  // (as does right-click / the keyboard context-menu key, for pointers that
+  // can't long-press). Timer armed on pointer-down, cancelled by >10px
+  // movement (that's a swipe/scroll, not a press). ---
+  const longPressTimer = React.useRef<number | null>(null);
+  // When true, the next click on the row body is a gesture artifact and must
+  // be swallowed: browsers synthesize a click from the pointer-up that ends a
+  // fired long-press AND from the one that ends a horizontal swipe — without
+  // this, finishing a swipe over the title pops the edit drawer.
+  const suppressClick = React.useRef(false);
+  const pressOrigin = React.useRef<{ x: number; y: number } | null>(null);
+
+  const cancelLongPress = () => {
+    if (longPressTimer.current !== null) {
+      window.clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return; // primary button / touch contact only
+    pressOrigin.current = { x: e.clientX, y: e.clientY };
+    suppressClick.current = false;
+    cancelLongPress();
+    longPressTimer.current = window.setTimeout(() => {
+      longPressTimer.current = null;
+      suppressClick.current = true;
+      // Android-only in practice: a timer callback has no transient user
+      // activation, so the iOS transport can't fire here (see utils/haptics.ts).
+      haptic('medium');
+      onMore(item);
+    }, LONG_PRESS_MS);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (longPressTimer.current === null || !pressOrigin.current) return;
+    // A press that starts moving is a swipe/scroll, not a long-press.
+    if (Math.hypot(e.clientX - pressOrigin.current.x, e.clientY - pressOrigin.current.y) > 10) {
+      cancelLongPress();
+    }
+  };
+
+  // A starting swipe both kills the pending long-press and marks the gesture's
+  // terminating click as an artifact. The pointer-move cancel alone is not
+  // enough: once framer-motion's drag session claims the pointer, React
+  // pointermove handlers on this element stop firing.
+  const handleSwipeStart = () => {
+    cancelLongPress();
+    suppressClick.current = true;
+  };
+
+  // Swallow the click that ends a fired long-press or a swipe (see above).
+  const consumeSuppressedClick = () => {
+    if (suppressClick.current) {
+      suppressClick.current = false;
+      return true;
+    }
+    return false;
+  };
+
+  // Tap on the row body → edit drawer.
+  const handleBodyClick = () => {
+    if (consumeSuppressedClick()) return;
+    onEdit(item);
+  };
+
+  // Right-click / keyboard context-menu → Task-options drawer. Guarded by
+  // suppressClick so a long-press that already fired (some platforms
+  // synthesize contextmenu around the same ~500ms mark) doesn't open it twice.
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (suppressClick.current) return;
+    if (longPressTimer.current !== null) suppressClick.current = true;
+    cancelLongPress();
+    onMore(item);
+  };
 
   // Shared by the checkbox control and the right-swipe action.
   //
@@ -115,7 +190,7 @@ export const TodoRow = React.memo(function TodoRow({
   };
 
   const cardInner = (
-    <div
+    <Row
       onClick={() => isSelectionMode && onToggleSelection(item.id)}
       {...(isSelectionMode ? {
         role: 'button' as const,
@@ -130,7 +205,7 @@ export const TodoRow = React.memo(function TodoRow({
         }
       } : {})}
       className={cn(
-        'hairline-divider p-4 transition-colors duration-(--duration-fast) ease-(--ease-standard)',
+        'items-start p-4 transition-colors duration-(--duration-fast) ease-(--ease-standard)',
         isSelectionMode
           ? isSelected
             ? 'cursor-pointer bg-accent-50 dark:bg-accent-900/30'
@@ -138,30 +213,51 @@ export const TodoRow = React.memo(function TodoRow({
           : 'bg-white dark:bg-brand-800'
       )}
     >
-      <div className="flex items-start gap-3">
-        {/* Complete Checkbox or Selection Box */}
-        {isSelectionMode ? (
-          <div className={`mt-0.5 w-6 h-6 flex items-center justify-center shrink-0 transition-colors ${isSelected ? 'text-accent-600 dark:text-accent-300' : 'text-brand-300 dark:text-brand-500'}`}>
-            {isSelected ? <CheckSquare aria-hidden="true" size={24} /> : <div className="w-5 h-5 border-2 border-current rounded-sm" />}
-          </div>
-        ) : (
-          <HapticCheck
-            checked={false}
-            onCheckedChange={handleComplete}
-            onClick={(e) => e.stopPropagation()}
-            className="mt-0.5 p-2.5 -m-2.5 shrink-0"
-            aria-label={`Complete task: ${item.text}`}
-          >
-            <span className="w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors border-brand-300 group-hover:border-accent-500 group-hover:bg-accent-50 group-active:bg-accent-100 dark:border-brand-600 dark:group-hover:border-accent-400 dark:group-hover:bg-accent-900/30">
-              <Check size={14} className="text-transparent group-hover:text-current group-active:text-current group-has-[:focus-visible]:text-current transition-colors" />
-            </span>
-          </HapticCheck>
-        )}
+      {/* Complete Checkbox or Selection Box */}
+      {isSelectionMode ? (
+        <div className={`mt-0.5 w-6 h-6 flex items-center justify-center shrink-0 transition-colors ${isSelected ? 'text-accent-600 dark:text-accent-300' : 'text-brand-300 dark:text-brand-500'}`}>
+          {isSelected ? <CheckSquare aria-hidden="true" size={24} /> : <div className="w-5 h-5 border-2 border-current rounded-sm" />}
+        </div>
+      ) : (
+        <HapticCheck
+          checked={false}
+          onCheckedChange={handleComplete}
+          onClick={(e) => e.stopPropagation()}
+          className="mt-0.5 p-2.5 -m-2.5 shrink-0"
+          aria-label={`Complete task: ${item.text}`}
+        >
+          <span className="w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors border-brand-300 group-hover:border-accent-500 group-hover:bg-accent-50 group-active:bg-accent-100 dark:border-brand-600 dark:group-hover:border-accent-400 dark:group-hover:bg-accent-900/30">
+            <Check size={14} className="text-transparent group-hover:text-current group-active:text-current group-has-[:focus-visible]:text-current transition-colors" />
+          </span>
+        </HapticCheck>
+      )}
 
+      {isSelectionMode ? (
         <div className="flex-1 min-w-0">
-          <p className={`font-medium leading-snug ${isSelected ? 'text-accent-800 dark:text-accent-200' : 'text-brand-900 dark:text-brand-50'}`}>{item.text}</p>
+          <p className="font-medium leading-snug text-inherit">
+            <span className={isSelected ? 'text-accent-800 dark:text-accent-200' : 'text-brand-900 dark:text-brand-50'}>{item.text}</span>
+          </p>
+        </div>
+      ) : (
+        /* Row body — TAP = edit drawer, LONG-PRESS / context-menu = options
+           drawer. A real <button> so keyboard/AT get the edit path for free;
+           the context-menu key (fired on the focused element) reaches the
+           options drawer. select-none + no touch-callout keep iOS from
+           starting text selection / the share sheet during a long-press. */
+        <button
+          type="button"
+          onClick={handleBodyClick}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={cancelLongPress}
+          onPointerCancel={cancelLongPress}
+          onContextMenu={handleContextMenu}
+          aria-label={`Edit task: ${item.text}`}
+          className="flex-1 min-w-0 text-left select-none [-webkit-touch-callout:none] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-sm"
+        >
+          <span className="block font-medium leading-snug text-brand-900 dark:text-brand-50">{item.text}</span>
 
-          <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs">
+          <span className="flex flex-wrap items-center gap-3 mt-1.5 text-xs">
             {/* Single primary status signal: urgency-colored text, not a bordered pill. */}
             {isOverdue ? (
               <span className="flex items-center gap-1 font-semibold text-money-neg dark:text-money-negDark">
@@ -179,206 +275,32 @@ export const TodoRow = React.memo(function TodoRow({
               </span>
             )}
 
-            {/* F-TODO-01: repeat badge — signals a recurring chore that
-                auto-spawns its next instance on completion. */}
-            {item.recurrence?.frequency && (
-              <span
-                className="flex items-center gap-1 text-accent-600 dark:text-accent-300 font-semibold"
-                title={`Repeats ${item.recurrence.frequency}`}
-              >
-                <Repeat size={11} aria-hidden="true" />
-                {item.recurrence.frequency === 'bi-weekly' ? 'Bi-weekly' :
-                 item.recurrence.frequency === 'monthly' ? 'Monthly' : 'Weekly'}
+            {/* Quiet "has details" indicator — notes, subtasks, or recurrence
+                live in the edit drawer; the dot just signals there's more. */}
+            {hasDetails && (
+              <span className="text-brand-300 dark:text-brand-500" data-testid="todo-details-dot">
+                <span aria-hidden="true">•</span>
+                <span className="sr-only">Has details</span>
               </span>
             )}
 
             {assignee && (
-              <span className="flex items-center gap-1 text-brand-500 dark:text-brand-400">
-                {assignee.photoURL ? (
-                  <img
-                    src={assignee.photoURL}
-                    className="w-4 h-4 rounded-full"
-                    alt={assignee.displayName ?? 'Task assignee'}
-                  />
-                ) : (
-                  <User size={10} />
-                )}
-                {assignee.displayName?.split(' ')[0] ?? 'User'}
-              </span>
-            )}
-
-            {/* Plan 080c-5: points-on-completion badge — kid chores only. Dormant for
-                normal households: only shown when the assignee is a managed kid. This
-                is the one signal that keeps pill chrome — it's a distinct bonus, not
-                metadata, so it should still pop against the plain-text date/assignee. */}
-            {assignee?.isManaged === true && (
-              <span className="flex items-center gap-1 font-bold px-2 py-1 rounded-sm bg-warm-100 text-warm-700 dark:bg-warm-500/15 dark:text-warm-300">
-                +{item.points ?? DEFAULT_TODO_POINTS} pts
-              </span>
-            )}
-
-            {/* F-TODO-08: subtask progress chip — expands the checklist inline. */}
-            {hasSubtasks && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setSubtasksExpanded(v => !v); }}
-                aria-expanded={subtasksExpanded}
-                aria-label={`${subtasksExpanded ? 'Hide' : 'Show'} subtasks — ${progress.done} of ${progress.total} done`}
-                className={cn(
-                  // The chip renders ~16px tall; the invisible before: extender
-                  // (Button's established pattern) stretches the hit area to
-                  // ≥44px without changing the visual size.
-                  "relative before:absolute before:inset-x-0 before:-inset-y-3.5 before:content-['']",
-                  'flex items-center gap-1 font-semibold transition-colors',
-                  progress.allDone
-                    ? 'text-accent-600 dark:text-accent-300'
-                    : 'text-brand-500 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-200'
-                )}
-              >
-                <ListChecks size={12} aria-hidden="true" />
-                {progress.done}/{progress.total}
-                <ChevronDown
-                  size={12}
-                  aria-hidden="true"
-                  className={cn('transition-transform duration-(--duration-fast)', subtasksExpanded && 'rotate-180')}
+              assignee.photoURL ? (
+                <img
+                  src={assignee.photoURL}
+                  className="w-4 h-4 rounded-full"
+                  alt={assignee.displayName ?? 'Task assignee'}
                 />
-              </button>
+              ) : (
+                <span className="text-brand-400 dark:text-brand-500" title={assignee.displayName ?? 'Task assignee'}>
+                  <User size={12} aria-label={assignee.displayName ?? 'Task assignee'} />
+                </span>
+              )
             )}
-
-            {hasNotes && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setNotesOpen((open) => !open);
-                }}
-                className="flex items-center gap-1 text-brand-500 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-200 transition-colors"
-                aria-expanded={notesOpen}
-                aria-label={notesOpen ? 'Hide note' : 'Show note'}
-                title={notesOpen ? 'Hide note' : 'Show note'}
-              >
-                <FileText size={11} />
-              </button>
-            )}
-          </div>
-
-          {/* F-TODO-08: expandable checkable subtask list. Toggling never touches
-              points, so it is a plain updateToDo in the parent handler. */}
-          {hasSubtasks && subtasksExpanded && !isSelectionMode && (
-            <ul className="mt-2.5 space-y-1" aria-label={`Subtasks for ${item.text}`}>
-              {(item.subtasks ?? []).map(sub => (
-                <li key={sub.id}>
-                  <label className="flex items-start gap-2 py-1 cursor-pointer group/sub">
-                    <input
-                      type="checkbox"
-                      checked={sub.isDone}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => { e.stopPropagation(); onToggleSubtask(item, sub.id); }}
-                      className="mt-0.5 w-4 h-4 shrink-0 rounded-sm border-brand-300 text-accent-600 focus-visible:ring-2 focus-visible:ring-accent-500 dark:border-brand-600 dark:bg-brand-700"
-                    />
-                    <span className={cn(
-                      'text-sm leading-snug',
-                      sub.isDone
-                        ? 'line-through text-brand-400 dark:text-brand-500'
-                        : 'text-brand-700 dark:text-brand-200'
-                    )}>
-                      {sub.text}
-                    </span>
-                  </label>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {hasNotes && notesOpen && (
-            <p
-              onClick={(e) => e.stopPropagation()}
-              className="mt-1.5 text-xs text-brand-500 dark:text-brand-400 line-clamp-2"
-            >
-              {item.notes}
-            </p>
-          )}
-        </div>
-
-        {/* Actions */}
-        {!isSelectionMode && (
-          <>
-            {/* Importance star — always visible at every width (not hover-
-                gated): one-tap family triage is the core Eisenhower workflow. */}
-            <Button
-              variant="ghost-brand"
-              size="icon"
-              onClick={(e) => { e.stopPropagation(); onToggleImportant(item); }}
-              aria-label={item.isImportant ? `Unmark important: ${item.text}` : `Mark important: ${item.text}`}
-              aria-pressed={item.isImportant === true}
-              title={item.isImportant ? 'Unmark important' : 'Mark important'}
-              className="self-center"
-            >
-              <Star
-                size={18}
-                className={item.isImportant ? 'text-warm-500 fill-warm-500' : 'text-brand-300 dark:text-brand-500'}
-              />
-            </Button>
-            {/* Desktop Actions */}
-            <div className="hidden sm:flex items-center gap-1 pl-2">
-              <Button
-                variant="ghost-brand"
-                size="icon"
-                onClick={(e) => { e.stopPropagation(); onMoveToTomorrow(item); }}
-                aria-label="Move to Tomorrow"
-                title="Move to Tomorrow"
-              >
-                <Calendar size={16} />
-              </Button>
-              <Button
-                variant="ghost-brand"
-                size="icon"
-                onClick={(e) => { e.stopPropagation(); onDuplicate(item); }}
-                aria-label="Duplicate task"
-                title="Duplicate"
-              >
-                <Copy size={16} />
-              </Button>
-              <Button
-                variant="ghost-brand"
-                size="icon"
-                onClick={(e) => { e.stopPropagation(); onEdit(item); }}
-                aria-label="Edit task"
-              >
-                <Edit2 size={16} />
-              </Button>
-              <Button
-                variant="ghost-brand"
-                size="icon"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  showDeleteConfirmation(async () => {
-                    haptic('medium');
-                    await onDelete(item.id);
-                    toast.success('Task deleted');
-                  });
-                }}
-                className="hover:text-money-neg active:text-money-neg active:bg-money-bgNeg dark:hover:text-money-negDark dark:active:bg-money-neg/15"
-                aria-label="Delete task"
-              >
-                <Trash2 size={16} />
-              </Button>
-            </div>
-            {/* Mobile Actions */}
-            <div className="flex sm:hidden pl-2">
-              <Button
-                variant="ghost-brand"
-                size="icon"
-                onClick={(e) => { e.stopPropagation(); onMore(item); }}
-                aria-label={`More options for: ${item.text}`}
-              >
-                <MoreVertical size={20} />
-              </Button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+          </span>
+        </button>
+      )}
+    </Row>
   );
 
   // In selection mode we keep tap-to-select intact and skip the swipe gesture.
@@ -389,7 +311,7 @@ export const TodoRow = React.memo(function TodoRow({
   // Gmail-style swipe: right = complete, left = delete (with confirmation).
   // Partial swipes stick open to a tappable button; SwipeActionRow handles
   // thresholds, reveal, haptics, and the reduced-motion fallback (the row's
-  // own checkbox and delete buttons remain the accessible path).
+  // own checkbox and the options drawer remain the accessible path).
   return (
     <SwipeActionRow
       startActions={[{
@@ -411,6 +333,7 @@ export const TodoRow = React.memo(function TodoRow({
           });
         },
       }]}
+      onSwipeStart={handleSwipeStart}
     >
       {cardInner}
     </SwipeActionRow>

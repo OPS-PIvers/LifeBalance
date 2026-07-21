@@ -20,12 +20,9 @@ export interface EisenhowerMatrixViewProps {
   onUncomplete: (id: string) => void;
   onEdit: (todo: ToDo) => void;
   onDelete: (id: string) => void;
-  onDuplicate: (todo: ToDo) => void;
-  onMoveToTomorrow: (todo: ToDo) => void;
-  onToggleImportant: (todo: ToDo) => void;
+  /** Opens the Task-options drawer (long-press / context-menu on a row). */
   onMore: (todo: ToDo) => void;
   onToggleSelection: (id: string) => void;
-  onToggleSubtask: (todo: ToDo, subtaskId: string) => void;
 }
 
 export const EisenhowerMatrixView: React.FC<EisenhowerMatrixViewProps> = ({
@@ -37,12 +34,8 @@ export const EisenhowerMatrixView: React.FC<EisenhowerMatrixViewProps> = ({
   onUncomplete,
   onEdit,
   onDelete,
-  onDuplicate,
-  onMoveToTomorrow,
-  onToggleImportant,
   onMore,
   onToggleSelection,
-  onToggleSubtask,
 }) => (
   <>
     {QUADRANT_ORDER.map((q) => (
@@ -61,11 +54,7 @@ export const EisenhowerMatrixView: React.FC<EisenhowerMatrixViewProps> = ({
         onUncomplete={onUncomplete}
         onEdit={onEdit}
         onDelete={onDelete}
-        onDuplicate={onDuplicate}
-        onMoveToTomorrow={onMoveToTomorrow}
-        onToggleImportant={onToggleImportant}
         onMore={onMore}
-        onToggleSubtask={onToggleSubtask}
         memberMap={memberMap}
         isSelectionMode={isSelectionMode}
         selectedIds={selectedIds}

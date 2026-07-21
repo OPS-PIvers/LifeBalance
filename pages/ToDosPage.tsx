@@ -4,7 +4,7 @@ import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers,
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { quadrantForTodo, QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhower';
-import { toggleSubtask, appendSubtask, removeSubtask, subtasksFromTexts, subtaskWriteErrorMessage, isPermissionDeniedError, subtaskProgress } from '@/utils/subtasks';
+import { toggleSubtask, appendSubtask, removeSubtask, subtasksFromTexts, isPermissionDeniedError, subtaskProgress } from '@/utils/subtasks';
 import { TODO_FREQUENCIES, TODO_FREQUENCY_LABELS, type TodoFrequency } from '@/utils/todoRecurrence';
 import { REMINDER_OFFSET_OPTIONS, compareDueTimes } from '@/utils/todoTime';
 import { ToDo, HouseholdMember, Subtask } from '@/types/schema';
@@ -446,21 +446,6 @@ const ToDosPage: React.FC = () => {
       } catch (error) {
           console.error('Failed to update importance:', error);
           toast.error('Failed to update importance');
-      }
-  }, [updateToDo]);
-
-  // F-TODO-08: toggle a single subtask's done state. Never touches points, so a
-  // plain updateToDo (no batch). Persists the whole subtasks array with the one
-  // entry flipped. Degrades gracefully if the firestore.rules whitelist hasn't
-  // shipped the `subtasks` field yet (permission-denied → friendly toast).
-  const handleToggleSubtask = useCallback(async (todo: ToDo, subtaskId: string) => {
-      haptic('light'); // at gesture time — dead after the await on iOS
-      const nextSubtasks = toggleSubtask(todo.subtasks, subtaskId);
-      try {
-          await updateToDo(todo.id, { subtasks: nextSubtasks });
-      } catch (error) {
-          console.error('Failed to update subtask:', error);
-          toast.error(subtaskWriteErrorMessage(error));
       }
   }, [updateToDo]);
 
@@ -1107,15 +1092,11 @@ const ToDosPage: React.FC = () => {
                 onUncomplete={handleUncomplete}
                 onEdit={openEditModal}
                 onDelete={deleteToDo}
-                onDuplicate={handleDuplicate}
-                onMoveToTomorrow={handleMoveToTomorrow}
-                onToggleImportant={handleToggleImportant}
                 onMore={setActionTodo}
                 memberMap={memberMap}
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
                 onToggleSelection={toggleSelection}
-                onToggleSubtask={handleToggleSubtask}
             />
 
             {/* Upcoming Section */}
@@ -1129,15 +1110,11 @@ const ToDosPage: React.FC = () => {
                 onUncomplete={handleUncomplete}
                 onEdit={openEditModal}
                 onDelete={deleteToDo}
-                onDuplicate={handleDuplicate}
-                onMoveToTomorrow={handleMoveToTomorrow}
-                onToggleImportant={handleToggleImportant}
                 onMore={setActionTodo}
                 memberMap={memberMap}
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
                 onToggleSelection={toggleSelection}
-                onToggleSubtask={handleToggleSubtask}
             />
 
             {/* On The Radar Section */}
@@ -1151,15 +1128,11 @@ const ToDosPage: React.FC = () => {
                 onUncomplete={handleUncomplete}
                 onEdit={openEditModal}
                 onDelete={deleteToDo}
-                onDuplicate={handleDuplicate}
-                onMoveToTomorrow={handleMoveToTomorrow}
-                onToggleImportant={handleToggleImportant}
                 onMore={setActionTodo}
                 memberMap={memberMap}
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
                 onToggleSelection={toggleSelection}
-                onToggleSubtask={handleToggleSubtask}
             />
             </>
             ) : effectiveArrangement === 'matrix' ? (
@@ -1186,12 +1159,8 @@ const ToDosPage: React.FC = () => {
               onUncomplete={handleUncomplete}
               onEdit={openEditModal}
               onDelete={deleteToDo}
-              onDuplicate={handleDuplicate}
-              onMoveToTomorrow={handleMoveToTomorrow}
-              onToggleImportant={handleToggleImportant}
               onMore={setActionTodo}
               onToggleSelection={toggleSelection}
-              onToggleSubtask={handleToggleSubtask}
             />
             </>
             ) : (
@@ -1629,20 +1598,22 @@ const ToDosPage: React.FC = () => {
         isConfirming={isBatchProcessing}
       />
 
-      {/* Mobile Actions Drawer */}
+      {/* Task-options drawer — the full per-task action set, opened by
+          long-press / right-click on a row (all visible per-row action buttons
+          were removed in the row-diet redesign). */}
       <Drawer
         isOpen={!!actionTodo}
         onClose={() => setActionTodo(null)}
-        title="Task Options"
+        title="Task options"
       >
-        <div className="space-y-2">
+        <div className="space-y-1">
           {actionTodo && (
             <>
               {/* Primary Action (Edit or Uncomplete) */}
               <Button
                 variant="ghost"
-                className="w-full justify-start text-lg py-4"
-                leftIcon={actionTodo.isCompleted ? <RotateCcw className="text-brand-500" /> : <Edit2 className="text-brand-500" />}
+                className="w-full justify-start"
+                leftIcon={actionTodo.isCompleted ? <RotateCcw size={18} className="text-brand-500" /> : <Edit2 size={18} className="text-brand-500" />}
                 onClick={() => {
                   if (actionTodo.isCompleted) {
                     handleUncomplete(actionTodo.id);
@@ -1652,14 +1623,42 @@ const ToDosPage: React.FC = () => {
                   setActionTodo(null);
                 }}
               >
-                {actionTodo.isCompleted ? 'Mark as Active' : 'Edit Task'}
+                {actionTodo.isCompleted ? 'Mark as active' : 'Edit'}
               </Button>
 
-              {/* Common Actions */}
+              {!actionTodo.isCompleted && (
+                <>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start"
+                    aria-pressed={actionTodo.isImportant === true}
+                    leftIcon={<Star size={18} className={actionTodo.isImportant ? 'text-warm-500 fill-warm-500' : 'text-brand-500'} />}
+                    onClick={() => {
+                      handleToggleImportant(actionTodo);
+                      setActionTodo(null);
+                    }}
+                  >
+                    {actionTodo.isImportant ? 'Unmark important' : 'Mark important'}
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start"
+                    leftIcon={<Calendar size={18} className="text-brand-500" />}
+                    onClick={() => {
+                      handleMoveToTomorrow(actionTodo);
+                      setActionTodo(null);
+                    }}
+                  >
+                    Move to tomorrow
+                  </Button>
+                </>
+              )}
+
               <Button
                 variant="ghost"
-                className="w-full justify-start text-lg py-4"
-                leftIcon={<Copy className="text-brand-500" />}
+                className="w-full justify-start"
+                leftIcon={<Copy size={18} className="text-brand-500" />}
                 onClick={() => {
                   handleDuplicate(actionTodo);
                   setActionTodo(null);
@@ -1668,12 +1667,12 @@ const ToDosPage: React.FC = () => {
                 Duplicate
               </Button>
 
-              <div className="h-px bg-brand-200 dark:bg-brand-700 my-2" />
+              <div className="hairline-divider my-2" />
 
               <Button
                 variant="ghost-destructive"
-                className="w-full justify-start text-lg py-4"
-                leftIcon={<Trash2 />}
+                className="w-full justify-start"
+                leftIcon={<Trash2 size={18} />}
                 onClick={() => {
                    // Close drawer immediately before confirmation to prevent visual clutter
                    // and potential interaction issues with the toast/modal overlay
@@ -1685,7 +1684,7 @@ const ToDosPage: React.FC = () => {
                    });
                 }}
               >
-                {actionTodo.isCompleted ? 'Delete Forever' : 'Delete'}
+                {actionTodo.isCompleted ? 'Delete forever' : 'Delete'}
               </Button>
             </>
           )}
