@@ -62,6 +62,17 @@ Key properties (all read directly from the merged `main` code, not assumed):
 - **No per-line balance delta.** The email's ending balance is the single source of
   truth; every withdrawal is filed/matched, but the account balance is only ever
   **overwritten** once per email (`buildEndingBalanceUpdate`), never incremented.
+  **Ordering guard:** each overwrite also stamps `Account.balanceAsOf` (the email's
+  own "As of" date, falling back to its newest withdrawal date, then the request's
+  `today`). An email whose as-of date is *older* than the stored `balanceAsOf` still
+  files its transactions and ledger entry but **skips the balance overwrite**
+  (`balanceSkipped: true` in the response; push says "Balance: unchanged") — so
+  out-of-order processing (e.g. a backfill) can never regress the balance to a stale
+  value. A "balance didn't update" report after such a run is this guard working,
+  not a bug. Note: a *manual* balance edit in the app does not touch `balanceAsOf`,
+  so the next night's email overwrites it as before — manual corrections are
+  stopgaps, not authoritative. `balanceAsOf` is server-written only (Firestore
+  rules reject client writes to it).
   This is also why a **filled Apple Pay stub** and a **confirmed pending transaction**
   are both marked `status: 'verified'` in this same pass (not left `pending_review`)
   — leaving either pending would let a later client-side categorize apply its own
