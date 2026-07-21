@@ -335,7 +335,7 @@ describe('makeUpdateTransactionCategory — bank-email-sync needsCategory row', 
     expect(balanceUpdates).toHaveLength(0);
   });
 
-  it('applies NO balance delta even with an inline amount override on a bank-sync row', async () => {
+  it('applies NO balance delta even with an inline amount override on a bank-sync row (source arm)', async () => {
     const realBankRow: Transaction = { ...bankSyncRow, source: 'bank-sync', bankRef: 'P0000123' };
     const { updateTransactionCategory } = makeUpdateTransactionCategory(catDeps([realBankRow]));
     await updateTransactionCategory('tx-bank', 'Groceries', undefined, undefined, { amount: 55 });
@@ -346,6 +346,30 @@ describe('makeUpdateTransactionCategory — bank-email-sync needsCategory row', 
     // correcting our recorded amount must not move any account.
     const balanceUpdates = capturedUpdates.filter(u => u.ref.__path.startsWith(`households/${HOUSEHOLD_ID}/accounts/`));
     expect(balanceUpdates).toHaveLength(0);
+  });
+
+  it('applies NO balance delta for a bankRef-stamped row even when source is not bank-sync', async () => {
+    // Guards against narrowing isBankSyncTransaction's OR to an AND.
+    const filledRow: Transaction = { ...bankSyncRow, source: 'shortcut', bankRef: 'synth:abc' };
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(catDeps([filledRow]));
+    await updateTransactionCategory('tx-bank', 'Groceries', undefined, undefined, { amount: 55 });
+
+    const balanceUpdates = capturedUpdates.filter(u => u.ref.__path.startsWith(`households/${HOUSEHOLD_ID}/accounts/`));
+    expect(balanceUpdates).toHaveLength(0);
+  });
+
+  // HIGH finding fix: re-tagging (Action Queue smart-approve) to a manual
+  // account must debit that destination, not silently drop the money.
+  it('re-tagging a bank-sync row to a manual account applies the delta to the destination and stamps the home', async () => {
+    const bankRow: Transaction = { ...bankSyncRow, source: 'bank-sync', bankRef: 'P0000123', accountId: 'acc-check' };
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(catDeps([bankRow]));
+    await updateTransactionCategory('tx-bank', 'Groceries', undefined, 'acc-save');
+
+    expect(capturedUpdates.some(u => u.ref.__path === accountPath('acc-check'))).toBe(false);
+    const savingsUpdate = capturedUpdates.find(u => u.ref.__path === accountPath('acc-save'));
+    expect(savingsUpdate?.data?.['balance']).toEqual({ __increment: -42 });
+    const txUpdate = capturedUpdates.find(u => u.ref.__path === txnPath('tx-bank'));
+    expect(txUpdate?.data).toMatchObject({ bankSyncAccountId: 'acc-check' });
   });
 });
 
@@ -392,7 +416,7 @@ describe('makeUpdateTransaction — bank-sync rows never delta a balance', () =>
     expect(balanceUpdate?.data?.['balance']).toEqual({ __increment: -7.5 });
   });
 
-  it('an amount edit on a bank-sync row applies NO balance delta', async () => {
+  it('an amount edit on a bank-sync row (source arm) applies NO balance delta', async () => {
     const bankRow: Transaction = { ...baseVerified, source: 'bank-sync', bankRef: 'P0000123' };
     const { updateTransaction } = makeUpdateTransaction(updateDeps([bankRow]));
     await updateTransaction('tx-1', { amount: 50 });
@@ -405,12 +429,77 @@ describe('makeUpdateTransaction — bank-sync rows never delta a balance', () =>
     expect(balanceUpdates).toHaveLength(0);
   });
 
-  it('an account re-tag on a bank-sync row moves NO money between accounts', async () => {
-    const bankRow: Transaction = { ...baseVerified, source: 'bank-sync', bankRef: 'P0000123' };
-    const { updateTransaction } = makeUpdateTransaction(updateDeps([bankRow]));
-    await updateTransaction('tx-1', { accountId: 'acc-save' });
+  it('an amount edit on a bankRef-stamped row applies NO balance delta even when source is not bank-sync', async () => {
+    // Guards against narrowing isBankSyncTransaction's OR to an AND: a row the
+    // sync FILLED (not created) carries only bankRef, not source: 'bank-sync'.
+    const filledRow: Transaction = { ...baseVerified, source: 'shortcut', bankRef: 'synth:abc' };
+    const { updateTransaction } = makeUpdateTransaction(updateDeps([filledRow]));
+    await updateTransaction('tx-1', { amount: 50 });
 
     const balanceUpdates = capturedUpdates.filter(u => u.ref.__path.startsWith(`households/${HOUSEHOLD_ID}/accounts/`));
     expect(balanceUpdates).toHaveLength(0);
+  });
+
+  // HIGH finding fix: re-tagging a bank-sync row must NOT silently drop its
+  // impact everywhere. Only the OLD (authoritative) account is exempt from
+  // the delta; the NEW (manual) destination account must be debited/credited
+  // normally, or the move is a permanent under-count on the destination.
+  it('re-tagging a bank-sync row to a manual account debits the destination and stamps bankSyncAccountId, leaving the source untouched', async () => {
+    const bankRow: Transaction = { ...baseVerified, source: 'bank-sync', bankRef: 'P0000123', accountId: 'acc-check' };
+    const { updateTransaction } = makeUpdateTransaction(updateDeps([bankRow]));
+    await updateTransaction('tx-1', { accountId: 'acc-save' });
+
+    // Old (checking) account: no reversal — it's still the bank-sync home.
+    expect(capturedUpdates.some(u => u.ref.__path === accountPath('acc-check'))).toBe(false);
+    // New (savings) account: debited by the row's full effective impact
+    // (expense → −amount), exactly like an ordinary re-tag.
+    const savingsUpdate = capturedUpdates.find(u => u.ref.__path === accountPath('acc-save'));
+    expect(savingsUpdate?.data?.['balance']).toEqual({ __increment: -42.5 });
+    // The doc is stamped with its authoritative home so a later re-tag can
+    // still tell checking apart from an ordinary manual account.
+    const txUpdate = capturedUpdates.find(u => u.ref.__path === `households/${HOUSEHOLD_ID}/transactions/tx-1`);
+    expect(txUpdate?.data).toMatchObject({ bankSyncAccountId: 'acc-check' });
+  });
+
+  it('re-tagging a bank-sync row back to its stamped home reverses the manual account and applies NO delta to the home', async () => {
+    // Simulates the round trip: already re-tagged to Savings once (so
+    // bankSyncAccountId was stamped to checking on that earlier edit).
+    const retaggedRow: Transaction = {
+      ...baseVerified,
+      source: 'bank-sync',
+      bankRef: 'P0000123',
+      accountId: 'acc-save',
+      bankSyncAccountId: 'acc-check',
+    };
+    const { updateTransaction } = makeUpdateTransaction(updateDeps([retaggedRow]));
+    await updateTransaction('tx-1', { accountId: 'acc-check' });
+
+    // Savings (current tag, NOT the stamped home) must be reversed — it was
+    // ordinary bookkeeping that would otherwise stay overstated forever.
+    const savingsUpdate = capturedUpdates.find(u => u.ref.__path === accountPath('acc-save'));
+    expect(savingsUpdate?.data?.['balance']).toEqual({ __increment: 42.5 });
+    // Checking (the stamped home) receives NO delta — its balance is still
+    // authoritative from the bank email.
+    expect(capturedUpdates.some(u => u.ref.__path === accountPath('acc-check'))).toBe(false);
+    // Already stamped — the write must not re-stamp it.
+    const txUpdate = capturedUpdates.find(u => u.ref.__path === `households/${HOUSEHOLD_ID}/transactions/tx-1`);
+    expect(txUpdate?.data).not.toHaveProperty('bankSyncAccountId');
+  });
+
+  it('a pure amount edit on an unmoved bank-sync row applies no deltas and does not re-stamp an already-known home', async () => {
+    const bankRow: Transaction = {
+      ...baseVerified,
+      source: 'bank-sync',
+      bankRef: 'P0000123',
+      accountId: 'acc-check',
+      bankSyncAccountId: 'acc-check',
+    };
+    const { updateTransaction } = makeUpdateTransaction(updateDeps([bankRow]));
+    await updateTransaction('tx-1', { amount: 50 });
+
+    const balanceUpdates = capturedUpdates.filter(u => u.ref.__path.startsWith(`households/${HOUSEHOLD_ID}/accounts/`));
+    expect(balanceUpdates).toHaveLength(0);
+    const txUpdate = capturedUpdates.find(u => u.ref.__path === `households/${HOUSEHOLD_ID}/transactions/tx-1`);
+    expect(txUpdate?.data).not.toHaveProperty('bankSyncAccountId');
   });
 });

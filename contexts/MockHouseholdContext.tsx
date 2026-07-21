@@ -991,8 +991,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
 
   // Test-Mode parity for the Merge action (plan 03 PR-3): applies the same
   // field-level winner set as the real context, deletes the dupe, and
-  // reverses the dupe's balance impact if it was verified — mirroring
-  // `deleteTransaction`'s balance-reversal rule above.
+  // reverses the dupe's balance impact if it was verified — mirroring the
+  // REAL `mergeTransactions`' balance-reversal rule (transactionMutations.ts).
+  // NOT a mirror of the mock `deleteTransaction` above, which never reverses
+  // a balance at all (see the parity note near its real-context counterpart
+  // further down this file).
   const mergeTransactions = useCallback(async (keeperId: string, dupeId: string) => {
     const keeperTx = transactions.find(t => t.id === keeperId);
     const dupeTx = transactions.find(t => t.id === dupeId);
