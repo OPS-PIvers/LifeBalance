@@ -24,6 +24,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import { cn } from '@/utils/cn';
 import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
+import Eyebrow from '@/components/ui/Eyebrow';
 import Textarea from '@/components/ui/Textarea';
 import BatchRescheduleModal from '@/components/modals/BatchRescheduleModal';
 import { TodoPhotoImportDrawer } from '@/components/modals/TodoPhotoImportDrawer';
@@ -196,6 +198,10 @@ const ToDosPage: React.FC = () => {
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [subtaskInput, setSubtaskInput] = useState('');
   const [aiBreakingDown, setAiBreakingDown] = useState(false);
+  // Progressive disclosure: the drawer shows only the core fields (task, due
+  // date, assignee, important) until "More options" is expanded. Editing a task
+  // that already has any secondary value auto-expands so nothing is hidden.
+  const [moreOpen, setMoreOpen] = useState(false);
 
   // Sticky quick-add bar state — mirrors the shopping list's inline add. The
   // input is desktop-only autofocused (useAutoFocus skips touch so it doesn't
@@ -340,6 +346,7 @@ const ToDosPage: React.FC = () => {
     setNotes('');
     setSubtasks([]);
     setSubtaskInput('');
+    setMoreOpen(false);
     setEditingId(null);
     setIsAddModalOpen(true);
   }, [quickText, currentUser, members]);
@@ -390,6 +397,15 @@ const ToDosPage: React.FC = () => {
     setNotes(todo.notes ?? '');
     setSubtasks(todo.subtasks ?? []);
     setSubtaskInput('');
+    // Auto-expand when any hidden-by-default field already has a value —
+    // editing a task with notes/subtasks/time/repeat must never hide them.
+    setMoreOpen(
+      !!todo.dueTime ||
+      todo.reminderMinutesBefore != null ||
+      !!todo.recurrence ||
+      !!(todo.notes && todo.notes.trim()) ||
+      (todo.subtasks?.length ?? 0) > 0
+    );
     setEditingId(todo.id);
     setIsAddModalOpen(true);
   }, []);
@@ -1330,7 +1346,7 @@ const ToDosPage: React.FC = () => {
 
           <Input
             id="due-date-input"
-            label="Due Date"
+            label="Due date"
             type="date"
             value={completeByDate}
             onChange={(e) => setCompleteByDate(e.target.value)}
@@ -1338,40 +1354,113 @@ const ToDosPage: React.FC = () => {
             className="appearance-none"
           />
 
+          {members.length === 0 ? (
+            <div className="flex items-center gap-2 text-sm text-brand-400 dark:text-brand-450 py-2">
+              <AlertCircle size={16} className="shrink-0" />
+              <span>No household members available to assign this task.</span>
+            </div>
+          ) : (
+            <Select
+              id="assignee-select"
+              label="Assign to"
+              icon={<User size={18} />}
+              value={assignedTo}
+              onChange={(e) => setAssignedTo(e.target.value)}
+            >
+              {/* Keep the rendered value in sync with state: without these
+                  sentinels an empty ('' on create) or orphaned (member left)
+                  assignedTo would visually snap to the first member while
+                  state still held the old value. handleSubmit blocks both
+                  cases with a toast — this just makes the field honest. */}
+              {assignedTo === '' && (
+                <option value="" disabled>Choose a member</option>
+              )}
+              {assignedTo !== '' && !members.some(m => m.uid === assignedTo) && (
+                <option value={assignedTo} disabled>Former member</option>
+              )}
+              {members.map(member => (
+                <option key={member.uid} value={member.uid}>
+                  {member.displayName ?? 'User'}
+                </option>
+              ))}
+            </Select>
+          )}
+
+          {/* Eisenhower importance — a household judgment call, deliberately a
+              yes/no (not low/med/high) to match the matrix's two-state axis.
+              Compact star chip: the task-options drawer also toggles this, so
+              it no longer needs a full explainer card. */}
+          <button
+            type="button"
+            onClick={() => setIsImportant(v => !v)}
+            aria-pressed={isImportant}
+            className={cn(
+              'inline-flex items-center gap-2 min-h-11 px-3 py-2 rounded-btn border text-sm font-medium transition-colors duration-(--duration-fast) ease-(--ease-standard)',
+              'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
+              isImportant
+                ? 'bg-warm-100 border-warm-500/40 text-warm-700 dark:bg-warm-500/15 dark:border-warm-500/40 dark:text-warm-300'
+                : 'bg-white border-brand-200 text-brand-600 hover:bg-brand-50 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:hover:bg-brand-700'
+            )}
+          >
+            <Star
+              size={18}
+              aria-hidden="true"
+              className={isImportant ? 'text-warm-500 fill-warm-500' : 'text-brand-300 dark:text-brand-500'}
+            />
+            Important
+          </button>
+          <p className="mt-1 text-xs text-brand-400 dark:text-brand-450">
+            Matters to the family — big consequences if skipped.
+          </p>
+
+          {/* Progressive disclosure: secondary fields live behind this expander.
+              Opening a task that already uses any of them auto-expands (see
+              openEditModal). */}
+          <button
+            type="button"
+            onClick={() => setMoreOpen(v => !v)}
+            aria-expanded={moreOpen}
+            aria-controls="task-more-options"
+            className="w-full min-h-11 flex items-center justify-between px-1 py-2 text-sm font-medium text-brand-600 dark:text-brand-300 hover:text-brand-900 dark:hover:text-brand-100 rounded-btn transition-colors duration-(--duration-fast) ease-(--ease-standard) focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+          >
+            <span>More options</span>
+            <ChevronDown
+              size={18}
+              aria-hidden="true"
+              className={cn('transition-transform duration-(--duration-fast) ease-(--ease-standard)', moreOpen && 'rotate-180')}
+            />
+          </button>
+
+          {/* Always mounted (hidden when collapsed) so the expander button's
+              aria-controls never references an absent id. */}
+          <div id="task-more-options" className="space-y-4" hidden={!moreOpen}>
           {/* F-TODO-14: optional due time + reminder lead time. The reminder
               select is disabled until a time anchors it; clearing the time
               clears the reminder on save (see handleSubmit). */}
           <div className="grid grid-cols-2 gap-3">
             <Input
               id="due-time-input"
-              label="Time (optional)"
+              label="Time"
               type="time"
               value={dueTime}
               onChange={(e) => setDueTime(e.target.value)}
               className="appearance-none"
             />
             <div>
-              <label
-                htmlFor="reminder-select"
-                className="block text-xs font-bold text-brand-400 dark:text-brand-450 uppercase tracking-wider mb-1"
-              >
-                Reminder
-              </label>
-              <select
+              <Select
                 id="reminder-select"
+                label="Reminder"
                 value={dueTime && reminderMinutesBefore !== null ? String(reminderMinutesBefore) : ''}
                 onChange={(e) =>
                   setReminderMinutesBefore(e.target.value === '' ? null : Number(e.target.value))
                 }
                 disabled={!dueTime}
-                className="w-full text-base sm:text-sm px-3 py-2.5 border border-brand-200 dark:border-brand-700 rounded-btn bg-white dark:bg-brand-900 text-brand-900 dark:text-brand-100 outline-hidden focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 disabled:opacity-50 transition-all duration-(--duration-fast) ease-(--ease-standard)"
-                aria-label="Reminder lead time"
               >
                 <option value="">No reminder</option>
                 {REMINDER_OFFSET_OPTIONS.map(opt => (
                   <option key={opt.value} value={String(opt.value)}>{opt.label}</option>
                 ))}
-              </select>
+              </Select>
               {!dueTime && (
                 <p className="mt-1 text-xs text-brand-400 dark:text-brand-450">
                   Set a time to enable reminders.
@@ -1380,40 +1469,27 @@ const ToDosPage: React.FC = () => {
             </div>
           </div>
 
-          {/* F-TODO-01: recurrence picker — mirrors CalendarItem's weekly/
+          {/* F-TODO-01: recurrence cadence — mirrors CalendarItem's weekly/
               bi-weekly/monthly cadence. 'None' = a one-off task (default). */}
-          <fieldset>
-            <legend className="flex items-center gap-1.5 text-xs font-bold text-brand-400 dark:text-brand-450 uppercase tracking-wider mb-1">
-              <Repeat size={12} aria-hidden="true" />
-              Repeat
-            </legend>
-            <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Repeat cadence">
-              {(['none', ...TODO_FREQUENCIES] as const).map(option => {
-                const selected = recurrence === option;
-                const label = option === 'none' ? 'None' : TODO_FREQUENCY_LABELS[option];
-                return (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => setRecurrence(option)}
-                    aria-pressed={selected}
-                    className={`px-3 py-2 rounded-btn border text-sm font-medium whitespace-nowrap transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
-                      selected
-                        ? 'bg-accent-600 text-white border-accent-600 dark:bg-accent-600 dark:border-accent-600'
-                        : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50 dark:bg-brand-700/50 dark:text-brand-200 dark:border-brand-600 dark:hover:bg-brand-700'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
+          <div>
+            <Select
+              id="recurrence-select"
+              label="Repeat"
+              icon={<Repeat size={18} />}
+              value={recurrence}
+              onChange={(e) => setRecurrence(e.target.value as 'none' | TodoFrequency)}
+            >
+              <option value="none">None</option>
+              {TODO_FREQUENCIES.map(option => (
+                <option key={option} value={option}>{TODO_FREQUENCY_LABELS[option]}</option>
+              ))}
+            </Select>
             {recurrence !== 'none' && (
               <p className="mt-1.5 text-xs text-brand-400 dark:text-brand-450">
                 A fresh copy is created automatically each time you complete this task.
               </p>
             )}
-          </fieldset>
+          </div>
 
           <Textarea
             id="task-notes"
@@ -1430,9 +1506,9 @@ const ToDosPage: React.FC = () => {
               form saves. "Break down with AI" appends model-suggested steps. */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <span className="block text-xs font-bold text-brand-400 dark:text-brand-450 uppercase tracking-wider">
+              <Eyebrow>
                 Subtasks{subtasks.length > 0 ? ` (${subtaskProgress(subtasks).done}/${subtasks.length})` : ''}
-              </span>
+              </Eyebrow>
               <Button
                 type="button"
                 variant="ghost-brand"
@@ -1507,72 +1583,7 @@ const ToDosPage: React.FC = () => {
               </Button>
             </div>
           </div>
-
-          {/* Eisenhower importance — a household judgment call, deliberately a
-              yes/no (not low/med/high) to match the matrix's two-state axis. */}
-          <button
-            type="button"
-            onClick={() => setIsImportant(v => !v)}
-            aria-pressed={isImportant}
-            className={cn(
-              'w-full flex items-center gap-3 px-3 py-3 rounded-btn border text-left transition-colors duration-(--duration-fast) ease-(--ease-standard)',
-              isImportant
-                ? 'bg-warm-100 border-warm-500/40 dark:bg-warm-500/15 dark:border-warm-500/40'
-                : 'bg-white border-brand-200 hover:bg-brand-50 dark:bg-brand-700/50 dark:border-brand-600 dark:hover:bg-brand-700'
-            )}
-          >
-            <Star
-              size={20}
-              aria-hidden="true"
-              className={isImportant ? 'text-warm-500 fill-warm-500' : 'text-brand-300 dark:text-brand-500'}
-            />
-            <span className="flex-1 min-w-0">
-              <span className={cn('block text-sm font-medium', isImportant ? 'text-warm-700 dark:text-warm-300' : 'text-brand-900 dark:text-brand-50')}>
-                Important
-              </span>
-              <span className="block text-xs text-brand-400 dark:text-brand-450">
-                Matters to the family — big consequences if skipped
-              </span>
-            </span>
-          </button>
-
-          <fieldset>
-            <legend className="block text-xs font-bold text-brand-400 dark:text-brand-450 uppercase tracking-wider mb-1">
-              Assign to
-            </legend>
-            {members.length === 0 ? (
-              <div className="flex items-center gap-2 text-sm text-brand-400 dark:text-brand-450 py-2">
-                <AlertCircle size={16} className="shrink-0" />
-                <span>No household members available to assign this task.</span>
-              </div>
-            ) : (
-              <div className="flex gap-2 overflow-x-auto pb-2" role="group" aria-label="Assign task to member">
-                {members.map(member => (
-                  <button
-                    key={member.uid}
-                    type="button"
-                    onClick={() => setAssignedTo(member.uid)}
-                    aria-label={`Assign to ${member.displayName || 'User'}`}
-                    aria-pressed={assignedTo === member.uid}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-btn border transition-colors duration-(--duration-fast) ease-(--ease-standard) whitespace-nowrap ${
-                      assignedTo === member.uid
-                        ? 'bg-accent-600 text-white border-accent-600 dark:bg-accent-600 dark:border-accent-600'
-                        : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50 dark:bg-brand-700/50 dark:text-brand-200 dark:border-brand-600 dark:hover:bg-brand-700'
-                    }`}
-                  >
-                    {member.photoURL ? (
-                      <img src={member.photoURL} alt={member.displayName ?? 'User'} className="w-5 h-5 rounded-full" />
-                    ) : (
-                      <div className="w-5 h-5 rounded-full bg-brand-200 dark:bg-brand-600 flex items-center justify-center text-xxs font-bold text-brand-600 dark:text-brand-200">
-                        {member.displayName?.charAt(0) ?? 'U'}
-                      </div>
-                    )}
-                    <span className="text-sm font-medium">{member.displayName?.split(' ')[0] ?? 'User'}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </fieldset>
+          </div>
 
           <Button
             type="submit"
