@@ -60,11 +60,15 @@ export interface ReconcileCandidate {
    *  card into a stub belonging to a different card. */
   accountId?: string;
   /** True if this row was ITSELF created from a bank-notification capture.
-   *  Used only by {@link pickDuplicateShortcutRow}: a bank-notification
-   *  duplicate is only ever merged INTO a NON-bank capture (the Apple Pay
-   *  "Transaction" automation row), never into another bank-notification row —
-   *  otherwise two genuinely-separate identical purchases captured via the
-   *  bank-only shortcut would collapse into one and lose spend data. */
+   *  Read by the two cross-source dedup pickers with INVERTED guards:
+   *  {@link pickDuplicateShortcutRow} (forward path — bank arrives second)
+   *  only merges INTO a NON-bank capture (the Apple Pay "Transaction" row),
+   *  skipping candidates that are already bank rows; {@link pickReverseDuplicateRow}
+   *  (reverse path — bank arrived first) requires the candidate IS a bank row.
+   *  Either way a bank-notification row is never folded into another
+   *  bank-notification row — otherwise two genuinely-separate identical
+   *  purchases captured via the bank-only shortcut would collapse into one and
+   *  lose spend data. */
   fromBankNotification?: boolean;
 }
 
