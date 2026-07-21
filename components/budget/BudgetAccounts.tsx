@@ -744,54 +744,54 @@ const BudgetAccounts: React.FC = () => {
         </div>
 
         {!isCardModalSavings && (
-        <div className="space-y-2">
-          <label className="text-xs font-semibold text-brand-600 dark:text-brand-300 uppercase tracking-wide">
-            Cards on this account
-          </label>
-          {cardChips.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {cardChips.map(digits => (
-                <span
-                  key={digits}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-brand-100 dark:bg-brand-700/50 pl-3 pr-1.5 py-1 text-xs font-mono text-brand-700 dark:text-brand-200"
-                >
-                  <CreditCard size={11} aria-hidden />
-                  ···{digits}
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveCardChip(digits)}
-                    aria-label={`Remove card ending ${digits}`}
-                    className="rounded-full p-0.5 hover:bg-brand-200 dark:hover:bg-brand-600 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-brand-600 dark:text-brand-300 uppercase tracking-wide">
+              Cards on this account
+            </label>
+            {cardChips.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {cardChips.map(digits => (
+                  <span
+                    key={digits}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-brand-100 dark:bg-brand-700/50 pl-3 pr-1.5 py-1 text-xs font-mono text-brand-700 dark:text-brand-200"
                   >
-                    <X size={11} />
-                  </button>
-                </span>
-              ))}
+                    <CreditCard size={11} aria-hidden />
+                    ···{digits}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveCardChip(digits)}
+                      aria-label={`Remove card ending ${digits}`}
+                      className="rounded-full p-0.5 hover:bg-brand-200 dark:hover:bg-brand-600 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+                    >
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Input
+                inputMode="numeric"
+                placeholder="Add card last 4 (e.g. 8899)"
+                value={cardChipDraft}
+                onChange={e => setCardChipDraft(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddCardChip();
+                  }
+                }}
+                maxLength={19}
+                className="font-mono flex-1"
+              />
+              <Button variant="secondary" onClick={handleAddCardChip}>
+                Add
+              </Button>
             </div>
-          )}
-          <div className="flex gap-2">
-            <Input
-              inputMode="numeric"
-              placeholder="Add card last 4 (e.g. 8899)"
-              value={cardChipDraft}
-              onChange={e => setCardChipDraft(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleAddCardChip();
-                }
-              }}
-              maxLength={19}
-              className="font-mono flex-1"
-            />
-            <Button variant="secondary" onClick={handleAddCardChip}>
-              Add
-            </Button>
+            <p className="text-xs text-brand-500 dark:text-brand-400">
+              Bank-alert Shortcuts (e.g. Wells Fargo purchase emails) use these to route transactions to the right account.
+            </p>
           </div>
-          <p className="text-xs text-brand-500 dark:text-brand-400">
-            Bank-alert Shortcuts (e.g. Wells Fargo purchase emails) use these to route transactions to the right account.
-          </p>
-        </div>
         )}
 
         <Button
