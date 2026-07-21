@@ -230,6 +230,18 @@ export interface HouseholdContextType {
    *  budgeted `amount`; a recurring template's own amount is left untouched. */
   payCalendarItem: (itemId: string, accountId: string, opts?: MutationOpts & { actualAmount?: number }) => Promise<void>;
   deferCalendarItem: (itemId: string, opts?: MutationOpts) => Promise<void>;
+  /** Reconcile a bank-synced transaction (carries a `bankRef`) as the payment
+   *  for an unpaid expense calendar item: marks the bill paid at the txn's
+   *  actual amount (NO account-balance write — the row's balance is already
+   *  authoritative), files the transaction as `Budgeted in Calendar`, and
+   *  learns the transaction's merchant descriptor onto the bill's
+   *  `bankDescriptorAliases` so future nightly syncs auto-match it.
+   *  `calendarItemId` accepts either a plain calendar item id or a synthetic
+   *  recurring-occurrence id (`templateId_instance_yyyy-MM-dd`).
+   *  Returns `true` only when the link actually committed — `false` for any
+   *  guard early-return (already paid, bad id, etc.); callers must not treat
+   *  a `false` result as success. */
+  linkBankTransactionToBill: (transactionId: string, calendarItemId: string) => Promise<boolean>;
 
   // Transaction Actions
   addTransaction: (tx: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>) => Promise<void>;
@@ -483,7 +495,7 @@ export type FinanceContextValue = Pick<HouseholdContextType,
   | 'updateAccountOrder' | 'reorderAccounts'
   | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal'
   | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'setBucketLimits' | 'saveCeremonyChanges' | 'reallocateBucket'
-  | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
+  | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem' | 'linkBankTransactionToBill'
   | 'addTransaction' | 'addTransactions' | 'updateTransactionCategory' | 'updateTransaction' | 'deleteTransaction' | 'splitTransaction'
   | 'setTransactionSplit' | 'markSplitSettled'
   | 'mergeTransactions' | 'keepBothTransactions'

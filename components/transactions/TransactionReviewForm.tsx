@@ -1,15 +1,17 @@
 import React, { useMemo, useState } from 'react';
-import { Check, ChevronDown, Copy, Sparkles, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, Copy, Link2, Sparkles, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { subMonths, addMonths, parseISO, format as formatDate } from 'date-fns';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import { Transaction, CREDIT_CARD_CATEGORY, INCOME_CATEGORY } from '@/types/schema';
 import { Switch } from '@/components/ui/Switch';
 import { getAutoSelectedHabitIds, suggestHabitsForTransaction } from '@/utils/habitSuggestions';
 import { suggestAccountIdForTransaction, suggestCategoryForTransaction } from '@/utils/actionQueueSmart';
 import { buildTransactionCategoryOptions } from '@/utils/categories';
+import { getBillLinkCandidates } from '@/utils/billLinkCandidates';
 import { roundMoney } from '@/utils/money';
 import { pickKeeper } from '@/utils/transactionMerge';
-import { useFinance, useGamification } from '@/contexts/FirebaseHouseholdContext';
+import { useFinance, useGamification, useExpandedCalendarItems } from '@/contexts/FirebaseHouseholdContext';
 import { cn } from '@/utils/cn';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
@@ -76,9 +78,48 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
   const {
     accounts, buckets, transactions,
     updateTransactionCategory, deleteTransaction, addCalendarItem,
-    mergeTransactions, keepBothTransactions,
+    mergeTransactions, keepBothTransactions, linkBankTransactionToBill,
   } = useFinance();
   const { habits } = useGamification();
+
+  // "Link to bill" (bank-sync reconcile) — only offered for a bank-synced row
+  // still awaiting categorization (see needsReview in useActionQueue.ts). The
+  // candidate list is expanded ~1 month back to ~1 month ahead so a slightly
+  // early/late bank post still finds its bill.
+  const canLinkToBill = !!transaction.bankRef && transaction.status === 'verified' && transaction.needsCategory === true;
+  const [showBillPicker, setShowBillPicker] = useState(false);
+  const [isLinkingBill, setIsLinkingBill] = useState(false);
+  // Anchored on the TRANSACTION's own date (not "today") so a bank-post from
+  // weeks ago still finds the bill it was actually due against. Rows that can
+  // never show the picker (canLinkToBill false) get a degenerate same-instant
+  // window instead of skipping the hook — hooks can't be conditional — which
+  // keeps the expansion trivially cheap (empty range) for the common case.
+  const billWindowStart = useMemo(
+    () => (canLinkToBill ? subMonths(parseISO(transaction.date), 1) : parseISO(transaction.date)),
+    [canLinkToBill, transaction.date]
+  );
+  const billWindowEnd = useMemo(
+    () => (canLinkToBill ? addMonths(parseISO(transaction.date), 1) : parseISO(transaction.date)),
+    [canLinkToBill, transaction.date]
+  );
+  const expandedForBillLink = useExpandedCalendarItems(billWindowStart, billWindowEnd);
+  const billCandidates = useMemo(
+    () => (canLinkToBill && showBillPicker ? getBillLinkCandidates(expandedForBillLink) : []),
+    [canLinkToBill, showBillPicker, expandedForBillLink]
+  );
+
+  const handleLinkToBill = async (calendarItemId: string) => {
+    setIsLinkingBill(true);
+    try {
+      const linked = await linkBankTransactionToBill(transaction.id, calendarItemId);
+      if (linked) onDone();
+    } catch (error) {
+      console.error('Failed to link transaction to bill:', error);
+      toast.error('Failed to link transaction to bill');
+    } finally {
+      setIsLinkingBill(false);
+    }
+  };
 
   // Plan 03 PR-3: a flagged possible duplicate of another existing row.
   // Resolved by id (not trusted blindly) so a stale/deleted reference never
@@ -336,6 +377,69 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
               Keep both
             </Button>
           </div>
+        </div>
+      )}
+
+      {canLinkToBill && (
+        <div className="rounded-card border border-accent-200 bg-accent-50 px-3 py-2.5 space-y-2 dark:border-accent-700 dark:bg-accent-800/20">
+          {!showBillPicker ? (
+            <Button
+              variant="link"
+              size="md"
+              onClick={() => setShowBillPicker(true)}
+              className="w-full justify-start gap-2 text-xs font-semibold text-accent-700 no-underline hover:no-underline dark:text-accent-200"
+              leftIcon={<Link2 size={14} className="shrink-0" />}
+            >
+              Is this a bill payment? Link it to a bill
+            </Button>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-accent-700 dark:text-accent-200 flex items-center gap-1.5">
+                  <Link2 size={14} className="shrink-0" />
+                  Pick the bill this pays
+                </p>
+                <Button
+                  variant="link"
+                  size="sm"
+                  onClick={() => setShowBillPicker(false)}
+                  className="text-xs text-brand-500 no-underline hover:no-underline dark:text-brand-400"
+                >
+                  Cancel
+                </Button>
+              </div>
+              {billCandidates.length === 0 ? (
+                <p className="text-xs text-brand-500 dark:text-brand-400">
+                  No unpaid bills found in the last/next month.
+                </p>
+              ) : (
+                <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                  {billCandidates.map(bill => (
+                    <Button
+                      key={bill.id}
+                      variant="outline"
+                      size="md"
+                      disabled={isLinkingBill}
+                      onClick={() => handleLinkToBill(bill.id)}
+                      className="w-full min-h-11 justify-between gap-2 bg-white text-left font-normal dark:bg-brand-700/50"
+                    >
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-brand-800 dark:text-brand-100 truncate">
+                          {bill.title}
+                        </span>
+                        <span className="block text-xs text-brand-400 dark:text-brand-450">
+                          {formatDate(parseISO(bill.date), 'MMM d, yyyy')}
+                        </span>
+                      </span>
+                      <span className="font-mono font-bold tabular-nums text-brand-900 dark:text-brand-50 shrink-0">
+                        ${bill.amount.toFixed(2)}
+                      </span>
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

@@ -11,6 +11,7 @@ const {
   mockMergeTransactions,
   mockKeepBothTransactions,
   mockAddCalendarItem,
+  mockLinkBankTransactionToBill,
   mockOnDone,
   mockToast,
 } = vi.hoisted(() => ({
@@ -19,6 +20,7 @@ const {
   mockMergeTransactions: vi.fn((..._args: unknown[]) => Promise.resolve()),
   mockKeepBothTransactions: vi.fn((..._args: unknown[]) => Promise.resolve()),
   mockAddCalendarItem: vi.fn((..._args: unknown[]) => Promise.resolve()),
+  mockLinkBankTransactionToBill: vi.fn((..._args: unknown[]) => Promise.resolve()),
   mockOnDone: vi.fn(),
   mockToast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 }));
@@ -46,8 +48,10 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
     mergeTransactions: mockMergeTransactions,
     keepBothTransactions: mockKeepBothTransactions,
     addCalendarItem: mockAddCalendarItem,
+    linkBankTransactionToBill: mockLinkBankTransactionToBill,
   }),
   useGamification: () => ({ habits: mockHabits }),
+  useExpandedCalendarItems: () => [],
 }));
 
 vi.mock('react-hot-toast', () => ({ default: mockToast }));
@@ -57,6 +61,7 @@ vi.mock('lucide-react', () => ({
   Check: () => <div data-testid="icon-check" />,
   ChevronDown: () => <div data-testid="icon-chevron-down" />,
   Copy: () => <div data-testid="icon-copy" />,
+  Link2: () => <div data-testid="icon-link2" />,
   Sparkles: () => <div data-testid="icon-sparkles" />,
   Trash2: () => <div data-testid="icon-trash" />,
   Loader2: () => <div data-testid="icon-loader" />,

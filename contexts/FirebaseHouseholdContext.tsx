@@ -111,6 +111,7 @@ import {
   makeDeleteCalendarItem,
   makePayCalendarItem,
   makeDeferCalendarItem,
+  makeLinkBankTransactionToBill,
 } from '@/contexts/household/mutations/calendarMutations';
 import {
   makeAddTransaction,
@@ -1784,6 +1785,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeDeferCalendarItem({ db, householdId, user, calendarItems }).deferCalendarItem(itemId, opts);
   }, [householdId, user, calendarItems]);
 
+  const linkBankTransactionToBill = useCallback(async (transactionId: string, calendarItemId: string) => {
+    return makeLinkBankTransactionToBill({
+      db, householdId, user, actorName: currentUser?.displayName ?? user?.displayName ?? null,
+      transactions, calendarItems,
+    }).linkBankTransactionToBill(transactionId, calendarItemId);
+  }, [householdId, user, currentUser, transactions, calendarItems]);
+
   // --- ACTIONS: TRANSACTIONS ---
   // (contexts/household/mutations/transactionMutations.ts)
 
@@ -2366,6 +2374,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     deleteCalendarItem,
     payCalendarItem,
     deferCalendarItem,
+    linkBankTransactionToBill,
     addTransaction,
     addTransactions,
     updateTransactionCategory,
@@ -2386,7 +2395,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addAccount, updateAccountBalance, setAccountGoal, setAccountCardLast4, setAccountCardDetails, deleteAccount, archiveAccount, unarchiveAccount, updateAccountOrder, reorderAccounts,
     addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, contributeToGoal,
     addBucket, updateBucket, deleteBucket, updateBucketLimit, setBucketLimits, saveCeremonyChanges, reallocateBucket,
-    addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem,
+    addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem, linkBankTransactionToBill,
     addTransaction, addTransactions, updateTransactionCategory, updateTransaction, deleteTransaction, splitTransaction,
     setTransactionSplit, markSplitSettled,
     mergeTransactions, keepBothTransactions, getTransactionComments, addTransactionComment, deleteTransactionComment,

@@ -521,28 +521,38 @@ export function makePayCalendarItem(deps: {
  *   3. Append the transaction's merchant/descriptor to the bill's
  *      `bankDescriptorAliases` (on the recurring TEMPLATE when applicable) so a
  *      future nightly sync auto-matches this descriptor via `matchesAlias`.
+ *   4. Log the payment to the activity feed (F-XCUT-01), same as payCalendarItem.
  *
- * All three writes commit in ONE batch so they can never partially apply. Pure
+ * All four writes commit in ONE batch so they can never partially apply. Pure
  * factory (mirrors the sibling calendar factories); NO account write is ever
- * staged. Not yet wired to a review-UI affordance — that is a tracked follow-up.
+ * staged. Wired to the review-surface "Link to bill" affordance in
+ * TransactionReviewForm.
+ *
+ * Returns `true` only when the batch actually committed, `false` for every
+ * guard early-return (bad/missing transaction, unparsable synthetic id,
+ * non-expense item, already-paid bill). Callers MUST check the return value
+ * before treating the link as having happened — a `false` means nothing was
+ * written.
  */
 export function makeLinkBankTransactionToBill(deps: {
   db: Firestore;
   householdId: string | null;
+  user: { uid: string } | null;
+  actorName?: string | null;
   transactions: Transaction[];
   calendarItems: CalendarItem[];
 }) {
-  const { db, householdId, transactions, calendarItems } = deps;
+  const { db, householdId, user, actorName, transactions, calendarItems } = deps;
 
-  const linkBankTransactionToBill = async (transactionId: string, calendarItemId: string) => {
-    if (!householdId) return;
+  const linkBankTransactionToBill = async (transactionId: string, calendarItemId: string): Promise<boolean> => {
+    if (!householdId || !user) return false;
 
     const tx = transactions.find((t) => t.id === transactionId);
     // Only a bank-synced row (carries a bankRef) whose balance is already
     // authoritative may be linked without a balance delta.
-    if (!tx || !tx.bankRef || tx.status !== 'verified') return;
+    if (!tx || !tx.bankRef || tx.status !== 'verified') return false;
     const descriptor = (tx.merchant || '').trim();
-    if (!descriptor) return;
+    if (!descriptor) return false;
 
     const paidAmount = roundMoney(tx.amount);
     const isRecurringInstance = isRecurringId(calendarItemId);
@@ -553,20 +563,27 @@ export function makeLinkBankTransactionToBill(deps: {
 
     if (isRecurringInstance) {
       const parsed = parseRecurringId(calendarItemId);
-      if (!parsed) return;
+      if (!parsed) return false;
       templateId = parsed.templateId;
       specificDate = parsed.date;
       const template = calendarItems.find((i) => i.id === templateId);
-      if (!template || template.type !== 'expense') return;
+      if (!template || template.type !== 'expense') return false;
       // Already-paid guard (matches payCalendarItem).
       const alreadyPaid = calendarItems.find(
         (i) => i.parentRecurringId === templateId && i.date === specificDate && i.isPaid,
       );
-      if (alreadyPaid) return;
+      if (alreadyPaid) {
+        toast.error('That bill is already marked paid');
+        return false;
+      }
       item = { ...template, date: specificDate };
     } else {
       item = calendarItems.find((i) => i.id === calendarItemId);
-      if (!item || item.type !== 'expense' || item.isPaid) return;
+      if (!item || item.type !== 'expense') return false;
+      if (item.isPaid) {
+        toast.error('That bill is already marked paid');
+        return false;
+      }
     }
 
     try {
@@ -585,6 +602,7 @@ export function makeLinkBankTransactionToBill(deps: {
           isRecurring: false,
           parentRecurringId: templateId,
           source: 'shortcut',
+          createdBy: user.uid,
           createdAt: serverTimestamp(),
         }));
       } else {
@@ -604,11 +622,20 @@ export function makeLinkBankTransactionToBill(deps: {
         bankDescriptorAliases: arrayUnion(descriptor),
       });
 
+      // 4. F-XCUT-01: log the payment INSIDE the same batch (mirrors payCalendarItem).
+      appendActivityLog(batch, db, householdId, { uid: user.uid, name: actorName ?? '' }, {
+        domain: 'money',
+        action: 'bill_paid',
+        summary: composeSummary(actorName ?? '', 'paid', item.title, paidAmount),
+      });
+
       await batch.commit();
       toast.success('Linked to bill — future syncs will match automatically');
+      return true;
     } catch (error) {
       console.error('[linkBankTransactionToBill] Failed:', error);
       toast.error(describeError(error, 'Failed to link transaction to bill'));
+      return false;
     }
   };
 

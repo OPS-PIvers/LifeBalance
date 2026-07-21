@@ -15,8 +15,13 @@ vi.mock('firebase/firestore', () => {
     doc: vi.fn((first: unknown, path?: string, id?: string) => {
       const firstRef = first as { __path?: string } | undefined;
       if (firstRef?.__path !== undefined && path === undefined) {
-        // collection(...) ref passed to doc() → auto-id child.
-        return { __path: `${firstRef.__path}/__autoId` };
+        // collection(...) ref passed to doc() → auto-id child. withConverter
+        // passthrough matches appendActivityLog's `doc(collection(...)).withConverter(...)` chain.
+        const ref: { __path: string; withConverter: () => typeof ref } = {
+          __path: `${firstRef.__path}/__autoId`,
+          withConverter: () => ref,
+        };
+        return ref;
       }
       return { __path: id ? `${path}/${id}` : (path ?? '__autoId') };
     }),
@@ -85,6 +90,8 @@ const oneOffBill = (over: Partial<CalendarItem> = {}): CalendarItem => ({
 
 const calPath = (id: string) => `households/${HOUSEHOLD_ID}/calendarItems/${id}`;
 const txPath = (id: string) => `households/${HOUSEHOLD_ID}/transactions/${id}`;
+const activityLogPathPrefix = `households/${HOUSEHOLD_ID}/activityLog/`;
+const USER = { uid: 'user-1' };
 
 describe('makeLinkBankTransactionToBill', () => {
   beforeEach(() => {
@@ -94,15 +101,18 @@ describe('makeLinkBankTransactionToBill', () => {
     vi.clearAllMocks();
   });
 
-  it('marks a one-off bill paid at the txn amount, files the txn, learns the alias — NO balance write', async () => {
+  it('marks a one-off bill paid at the txn amount, files the txn, learns the alias — NO balance write; returns true', async () => {
     const { linkBankTransactionToBill } = makeLinkBankTransactionToBill({
       db,
       householdId: HOUSEHOLD_ID,
+      user: USER,
+      actorName: 'Paul',
       transactions: [bankTx()],
       calendarItems: [oneOffBill()],
     });
-    await linkBankTransactionToBill('tx-bank', 'bill-1');
+    const result = await linkBankTransactionToBill('tx-bank', 'bill-1');
 
+    expect(result).toBe(true);
     expect(commitCount).toBe(1);
 
     // Bill marked paid at the ACTUAL charge (153.95), not its budgeted 150.
@@ -124,6 +134,15 @@ describe('makeLinkBankTransactionToBill', () => {
       __arrayUnion: ['COMCAST-XFINITY CABLE SVCS'],
     });
 
+    // F-XCUT-01: the payment is logged to the activity feed in the same batch.
+    const activityLogSet = capturedSets.find((s) => s.ref.__path.startsWith(activityLogPathPrefix));
+    expect(activityLogSet?.data).toMatchObject({
+      actorUid: 'user-1',
+      actorName: 'Paul',
+      domain: 'money',
+      action: 'bill_paid',
+    });
+
     // INVARIANT: no account-balance write anywhere.
     const balanceWrites = capturedUpdates.filter((u) =>
       u.ref.__path.startsWith(`households/${HOUSEHOLD_ID}/accounts/`),
@@ -131,25 +150,31 @@ describe('makeLinkBankTransactionToBill', () => {
     expect(balanceWrites).toHaveLength(0);
   });
 
-  it('writes a paid-instance record and learns the alias onto the TEMPLATE for a recurring occurrence', async () => {
+  it('writes a paid-instance record (with createdBy) and learns the alias onto the TEMPLATE for a recurring occurrence', async () => {
     const template = oneOffBill({ id: 'tmpl-1', isRecurring: true });
     const recurringId = 'tmpl-1_instance_2026-07-18';
     const { linkBankTransactionToBill } = makeLinkBankTransactionToBill({
       db,
       householdId: HOUSEHOLD_ID,
+      user: USER,
+      actorName: 'Paul',
       transactions: [bankTx()],
       calendarItems: [template],
     });
-    await linkBankTransactionToBill('tx-bank', recurringId);
+    const result = await linkBankTransactionToBill('tx-bank', recurringId);
 
+    expect(result).toBe(true);
     expect(commitCount).toBe(1);
-    // Paid-instance record created (set) referencing the template.
-    const paidInstance = capturedSets[0];
+    // Paid-instance record created (set) referencing the template, with createdBy
+    // stamped (matches makePayCalendarItem's paid-instance shape). It's staged
+    // before the activity-log set (step 4), so it's the first captured `set`.
+    const paidInstance = capturedSets.find((s) => 'parentRecurringId' in (s.data ?? {}));
     expect(paidInstance?.data).toMatchObject({
       isPaid: true,
       amount: 153.95,
       parentRecurringId: 'tmpl-1',
       date: '2026-07-18',
+      createdBy: 'user-1',
     });
     // Alias learned onto the TEMPLATE doc, not the synthetic occurrence id.
     const aliasUpdate = capturedUpdates.find((u) => u.ref.__path === calPath('tmpl-1'));
@@ -158,26 +183,43 @@ describe('makeLinkBankTransactionToBill', () => {
     });
   });
 
-  it('no-ops for a non-bank-synced transaction (no bankRef)', async () => {
+  it('no-ops for a non-bank-synced transaction (no bankRef); returns false', async () => {
     const { linkBankTransactionToBill } = makeLinkBankTransactionToBill({
       db,
       householdId: HOUSEHOLD_ID,
+      user: USER,
       transactions: [bankTx({ bankRef: undefined })],
       calendarItems: [oneOffBill()],
     });
-    await linkBankTransactionToBill('tx-bank', 'bill-1');
+    const result = await linkBankTransactionToBill('tx-bank', 'bill-1');
+    expect(result).toBe(false);
     expect(commitCount).toBe(0);
     expect(capturedUpdates).toHaveLength(0);
   });
 
-  it('no-ops when the bill is already paid', async () => {
+  it('no-ops when the bill is already paid; returns false', async () => {
     const { linkBankTransactionToBill } = makeLinkBankTransactionToBill({
       db,
       householdId: HOUSEHOLD_ID,
+      user: USER,
       transactions: [bankTx()],
       calendarItems: [oneOffBill({ isPaid: true })],
     });
-    await linkBankTransactionToBill('tx-bank', 'bill-1');
+    const result = await linkBankTransactionToBill('tx-bank', 'bill-1');
+    expect(result).toBe(false);
+    expect(commitCount).toBe(0);
+  });
+
+  it('no-ops when there is no authenticated user; returns false', async () => {
+    const { linkBankTransactionToBill } = makeLinkBankTransactionToBill({
+      db,
+      householdId: HOUSEHOLD_ID,
+      user: null,
+      transactions: [bankTx()],
+      calendarItems: [oneOffBill()],
+    });
+    const result = await linkBankTransactionToBill('tx-bank', 'bill-1');
+    expect(result).toBe(false);
     expect(commitCount).toBe(0);
   });
 });

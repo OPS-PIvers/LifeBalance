@@ -6,6 +6,7 @@ import type { Transaction } from '@/types/schema';
 const mockUpdateCategory = vi.fn(() => Promise.resolve());
 const mockDeleteTransaction = vi.fn(() => Promise.resolve());
 const mockAddCalendarItem = vi.fn(() => Promise.resolve());
+const mockLinkBankTransactionToBill = vi.fn(() => Promise.resolve());
 
 // ReviewPendingDrawer renders TransactionReviewForm, which consumes
 // useFinance/useGamification directly. Mocking these two is sufficient.
@@ -17,8 +18,10 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
     updateTransactionCategory: mockUpdateCategory,
     deleteTransaction: mockDeleteTransaction,
     addCalendarItem: mockAddCalendarItem,
+    linkBankTransactionToBill: mockLinkBankTransactionToBill,
   }),
   useGamification: () => ({ habits: [] }),
+  useExpandedCalendarItems: () => [],
 }));
 
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
