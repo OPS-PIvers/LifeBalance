@@ -268,6 +268,43 @@ As of 07/21/2026 at 01:50 a.m., Central Time
     }
   });
 
+  it("reviewer repro: a stray dollar-less line never glues onto the front of the next card line", () => {
+    // "Some stray disclaimer text with no dollar amount" has no trailing
+    // $amount, so the old unconditional buffering would glue it onto the
+    // FRONT of the next PURCHASE line. The merged blob no longer starts with
+    // PURCHASE/RECURRING PAYMENT, so the item-level card guard never fires,
+    // CARD_LINE_RE fails, and ACH_LINE_RE would greedily accept the whole
+    // merged blob as a fake ACH withdrawal (fabricating a transaction from
+    // the swallowed amount) instead of the intended strict-mode error.
+    const body = `
+for account ...5581
+Balance summary
+Ending balance: $500.00
+Available balance1: $500.00
+Withdrawals
+Some stray disclaimer text with no dollar amount
+PURCHASE AUTHORIZED ON 07/20 TARGET T-2189 Minneapolis MN X000000551051569 CARD 2115 $9.00
+As of 07/21/2026 at 01:50 a.m., Central Time
+`;
+    const result = parseBankEmail({ subject: "x", rawBody: body, today: TODAY });
+    expect("error" in result).toBe(true);
+  });
+
+  it("reviewer repro variant: a stray dollar-less line before an ACH line also errors instead of fabricating a withdrawal", () => {
+    const body = `
+for account ...5581
+Balance summary
+Ending balance: $500.00
+Available balance1: $500.00
+Withdrawals
+Some stray disclaimer text with no dollar amount
+AMERICAN EXPRESS ACH PMT 260720 M6486 JENNIFER IVERS $372.00
+As of 07/21/2026 at 01:50 a.m., Central Time
+`;
+    const result = parseBankEmail({ subject: "x", rawBody: body, today: TODAY });
+    expect("error" in result).toBe(true);
+  });
+
   it("returns a structured error for an unrecognized withdrawal line among good ones", () => {
     const body = `
 for account ...5581

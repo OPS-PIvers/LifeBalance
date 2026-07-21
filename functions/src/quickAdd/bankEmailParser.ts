@@ -240,6 +240,14 @@ const CARD_LINE_RE =
 // are tried first — see classifyLineItem below).
 const ACH_LINE_RE = /^([A-Z][^$]*?)\s*\$\s*([\d,]+\.\d{2})$/i;
 
+// A line that is ONLY a dollar amount, nothing else — the shape the HTML
+// table-cell rendering produces when the amount lands in its own <td> (see
+// HTML_BODY in the test file). This is the ONLY legitimate reason a
+// dollar-less buffered line should be glued onto what follows: a real
+// wrapped descriptor is completed by an amount-only line immediately after
+// it, never by a full line of unrelated text.
+const AMOUNT_ONLY_LINE_RE = /^\$\s*[\d,]+\.\d{2}$/;
+
 /**
  * Split the Withdrawals section into logical line items: each item is one
  * withdrawal's full text, joining a wrapped descriptor line with a following
@@ -259,6 +267,19 @@ function splitLogicalLineItems(section: string): string[] {
   let buffer = "";
   const trailingAmount = /\$\s*[\d,]+\.\d{2}\s*$/;
   for (const line of lines) {
+    // A dollar-less buffered line (e.g. disclaimer text) may only be
+    // completed by an amount-only continuation line — that's the sole shape
+    // a legitimate wrapped descriptor takes. Any other next line (a full new
+    // withdrawal line, whether card- or ACH-shaped) means the buffered text
+    // was never a wrapped fragment of it; gluing them would hide the new
+    // line's own leading shape from the item-level classifiers below and
+    // risk it being misclassified as a fabricated ACH withdrawal instead of
+    // reported as a parse failure. Flush the dangling buffer as its own
+    // (unclassifiable) item first.
+    if (buffer && !trailingAmount.test(buffer) && !AMOUNT_ONLY_LINE_RE.test(line)) {
+      items.push(buffer);
+      buffer = "";
+    }
     buffer = buffer ? `${buffer} ${line}` : line;
     if (trailingAmount.test(buffer)) {
       items.push(buffer);
