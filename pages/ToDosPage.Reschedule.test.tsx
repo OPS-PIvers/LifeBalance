@@ -174,13 +174,12 @@ describe('ToDosPage Reschedule Features', () => {
     vi.clearAllMocks();
   });
 
-  it('moves a single task to tomorrow', async () => {
+  it('moves a single task to tomorrow via the Task-options drawer', async () => {
     setup();
-    // Find "Move to Tomorrow" button
-    const moveBtns = screen.getAllByTitle('Move to Tomorrow');
-    expect(moveBtns.length).toBeGreaterThan(0);
-
-    fireEvent.click(moveBtns[0]!);
+    // Row actions moved into the options drawer — opened by long-press on
+    // touch, or right-click / the context-menu key elsewhere.
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'Edit task: Task 1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Move to tomorrow' }));
 
     await waitFor(() => {
       expect(mockUpdateToDo).toHaveBeenCalledWith('1', {

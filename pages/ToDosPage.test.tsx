@@ -378,10 +378,12 @@ describe('ToDosPage', () => {
       expect(mockAddToDo).toHaveBeenCalledWith(expect.objectContaining({ text: 'Once only' }));
     });
 
-    it('duplicates a task', async () => {
+    it('duplicates a task from the Task-options drawer (context-menu on the row body)', async () => {
         setup();
-        const duplicateBtn = screen.getAllByLabelText('Duplicate task')[0]!;
-        fireEvent.click(duplicateBtn);
+        // Row actions moved into the options drawer — opened by long-press on
+        // touch, or right-click / the context-menu key elsewhere.
+        fireEvent.contextMenu(screen.getByRole('button', { name: 'Edit task: Overdue Task' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Duplicate' }));
 
         await waitFor(() => {
             expect(mockAddToDo).toHaveBeenCalledWith(expect.objectContaining({
@@ -830,8 +832,9 @@ describe('ToDosPage', () => {
       setOrientation(true);
       setup(quadrantTodos);
 
-      // Open the action drawer from the list view — Drawer locks body scroll.
-      fireEvent.click(screen.getByRole('button', { name: 'More options for: Do First Task' }));
+      // Open the action drawer from the list view (context-menu on the row
+      // body — the visible kebab was removed) — Drawer locks body scroll.
+      fireEvent.contextMenu(screen.getByRole('button', { name: 'Edit task: Do First Task' }));
       expect(document.body.style.overflow).toBe('hidden');
 
       // Cycle list → matrix → grid while the drawer is open: the overlay
