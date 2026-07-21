@@ -96,6 +96,14 @@ jobs:
       - name: Deploy Firestore Rules
         run: pnpm exec firebase deploy --only firestore:rules --project lifebalance-26080
 
+      # Indexes were historically NOT deployed by CI — the sendtodoreminders
+      # index sat in firestore.indexes.json for weeks while the deployed query
+      # failed FAILED_PRECONDITION every 15 minutes. Keep this step so the file
+      # is always the live source of truth (deploys are diff-based: additions
+      # build in the background, removals require the file entry to be deleted).
+      - name: Deploy Firestore Indexes
+        run: pnpm exec firebase deploy --only firestore:indexes --project lifebalance-26080
+
       - name: Deploy Cloud Functions
         run: pnpm exec firebase deploy --only functions --project lifebalance-26080
 
