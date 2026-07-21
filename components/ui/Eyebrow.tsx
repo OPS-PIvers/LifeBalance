@@ -10,8 +10,14 @@ const TONE_CLASSES: Record<EyebrowTone, string> = {
 };
 
 export interface EyebrowProps extends React.HTMLAttributes<HTMLElement> {
-  /** Color variant — the only thing that varies. Size/weight/case/tracking are fixed. */
+  /** Color variant. Weight/case/tracking are fixed. */
   tone?: EyebrowTone;
+  /**
+   * `xs` (default) everywhere; `xxs` ONLY for height-starved overlay chrome
+   * (e.g. the landscape Eisenhower grid's axis labels). Don't reach for it to
+   * make ordinary labels smaller.
+   */
+  size?: 'xs' | 'xxs';
   /** Element to render. Defaults to `span`. */
   as?: 'span' | 'p' | 'div' | 'h2' | 'h3' | 'h4' | 'legend';
 }
@@ -30,6 +36,7 @@ export interface EyebrowProps extends React.HTMLAttributes<HTMLElement> {
  */
 const Eyebrow: React.FC<EyebrowProps> = ({
   tone = 'default',
+  size = 'xs',
   as = 'span',
   className,
   children,
@@ -39,7 +46,8 @@ const Eyebrow: React.FC<EyebrowProps> = ({
   return (
     <Tag
       className={cn(
-        'text-xs font-semibold uppercase tracking-wider',
+        'font-semibold uppercase tracking-wider',
+        size === 'xxs' ? 'text-xxs' : 'text-xs',
         TONE_CLASSES[tone],
         className
       )}

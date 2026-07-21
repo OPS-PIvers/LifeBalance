@@ -326,17 +326,12 @@ const ToDosPage: React.FC = () => {
   // Derive completed count from already-computed buckets to avoid a fourth pass over todos.
   const completedCount = completedToday.length + completedYesterday.length + completedWeek.length + completedOlder.length;
 
-  // CountBadge primitive, restyled from its default red overlay into an inline
-  // neutral pill (it's a tab count, not a notification). The badge itself is
-  // aria-hidden, so the count also rides along as sr-only text.
+  // Inline CountBadge variant (a tab count, not a notification). The badge
+  // itself is aria-hidden, so the count also rides along as sr-only text.
   const completedBadge = (
     <span className="flex items-center gap-1.5">
         Completed
-        <CountBadge
-            count={completedCount}
-            max={99}
-            className="static ml-0 rounded-sm px-1.5 bg-brand-200 text-brand-700 dark:bg-brand-700 dark:text-brand-200 text-xs font-normal tabular-nums ring-0"
-        />
+        <CountBadge count={completedCount} max={99} variant="inline" />
         <span className="sr-only">{completedCount} completed tasks</span>
     </span>
   );
@@ -1297,9 +1292,10 @@ const ToDosPage: React.FC = () => {
 
       {/* Floating Action Bar (FAB) for Batch Actions */}
       {isSelectionMode && selectedIds.size > 0 && (
-        /* Same offset/z recipe as TransactionMasterList's batch bar: clears the
-           bottom nav (+ home-indicator inset) and sits at z-dropdown — above
-           the z-sticky nav, below drawers/modals. */
+        /* Offset/z recipe from TransactionMasterList's batch bar (minus its
+           md:px-0, dropped here — mobile-only surface): clears the bottom nav
+           (+ home-indicator inset) and sits at z-dropdown — above the
+           z-sticky nav, below drawers/modals. */
         <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] left-0 right-0 px-4 flex justify-center z-dropdown pointer-events-none">
           <div className="bg-brand-900 dark:bg-brand-800 text-white p-2 rounded-card shadow-raised border border-brand-700 flex items-center gap-2 pointer-events-auto animate-in slide-in-from-bottom-4">
             <div className="px-3 font-semibold text-sm border-r border-brand-700 dark:border-brand-600">
