@@ -29,6 +29,9 @@ describe('FilterControls', () => {
     // Source options (static)
     expect(screen.getByText('All Sources')).toBeInTheDocument();
     expect(screen.getByText('Recurring')).toBeInTheDocument();
+    expect(screen.getByText('Bank Sync')).toBeInTheDocument();
+    expect(screen.getByText('Shortcut')).toBeInTheDocument();
+    expect(screen.getByText('Plaid')).toBeInTheDocument();
 
     // Store options
     expect(screen.getByText('All Stores')).toBeInTheDocument();

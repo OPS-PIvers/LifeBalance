@@ -122,7 +122,7 @@ libraries — only the built-in `GmailApp`, `UrlFetchApp`, `Utilities`, and
 const LB_FUNCTION_URL = 'https://us-central1-lifebalance-26080.cloudfunctions.net/bankEmailSync';
 const LB_API_KEY = 'PASTE_YOUR_BANKSYNC_API_KEY_HERE'; // Settings → API keys → bankSync-only key
 const LB_LABEL_NAME = 'lb-synced';
-const WF_SEARCH_QUERY = 'from:alerts@notify.wellsfargo.com subject:(account update) -label:' + LB_LABEL_NAME;
+const WF_SEARCH_QUERY = 'from:alerts@notify.wellsfargo.com subject:(account update) newer_than:2d -label:' + LB_LABEL_NAME;
 
 function lbSyncBankEmails() {
   const label = getOrCreateLabel_(LB_LABEL_NAME);

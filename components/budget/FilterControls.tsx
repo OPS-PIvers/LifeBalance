@@ -67,6 +67,9 @@ const FilterControls: React.FC<FilterControlsProps> = ({
           <option value="manual">Manual Entry</option>
           <option value="camera-scan">Camera Scan</option>
           <option value="file-upload">File Upload</option>
+          <option value="shortcut">Shortcut</option>
+          <option value="plaid">Plaid</option>
+          <option value="bank-sync">Bank Sync</option>
         </select>
       </div>
 
