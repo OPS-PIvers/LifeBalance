@@ -124,7 +124,13 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
       (sourceFilter === 'manual' && tx.source === 'manual') ||
       (sourceFilter === 'camera-scan' && tx.source === 'camera-scan') ||
       (sourceFilter === 'file-upload' && tx.source === 'file-upload') ||
-      (sourceFilter === 'bank-sync' && tx.source === 'bank-sync');
+      // Bank rows created before the dedicated 'bank-sync' source value (PR
+      // #1047) were stamped source 'shortcut' + a bankRef, so bankRef presence
+      // is the authoritative bank-sync signal and legacy rows must not
+      // pollute the Shortcut filter.
+      (sourceFilter === 'bank-sync' && (tx.source === 'bank-sync' || tx.bankRef !== undefined)) ||
+      (sourceFilter === 'shortcut' && tx.source === 'shortcut' && tx.bankRef === undefined) ||
+      (sourceFilter === 'plaid' && tx.source === 'plaid');
 
     // Store Filter
     const matchesStore = storeFilter === 'all' || tx.store === storeFilter;
