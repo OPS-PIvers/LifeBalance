@@ -332,7 +332,7 @@ const ToDosPage: React.FC = () => {
     <span className="flex items-center gap-1.5">
         Completed
         <CountBadge count={completedCount} max={99} variant="inline" />
-        <span className="sr-only">{completedCount} completed tasks</span>
+        <span className="sr-only">{completedCount} completed {completedCount === 1 ? 'task' : 'tasks'}</span>
     </span>
   );
 
@@ -1643,51 +1643,42 @@ const ToDosPage: React.FC = () => {
         <div className="space-y-1">
           {actionTodo && (
             <>
-              {/* Primary Action (Edit or Uncomplete) */}
               <Button
                 variant="ghost"
                 className="w-full justify-start"
-                leftIcon={actionTodo.isCompleted ? <RotateCcw size={18} className="text-brand-500" /> : <Edit2 size={18} className="text-brand-500" />}
+                leftIcon={<Edit2 size={18} className="text-brand-500" />}
                 onClick={() => {
-                  if (actionTodo.isCompleted) {
-                    handleUncomplete(actionTodo.id);
-                  } else {
-                    openEditModal(actionTodo);
-                  }
+                  openEditModal(actionTodo);
                   setActionTodo(null);
                 }}
               >
-                {actionTodo.isCompleted ? 'Mark as active' : 'Edit'}
+                Edit
               </Button>
 
-              {!actionTodo.isCompleted && (
-                <>
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start"
-                    aria-pressed={actionTodo.isImportant === true}
-                    leftIcon={<Star size={18} className={actionTodo.isImportant ? 'text-warm-500 fill-warm-500' : 'text-brand-500'} />}
-                    onClick={() => {
-                      handleToggleImportant(actionTodo);
-                      setActionTodo(null);
-                    }}
-                  >
-                    {actionTodo.isImportant ? 'Unmark important' : 'Mark important'}
-                  </Button>
+              <Button
+                variant="ghost"
+                className="w-full justify-start"
+                aria-pressed={actionTodo.isImportant === true}
+                leftIcon={<Star size={18} className={actionTodo.isImportant ? 'text-warm-500 fill-warm-500' : 'text-brand-500'} />}
+                onClick={() => {
+                  handleToggleImportant(actionTodo);
+                  setActionTodo(null);
+                }}
+              >
+                {actionTodo.isImportant ? 'Unmark important' : 'Mark important'}
+              </Button>
 
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start"
-                    leftIcon={<Calendar size={18} className="text-brand-500" />}
-                    onClick={() => {
-                      handleMoveToTomorrow(actionTodo);
-                      setActionTodo(null);
-                    }}
-                  >
-                    Move to tomorrow
-                  </Button>
-                </>
-              )}
+              <Button
+                variant="ghost"
+                className="w-full justify-start"
+                leftIcon={<Calendar size={18} className="text-brand-500" />}
+                onClick={() => {
+                  handleMoveToTomorrow(actionTodo);
+                  setActionTodo(null);
+                }}
+              >
+                Move to tomorrow
+              </Button>
 
               <Button
                 variant="ghost"
@@ -1718,7 +1709,7 @@ const ToDosPage: React.FC = () => {
                    });
                 }}
               >
-                {actionTodo.isCompleted ? 'Delete forever' : 'Delete'}
+                Delete
               </Button>
             </>
           )}
