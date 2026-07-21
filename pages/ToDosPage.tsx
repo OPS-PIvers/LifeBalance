@@ -51,7 +51,7 @@ const isArrangement = (value: string | null): value is Arrangement =>
 const ARRANGEMENT_OPTIONS: Array<{ value: Arrangement; icon: React.ReactNode; label: string }> = [
   { value: 'list', icon: <List size={16} />, label: 'List view' },
   { value: 'matrix', icon: <Rows3 size={16} />, label: 'Prioritized list' },
-  { value: 'grid', icon: <Grid2x2 size={16} />, label: '2×2 grid (landscape)' },
+  { value: 'grid', icon: <Grid2x2 size={16} />, label: '2×2 grid' },
 ];
 
 const ToDosPage: React.FC = () => {
@@ -876,6 +876,7 @@ const ToDosPage: React.FC = () => {
       label: option.label,
       icon: option.icon,
       selected: arrangement === option.value,
+      group: 'View',
       onSelect: () => setArrangementPersisted(option.value),
     })),
     {

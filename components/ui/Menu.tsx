@@ -26,6 +26,12 @@ export interface MenuItem {
    * for plain action items.
    */
   selected?: boolean;
+  /**
+   * Names the radio set this item belongs to. Consecutive items sharing a
+   * group are wrapped in `role="group"` with this label, per the ARIA menu
+   * pattern for `menuitemradio` sets that coexist with plain actions.
+   */
+  group?: string;
 }
 
 interface MenuProps {
@@ -87,17 +93,7 @@ export const Menu: React.FC<MenuProps> = ({
   className,
   stopPropagation = false,
 }) => {
-  return (
-    <Popover
-      isOpen={isOpen}
-      onClose={onClose}
-      role="menu"
-      ariaLabel={ariaLabel}
-      ariaOrientation="vertical"
-      position={position}
-      className={['overflow-hidden py-1', className].filter(Boolean).join(' ')}
-    >
-      {items.map((item) => {
+  const renderItem = (item: MenuItem) => {
         const tone = item.tone ?? 'default';
         return (
           <button
@@ -134,7 +130,41 @@ export const Menu: React.FC<MenuProps> = ({
             )}
           </button>
         );
-      })}
+  };
+
+  return (
+    <Popover
+      isOpen={isOpen}
+      onClose={onClose}
+      role="menu"
+      ariaLabel={ariaLabel}
+      ariaOrientation="vertical"
+      position={position}
+      className={['overflow-hidden py-1', className].filter(Boolean).join(' ')}
+    >
+      {chunkByGroup(items).map((chunk) =>
+        chunk.group ? (
+          <div key={`group-${chunk.group}`} role="group" aria-label={chunk.group}>
+            {chunk.items.map(renderItem)}
+          </div>
+        ) : (
+          chunk.items.map(renderItem)
+        )
+      )}
     </Popover>
   );
 };
+
+/** Split the flat items list into runs of same-`group` (or ungrouped) items. */
+function chunkByGroup(items: MenuItem[]): { group?: string; items: MenuItem[] }[] {
+  const chunks: { group?: string; items: MenuItem[] }[] = [];
+  for (const item of items) {
+    const last = chunks[chunks.length - 1];
+    if (last && last.group === item.group) {
+      last.items.push(item);
+    } else {
+      chunks.push({ group: item.group, items: [item] });
+    }
+  }
+  return chunks;
+}

@@ -712,7 +712,7 @@ describe('ToDosPage', () => {
         screen.getByRole('heading', { name: /Do First\s?\(Urgent & Important\)/ })
       ).toBeInTheDocument();
 
-      chooseArrangement('2×2 grid (landscape)');
+      chooseArrangement('2×2 grid');
       expect(localStorage.getItem(ARRANGEMENT_KEY)).toBe('grid');
       expect(screen.getByTestId('grid-cell-do')).toBeInTheDocument();
 
@@ -867,7 +867,7 @@ describe('ToDosPage', () => {
       // Cycle list → matrix → grid while the drawer is open: the overlay
       // mounts and the latch engages on top of the drawer's existing lock.
       chooseArrangement('Prioritized list');
-      chooseArrangement('2×2 grid (landscape)');
+      chooseArrangement('2×2 grid');
       expect(screen.getByTestId('grid-overlay')).toBeInTheDocument();
 
       // Close the drawer, then exit the grid — nothing holds a lock anymore.
