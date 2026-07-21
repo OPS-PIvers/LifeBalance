@@ -50,6 +50,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
     bills: true,  // Pay a calendar bill via the quickAddBillPay endpoint (F-MONEY-11)
     todos: true,  // Create a to-do via the quickAddTodo endpoint (F-TODO-07)
     read: true,  // Read/export data via GET endpoints (e.g. getTodos)
+    bankSync: false,  // Nightly Wells Fargo bank-email sync scope; defaults off (endpoint not yet built)
     receiptScanning: false,  // Hidden until implemented
   });
   const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
@@ -370,6 +371,11 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                         Read
                       </Badge>
                     )}
+                    {key.permissions.bankSync && (
+                      <Badge variant="outline" size="md">
+                        Bank Sync
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </Row>
@@ -563,6 +569,17 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                     setPermissions({ ...permissions, read: checked })
                   }
                   aria-label="Read / export data (GET your to-dos)"
+                />
+              </Row>
+              <Row>
+                <label htmlFor="perm-bank-sync" className="flex-1 text-sm text-brand-700 dark:text-brand-200 cursor-pointer">Bank Sync (nightly bank-email import)</label>
+                <Switch
+                  id="perm-bank-sync"
+                  checked={permissions.bankSync ?? false}
+                  onCheckedChange={(checked) =>
+                    setPermissions({ ...permissions, bankSync: checked })
+                  }
+                  aria-label="Bank Sync (nightly bank-email import)"
                 />
               </Row>
             </SurfaceList>
