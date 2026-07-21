@@ -155,4 +155,17 @@ describe('useActionQueue midnight rollover', () => {
     });
     expect(result.current.actionQueue.map(i => i.id)).toEqual(['due-in-two-days']);
   });
+
+  // Item 8: a bank-email-sync row is born `verified` + `needsCategory` — it must
+  // still surface for review (bucket assignment) alongside pending_review rows.
+  it('surfaces a born-verified needsCategory bank-sync row for review', () => {
+    mockData.transactions = [
+      makeTransaction({ id: 'bank-sync', status: 'verified', needsCategory: true, date: '2026-06-15' }),
+      // A plain verified row (no needsCategory) must NOT surface.
+      makeTransaction({ id: 'plain-verified', status: 'verified', date: '2026-06-15' }),
+    ];
+
+    const { result } = renderHook(() => useActionQueue());
+    expect(result.current.actionQueue.map(i => i.id)).toEqual(['bank-sync']);
+  });
 });

@@ -52,6 +52,19 @@ export const isReviewSnoozed = (
   today: string,
 ): boolean => !!tx.reviewSnoozedUntil && tx.reviewSnoozedUntil > today;
 
+/**
+ * A transaction is a REVIEW candidate when it is either a classic
+ * `pending_review` row OR a bank-email-sync row that was born `verified` but
+ * still `needsCategory` (bankEmailSync Cloud Function). The latter carries an
+ * authoritative balance already, so its review is a bucket-assignment only (no
+ * balance delta on categorize) — but it must still surface in the same review
+ * surfaces (Action Queue + on-open review drawer) so it doesn't sit
+ * uncategorized forever.
+ */
+export const needsReview = (
+  tx: Pick<Transaction, 'status' | 'needsCategory'>,
+): boolean => tx.status === 'pending_review' || (tx.status === 'verified' && tx.needsCategory === true);
+
 export const useActionQueue = () => {
   const { transactions } = useFinance();
   const { todos } = useTodos();
@@ -112,7 +125,7 @@ export const useActionQueue = () => {
   // still in the future; both sides are local yyyy-MM-dd, so lexical compare
   // is chronological. It still counts toward pendingSpend / Safe-to-Spend.
   const pendingTx: ActionQueueItem[] = useMemo(() => showMoney ? transactions.filter(t =>
-    t.status === 'pending_review' &&
+    needsReview(t) &&
     !isReviewSnoozed(t, localToday)
   ).map(t => ({ ...t, queueType: 'transaction' as const })) : [], [showMoney, transactions, localToday]);
 

@@ -8,9 +8,11 @@ import {
   writeBatch,
   increment,
   serverTimestamp,
+  arrayUnion,
   type Firestore,
   type WriteBatch,
 } from 'firebase/firestore';
+import type { Transaction } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { describeError } from '@/utils/errorMessages';
 import { format, parseISO, addDays, startOfToday, isAfter, isValid } from 'date-fns';
@@ -499,6 +501,118 @@ export function makePayCalendarItem(deps: {
   };
 
   return { payCalendarItem };
+}
+
+/**
+ * linkBankTransactionToBill — manual reconcile that teaches the nightly
+ * bank-email sync (item 9 of the bankEmailSync review). When a user, reviewing a
+ * bank-SYNCED transaction (one carrying a `bankRef`), says "this actually pays a
+ * bill" and picks an unpaid calendar item, we:
+ *
+ *   1. Mark that bill PAID at the transaction's actual amount — reusing the
+ *      payCalendarItem shape (recurring occurrence → a paid-instance record that
+ *      suppresses the synthetic occurrence; one-off → isPaid/amount on the doc)
+ *      but WITHOUT any account-balance delta: the row is already `verified` and
+ *      the account balance is authoritative from the email's ending balance, so
+ *      touching the balance here would double-count. This preserves the pipeline
+ *      invariant (no per-line balance delta, ever, for a row this sync touches).
+ *   2. File the transaction as the bill payment (category `Budgeted in Calendar`,
+ *      clear `needsCategory`) so it leaves the review surface.
+ *   3. Append the transaction's merchant/descriptor to the bill's
+ *      `bankDescriptorAliases` (on the recurring TEMPLATE when applicable) so a
+ *      future nightly sync auto-matches this descriptor via `matchesAlias`.
+ *
+ * All three writes commit in ONE batch so they can never partially apply. Pure
+ * factory (mirrors the sibling calendar factories); NO account write is ever
+ * staged. Not yet wired to a review-UI affordance — that is a tracked follow-up.
+ */
+export function makeLinkBankTransactionToBill(deps: {
+  db: Firestore;
+  householdId: string | null;
+  transactions: Transaction[];
+  calendarItems: CalendarItem[];
+}) {
+  const { db, householdId, transactions, calendarItems } = deps;
+
+  const linkBankTransactionToBill = async (transactionId: string, calendarItemId: string) => {
+    if (!householdId) return;
+
+    const tx = transactions.find((t) => t.id === transactionId);
+    // Only a bank-synced row (carries a bankRef) whose balance is already
+    // authoritative may be linked without a balance delta.
+    if (!tx || !tx.bankRef || tx.status !== 'verified') return;
+    const descriptor = (tx.merchant || '').trim();
+    if (!descriptor) return;
+
+    const paidAmount = roundMoney(tx.amount);
+    const isRecurringInstance = isRecurringId(calendarItemId);
+
+    let item: CalendarItem | undefined;
+    let templateId: string | undefined;
+    let specificDate: string | undefined;
+
+    if (isRecurringInstance) {
+      const parsed = parseRecurringId(calendarItemId);
+      if (!parsed) return;
+      templateId = parsed.templateId;
+      specificDate = parsed.date;
+      const template = calendarItems.find((i) => i.id === templateId);
+      if (!template || template.type !== 'expense') return;
+      // Already-paid guard (matches payCalendarItem).
+      const alreadyPaid = calendarItems.find(
+        (i) => i.parentRecurringId === templateId && i.date === specificDate && i.isPaid,
+      );
+      if (alreadyPaid) return;
+      item = { ...template, date: specificDate };
+    } else {
+      item = calendarItems.find((i) => i.id === calendarItemId);
+      if (!item || item.type !== 'expense' || item.isPaid) return;
+    }
+
+    try {
+      const batch = writeBatch(db);
+      const calPath = `households/${householdId}/calendarItems`;
+      const txPath = `households/${householdId}/transactions`;
+
+      // 1. Mark the bill paid at the actual amount — NO account-balance write.
+      if (isRecurringInstance && templateId && specificDate) {
+        batch.set(doc(collection(db, calPath)), sanitizeFirestoreData({
+          title: item.title,
+          amount: paidAmount,
+          date: specificDate,
+          type: 'expense',
+          isPaid: true,
+          isRecurring: false,
+          parentRecurringId: templateId,
+          source: 'shortcut',
+          createdAt: serverTimestamp(),
+        }));
+      } else {
+        batch.update(doc(db, calPath, calendarItemId), { isPaid: true, amount: paidAmount });
+      }
+
+      // 2. File the transaction as the bill payment; it leaves the review surface.
+      batch.update(doc(db, txPath, transactionId), {
+        category: BUDGETED_IN_CALENDAR,
+        needsCategory: deleteField(),
+      });
+
+      // 3. Learn the descriptor onto the bill (template for a recurring occurrence)
+      //    so future nightly syncs auto-match it.
+      const aliasTargetId = templateId ?? calendarItemId;
+      batch.update(doc(db, calPath, aliasTargetId), {
+        bankDescriptorAliases: arrayUnion(descriptor),
+      });
+
+      await batch.commit();
+      toast.success('Linked to bill — future syncs will match automatically');
+    } catch (error) {
+      console.error('[linkBankTransactionToBill] Failed:', error);
+      toast.error(describeError(error, 'Failed to link transaction to bill'));
+    }
+  };
+
+  return { linkBankTransactionToBill };
 }
 
 /**

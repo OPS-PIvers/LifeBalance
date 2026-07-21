@@ -35,7 +35,7 @@ export { findBillsDueOnDate, type BillCalendarItem } from "./shared/bills";
 admin.initializeApp();
 
 // Export Quick Add HTTP functions for iOS Shortcuts
-export { quickAddHabit, quickAddExpense, quickAddShoppingItem, quickAddNaturalLanguage, quickAddBillPay, quickAddTodo, getTodos } from "./quickAdd";
+export { quickAddHabit, quickAddExpense, quickAddShoppingItem, quickAddNaturalLanguage, quickAddBillPay, quickAddTodo, getTodos, bankEmailSync } from "./quickAdd";
 
 // Export the Gemini API proxy (holds the GEMINI_API_KEY secret server-side).
 export { geminiproxy } from "./geminiProxy";

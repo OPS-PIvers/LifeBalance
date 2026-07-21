@@ -6,7 +6,7 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import { LazyMount } from '@/components/ui/LazyMount';
 import { preloadOnIdle } from '@/utils/preloadOnIdle';
 import { useHouseholdCore, useFinance } from '@/contexts/FirebaseHouseholdContext';
-import { isReviewSnoozed, useActionQueue } from '@/hooks/useActionQueue';
+import { isReviewSnoozed, needsReview, useActionQueue } from '@/hooks/useActionQueue';
 import { useAppReopen } from '@/hooks/useAppReopen';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
@@ -62,7 +62,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const pendingReviewTransactions = useMemo(
     () =>
       transactions
-        .filter((t) => t.status === 'pending_review' && !isReviewSnoozed(t, reviewToday))
+        .filter((t) => needsReview(t) && !isReviewSnoozed(t, reviewToday))
         .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)),
     [transactions, reviewToday],
   );
