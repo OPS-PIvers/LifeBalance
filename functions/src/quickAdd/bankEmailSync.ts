@@ -564,7 +564,6 @@ export const bankEmailSync = onRequest(
                 isPaid: true,
                 isRecurring: false,
                 parentRecurringId: bill.templateId,
-                source: "bank-sync",
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
               });
             } else {

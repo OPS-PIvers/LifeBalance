@@ -601,7 +601,6 @@ export function makeLinkBankTransactionToBill(deps: {
           isPaid: true,
           isRecurring: false,
           parentRecurringId: templateId,
-          source: 'shortcut',
           createdBy: user.uid,
           createdAt: serverTimestamp(),
         }));
