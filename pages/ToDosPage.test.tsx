@@ -3,6 +3,7 @@ import { render as rtlRender, screen, fireEvent, waitFor, act, within } from '@t
 import type { ReactElement } from 'react';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import ToDosPage from './ToDosPage';
+import type { ToDo } from '@/types/schema';
 
 // TodoRow's SwipeActionRow reads the resolved theme from ThemeContext.
 const render = (ui: ReactElement) => rtlRender(<ThemeProvider>{ui}</ThemeProvider>);
@@ -135,7 +136,7 @@ describe('ToDosPage', () => {
     }
   ];
 
-  const mockTodos = [
+  const mockTodos: ToDo[] = [
     {
       id: '1',
       text: 'Overdue Task',
@@ -865,6 +866,64 @@ describe('ToDosPage', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Edit task: Do First Task' }));
       expect(screen.getByText('Edit task')).toBeInTheDocument();
       expect(screen.getByDisplayValue('Do First Task')).toBeInTheDocument();
+    });
+  });
+
+  describe('Progressive disclosure ("More options")', () => {
+    const moreOptionsButton = () => screen.getByRole('button', { name: 'More options' });
+
+    it('is collapsed by default when creating a new task', () => {
+      setup();
+      fireEvent.click(screen.getByRole('button', { name: 'Add new task' }));
+
+      expect(moreOptionsButton()).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByLabelText('Notes')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Repeat')).not.toBeInTheDocument();
+    });
+
+    it('stays collapsed when editing a task with no secondary fields', () => {
+      setup();
+      fireEvent.click(screen.getByRole('button', { name: 'Edit task: Today Task' }));
+
+      expect(moreOptionsButton()).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByLabelText('Notes')).not.toBeInTheDocument();
+    });
+
+    it('auto-expands when editing a task that has notes', () => {
+      setup([
+        { ...mockTodos[0]!, id: 'n1', text: 'Notes Task', notes: 'call the office first' },
+        ...mockTodos.slice(1),
+      ]);
+      fireEvent.click(screen.getByRole('button', { name: 'Edit task: Notes Task' }));
+
+      expect(moreOptionsButton()).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByDisplayValue('call the office first')).toBeInTheDocument();
+    });
+
+    it('auto-expands for a zero-minute ("at due time") reminder', () => {
+      setup([
+        { ...mockTodos[0]!, id: 'r1', text: 'Reminder Task', dueTime: '09:00', reminderMinutesBefore: 0 },
+        ...mockTodos.slice(1),
+      ]);
+      fireEvent.click(screen.getByRole('button', { name: 'Edit task: Reminder Task' }));
+
+      expect(moreOptionsButton()).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByLabelText('Reminder')).toHaveValue('0');
+    });
+
+    it('keeps a value set before collapsing (collapse does not clear state)', () => {
+      setup();
+      fireEvent.click(screen.getByRole('button', { name: 'Edit task: Today Task' }));
+
+      fireEvent.click(moreOptionsButton());
+      fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'hidden but saved' } });
+      fireEvent.click(moreOptionsButton()); // collapse again
+      fireEvent.click(screen.getByText('Save changes'));
+
+      expect(mockUpdateToDo).toHaveBeenCalledWith(
+        '2',
+        expect.objectContaining({ notes: 'hidden but saved' })
+      );
     });
   });
 });

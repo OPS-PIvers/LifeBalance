@@ -1398,6 +1398,9 @@ const ToDosPage: React.FC = () => {
             />
             Important
           </button>
+          <p className="mt-1 text-xs text-brand-400 dark:text-brand-450">
+            Matters to the family — big consequences if skipped.
+          </p>
 
           {/* Progressive disclosure: secondary fields live behind this expander.
               Opening a task that already uses any of them auto-expands (see
@@ -1440,7 +1443,6 @@ const ToDosPage: React.FC = () => {
                   setReminderMinutesBefore(e.target.value === '' ? null : Number(e.target.value))
                 }
                 disabled={!dueTime}
-                aria-label="Reminder lead time"
               >
                 <option value="">No reminder</option>
                 {REMINDER_OFFSET_OPTIONS.map(opt => (
