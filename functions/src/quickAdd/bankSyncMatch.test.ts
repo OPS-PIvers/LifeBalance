@@ -481,6 +481,33 @@ describe("computeBalanceAsOf", () => {
   it("handles a single withdrawal", () => {
     expect(computeBalanceAsOf(["2026-07-15"], "2026-07-21")).toBe("2026-07-15");
   });
+
+  it("prefers the email's own asOf date over the max withdrawal date", () => {
+    expect(
+      computeBalanceAsOf(["2026-07-05", "2026-07-20", "2026-07-12"], "2026-07-21", "2026-07-18")
+    ).toBe("2026-07-18");
+  });
+
+  it("falls back to the max withdrawal date when asOf is absent", () => {
+    expect(computeBalanceAsOf(["2026-07-05", "2026-07-20", "2026-07-12"], "2026-07-21")).toBe(
+      "2026-07-20"
+    );
+  });
+
+  it("falls back to today when neither asOf nor withdrawals are present", () => {
+    expect(computeBalanceAsOf([], "2026-07-21")).toBe("2026-07-21");
+  });
+
+  it("regression: a no-withdrawal email with an old asOf must not beat a newer stored balanceAsOf", () => {
+    // Motivating scenario: a balance-only (no withdrawal lines) email whose own
+    // "As of 07/05/2026" footer is OLD arrives in a backfill run TODAY
+    // (2026-07-21), after a newer email (as-of 2026-07-20) has already been
+    // applied. Using `today` as the as-of would wrongly compute 2026-07-21,
+    // beat the stored 2026-07-20, and overwrite with a stale balance.
+    const incomingAsOf = computeBalanceAsOf([], "2026-07-21", "2026-07-05");
+    expect(incomingAsOf).toBe("2026-07-05");
+    expect(shouldSkipBalanceOverwrite("2026-07-20", incomingAsOf)).toBe(true);
+  });
 });
 
 describe("shouldSkipBalanceOverwrite", () => {

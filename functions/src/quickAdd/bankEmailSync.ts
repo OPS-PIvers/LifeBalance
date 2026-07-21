@@ -632,12 +632,14 @@ export const bankEmailSync = onRequest(
       //     A first-install backfill (or any retry storm) can deliver several
       //     historical emails out of order; without this guard the LAST batch
       //     write wins regardless of which email is actually newest. The
-      //     email's "balance as-of" date is the latest withdrawal date (the
-      //     ending balance reflects every withdrawal through that date), or
-      //     `today` when there are no withdrawals at all.
+      //     email's "balance as-of" date prefers the email's OWN stated date
+      //     (`parsed.asOf`, from its "As of MM/DD/YYYY" footer) — falling back
+      //     to the latest withdrawal date, and only then to `today` — see
+      //     `computeBalanceAsOf`'s doc comment for why `today` must be last.
       const incomingBalanceAsOf = computeBalanceAsOf(
         parsed.withdrawals.map((w) => w.date),
-        today
+        today,
+        parsed.asOf
       );
       const balanceSkipped = shouldSkipBalanceOverwrite(
         resolvedAccountBalanceAsOf,
