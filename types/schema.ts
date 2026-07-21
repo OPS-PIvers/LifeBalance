@@ -105,6 +105,14 @@ export interface NotificationPreferences {
     enabled: boolean;
   };
 
+  // Nightly bank-email sync summary push (bank-email-sync groundwork). Sent
+  // server-side after the nightly sync run finishes. Optional so legacy docs
+  // deserialize — absent is treated as enabled (default ON, fail-open like
+  // weeklyRecap) since it's opt-out.
+  bankEmailSync?: {
+    enabled: boolean;
+  };
+
   // General notification settings
   timezone?: string; // IANA timezone (e.g., 'America/New_York')
 }
@@ -1214,6 +1222,7 @@ export interface ApiKeyPermissions {
   bills?: boolean;  // Pay/mark a calendar bill via the quickAddBillPay endpoint (F-MONEY-11). Optional for backward-compat with keys minted before it existed.
   todos?: boolean;  // Create a to-do via the quickAddTodo endpoint (F-TODO-07). Optional for backward-compat with keys minted before it existed.
   read?: boolean;  // Generic read/export scope for GET endpoints (e.g. getTodos). Separate from the write-only scopes so a capture-only key can't exfiltrate data. Optional for backward-compat with keys minted before it existed.
+  bankSync?: boolean;  // Nightly Wells Fargo bank-email sync scope, gating the (not-yet-built) bankEmailSync endpoint. Separate scope so a capture-only key can't ingest bank data unless explicitly enabled. Optional for backward-compat with keys minted before it existed.
   receiptScanning: boolean;  // Unused — receipt endpoint removed; kept for stored-doc shape
 }
 

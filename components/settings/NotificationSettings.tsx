@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clock, DollarSign, Flame, Calendar, ListTodo, Send, Info, Newspaper, NotebookPen, Wallet, Layers, Sunrise } from 'lucide-react';
+import { Clock, DollarSign, Flame, Calendar, ListTodo, Send, Info, Newspaper, NotebookPen, Wallet, Layers, Sunrise, Landmark } from 'lucide-react';
 import { NotificationPreferences } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { getFunctionsInstance } from '@/firebase.config';
@@ -66,6 +66,11 @@ const DEFAULT_PREFERENCES: NotificationPreferences = {
   todoReminders: {
     enabled: true
   },
+  // Nightly bank-email sync summary defaults ON (opt-out) — a fixed nightly
+  // send after the sync run finishes, so no time selection needed.
+  bankEmailSync: {
+    enabled: true
+  },
   // Digest mode defaults OFF — opt-in consolidation of the four per-type
   // reminders above into one push at a single time.
   digestMode: DEFAULT_DIGEST_MODE,
@@ -110,6 +115,7 @@ const mergePreferences = (current?: NotificationPreferences): NotificationPrefer
   reflectionReminder: { enabled: false, time: '20:30', ...current?.reflectionReminder },
   monthlyMoneyRecap: { enabled: true, ...current?.monthlyMoneyRecap },
   todoReminders: { enabled: true, ...current?.todoReminders },
+  bankEmailSync: { enabled: true, ...current?.bankEmailSync },
   digestMode: { ...DEFAULT_DIGEST_MODE, ...current?.digestMode },
   dailyBriefing: { enabled: false, time: '08:00', ...current?.dailyBriefing },
   timezone: current?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -628,6 +634,27 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                 aria-label="Monthly money recap notifications"
                 checked={preferences.monthlyMoneyRecap?.enabled ?? true}
                 onCheckedChange={() => handleToggle('monthlyMoneyRecap')}
+              />
+            </div>
+          </div>
+        </Row>
+
+        {/* Nightly Bank Sync — fixed nightly send after the sync run, so no time select */}
+        <Row className="items-start">
+          <div className="w-10 h-10 bg-accent-50 dark:bg-accent-500/15 rounded-btn flex items-center justify-center shrink-0">
+            <Landmark className="w-5 h-5 text-accent-600 dark:text-accent-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <h4 className="font-semibold text-brand-900 dark:text-brand-100">Nightly Bank Sync</h4>
+                <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">A summary after your bank-email transactions sync overnight.</p>
+              </div>
+              <Switch
+                id="notif-bank-email-sync"
+                aria-label="Nightly bank sync notifications"
+                checked={preferences.bankEmailSync?.enabled ?? true}
+                onCheckedChange={() => handleToggle('bankEmailSync')}
               />
             </div>
           </div>

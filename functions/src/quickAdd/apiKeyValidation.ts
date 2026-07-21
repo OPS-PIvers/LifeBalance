@@ -21,6 +21,14 @@ export interface ApiKeyPermissions {
   // can reuse it. Optional so keys minted before it existed keep validating
   // (read defaults off).
   read?: boolean;
+  // Nightly Wells Fargo bank-email sync scope: gates the (not-yet-built)
+  // bankEmailSync endpoint via requireScope('bankSync'). Deliberately a
+  // SEPARATE scope from `read`/the write-only quickAdd* permissions, mirroring
+  // why `read` is its own scope — a key minted for capture or export can't
+  // also ingest bank-notification emails unless `bankSync` is explicitly
+  // enabled. Optional so keys minted before it existed keep validating
+  // (bankSync defaults off).
+  bankSync?: boolean;
   receiptScanning: boolean;
 }
 
@@ -54,6 +62,7 @@ const RATE_LIMITS = {
   bill: { limit: 50, windowMs: 60 * 60 * 1000 }, // 50/hour
   todo: { limit: 100, windowMs: 60 * 60 * 1000 }, // 100/hour
   read: { limit: 100, windowMs: 60 * 60 * 1000 }, // 100/hour (GET export endpoints)
+  bankSync: { limit: 50, windowMs: 60 * 60 * 1000 }, // 50/hour (nightly bank-email sync)
 };
 
 /**
@@ -150,11 +159,28 @@ export async function validateApiKey(
 }
 
 /**
+ * Check whether a validated key's permissions grant a given scope.
+ *
+ * A tiny generic wrapper around the `permissions?.<scope>` checks that were
+ * previously duplicated inline at each endpoint (see quickAdd/index.ts,
+ * getTodos.ts). New endpoints — e.g. the forthcoming bankEmailSync GET
+ * endpoint — can call `hasScope(permissions, "bankSync")` instead of
+ * repeating the optional-chaining check. Existing call sites are left as-is
+ * (out of scope for this change) to avoid an unrelated diff.
+ */
+export function hasScope(
+  permissions: ApiKeyPermissions | undefined,
+  scope: keyof ApiKeyPermissions
+): boolean {
+  return permissions?.[scope] === true;
+}
+
+/**
  * Check rate limit for a specific endpoint type
  */
 export async function checkRateLimit(
   householdId: string,
-  endpointType: "habit" | "expense" | "shopping" | "bill" | "todo" | "read"
+  endpointType: "habit" | "expense" | "shopping" | "bill" | "todo" | "read" | "bankSync"
 ): Promise<{ allowed: boolean; retryAfterMs?: number }> {
   const config = RATE_LIMITS[endpointType];
   const now = Date.now();
