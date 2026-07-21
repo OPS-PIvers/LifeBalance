@@ -5,6 +5,8 @@ import {
   normalizeMerchant,
   pickFillTarget,
   buildFillUpdates,
+  pickDuplicateShortcutRow,
+  buildDuplicateMergeUpdates,
   type ReconcileCandidate,
 } from "./reconcile";
 
@@ -208,5 +210,146 @@ describe("pickFillTarget — account awareness", () => {
 describe("RECONCILE_WINDOW_MS", () => {
   it("is a tight, positive window (30 minutes)", () => {
     expect(RECONCILE_WINDOW_MS).toBe(30 * 60 * 1000);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// pickDuplicateShortcutRow — cross-source dedup of two REAL-amount captures
+// ---------------------------------------------------------------------------
+
+/** A real-amount Apple Pay capture (the "Transaction" automation, untagged). */
+function applePay(
+  id: string,
+  merchant: string,
+  amount: number,
+  extra: Partial<ReconcileCandidate> = {},
+): ReconcileCandidate {
+  return { id, merchant, amount, needsAmount: false, ...extra };
+}
+
+/** A row that itself came from a bank notification (never a merge TARGET). */
+function bankRow(id: string, merchant: string, amount: number): ReconcileCandidate {
+  return { id, merchant, amount, needsAmount: false, fromBankNotification: true };
+}
+
+describe("pickDuplicateShortcutRow", () => {
+  it("REGRESSION: folds a bank notification into the untagged real-amount Apple Pay row for the same purchase", () => {
+    // The reported bug: Apple Pay captured "Target" $18.86 at full amount (not a
+    // $0 stub); the bank push reports "TARGET T-2189" $18.86. Both untagged, so
+    // the shared identity check only ranks them 'possible' and two rows survive.
+    const candidates = [applePay("ap1", "Target", 18.86)];
+    const target = pickDuplicateShortcutRow(
+      { amount: 18.86, merchant: "TARGET T-2189" },
+      candidates,
+    );
+    expect(target?.id).toBe("ap1");
+  });
+
+  it("returns null when there are no candidates", () => {
+    expect(pickDuplicateShortcutRow({ amount: 5, merchant: "Coffee" }, [])).toBeNull();
+  });
+
+  it("does NOT fold into a $0 stub (that is pickFillTarget's job)", () => {
+    const candidates = [stub("s1", "Target")];
+    expect(
+      pickDuplicateShortcutRow({ amount: 18.86, merchant: "Target" }, candidates),
+    ).toBeNull();
+  });
+
+  it("does NOT fold when the amount differs by even a cent", () => {
+    const candidates = [applePay("ap1", "Target", 18.86)];
+    expect(
+      pickDuplicateShortcutRow({ amount: 18.87, merchant: "Target" }, candidates),
+    ).toBeNull();
+  });
+
+  it("does NOT fold when the merchant is dissimilar", () => {
+    const candidates = [applePay("ap1", "Whole Foods", 18.86)];
+    expect(
+      pickDuplicateShortcutRow({ amount: 18.86, merchant: "Target" }, candidates),
+    ).toBeNull();
+  });
+
+  it("SAFETY: does NOT fold into another bank-notification row (two bank-only identical purchases stay separate)", () => {
+    const candidates = [bankRow("bn1", "Starbucks", 5)];
+    expect(
+      pickDuplicateShortcutRow({ amount: 5, merchant: "Starbucks" }, candidates),
+    ).toBeNull();
+  });
+
+  it("SAFETY: does NOT fold when two matching Apple Pay rows exist (ambiguous → keep both)", () => {
+    // Two genuinely-separate identical $5 coffees, each captured by Apple Pay.
+    const candidates = [
+      applePay("ap1", "Starbucks", 5),
+      applePay("ap2", "Starbucks", 5),
+    ];
+    expect(
+      pickDuplicateShortcutRow({ amount: 5, merchant: "Starbucks" }, candidates),
+    ).toBeNull();
+  });
+
+  it("does NOT fold into a row tagged to a DIFFERENT account than the incoming card", () => {
+    const candidates = [applePay("ap1", "Target", 18.86, { accountId: "checking" })];
+    expect(
+      pickDuplicateShortcutRow(
+        { amount: 18.86, merchant: "Target", accountId: "credit" },
+        candidates,
+      ),
+    ).toBeNull();
+  });
+
+  it("folds into a same-account row", () => {
+    const candidates = [applePay("ap1", "Target", 18.86, { accountId: "credit" })];
+    const target = pickDuplicateShortcutRow(
+      { amount: 18.86, merchant: "Target", accountId: "credit" },
+      candidates,
+    );
+    expect(target?.id).toBe("ap1");
+  });
+
+  it("folds into the single eligible row while ignoring stubs and bank rows around it", () => {
+    const candidates = [
+      stub("s1", "Target"),
+      bankRow("bn1", "Target", 18.86),
+      applePay("ap1", "Target", 18.86),
+    ];
+    const target = pickDuplicateShortcutRow(
+      { amount: 18.86, merchant: "TARGET T-2189" },
+      candidates,
+    );
+    expect(target?.id).toBe("ap1");
+  });
+});
+
+describe("buildDuplicateMergeUpdates", () => {
+  it("back-fills the resolved account onto an untagged Apple Pay row", () => {
+    const target = applePay("ap1", "Target", 18.86);
+    const updates = buildDuplicateMergeUpdates(
+      { amount: 18.86, merchant: "TARGET T-2189", accountId: "credit" },
+      target,
+    );
+    expect(updates).toEqual({ accountId: "credit" });
+  });
+
+  it("does NOT overwrite amount or merchant (the Apple Pay row's are kept)", () => {
+    const target = applePay("ap1", "Target", 18.86);
+    const updates = buildDuplicateMergeUpdates(
+      { amount: 18.86, merchant: "TARGET T-2189", accountId: "credit" },
+      target,
+    );
+    expect(updates).not.toHaveProperty("amount");
+    expect(updates).not.toHaveProperty("merchant");
+  });
+
+  it("is an empty patch when there is nothing to enrich (already tagged / no incoming account)", () => {
+    expect(
+      buildDuplicateMergeUpdates({ amount: 18.86, merchant: "Target" }, applePay("ap1", "Target", 18.86)),
+    ).toEqual({});
+    expect(
+      buildDuplicateMergeUpdates(
+        { amount: 18.86, merchant: "Target", accountId: "credit" },
+        applePay("ap1", "Target", 18.86, { accountId: "credit" }),
+      ),
+    ).toEqual({});
   });
 });
