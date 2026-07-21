@@ -295,6 +295,20 @@ export interface Transaction {
    *  yet entered, so `amount` is a placeholder 0. Cleared (set false) once the
    *  user supplies the amount during review. Absent on normal transactions. */
   needsAmount?: boolean;
+  /** Nightly Wells Fargo bank-email sync (bankEmailSync Cloud Function): the
+   *  bank's reference token for a withdrawal line (card ref like "P0000..." or a
+   *  deterministic "synth:<hash>" for ACH lines). Used as the sync's idempotency
+   *  key — a re-run skips any withdrawal whose bankRef already exists on a
+   *  transaction, and it is stamped onto rows the sync fills/confirms/pays/creates.
+   *  Absent on non-bank-sync transactions. */
+  bankRef?: string;
+  /** Nightly bank-email sync: a row CREATED from a withdrawal line that matched
+   *  no stub/pending/bill. It is born `verified` (the account balance is
+   *  authoritative from the email's ending balance), so this flag marks it as
+   *  still needing a budget category. Client categorization of such a row is a
+   *  bucket-assignment only — it applies NO balance delta (the row is already
+   *  verified). Cleared when the user assigns a category. Absent otherwise. */
+  needsCategory?: boolean;
   /** LEGACY — no longer written or read. The retired "awaiting amount" drawer
    *  stamped this to suppress its auto-pop; the on-open review drawer now simply
    *  re-opens while un-snoozed `pending_review` transactions remain. Kept so

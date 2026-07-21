@@ -441,6 +441,12 @@ export function makeUpdateTransactionCategory(deps: {
       // truthy guard, editedPayPeriodId is only computed when a date is present.
       ...(overrides?.date ? { date: overrides.date, payPeriodId: editedPayPeriodId } : {}),
       ...(overrides?.clearNeedsAmount ? { needsAmount: false } : {}),
+      // A bank-email-sync row is born `verified` + `needsCategory` (the account
+      // balance is authoritative from the email). Assigning a category clears
+      // the flag; because the row is ALREADY verified, the reverse+apply impact
+      // above cancels to a zero net balance delta (no double-debit) whenever the
+      // account is unchanged — exactly the desired "bucket-assignment only".
+      ...(existingTx.needsCategory ? { needsCategory: false } : {}),
       // The review drawer can flag the spend as recurring in the same verify
       // (the caller also creates the subscription CalendarItem). Only ever sent
       // as `true` — an untouched toggle leaves the stored value alone.

@@ -62,7 +62,7 @@ vi.mock('react-hot-toast', () => ({
 
 vi.mock('@/services/analytics', () => ({ track: vi.fn() }));
 
-import { makeAddTransaction, makeDeleteTransaction } from './transactionMutations';
+import { makeAddTransaction, makeDeleteTransaction, makeUpdateTransactionCategory } from './transactionMutations';
 import type { Account, Transaction } from '@/types/schema';
 
 const HOUSEHOLD_ID = 'house1';
@@ -251,5 +251,65 @@ describe('makeDeleteTransaction — trash mirror + balance reversal', () => {
     const { deleteTransaction } = makeDeleteTransaction(deleteDeps([verifiedTx]));
     await expect(deleteTransaction('tx-1')).rejects.toThrow('network down');
     expect(commitCount).toBe(0);
+  });
+});
+
+describe('makeUpdateTransactionCategory — bank-email-sync needsCategory row', () => {
+  beforeEach(() => {
+    capturedSets = [];
+    capturedUpdates = [];
+    capturedDeletes = [];
+    commitCount = 0;
+    commitErrors = [];
+    vi.clearAllMocks();
+  });
+
+  const txnPath = (id: string) => `households/${HOUSEHOLD_ID}/transactions/${id}`;
+
+  // A row created by bankEmailSync: born `verified` + `needsCategory`, tagged to
+  // checking, category 'Uncategorized'. Categorizing it must be a bucket
+  // assignment only: the flag clears and NO balance delta is applied (the
+  // reverse+apply impact of an already-verified row cancels to zero).
+  const bankSyncRow: Transaction = {
+    id: 'tx-bank',
+    amount: 42,
+    merchant: 'TARGET T-2189',
+    category: 'Uncategorized',
+    date: '2026-07-20',
+    status: 'verified',
+    isRecurring: false,
+    source: 'shortcut',
+    autoCategorized: false,
+    accountId: 'acc-check',
+    needsCategory: true,
+  };
+
+  function catDeps(transactions: Transaction[]) {
+    return {
+      db,
+      householdId: HOUSEHOLD_ID,
+      currentUser: { uid: 'user-1' },
+      habits: [],
+      transactions,
+      accounts,
+      householdSettings: null,
+    };
+  }
+
+  it('clears needsCategory and applies NO balance delta on categorize', async () => {
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(catDeps([bankSyncRow]));
+    await updateTransactionCategory('tx-bank', 'Groceries');
+
+    expect(commitCount).toBe(1);
+    const txUpdate = capturedUpdates.find(u => u.ref.__path === txnPath('tx-bank'));
+    expect(txUpdate?.data).toMatchObject({
+      category: 'Groceries',
+      status: 'verified',
+      needsCategory: false,
+    });
+    // No account balance update — the row was already verified, so reverse+apply
+    // cancel to a zero net delta (the account is unchanged).
+    const balanceUpdates = capturedUpdates.filter(u => u.ref.__path.startsWith(`households/${HOUSEHOLD_ID}/accounts/`));
+    expect(balanceUpdates).toHaveLength(0);
   });
 });

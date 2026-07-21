@@ -58,6 +58,11 @@ import { parseTodoPhrase } from "./todoParser";
 // lives away from the churny expense-endpoint code below (fewer merge conflicts).
 export { getTodos } from "./getTodos";
 
+// Nightly Wells Fargo bank-email sync endpoint. Kept in its own module (like
+// getTodos) so the churny expense-endpoint code below and this stay apart; it is
+// re-exported here and surfaced for deploy from functions/src/index.ts.
+export { bankEmailSync } from "./bankEmailSync";
+
 /** The category new paid bills are filed under (mirrors utils/categories.ts). */
 const BUDGETED_IN_CALENDAR = "Budgeted in Calendar";
 
