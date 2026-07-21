@@ -38,6 +38,12 @@ export interface PendingConfirmCandidate {
   /** yyyy-MM-dd. */
   date: string;
   merchant: string;
+  /** Account the pending row is tagged to, if any. A checking bank email must
+   *  never confirm a row tagged to a DIFFERENT account (especially a credit
+   *  card): a candidate is eligible only when its `accountId` matches the
+   *  resolved account or is undefined (untagged — the common case for
+   *  voice/shortcut captures, which land on the checking pool). */
+  accountId?: string;
 }
 
 /**
@@ -182,11 +188,16 @@ export function matchesAlias(descriptor: string, aliases: string[] | undefined):
  */
 export function pickPendingToConfirm(
   withdrawal: BankEmailWithdrawal,
-  candidates: readonly PendingConfirmCandidate[]
+  candidates: readonly PendingConfirmCandidate[],
+  resolvedAccountId?: string
 ): PendingConfirmCandidate | null {
   const w = cents(withdrawal.amount);
   const near = candidates.filter(
     (c) =>
+      // Account gate: only an untagged row or one tagged to THIS account is
+      // eligible — never verify a row belonging to a different account (a
+      // credit-card pending row must not be cleared by a checking email).
+      (c.accountId === undefined || c.accountId === resolvedAccountId) &&
       cents(c.amount) === w &&
       dayGap(c.date, withdrawal.date) <= CONFIRM_DATE_TOLERANCE_DAYS
   );
@@ -296,8 +307,8 @@ export function decideWithdrawal(input: DecideWithdrawalInput): WithdrawalDecisi
   );
   if (stub) return { kind: "fill_stub", stubId: stub.id };
 
-  // c. Confirm an existing pending transaction.
-  const pending = pickPendingToConfirm(withdrawal, pendingCandidates);
+  // c. Confirm an existing pending transaction (account-gated).
+  const pending = pickPendingToConfirm(withdrawal, pendingCandidates, input.resolvedAccountId);
   if (pending) return { kind: "confirm_pending", transactionId: pending.id };
 
   // d. Pay a matching unpaid bill.
@@ -354,6 +365,61 @@ export function isMessageAlreadyProcessed(
   processedIds: ReadonlySet<string>
 ): boolean {
   return processedIds.has(messageId);
+}
+
+/** Minimal income-calendar-item shape for bill retro-attribution. */
+export interface PaidIncomeLike {
+  type: "income" | "expense";
+  isPaid: boolean;
+  isDeleted?: boolean;
+  /** yyyy-MM-dd. */
+  date: string;
+}
+
+/**
+ * Pay-period id for a PAID BILL, mirroring the client `payCalendarItem`
+ * retro-filing convention (contexts/household/mutations/calendarMutations.ts):
+ * a bill files under the period covering its DUE date, and a bill dated before
+ * the current period start (an overdue bill paid after the period rolled) files
+ * under the pay period it was due in — the latest APPROVED paycheck (paid,
+ * non-deleted income calendar item) on/before the due date (yyyy-MM-dd compares
+ * lexically). No such paycheck → '' (untracked history), matching the client.
+ *
+ * NOTE: pass the bill's DUE date, not the withdrawal's clearing date — the whole
+ * point of the retro-file is that a July email paying an overdue June bill lands
+ * in the June period.
+ */
+export function getBillPayPeriodId(
+  billDueDate: string,
+  lastPaycheckDate: string | undefined,
+  calendarItems: readonly PaidIncomeLike[]
+): string {
+  const direct = getPayPeriodForTransactionLexical(billDueDate, lastPaycheckDate);
+  if (direct) return direct;
+  return calendarItems.reduce(
+    (latest, i) =>
+      i.type === "income" &&
+      i.isPaid &&
+      !i.isDeleted &&
+      i.date <= billDueDate &&
+      i.date > latest
+        ? i.date
+        : latest,
+    ""
+  );
+}
+
+/**
+ * Local lexical port of getPayPeriodForTransaction (plaid/payPeriod.ts) — a bill
+ * on/after the last paycheck files under it, else '' for pre-period. Kept inline
+ * (yyyy-MM-dd lexical compare) so this pure helper needs no date-fns import.
+ */
+function getPayPeriodForTransactionLexical(
+  transactionDate: string,
+  lastPaycheckDate: string | undefined
+): string {
+  if (!lastPaycheckDate) return "";
+  return transactionDate >= lastPaycheckDate ? lastPaycheckDate : "";
 }
 
 /**

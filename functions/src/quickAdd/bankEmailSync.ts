@@ -48,8 +48,10 @@ import {
   decideWithdrawal,
   buildEndingBalanceUpdate,
   matchAccountByAccountLast4,
+  getBillPayPeriodId,
   type PendingConfirmCandidate,
   type BillPayCandidate,
+  type PaidIncomeLike,
 } from "./bankSyncMatch";
 import {
   sendNotificationToUser,
@@ -62,6 +64,37 @@ const db = admin.firestore();
 const BUDGETED_IN_CALENDAR = "Budgeted in Calendar";
 /** The category a needs-category created row lands under until reviewed. */
 const UNCATEGORIZED = "Uncategorized";
+
+/**
+ * Hard cap on withdrawal lines processed per request (abuse / runaway-parse
+ * guard). A real nightly WF "account update" email carries ~a dozen; anything
+ * beyond this is malformed or hostile input.
+ *
+ * Firestore batch-size proof: each withdrawal stages AT MOST 3 document writes
+ * (the pay_bill branch: a paid-instance/calendar write + the transaction row +
+ * the alias arrayUnion, three distinct docs). Every other branch stages 1 or 0.
+ * The email also stages a fixed overhead of 2 writes (the account ending-balance
+ * overwrite + the ledger record). Worst-case batch:
+ *   MAX_WITHDRAWALS * 3 + 2 = 150 * 3 + 2 = 452 < 500 (Firestore's hard limit).
+ * Keep this product under 500 if either factor changes. */
+const MAX_WITHDRAWALS = 150;
+
+/** Max length for bank-derived error text echoed into a push body (item 7). */
+const PUSH_ERROR_MAX_LEN = 120;
+
+/**
+ * Make bank-email-derived error text safe to embed in a push body: collapse
+ * control characters and newlines (so it can't smuggle multi-line content into
+ * the notification) and hard-truncate. The email body itself is redacted before
+ * logging; this bounds what the parser's message can leak into a push.
+ */
+function sanitizeForPush(text: string): string {
+  // eslint-disable-next-line no-control-regex -- deliberately strip C0/C1 controls + newlines
+  const cleaned = text.replace(/[\x00-\x1F\x7F-\x9F]+/g, " ").replace(/\s+/g, " ").trim();
+  return cleaned.length > PUSH_ERROR_MAX_LEN
+    ? cleaned.slice(0, PUSH_ERROR_MAX_LEN - 3) + "..."
+    : cleaned;
+}
 
 /** Minimal subset of the Express/Firebase response object used below. */
 interface HttpResponse {
@@ -213,7 +246,7 @@ export const bankEmailSync = onRequest(
       await pushToBankSyncMembers(
         householdId,
         "Bank sync failed",
-        `Couldn't read last night's bank email. ${parsed.error}`
+        `Couldn't read last night's bank email. ${sanitizeForPush(parsed.error)}`
       );
       await logApiCall(householdId, apiKey.substring(0, 16), "bankSync", req.body, 200);
       jsonResponse(res, 200, {
@@ -223,6 +256,31 @@ export const bankEmailSync = onRequest(
       });
       return;
     }
+
+    // 5b. Withdrawal cap (abuse / runaway-parse guard). Anything past the cap is
+    //     malformed/hostile — refuse rather than stage a giant batch. Distinct
+    //     FAILURE push + structured 200 (no Apps Script retry storm).
+    if (parsed.withdrawals.length > MAX_WITHDRAWALS) {
+      await pushToBankSyncMembers(
+        householdId,
+        "Bank sync failed",
+        `Bank email had ${parsed.withdrawals.length} transactions (max ${MAX_WITHDRAWALS}); skipped.`
+      );
+      await logApiCall(householdId, apiKey.substring(0, 16), "bankSync", req.body, 200);
+      jsonResponse(res, 200, {
+        success: false,
+        error: { code: "TOO_MANY_WITHDRAWALS" },
+        message: `Withdrawal count ${parsed.withdrawals.length} exceeds max ${MAX_WITHDRAWALS}`,
+      });
+      return;
+    }
+
+    // Ledger doc + claim ownership are hoisted so the catch can release the
+    // claim on a downstream failure (item 6).
+    const ledgerRef = db.doc(
+      `households/${householdId}/bankEmailSyncLedger/${ledgerDocId(messageId)}`
+    );
+    let claimedByUs = false;
 
     try {
       const householdRef = db.doc(`households/${householdId}`);
@@ -256,12 +314,26 @@ export const bankEmailSync = onRequest(
         return;
       }
 
-      // 7. messageId ledger fast-skip (idempotent re-runs).
-      const ledgerRef = db.doc(
-        `households/${householdId}/bankEmailSyncLedger/${ledgerDocId(messageId)}`
-      );
-      const ledgerDoc = await ledgerRef.get();
-      if (ledgerDoc.exists) {
+      // 7. Atomic idempotency claim (check-and-claim, not a plain read). A
+      //    concurrent Apps Script retry racing this same Message-ID must not both
+      //    pass a read and both process the email, so we claim the ledger doc in
+      //    a runTransaction (create-if-absent) BEFORE loading candidates —
+      //    mirroring the geminiProxy daily-quota check-and-increment pattern.
+      //    On any downstream failure we DELETE our claim (see the catch) so a
+      //    later retry can rerun; the successful path overwrites the claim with
+      //    the full processed record in the same atomic batch (step 11).
+      const claim = await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ledgerRef);
+        if (snap.exists) return { alreadyProcessed: true };
+        tx.set(ledgerRef, {
+          messageId,
+          accountId: resolvedAccountId,
+          status: "processing",
+          claimedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return { alreadyProcessed: false };
+      });
+      if (claim.alreadyProcessed) {
         await logApiCall(householdId, apiKey.substring(0, 16), "bankSync", req.body, 200);
         jsonResponse(res, 200, {
           success: true,
@@ -271,6 +343,8 @@ export const bankEmailSync = onRequest(
         });
         return;
       }
+      // From here on WE own the claim; release it on any failure so a retry works.
+      claimedByUs = true;
 
       // 8. Load candidate rows for the a→e decisions.
       // 8a. Existing bankRefs (4a dedup): one small single-field query per
@@ -303,7 +377,10 @@ export const bankEmailSync = onRequest(
         if (!Number.isFinite(amount)) continue;
         const merchant = typeof data.merchant === "string" ? data.merchant : "";
         const date = typeof data.date === "string" ? data.date : today;
-        pendingCandidates.push({ id: d.id, amount, date, merchant });
+        const accountId = typeof data.accountId === "string" ? data.accountId : undefined;
+        // accountId gates CONFIRM so a credit-card / other-account pending row is
+        // never verified by this checking email (item 3).
+        pendingCandidates.push({ id: d.id, amount, date, merchant, accountId });
         stubCandidates.push({
           id: d.id,
           amount,
@@ -377,13 +454,22 @@ export const bankEmailSync = onRequest(
       const calendarPath = `households/${householdId}/calendarItems`;
       const counts = { created: 0, confirmed: 0, filled: 0, billsPaid: 0, skipped: 0 };
 
+      // Mutable candidate pools: once a withdrawal CONSUMES a stub/pending/bill,
+      // it is pruned so a second withdrawal in the SAME email can't be routed to
+      // the same target (which would let the last batch write win and silently
+      // drop a real transaction). The displaced withdrawal then falls through the
+      // remaining a→e steps (ultimately CREATE) — item 2.
+      let stubPool: (ReconcileCandidate & { date?: string })[] = stubCandidates;
+      let pendingPool: PendingConfirmCandidate[] = pendingCandidates;
+      let billPool: BillPayCandidate[] = billCandidates;
+
       for (const w of parsed.withdrawals) {
         const decision = decideWithdrawal({
           withdrawal: w,
           existingBankRefs,
-          stubs: stubCandidates,
-          pendingCandidates,
-          billCandidates,
+          stubs: stubPool,
+          pendingCandidates: pendingPool,
+          billCandidates: billPool,
           resolvedAccountId,
         });
 
@@ -399,30 +485,56 @@ export const bankEmailSync = onRequest(
             break;
           }
           case "fill_stub": {
+            // Fill the Apple Pay $0 stub AND mark it verified in this same email
+            // (item 1): the ending-balance overwrite is authoritative, so a
+            // filled stub must become verified here (no balance delta) — leaving
+            // it pending_review would let a later client categorize double-debit
+            // it (verified delta) and double-count it in Safe-to-Spend. accountId
+            // is stamped by buildFillUpdates from the resolved account.
             batch.update(db.doc(`${transactionsPath}/${decision.stubId}`), {
               ...buildFillUpdates({
                 amount: w.amount,
                 merchant: w.descriptor,
                 accountId: resolvedAccountId,
               }),
+              status: "verified",
               bankRef: w.bankRef,
             });
+            // Prune the consumed stub from BOTH pools (a stub is also a pending
+            // doc) so no other withdrawal can target it.
+            stubPool = stubPool.filter((s) => s.id !== decision.stubId);
+            pendingPool = pendingPool.filter((p) => p.id !== decision.stubId);
             counts.filled++;
             break;
           }
           case "confirm_pending": {
             // Verify only — NO balance delta (ending-balance overwrite is
-            // authoritative). Stamp bankRef for idempotency.
+            // authoritative). Stamp bankRef for idempotency and stamp the
+            // resolved account so the row is anchored to THIS account (item 3).
             batch.update(db.doc(`${transactionsPath}/${decision.transactionId}`), {
               status: "verified",
               bankRef: w.bankRef,
+              accountId: resolvedAccountId,
             });
+            // Prune the consumed pending row from BOTH pools (item 2).
+            pendingPool = pendingPool.filter((p) => p.id !== decision.transactionId);
+            stubPool = stubPool.filter((s) => s.id !== decision.transactionId);
             counts.confirmed++;
             break;
           }
           case "pay_bill": {
             const { bill, matchedByAlias } = decision.match;
             const paidAmount = Math.round(w.amount * 100) / 100;
+            // Retro-file under the bill's DUE-date pay period (mirrors the client
+            // payCalendarItem convention), NOT the withdrawal clearing date — an
+            // overdue June bill paid by a July email files under June (item 4).
+            const billPayPeriodId = getBillPayPeriodId(
+              bill.date,
+              householdData?.lastPaycheckDate,
+              calendarItems as PaidIncomeLike[]
+            );
+            // Prune the consumed bill so a second withdrawal can't re-pay it (item 2).
+            billPool = billPool.filter((b) => b.id !== bill.id);
             if (bill.isRecurringInstance && bill.templateId) {
               // Recurring occurrence → paid-instance record (suppresses the
               // synthetic occurrence on future expansions).
@@ -454,7 +566,7 @@ export const bankEmailSync = onRequest(
               isRecurring: bill.isRecurringInstance,
               source: "shortcut",
               autoCategorized: true,
-              payPeriodId,
+              payPeriodId: billPayPeriodId,
               accountId: resolvedAccountId,
               bankRef: w.bankRef,
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -534,6 +646,14 @@ export const bankEmailSync = onRequest(
       });
     } catch (error) {
       logger.error("Error in bankEmailSync:", error);
+      // Release our idempotency claim so a later Apps Script retry can reprocess
+      // this Message-ID (the batch never committed, so no data was written). Only
+      // delete a claim WE created — never one already recorded as processed.
+      if (claimedByUs) {
+        await ledgerRef.delete().catch((delErr) => {
+          logger.error("bankEmailSync: failed to release idempotency claim:", delErr);
+        });
+      }
       await logApiCall(householdId, apiKey.substring(0, 16), "bankSync", req.body, 500);
       errorResponse(res, 500, "Internal server error", "INTERNAL_ERROR");
     }

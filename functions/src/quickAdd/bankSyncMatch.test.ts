@@ -14,9 +14,12 @@ import {
   matchAccountByAccountLast4,
   isMessageAlreadyProcessed,
   buildEndingBalanceUpdate,
+  getBillPayPeriodId,
   CONFIRM_DATE_TOLERANCE_DAYS,
   type PendingConfirmCandidate,
   type BillPayCandidate,
+  type PaidIncomeLike,
+  type WithdrawalDecision,
 } from "./bankSyncMatch";
 
 // ---------------------------------------------------------------------------
@@ -140,6 +143,59 @@ describe("pickPendingToConfirm", () => {
     const a = pending({ id: "a", merchant: "Mystery", date: "2026-07-20" });
     const b = pending({ id: "b", merchant: "Enigma", date: "2026-07-20" });
     expect(pickPendingToConfirm(withdrawal({ descriptor: "UNRELATED" }), [a, b])).toBeNull();
+  });
+
+  // Item 3 — account gating.
+  it("does NOT confirm a row tagged to a DIFFERENT account", () => {
+    const other = pending({ accountId: "savings" });
+    expect(pickPendingToConfirm(withdrawal(), [other], "checking")).toBeNull();
+  });
+
+  it("confirms an UNTAGGED row (voice/shortcut entries land on checking)", () => {
+    const untagged = pending({ accountId: undefined });
+    expect(pickPendingToConfirm(withdrawal(), [untagged], "checking")?.id).toBe("txn1");
+  });
+
+  it("never confirms a CREDIT-tagged row with a checking email", () => {
+    const credit = pending({ id: "cc", accountId: "credit-card" });
+    expect(pickPendingToConfirm(withdrawal(), [credit], "checking")).toBeNull();
+  });
+
+  it("confirms a row tagged to the SAME resolved account", () => {
+    const same = pending({ accountId: "checking" });
+    expect(pickPendingToConfirm(withdrawal(), [same], "checking")?.id).toBe("txn1");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bill pay-period retro-filing (item 4)
+// ---------------------------------------------------------------------------
+
+describe("getBillPayPeriodId", () => {
+  const paychecks: PaidIncomeLike[] = [
+    { type: "income", isPaid: true, date: "2026-06-01" },
+    { type: "income", isPaid: true, date: "2026-07-01" },
+    { type: "income", isPaid: false, date: "2026-07-15" }, // unapproved — ignored
+    { type: "expense", isPaid: true, date: "2026-06-20" }, // not income — ignored
+  ];
+
+  it("files a current-period bill under the last paycheck", () => {
+    expect(getBillPayPeriodId("2026-07-05", "2026-07-01", paychecks)).toBe("2026-07-01");
+  });
+
+  it("retro-files an overdue June bill (paid by a July email) under the June period", () => {
+    // Due 2026-06-15, current period 2026-07-01 → walk back to the June paycheck.
+    expect(getBillPayPeriodId("2026-06-15", "2026-07-01", paychecks)).toBe("2026-06-01");
+  });
+
+  it("ignores unapproved (unpaid) and non-income items when walking back", () => {
+    // A bill due 2026-06-25 must land on 2026-06-01, not the unpaid 07-15 income
+    // nor the paid 06-20 expense.
+    expect(getBillPayPeriodId("2026-06-25", "2026-07-01", paychecks)).toBe("2026-06-01");
+  });
+
+  it("returns '' (untracked) when no paycheck precedes the bill", () => {
+    expect(getBillPayPeriodId("2026-05-01", "2026-07-01", paychecks)).toBe("");
   });
 });
 
@@ -278,6 +334,94 @@ describe("decideWithdrawal order of operations", () => {
       pendingCandidates: [a, b],
     });
     expect(decision.kind).toBe("create");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Per-email loop pruning (item 2): two withdrawals must never consume the same
+// stub / pending / bill. This mirrors the endpoint's decide→prune→next loop
+// exactly (bankEmailSync.ts step 9) so a displaced withdrawal falls through to
+// CREATE instead of silently overwriting the first one's target.
+// ---------------------------------------------------------------------------
+
+interface LoopPools {
+  stubs: (ReconcileCandidate & { date?: string })[];
+  pendingCandidates: PendingConfirmCandidate[];
+  billCandidates: BillPayCandidate[];
+}
+
+/** Replays the endpoint's decide-and-prune loop; returns the per-line decisions. */
+function runLoop(
+  withdrawals: BankEmailWithdrawal[],
+  pools: LoopPools,
+  resolvedAccountId = "acct1"
+): WithdrawalDecision[] {
+  const existingBankRefs = new Set<string>();
+  let stubPool = pools.stubs;
+  let pendingPool = pools.pendingCandidates;
+  let billPool = pools.billCandidates;
+  const out: WithdrawalDecision[] = [];
+  for (const w of withdrawals) {
+    const decision = decideWithdrawal({
+      withdrawal: w,
+      existingBankRefs,
+      stubs: stubPool,
+      pendingCandidates: pendingPool,
+      billCandidates: billPool,
+      resolvedAccountId,
+    });
+    existingBankRefs.add(w.bankRef);
+    if (decision.kind === "fill_stub") {
+      stubPool = stubPool.filter((s) => s.id !== decision.stubId);
+      pendingPool = pendingPool.filter((p) => p.id !== decision.stubId);
+    } else if (decision.kind === "confirm_pending") {
+      pendingPool = pendingPool.filter((p) => p.id !== decision.transactionId);
+      stubPool = stubPool.filter((s) => s.id !== decision.transactionId);
+    } else if (decision.kind === "pay_bill") {
+      billPool = billPool.filter((b) => b.id !== decision.match.bill.id);
+    }
+    out.push(decision);
+  }
+  return out;
+}
+
+describe("per-email loop pruning", () => {
+  it("two withdrawals + one stub → one fill + one create", () => {
+    // Both lines merchant-match the lone stub, but only the first may consume it.
+    const w1 = withdrawal({ bankRef: "R1", descriptor: "TARGET", amount: 20, date: "2026-07-20" });
+    const w2 = withdrawal({ bankRef: "R2", descriptor: "TARGET", amount: 30, date: "2026-07-20" });
+    const decisions = runLoop([w1, w2], {
+      stubs: [stub({ id: "s1", date: "2026-07-20" })],
+      pendingCandidates: [],
+      billCandidates: [],
+    });
+    expect(decisions[0]).toEqual({ kind: "fill_stub", stubId: "s1" });
+    expect(decisions[1]?.kind).toBe("create");
+  });
+
+  it("two withdrawals cent-matching one pending row → one confirm + one create", () => {
+    const w1 = withdrawal({ bankRef: "R1", amount: 18.86, date: "2026-07-20" });
+    const w2 = withdrawal({ bankRef: "R2", amount: 18.86, date: "2026-07-20" });
+    const decisions = runLoop([w1, w2], {
+      stubs: [],
+      pendingCandidates: [pending({ id: "p1", amount: 18.86, date: "2026-07-20" })],
+      billCandidates: [],
+    });
+    expect(decisions[0]).toEqual({ kind: "confirm_pending", transactionId: "p1" });
+    expect(decisions[1]?.kind).toBe("create");
+  });
+
+  it("two withdrawals matching one bill → one pay + one create", () => {
+    const w1 = withdrawal({ bankRef: "R1", descriptor: "COMCAST-XFINITY CABLE", amount: 153.95 });
+    const w2 = withdrawal({ bankRef: "R2", descriptor: "COMCAST-XFINITY CABLE", amount: 153.95 });
+    const decisions = runLoop([w1, w2], {
+      stubs: [],
+      pendingCandidates: [],
+      billCandidates: [bill({ id: "b1", title: "Comcast Internet", amount: 153.95 })],
+    });
+    expect(decisions[0]?.kind).toBe("pay_bill");
+    if (decisions[0]?.kind === "pay_bill") expect(decisions[0].match.bill.id).toBe("b1");
+    expect(decisions[1]?.kind).toBe("create");
   });
 });
 
