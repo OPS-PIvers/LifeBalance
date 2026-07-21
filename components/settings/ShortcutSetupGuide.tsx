@@ -15,6 +15,7 @@ import {
   MousePointerClick,
   ReceiptText,
   ListTodo,
+  Download,
 } from 'lucide-react';
 import { getQuickAddEndpointUrl } from '@/services/apiKeyService';
 import { SurfaceList, DisclosureRow } from '@/components/ui/Section';
@@ -57,9 +58,15 @@ interface ShortcutExample {
   title: string;
   icon: React.ReactNode;
   description: string;
-  endpoint: 'habit' | 'expense' | 'shopping' | 'naturalLanguage' | 'bill' | 'todo';
+  endpoint: 'habit' | 'expense' | 'shopping' | 'naturalLanguage' | 'bill' | 'todo' | 'getTodos';
   isAutomation?: boolean;
   isRecommended?: boolean;
+  /**
+   * A read/export recipe (GET the data OUT → parse → Reminders) rather than a
+   * capture POST. Changes the middle "web request" group: a GET with only an
+   * Authorization header and no JSON body, so `fields` is left empty.
+   */
+  variant?: 'capture' | 'read';
   /** Short bullets shown before the steps (prep work, what to expect). */
   before?: string[];
   /** Steps BEFORE the web-request block (create the shortcut, ask for input…). */
@@ -425,6 +432,67 @@ const EXAMPLES: ShortcutExample[] = [
     ],
   },
   {
+    id: 'export-todos',
+    title: 'Export To-Dos to Reminders',
+    icon: <Download className="w-5 h-5" />,
+    description: 'Pull your shared to-dos OUT of LifeBalance and into Apple Reminders.',
+    endpoint: 'getTodos',
+    variant: 'read',
+    before: [
+      'This is a **read / export** shortcut: it pulls your shared to-dos **out** of LifeBalance (for example, into Apple Reminders) — the mirror image of the capture shortcuts above, which push data **in**.',
+      'It needs a key with the **Read / export data** permission — that key shows a **Read** badge in the **API Keys** list above. Capture-only keys don’t have it and get a **403** here. If yours is missing it, scroll up to **API Keys → Generate New API Key**, leave **Read / export data** switched on (it’s on by default), and create a fresh key — the steps below then pre-fill with it.',
+    ],
+    setupSteps: [{ text: NEW_SHORTCUT_STEP }],
+    fields: [],
+    finishSteps: [
+      {
+        text: 'Add **Get Dictionary Value**. Tap its **Dictionary** input and pick **Contents of URL** from the variable bar, set **Get** to **Value for**, and type the key below — it drills straight to the array of to-dos in the response:',
+        copy: [
+          {
+            label: 'Key',
+            value: 'data.todos',
+            hint: 'The response wraps the list under **data.todos** — this reaches it in one step.',
+          },
+        ],
+      },
+      {
+        text: 'Add **Repeat with Each** and set its input to the **Dictionary Value** from the step above. Everything you nest inside now runs once per to-do.',
+      },
+      {
+        text: 'Inside the Repeat, add another **Get Dictionary Value**: set **Dictionary** to **Repeat Item** and **Value for** key to the field below — that’s the to-do’s title.',
+        copy: [{ label: 'Key', value: 'text' }],
+      },
+      {
+        text: 'Still inside the Repeat, add **Add New Reminder**. Tap its **Title** and pick the **Dictionary Value** from the previous step, so each reminder is named after the to-do.',
+      },
+      {
+        text: 'Optional — give the reminder a due date: add one more **Get Dictionary Value** (**Repeat Item** → one of the keys below), then in **Add New Reminder** tap **Show More** and set its **Alert** to that value.',
+        copy: [
+          {
+            label: 'Key · date only',
+            value: 'completeByDate',
+            hint: 'A yyyy-MM-dd day, e.g. 2026-07-25.',
+          },
+          {
+            label: 'Key · date + time',
+            value: 'dueAt',
+            hint: 'A combined 2026-07-25T18:30:00 when the to-do has a time — otherwise null, so fall back to **completeByDate**.',
+          },
+        ],
+      },
+      {
+        text: 'Tap the shortcut’s name at the top → **Rename** → call it something like **Import To-Dos**.',
+      },
+      {
+        text: 'Run it! Your open LifeBalance to-dos land in Apple Reminders. Re-run it any time to pull in new ones.',
+      },
+    ],
+    after: [
+      'By default only **open** to-dos come across. Add **?includeCompleted=1** to the end of the URL to include completed ones too.',
+      'This only **reads** — it never changes anything in LifeBalance, so run it as often as you like. Checking off or deleting the reminder in Apple Reminders doesn’t sync back.',
+    ],
+  },
+  {
     id: 'bill-pay',
     title: 'Voice Bill Pay',
     icon: <ReceiptText className="w-5 h-5" />,
@@ -692,9 +760,12 @@ const ExampleWalkthrough: React.FC<{
   authValue: string;
   apiKey?: string | null;
 }> = ({ ex, authValue, apiKey }) => {
-  // Numbering runs continuously across the three step groups.
+  // Numbering runs continuously across the three step groups. The middle
+  // "web request" group is 4 steps for a capture POST (method → headers → body)
+  // but only 2 for a read/export GET (URL + Authorization header, no body).
+  const isRead = ex.variant === 'read';
   const requestStart = ex.setupSteps.length;
-  const finishStart = requestStart + 4;
+  const finishStart = requestStart + (isRead ? 2 : 4);
 
   return (
     <div className="space-y-6">
@@ -718,55 +789,86 @@ const ExampleWalkthrough: React.FC<{
         </ol>
       </div>
 
-      {/* Part 2 — the web request (same 4 steps for every shortcut) */}
+      {/* Part 2 — the web request. Capture shortcuts POST a JSON body; the
+          read/export shortcut GETs and carries only the Authorization header. */}
       <div>
-        <PartLabel>Send it to LifeBalance</PartLabel>
-        <ol className="space-y-4">
-          <NumberedStep
-            n={requestStart + 1}
-            text="Add **Get Contents of URL**. Tap its pale **URL** text and paste:"
-          >
-            <SurfaceList>
-              <CopyRow label="URL" value={getQuickAddEndpointUrl(ex.endpoint)} />
-            </SurfaceList>
-          </NumberedStep>
-          <NumberedStep
-            n={requestStart + 2}
-            text="Tap the **› arrow** on that action to expand its options, then change **Method** from GET to **POST**."
-          />
-          <NumberedStep
-            n={requestStart + 3}
-            text="Tap **Headers** → **Add new header**, twice. Type each header’s name on the left and paste its value on the right:"
-          >
-            <SurfaceList>
-              <CopyRow
-                label="Header 1 · Authorization"
-                value={authValue}
-                hint={
-                  apiKey
-                    ? 'Name: **Authorization** — tap to copy the value.'
-                    : 'Generate a key above and this fills in automatically.'
-                }
-                disabled={!apiKey}
-              />
-              <CopyRow
-                label="Header 2 · Content-Type"
-                value="application/json"
-                hint="Name: **Content-Type** — tap to copy the value."
-              />
-            </SurfaceList>
-          </NumberedStep>
-          <NumberedStep
-            n={requestStart + 4}
-            text="Tap **Request Body** (keep it on **JSON**) → **Add new field**, once per field below. Pick the type on the chip, type the name exactly as shown, then set the value:"
-          >
-            <SurfaceList>
-              {ex.fields.map((f) => (
-                <FieldRow key={f.key} field={f} />
-              ))}
-            </SurfaceList>
-          </NumberedStep>
-        </ol>
+        <PartLabel>{isRead ? 'Fetch your to-dos' : 'Send it to LifeBalance'}</PartLabel>
+        {isRead ? (
+          <ol className="space-y-4">
+            <NumberedStep
+              n={requestStart + 1}
+              text="Add **Get Contents of URL**. Tap its pale **URL** text and paste:"
+            >
+              <SurfaceList>
+                <CopyRow label="URL" value={getQuickAddEndpointUrl(ex.endpoint)} />
+              </SurfaceList>
+            </NumberedStep>
+            <NumberedStep
+              n={requestStart + 2}
+              text="Tap the **› arrow** to expand the action. Leave **Method** as **GET**, then under **Headers** tap **Add new header** — name it **Authorization** and paste its value:"
+            >
+              <SurfaceList>
+                <CopyRow
+                  label="Header · Authorization"
+                  value={authValue}
+                  hint={
+                    apiKey
+                      ? 'Name: **Authorization** — tap to copy the value. No Content-Type needed; there’s no body.'
+                      : 'Generate a key with **Read / export data** on (above) and this fills in automatically.'
+                  }
+                  disabled={!apiKey}
+                />
+              </SurfaceList>
+            </NumberedStep>
+          </ol>
+        ) : (
+          <ol className="space-y-4">
+            <NumberedStep
+              n={requestStart + 1}
+              text="Add **Get Contents of URL**. Tap its pale **URL** text and paste:"
+            >
+              <SurfaceList>
+                <CopyRow label="URL" value={getQuickAddEndpointUrl(ex.endpoint)} />
+              </SurfaceList>
+            </NumberedStep>
+            <NumberedStep
+              n={requestStart + 2}
+              text="Tap the **› arrow** on that action to expand its options, then change **Method** from GET to **POST**."
+            />
+            <NumberedStep
+              n={requestStart + 3}
+              text="Tap **Headers** → **Add new header**, twice. Type each header’s name on the left and paste its value on the right:"
+            >
+              <SurfaceList>
+                <CopyRow
+                  label="Header 1 · Authorization"
+                  value={authValue}
+                  hint={
+                    apiKey
+                      ? 'Name: **Authorization** — tap to copy the value.'
+                      : 'Generate a key above and this fills in automatically.'
+                  }
+                  disabled={!apiKey}
+                />
+                <CopyRow
+                  label="Header 2 · Content-Type"
+                  value="application/json"
+                  hint="Name: **Content-Type** — tap to copy the value."
+                />
+              </SurfaceList>
+            </NumberedStep>
+            <NumberedStep
+              n={requestStart + 4}
+              text="Tap **Request Body** (keep it on **JSON**) → **Add new field**, once per field below. Pick the type on the chip, type the name exactly as shown, then set the value:"
+            >
+              <SurfaceList>
+                {ex.fields.map((f) => (
+                  <FieldRow key={f.key} field={f} />
+                ))}
+              </SurfaceList>
+            </NumberedStep>
+          </ol>
+        )}
       </div>
 
       {/* Part 3 — finish */}
@@ -864,12 +966,17 @@ const ShortcutSetupGuide: React.FC<ShortcutSetupGuideProps> = ({ apiKey }) => {
               subtitle={ex.description}
               onClick={() => setOpenId(ex.id)}
               value={
-                ex.isRecommended || ex.isAutomation ? (
+                ex.isRecommended || ex.isAutomation || ex.variant === 'read' ? (
                   <span className="flex items-center gap-1">
                     {ex.isRecommended && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-accent-100 dark:bg-accent-500/20 text-accent-700 dark:text-accent-300 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5">
                         <Sparkles className="w-2.5 h-2.5" />
                         Best
+                      </span>
+                    )}
+                    {ex.variant === 'read' && (
+                      <span className="rounded-full border border-accent-300 dark:border-accent-500/40 text-accent-700 dark:text-accent-300 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5">
+                        Export
                       </span>
                     )}
                     {ex.isAutomation && (
