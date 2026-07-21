@@ -237,8 +237,11 @@ export interface HouseholdContextType {
    *  learns the transaction's merchant descriptor onto the bill's
    *  `bankDescriptorAliases` so future nightly syncs auto-match it.
    *  `calendarItemId` accepts either a plain calendar item id or a synthetic
-   *  recurring-occurrence id (`templateId_instance_yyyy-MM-dd`). */
-  linkBankTransactionToBill: (transactionId: string, calendarItemId: string) => Promise<void>;
+   *  recurring-occurrence id (`templateId_instance_yyyy-MM-dd`).
+   *  Returns `true` only when the link actually committed — `false` for any
+   *  guard early-return (already paid, bad id, etc.); callers must not treat
+   *  a `false` result as success. */
+  linkBankTransactionToBill: (transactionId: string, calendarItemId: string) => Promise<boolean>;
 
   // Transaction Actions
   addTransaction: (tx: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>) => Promise<void>;

@@ -1345,25 +1345,28 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // Mirrors makeLinkBankTransactionToBill in calendarMutations.ts — marks the
   // bill paid at the txn's actual amount (NO account-balance write), files the
   // transaction as Budgeted in Calendar, and learns the descriptor alias.
-  const linkBankTransactionToBill = useCallback(async (transactionId: string, calendarItemId: string) => {
+  const linkBankTransactionToBill = useCallback(async (transactionId: string, calendarItemId: string): Promise<boolean> => {
     const tx = transactions.find(t => t.id === transactionId);
-    if (!tx || !tx.bankRef || tx.status !== 'verified') return;
+    if (!tx || !tx.bankRef || tx.status !== 'verified') return false;
     const descriptor = (tx.merchant || '').trim();
-    if (!descriptor) return;
+    if (!descriptor) return false;
 
     const paidAmount = roundMoney(tx.amount);
     const isRecurringInstance = isRecurringId(calendarItemId);
 
     if (isRecurringInstance) {
       const parsed = parseRecurringId(calendarItemId);
-      if (!parsed) return;
+      if (!parsed) return false;
       const { templateId, date: specificDate } = parsed;
       const template = calendarItems.find(i => i.id === templateId);
-      if (!template || template.type !== 'expense') return;
+      if (!template || template.type !== 'expense') return false;
       const alreadyPaid = calendarItems.find(
         i => i.parentRecurringId === templateId && i.date === specificDate && i.isPaid,
       );
-      if (alreadyPaid) return;
+      if (alreadyPaid) {
+        toast.error('That bill is already marked paid');
+        return false;
+      }
 
       const paidInstance: CalendarItem = {
         ...template,
@@ -1382,7 +1385,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       ]);
     } else {
       const item = calendarItems.find(i => i.id === calendarItemId);
-      if (!item || item.type !== 'expense' || item.isPaid) return;
+      if (!item || item.type !== 'expense') return false;
+      if (item.isPaid) {
+        toast.error('That bill is already marked paid');
+        return false;
+      }
       setCalendarItems(prev => prev.map(i => i.id === calendarItemId
         ? { ...i, isPaid: true, amount: paidAmount, bankDescriptorAliases: [...(i.bankDescriptorAliases ?? []), descriptor] }
         : i));
@@ -1392,6 +1399,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       ? { ...t, category: BUDGETED_IN_CALENDAR, needsCategory: undefined }
       : t));
     toast.success('Linked to bill — future syncs will match automatically');
+    return true;
   }, [transactions, calendarItems]);
 
   // Meal operations

@@ -9,7 +9,6 @@ import { getAutoSelectedHabitIds, suggestHabitsForTransaction } from '@/utils/ha
 import { suggestAccountIdForTransaction, suggestCategoryForTransaction } from '@/utils/actionQueueSmart';
 import { buildTransactionCategoryOptions } from '@/utils/categories';
 import { getBillLinkCandidates } from '@/utils/billLinkCandidates';
-import { getLocalDateString } from '@/utils/dateHelpers';
 import { roundMoney } from '@/utils/money';
 import { pickKeeper } from '@/utils/transactionMerge';
 import { useFinance, useGamification, useExpandedCalendarItems } from '@/contexts/FirebaseHouseholdContext';
@@ -90,8 +89,19 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
   const canLinkToBill = !!transaction.bankRef && transaction.status === 'verified' && transaction.needsCategory === true;
   const [showBillPicker, setShowBillPicker] = useState(false);
   const [isLinkingBill, setIsLinkingBill] = useState(false);
-  const billWindowStart = useMemo(() => subMonths(parseISO(getLocalDateString()), 1), []);
-  const billWindowEnd = useMemo(() => addMonths(parseISO(getLocalDateString()), 1), []);
+  // Anchored on the TRANSACTION's own date (not "today") so a bank-post from
+  // weeks ago still finds the bill it was actually due against. Rows that can
+  // never show the picker (canLinkToBill false) get a degenerate same-instant
+  // window instead of skipping the hook — hooks can't be conditional — which
+  // keeps the expansion trivially cheap (empty range) for the common case.
+  const billWindowStart = useMemo(
+    () => (canLinkToBill ? subMonths(parseISO(transaction.date), 1) : parseISO(transaction.date)),
+    [canLinkToBill, transaction.date]
+  );
+  const billWindowEnd = useMemo(
+    () => (canLinkToBill ? addMonths(parseISO(transaction.date), 1) : parseISO(transaction.date)),
+    [canLinkToBill, transaction.date]
+  );
   const expandedForBillLink = useExpandedCalendarItems(billWindowStart, billWindowEnd);
   const billCandidates = useMemo(
     () => (canLinkToBill && showBillPicker ? getBillLinkCandidates(expandedForBillLink) : []),
@@ -101,8 +111,8 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
   const handleLinkToBill = async (calendarItemId: string) => {
     setIsLinkingBill(true);
     try {
-      await linkBankTransactionToBill(transaction.id, calendarItemId);
-      onDone();
+      const linked = await linkBankTransactionToBill(transaction.id, calendarItemId);
+      if (linked) onDone();
     } catch (error) {
       console.error('Failed to link transaction to bill:', error);
       toast.error('Failed to link transaction to bill');
@@ -373,14 +383,15 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
       {canLinkToBill && (
         <div className="rounded-card border border-accent-200 bg-accent-50 px-3 py-2.5 space-y-2 dark:border-accent-700 dark:bg-accent-800/20">
           {!showBillPicker ? (
-            <button
-              type="button"
+            <Button
+              variant="link"
+              size="md"
               onClick={() => setShowBillPicker(true)}
-              className="w-full flex items-center gap-2 text-xs font-semibold text-accent-700 dark:text-accent-200"
+              className="w-full justify-start gap-2 text-xs font-semibold text-accent-700 no-underline hover:no-underline dark:text-accent-200"
+              leftIcon={<Link2 size={14} className="shrink-0" />}
             >
-              <Link2 size={14} className="shrink-0" />
               Is this a bill payment? Link it to a bill
-            </button>
+            </Button>
           ) : (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -388,13 +399,14 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
                   <Link2 size={14} className="shrink-0" />
                   Pick the bill this pays
                 </p>
-                <button
-                  type="button"
+                <Button
+                  variant="link"
+                  size="sm"
                   onClick={() => setShowBillPicker(false)}
-                  className="text-xs text-brand-500 dark:text-brand-400"
+                  className="text-xs text-brand-500 no-underline hover:no-underline dark:text-brand-400"
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
               {billCandidates.length === 0 ? (
                 <p className="text-xs text-brand-500 dark:text-brand-400">
@@ -403,12 +415,13 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
               ) : (
                 <div className="space-y-1.5 max-h-56 overflow-y-auto">
                   {billCandidates.map(bill => (
-                    <button
+                    <Button
                       key={bill.id}
-                      type="button"
+                      variant="outline"
+                      size="md"
                       disabled={isLinkingBill}
                       onClick={() => handleLinkToBill(bill.id)}
-                      className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-btn bg-white border border-brand-200 text-left hover:bg-brand-50 disabled:opacity-50 dark:bg-brand-700/50 dark:border-brand-600 dark:hover:bg-brand-700"
+                      className="w-full min-h-11 justify-between gap-2 bg-white text-left font-normal dark:bg-brand-700/50"
                     >
                       <span className="min-w-0">
                         <span className="block text-sm font-semibold text-brand-800 dark:text-brand-100 truncate">
@@ -421,7 +434,7 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
                       <span className="font-mono font-bold tabular-nums text-brand-900 dark:text-brand-50 shrink-0">
                         ${bill.amount.toFixed(2)}
                       </span>
-                    </button>
+                    </Button>
                   ))}
                 </div>
               )}

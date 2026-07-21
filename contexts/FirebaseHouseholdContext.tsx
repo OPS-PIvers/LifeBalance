@@ -1786,10 +1786,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }, [householdId, user, calendarItems]);
 
   const linkBankTransactionToBill = useCallback(async (transactionId: string, calendarItemId: string) => {
-    await makeLinkBankTransactionToBill({
-      db, householdId, transactions, calendarItems,
+    return makeLinkBankTransactionToBill({
+      db, householdId, user, actorName: currentUser?.displayName ?? user?.displayName ?? null,
+      transactions, calendarItems,
     }).linkBankTransactionToBill(transactionId, calendarItemId);
-  }, [householdId, transactions, calendarItems]);
+  }, [householdId, user, currentUser, transactions, calendarItems]);
 
   // --- ACTIONS: TRANSACTIONS ---
   // (contexts/household/mutations/transactionMutations.ts)
