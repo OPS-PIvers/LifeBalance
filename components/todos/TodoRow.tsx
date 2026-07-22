@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Trash2, AlertCircle, Clock, User, CheckSquare, Bell } from 'lucide-react';
+import { Check, Trash2, AlertCircle, Clock, User, CheckSquare, Bell, Star } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, startOfToday } from 'date-fns';
 import { ToDo, HouseholdMember } from '@/types/schema';
 import toast from 'react-hot-toast';
@@ -206,6 +206,15 @@ export const TodoRow = React.memo(function TodoRow({
   // aria-describedby target via metaId.
   const metaLine = (
     <span id={metaId} className="flex flex-wrap items-center gap-3 mt-1.5 text-xs">
+      {/* Small amber star marks an important (starred) task — the flat list
+          sorts these first, so the mark explains the ordering at a glance.
+          Unstarred rows render nothing here (zero space cost). */}
+      {item.isImportant === true && (
+        <span className="flex items-center text-warm-500" data-testid="todo-important-star">
+          <Star size={12} aria-hidden="true" className="fill-warm-500" />
+          <span className="sr-only">Important</span>
+        </span>
+      )}
       {/* Single primary status signal: urgency-colored text, not a bordered pill. */}
       {isOverdue ? (
         <span className="flex items-center gap-1 font-semibold text-money-neg dark:text-money-negDark">

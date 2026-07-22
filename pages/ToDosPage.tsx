@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Rows3, Grid2x2, List, Camera, Sparkles, Plus, Repeat } from 'lucide-react';
+import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Camera, Sparkles, Plus, Repeat } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { quadrantForTodo, QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhower';
@@ -33,29 +33,11 @@ import Textarea from '@/components/ui/Textarea';
 import BatchRescheduleModal from '@/components/modals/BatchRescheduleModal';
 import { TodoPhotoImportDrawer } from '@/components/modals/TodoPhotoImportDrawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { TodoSection } from '@/components/todos/TodoSection';
-import { EisenhowerMatrixView } from '@/components/todos/EisenhowerMatrixView';
+import { TodoRow } from '@/components/todos/TodoRow';
+import { type SectionColor } from '@/components/todos/todoDisplay';
 import { EisenhowerGridView } from '@/components/todos/EisenhowerGridView';
 import { TaskTemplateDrawer } from '@/components/todos/TaskTemplateDrawer';
-
-// localStorage key for the per-device arrangement choice.
-const ARRANGEMENT_KEY = 'lifebalance:todos-view';
-
-// Active-view arrangements: chronological list, stacked Eisenhower sections
-// ("prioritized list"), or the true 2×2 Eisenhower grid (landscape-only).
-type Arrangement = 'list' | 'matrix' | 'grid';
-
-const isArrangement = (value: string | null): value is Arrangement =>
-  value === 'list' || value === 'matrix' || value === 'grid';
-
-// View choices for the overflow menu — labeled radio-style items (the old
-// single cycle button previewed the NEXT view's icon, which read as mystery
-// meat). Order matches the old cycle: list → prioritized → grid.
-const ARRANGEMENT_OPTIONS: Array<{ value: Arrangement; icon: React.ReactNode; label: string }> = [
-  { value: 'list', icon: <List size={16} />, label: 'List view' },
-  { value: 'matrix', icon: <Rows3 size={16} />, label: 'Prioritized list' },
-  { value: 'grid', icon: <Grid2x2 size={16} />, label: '2×2 grid' },
-];
+import { sortFlatTodos } from '@/utils/todoSort';
 
 const ToDosPage: React.FC = () => {
   const {
@@ -86,26 +68,9 @@ const ToDosPage: React.FC = () => {
   // means "All". Filters every visible section/quadrant to one member's tasks.
   const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null);
 
-  // Active-view arrangement: chronological list, Eisenhower sections, or 2×2 grid.
-  // Persisted per-device — this is a personal lens on shared data.
-  const [arrangement, setArrangement] = useState<Arrangement>(() => {
-    try {
-      const stored = localStorage.getItem(ARRANGEMENT_KEY);
-      return isArrangement(stored) ? stored : 'list';
-    } catch {
-      return 'list'; // storage unavailable (private browsing) — default lens
-    }
-  });
-  const setArrangementPersisted = useCallback((next: Arrangement) => {
-    setArrangement(next);
-    try {
-      localStorage.setItem(ARRANGEMENT_KEY, next);
-    } catch {
-      // non-fatal: the toggle still works for this session
-    }
-  }, []);
-
-  // The 2×2 grid needs landscape; hook-driven so rotating re-renders instantly.
+  // Orientation drives the view (no persisted arrangement anymore): portrait
+  // shows the flat list; rotating to landscape auto-shows the immersive 2×2
+  // Eisenhower grid. Hook-driven so rotating re-renders instantly.
   const isLandscape = useIsLandscape();
 
   // Track current date to trigger re-categorization at midnight
@@ -219,45 +184,31 @@ const ToDosPage: React.FC = () => {
   // entry, so we deliberately do NOT disable the field between adds.
   const submittingQuickAddRef = useRef(false);
 
-  // Categorize To-Dos (Active)
-  const { immediate, upcoming, radar, allActiveCount, allActiveIds } = useMemo(() => {
+  // Flat active list (owner-locked spec): ONE list of every active to-do —
+  // starred first, then overdue → ascending due date → undated last (see
+  // utils/todoSort.ts). The old Immediate/Upcoming/Radar urgency windows
+  // survive only as each row's due-date COLOR (rose/amber/blue), computed here
+  // once per todo so TodoRow keeps its urgency-tinted meta line.
+  const { flatActive, rowColors, allActiveCount, allActiveIds } = useMemo(() => {
     const active = todos.filter(t => !t.isCompleted && (assigneeFilter === null || t.assignedTo === assigneeFilter));
-    const today = currentDate;
-    const endOfCurrentWeek = endOfWeek(today, { weekStartsOn: 1 }); // Monday start
+    const endOfCurrentWeek = addDays(endOfWeek(currentDate, { weekStartsOn: 1 }), 1); // Monday start
 
-    const immediate: ToDo[] = [];
-    const upcoming: ToDo[] = [];
-    const radar: ToDo[] = [];
-
-    // Create a map of parsed dates for efficient sorting
-    const dateMap = new Map<string, number>();
-
+    const rowColors = new Map<string, SectionColor>();
     active.forEach(todo => {
       const date = parseISO(todo.completeByDate);
-      dateMap.set(todo.id, date.getTime());
-
-      // Overdue items: strictly before the start of today
-      if (isBefore(date, today)) {
-        immediate.push(todo);
-      // Immediate items: due today or tomorrow
-      } else if (isToday(date) || isTomorrow(date)) {
-        immediate.push(todo);
-      } else if (isBefore(date, addDays(endOfCurrentWeek, 1))) { // Within this week
-        upcoming.push(todo);
-      } else {
-        radar.push(todo);
-      }
+      rowColors.set(
+        todo.id,
+        isBefore(date, currentDate) || isToday(date) || isTomorrow(date)
+          ? 'rose' // overdue / today / tomorrow (old "Immediate" window)
+          : isBefore(date, endOfCurrentWeek)
+            ? 'amber' // this week
+            : 'blue' // future
+      );
     });
 
-    // Sort by date using pre-parsed timestamps; within the same day, timed
-    // to-dos come first ordered by their due time (F-TODO-14).
-    const sortByCompleteByDate = (a: ToDo, b: ToDo) =>
-      ((dateMap.get(a.id) || 0) - (dateMap.get(b.id) || 0)) || compareDueTimes(a, b);
-
     return {
-      immediate: immediate.sort(sortByCompleteByDate),
-      upcoming: upcoming.sort(sortByCompleteByDate),
-      radar: radar.sort(sortByCompleteByDate),
+      flatActive: sortFlatTodos(active),
+      rowColors,
       allActiveCount: active.length,
       allActiveIds: active.map(t => t.id)
     };
@@ -532,18 +483,38 @@ const ToDosPage: React.FC = () => {
     });
   }, []);
 
-  // The 2×2 grid falls back to the stacked quadrant sections — same buckets,
-  // full rows — whenever it can't do its job: in selection mode its compact
-  // chips have no selection affordance, and in portrait the four quadrants
-  // can't fit side by side (a full-screen "rotate your phone" wall would hide
-  // every task in the phone's default orientation). The stored preference is
-  // untouched, so rotating to landscape restores the grid.
-  const effectiveArrangement: Arrangement =
-    arrangement === 'grid' && (isSelectionMode || !isLandscape) ? 'matrix' : arrangement;
-
-  const gridOverlayVisible =
-    viewMode === 'active' && effectiveArrangement === 'grid' && isLandscape;
   const drawerOpen = isAddModalOpen || !!actionTodo;
+
+  // Rotation-driven 2×2 Eisenhower grid (owner-locked spec): rotating to
+  // landscape auto-shows the immersive grid overlay; rotating back to portrait
+  // returns to the flat list. The grid never AUTO-shows over an active layer —
+  // selection mode (its chips have no selection affordance) or any open
+  // drawer/modal — but once shown it stays put while the edit/options drawer
+  // opens ABOVE it (the guard applies at show-time only; when the blocking
+  // layer closes while still landscape, the grid then appears).
+  //
+  // `gridDismissed`: the grid's on-screen ✕ (or Escape) simply hides the grid
+  // until the next rotation — the simplest correct exit. It resets whenever
+  // the device returns to portrait, so the next rotation to landscape shows
+  // the grid again. Both use the render-phase-setState edge pattern (see
+  // wasSelectionMode above) instead of an effect cascade.
+  const [gridActive, setGridActive] = useState(false);
+  const [gridDismissed, setGridDismissed] = useState(false);
+  const blockingLayerOpen =
+    isSelectionMode || drawerOpen || isPhotoImportOpen || isTemplateDrawerOpen ||
+    isBatchRescheduleOpen || showBatchDeleteConfirm;
+  if (!isLandscape) {
+    if (gridActive) setGridActive(false);
+    if (gridDismissed) setGridDismissed(false);
+  } else if (viewMode === 'active' && !gridActive && !gridDismissed && !blockingLayerOpen) {
+    setGridActive(true);
+  }
+  const exitGrid = useCallback(() => {
+    setGridActive(false);
+    setGridDismissed(true);
+  }, []);
+
+  const gridOverlayVisible = gridActive && viewMode === 'active';
 
   // Body-scroll lock for the immersive grid overlay, held at PAGE level as a
   // latch rather than inside GridOverlay. Why: if the user rotates to portrait
@@ -871,18 +842,31 @@ const ToDosPage: React.FC = () => {
   // (same pattern as the Shopping list). Export targets the current view;
   // Select-multiple (batch mode) is disabled in the Completed view, matching
   // the previous behaviour.
-  // View arrangement lives here as labeled radio items (replacing the old
-  // icon-cycling toggle). Choosing one persists per-device; the landscape-only
-  // grid behavior (portrait falls back to stacked quadrants) is unchanged.
+  // Person filtering lives here as a "Filter" radio group (it replaced the old
+  // row of assignee chips): "Everyone" plus one item per member. Session-only,
+  // transient state — same `assigneeFilter` as before, only the UI moved.
+  // Skipped for single-member households where filtering is moot.
   const menuItems: MenuItem[] = [
-    ...ARRANGEMENT_OPTIONS.map((option) => ({
-      key: `view-${option.value}`,
-      label: option.label,
-      icon: option.icon,
-      selected: arrangement === option.value,
-      group: 'View',
-      onSelect: () => setArrangementPersisted(option.value),
-    })),
+    ...(members.length > 1
+      ? [
+          {
+            key: 'filter-all',
+            label: 'Everyone',
+            icon: <User size={16} />,
+            selected: assigneeFilter === null,
+            group: 'Filter',
+            onSelect: () => setAssigneeFilter(null),
+          },
+          ...members.map((member) => ({
+            key: `filter-${member.uid}`,
+            label: member.displayName?.split(' ')[0] ?? 'User',
+            ariaLabel: `Filter to ${member.displayName ?? 'User'}`,
+            selected: assigneeFilter === member.uid,
+            group: 'Filter',
+            onSelect: () => setAssigneeFilter(member.uid),
+          })),
+        ]
+      : []),
     {
       key: 'export',
       label: 'Export CSV',
@@ -898,69 +882,6 @@ const ToDosPage: React.FC = () => {
       disabled: viewMode === 'completed',
     },
   ];
-
-  // Sticky quick-add card — reuses the shopping list's pattern: the add bar is
-  // its own top card that stays pinned while a long list scrolls beneath it, so
-  // adding a task is always one tap away. `position: sticky` dies inside an
-  // `overflow-hidden` ancestor, so the bar lives in a plain sticky wrapper
-  // (page-colored background masks rows scrolling past the card's rounded
-  // corners) with the `SurfaceList` card nested inside — never in a section's
-  // clipped surface. The sticky offset tucks it under ListsPage's sticky tab
-  // strip via --lists-sticky-top (0px fallback when the strip is hidden).
-  // Shared by the list and matrix arrangements; hidden in selection mode (adding
-  // has no context there) and in the grid arrangement (landscape-immersive).
-  // Assignee filter chips — 'All' plus one avatar-chip per member, using the
-  // same visual pattern as the assign-to fieldset in the add/edit drawer.
-  // Skipped entirely for single-member households where filtering is moot.
-  const assigneeFilterChips = !isSelectionMode && members.length > 1 ? (
-    <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Filter by assignee">
-      <button
-        type="button"
-        onClick={() => setAssigneeFilter(null)}
-        aria-pressed={assigneeFilter === null}
-        className={cn(
-          // The pill renders ~34px tall; the invisible before: extender
-          // (Button's established pattern) stretches the hit area past 44px
-          // without changing the visual size. Vertical only — adjacent pills
-          // in the row would otherwise overlap each other's zones.
-          "relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']",
-          'flex items-center px-3 py-1.5 rounded-full border text-sm font-medium whitespace-nowrap transition-colors duration-(--duration-fast) ease-(--ease-standard)',
-          'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
-          assigneeFilter === null
-            ? 'bg-accent-600 text-white border-accent-600 dark:bg-accent-600 dark:border-accent-600'
-            : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50 dark:bg-brand-700/50 dark:text-brand-200 dark:border-brand-600 dark:hover:bg-brand-700'
-        )}
-      >
-        All
-      </button>
-      {members.map(member => (
-        <button
-          key={member.uid}
-          type="button"
-          onClick={() => setAssigneeFilter(prev => (prev === member.uid ? null : member.uid))}
-          aria-label={`Filter to ${member.displayName || 'User'}`}
-          aria-pressed={assigneeFilter === member.uid}
-          className={cn(
-            "relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']",
-            'flex items-center gap-2 px-3 py-1.5 rounded-full border transition-colors duration-(--duration-fast) ease-(--ease-standard) whitespace-nowrap',
-            'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
-            assigneeFilter === member.uid
-              ? 'bg-accent-600 text-white border-accent-600 dark:bg-accent-600 dark:border-accent-600'
-              : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50 dark:bg-brand-700/50 dark:text-brand-200 dark:border-brand-600 dark:hover:bg-brand-700'
-          )}
-        >
-          {member.photoURL ? (
-            <img src={member.photoURL} alt={member.displayName ?? 'User'} className="w-5 h-5 rounded-full" />
-          ) : (
-            <div className="w-5 h-5 rounded-full bg-brand-200 dark:bg-brand-600 flex items-center justify-center text-xxs font-bold text-brand-600 dark:text-brand-200">
-              {member.displayName?.charAt(0) ?? 'U'}
-            </div>
-          )}
-          <span className="text-sm font-medium">{member.displayName?.split(' ')[0] ?? 'User'}</span>
-        </button>
-      ))}
-    </div>
-  ) : null;
 
   // "More ways to add" menu — Full details keeps the quick-add carry-over
   // behavior (openAddModal seeds the form with whatever is typed in the bar).
@@ -987,9 +908,18 @@ const ToDosPage: React.FC = () => {
     },
   ];
 
-  const stickyQuickAdd = !isSelectionMode && effectiveArrangement !== 'grid' ? (
+  // Add row — row ONE of the list card, matching the Shopping list exactly:
+  // `position: sticky` dies inside an `overflow-hidden` ancestor, so the
+  // surface is split into a sticky top card (add row, bottom hairline = the
+  // divider) and a flush list card below (border-t-0, rounded-t-none) that
+  // together read as one rounded section. The sticky offset tucks it under
+  // ListsPage's sticky tab strip via --lists-sticky-top (0px fallback when the
+  // strip is hidden); the wrapper's page-colored background masks rows
+  // scrolling past the card's rounded top corners. Hidden in selection mode
+  // (adding has no context there).
+  const stickyQuickAdd = !isSelectionMode ? (
     <div className="sticky top-[var(--lists-sticky-top,0px)] z-sticky bg-brand-50 dark:bg-brand-900">
-      <SurfaceList>
+      <div className="surface-section rounded-b-none overflow-hidden">
         <div className="flex items-center gap-2">
           <QuickAddBar
             attached
@@ -1003,20 +933,20 @@ const ToDosPage: React.FC = () => {
             submitLabel="Add task"
           />
 
-          {/* One labeled "More" affordance replaces the old pair of unlabeled
-              icon buttons — opens Full details / From template / Scan a list. */}
+          {/* Compact icon-only "More ways to add" affordance (44px target) —
+              opens Full details / From template / Scan a list. */}
           <div className="relative flex-none mr-2">
-            <button
-              type="button"
+            <Button
+              variant="ghost-brand"
+              size="icon"
               onClick={() => setAddMenuOpen((o) => !o)}
               aria-label="More ways to add"
               aria-haspopup="menu"
               aria-expanded={addMenuOpen}
-              className="min-h-11 flex items-center gap-1 px-3 py-2 rounded-btn text-sm font-medium text-brand-600 hover:text-brand-900 hover:bg-brand-100 dark:text-brand-300 dark:hover:text-brand-50 dark:hover:bg-brand-700/50 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+              className="rounded-full min-w-11 min-h-11"
             >
-              More
-              <ChevronDown size={16} aria-hidden="true" className={cn('transition-transform duration-(--duration-fast) ease-(--ease-standard)', addMenuOpen && 'rotate-180')} />
-            </button>
+              <MoreHorizontal className="w-5 h-5" />
+            </Button>
             {addMenuOpen && (
               <Menu
                 isOpen={addMenuOpen}
@@ -1029,7 +959,7 @@ const ToDosPage: React.FC = () => {
             )}
           </div>
         </div>
-      </SurfaceList>
+      </div>
     </div>
   ) : null;
 
@@ -1114,111 +1044,68 @@ const ToDosPage: React.FC = () => {
 
       {viewMode === 'active' ? (
           <>
-            {/* Sticky quick-add card — pinned at the top of the active view so
-                the add bar stays visible while a long list scrolls beneath it
-                (reused from the Shopping list). Precedes the sections in both
-                the list and matrix arrangements. */}
-            {assigneeFilterChips}
-            {stickyQuickAdd}
-            {effectiveArrangement === 'list' ? (
-            <>
-            {/* Immediate Section — Overdue, Today & Tomorrow. Quick-add now lives
-                in the sticky card above (not row one of this section), so an
-                empty Immediate section collapses away entirely. */}
-            <TodoSection
-                title="Immediate"
-                subtitle="Overdue, Today & Tomorrow"
-                items={immediate}
-                color="rose"
-                onComplete={completeToDo}
-                onUncomplete={handleUncomplete}
-                onEdit={openEditModal}
-                onDelete={deleteToDo}
-                onMore={setActionTodo}
-                memberMap={memberMap}
-                isSelectionMode={isSelectionMode}
-                selectedIds={selectedIds}
-                onToggleSelection={toggleSelection}
-            />
-
-            {/* Upcoming Section */}
-            <TodoSection
-                title="Upcoming"
-                subtitle="This Week"
-                items={upcoming}
-                color="amber"
-                maxVisible={5}
-                onComplete={completeToDo}
-                onUncomplete={handleUncomplete}
-                onEdit={openEditModal}
-                onDelete={deleteToDo}
-                onMore={setActionTodo}
-                memberMap={memberMap}
-                isSelectionMode={isSelectionMode}
-                selectedIds={selectedIds}
-                onToggleSelection={toggleSelection}
-            />
-
-            {/* On The Radar Section */}
-            <TodoSection
-                title="On the Radar"
-                subtitle="Future"
-                items={radar}
-                color="blue"
-                maxVisible={5}
-                onComplete={completeToDo}
-                onUncomplete={handleUncomplete}
-                onEdit={openEditModal}
-                onDelete={deleteToDo}
-                onMore={setActionTodo}
-                memberMap={memberMap}
-                isSelectionMode={isSelectionMode}
-                selectedIds={selectedIds}
-                onToggleSelection={toggleSelection}
-            />
-            </>
-            ) : effectiveArrangement === 'matrix' ? (
-            /* Eisenhower matrix arrangement — same tasks, partitioned by
-               urgency (derived from due date, same window as Immediate) ×
-               importance (the star). Stacked sections in actionability order;
-               the quick-add bar sits in the sticky card above. */
-            <>
-            <EisenhowerMatrixView
-              quadrants={quadrants}
-              memberMap={memberMap}
-              isSelectionMode={isSelectionMode}
-              selectedIds={selectedIds}
-              onComplete={completeToDo}
-              onUncomplete={handleUncomplete}
-              onEdit={openEditModal}
-              onDelete={deleteToDo}
-              onMore={setActionTodo}
-              onToggleSelection={toggleSelection}
-            />
-            </>
-            ) : (
-            /* True 2×2 Eisenhower grid — auto-immersive full-screen overlay.
-               Only reachable in landscape (effectiveArrangement falls back to
-               'matrix' in portrait). */
-            <EisenhowerGridView
-              quadrants={quadrants}
-              onComplete={completeToDo}
-              onEdit={openEditModal}
-              onToggleImportant={handleToggleImportant}
-              onExit={() => setArrangementPersisted('list')}
-              escapeDisabled={isAddModalOpen || !!actionTodo}
-            />
+            {/* One flat list card. Its first row is the sticky quick-add bar
+                (Shopping's split-card pattern — see stickyQuickAdd above); the
+                flush SurfaceList below completes the same rounded section.
+                Not rendered while the immersive grid overlay is up — the
+                overlay covers the whole viewport, and rendering the same rows
+                underneath would double every task's accessible control. */}
+            {!gridOverlayVisible && (
+            <div>
+              {stickyQuickAdd}
+              {flatActive.length > 0 && (
+                <SurfaceList
+                  className={cn(
+                    // SwipeActionRow wraps each Row, so the inner hairline of
+                    // the first row needs suppressing too (as TodoSection did).
+                    '[&>*:first-child_.hairline-divider]:border-t-0',
+                    // Flush against the sticky add card — unless selection mode
+                    // hid the add row, in which case the list stands alone.
+                    !isSelectionMode && 'rounded-t-none border-t-0'
+                  )}
+                >
+                  {flatActive.map(item => (
+                    <TodoRow
+                      key={item.id}
+                      item={item}
+                      color={rowColors.get(item.id) ?? 'blue'}
+                      assignee={memberMap.get(item.assignedTo)}
+                      isSelected={selectedIds.has(item.id)}
+                      isSelectionMode={isSelectionMode}
+                      onComplete={completeToDo}
+                      onUncomplete={handleUncomplete}
+                      onEdit={openEditModal}
+                      onDelete={deleteToDo}
+                      onMore={setActionTodo}
+                      onToggleSelection={toggleSelection}
+                    />
+                  ))}
+                </SurfaceList>
+              )}
+            </div>
             )}
 
-            {/* The sticky quick-add card is always visible in the list/matrix
-                arrangements, so "add a task above" points straight at it. Shown
-                only when every section is empty; the grid arrangement has no
-                quick-add card, so the note would mislead there. */}
-            {effectiveArrangement !== 'grid' && immediate.length === 0 && upcoming.length === 0 && radar.length === 0 && (
+            {/* The add row above is always visible in the flat list, so "add a
+                task above" points straight at it (hidden with the list while
+                the grid overlay is up). */}
+            {!gridOverlayVisible && flatActive.length === 0 && (
                  <p className="px-1 text-sm text-brand-400 dark:text-brand-450 flex items-center gap-1.5">
                      <ClipboardList size={14} aria-hidden="true" />
                      All caught up — add a task above to get started.
                  </p>
+            )}
+
+            {/* Immersive 2×2 Eisenhower grid — landscape-only overlay, shown
+                automatically on rotation (see the gridActive edge logic). */}
+            {gridOverlayVisible && (
+              <EisenhowerGridView
+                quadrants={quadrants}
+                onComplete={completeToDo}
+                onEdit={openEditModal}
+                onToggleImportant={handleToggleImportant}
+                onExit={exitGrid}
+                escapeDisabled={drawerOpen}
+              />
             )}
           </>
       ) : (
