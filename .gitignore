@@ -57,5 +57,5 @@ live-before-008.png
 ds-bundle/
 .design-sync/.cache/
 .design-sync/learnings/
-.design-sync/node_modules
+.design-sync/node_modules/
 .design-sync/compiled.css
