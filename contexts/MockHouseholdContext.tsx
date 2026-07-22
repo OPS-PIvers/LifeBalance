@@ -1005,9 +1005,22 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       return next;
     }));
     if (habitIdsToFire.length > 0) {
-      setHabits(prev => prev.map(h => habitIdsToFire.includes(h.id)
-        ? { ...h, count: h.count + 1, totalCount: h.totalCount + 1 }
-        : h));
+      setHabits(prev => prev.map(h => {
+        if (!habitIdsToFire.includes(h.id)) return h;
+        // PRD #1065 parity with makeUpdateTransactionCategory: an archived
+        // habit must never fire (skip entirely — no count/points change).
+        if (h.archivedAt) return h;
+        // Lazy-reset parity: a stale habit (counter belongs to a previous
+        // period) fires as if count were 0, so it ends at exactly the delta
+        // (here always +1) instead of incrementing the prior-period value.
+        // totalCount still increments normally regardless of staleness.
+        const stale = isHabitStale(h);
+        return {
+          ...h,
+          count: stale ? 1 : h.count + 1,
+          totalCount: h.totalCount + 1,
+        };
+      }));
     }
     toast.success('Mock: Verified & Categorized!');
   }, [transactions, accounts]);
