@@ -16,7 +16,7 @@ import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { processToggleHabit, processStaleDownToggle, isHabitStale, calculateResetPoints, streakForHabit } from '@/utils/habitLogic';
 import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
 import { selectAutoFreezeCandidates } from '@/utils/freezeBank';
-import { accountImpactOf, effectiveAccountImpact, resolveTargetAccount } from '@/utils/accountImpact';
+import { accountImpactOf, effectiveAccountImpact, isBankSyncTransaction, resolveTargetAccount } from '@/utils/accountImpact';
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
 import { MAX_COMMENT_LENGTH } from '@/contexts/household/mutations/commentMutations';
 import { roundMoney } from '@/utils/money';
@@ -991,8 +991,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
 
   // Test-Mode parity for the Merge action (plan 03 PR-3): applies the same
   // field-level winner set as the real context, deletes the dupe, and
-  // reverses the dupe's balance impact if it was verified — mirroring
-  // `deleteTransaction`'s balance-reversal rule above.
+  // reverses the dupe's balance impact if it was verified — mirroring the
+  // REAL `mergeTransactions`' balance-reversal rule (transactionMutations.ts).
+  // NOT a mirror of the mock `deleteTransaction` above, which never reverses
+  // a balance at all (see the parity note near its real-context counterpart
+  // further down this file).
   const mergeTransactions = useCallback(async (keeperId: string, dupeId: string) => {
     const keeperTx = transactions.find(t => t.id === keeperId);
     const dupeTx = transactions.find(t => t.id === dupeId);
@@ -1005,8 +1008,13 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
 
     const updates = buildMergeUpdates(keeperTx, dupeTx);
 
+    // Bank-sync exception (parity with the real mergeTransactions): a bank-sync
+    // dupe's balance came from the bank email's ending balance, so deleting it
+    // reverses nothing.
     const dupeTarget = resolveTargetAccount(dupeTx.accountId, accounts);
-    const dupeBalanceDelta = -effectiveAccountImpact(dupeTx, dupeTarget);
+    const dupeBalanceDelta = isBankSyncTransaction(dupeTx)
+      ? 0
+      : -effectiveAccountImpact(dupeTx, dupeTarget);
     if (dupeBalanceDelta !== 0 && dupeTarget) {
       setAccounts(prev => prev.map(a => a.id === dupeTarget.id
         ? { ...a, balance: roundMoney(a.balance + dupeBalanceDelta), lastUpdated: new Date().toISOString() }

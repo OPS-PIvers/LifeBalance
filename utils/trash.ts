@@ -14,7 +14,7 @@
  */
 
 import type { Account, Transaction } from '@/types/schema';
-import { accountImpactOf, resolveTargetAccount } from '@/utils/accountImpact';
+import { accountImpactOf, resolveTargetAccount, shouldSkipBankSyncDelta } from '@/utils/accountImpact';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { roundMoney } from '@/utils/money';
 
@@ -205,6 +205,31 @@ export function transactionRestoreImpact(
 
   const accountId =
     typeof data.accountId === 'string' && data.accountId.trim() ? data.accountId.trim() : undefined;
+
+  // BANK-SYNC EXCEPTION (symmetry with deleteTransaction's per-target rule):
+  // a bank-email-sync row's HOME account balance was set authoritatively from
+  // the bank email's ending balance, so deleting it from its home reversed
+  // nothing — restoring it must re-apply nothing either, or a delete→restore
+  // round-trip would inflate the balance. But a row RE-TAGGED to a different
+  // (manual) account before deletion DID have its delta reversed on delete,
+  // so restore must symmetrically re-apply it there — the skip is per-target,
+  // not per-row.
+  if (
+    shouldSkipBankSyncDelta(
+      {
+        // Trash payloads are untyped records; the predicate only compares
+        // against 'bank-sync', so any non-string source safely maps to 'manual'.
+        source: typeof data.source === 'string' ? (data.source as Transaction['source']) : 'manual',
+        bankRef: typeof data.bankRef === 'string' ? data.bankRef : undefined,
+        bankSyncAccountId:
+          typeof data.bankSyncAccountId === 'string' ? data.bankSyncAccountId : undefined,
+      },
+      accountId,
+      accountId
+    )
+  ) {
+    return { outcome: 'none' };
+  }
   if (accountId && !accounts.some((a) => a.id === accountId)) {
     return { outcome: 'missing-account' };
   }
