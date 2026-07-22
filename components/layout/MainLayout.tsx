@@ -5,8 +5,9 @@ import BottomNav from './BottomNav';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { LazyMount } from '@/components/ui/LazyMount';
 import { preloadOnIdle } from '@/utils/preloadOnIdle';
-import { useHouseholdCore, useFinance } from '@/contexts/FirebaseHouseholdContext';
+import { useHouseholdCore, useFinance, useShopping, useTodos } from '@/contexts/FirebaseHouseholdContext';
 import { isReviewSnoozed, needsReview, useActionQueue } from '@/hooks/useActionQueue';
+import { buildReviewQueueSnapshot, type ReviewQueueItem } from '@/utils/reviewQueue';
 import { useAppReopen } from '@/hooks/useAppReopen';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
@@ -35,8 +36,10 @@ interface MainLayoutProps {
 
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const { pathname } = useLocation();
-  const { members, activeMemberId, isLoading, householdId } = useHouseholdCore();
+  const { members, activeMemberId, isLoading, householdId, householdSettings } = useHouseholdCore();
   const { transactions, buckets } = useFinance();
+  const { shoppingAwaitingReview } = useShopping();
+  const { todosAwaitingReview } = useTodos();
   const kidModeEnabled = useKidModeEnabled(householdId);
   // Keeps the header and fixed overlays (toasts) anchored when the iOS
   // keyboard pans the window; the ref scopes it to in-page inputs (portal
@@ -66,11 +69,27 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)),
     [transactions, reviewToday],
   );
-  // Once-per-app-open: snapshot the pending transactions and auto-open the
+  // Combined, ordered review queue: transactions (gated on expense review mode)
+  // first, then held to-dos, then held shopping captures. The transaction gate
+  // is the critical accounting rule — in expense `auto` mode, pending
+  // transactions still count toward Safe-to-Spend and stay reviewable via the
+  // Action Queue, but must NOT be force-shown in this drawer; their inclusion
+  // is independent of whether the drawer opens for a held to-do / shopping item.
+  const reviewQueueItems = useMemo(
+    () =>
+      buildReviewQueueSnapshot({
+        pendingReviewTransactions,
+        todosAwaitingReview,
+        shoppingAwaitingReview,
+        householdSettings,
+      }),
+    [pendingReviewTransactions, todosAwaitingReview, shoppingAwaitingReview, householdSettings],
+  );
+  // Once-per-app-open: snapshot the combined review queue and auto-open the
   // cycling review drawer.
   const [hasAutoOpenedReview, setHasAutoOpenedReview] = useState(false);
   const [reviewDrawerOpen, setReviewDrawerOpen] = useState(false);
-  const [reviewSnapshot, setReviewSnapshot] = useState<typeof transactions>([]);
+  const [reviewSnapshot, setReviewSnapshot] = useState<ReviewQueueItem[]>([]);
 
   useEffect(() => preloadOnIdle(loadReviewPendingDrawer), []);
 
@@ -132,9 +151,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   // `activeKid` keeps the flag from latching on a render destined for the
   // Kid-Mode early return (which never mounts the review drawer) — otherwise it
   // could be consumed without ever showing the drawer, or pop on Kid-Mode exit.
-  if (!isLoading && !activeKid && !hasAutoOpenedReview && pendingReviewTransactions.length > 0) {
+  if (!isLoading && !activeKid && !hasAutoOpenedReview && reviewQueueItems.length > 0) {
     setHasAutoOpenedReview(true);
-    setReviewSnapshot(pendingReviewTransactions); // snapshot so the cycle is stable
+    setReviewSnapshot(reviewQueueItems); // snapshot so the cycle is stable
     setReviewDrawerOpen(true);
   }
 
@@ -204,12 +223,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         <BottomNav />
       </div>
 
-      {/* Pending-transaction review cycler — lazy so Drawer/framer-motion stay
-          out of the boot bundle. Opens once per app-open whenever any un-snoozed
-          pending_review transactions exist. */}
+      {/* Held-for-review cycler — lazy so Drawer/framer-motion stay out of the
+          boot bundle. Opens once per app-open whenever any un-snoozed
+          pending_review transactions (expense `review` mode) or held to-do /
+          shopping captures exist. */}
       <LazyMount when={reviewDrawerOpen}>
         <ReviewPendingDrawer
-          transactions={reviewSnapshot}
+          items={reviewSnapshot}
           isOpen={reviewDrawerOpen}
           onClose={() => setReviewDrawerOpen(false)}
         />
