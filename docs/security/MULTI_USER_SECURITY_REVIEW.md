@@ -121,6 +121,8 @@ Future data could be exposed or tampered with by default, including:
 
 The current catch-all is especially dangerous because the denylist model fails open for new collections.
 
+A related current surface exists in the explicit `activityLog` rule: members can create audit-log entries, but there is no schema validation for the entry body. Because updates and deletes are denied, a poisoned or oversized audit-log entry cannot be corrected by clients after creation. That is better than editable audit history, but it leaves unbounded append as the remaining audit-log abuse path.
+
 #### Recommended fix
 
 Invert the default:
@@ -129,6 +131,13 @@ Invert the default:
 - Add explicit rules for every legitimate household subcollection.
 - For any intentionally generic or future extension collection, create a narrow, validated rule with a clear schema and access model.
 - Add a rules test proving an unknown subcollection is denied for read and write.
+- Add explicit `activityLog` create validation:
+  - allowed keys only,
+  - required `actorUid === request.auth.uid`,
+  - bounded action/type strings,
+  - bounded optional detail text,
+  - server timestamp semantics for created-at fields,
+  - optional resource ids capped to safe lengths.
 - Add a policy note to `CLAUDE.md` requiring all new Firestore collections to ship with explicit rules and emulator tests.
 
 ---
