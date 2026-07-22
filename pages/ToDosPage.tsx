@@ -20,11 +20,9 @@ import { Button } from '@/components/ui/Button';
 import { QuickAddBar } from '@/components/ui/QuickAddBar';
 import EmptyState from '@/components/ui/EmptyState';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import SectionHeading from '@/components/ui/SectionHeading';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
-import CountBadge from '@/components/ui/CountBadge';
 import { cn } from '@/utils/cn';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
@@ -90,7 +88,6 @@ const ToDosPage: React.FC = () => {
   // "More ways to add" menu next to the quick-add bar — collapses the old pair
   // of unlabeled icon buttons (full form / templates) plus Scan a list into
   // one labeled affordance.
-  const [addMenuOpen, setAddMenuOpen] = useState(false);
 
   // Mobile Action Drawer State
   const [actionTodo, setActionTodo] = useState<ToDo | null>(null);
@@ -277,16 +274,6 @@ const ToDosPage: React.FC = () => {
 
   // Derive completed count from already-computed buckets to avoid a fourth pass over todos.
   const completedCount = completedToday.length + completedYesterday.length + completedWeek.length + completedOlder.length;
-
-  // Inline CountBadge variant (a tab count, not a notification). The badge
-  // itself is aria-hidden, so the count also rides along as sr-only text.
-  const completedBadge = (
-    <span className="flex items-center gap-1.5">
-        Completed
-        <CountBadge count={completedCount} max={99} variant="inline" />
-        <span className="sr-only">{completedCount} completed {completedCount === 1 ? 'task' : 'tasks'}</span>
-    </span>
-  );
 
   // Open the full add form (date + assignee). Carries over whatever is already
   // typed in the sticky quick-add field so switching to "details" never loses it.
@@ -838,15 +825,51 @@ const ToDosPage: React.FC = () => {
     }
   };
 
-  // Secondary header actions, collapsed into the top-right "…" overflow menu
-  // (same pattern as the Shopping list). Export targets the current view;
-  // Select-multiple (batch mode) is disabled in the Completed view, matching
-  // the previous behaviour.
-  // Person filtering lives here as a "Filter" radio group (it replaced the old
-  // row of assignee chips): "Everyone" plus one item per member. Session-only,
-  // transient state — same `assigneeFilter` as before, only the UI moved.
-  // Skipped for single-member households where filtering is moot.
+  // ONE overflow menu for the whole page, anchored on the quick-add row's
+  // kebab (the default view has no separate header row at all — owner call).
+  // Groups: "Add" (the extra add methods), "View" (Active/Completed radio —
+  // replaced the old segmented toggle), "Filter" (person radio — replaced the
+  // old chips row), then the ungrouped actions. Export targets the current
+  // view; Select-multiple is disabled in the Completed view, matching the
+  // previous behaviour. Filter is skipped for single-member households.
   const menuItems: MenuItem[] = [
+    {
+      key: 'details',
+      label: 'Full details',
+      icon: <SlidersHorizontal size={16} />,
+      ariaLabel: 'Add new task with full details',
+      group: 'Add',
+      onSelect: openAddModal,
+    },
+    {
+      key: 'template',
+      label: 'From template',
+      icon: <ClipboardList size={16} />,
+      ariaLabel: 'Add tasks from a template',
+      group: 'Add',
+      onSelect: () => setIsTemplateDrawerOpen(true),
+    },
+    {
+      key: 'scan',
+      label: 'Scan a list',
+      icon: <Camera size={16} />,
+      group: 'Add',
+      onSelect: () => setIsPhotoImportOpen(true),
+    },
+    {
+      key: 'view-active',
+      label: 'Active tasks',
+      selected: viewMode === 'active',
+      group: 'View',
+      onSelect: () => setViewMode('active'),
+    },
+    {
+      key: 'view-completed',
+      label: `Completed (${completedCount})`,
+      selected: viewMode === 'completed',
+      group: 'View',
+      onSelect: () => setViewMode('completed'),
+    },
     ...(members.length > 1
       ? [
           {
@@ -883,31 +906,6 @@ const ToDosPage: React.FC = () => {
     },
   ];
 
-  // "More ways to add" menu — Full details keeps the quick-add carry-over
-  // behavior (openAddModal seeds the form with whatever is typed in the bar).
-  const addMenuItems: MenuItem[] = [
-    {
-      key: 'details',
-      label: 'Full details',
-      icon: <SlidersHorizontal size={16} />,
-      ariaLabel: 'Add new task with full details',
-      onSelect: openAddModal,
-    },
-    {
-      key: 'template',
-      label: 'From template',
-      icon: <ClipboardList size={16} />,
-      ariaLabel: 'Add tasks from a template',
-      onSelect: () => setIsTemplateDrawerOpen(true),
-    },
-    {
-      key: 'scan',
-      label: 'Scan a list',
-      icon: <Camera size={16} />,
-      onSelect: () => setIsPhotoImportOpen(true),
-    },
-  ];
-
   // Add row — row ONE of the list card, matching the Shopping list exactly:
   // `position: sticky` dies inside an `overflow-hidden` ancestor, so the
   // surface is split into a sticky top card (add row, bottom hairline = the
@@ -918,7 +916,9 @@ const ToDosPage: React.FC = () => {
   // scrolling past the card's rounded top corners. Hidden in selection mode
   // (adding has no context there).
   const stickyQuickAdd = !isSelectionMode ? (
-    <div className="sticky top-[var(--lists-sticky-top,0px)] z-sticky bg-brand-50 dark:bg-brand-900">
+    // `relative` so the kebab's Menu can anchor to the sticky wrapper — it must
+    // render OUTSIDE the card below, whose overflow-hidden would clip it.
+    <div className="relative sticky top-[var(--lists-sticky-top,0px)] z-sticky bg-brand-50 dark:bg-brand-900">
       <div className="surface-section rounded-b-none overflow-hidden">
         <div className="flex items-center gap-2">
           <QuickAddBar
@@ -933,62 +933,55 @@ const ToDosPage: React.FC = () => {
             submitLabel="Add task"
           />
 
-          {/* Compact icon-only "More ways to add" affordance (44px target) —
-              opens Full details / From template / Scan a list. */}
-          <div className="relative flex-none mr-2">
+          {/* THE page kebab (44px target): the default view has no header row,
+              so this single menu carries the add methods, view + person
+              filters, and list actions. */}
+          <div className="flex-none mr-2">
             <Button
               variant="ghost-brand"
               size="icon"
-              onClick={() => setAddMenuOpen((o) => !o)}
-              aria-label="More ways to add"
+              onClick={() => setMenuOpen((o) => !o)}
+              aria-label="To-do list actions"
               aria-haspopup="menu"
-              aria-expanded={addMenuOpen}
+              aria-expanded={menuOpen}
               className="rounded-full min-w-11 min-h-11"
             >
               <MoreHorizontal className="w-5 h-5" />
             </Button>
-            {addMenuOpen && (
-              <Menu
-                isOpen={addMenuOpen}
-                onClose={() => setAddMenuOpen(false)}
-                ariaLabel="More ways to add"
-                position="top-full right-0 mt-2"
-                className="min-w-[208px]"
-                items={addMenuItems}
-              />
-            )}
           </div>
         </div>
       </div>
+      {/* Anchored to the sticky wrapper (see `relative` above), not the card —
+          the card's overflow-hidden would clip the popover. */}
+      {menuOpen && (
+        <Menu
+          isOpen={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          ariaLabel="To-do list actions"
+          position="top-full right-2 mt-1"
+          className="min-w-[208px]"
+          items={menuItems}
+        />
+      )}
     </div>
   ) : null;
 
   return (
     <div className={cn("px-4 max-w-2xl mx-auto space-y-4 min-h-screen", isSelectionMode ? "pb-40" : "pb-nav-safe")}>
 
-      {/* Slim header row: no "To-dos" title — the highlighted Plan tab already
-          names the surface, so the row is just the Active/Completed control on
-          the left and the overflow menu on the right (heading text appears
-          only in selection mode, where the mode needs announcing). An h2, not
-          h1 — the page-level h1 is ListsPage's sr-only "Plan". */}
-      <div className="pt-3 flex items-center justify-between gap-3">
-        <div className="min-w-0 flex items-center gap-3">
-          <h2 className="sr-only">To-dos</h2>
-          {isSelectionMode ? (
-            <span className="font-display text-xl font-semibold tracking-tight text-brand-900 dark:text-brand-50 whitespace-nowrap shrink-0">
-              Select tasks
-            </span>
-          ) : (
-            <Tabs value={viewMode} onValueChange={(val) => setViewMode(val as 'active' | 'completed')}>
-              {/* size="sm" (36px) was the app's only sub-44px touch target; default md keeps min-h-11. */}
-              <TabsList className="w-auto inline-flex">
-                <TabsTrigger value="active">Active</TabsTrigger>
-                <TabsTrigger value="completed">{completedBadge}</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          )}
-        </div>
-        {isSelectionMode ? (
+      {/* No header row in the default (active) view — the quick-add row's
+          kebab carries the whole menu, so content starts immediately under the
+          Plan tab strip. A slim row appears only when a mode needs announcing:
+          selection mode (Select all + Cancel) or the Completed view (label +
+          kebab, since the quick-add row — the kebab's usual home — is hidden
+          there). The sr-only h2 keeps the document outline; the page-level h1
+          is ListsPage's sr-only "Plan". */}
+      <h2 className="sr-only">To-dos</h2>
+      {isSelectionMode ? (
+        <div className="pt-3 flex items-center justify-between gap-3">
+          <span className="font-display text-xl font-semibold tracking-tight text-brand-900 dark:text-brand-50 whitespace-nowrap shrink-0">
+            Select tasks
+          </span>
           <div className="flex items-center gap-3 shrink-0">
             <Button
               variant="link"
@@ -1012,10 +1005,15 @@ const ToDosPage: React.FC = () => {
               <X size={20} />
             </Button>
           </div>
-        ) : (
-          /* Secondary actions (Export, Select multiple) collapse into one
-             top-right "…" overflow menu, matching the Shopping list header.
-             The primary add now lives in the sticky quick-add bar below. */
+        </div>
+      ) : viewMode === 'completed' ? (
+        <div className="pt-3 flex items-center justify-between gap-3">
+          <span className="font-display text-xl font-semibold tracking-tight text-brand-900 dark:text-brand-50 whitespace-nowrap shrink-0">
+            Completed
+            <span className="ml-2 font-sans text-sm font-normal text-brand-400 dark:text-brand-450 tabular-nums">
+              {completedCount}
+            </span>
+          </span>
           <div className="relative shrink-0">
             <Button
               variant="ghost-brand"
@@ -1039,8 +1037,8 @@ const ToDosPage: React.FC = () => {
               />
             )}
           </div>
-        )}
-      </div>
+        </div>
+      ) : null}
 
       {viewMode === 'active' ? (
           <>

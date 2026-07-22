@@ -200,11 +200,16 @@ describe('ToDosPage', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /Select multiple/i }));
   };
 
-  // Creation entry points beyond the quick-add bar live behind its "More"
-  // menu: Full details / From template / Scan a list.
+  // Creation entry points beyond the quick-add bar live in the single page
+  // kebab menu ("Add" group): Full details / From template / Scan a list.
   const openFullAddForm = () => {
-    fireEvent.click(screen.getByRole('button', { name: 'More ways to add' }));
+    openOverflowMenu();
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add new task with full details' }));
+  };
+  // The Active/Completed toggle is now a "View" radio group in the same menu.
+  const switchToCompleted = () => {
+    openOverflowMenu();
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /Completed \(\d+\)/ }));
   };
 
   beforeEach(() => {
@@ -348,9 +353,9 @@ describe('ToDosPage', () => {
       });
     });
 
-    it('lists Full details / From template / Scan a list in the quick-add "More" menu', () => {
+    it('lists Full details / From template / Scan a list in the page kebab menu', () => {
       setup();
-      fireEvent.click(screen.getByRole('button', { name: 'More ways to add' }));
+      openOverflowMenu();
       expect(screen.getByRole('menuitem', { name: 'Add new task with full details' })).toBeInTheDocument();
       expect(screen.getByRole('menuitem', { name: 'Add tasks from a template' })).toBeInTheDocument();
       expect(screen.getByRole('menuitem', { name: 'Scan a list' })).toBeInTheDocument();
@@ -417,9 +422,8 @@ describe('ToDosPage', () => {
       it('toggles to completed view and shows completed tasks', () => {
           setup();
 
-          // Switch to completed view
-          const completedToggle = screen.getByText('Completed');
-          fireEvent.click(completedToggle);
+          // Switch to completed view via the kebab's View radio group
+          switchToCompleted();
 
           // Check if Completed Task is visible
           expect(screen.getByText('Completed Task')).toBeInTheDocument();
@@ -430,8 +434,7 @@ describe('ToDosPage', () => {
 
       it('restores a completed task to active', async () => {
           setup();
-          // Switch to completed view
-          fireEvent.click(screen.getByText('Completed'));
+          switchToCompleted();
 
           // Click restore (uncomplete) button
           const restoreBtn = screen.getByTitle('Mark as incomplete');
@@ -446,8 +449,7 @@ describe('ToDosPage', () => {
 
       it('duplicates a completed task', async () => {
           setup();
-          // Switch to completed view
-          fireEvent.click(screen.getByText('Completed'));
+          switchToCompleted();
 
           // Hover/Click duplicate on completed item
           // Note: Duplicate button might be hidden by CSS group-hover in real DOM,
@@ -549,7 +551,7 @@ describe('ToDosPage', () => {
           },
         ];
         setup(completedTodos);
-        fireEvent.click(screen.getByText('Completed'));
+        switchToCompleted();
 
         // Recent bucket stays expanded; older buckets are collapsed.
         expect(screen.getByText('Done Today')).toBeInTheDocument();
@@ -673,8 +675,8 @@ describe('ToDosPage', () => {
       expect(
         quickAdd.compareDocumentPosition(firstRow) & Node.DOCUMENT_POSITION_FOLLOWING
       ).toBeTruthy();
-      // Its secondary affordance is the compact icon button.
-      expect(screen.getByRole('button', { name: 'More ways to add' })).toBeInTheDocument();
+      // Its secondary affordance is the single page kebab.
+      expect(screen.getByRole('button', { name: 'To-do list actions' })).toBeInTheDocument();
     });
 
     it('filters by person via the overflow menu radio group', () => {
