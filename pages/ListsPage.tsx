@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
-import PageHeader from '@/components/ui/PageHeader';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import ToDosPage from './ToDosPage';
 import MealPlanTab from '@/components/meals/MealPlanTab';
@@ -89,14 +88,14 @@ const ListsPage: React.FC = () => {
 
   return (
     <div ref={containerRef} className="flex flex-col h-full">
-      {/* Page masthead — named to match the bottom nav's "Plan" item, so the
-          surface has ONE identity (the nav label wins; "/lists" and the
-          storage key stay as-is — they're routing/persistence contracts, not
-          user-facing names). The header scrolls away; only the strip sticks. */}
-      <PageHeader title="Plan" className="pb-2" />
+      {/* No visible masthead: the bottom nav's active "Plan" item + the tab
+          strip already say where you are, and the title row cost a full band
+          of vertical space before any content. The h1 stays for the document
+          outline / screen readers only. */}
+      <h1 className="sr-only">Plan</h1>
       {/* Hide the tab strip when only one tab remains — there's nothing to switch. */}
       {showTabStrip && (
-        <div ref={tabStripRef} className="flex-none px-4 pt-1 pb-2 sticky top-0 z-30 bg-brand-50 dark:bg-brand-900 border-b border-brand-200 dark:border-brand-800">
+        <div ref={tabStripRef} className="flex-none px-4 pt-3 pb-2 sticky top-0 z-30 bg-brand-50 dark:bg-brand-900 border-b border-brand-200 dark:border-brand-800">
           <Tabs value={activeTab} onValueChange={(value) => setSelectedTab(value as PlanTab)}>
             <TabsList>
               {enabledTabs.map((tab) => (

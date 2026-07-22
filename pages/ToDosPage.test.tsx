@@ -200,18 +200,16 @@ describe('ToDosPage', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /Select multiple/i }));
   };
 
-  // View arrangement now lives in the overflow menu as labeled radio items
-  // (the old single cycle button was removed).
-  const chooseArrangement = (label: string) => {
-    openOverflowMenu();
-    fireEvent.click(screen.getByRole('menuitemradio', { name: label }));
-  };
-
-  // Creation entry points beyond the quick-add bar live behind its "More"
-  // menu: Full details / From template / Scan a list.
+  // Creation entry points beyond the quick-add bar live in the single page
+  // kebab menu ("Add" group): Full details / From template / Scan a list.
   const openFullAddForm = () => {
-    fireEvent.click(screen.getByRole('button', { name: 'More ways to add' }));
+    openOverflowMenu();
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add new task with full details' }));
+  };
+  // The Active/Completed toggle is now a "View" radio group in the same menu.
+  const switchToCompleted = () => {
+    openOverflowMenu();
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /Completed \(\d+\)/ }));
   };
 
   beforeEach(() => {
@@ -355,9 +353,9 @@ describe('ToDosPage', () => {
       });
     });
 
-    it('lists Full details / From template / Scan a list in the quick-add "More" menu', () => {
+    it('lists Full details / From template / Scan a list in the page kebab menu', () => {
       setup();
-      fireEvent.click(screen.getByRole('button', { name: 'More ways to add' }));
+      openOverflowMenu();
       expect(screen.getByRole('menuitem', { name: 'Add new task with full details' })).toBeInTheDocument();
       expect(screen.getByRole('menuitem', { name: 'Add tasks from a template' })).toBeInTheDocument();
       expect(screen.getByRole('menuitem', { name: 'Scan a list' })).toBeInTheDocument();
@@ -424,9 +422,8 @@ describe('ToDosPage', () => {
       it('toggles to completed view and shows completed tasks', () => {
           setup();
 
-          // Switch to completed view
-          const completedToggle = screen.getByText('Completed');
-          fireEvent.click(completedToggle);
+          // Switch to completed view via the kebab's View radio group
+          switchToCompleted();
 
           // Check if Completed Task is visible
           expect(screen.getByText('Completed Task')).toBeInTheDocument();
@@ -437,8 +434,7 @@ describe('ToDosPage', () => {
 
       it('restores a completed task to active', async () => {
           setup();
-          // Switch to completed view
-          fireEvent.click(screen.getByText('Completed'));
+          switchToCompleted();
 
           // Click restore (uncomplete) button
           const restoreBtn = screen.getByTitle('Mark as incomplete');
@@ -453,8 +449,7 @@ describe('ToDosPage', () => {
 
       it('duplicates a completed task', async () => {
           setup();
-          // Switch to completed view
-          fireEvent.click(screen.getByText('Completed'));
+          switchToCompleted();
 
           // Hover/Click duplicate on completed item
           // Note: Duplicate button might be hidden by CSS group-hover in real DOM,
@@ -517,52 +512,7 @@ describe('ToDosPage', () => {
     });
   });
 
-  describe('List caps and collapsed history', () => {
-    // Radar bucket = due after the end of the current week; +10 days or more is
-    // always beyond it (endOfWeek is at most today+6), so these are deterministic.
-    const makeRadarTodos = (count: number) =>
-      Array.from({ length: count }, (_, i) => ({
-        id: `radar-${i + 1}`,
-        text: `Radar Task ${i + 1}`,
-        completeByDate: format(addDays(startOfToday(), 10 + i), 'yyyy-MM-dd'),
-        assignedTo: 'user1',
-        isCompleted: false,
-        createdBy: 'user1',
-        createdAt: new Date().toISOString(),
-      }));
-
-    it('caps On the Radar at 5 with a show-more row that reveals the rest', () => {
-      setup(makeRadarTodos(7));
-
-      // First five rows visible, the rest hidden behind the show-more row.
-      expect(screen.getByText('Radar Task 1')).toBeInTheDocument();
-      expect(screen.getByText('Radar Task 5')).toBeInTheDocument();
-      expect(screen.queryByText('Radar Task 6')).not.toBeInTheDocument();
-      expect(screen.queryByText('Radar Task 7')).not.toBeInTheDocument();
-
-      const showMore = screen.getByRole('button', { name: '+ 2 more tasks' });
-      expect(showMore).toHaveAttribute('aria-expanded', 'false');
-      fireEvent.click(showMore);
-
-      expect(screen.getByText('Radar Task 6')).toBeInTheDocument();
-      expect(screen.getByText('Radar Task 7')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Show fewer' })).toBeInTheDocument();
-    });
-
-    it('renders the full list in selection mode despite the cap', () => {
-      setup(makeRadarTodos(7));
-      enterSelectionMode();
-
-      // Every item must be selectable — the cap is bypassed and the row is gone.
-      expect(screen.getByText('Radar Task 6')).toBeInTheDocument();
-      expect(screen.getByText('Radar Task 7')).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /more tasks/ })).not.toBeInTheDocument();
-
-      // Select all operates on all 7 items.
-      fireEvent.click(screen.getByText('Select all'));
-      expect(screen.getByText('7 selected')).toBeInTheDocument();
-    });
-
+  describe('Completed history buckets', () => {
     it('collapses This week and Older by default while Completed today stays expanded', () => {
       vi.useFakeTimers();
       try {
@@ -601,7 +551,7 @@ describe('ToDosPage', () => {
           },
         ];
         setup(completedTodos);
-        fireEvent.click(screen.getByText('Completed'));
+        switchToCompleted();
 
         // Recent bucket stays expanded; older buckets are collapsed.
         expect(screen.getByText('Done Today')).toBeInTheDocument();
@@ -624,8 +574,7 @@ describe('ToDosPage', () => {
     });
   });
 
-  describe('Arrangement views (list / matrix / grid)', () => {
-    const ARRANGEMENT_KEY = 'lifebalance:todos-view';
+  describe('Flat list, filter, and landscape grid', () => {
     const originalMatchMedia = window.matchMedia;
 
     // jsdom has no matchMedia; useIsLandscape guards its absence (→ portrait).
@@ -667,12 +616,7 @@ describe('ToDosPage', () => {
       });
     };
 
-    beforeEach(() => {
-      localStorage.clear();
-    });
-
     afterEach(() => {
-      localStorage.clear();
       Object.defineProperty(window, 'matchMedia', {
         writable: true,
         configurable: true,
@@ -690,64 +634,103 @@ describe('ToDosPage', () => {
       { id: 'q4', text: 'Later Task', completeByDate: farOut, assignedTo: 'user2', isCompleted: false, createdBy: 'user1', createdAt: new Date().toISOString() },
     ];
 
-    it('switches list → matrix → grid → list via the overflow menu and persists each step to localStorage', () => {
-      setOrientation(true);
-      // Use the quadrant fixture so every stacked section has an item — the
-      // quick-add bar now lives in a page-level sticky card, so an empty
-      // quadrant section (like "Do First") collapses away instead of being
-      // kept alive by the add row.
-      setup(quadrantTodos);
-
-      // Default: list arrangement. The overflow menu marks it as the current view.
-      openOverflowMenu();
-      expect(screen.getByRole('menuitemradio', { name: 'List view' })).toHaveAttribute('aria-checked', 'true');
-      expect(screen.getByRole('menuitemradio', { name: 'Prioritized list' })).toHaveAttribute('aria-checked', 'false');
-      fireEvent.click(screen.getByRole('menuitemradio', { name: 'Prioritized list' }));
-      expect(localStorage.getItem(ARRANGEMENT_KEY)).toBe('matrix');
-      expect(screen.getByText('Do First')).toBeInTheDocument(); // stacked quadrant sections
-      // The urgent/important axis is sr-only INSIDE the heading (no visible
-      // caps subtitle) so heading navigation announces title + axis together.
-      // (\s? because dom-accessibility-api drops the span-boundary space that
-      // browsers/screen readers preserve from the DOM text.)
-      expect(
-        screen.getByRole('heading', { name: /Do First\s?\(Urgent & Important\)/ })
-      ).toBeInTheDocument();
-
-      chooseArrangement('2×2 grid');
-      expect(localStorage.getItem(ARRANGEMENT_KEY)).toBe('grid');
-      expect(screen.getByTestId('grid-cell-do')).toBeInTheDocument();
-
-      chooseArrangement('List view');
-      expect(localStorage.getItem(ARRANGEMENT_KEY)).toBe('list');
-      expect(screen.getByText('Immediate')).toBeInTheDocument();
-    });
-
-    it('falls back to the list arrangement when the stored value is invalid', () => {
-      localStorage.setItem(ARRANGEMENT_KEY, 'bogus');
-      setup();
-      openOverflowMenu();
-      expect(screen.getByRole('menuitemradio', { name: 'List view' })).toHaveAttribute('aria-checked', 'true');
-      expect(screen.getByText('Immediate')).toBeInTheDocument();
-    });
-
-    it('falls back to stacked quadrants (with a rotate hint) in grid arrangement while portrait', () => {
-      localStorage.setItem(ARRANGEMENT_KEY, 'grid');
+    it('renders the flat list in spec order: starred first, then overdue → ascending date', () => {
       setOrientation(false);
       setup(quadrantTodos);
 
-      // Tasks stay visible via the matrix sections instead of hiding behind a
-      // full-screen rotate wall; an inline hint explains how to get the grid.
-      expect(screen.getByText(/Rotate your phone for the 2×2 grid/)).toBeInTheDocument();
-      expect(screen.getByText('Do First')).toBeInTheDocument();
-      expect(screen.getByText('Do First Task')).toBeInTheDocument();
+      // Starred group (q1 today, q2 far out) before unstarred (q3 overdue, q4 far out).
+      const rowLabels = screen
+        .getAllByRole('button', { name: /^Edit task:/ })
+        .map(b => b.getAttribute('aria-label'));
+      expect(rowLabels).toEqual([
+        'Edit task: Do First Task',
+        'Edit task: Schedule Task',
+        'Edit task: Delegate Task',
+        'Edit task: Later Task',
+      ]);
+      // No section headings anymore — one flat list.
+      expect(screen.queryByText('Immediate')).not.toBeInTheDocument();
+      expect(screen.queryByText('Do First')).not.toBeInTheDocument();
+    });
+
+    it('shows the amber star (with sr-only "Important") only on starred rows', () => {
+      setOrientation(false);
+      setup(quadrantTodos);
+
+      // Exactly the two starred fixtures carry the star.
+      expect(screen.getAllByTestId('todo-important-star')).toHaveLength(2);
+      const starredRow = screen.getByRole('button', { name: 'Edit task: Do First Task' });
+      expect(within(starredRow).getByText('Important')).toBeInTheDocument();
+      const plainRow = screen.getByRole('button', { name: 'Edit task: Delegate Task' });
+      expect(within(plainRow).queryByTestId('todo-important-star')).not.toBeInTheDocument();
+    });
+
+    it('renders the quick-add bar as the first row of the list card', () => {
+      setOrientation(false);
+      setup(quadrantTodos);
+
+      const quickAdd = screen.getByLabelText('Quick add task');
+      const firstRow = screen.getAllByRole('button', { name: /^Edit task:/ })[0]!;
+      // The add row precedes every task row in document order.
+      expect(
+        quickAdd.compareDocumentPosition(firstRow) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+      // Its secondary affordance is the single page kebab.
+      expect(screen.getByRole('button', { name: 'To-do list actions' })).toBeInTheDocument();
+    });
+
+    it('filters by person via the overflow menu radio group', () => {
+      setOrientation(false);
+      setup();
+
+      openOverflowMenu();
+      const menu = screen.getByRole('menu', { name: 'To-do list actions' });
+      const group = within(menu).getByRole('group', { name: 'Filter' });
+      expect(within(group).getByRole('menuitemradio', { name: 'Everyone' })).toHaveAttribute('aria-checked', 'true');
+      expect(within(group).getByRole('menuitemradio', { name: 'Filter to Alice Smith' })).toHaveAttribute('aria-checked', 'false');
+
+      // Choose Bob — only his tasks stay visible.
+      fireEvent.click(within(group).getByRole('menuitemradio', { name: 'Filter to Bob Jones' }));
+      expect(screen.getByText('Today Task')).toBeInTheDocument(); // user2
+      expect(screen.queryByText('Overdue Task')).not.toBeInTheDocument(); // user1
+
+      // Reopening the menu marks Bob as the active choice; Everyone restores all.
+      openOverflowMenu();
+      expect(screen.getByRole('menuitemradio', { name: 'Filter to Bob Jones' })).toHaveAttribute('aria-checked', 'true');
+      fireEvent.click(screen.getByRole('menuitemradio', { name: 'Everyone' }));
+      expect(screen.getByText('Overdue Task')).toBeInTheDocument();
+    });
+
+    it('shows the grid automatically when mounted in landscape, and rotating back returns the list', () => {
+      setOrientation(true);
+      setup(quadrantTodos);
+
+      expect(screen.getByTestId('grid-overlay')).toBeInTheDocument();
+
+      rotateTo(false);
       expect(screen.queryByTestId('grid-overlay')).not.toBeInTheDocument();
-      expect(screen.queryByTestId('grid-cell-do')).not.toBeInTheDocument();
-      // The stored preference is untouched — landscape will restore the grid.
-      expect(localStorage.getItem(ARRANGEMENT_KEY)).toBe('grid');
+      expect(screen.getByText('Do First Task')).toBeInTheDocument(); // flat list
+    });
+
+    it('shows the grid when rotating to landscape after mounting in portrait', () => {
+      setOrientation(false);
+      setup(quadrantTodos);
+
+      expect(screen.queryByTestId('grid-overlay')).not.toBeInTheDocument();
+      rotateTo(true);
+      expect(screen.getByTestId('grid-overlay')).toBeInTheDocument();
+    });
+
+    it('does not auto-show the grid in landscape while selection mode is active', () => {
+      setOrientation(false);
+      setup(quadrantTodos);
+      enterSelectionMode();
+
+      rotateTo(true);
+      expect(screen.queryByTestId('grid-overlay')).not.toBeInTheDocument();
     });
 
     it('renders all four quadrant cells with correct task placement in landscape', () => {
-      localStorage.setItem(ARRANGEMENT_KEY, 'grid');
       setOrientation(true);
       setup(quadrantTodos);
 
@@ -758,7 +741,6 @@ describe('ToDosPage', () => {
     });
 
     it('keeps an empty cell rendered with a placeholder so the 2×2 shape stays stable', () => {
-      localStorage.setItem(ARRANGEMENT_KEY, 'grid');
       setOrientation(true);
       // Only one quadrant populated — the other three stay as empty cells.
       setup([quadrantTodos[0]!]);
@@ -768,7 +750,6 @@ describe('ToDosPage', () => {
     });
 
     it('renders the grid as an immersive full-screen overlay in landscape', () => {
-      localStorage.setItem(ARRANGEMENT_KEY, 'grid');
       setOrientation(true);
       setup(quadrantTodos);
 
@@ -781,20 +762,25 @@ describe('ToDosPage', () => {
       expect(within(overlay).getByRole('button', { name: 'Exit matrix view' })).toBeInTheDocument();
     });
 
-    it('exits to the list arrangement (persisted) when ✕ is clicked', () => {
-      localStorage.setItem(ARRANGEMENT_KEY, 'grid');
+    it('✕ hides the grid until the next rotation cycle', () => {
       setOrientation(true);
       setup(quadrantTodos);
 
       fireEvent.click(screen.getByRole('button', { name: 'Exit matrix view' }));
 
+      // Still landscape: the grid stays dismissed and the flat list shows.
       expect(screen.queryByTestId('grid-overlay')).not.toBeInTheDocument();
-      expect(localStorage.getItem(ARRANGEMENT_KEY)).toBe('list');
-      expect(screen.getByText('Immediate')).toBeInTheDocument();
+      expect(screen.getByText('Do First Task')).toBeInTheDocument();
+
+      // Rotating to portrait resets the dismissal; the next landscape rotation
+      // shows the grid again.
+      rotateTo(false);
+      expect(screen.queryByTestId('grid-overlay')).not.toBeInTheDocument();
+      rotateTo(true);
+      expect(screen.getByTestId('grid-overlay')).toBeInTheDocument();
     });
 
     it('exits the overlay on Escape', () => {
-      localStorage.setItem(ARRANGEMENT_KEY, 'grid');
       setOrientation(true);
       setup(quadrantTodos);
 
@@ -802,11 +788,9 @@ describe('ToDosPage', () => {
       fireEvent.keyDown(window, { key: 'Escape' });
 
       expect(screen.queryByTestId('grid-overlay')).not.toBeInTheDocument();
-      expect(localStorage.getItem(ARRANGEMENT_KEY)).toBe('list');
     });
 
     it('does NOT exit on Escape while the edit drawer is open above the grid', () => {
-      localStorage.setItem(ARRANGEMENT_KEY, 'grid');
       setOrientation(true);
       setup(quadrantTodos);
 
@@ -816,11 +800,9 @@ describe('ToDosPage', () => {
       // Escape here belongs to the drawer — the grid overlay must stay put.
       fireEvent.keyDown(window, { key: 'Escape' });
       expect(screen.getByTestId('grid-overlay')).toBeInTheDocument();
-      expect(localStorage.getItem(ARRANGEMENT_KEY)).toBe('grid');
     });
 
     it('locks body scroll while the overlay is shown and restores it on exit', () => {
-      localStorage.setItem(ARRANGEMENT_KEY, 'grid');
       setOrientation(true);
       setup(quadrantTodos);
 
@@ -830,7 +812,6 @@ describe('ToDosPage', () => {
     });
 
     it('keeps body scroll locked when rotating to portrait while the edit drawer is open, and restores it when the drawer closes', () => {
-      localStorage.setItem(ARRANGEMENT_KEY, 'grid');
       setOrientation(true);
       setup(quadrantTodos);
 
@@ -839,12 +820,10 @@ describe('ToDosPage', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Edit task: Do First Task' }));
       expect(screen.getByText('Edit task')).toBeInTheDocument();
 
-      // Rotate to portrait: the overlay unmounts (stacked-quadrant fallback
-      // shows) but the drawer is still open — the page-level latch must HOLD
-      // the lock.
+      // Rotate to portrait: the overlay unmounts (flat list shows) but the
+      // drawer is still open — the page-level latch must HOLD the lock.
       rotateTo(false);
       expect(screen.queryByTestId('grid-overlay')).not.toBeInTheDocument();
-      expect(screen.getByText(/Rotate your phone for the 2×2 grid/)).toBeInTheDocument();
       expect(document.body.style.overflow).toBe('hidden');
 
       // Close the drawer: now everything is closed — lock fully released.
@@ -852,33 +831,36 @@ describe('ToDosPage', () => {
       expect(document.body.style.overflow).not.toBe('hidden');
     });
 
-    it('releases body scroll even when the latch engaged while a drawer already held the lock', () => {
-      // The inverse race: the overlay appears while a Drawer has already set
-      // body overflow to 'hidden'. If the latch captured-and-restored that
-      // value, release would re-pin 'hidden' forever; it must clear instead.
-      localStorage.setItem(ARRANGEMENT_KEY, 'list');
-      setOrientation(true);
+    it('does not auto-show the grid while a drawer is open, shows it after the drawer closes, and releases the lock cleanly', () => {
+      // A drawer already holds the body-scroll lock when the device rotates:
+      // the grid must NOT auto-show over it. Once the drawer closes (still
+      // landscape) the grid appears — and the latch, having engaged after the
+      // drawer's lock, must still fully release on exit (clear, not
+      // capture-and-restore 'hidden').
+      setOrientation(false);
       setup(quadrantTodos);
 
-      // Open the action drawer from the list view (context-menu on the row
-      // body — the visible kebab was removed) — Drawer locks body scroll.
+      // Open the action drawer from the flat list (context-menu on the row
+      // body) — Drawer locks body scroll.
       fireEvent.contextMenu(screen.getByRole('button', { name: 'Edit task: Do First Task' }));
       expect(document.body.style.overflow).toBe('hidden');
 
-      // Cycle list → matrix → grid while the drawer is open: the overlay
-      // mounts and the latch engages on top of the drawer's existing lock.
-      chooseArrangement('Prioritized list');
-      chooseArrangement('2×2 grid');
-      expect(screen.getByTestId('grid-overlay')).toBeInTheDocument();
+      // Rotate to landscape with the drawer open: no grid.
+      rotateTo(true);
+      expect(screen.queryByTestId('grid-overlay')).not.toBeInTheDocument();
 
-      // Close the drawer, then exit the grid — nothing holds a lock anymore.
+      // Close the drawer: the blocking layer is gone, so the grid appears and
+      // the latch takes over the lock.
       fireEvent.click(screen.getByLabelText('Close drawer'));
+      expect(screen.getByTestId('grid-overlay')).toBeInTheDocument();
+      expect(document.body.style.overflow).toBe('hidden');
+
+      // Exit the grid — nothing holds a lock anymore.
       fireEvent.click(screen.getByRole('button', { name: 'Exit matrix view' }));
       expect(document.body.style.overflow).not.toBe('hidden');
     });
 
     it('focuses the exit button when the overlay mounts', () => {
-      localStorage.setItem(ARRANGEMENT_KEY, 'grid');
       setOrientation(true);
       setup(quadrantTodos);
 
@@ -886,7 +868,6 @@ describe('ToDosPage', () => {
     });
 
     it('opens the edit drawer when a grid chip body is tapped', () => {
-      localStorage.setItem(ARRANGEMENT_KEY, 'grid');
       setOrientation(true);
       setup(quadrantTodos);
 
