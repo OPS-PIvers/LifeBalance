@@ -185,6 +185,24 @@ describe('useActionQueue', () => {
     expect(result.current.actionQueue.map((i) => i.id)).toEqual(['open']);
   });
 
+  // Layer 4 regression: a held-for-review todo (captureReview) must never
+  // surface as an individual Action Queue card — it's only reachable via the
+  // aggregate ReviewQueueCard until approved. In production `useTodos().todos`
+  // is already filtered upstream (the context splits visible vs.
+  // awaiting-review), but this asserts the guarantee holds at this hook too,
+  // even if a caller (a test, Test Mode, or a future context change) ever
+  // hands it an unfiltered list.
+  it('excludes needsReview todos even if the upstream todos slice were to leak one', () => {
+    setMocks({
+      todos: [
+        makeTodo({ id: 'held', completeByDate: '2026-06-16', needsReview: true }),
+        makeTodo({ id: 'visible', completeByDate: '2026-06-16' }),
+      ],
+    });
+    const { result } = renderHook(() => useActionQueue());
+    expect(result.current.actionQueue.map((i) => i.id)).toEqual(['visible']);
+  });
+
   it('includes pending_review transactions but excludes verified ones', () => {
     setMocks({
       transactions: [

@@ -71,7 +71,8 @@ import { MODULE_PRESETS, type ModulePreset } from '@/utils/modulePresets';
 import type { ModuleKey } from '@/types/schema';
 import { requestNotificationPermission, setupForegroundNotificationListener } from '@/services/notificationService';
 import { generateJsonBackup, generateCsvExport, buildExportPayload } from '@/utils/exportUtils';
-import { HouseholdMember, NotificationPreferences, Transaction, Meal } from '@/types/schema';
+import { getCaptureReviewMode } from '@/utils/captureReview';
+import { HouseholdMember, NotificationPreferences, Transaction, Meal, CaptureType, CaptureReviewMode } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { doc, updateDoc } from 'firebase/firestore';
 import { computeAnyNotificationsEnabled } from '@/utils/notificationFlags';
@@ -119,6 +120,20 @@ const FONT_SCALE_OPTIONS: SegmentedControlOption<FontScale>[] = [
   { value: '100', label: <span className="text-xs">A</span>, ariaLabel: 'Default text size' },
   { value: '115', label: <span className="text-sm">A</span>, ariaLabel: 'Larger text size' },
   { value: '130', label: <span className="text-base">A</span>, ariaLabel: 'Largest text size' },
+];
+
+// Quick-Add capture review mode — governs whether an iOS-Shortcut/API capture
+// of each type lands immediately or is held in a review drawer. See
+// utils/captureReview.ts for the per-type defaults this control overrides.
+const CAPTURE_REVIEW_MODE_OPTIONS: SegmentedControlOption<CaptureReviewMode>[] = [
+  { value: 'auto', label: 'Automatic' },
+  { value: 'review', label: 'Manual review' },
+];
+
+const CAPTURE_REVIEW_ROWS: { type: CaptureType; label: string }[] = [
+  { type: 'expense', label: 'Transactions' },
+  { type: 'shopping', label: 'Shopping list' },
+  { type: 'todo', label: 'To-dos' },
 ];
 
 /**
@@ -173,6 +188,7 @@ const Settings: React.FC = () => {
     setHouseholdCurrency,
     setModuleVisibility,
     updateModuleVisibility,
+    setCaptureReviewMode,
     setKidModePin,
     apiKeys,
     activityLog,
@@ -330,6 +346,15 @@ const Settings: React.FC = () => {
     } catch (error) {
       console.error('[Settings] Failed to update module visibility:', error);
       toast.error('Failed to update modules');
+    }
+  };
+
+  const handleCaptureReviewModeChange = async (type: CaptureType, mode: CaptureReviewMode) => {
+    try {
+      await setCaptureReviewMode(type, mode);
+    } catch (error) {
+      console.error('[Settings] Failed to update capture review mode:', error);
+      toast.error('Failed to update review settings');
     }
   };
 
@@ -1193,6 +1218,34 @@ const Settings: React.FC = () => {
             isAdmin={currentUser?.role === 'admin'}
             onKeyGenerated={setSessionApiKey}
           />
+        </div>
+
+        {/* Capture review mode — per-type auto vs. held-for-review routing for
+            iOS-Shortcut/API captures. See utils/captureReview.ts. */}
+        <div className="space-y-2">
+          <SectionHeading
+            as="h3"
+            className="px-1"
+            description="Automatic: new captures skip the review drawer. Manual review: hold them until you open the app and confirm."
+          >
+            Review captured items
+          </SectionHeading>
+          <SurfaceList>
+            {CAPTURE_REVIEW_ROWS.map(({ type, label }) => (
+              <Row key={type} className="flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+                <p className="flex-1 min-w-0 font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">
+                  {label}
+                </p>
+                <SegmentedControl
+                  name={`${label} review mode`}
+                  size="sm"
+                  options={CAPTURE_REVIEW_MODE_OPTIONS}
+                  value={getCaptureReviewMode(householdSettings, type)}
+                  onChange={(mode) => handleCaptureReviewModeChange(type, mode)}
+                />
+              </Row>
+            ))}
+          </SurfaceList>
         </div>
 
         {/* Setup Guide */}

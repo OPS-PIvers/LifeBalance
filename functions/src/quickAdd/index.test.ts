@@ -1454,6 +1454,255 @@ describe("quickAddShoppingItem", () => {
     expect(res.statusCode).toBe(403);
     expect(res.body).toMatchObject({ error: { code: "FORBIDDEN" } });
   });
+
+  // -------------------------------------------------------------------------
+  // Capture-review (F-CAPTURE-01 layer 2): captureReview.shopping stamps
+  // needsReview on NEWLY created rows only — never on a quantity-bump merge.
+  // -------------------------------------------------------------------------
+
+  /** A shoppingList doc fixture carrying a `ref.update` for the merge path. */
+  function shoppingDoc(
+    id: string,
+    data: Record<string, unknown>,
+    update: ReturnType<typeof vi.fn> = vi.fn(() => Promise.resolve())
+  ): unknown {
+    return { id, data: () => data, ref: { update } };
+  }
+
+  describe("single-item mode", () => {
+    it("household in 'review' mode stamps needsReview: true on a new item", async () => {
+      configureHouseholdCaptureReview({ shopping: "review" });
+      const add = vi.fn(() => Promise.resolve({ id: "s-review" }));
+      collectionOverrides[`households/${HOUSEHOLD_ID}/shoppingList`] = {
+        add,
+        whereGetDocs: [],
+      };
+      configureCollections();
+
+      const res = makeRes();
+      await asHandler(quickAddShoppingItem)(
+        makeReq({ body: { item: "Milk" } }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      const written = add.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(written).toMatchObject({ needsReview: true });
+    });
+
+    it("household in 'auto' mode (default/absent) omits needsReview on a new item", async () => {
+      configureHouseholdCaptureReview(undefined);
+      const add = vi.fn(() => Promise.resolve({ id: "s-auto" }));
+      collectionOverrides[`households/${HOUSEHOLD_ID}/shoppingList`] = {
+        add,
+        whereGetDocs: [],
+      };
+      configureCollections();
+
+      const res = makeRes();
+      await asHandler(quickAddShoppingItem)(
+        makeReq({ body: { item: "Eggs" } }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      const written = add.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect("needsReview" in written).toBe(false);
+    });
+
+    it("a quantity-bump onto an existing HELD item does not set needsReview, even in 'review' mode", async () => {
+      configureHouseholdCaptureReview({ shopping: "review" });
+      const update = vi.fn(() => Promise.resolve());
+      collectionOverrides[`households/${HOUSEHOLD_ID}/shoppingList`] = {
+        whereGetDocs: [shoppingDoc("existing1", { name: "milk", quantity: 1, needsReview: true }, update)],
+      };
+      configureCollections();
+
+      const res = makeRes();
+      await asHandler(quickAddShoppingItem)(
+        makeReq({ body: { item: "Milk", quantity: 2 } }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toMatchObject({ data: { updated: true, quantity: 3 } });
+      expect(update).toHaveBeenCalledTimes(1);
+      const updatePayload = update.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect("needsReview" in updatePayload).toBe(false);
+    });
+
+    // -----------------------------------------------------------------------
+    // FIX 3: dedup must never cross the held/visible boundary — a capture may
+    // only merge into an existing row with the SAME held-state.
+    // -----------------------------------------------------------------------
+
+    it("an AUTO capture does not merge into a HELD row with the same name — creates a new visible row instead", async () => {
+      configureHouseholdCaptureReview(undefined); // shopping defaults to 'auto'
+      const heldUpdate = vi.fn(() => Promise.resolve());
+      const add = vi.fn(() => Promise.resolve({ id: "s-new" }));
+      collectionOverrides[`households/${HOUSEHOLD_ID}/shoppingList`] = {
+        add,
+        whereGetDocs: [shoppingDoc("held1", { name: "milk", quantity: 1, needsReview: true }, heldUpdate)],
+      };
+      configureCollections();
+
+      const res = makeRes();
+      await asHandler(quickAddShoppingItem)(
+        makeReq({ body: { item: "Milk", quantity: 2 } }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      // The held row is left completely untouched...
+      expect(heldUpdate).not.toHaveBeenCalled();
+      // ...and a new, visible row is created instead of merging.
+      expect(add).toHaveBeenCalledTimes(1);
+      const written = add.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(written).toMatchObject({ name: "Milk", quantity: 2 });
+      expect("needsReview" in written).toBe(false);
+    });
+
+    it("a REVIEW-mode capture merges into a HELD row with the same name (same held-state)", async () => {
+      configureHouseholdCaptureReview({ shopping: "review" });
+      const heldUpdate = vi.fn(() => Promise.resolve());
+      const add = vi.fn(() => Promise.resolve({ id: "s-new" }));
+      collectionOverrides[`households/${HOUSEHOLD_ID}/shoppingList`] = {
+        add,
+        whereGetDocs: [shoppingDoc("held1", { name: "milk", quantity: 1, needsReview: true }, heldUpdate)],
+      };
+      configureCollections();
+
+      const res = makeRes();
+      await asHandler(quickAddShoppingItem)(
+        makeReq({ body: { item: "Milk", quantity: 2 } }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(add).not.toHaveBeenCalled();
+      expect(heldUpdate).toHaveBeenCalledTimes(1);
+      expect(res.body).toMatchObject({ data: { updated: true, quantity: 3 } });
+      const updatePayload = heldUpdate.mock.calls[0]?.[0] as Record<string, unknown>;
+      // The bump must not disturb the held row's needsReview flag.
+      expect("needsReview" in updatePayload).toBe(false);
+    });
+  });
+
+  describe("batch mode", () => {
+    it("household in 'review' mode stamps needsReview: true on newly created rows", async () => {
+      configureHouseholdCaptureReview({ shopping: "review" });
+      collectionOverrides[`households/${HOUSEHOLD_ID}/shoppingList`] = {
+        whereGetDocs: [],
+      };
+      configureCollections();
+      configureBatch();
+
+      const res = makeRes();
+      await asHandler(quickAddShoppingItem)(
+        makeReq({ body: { items: [{ item: "Milk" }, { item: "Eggs" }] } }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(lastBatch.set).toHaveBeenCalledTimes(2);
+      for (const call of lastBatch.set.mock.calls) {
+        expect((call[1] as Record<string, unknown>)).toMatchObject({ needsReview: true });
+      }
+    });
+
+    it("household in 'auto' mode (default/absent) omits needsReview on newly created rows", async () => {
+      configureHouseholdCaptureReview(undefined);
+      collectionOverrides[`households/${HOUSEHOLD_ID}/shoppingList`] = {
+        whereGetDocs: [],
+      };
+      configureCollections();
+      configureBatch();
+
+      const res = makeRes();
+      await asHandler(quickAddShoppingItem)(
+        makeReq({ body: { items: [{ item: "Milk" }] } }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(lastBatch.set).toHaveBeenCalledTimes(1);
+      const written = lastBatch.set.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect("needsReview" in written).toBe(false);
+    });
+
+    it("a quantity-bump onto an existing HELD item does not set needsReview, even in 'review' mode", async () => {
+      configureHouseholdCaptureReview({ shopping: "review" });
+      const update = vi.fn(() => Promise.resolve());
+      collectionOverrides[`households/${HOUSEHOLD_ID}/shoppingList`] = {
+        whereGetDocs: [shoppingDoc("existing1", { name: "milk", quantity: 1, needsReview: true }, update)],
+      };
+      configureCollections();
+      configureBatch();
+
+      const res = makeRes();
+      await asHandler(quickAddShoppingItem)(
+        makeReq({ body: { items: [{ item: "Milk", quantity: 2 }] } }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(lastBatch.set).not.toHaveBeenCalled();
+      expect(lastBatch.update).toHaveBeenCalledTimes(1);
+      const updatePayload = lastBatch.update.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect("needsReview" in updatePayload).toBe(false);
+    });
+
+    // -----------------------------------------------------------------------
+    // FIX 3: dedup must never cross the held/visible boundary (batch mode).
+    // -----------------------------------------------------------------------
+
+    it("an AUTO batch capture does not merge into a HELD row with the same name — creates a new visible row instead", async () => {
+      configureHouseholdCaptureReview(undefined); // shopping defaults to 'auto'
+      const heldUpdate = vi.fn(() => Promise.resolve());
+      collectionOverrides[`households/${HOUSEHOLD_ID}/shoppingList`] = {
+        whereGetDocs: [shoppingDoc("held1", { name: "milk", quantity: 1, needsReview: true }, heldUpdate)],
+      };
+      configureCollections();
+      configureBatch();
+
+      const res = makeRes();
+      await asHandler(quickAddShoppingItem)(
+        makeReq({ body: { items: [{ item: "Milk", quantity: 2 }] } }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(heldUpdate).not.toHaveBeenCalled();
+      expect(lastBatch.update).not.toHaveBeenCalled();
+      expect(lastBatch.set).toHaveBeenCalledTimes(1);
+      const written = lastBatch.set.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(written).toMatchObject({ name: "Milk", quantity: 2 });
+      expect("needsReview" in written).toBe(false);
+    });
+
+    it("a REVIEW-mode batch capture merges into a HELD row with the same name (same held-state)", async () => {
+      configureHouseholdCaptureReview({ shopping: "review" });
+      const heldUpdate = vi.fn(() => Promise.resolve());
+      collectionOverrides[`households/${HOUSEHOLD_ID}/shoppingList`] = {
+        whereGetDocs: [shoppingDoc("held1", { name: "milk", quantity: 1, needsReview: true }, heldUpdate)],
+      };
+      configureCollections();
+      configureBatch();
+
+      const res = makeRes();
+      await asHandler(quickAddShoppingItem)(
+        makeReq({ body: { items: [{ item: "Milk", quantity: 2 }] } }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(lastBatch.set).not.toHaveBeenCalled();
+      expect(lastBatch.update).toHaveBeenCalledTimes(1);
+      const updatePayload = lastBatch.update.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(updatePayload).toMatchObject({ quantity: 3 });
+      expect("needsReview" in updatePayload).toBe(false);
+    });
+  });
 });
 
 // ===========================================================================
@@ -1541,6 +1790,23 @@ describe("quickAddNaturalLanguage", () => {
 /** A raw Firestore-style doc: { id, data() }. */
 function docOf(id: string, data: Record<string, unknown>): unknown {
   return { id, data: () => data };
+}
+
+/**
+ * Configure the household doc read shared by quickAddShoppingItem and
+ * quickAddTodo's capture-review lookup (`db.doc('households/{id}').get()`).
+ * Pass `undefined` for a household with no captureReview override (exercises
+ * the per-type default from captureReview.ts).
+ */
+function configureHouseholdCaptureReview(
+  captureReview: Record<string, string> | undefined
+): void {
+  docOverrides[`households/${HOUSEHOLD_ID}`] = {
+    get: vi.fn(() =>
+      Promise.resolve({ data: () => (captureReview ? { captureReview } : {}) })
+    ),
+  };
+  configureDocs();
 }
 
 describe("quickAddBillPay", () => {
@@ -2015,5 +2281,46 @@ describe("quickAddTodo", () => {
     );
     expect(res.statusCode).toBe(429);
     expect(res.headers["Retry-After"]).toBeDefined();
+  });
+
+  // -------------------------------------------------------------------------
+  // Capture-review (F-CAPTURE-01 layer 2): captureReview.todo stamps
+  // needsReview: true on the created to-do when the household is in 'review'.
+  // -------------------------------------------------------------------------
+
+  it("household in 'review' mode stamps needsReview: true on the created to-do", async () => {
+    configureValidKey({ habits: false, expenses: false, shoppingList: false, todos: true });
+    configureHouseholdCaptureReview({ todo: "review" });
+    const add = vi.fn(() => Promise.resolve({ id: "todo-review" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/todos`] = { add };
+    configureCollections();
+
+    const res = makeRes();
+    await asHandler(quickAddTodo)(
+      makeReq({ body: { text: "Take out trash", today: TODO_TODAY } }),
+      res
+    );
+
+    expect(res.statusCode).toBe(200);
+    const written = add.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(written).toMatchObject({ needsReview: true });
+  });
+
+  it("household in 'auto' mode (default/absent) omits needsReview on the created to-do", async () => {
+    configureValidKey({ habits: false, expenses: false, shoppingList: false, todos: true });
+    configureHouseholdCaptureReview(undefined);
+    const add = vi.fn(() => Promise.resolve({ id: "todo-auto" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/todos`] = { add };
+    configureCollections();
+
+    const res = makeRes();
+    await asHandler(quickAddTodo)(
+      makeReq({ body: { text: "Take out trash", today: TODO_TODAY } }),
+      res
+    );
+
+    expect(res.statusCode).toBe(200);
+    const written = add.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect("needsReview" in written).toBe(false);
   });
 });

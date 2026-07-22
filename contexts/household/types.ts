@@ -25,6 +25,8 @@ import {
   TaskTemplate,
   HouseholdApiKey,
   ModuleKey,
+  CaptureType,
+  CaptureReviewMode,
   WeeklyRecap,
   MonthlyMoneyRecap,
   NetWorthSnapshot,
@@ -86,9 +88,15 @@ export interface HouseholdContextType {
   insightsHistory: Insight[];
   isGeneratingInsight: boolean;
   meals: Meal[];
+  /** Visible shopping items — excludes held-for-review captures (`needsReview === true`). */
   shoppingList: ShoppingItem[];
+  /** Held-for-review shopping captures (`needsReview === true`), hidden from `shoppingList`. */
+  shoppingAwaitingReview: ShoppingItem[];
   mealPlan: MealPlanItem[];
+  /** Visible to-dos — excludes held-for-review captures (`needsReview === true`). */
   todos: ToDo[];
+  /** Held-for-review todo captures (`needsReview === true`), hidden from `todos`. */
+  todosAwaitingReview: ToDo[];
   /** F-TODO-03 — task-bundle templates ("Quick Task Lists"). */
   taskTemplates: TaskTemplate[];
   groceryCatalog: GroceryCatalogItem[];
@@ -410,6 +418,9 @@ export interface HouseholdContextType {
   /** F-PLAT-07 — apply a full module-visibility preset in one write (merge-writes every key at once). */
   updateModuleVisibility: (patch: Partial<Record<ModuleKey, boolean>>) => Promise<void>;
 
+  /** Set a household's capture-review routing for one quick-add input type (merge-writes captureReview.<type>). See utils/captureReview.ts. */
+  setCaptureReviewMode: (type: CaptureType, mode: CaptureReviewMode) => Promise<void>;
+
   /** Set (raw PIN, salted+hashed before write) or clear (null) the Kid Mode exit PIN. */
   setKidModePin: (pin: string | null) => Promise<void>;
 
@@ -432,6 +443,15 @@ export interface HouseholdContextType {
   deleteShoppingItem: (id: string) => Promise<void>;
   toggleShoppingItemPurchased: (id: string) => Promise<void>;
   clearPurchasedShoppingItems: () => Promise<void>;
+  /**
+   * Approves a held-for-review shopping capture (`shoppingAwaitingReview`):
+   * persists any edited `overrides` AND clears `needsReview` in one write.
+   * Reject is `deleteShoppingItem` — there is no separate reject mutation.
+   */
+  approveShoppingItem: (
+    id: string,
+    overrides?: Partial<Pick<ShoppingItem, 'name' | 'quantity' | 'category' | 'store'>>
+  ) => Promise<void>;
 
   // Shopping Settings Actions
   addStore: (store: Omit<Store, 'id'>) => Promise<void>;
@@ -467,6 +487,15 @@ export interface HouseholdContextType {
   updateToDo: (id: string, updates: Partial<ToDo>) => Promise<void>;
   deleteToDo: (id: string) => Promise<void>;
   completeToDo: (id: string) => Promise<void>;
+  /**
+   * Approves a held-for-review to-do capture (`todosAwaitingReview`):
+   * persists any edited `overrides` AND clears `needsReview` in one write.
+   * Reject is `deleteToDo` — there is no separate reject mutation.
+   */
+  approveTodo: (
+    id: string,
+    overrides?: Partial<Pick<ToDo, 'text' | 'completeByDate' | 'assignedTo' | 'isImportant'>>
+  ) => Promise<void>;
   /** Counterpart of completeToDo: restores a completed to-do to active and
    *  atomically reverses any managed-kid points the completion credited. */
   uncompleteToDo: (id: string) => Promise<void>;
@@ -528,9 +557,9 @@ export type MealPlanContextValue = Pick<HouseholdContextType,
 >;
 
 export type ShoppingContextValue = Pick<HouseholdContextType,
-  | 'shoppingList' | 'groceryCatalog' | 'loadFullGroceryCatalog' | 'stores' | 'groceryCategories' | 'quickStockLists'
+  | 'shoppingList' | 'shoppingAwaitingReview' | 'groceryCatalog' | 'loadFullGroceryCatalog' | 'stores' | 'groceryCategories' | 'quickStockLists'
   | 'addShoppingItem' | 'addShoppingItems' | 'updateShoppingItem' | 'reorderShoppingItems'
-  | 'deleteShoppingItem' | 'toggleShoppingItemPurchased' | 'clearPurchasedShoppingItems'
+  | 'deleteShoppingItem' | 'approveShoppingItem' | 'toggleShoppingItemPurchased' | 'clearPurchasedShoppingItems'
   | 'addStore' | 'updateStore' | 'deleteStore' | 'reorderStores' | 'updateGroceryCategories'
   | 'addQuickStockList' | 'updateQuickStockList' | 'updateQuickStockLists' | 'deleteQuickStockList'
   | 'addGroceryCatalogItem' | 'updateGroceryCatalogItem' | 'deleteGroceryCatalogItem'
@@ -540,7 +569,7 @@ export type ShoppingContextValue = Pick<HouseholdContextType,
 export type MealsContextValue = MealPlanContextValue & ShoppingContextValue;
 
 export type TodosContextValue = Pick<HouseholdContextType,
-  | 'todos' | 'addToDo' | 'updateToDo' | 'deleteToDo' | 'completeToDo' | 'uncompleteToDo'
+  | 'todos' | 'todosAwaitingReview' | 'addToDo' | 'updateToDo' | 'deleteToDo' | 'approveTodo' | 'completeToDo' | 'uncompleteToDo'
   | 'isLoadingOlderTodos' | 'hasMoreCompletedTodos' | 'loadOlderCompletedTodos'
   | 'taskTemplates' | 'addTaskTemplate' | 'updateTaskTemplate' | 'deleteTaskTemplate' | 'applyTaskTemplate'
 >;
@@ -552,7 +581,7 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'pendingItemsCount' | 'apiKeys'
   | 'householdId' | 'householdSettings' | 'household'
   | 'refreshInsight' | 'rateInsight' | 'addMember' | 'updateMember' | 'removeMember' | 'deleteHousehold'
-  | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'updateModuleVisibility' | 'setKidModePin' | 'setDietaryProfile' | 'setMealCookedHabitId'
+  | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'updateModuleVisibility' | 'setCaptureReviewMode' | 'setKidModePin' | 'setDietaryProfile' | 'setMealCookedHabitId'
   | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
   | 'activeMemberId' | 'actAs' | 'exitToParent'
   | 'recaps' | 'moneyRecaps' | 'activityLog'

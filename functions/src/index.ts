@@ -212,8 +212,11 @@ export const sendactionqueuereminders = onSchedule(
             prefs.timezone || "UTC",
             "yyyy-MM-dd"
           );
+          // Held-for-review captures (captureReview) must not trigger a
+          // reminder until approved — they haven't landed on the real to-do
+          // list yet. See types/schema.ts's `ToDo.needsReview`.
           const todayTodos = todosSnapshot.docs.filter(
-            (doc) => doc.data().completeByDate === todayString
+            (doc) => doc.data().completeByDate === todayString && doc.data().needsReview !== true
           );
 
           if (todayTodos.length > 0) {

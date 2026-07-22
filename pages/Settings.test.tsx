@@ -26,6 +26,8 @@ const mockCurrentUser = {
   role: 'admin' as const,
 };
 
+const mockSetCaptureReviewMode = vi.fn();
+
 // A second admin so `canLeaveHousehold` is true (the last remaining admin is
 // blocked from the self-serve Leave Household path).
 const mockPartner = {
@@ -48,6 +50,7 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
     setHouseholdCurrency: vi.fn(),
     setModuleVisibility: vi.fn(),
     updateModuleVisibility: vi.fn(),
+    setCaptureReviewMode: mockSetCaptureReviewMode,
     setKidModePin: vi.fn(),
     apiKeys: [],
     activityLog: [],
@@ -296,5 +299,32 @@ describe('Settings index + sub-screens', () => {
     renderSettings('/settings?section=not-a-real-section');
 
     expect(screen.getByRole('navigation', { name: /settings sections/i })).toBeInTheDocument();
+  });
+
+  it('renders the capture review toggles with the correct effective defaults on a fresh household', () => {
+    renderSettings('/settings?section=shortcuts');
+
+    // Transactions (expense) defaults to 'review'; shopping and to-dos default to 'auto'.
+    const transactionsGroup = screen.getByRole('radiogroup', { name: 'Transactions review mode' });
+    expect(within(transactionsGroup).getByRole('radio', { name: 'Manual review' })).toHaveAttribute('aria-checked', 'true');
+    expect(within(transactionsGroup).getByRole('radio', { name: 'Automatic' })).toHaveAttribute('aria-checked', 'false');
+
+    const shoppingGroup = screen.getByRole('radiogroup', { name: 'Shopping list review mode' });
+    expect(within(shoppingGroup).getByRole('radio', { name: 'Automatic' })).toHaveAttribute('aria-checked', 'true');
+
+    const todosGroup = screen.getByRole('radiogroup', { name: 'To-dos review mode' });
+    expect(within(todosGroup).getByRole('radio', { name: 'Automatic' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('calls setCaptureReviewMode with the type and new mode when a toggle is clicked', () => {
+    renderSettings('/settings?section=shortcuts');
+
+    const shoppingGroup = screen.getByRole('radiogroup', { name: 'Shopping list review mode' });
+    fireEvent.click(within(shoppingGroup).getByRole('radio', { name: 'Manual review' }));
+    expect(mockSetCaptureReviewMode).toHaveBeenCalledWith('shopping', 'review');
+
+    const transactionsGroup = screen.getByRole('radiogroup', { name: 'Transactions review mode' });
+    fireEvent.click(within(transactionsGroup).getByRole('radio', { name: 'Automatic' }));
+    expect(mockSetCaptureReviewMode).toHaveBeenCalledWith('expense', 'auto');
   });
 });

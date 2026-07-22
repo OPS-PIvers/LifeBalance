@@ -2,7 +2,7 @@ import React, { useState, useCallback, useMemo, useRef, useEffect, Suspense } fr
 import { useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
-import { useFinance, useTodos, useHouseholdCore, useGamification } from '@/contexts/FirebaseHouseholdContext';
+import { useFinance, useTodos, useHouseholdCore, useGamification, useShopping } from '@/contexts/FirebaseHouseholdContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { AccountPicker } from '@/components/budget/AccountPicker';
 import { TrendingUp, Check, Clock, Eye, Trash2, X } from 'lucide-react';
@@ -17,6 +17,15 @@ const InsightsArchiveModal = React.lazy(() => import('@/components/modals/Insigh
 // Lazy so the heavy Drawer-based capture flow stays out of the Dashboard chunk;
 // it only loads when the "Pay down" quick action is used.
 const CaptureModal = React.lazy(() => import('@/components/modals/CaptureModal'));
+// Lazy (+ LazyMount-gated mount) so the Drawer/framer-motion stay out of the
+// boot bundle — this drawer only mounts once the aggregate ReviewQueueCard
+// (below) is actually tapped. Mirrors MainLayout's on-open-review-drawer
+// wiring, but scoped to shopping+todo held captures only (no transactions —
+// those keep their existing individual Action Queue cards).
+const ReviewPendingDrawer = React.lazy(() => import('@/components/modals/ReviewPendingDrawer'));
+import { LazyMount } from '@/components/ui/LazyMount';
+import { buildReviewQueueSnapshot, type ReviewQueueItem } from '@/utils/reviewQueue';
+import { ReviewQueueCard } from '@/components/dashboard/ReviewQueueCard';
 import {
   useActionQueue,
   isCalendarQueueItem,
@@ -90,8 +99,9 @@ const Dashboard: React.FC = () => {
     updateTransaction,
     deleteTransaction,
   } = useFinance();
-  const { updateToDo, deleteToDo, completeToDo } = useTodos();
-  const { isModuleEnabled } = useModuleVisibility();
+  const { updateToDo, deleteToDo, completeToDo, todosAwaitingReview } = useTodos();
+  const { shoppingAwaitingReview } = useShopping();
+  const { isModuleEnabled, isPlanTabVisible } = useModuleVisibility();
   const navigate = useNavigate();
 
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
@@ -107,6 +117,35 @@ const Dashboard: React.FC = () => {
 
   // --- ACTION QUEUE LOGIC ---
   const { actionQueue } = useActionQueue();
+
+  // --- Aggregate review queue (Layer 4) ---
+  // Held-for-review shopping + to-do captures ONLY (todos → shopping order,
+  // matching MainLayout's on-open cycler, via the shared buildReviewQueueSnapshot
+  // helper — an empty transactions input yields exactly that ordering) —
+  // transactions are deliberately excluded here since they keep their existing
+  // individual Action Queue cards; surfacing them again in this card would
+  // double-count them. Also gated on module visibility (Plan 090) — a
+  // household that hid the To-Dos or Shopping tab must not get a review card
+  // surfacing items whose destination page is hidden.
+  const reviewQueueItems = useMemo<ReviewQueueItem[]>(
+    () =>
+      buildReviewQueueSnapshot({
+        pendingReviewTransactions: [],
+        todosAwaitingReview: isPlanTabVisible('todos') ? todosAwaitingReview : [],
+        shoppingAwaitingReview: isPlanTabVisible('shopping') ? shoppingAwaitingReview : [],
+        householdSettings: undefined,
+      }),
+    [todosAwaitingReview, shoppingAwaitingReview, isPlanTabVisible]
+  );
+  const [reviewDrawerOpen, setReviewDrawerOpen] = useState(false);
+  // Snapshot taken on open (not the live lists) so approvals shrinking the
+  // underlying lists mid-cycle don't reshuffle the drawer's indices — mirrors
+  // MainLayout's reviewSnapshot.
+  const [reviewSnapshot, setReviewSnapshot] = useState<ReviewQueueItem[]>([]);
+  const openReviewQueue = useCallback(() => {
+    setReviewSnapshot(reviewQueueItems);
+    setReviewDrawerOpen(true);
+  }, [reviewQueueItems]);
 
   // Data for the empty-queue "today at a glance" hero (impeccable r6): today's
   // due-habit progress (same "positive daily you can finish today" definition
@@ -703,6 +742,12 @@ const Dashboard: React.FC = () => {
 
       <div className="px-4">
 
+        {/* Aggregate "N items to review" card (Layer 4) — leads the Action
+            Queue area, independent of whether the queue itself is empty, so
+            held Quick-Add captures stay discoverable even on an otherwise
+            "all caught up" day. */}
+        <ReviewQueueCard count={reviewQueueItems.length} onOpen={openReviewQueue} />
+
         {/* TIER 1 — the hero slot: the queue when it has items, the "today at
             a glance" moment when it doesn't. Always the page's focal point. */}
         {actionQueue.length > 0 ? queueHero : glanceHero}
@@ -844,6 +889,17 @@ const Dashboard: React.FC = () => {
           />
         )}
       </Suspense>
+
+      {/* Aggregate review drawer (Layer 4) — lazy so Drawer/framer-motion stay
+          out of the boot bundle; only mounts once the ReviewQueueCard above is
+          tapped. Scoped to the held shopping/to-do snapshot only. */}
+      <LazyMount when={reviewDrawerOpen}>
+        <ReviewPendingDrawer
+          items={reviewSnapshot}
+          isOpen={reviewDrawerOpen}
+          onClose={() => setReviewDrawerOpen(false)}
+        />
+      </LazyMount>
 
       {/* Pay sheet for calendar items — seeded with the amount already edited
           in the review drawer (still editable here for paths without an edit

@@ -1,15 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ReviewPendingDrawer from './ReviewPendingDrawer';
-import type { Transaction } from '@/types/schema';
+import type { ReviewQueueItem } from '@/utils/reviewQueue';
+import type { ShoppingItem, ToDo, Transaction } from '@/types/schema';
 
 const mockUpdateCategory = vi.fn(() => Promise.resolve());
 const mockDeleteTransaction = vi.fn(() => Promise.resolve());
 const mockAddCalendarItem = vi.fn(() => Promise.resolve());
 const mockLinkBankTransactionToBill = vi.fn(() => Promise.resolve());
+const mockApproveShoppingItem = vi.fn(() => Promise.resolve());
+const mockDeleteShoppingItem = vi.fn(() => Promise.resolve());
+const mockApproveTodo = vi.fn(() => Promise.resolve());
+const mockDeleteToDo = vi.fn(() => Promise.resolve());
 
-// ReviewPendingDrawer renders TransactionReviewForm, which consumes
-// useFinance/useGamification directly. Mocking these two is sufficient.
+// ReviewPendingDrawer renders TransactionReviewForm / ShoppingReviewForm /
+// TodoReviewForm, which each consume context slices directly. Mock the slices
+// each form reads.
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useFinance: () => ({
     buckets: [{ id: 'b1', name: 'Groceries' }, { id: 'b2', name: 'Gas' }],
@@ -22,6 +28,17 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   }),
   useGamification: () => ({ habits: [] }),
   useExpandedCalendarItems: () => [],
+  useShopping: () => ({
+    approveShoppingItem: mockApproveShoppingItem,
+    deleteShoppingItem: mockDeleteShoppingItem,
+    stores: [],
+    groceryCategories: [],
+  }),
+  useTodos: () => ({
+    approveTodo: mockApproveTodo,
+    deleteToDo: mockDeleteToDo,
+  }),
+  useHouseholdCore: () => ({ members: [{ uid: 'u1', displayName: 'Alice' }] }),
 }));
 
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
@@ -39,12 +56,45 @@ const tx = (id: string, merchant: string, extra: Partial<Transaction> = {}): Tra
   ...extra,
 });
 
+const txItem = (id: string, merchant: string, extra: Partial<Transaction> = {}): ReviewQueueItem => ({
+  kind: 'transaction',
+  id,
+  transaction: tx(id, merchant, extra),
+});
+
+const todoItem = (id: string, text: string): ReviewQueueItem => ({
+  kind: 'todo',
+  id,
+  item: {
+    id,
+    text,
+    completeByDate: '2026-07-01',
+    assignedTo: 'u1',
+    isCompleted: false,
+    createdBy: 'u1',
+    createdAt: '2026-06-27T00:00:00.000Z',
+    needsReview: true,
+  } satisfies ToDo,
+});
+
+const shoppingItem = (id: string, name: string): ReviewQueueItem => ({
+  kind: 'shopping',
+  id,
+  item: {
+    id,
+    name,
+    category: 'Produce',
+    isPurchased: false,
+    needsReview: true,
+  } satisfies ShoppingItem,
+});
+
 describe('ReviewPendingDrawer', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('shows the first pending transaction prefilled (no doc-stamping on open)', () => {
-    const transactions = [tx('t1', 'Shell Gas'), tx('t2', 'Target')];
-    render(<ReviewPendingDrawer transactions={transactions} isOpen onClose={vi.fn()} />);
+    const items = [txItem('t1', 'Shell Gas'), txItem('t2', 'Target')];
+    render(<ReviewPendingDrawer items={items} isOpen onClose={vi.fn()} />);
 
     expect(screen.getByDisplayValue('Shell Gas')).toBeInTheDocument();
     // A real amount prefills (only $0 stubs open blank).
@@ -52,9 +102,9 @@ describe('ReviewPendingDrawer', () => {
   });
 
   it('approving verifies via a single call then advances to the next card', async () => {
-    const transactions = [tx('t1', 'Shell Gas'), tx('t2', 'Target')];
+    const items = [txItem('t1', 'Shell Gas'), txItem('t2', 'Target')];
     const onClose = vi.fn();
-    render(<ReviewPendingDrawer transactions={transactions} isOpen onClose={onClose} />);
+    render(<ReviewPendingDrawer items={items} isOpen onClose={onClose} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Approve Transaction/ }));
 
@@ -69,8 +119,8 @@ describe('ReviewPendingDrawer', () => {
   });
 
   it('sends an amount override (once) when approving a $0 needsAmount stub', async () => {
-    const transactions = [tx('t1', 'Shell Gas', { amount: 0, needsAmount: true })];
-    render(<ReviewPendingDrawer transactions={transactions} isOpen onClose={vi.fn()} />);
+    const items = [txItem('t1', 'Shell Gas', { amount: 0, needsAmount: true })];
+    render(<ReviewPendingDrawer items={items} isOpen onClose={vi.fn()} />);
 
     // Stub opens blank; the CTA reads "Add amount & approve" and is disabled.
     expect((screen.getByLabelText('Amount') as HTMLInputElement).value).toBe('');
@@ -90,8 +140,8 @@ describe('ReviewPendingDrawer', () => {
   });
 
   it('resets the Recurring toggle between review items and only flags the item it was ON for', async () => {
-    const transactions = [tx('t1', 'Peacock Premium'), tx('t2', 'Target')];
-    render(<ReviewPendingDrawer transactions={transactions} isOpen onClose={vi.fn()} />);
+    const items = [txItem('t1', 'Peacock Premium'), txItem('t2', 'Target')];
+    render(<ReviewPendingDrawer items={items} isOpen onClose={vi.fn()} />);
 
     // Flip Recurring ON for the first card and approve it.
     fireEvent.click(screen.getByRole('checkbox', { name: /recurring transaction/i }));
@@ -119,9 +169,9 @@ describe('ReviewPendingDrawer', () => {
   });
 
   it('skip advances without verifying; finishing the last card closes the drawer', async () => {
-    const transactions = [tx('t1', 'Shell Gas'), tx('t2', 'Target')];
+    const items = [txItem('t1', 'Shell Gas'), txItem('t2', 'Target')];
     const onClose = vi.fn();
-    render(<ReviewPendingDrawer transactions={transactions} isOpen onClose={onClose} />);
+    render(<ReviewPendingDrawer items={items} isOpen onClose={onClose} />);
 
     // Card 1 is not the last → "Skip — add later"; advances without a write.
     fireEvent.click(screen.getByText('Skip — add later'));
@@ -131,5 +181,55 @@ describe('ReviewPendingDrawer', () => {
     // Card 2 is the last → "Done for now" closes the whole drawer.
     fireEvent.click(screen.getByText('Done for now'));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('cycles a mixed queue in order (transaction → todo → shopping); last Skip closes', async () => {
+    const items = [
+      txItem('t1', 'Shell Gas'),
+      todoItem('d1', 'Call plumber'),
+      shoppingItem('s1', 'Bananas'),
+    ];
+    const onClose = vi.fn();
+    render(<ReviewPendingDrawer items={items} isOpen onClose={onClose} />);
+
+    // 1 of 3 → the transaction form.
+    expect(screen.getByText('Review (1 of 3)')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Shell Gas')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Skip — add later'));
+
+    // 2 of 3 → the to-do form.
+    await waitFor(() => expect(screen.getByDisplayValue('Call plumber')).toBeInTheDocument());
+    expect(screen.getByText('Review (2 of 3)')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('Shell Gas')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Skip — add later'));
+
+    // 3 of 3 → the shopping form (last card).
+    await waitFor(() => expect(screen.getByDisplayValue('Bananas')).toBeInTheDocument());
+    expect(screen.getByText('Review (3 of 3)')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('Call plumber')).not.toBeInTheDocument();
+
+    // Last card's footer closes the drawer.
+    fireEvent.click(screen.getByText('Done for now'));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('approving a held to-do then a held shopping item advances through each form', async () => {
+    const items = [todoItem('d1', 'Call plumber'), shoppingItem('s1', 'Bananas')];
+    const onClose = vi.fn();
+    render(<ReviewPendingDrawer items={items} isOpen onClose={onClose} />);
+
+    // Approve the to-do (unedited → approve with no overrides), then advance.
+    fireEvent.click(screen.getByRole('button', { name: /Add to list/ }));
+    await waitFor(() => expect(mockApproveTodo).toHaveBeenCalledTimes(1));
+    expect(mockApproveTodo).toHaveBeenCalledWith('d1', undefined);
+    await waitFor(() => expect(screen.getByDisplayValue('Bananas')).toBeInTheDocument());
+
+    // Approve the shopping item → resolves the last card and closes the drawer.
+    fireEvent.click(screen.getByRole('button', { name: /Add to list/ }));
+    await waitFor(() => expect(mockApproveShoppingItem).toHaveBeenCalledTimes(1));
+    expect(mockApproveShoppingItem).toHaveBeenCalledWith('s1', undefined);
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 });

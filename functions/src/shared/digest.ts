@@ -25,6 +25,10 @@ export interface DigestTodo {
   assignedTo?: string;
   isCompleted?: boolean;
   completeByDate?: string;
+  // Held-for-review capture (captureReview) — must not count toward the
+  // digest's "N to-dos today" line until approved. See types/schema.ts's
+  // `ToDo.needsReview`.
+  needsReview?: boolean;
 }
 
 /**
@@ -53,11 +57,17 @@ export function computeStreaksAtRisk(habits: DigestHabit[], today: string): numb
 
 /**
  * Count of a specific member's incomplete todos due today — mirrors the
- * `todayTodos` filter in sendactionqueuereminders.
+ * `todayTodos` filter in sendactionqueuereminders. Held-for-review captures
+ * (`needsReview === true`) are excluded — they haven't been approved into the
+ * real to-do list yet, so they must not trigger a reminder.
  */
 export function computeTodosToday(todos: DigestTodo[], uid: string, today: string): number {
   return todos.filter(
-    (t) => t.assignedTo === uid && !t.isCompleted && t.completeByDate === today
+    (t) =>
+      t.assignedTo === uid &&
+      !t.isCompleted &&
+      t.completeByDate === today &&
+      t.needsReview !== true
   ).length;
 }
 

@@ -17,6 +17,9 @@ export interface ReminderTodo {
   reminderSentAt?: unknown;
   isCompleted?: unknown;
   assignedTo?: unknown;
+  // Held-for-review capture (captureReview) — must not fire a timed reminder
+  // until approved. See types/schema.ts's `ToDo.needsReview`.
+  needsReview?: unknown;
 }
 
 /**
@@ -84,6 +87,7 @@ export function shouldSendTodoReminder(
   timezone: string
 ): boolean {
   if (todo.isCompleted === true) return false;
+  if (todo.needsReview === true) return false;
   if (todo.reminderSentAt != null) return false;
   const reminderAtMs = computeReminderAtMs(todo, timezone);
   if (reminderAtMs === null) return false;

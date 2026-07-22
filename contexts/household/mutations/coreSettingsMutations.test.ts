@@ -83,6 +83,18 @@ describe('makeHouseholdSettingsMutations — household settings single-doc write
     expect(capturedUpdates[0]?.data).toEqual({ 'moduleVisibility.meals': false });
   });
 
+  it('setCaptureReviewMode merge-writes a single dotted field path', async () => {
+    const { setCaptureReviewMode } = makeHouseholdSettingsMutations({ db, householdId: 'h1' });
+    await setCaptureReviewMode('shopping', 'review');
+    expect(capturedUpdates[0]?.data).toEqual({ 'captureReview.shopping': 'review' });
+  });
+
+  it('setCaptureReviewMode is a no-op without a household id', async () => {
+    const { setCaptureReviewMode } = makeHouseholdSettingsMutations({ db, householdId: null });
+    await setCaptureReviewMode('expense', 'auto');
+    expect(capturedUpdates).toHaveLength(0);
+  });
+
   it('setKidModePin hashes and writes; null clears via deleteField', async () => {
     const { setKidModePin } = makeHouseholdSettingsMutations({ db, householdId: 'h1' });
     await setKidModePin('1234');

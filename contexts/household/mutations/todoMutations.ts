@@ -136,7 +136,26 @@ export function makeTodoCrudMutations(deps: {
     }
   };
 
-  return { updateToDo, deleteToDo };
+  /**
+   * Approves a held-for-review to-do capture (`needsReview: true` from the
+   * quick-add API — see utils/captureReview.ts): persists any edited fields
+   * AND clears the review flag, so the to-do appears in the normal list
+   * immediately after. Reuses `updateToDo` above (already a general-purpose
+   * field-patch mutation) — no dedicated write path needed.
+   *
+   * Toast Behavior: unlike `updateToDo`/`deleteToDo` (which delegate toast
+   * messaging to their single existing caller, ToDosPage), this is used from
+   * exactly one place (the review form) so it owns its own success toast.
+   */
+  const approveTodo = async (
+    id: string,
+    overrides?: Partial<Pick<ToDo, 'text' | 'completeByDate' | 'assignedTo' | 'isImportant'>>
+  ) => {
+    await updateToDo(id, { ...overrides, needsReview: false });
+    toast.success('Added to list');
+  };
+
+  return { updateToDo, deleteToDo, approveTodo };
 }
 
 /**

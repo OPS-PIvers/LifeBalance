@@ -1,9 +1,9 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import Dashboard from './Dashboard';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
-import type { ModuleKey } from '@/types/schema';
+import type { ModuleKey, ToDo, ShoppingItem } from '@/types/schema';
 
 // Narrow context slices the Dashboard reads. Stub with minimal shapes; the
 // gated widgets themselves are mocked to identifiable stubs below.
@@ -27,7 +27,13 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
     deleteTransaction: vi.fn(),
   }),
   useGamification: () => ({ habits: [] }),
-  useTodos: () => ({ updateToDo: vi.fn(), deleteToDo: vi.fn(), completeToDo: vi.fn() }),
+  useTodos: () => ({
+    updateToDo: vi.fn(),
+    deleteToDo: vi.fn(),
+    completeToDo: vi.fn(),
+    todosAwaitingReview: mockTodosAwaitingReview,
+  }),
+  useShopping: () => ({ shoppingAwaitingReview: mockShoppingAwaitingReview }),
 }));
 
 // The action queue is mixed-domain (PR4). Backed by a mutable array so the
@@ -44,6 +50,26 @@ vi.mock('@/hooks/useActionQueue', async (importOriginal) => {
     useActionQueue: () => ({ actionQueue: queueItems }),
   };
 });
+
+// Layer 4: the aggregate ReviewQueueCard's held shopping/to-do sources.
+// Mutable, closed over by the useTodos/useShopping mocks above (declaring
+// them after those hoisted vi.mock calls is safe — same reasoning as
+// `queueItems`).
+let mockTodosAwaitingReview: ToDo[] = [];
+let mockShoppingAwaitingReview: ShoppingItem[] = [];
+
+// Keep the LazyMount gate real (children render once `when` flips true) but
+// off framer-motion/Drawer — mirrors TopToolbar.test.tsx's pattern.
+vi.mock('@/components/ui/LazyMount', () => ({
+  LazyMount: ({ when, children }: { when: boolean; children: React.ReactNode }) =>
+    when ? <>{children}</> : null,
+}));
+// Stub the heavy cycling drawer to an identifiable marker so the "opens on
+// tap" wiring is observable without pulling in its real per-type review forms.
+vi.mock('@/components/modals/ReviewPendingDrawer', () => ({
+  default: ({ isOpen, items }: { isOpen: boolean; items: Array<{ id: string }> }) =>
+    isOpen ? <div data-testid="review-drawer">{items.map((i) => i.id).join(',')}</div> : null,
+}));
 
 // Gated single-domain widgets — stub to identifiable text so the visibility
 // gating is observable regardless of their self-null-on-empty-data behavior.
@@ -109,6 +135,8 @@ describe('Dashboard module visibility (Plan 090)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     queueItems = [];
+    mockTodosAwaitingReview = [];
+    mockShoppingAwaitingReview = [];
     setEnabledModules(['habits', 'money', 'plan', 'todos', 'meals', 'shopping']);
   });
 
@@ -140,6 +168,8 @@ describe('Dashboard action queue cap', () => {
     vi.clearAllMocks();
     setEnabledModules(['habits', 'money', 'plan', 'todos', 'meals', 'shopping']);
     queueItems = Array.from({ length: 8 }, (_, i) => ({ id: `q-${i}` }));
+    mockTodosAwaitingReview = [];
+    mockShoppingAwaitingReview = [];
   });
 
   it('renders at most 6 items with a show-more row that expands in place', () => {
@@ -180,6 +210,8 @@ describe('Dashboard hero slot (impeccable r6)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setEnabledModules(['habits', 'money', 'plan', 'todos', 'meals', 'shopping']);
+    mockTodosAwaitingReview = [];
+    mockShoppingAwaitingReview = [];
   });
 
   it('leads with the "Needs you" queue hero above the widgets when the queue has items', () => {
@@ -218,5 +250,91 @@ describe('Dashboard hero slot (impeccable r6)', () => {
     expect(screen.getByRole('heading', { name: /All caught up/ })).toBeInTheDocument();
     expect(screen.queryByText('safe to spend')).not.toBeInTheDocument();
     expect(screen.queryByText(/habits done today|habits — day complete/)).not.toBeInTheDocument();
+  });
+});
+
+describe('Dashboard aggregate review queue card (Layer 4)', () => {
+  const makeTodo = (id: string): ToDo => ({
+    id,
+    text: `Todo ${id}`,
+    completeByDate: '2026-07-21',
+    assignedTo: 'uid-1',
+    isCompleted: false,
+    createdBy: 'uid-1',
+    createdAt: '2026-07-01T00:00:00.000Z',
+    needsReview: true,
+  });
+
+  const makeShoppingItem = (id: string): ShoppingItem => ({
+    id,
+    name: `Item ${id}`,
+    category: 'Produce',
+    isPurchased: false,
+    needsReview: true,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setEnabledModules(['habits', 'money', 'plan', 'todos', 'meals', 'shopping']);
+    queueItems = [];
+    mockTodosAwaitingReview = [];
+    mockShoppingAwaitingReview = [];
+  });
+
+  it('renders no review card when nothing is held for review', () => {
+    renderDashboard();
+    expect(screen.queryByText(/item.*to review/)).not.toBeInTheDocument();
+  });
+
+  it('shows the aggregate count across held todos + shopping items (not transactions)', () => {
+    mockTodosAwaitingReview = [makeTodo('t1'), makeTodo('t2')];
+    mockShoppingAwaitingReview = [makeShoppingItem('s1')];
+    renderDashboard();
+    expect(screen.getByText('3 items to review')).toBeInTheDocument();
+  });
+
+  it('uses the singular label for exactly one held item', () => {
+    mockTodosAwaitingReview = [makeTodo('t1')];
+    renderDashboard();
+    expect(screen.getByText('1 item to review')).toBeInTheDocument();
+  });
+
+  it('opens the review drawer with a todos-then-shopping snapshot on tap', async () => {
+    mockTodosAwaitingReview = [makeTodo('t1')];
+    mockShoppingAwaitingReview = [makeShoppingItem('s1')];
+    renderDashboard();
+
+    expect(screen.queryByTestId('review-drawer')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('2 items to review'));
+
+    // ReviewPendingDrawer is `React.lazy`-loaded, so it resolves asynchronously
+    // even with the module mocked (mirrors TopToolbar.test.tsx).
+    await waitFor(() => {
+      expect(screen.getByTestId('review-drawer')).toHaveTextContent('t1,s1');
+    });
+  });
+
+  it('hides the review card when both the To-Dos and Shopping tabs are disabled', () => {
+    mockTodosAwaitingReview = [makeTodo('t1')];
+    mockShoppingAwaitingReview = [makeShoppingItem('s1')];
+    // Plan stays on, but its To-Dos/Shopping sub-tabs are both off.
+    setEnabledModules(['habits', 'money', 'plan', 'meals']);
+    renderDashboard();
+    expect(screen.queryByText(/item.*to review/)).not.toBeInTheDocument();
+  });
+
+  it('shows only the visible-domain items when one of the two tabs is disabled', async () => {
+    mockTodosAwaitingReview = [makeTodo('t1')];
+    mockShoppingAwaitingReview = [makeShoppingItem('s1')];
+    // Shopping tab hidden — only the held to-do should count/appear.
+    setEnabledModules(['habits', 'money', 'plan', 'todos', 'meals']);
+    renderDashboard();
+
+    expect(screen.getByText('1 item to review')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('1 item to review'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('review-drawer')).toHaveTextContent('t1');
+    });
   });
 });

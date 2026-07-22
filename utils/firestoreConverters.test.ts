@@ -552,6 +552,30 @@ describe('shoppingItemConverter', () => {
     const partial = { name: 'Eggs', category: 'Dairy', isPurchased: true };
     expect(() => shoppingItemConverter.fromFirestore(fakeSnap('si-2', partial))).not.toThrow();
   });
+
+  it('(a) needsReview round-trips through both directions', () => {
+    const fromDb = shoppingItemConverter.fromFirestore(fakeSnap('si-3', { ...wellFormed, needsReview: true }));
+    expect(fromDb.needsReview).toBe(true);
+    const out = callToFirestore(shoppingItemConverter, { ...wellFormed, id: 'si-3', needsReview: true });
+    expect(out['needsReview']).toBe(true);
+  });
+
+  it('(b) needsReview stays undefined when absent (legacy/normal docs)', () => {
+    const result = shoppingItemConverter.fromFirestore(fakeSnap('si-4', wellFormed));
+    expect(result.needsReview).toBeUndefined();
+  });
+
+  it('(a) source round-trips through both directions', () => {
+    const fromDb = shoppingItemConverter.fromFirestore(fakeSnap('si-5', { ...wellFormed, source: 'shortcut' }));
+    expect(fromDb.source).toBe('shortcut');
+    const out = callToFirestore(shoppingItemConverter, { ...wellFormed, id: 'si-5', source: 'shortcut' });
+    expect(out['source']).toBe('shortcut');
+  });
+
+  it('(b) source stays undefined when absent (legacy/manual docs)', () => {
+    const result = shoppingItemConverter.fromFirestore(fakeSnap('si-6', wellFormed));
+    expect(result.source).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1138,6 +1162,18 @@ describe('todoConverter', () => {
   it('(b) isImportant stays undefined when absent (legacy docs)', () => {
     const result = todoConverter.fromFirestore(fakeSnap('todo-7', wellFormed));
     expect(result.isImportant).toBeUndefined();
+  });
+
+  it('(a) needsReview round-trips through both directions', () => {
+    const fromDb = todoConverter.fromFirestore(fakeSnap('todo-8', { ...wellFormed, needsReview: true }));
+    expect(fromDb.needsReview).toBe(true);
+    const out = callToFirestore(todoConverter, { ...wellFormed, id: 'todo-8', needsReview: true });
+    expect(out['needsReview']).toBe(true);
+  });
+
+  it('(b) needsReview stays undefined when absent (legacy/normal docs)', () => {
+    const result = todoConverter.fromFirestore(fakeSnap('todo-9', wellFormed));
+    expect(result.needsReview).toBeUndefined();
   });
 });
 

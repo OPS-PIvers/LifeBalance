@@ -58,6 +58,14 @@ describe("computeTodosToday", () => {
   it("returns 0 when nothing matches", () => {
     expect(computeTodosToday(todos, "u3", "2026-07-14")).toBe(0);
   });
+
+  it("excludes held-for-review todos even when otherwise due today", () => {
+    const withHeld: DigestTodo[] = [
+      { assignedTo: "u1", isCompleted: false, completeByDate: "2026-07-14", needsReview: true },
+      { assignedTo: "u1", isCompleted: false, completeByDate: "2026-07-14" },
+    ];
+    expect(computeTodosToday(withHeld, "u1", "2026-07-14")).toBe(1);
+  });
 });
 
 describe("buildDigestMessage", () => {

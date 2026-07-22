@@ -114,6 +114,7 @@ import {
   findBillsDueOnDate,
   sendbillreminders,
   sendstreakwarnings,
+  sendactionqueuereminders,
   type BillCalendarItem,
 } from "./index";
 
@@ -591,6 +592,123 @@ describe("sendbillreminders", () => {
     await runBillReminders();
 
     expect(adminMock.sendEachForMulticast).not.toHaveBeenCalled();
+  });
+});
+
+// ===========================================================================
+// sendactionqueuereminders
+// ===========================================================================
+
+describe("sendactionqueuereminders", () => {
+  interface MockQuery {
+    where: (...args: unknown[]) => MockQuery;
+    get: () => Promise<{ docs: Array<{ id: string; data: () => Record<string, unknown> }> }>;
+  }
+
+  /**
+   * Configures a single household with one member whose action queue
+   * reminders fire at 09:00 UTC and the given todo docs.
+   */
+  function configureActionQueueReminderHousehold(
+    todoDocs: Array<{ id: string; data: Record<string, unknown> }>
+  ): void {
+    const member = {
+      uid: "u1",
+      fcmTokens: ["tok1"],
+      anyNotificationsEnabled: true,
+      notificationPreferences: {
+        actionQueueReminders: { enabled: true, time: "9:00" },
+        timezone: "UTC",
+      },
+    };
+    const todosSnapshot = {
+      docs: todoDocs.map((d) => ({ id: d.id, data: () => d.data })),
+    };
+    const todosQuery: MockQuery = {
+      where: () => todosQuery,
+      get: () => Promise.resolve(todosSnapshot),
+    };
+    const householdRef = {
+      id: HOUSEHOLD_ID,
+      collection: (name: string) => {
+        if (name === "todos") return todosQuery;
+        return { get: () => Promise.resolve({ docs: [] }) };
+      },
+    };
+    const flaggedMemberDocs = [
+      { data: () => member, ref: { update: vi.fn(), parent: { parent: householdRef } } },
+    ];
+
+    adminMock.db.collectionGroup.mockImplementation((path: string) => {
+      if (path === "members") {
+        return { where: () => ({ get: () => Promise.resolve({ docs: flaggedMemberDocs }) }) };
+      }
+      return { where: () => ({ get: () => Promise.resolve({ docs: [] }) }) };
+    });
+  }
+
+  const runActionQueueReminders = sendactionqueuereminders as unknown as () => Promise<void>;
+
+  beforeEach(() => {
+    adminMock.sendEachForMulticast.mockImplementation(() =>
+      Promise.resolve({ successCount: 1, failureCount: 0, responses: [{ success: true }] })
+    );
+    vi.useFakeTimers();
+    // 09:30 UTC matches the member's 9:00 reminder hour; today = 2026-07-14.
+    vi.setSystemTime(new Date("2026-07-14T09:30:00Z"));
+    fullScanParamHolder.value = undefined;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("does not send a reminder when the only due-today todo is held for review", async () => {
+    configureActionQueueReminderHousehold([
+      {
+        id: "held",
+        data: { assignedTo: "u1", isCompleted: false, completeByDate: "2026-07-14", needsReview: true },
+      },
+    ]);
+
+    await runActionQueueReminders();
+
+    expect(adminMock.sendEachForMulticast).not.toHaveBeenCalled();
+  });
+
+  it("excludes held-for-review todos from the count but still sends for the rest", async () => {
+    configureActionQueueReminderHousehold([
+      {
+        id: "held",
+        data: { assignedTo: "u1", isCompleted: false, completeByDate: "2026-07-14", needsReview: true },
+      },
+      { id: "normal", data: { assignedTo: "u1", isCompleted: false, completeByDate: "2026-07-14" } },
+    ]);
+
+    await runActionQueueReminders();
+
+    expect(adminMock.sendEachForMulticast).toHaveBeenCalledTimes(1);
+    expect(adminMock.sendEachForMulticast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        notification: expect.objectContaining({ title: expect.stringContaining("1 task") }),
+      })
+    );
+  });
+
+  it("sends a reminder counting every due-today todo when none are held", async () => {
+    configureActionQueueReminderHousehold([
+      { id: "normal-1", data: { assignedTo: "u1", isCompleted: false, completeByDate: "2026-07-14" } },
+      { id: "normal-2", data: { assignedTo: "u1", isCompleted: false, completeByDate: "2026-07-14" } },
+    ]);
+
+    await runActionQueueReminders();
+
+    expect(adminMock.sendEachForMulticast).toHaveBeenCalledTimes(1);
+    expect(adminMock.sendEachForMulticast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        notification: expect.objectContaining({ title: expect.stringContaining("2 tasks") }),
+      })
+    );
   });
 });
 

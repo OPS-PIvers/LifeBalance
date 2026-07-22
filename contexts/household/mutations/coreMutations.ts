@@ -15,7 +15,7 @@ import toast from 'react-hot-toast';
 import { describeError } from '@/utils/errorMessages';
 import { Sparkles } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
-import { DietaryProfile, Habit, HabitSubmission, Insight, ModuleKey, Transaction } from '@/types/schema';
+import { CaptureReviewMode, CaptureType, DietaryProfile, Habit, HabitSubmission, Insight, ModuleKey, Transaction } from '@/types/schema';
 import { hashKidPin } from '@/utils/kidPin';
 import { track } from '@/services/analytics';
 import { selectRecentReflections } from '@/utils/habitReflections';
@@ -33,7 +33,8 @@ import { selectRecentReflections } from '@/utils/habitReflections';
 
 /**
  * completeOnboarding / setHouseholdCurrency / setModuleVisibility /
- * setKidModePin — original closures captured only `householdId`.
+ * setCaptureReviewMode / setKidModePin — original closures captured only
+ * `householdId`.
  */
 export function makeHouseholdSettingsMutations(deps: {
   db: Firestore;
@@ -58,6 +59,15 @@ export function makeHouseholdSettingsMutations(deps: {
   const setModuleVisibility = async (key: ModuleKey, value: boolean) => {
     if (!householdId) return;
     await updateDoc(doc(db, 'households', householdId), { [`moduleVisibility.${key}`]: value });
+  };
+
+  // Same dotted-path-merge approach as setModuleVisibility: routes ONE capture
+  // type ('expense' | 'shopping' | 'todo') to 'auto' or 'review' without
+  // disturbing sibling keys in captureReview. Absent keys keep reading through
+  // the legacy-preserving defaults in utils/captureReview.ts.
+  const setCaptureReviewMode = async (type: CaptureType, mode: CaptureReviewMode) => {
+    if (!householdId) return;
+    await updateDoc(doc(db, 'households', householdId), { [`captureReview.${type}`]: mode });
   };
 
   // Plan 080b: set/clear the Kid Mode exit PIN. A raw PIN is salted+hashed here
@@ -103,7 +113,7 @@ export function makeHouseholdSettingsMutations(deps: {
     await updateDoc(doc(db, 'households', householdId), dottedPatch);
   };
 
-  return { completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setKidModePin, setDietaryProfile, setMealCookedHabitId };
+  return { completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setCaptureReviewMode, setKidModePin, setDietaryProfile, setMealCookedHabitId };
 }
 
 /**
