@@ -480,6 +480,32 @@ export interface CalendarItem {
 
 export type EffortLevel = 'easy' | 'medium' | 'hard' | 'very_hard';
 
+// Habit Automations (PRD #1065): a single saved geolocation that can fire a
+// habit when the member arrives within `radiusMeters` of it. Captured via
+// "Use my location" (current-position snapshot — no maps SDK / geocoding).
+// `id` is a stable client-generated key used for per-day dedup of geo prompts.
+export interface HabitLocationTrigger {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  radiusMeters: number;
+}
+
+// Habit Automations (PRD #1065): the optional trigger configuration on a habit.
+// Absent on every existing habit — no migration; the Firestore converter passes
+// it through untouched. `keywords` are matched against approved transactions
+// (see utils/habitKeywordMatch.ts); `locations` drive the geo prompt (see
+// utils/habitGeoTrigger.ts).
+export interface HabitTriggers {
+  keywords?: string[];
+  locations?: HabitLocationTrigger[];
+}
+
+// Default geolocation trigger radius in meters (~150 m) — a comfortable
+// store-sized bubble that tolerates GPS drift without covering neighbours.
+export const DEFAULT_LOCATION_RADIUS_METERS = 150;
+
 export interface Habit {
   id: string;
   title: string;
@@ -550,6 +576,11 @@ export interface Habit {
   // hides it from the Track tab / reminders while keeping streak/points
   // history intact for Insights/export). Undefined/absent = active.
   archivedAt?: string;
+
+  // Habit Automations (PRD #1065): optional trigger configuration (transaction
+  // keywords + saved geolocations). Absent on every existing habit — no
+  // migration; converter passes it through. See utils/habitTriggers.ts.
+  triggers?: HabitTriggers;
 }
 
 // F-HABITS-06: quick mood tag attachable to a habit completion submission.
@@ -1062,6 +1093,12 @@ export interface ToDo {
     // group / manage a chain of occurrences later without a separate parent doc.
     parentRecurringId?: string;
   };
+
+  // Habit Automations (PRD #1065): the habit this to-do is linked to. Completing
+  // the to-do fires the habit exactly like one manual tap (same batch); restoring
+  // reverses it. Authored on the to-do form ("Counts toward habit" picker). Absent
+  // on every existing to-do — no migration; converter passes it through.
+  linkedHabitId?: string;
 }
 
 export interface UpdateBucketPayload {
