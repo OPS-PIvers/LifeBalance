@@ -16,6 +16,8 @@ import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { processToggleHabit, processStaleDownToggle, isHabitStale, calculateResetPoints, streakForHabit } from '@/utils/habitLogic';
 import { computeHabitTriggerFire, computeHabitTriggerReverse } from '@/utils/habitTriggerFire';
 import { evaluateTodoSubtaskGate, TodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
+import { toggleSubtask, subtaskProgress } from '@/utils/subtasks';
+import type { TodoSubtaskToggleResult } from '@/contexts/household/mutations/todoMutations';
 import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
 import { attributionString, type TriggerSource } from '@/utils/habitTriggers';
 import { selectAutoFreezeCandidates } from '@/utils/freezeBank';
@@ -45,6 +47,7 @@ import {
   ShoppingItem,
   MealPlanItem,
   ToDo,
+  Subtask,
   Insight,
   HabitInsightsDoc,
   GroceryCatalogItem,
@@ -1657,6 +1660,57 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: ToDo updated');
   }, []);
 
+  // Inline subtask access (owner-approved) — parity with makeToggleTodoSubtask.
+  // Checking the last step escalates to an auto-completion (subtasks + complete
+  // + linked-habit fire + kid points), mirroring the atomic real path; every
+  // other toggle is a plain subtasks-array update.
+  const toggleTodoSubtask = useCallback(async (todoId: string, subtaskId: string): Promise<TodoSubtaskToggleResult> => {
+    const todo = todosRef.current.find(t => t.id === todoId);
+    if (!todo) {
+      toast.error('Mock: ToDo not found');
+      return { autoCompleted: false, priorSubtasks: [] };
+    }
+    const priorSubtasks = todo.subtasks ?? [];
+    const nextSubtasks = toggleSubtask(priorSubtasks, subtaskId);
+    const { allDone } = subtaskProgress(nextSubtasks);
+
+    if (!todo.isCompleted && allDone) {
+      const completedTodo: ToDo = { ...todo, subtasks: nextSubtasks };
+      const nextInstance = buildNextRecurringTodo(completedTodo, getLocalDateString());
+      setTodos(prev => {
+        const updated = prev.map(t =>
+          t.id === todoId
+            ? { ...t, isCompleted: true, completedAt: new Date().toISOString(), subtasks: nextSubtasks }
+            : t,
+        );
+        if (!nextInstance) return updated;
+        return [...updated, {
+          ...nextInstance,
+          id: generateId(),
+          createdAt: new Date().toISOString(),
+          createdBy: completedTodo.createdBy,
+        } as ToDo];
+      });
+      setMembers(prev => {
+        const credit = computeTodoCompletionCredit(completedTodo, prev);
+        if (!credit) return prev;
+        return prev.map(m => m.uid === credit.memberUid
+          ? { ...m, points: {
+              daily: m.points.daily + credit.points,
+              weekly: m.points.weekly + credit.points,
+              total: m.points.total + credit.points,
+            } }
+          : m);
+      });
+      const firedTitle = fireLinkedHabitMock(completedTodo, 'up');
+      toast.success(firedTitle ? `Mock: logged "${firedTitle}" via to-do` : 'Mock: ToDo completed');
+      return { autoCompleted: true, priorSubtasks };
+    }
+
+    setTodos(prev => prev.map(t => t.id === todoId ? { ...t, subtasks: nextSubtasks } : t));
+    return { autoCompleted: false, priorSubtasks };
+  }, [fireLinkedHabitMock]);
+
   const deleteToDo = useCallback(async (id: string) => {
     setTodos(prev => {
       const target = prev.find(t => t.id === id);
@@ -2243,23 +2297,31 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     deleteMealPlanItem: deleteMealPlan,
     addToDo,
     updateToDo,
+    toggleTodoSubtask,
     deleteToDo,
     approveTodo,
-    completeToDo: useCallback(async (id: string) => {
+    completeToDo: useCallback(async (id: string, options?: { subtasksOverride?: Subtask[] }) => {
       // Resolve the to-do being completed from the live ref (NOT a value leaked out
       // of the setTodos updater) so the points credit can't depend on the execution
       // order of two separate setState updaters — that coupling silently dropped the
       // credit when the to-do was added earlier in the same flush. The SAME dormancy
       // gate the real Firebase context uses (computeTodoCompletionCredit) decides
       // whether a managed kid is credited.
-      const completedTodo = todosRef.current.find(t => t.id === id);
-      if (!completedTodo) {
+      const found = todosRef.current.find(t => t.id === id);
+      if (!found) {
         toast.error('Mock: ToDo not found');
         return;
       }
-      if (completedTodo.isCompleted) {
+      if (found.isCompleted) {
         return; // already completed — avoid duplicate points
       }
+      // Inline subtask auto-complete parity: an escalation passes the finished
+      // subtasks array so the gate/credit/spawn/fire evaluate the FINAL checklist
+      // and it's persisted with the completion (mirrors makeCompleteToDo).
+      const subtasksOverride = options?.subtasksOverride;
+      const completedTodo: ToDo = subtasksOverride
+        ? { ...found, subtasks: subtasksOverride }
+        : found;
       // Subtask gate parity (PRD #1065): refuse a habit-linked to-do with
       // unfinished subtasks with the SAME typed error the real mutation throws.
       const gate = evaluateTodoSubtaskGate(completedTodo);
@@ -2271,7 +2333,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       const nextInstance = buildNextRecurringTodo(completedTodo, getLocalDateString());
       setTodos(prev => {
         const updated = prev.map(t =>
-          t.id === id ? { ...t, isCompleted: true, completedAt: new Date().toISOString() } : t,
+          t.id === id
+            ? { ...t, isCompleted: true, completedAt: new Date().toISOString(), ...(subtasksOverride ? { subtasks: subtasksOverride } : {}) }
+            : t,
         );
         if (!nextInstance) return updated;
         return [...updated, {
@@ -2296,7 +2360,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       const firedTitle = fireLinkedHabitMock(completedTodo, 'up');
       toast.success(firedTitle ? `Mock: logged "${firedTitle}" via to-do` : 'Mock: ToDo completed');
     }, [fireLinkedHabitMock]),
-    uncompleteToDo: useCallback(async (id: string) => {
+    uncompleteToDo: useCallback(async (id: string, options?: { subtasksOverride?: Subtask[] }) => {
       // Counterpart of completeToDo (see makeUncompleteToDo in the real
       // context): restores the to-do AND reverses the managed-kid points
       // credit through the SAME dormancy gate, so Test Mode mirrors the
@@ -2331,8 +2395,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
           spawnIdToDelete = matches[0]?.id ?? null;
         }
       }
+      const subtasksOverride = options?.subtasksOverride;
       setTodos(prev => prev
-        .map(t => t.id === id ? { ...t, isCompleted: false, completedAt: undefined } : t)
+        .map(t => t.id === id ? { ...t, isCompleted: false, completedAt: undefined, ...(subtasksOverride ? { subtasks: subtasksOverride } : {}) } : t)
         .filter(t => t.id !== spawnIdToDelete));
       setMembers(prev => {
         const credit = computeTodoCompletionCredit(todo, prev);

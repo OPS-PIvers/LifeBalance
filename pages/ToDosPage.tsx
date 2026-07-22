@@ -51,6 +51,7 @@ const ToDosPage: React.FC = () => {
     deleteToDo,
     completeToDo,
     uncompleteToDo,
+    toggleTodoSubtask,
     hasMoreCompletedTodos,
     isLoadingOlderTodos,
     loadOlderCompletedTodos,
@@ -437,11 +438,13 @@ const ToDosPage: React.FC = () => {
       }
   }, [addToDo]);
 
-  const handleUncomplete = useCallback(async (id: string) => {
+  const handleUncomplete = useCallback(async (id: string, options?: { subtasksOverride?: Subtask[] }) => {
       try {
           // uncompleteToDo (not a plain updateToDo) so a managed-kid assignee's
           // completion points credit is reversed atomically with the restore.
-          await uncompleteToDo(id);
+          // `options.subtasksOverride` (from an inline subtask auto-complete undo)
+          // re-unchecks the triggering subtask in the same batch.
+          await uncompleteToDo(id, options);
           toast.success('Task restored to active');
       } catch (error) {
           console.error('Failed to restore task:', error);
@@ -1246,6 +1249,7 @@ const ToDosPage: React.FC = () => {
                       onDelete={deleteToDo}
                       onMore={setActionTodo}
                       onToggleSelection={toggleSelection}
+                      onToggleSubtask={toggleTodoSubtask}
                     />
                   ))}
                 </SurfaceList>

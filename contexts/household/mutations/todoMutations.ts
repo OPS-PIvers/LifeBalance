@@ -25,8 +25,9 @@ import {
 import toast from 'react-hot-toast';
 import { describeError } from '@/utils/errorMessages';
 import { todoConverter, habitConverter } from '@/utils/firestoreConverters';
-import { ToDo, HouseholdMember } from '@/types/schema';
+import { ToDo, HouseholdMember, Subtask } from '@/types/schema';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
+import { toggleSubtask, subtaskProgress } from '@/utils/subtasks';
 import { computeTodoCompletionCredit, buildUncompleteCreditReversal } from '@/utils/todoPoints';
 import { buildNextRecurringTodo, isTodoFrequency } from '@/utils/todoRecurrence';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -303,9 +304,14 @@ export function makeCompleteToDo(deps: {
     todoRef: ReturnType<typeof doc>,
     todo: ToDo,
     credit: ReturnType<typeof computeTodoCompletionCredit>,
+    subtasksOverride?: Subtask[],
   ): Promise<string | null> => {
     const batch = writeBatch(db);
-    batch.update(todoRef, { isCompleted: true, completedAt: serverTimestamp() });
+    batch.update(todoRef, {
+      isCompleted: true,
+      completedAt: serverTimestamp(),
+      ...(subtasksOverride ? { subtasks: subtasksOverride } : {}),
+    });
     if (credit) {
       batch.update(doc(db, `households/${hid}/members`, credit.memberUid), {
         'points.daily': increment(credit.points),
@@ -329,7 +335,10 @@ export function makeCompleteToDo(deps: {
    *
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
-  const completeToDo = async (id: string) => {
+  const completeToDo = async (
+    id: string,
+    options?: { subtasksOverride?: Subtask[] },
+  ) => {
     if (!householdId) {
       throw new Error('Household not selected');
     }
@@ -358,27 +367,37 @@ export function makeCompleteToDo(deps: {
       if (todo.isCompleted) {
         return; // already completed — idempotent, no duplicate points
       }
+      // Inline subtask auto-complete (owner-approved): when checking the LAST
+      // subtask escalates to completion, the caller passes the freshly-toggled
+      // subtasks array so the gate, credit, recurring-spawn, and habit fire all
+      // evaluate against the FINISHED checklist (the DB doc still has the last
+      // step unchecked at this point) and the array is persisted in-batch.
+      const subtasksOverride = options?.subtasksOverride;
+      const effectiveTodo: ToDo = subtasksOverride
+        ? { ...todo, subtasks: subtasksOverride }
+        : todo;
       // Subtask gate (PRD #1065), enforced in the MUTATION so every completion
       // path is covered — not just TodoRow's disabled checkbox. A habit-linked
       // to-do with unfinished subtasks refuses completion with a typed error;
       // call sites surface a "n steps left" message and bulk paths skip it.
-      const gate = evaluateTodoSubtaskGate(todo);
+      const gate = evaluateTodoSubtaskGate(effectiveTodo);
       if (gate.blocked) {
-        throw new TodoSubtasksIncompleteError(todo.id, todo.text, gate.stepsLeft);
+        throw new TodoSubtasksIncompleteError(effectiveTodo.id, effectiveTodo.text, gate.stepsLeft);
       }
-      const credit = computeTodoCompletionCredit(todo, membersRef.current);
+      const credit = computeTodoCompletionCredit(effectiveTodo, membersRef.current);
 
       // F-TODO-01: for a recurring to-do, spawn the next instance in the SAME
       // writeBatch as the completion so the two can never diverge (matching the
       // payCalendarItem atomicity convention). buildNextRecurringTodo returns
       // null for non-recurring todos, so this is byte-for-byte the prior
       // behaviour for every existing (non-recurring) todo.
-      const nextInstance = buildNextRecurringTodo(todo, getLocalDateString());
+      const nextInstance = buildNextRecurringTodo(effectiveTodo, getLocalDateString());
 
       const batch = writeBatch(db);
       batch.update(todoRef, {
         isCompleted: true,
         completedAt: serverTimestamp(),
+        ...(subtasksOverride ? { subtasks: subtasksOverride } : {}),
       });
       if (credit) {
         // Atomic points credit on the kid member doc (Firestore increment()).
@@ -401,7 +420,7 @@ export function makeCompleteToDo(deps: {
       // Habit Automations (PRD #1065): fire the linked habit IN this batch so
       // the habit + points writes co-commit atomically with the completion.
       let firedHabitTitle = await fireLinkedHabitInBatch({
-        db, batch, householdId, todo, direction: 'up', actor: user,
+        db, batch, householdId, todo: effectiveTodo, direction: 'up', actor: user,
       });
 
       try {
@@ -413,7 +432,7 @@ export function makeCompleteToDo(deps: {
         // simply won't be created until the rules ship.
         if (nextInstance) {
           console.warn('[completeToDo] Recurring spawn rejected; completing without it:', error);
-          firedHabitTitle = await commitCompletionOnly(householdId, todoRef, todo, credit);
+          firedHabitTitle = await commitCompletionOnly(householdId, todoRef, effectiveTodo, credit, subtasksOverride);
         } else {
           throw error;
         }
@@ -478,7 +497,10 @@ export function makeUncompleteToDo(deps: {
    *
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
-  const uncompleteToDo = async (id: string) => {
+  const uncompleteToDo = async (
+    id: string,
+    options?: { subtasksOverride?: Subtask[] },
+  ) => {
     if (!householdId) {
       throw new Error('Household not selected');
     }
@@ -494,8 +516,17 @@ export function makeUncompleteToDo(deps: {
       }
       const credit = computeTodoCompletionCredit(todo, membersRef.current);
 
+      // Inline subtask auto-complete undo (owner-approved): restoring an
+      // auto-completed to-do also RE-UNCHECKS the subtask that triggered it, so
+      // the caller passes the pre-toggle subtasks array to write in-batch.
+      const subtasksOverride = options?.subtasksOverride;
+
       const batch = writeBatch(db);
-      batch.update(todoRef, { isCompleted: false, completedAt: null });
+      batch.update(todoRef, {
+        isCompleted: false,
+        completedAt: null,
+        ...(subtasksOverride ? { subtasks: subtasksOverride } : {}),
+      });
       if (credit) {
         const deltas = buildUncompleteCreditReversal(credit.points, todo.completedAt);
         const pointUpdates: Record<string, unknown> = {};
@@ -555,6 +586,75 @@ export function makeUncompleteToDo(deps: {
   };
 
   return { uncompleteToDo };
+}
+
+/**
+ * Result of a `toggleTodoSubtask` call — tells the UI whether checking the
+ * subtask escalated to auto-completing the parent to-do (so it can offer the
+ * standard 5s undo) and carries the pre-toggle subtasks array to restore on
+ * undo (which re-unchecks the triggering subtask).
+ */
+export interface TodoSubtaskToggleResult {
+  /** True when this toggle checked the LAST subtask and auto-completed the parent. */
+  autoCompleted: boolean;
+  /** Subtasks state BEFORE this toggle — restore on undo of an auto-complete. */
+  priorSubtasks: Subtask[];
+}
+
+/**
+ * toggleTodoSubtask (owner-approved inline subtask access) — flips one subtask's
+ * done state directly from the list row.
+ *
+ * - Checking a NON-final subtask (or unchecking any subtask) is a plain
+ *   subtasks-array update on the to-do doc; it never (un)completes anything.
+ * - Checking the LAST remaining subtask on a still-open to-do ESCALATES to
+ *   completion: the subtasks write + parent completion + linked-habit fire +
+ *   kid-points credit all co-commit in the ONE writeBatch `completeToDo` builds
+ *   (via its `subtasksOverride`), so they can never diverge.
+ *
+ * Shares `makeCompleteToDo`/`makeTodoCrudMutations` so the escalation path is
+ * byte-identical to a normal completion.
+ */
+export function makeToggleTodoSubtask(deps: {
+  db: Firestore;
+  householdId: string | null;
+  membersRef: { current: HouseholdMember[] };
+  user?: User | null;
+}) {
+  const { db, householdId, membersRef, user = null } = deps;
+  const { completeToDo } = makeCompleteToDo({ db, householdId, membersRef, user });
+  const { updateToDo } = makeTodoCrudMutations({ db, householdId });
+
+  const toggleTodoSubtask = async (
+    todoId: string,
+    subtaskId: string,
+  ): Promise<TodoSubtaskToggleResult> => {
+    if (!householdId) {
+      throw new Error('Household not selected');
+    }
+    const todoRef = doc(db, `households/${householdId}/todos`, todoId).withConverter(todoConverter);
+    const snap = await getDoc(todoRef);
+    const todo = snap.data();
+    if (!todo) {
+      throw new Error('To-Do not found');
+    }
+    const priorSubtasks = todo.subtasks ?? [];
+    const nextSubtasks = toggleSubtask(priorSubtasks, subtaskId);
+    const { allDone } = subtaskProgress(nextSubtasks);
+
+    // Escalate only when this toggle CHECKS the last remaining step on a
+    // still-open to-do. Unchecking (allDone false) and a still-incomplete list
+    // both fall through to the plain array update below.
+    if (!todo.isCompleted && allDone) {
+      await completeToDo(todoId, { subtasksOverride: nextSubtasks });
+      return { autoCompleted: true, priorSubtasks };
+    }
+
+    await updateToDo(todoId, { subtasks: nextSubtasks });
+    return { autoCompleted: false, priorSubtasks };
+  };
+
+  return { toggleTodoSubtask };
 }
 
 /**

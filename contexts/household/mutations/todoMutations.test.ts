@@ -9,7 +9,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { makeUncompleteToDo } from './todoMutations';
+import { makeUncompleteToDo, makeToggleTodoSubtask } from './todoMutations';
+import type { Subtask } from '@/types/schema';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import type { HouseholdMember, ToDo } from '@/types/schema';
 
@@ -266,5 +267,65 @@ describe('makeUncompleteToDo', () => {
       expect(batchOps).toHaveLength(1); // only the todo flip
       expect(batchOps.some(o => o.op === 'delete')).toBe(false);
     });
+  });
+});
+
+describe('makeToggleTodoSubtask', () => {
+  const activeTodo = (subtasks: Subtask[]): ToDo =>
+    baseTodo({ isCompleted: false, completedAt: undefined, assignedTo: 'parent_1', subtasks });
+
+  it('throws when no household is selected', async () => {
+    const { toggleTodoSubtask } = makeToggleTodoSubtask({ db, householdId: null, membersRef });
+    await expect(toggleTodoSubtask('todo-1', 's1')).rejects.toThrow('Household not selected');
+  });
+
+  it('checking a NON-final subtask is a plain update — never completes the to-do', async () => {
+    mockTodoDoc(activeTodo([
+      { id: 's1', text: 'a', isDone: false },
+      { id: 's2', text: 'b', isDone: false },
+    ]));
+    const { toggleTodoSubtask } = makeToggleTodoSubtask({ db, householdId, membersRef });
+    const result = await toggleTodoSubtask('todo-1', 's1');
+
+    expect(result.autoCompleted).toBe(false);
+    expect(result.priorSubtasks).toHaveLength(2);
+    // Plain update goes through updateDoc, not a completion writeBatch.
+    expect(commitMock).not.toHaveBeenCalled();
+  });
+
+  it('unchecking a subtask on a still-open to-do never (un)completes anything', async () => {
+    mockTodoDoc(activeTodo([
+      { id: 's1', text: 'a', isDone: true },
+      { id: 's2', text: 'b', isDone: false },
+    ]));
+    const { toggleTodoSubtask } = makeToggleTodoSubtask({ db, householdId, membersRef });
+    const result = await toggleTodoSubtask('todo-1', 's1'); // done -> not done
+
+    expect(result.autoCompleted).toBe(false);
+    expect(commitMock).not.toHaveBeenCalled();
+  });
+
+  it('checking the LAST subtask auto-completes the parent in ONE batch, persisting the finished checklist', async () => {
+    mockTodoDoc(activeTodo([
+      { id: 's1', text: 'a', isDone: true },
+      { id: 's2', text: 'b', isDone: false },
+    ]));
+    const { toggleTodoSubtask } = makeToggleTodoSubtask({ db, householdId, membersRef });
+    const result = await toggleTodoSubtask('todo-1', 's2');
+
+    expect(result.autoCompleted).toBe(true);
+    // Pre-toggle subtasks are returned so an undo can re-uncheck the trigger.
+    expect(result.priorSubtasks).toEqual([
+      { id: 's1', text: 'a', isDone: true },
+      { id: 's2', text: 'b', isDone: false },
+    ]);
+    // Completion committed atomically.
+    expect(commitMock).toHaveBeenCalledTimes(1);
+    const todoOp = batchOps.find(o => o.ref.__path === 'households/hh-1/todos/todo-1');
+    expect(todoOp?.data).toMatchObject({ isCompleted: true });
+    expect(todoOp?.data?.subtasks).toEqual([
+      { id: 's1', text: 'a', isDone: true },
+      { id: 's2', text: 'b', isDone: true },
+    ]);
   });
 });

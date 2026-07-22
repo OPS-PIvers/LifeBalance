@@ -26,6 +26,7 @@ const handlers = {
   onDelete: vi.fn(),
   onMore: vi.fn(),
   onToggleSelection: vi.fn(),
+  onToggleSubtask: vi.fn(async () => ({ autoCompleted: false, priorSubtasks: [] })),
 };
 
 const baseProps = {
@@ -100,6 +101,58 @@ describe('TodoRow', () => {
       fireEvent.contextMenu(editButton);
       expect(handlers.onMore).toHaveBeenCalledTimes(1);
       expect(handlers.onEdit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('inline subtask access (checklist pill)', () => {
+    const withSubtasks: ToDo = {
+      ...item,
+      subtasks: [
+        { id: 's1', text: 'Gather bins', isDone: true },
+        { id: 's2', text: 'Wheel to curb', isDone: false },
+      ],
+    };
+
+    it('does not render the pill when the to-do has no subtasks', () => {
+      render(<TodoRow {...baseProps} />);
+      expect(screen.queryByTestId('todo-subtask-pill')).toBeNull();
+    });
+
+    it('renders a done/total pill and no longer renders the legacy steps-left hint', () => {
+      render(<TodoRow {...baseProps} item={withSubtasks} />);
+      const pill = screen.getByTestId('todo-subtask-pill');
+      expect(pill.textContent).toContain('1/2');
+      expect(screen.queryByTestId('todo-steps-left')).toBeNull();
+    });
+
+    it('tapping the pill expands the checklist without opening the edit drawer', () => {
+      render(<TodoRow {...baseProps} item={withSubtasks} />);
+      const pill = screen.getByTestId('todo-subtask-pill');
+      // Collapsed by default.
+      expect(screen.queryByText('Wheel to curb')).toBeNull();
+      expect(pill.getAttribute('aria-expanded')).toBe('false');
+
+      fireEvent.click(pill);
+      expect(screen.getByText('Wheel to curb')).toBeInTheDocument();
+      expect(pill.getAttribute('aria-expanded')).toBe('true');
+      // The pill's click must not bubble to the row body's edit handler.
+      expect(handlers.onEdit).not.toHaveBeenCalled();
+    });
+
+    it('checking a subtask calls onToggleSubtask with the row + subtask ids', () => {
+      render(<TodoRow {...baseProps} item={withSubtasks} />);
+      fireEvent.click(screen.getByTestId('todo-subtask-pill'));
+      const checkbox = screen.getByRole('checkbox', { name: /Wheel to curb/ });
+      fireEvent.click(checkbox);
+      expect(handlers.onToggleSubtask).toHaveBeenCalledWith('todo-1', 's2');
+    });
+
+    it('demotes subtasks out of the generic "has details" dot', () => {
+      // A to-do whose ONLY extra content is subtasks shows the pill but not the
+      // details dot (notes/recurrence are what the dot now signals).
+      render(<TodoRow {...baseProps} item={withSubtasks} />);
+      expect(screen.getByTestId('todo-subtask-pill')).toBeInTheDocument();
+      expect(screen.queryByTestId('todo-details-dot')).toBeNull();
     });
   });
 });

@@ -46,6 +46,7 @@ import {
   ShoppingItem,
   MealPlanItem,
   ToDo,
+  Subtask,
   Insight,
   HabitInsightsDoc,
   GroceryCatalogItem,
@@ -138,6 +139,7 @@ import {
   makeTodoCrudMutations,
   makeCompleteToDo,
   makeUncompleteToDo,
+  makeToggleTodoSubtask,
   makeLoadOlderCompletedTodos,
 } from '@/contexts/household/mutations/todoMutations';
 import {
@@ -2299,16 +2301,25 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
    *
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
-  const completeToDo = useCallback(async (id: string) => {
-    await makeCompleteToDo({ db, householdId, membersRef, user }).completeToDo(id);
+  const completeToDo = useCallback(async (id: string, options?: { subtasksOverride?: Subtask[] }) => {
+    await makeCompleteToDo({ db, householdId, membersRef, user }).completeToDo(id, options);
   }, [householdId, user]);
 
   /**
    * Restores a completed to-do to active, reversing any kid points credit in
    * the same writeBatch (counterpart of completeToDo — see makeUncompleteToDo).
    */
-  const uncompleteToDo = useCallback(async (id: string) => {
-    await makeUncompleteToDo({ db, householdId, membersRef, user }).uncompleteToDo(id);
+  const uncompleteToDo = useCallback(async (id: string, options?: { subtasksOverride?: Subtask[] }) => {
+    await makeUncompleteToDo({ db, householdId, membersRef, user }).uncompleteToDo(id, options);
+  }, [householdId, user]);
+
+  /**
+   * Inline subtask access (owner-approved): toggle one subtask from the to-do
+   * list row. Checking the last step escalates to an atomic auto-completion —
+   * see makeToggleTodoSubtask.
+   */
+  const toggleTodoSubtask = useCallback(async (todoId: string, subtaskId: string) => {
+    return makeToggleTodoSubtask({ db, householdId, membersRef, user }).toggleTodoSubtask(todoId, subtaskId);
   }, [householdId, user]);
 
   // --- ACTIONS: UNIFIED TRASH (F-XCUT-03) ---
@@ -2582,6 +2593,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     approveTodo,
     completeToDo,
     uncompleteToDo,
+    toggleTodoSubtask,
     taskTemplates,
     addTaskTemplate,
     updateTaskTemplate,
@@ -2589,7 +2601,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     applyTaskTemplate,
   }), [
     visibleTodos, todosAwaitingReview, isLoadingOlderTodos, hasMoreCompletedTodos, loadOlderCompletedTodos,
-    addToDo, updateToDo, deleteToDo, approveTodo, completeToDo, uncompleteToDo,
+    addToDo, updateToDo, deleteToDo, approveTodo, completeToDo, uncompleteToDo, toggleTodoSubtask,
     taskTemplates, addTaskTemplate, updateTaskTemplate, deleteTaskTemplate, applyTaskTemplate,
   ]);
 

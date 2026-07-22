@@ -450,8 +450,9 @@ describe('ToDosPage', () => {
 
           await waitFor(() => {
               // Restore routes through uncompleteToDo (atomic kid-points
-              // reversal), NOT a plain updateToDo.
-              expect(mockUncompleteToDo).toHaveBeenCalledWith('3');
+              // reversal), NOT a plain updateToDo. The second arg is the
+              // optional subtasks-override (undefined for a plain restore).
+              expect(mockUncompleteToDo).toHaveBeenCalledWith('3', undefined);
           });
       });
 
