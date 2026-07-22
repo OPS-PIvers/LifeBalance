@@ -16,6 +16,7 @@ import {
   ReceiptText,
   ListTodo,
   Download,
+  MapPin,
 } from 'lucide-react';
 import { getQuickAddEndpointUrl } from '@/services/apiKeyService';
 import { SurfaceList, DisclosureRow } from '@/components/ui/Section';
@@ -341,6 +342,50 @@ const EXAMPLES: ShortcutExample[] = [
       },
     ],
     after: ['Make one copy of this shortcut per habit — only the **habitName** value changes.'],
+  },
+  {
+    id: 'habit-arrive',
+    title: 'Arrive & Auto-Log a Habit',
+    icon: <MapPin className="w-5 h-5" />,
+    description: 'Runs by itself when you arrive somewhere — e.g. auto-log “Went into Target” at the store.',
+    endpoint: 'habit',
+    isAutomation: true,
+    before: [
+      'This is a true **background** automation — LifeBalance never stores your location; your phone just posts one request when you arrive.',
+      'It logs the SAME habit every time you arrive — for a habit with a saved location in its **Automations** section, this is the always-on twin of the in-app confirm prompt (which only checks once per app open).',
+      'Make one automation per habit + location pair — copy this one and swap the **habitName** and place each time.',
+    ],
+    setupSteps: [
+      { text: 'In the **Shortcuts** app, go to the **Automation** tab → tap **+**.' },
+      { text: 'Choose **Arrive** from the trigger list, then pick the place — search an address or drop a pin.' },
+      { text: 'Set **Radius** (Shortcuts default is fine) and leave it as **Arrive** (not **Leave**), select **Run Immediately**, then tap **Next**.' },
+      { text: 'Tap **New Blank Automation** — now you’re building the actions it runs.' },
+    ],
+    fields: [
+      {
+        key: 'habitName',
+        type: 'Text',
+        mode: 'typeIn',
+        value: 'Went into Target',
+        hint: 'Use the habit’s exact name from your Habits page — close spelling still matches.',
+      },
+      {
+        key: 'direction',
+        type: 'Text',
+        mode: 'copy',
+        value: 'up',
+        hint: '“up” logs a completion.',
+      },
+    ],
+    finishSteps: [
+      {
+        text: 'Tap **Done**. That’s it — no notification needed; open LifeBalance later and the habit (and its points) will already reflect the visit.',
+      },
+    ],
+    after: [
+      'A **threshold** habit (most habits) only counts once toward its target per day, so a re-trigger (or running this alongside the in-app confirm prompt) can’t double-log it. An **incremental** habit (points on every action) logs again each time it fires — only use Arrive with one of those if repeat visits in a day should really score again.',
+      'iOS may ask to confirm **Always Allow** location access for Shortcuts the first time an Arrive automation fires — without it, arrival automations silently stop working.',
+    ],
   },
   {
     id: 'expense-voice',

@@ -3,13 +3,14 @@ import { Trash2, Sparkles, ListChecks } from 'lucide-react';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
-import { Habit, EffortLevel, ToDo } from '@/types/schema';
+import { Habit, EffortLevel, HabitLocationTrigger, ToDo } from '@/types/schema';
 import {
   EFFORT_POINTS,
   EFFORT_LABELS,
   EFFORT_COLORS,
   NEGATIVE_CATEGORY,
 } from '@/data/presetHabits';
+import HabitLocationsEditor from '@/components/habits/HabitLocationsEditor';
 
 // Categories for custom habit creation
 const CUSTOM_CATEGORIES = ['Health', 'Meal Planning', 'Household', 'Financial Planning', 'Self-Discipline', NEGATIVE_CATEGORY];
@@ -25,6 +26,9 @@ export interface CustomHabitFormData {
   scoringType: 'incremental' | 'threshold';
   period: 'daily' | 'weekly';
   targetCount: string;
+  /** Habit Automations (PRD #1065) — saved geolocation triggers being edited
+   *  in this form session (merged back with any other trigger type on save). */
+  locations: HabitLocationTrigger[];
 }
 
 interface CustomHabitFormProps {
@@ -164,12 +168,12 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
         </div>
       </div>
 
-      {/* Automations (Edit mode only) — PRD #1065. This PR fills in the linked
-          to-dos listing (read-only; the link is authored on the to-do's "Counts
-          toward habit" picker). Transaction keywords and saved locations are
-          added by sibling PRs. */}
+      {/* Automations (Edit mode only) — PRD #1065. Geolocation triggers are fully
+          wired here (saved locations editor). Linked to-dos are listed read-only
+          (the link is authored on the to-do's "Counts toward habit" picker).
+          Transaction keywords are a not-yet-built surface from a sibling PR. */}
       {editingHabit && (
-        <section aria-labelledby="habit-automations-heading" className="pt-1">
+        <section aria-labelledby="habit-automations-heading" className="pt-1 space-y-3">
           <h3
             id="habit-automations-heading"
             className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase mb-2 flex items-center gap-1.5"
@@ -177,6 +181,16 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
             <Sparkles size={13} className="text-warm-500" aria-hidden="true" />
             Automations
           </h3>
+
+          <div>
+            <p className="text-sm font-semibold text-brand-700 dark:text-brand-200 mb-1.5">
+              Saved locations
+            </p>
+            <HabitLocationsEditor
+              locations={formData.locations}
+              onChange={(locations) => onFormChange({ locations })}
+            />
+          </div>
 
           {linkedTodos.length > 0 ? (
             <div className="rounded-card border border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800 overflow-hidden">

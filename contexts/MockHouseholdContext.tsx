@@ -17,6 +17,7 @@ import { processToggleHabit, processStaleDownToggle, isHabitStale, calculateRese
 import { computeHabitTriggerFire, computeHabitTriggerReverse } from '@/utils/habitTriggerFire';
 import { evaluateTodoSubtaskGate, TodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
 import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
+import { attributionString, type TriggerSource } from '@/utils/habitTriggers';
 import { selectAutoFreezeCandidates } from '@/utils/freezeBank';
 import { accountImpactOf, effectiveAccountImpact, isBankSyncTransaction, resolveTargetAccount } from '@/utils/accountImpact';
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
@@ -1180,7 +1181,15 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   }, []);
 
   const updateHabit = useCallback(async (habit: Habit) => {
-    setHabits(prev => prev.map(h => h.id === habit.id ? habit : h));
+    // Merge rather than wholesale-replace, mirroring the real Firestore
+    // updateDoc path (which only touches the fields it's explicitly given):
+    // spreading the incoming `habit` OVER the existing doc preserves any
+    // field the caller's payload omits entirely (e.g. HabitFormModal editing
+    // basePoints doesn't carry `triggers` at all) while still honoring an
+    // explicit overwrite/clear for any key the caller DID include (even with
+    // value `undefined`, since object spread only overwrites keys actually
+    // present on the source object).
+    setHabits(prev => prev.map(h => (h.id === habit.id ? { ...h, ...habit } : h)));
     toast.success('Mock: Habit updated');
   }, []);
 
@@ -1328,9 +1337,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // unit-tested logic (streaks, period-aware multiplier, threshold vs
   // incremental scoring, completedDates upkeep) instead of a bare count bump,
   // so Test Mode's points/streak behavior matches production exactly.
-  const toggleHabit = useCallback(async (id: string, direction: 'up' | 'down') => {
+  const toggleHabit = useCallback(async (id: string, direction: 'up' | 'down', source?: TriggerSource) => {
     const habit = habits.find(h => h.id === id);
     if (!habit) return;
+    const attribution = source ? attributionString(source) : null;
 
     // Lazy-reset parity with the real toggle path (useHabitActions): a stale
     // habit's counter belongs to a previous period. 'down' undoes that prior
@@ -1369,7 +1379,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     if (!result) return; // e.g. decrement below 0
     setHabits(prev => prev.map(h => h.id === id ? { ...h, ...result.updatedHabit } : h));
     creditPoints(result.pointsChange);
-    toast.success(`Mock: Habit ${direction === 'up' ? 'incremented' : 'decremented'}`);
+    toast.success(
+      `Mock: Habit ${direction === 'up' ? 'incremented' : 'decremented'}${attribution ? ` (${attribution})` : ''}`
+    );
 
     // F-HABITS-02 (streak milestone celebrations): mirrors the real
     // toggleHabit's presentation-only milestone toast + reward unlock.

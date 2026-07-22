@@ -46,6 +46,7 @@ import { getLocalDateString } from '@/utils/dateHelpers';
 import { track } from '@/services/analytics';
 import { shouldTrackFirstTime, FIRST_HABIT_FLAG } from '@/utils/firstTimeFlags';
 import { appendActivityLog, composeSummary } from '@/utils/activityLog';
+import { attributionString, TriggerSource } from '@/utils/habitTriggers';
 import { accumulate, ToastAccumulatorState } from '@/utils/toastAccumulator';
 import { softDeleteDoc } from '@/contexts/household/mutations/trashMutations';
 
@@ -99,7 +100,7 @@ export const useHabitActions = (
   // Self-reference so the points toast's Undo action can fire the reverse
   // toggle — a useCallback can't appear in its own dependency array, so the
   // toast closure reads the latest callback through this ref instead.
-  const toggleHabitSelfRef = useRef<(id: string, direction: 'up' | 'down') => Promise<void>>(async () => {});
+  const toggleHabitSelfRef = useRef<(id: string, direction: 'up' | 'down', source?: TriggerSource) => Promise<void>>(async () => {});
 
   const addHabit = useCallback(async (habit: Habit): Promise<string> => {
     if (!householdId || !currentUser) throw new Error("Not authenticated");
@@ -150,8 +151,37 @@ export const useHabitActions = (
         }).filter(([, value]) => value !== undefined)
       );
 
+      // Habit Automations (PRD #1065): persist trigger config (keywords +
+      // saved locations) edited in the habit's Automations section. Handled
+      // OUTSIDE the generic filter above because clearing the last saved
+      // trigger must remove the field from Firestore (deleteField), not
+      // merely omit it from this update — or a stale location would linger
+      // forever.
+      //
+      // The caller's INTENT is distinguished by whether `triggers` is an own
+      // property on the passed-in `habit` object at all, not by its value:
+      //   - key absent (e.g. HabitFormModal's baseHabitData, which never
+      //     mentions `triggers`) => an ordinary edit that didn't touch
+      //     Automations => leave the stored field untouched.
+      //   - key present but the value is empty/undefined (the Automations
+      //     editor explicitly clearing the last keyword/location) => remove
+      //     the field via deleteField().
+      //   - key present with a non-empty value => write it.
+      // A plain `habit.triggers !== undefined` check can't tell these apart:
+      // both "not touched" and "explicitly cleared" often produce the same
+      // `undefined` value, so it would either wipe triggers on every
+      // unrelated edit or make clearing impossible.
+      const hasTriggersKey = Object.prototype.hasOwnProperty.call(habit, 'triggers');
+      const triggersValue = habit.triggers;
+      const triggersIsEmpty =
+        !triggersValue ||
+        (!triggersValue.keywords?.length && !triggersValue.locations?.length);
+
       await updateDoc(doc(db, `households/${householdId}/habits`, habit.id), {
         ...updateData,
+        ...(hasTriggersKey
+          ? { triggers: triggersIsEmpty ? deleteField() : triggersValue }
+          : {}),
         lastUpdated: serverTimestamp(),
       });
     } catch (error) {
@@ -227,7 +257,7 @@ export const useHabitActions = (
     }
   }, [householdId]);
 
-  const toggleHabit = useCallback(async (id: string, direction: 'up' | 'down') => {
+  const toggleHabit = useCallback(async (id: string, direction: 'up' | 'down', source?: TriggerSource) => {
     if (!householdId || !currentUser || !householdSettingsRef.current) return;
 
     const habit = habitsRef.current.find(h => h.id === id);
@@ -376,11 +406,17 @@ export const useHabitActions = (
     // so it co-commits atomically with the habit/points writes. Only an 'up'
     // toggle (a completion) is logged — a 'down' correction would clutter the
     // feed. AI/quota events are deliberately excluded from the log.
+    // Habit Automations (PRD #1065): an automated fire (source present) appends
+    // its attribution ("via location: Target") to the same activity-log entry
+    // a manual tap would have written — one event, one log line either way.
+    const attribution = source ? attributionString(source) : null;
     if (direction === 'up') {
       appendActivityLog(batch, db, householdId, { uid: currentUser.uid, name: currentUser.displayName }, {
         domain: 'habit',
         action: 'habit_completed',
-        summary: composeSummary(currentUser.displayName, 'completed', habit.title),
+        summary: attribution
+          ? `${composeSummary(currentUser.displayName, 'completed', habit.title)} (${attribution})`
+          : composeSummary(currentUser.displayName, 'completed', habit.title),
       });
     }
 
@@ -448,6 +484,13 @@ export const useHabitActions = (
             <span className="text-sm opacity-80">
               {count === 1 ? `(${result.multiplier}x)` : `(${count} changes)`}
             </span>
+            {/* Habit Automations (PRD #1065): an automated fire's attribution
+                ("via location: Target") rides along on the same toast a manual
+                tap would have shown, so "why did my points change?" is always
+                answerable without opening the activity log. */}
+            {attribution && count === 1 && (
+              <span className="text-xs opacity-70 truncate">{attribution}</span>
+            )}
             {/* Undo = the reverse toggle. It feeds the same accumulator, so a
                 single-tap undo nets to 0 and the branch above dismisses this
                 toast; after multiple taps it walks the total back one tap at
