@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Sparkles } from 'lucide-react';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
@@ -156,6 +156,30 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
           />
         </div>
       </div>
+
+      {/* Automations (Edit mode only) — scaffold. Trigger types (linked to-dos,
+          transaction keywords, saved locations) are filled in by later PRs
+          (PRD #1065). Shown as an empty-state shell until then. */}
+      {editingHabit && (
+        <section aria-labelledby="habit-automations-heading" className="pt-1">
+          <h3
+            id="habit-automations-heading"
+            className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase mb-2 flex items-center gap-1.5"
+          >
+            <Sparkles size={13} className="text-warm-500" aria-hidden="true" />
+            Automations
+          </h3>
+          <div className="rounded-card border border-dashed border-brand-200 dark:border-brand-700 bg-brand-50/60 dark:bg-brand-700/30 p-4 text-center">
+            <p className="text-sm font-semibold text-brand-700 dark:text-brand-200">
+              Log this habit automatically
+            </p>
+            <p className="text-xs text-brand-400 dark:text-brand-450 mt-1">
+              Link a to-do, match transaction keywords, or save a location to fire
+              this habit for you. Coming soon.
+            </p>
+          </div>
+        </section>
+      )}
 
       {/* Delete Button (Edit mode only) */}
       {editingHabit && onDelete && (
