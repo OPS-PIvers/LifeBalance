@@ -4,9 +4,15 @@ import {
   haversineMeters,
   isWithinRadius,
   locationsContainingPoint,
-  geoDedupKey,
   shouldPromptLocation,
 } from '@/utils/habitGeoTrigger';
+import { triggerDedupKey } from '@/utils/habitTriggers';
+
+function geoKey(locationId: string, date: string): string {
+  const key = triggerDedupKey({ type: 'geo', locationId, label: 'x' }, date);
+  if (key === null) throw new Error('geo dedup key must not be null');
+  return key;
+}
 
 const target: HabitLocationTrigger = {
   id: 'loc-target',
@@ -66,8 +72,8 @@ describe('locationsContainingPoint', () => {
 });
 
 describe('geo dedup', () => {
-  it('builds a stable per-day-per-location key', () => {
-    expect(geoDedupKey('loc-target', '2026-07-22')).toBe('geo:loc-target:2026-07-22');
+  it('delegates to triggerDedupKey for a stable per-day-per-location key', () => {
+    expect(geoKey('loc-target', '2026-07-22')).toBe('geo:loc-target:2026-07-22');
   });
 
   it('prompts when no key recorded today', () => {
@@ -75,12 +81,12 @@ describe('geo dedup', () => {
   });
 
   it('suppresses a second prompt for the same location the same day', () => {
-    const fired = [geoDedupKey('loc-target', '2026-07-22')];
+    const fired = [geoKey('loc-target', '2026-07-22')];
     expect(shouldPromptLocation(target, '2026-07-22', fired)).toBe(false);
   });
 
   it('prompts again the next day', () => {
-    const fired = [geoDedupKey('loc-target', '2026-07-22')];
+    const fired = [geoKey('loc-target', '2026-07-22')];
     expect(shouldPromptLocation(target, '2026-07-23', fired)).toBe(true);
   });
 });

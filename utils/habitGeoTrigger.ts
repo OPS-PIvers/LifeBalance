@@ -1,4 +1,5 @@
 import { HabitLocationTrigger } from '@/types/schema';
+import { triggerDedupKey } from '@/utils/habitTriggers';
 
 /**
  * Habit Automations (PRD #1065) — geolocation trigger math.
@@ -62,21 +63,17 @@ export function locationsContainingPoint(
 }
 
 /**
- * Stable dedup key for a geo prompt: once per day per location. `date` is a
- * local `yyyy-MM-dd` string (from getLocalDateString()).
- */
-export function geoDedupKey(locationId: string, date: string): string {
-  return `geo:${locationId}:${date}`;
-}
-
-/**
  * Should we surface the confirm prompt for this location today? True only when
- * its dedup key has not already been recorded for `date`.
+ * its dedup key has not already been recorded for `date`. The dedup key
+ * itself (once per day per location) is owned by `triggerDedupKey` in
+ * utils/habitTriggers.ts — this delegates rather than re-deriving the format,
+ * so the two can never drift.
  */
 export function shouldPromptLocation(
   location: HabitLocationTrigger,
   date: string,
   promptedKeys: readonly string[],
 ): boolean {
-  return !promptedKeys.includes(geoDedupKey(location.id, date));
+  const key = triggerDedupKey({ type: 'geo', locationId: location.id, label: location.name }, date);
+  return key === null || !promptedKeys.includes(key);
 }
