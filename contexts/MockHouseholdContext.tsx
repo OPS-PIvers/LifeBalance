@@ -15,6 +15,7 @@ import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/util
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { processToggleHabit, processStaleDownToggle, isHabitStale, calculateResetPoints, streakForHabit } from '@/utils/habitLogic';
 import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
+import { attributionString, type TriggerSource } from '@/utils/habitTriggers';
 import { selectAutoFreezeCandidates } from '@/utils/freezeBank';
 import { accountImpactOf, effectiveAccountImpact, isBankSyncTransaction, resolveTargetAccount } from '@/utils/accountImpact';
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
@@ -1252,9 +1253,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // unit-tested logic (streaks, period-aware multiplier, threshold vs
   // incremental scoring, completedDates upkeep) instead of a bare count bump,
   // so Test Mode's points/streak behavior matches production exactly.
-  const toggleHabit = useCallback(async (id: string, direction: 'up' | 'down') => {
+  const toggleHabit = useCallback(async (id: string, direction: 'up' | 'down', source?: TriggerSource) => {
     const habit = habits.find(h => h.id === id);
     if (!habit) return;
+    const attribution = source ? attributionString(source) : null;
 
     // Lazy-reset parity with the real toggle path (useHabitActions): a stale
     // habit's counter belongs to a previous period. 'down' undoes that prior
@@ -1293,7 +1295,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     if (!result) return; // e.g. decrement below 0
     setHabits(prev => prev.map(h => h.id === id ? { ...h, ...result.updatedHabit } : h));
     creditPoints(result.pointsChange);
-    toast.success(`Mock: Habit ${direction === 'up' ? 'incremented' : 'decremented'}`);
+    toast.success(
+      `Mock: Habit ${direction === 'up' ? 'incremented' : 'decremented'}${attribution ? ` (${attribution})` : ''}`
+    );
 
     // F-HABITS-02 (streak milestone celebrations): mirrors the real
     // toggleHabit's presentation-only milestone toast + reward unlock.

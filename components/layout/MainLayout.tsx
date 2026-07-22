@@ -14,6 +14,7 @@ import { getLocalDateString } from '@/utils/dateHelpers';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { useKeyboardViewportAnchor } from '@/hooks/useKeyboardViewportAnchor';
 import { InstallPwaBanner } from '@/components/ui/InstallPwaBanner';
+import HabitLocationPromptBanner from '@/components/habits/HabitLocationPromptBanner';
 import { useAppBadge } from '@/hooks/useAppBadge';
 import { useNotificationActionIntent } from '@/hooks/useNotificationActionIntent';
 import { subscribePayPeriodCeremony, type PayPeriodCeremonyEvent } from '@/utils/payPeriodCeremony';
@@ -255,6 +256,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       </LazyMount>
 
       <InstallPwaBanner />
+      <HabitLocationPromptBanner />
     </div>
   );
 };

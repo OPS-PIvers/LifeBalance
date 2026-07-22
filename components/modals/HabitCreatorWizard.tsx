@@ -13,19 +13,7 @@ import CustomHabitList from '@/components/habits/CustomHabitList';
 import PresetHabitList from '@/components/habits/PresetHabitList';
 import { Drawer } from '@/components/ui/Drawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-
-// UUID generator with fallback for non-secure contexts
-const generateId = (): string => {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  // Fallback for non-secure contexts
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-};
+import { generateId } from '@/utils/id';
 
 // Helper to calculate basePoints based on type and effort level
 const calculateBasePoints = (type: 'positive' | 'negative', effortLevel: EffortLevel): number => {
@@ -65,6 +53,7 @@ const DEFAULT_FORM_DATA: CustomHabitFormData = {
   scoringType: 'threshold',
   period: 'daily',
   targetCount: '1',
+  locations: [],
 };
 
 const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose }) => {
@@ -152,6 +141,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
       scoringType: habit.scoringType,
       period: habit.period,
       targetCount: habit.targetCount.toString(),
+      locations: habit.triggers?.locations ?? [],
     });
     setView('edit-custom');
   };
@@ -169,6 +159,20 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
     }
 
     const targetCount = parseTargetCount(formData.targetCount);
+
+    // Habit Automations (PRD #1065): merge the edited locations back with any
+    // existing keyword trigger (a different PR's Automations surface — never
+    // touched here) so saving the geo editor can't silently drop it. `triggers`
+    // itself is omitted entirely when there's nothing to configure, matching
+    // every existing habit doc (the field is absent, not an empty object).
+    const existingKeywords = editingHabit?.triggers?.keywords;
+    const triggers: Habit['triggers'] =
+      formData.locations.length > 0 || (existingKeywords && existingKeywords.length > 0)
+        ? {
+            ...(existingKeywords && existingKeywords.length > 0 ? { keywords: existingKeywords } : {}),
+            ...(formData.locations.length > 0 ? { locations: formData.locations } : {}),
+          }
+        : undefined;
 
     // Build base habit data
     const habitData: Habit = {
@@ -192,6 +196,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
         isShared: editingHabit.isShared,
         ownerId: editingHabit.ownerId,
       }),
+      ...(triggers ? { triggers } : {}),
       // Custom habits should not have presetId (contradicts isCustom: true)
     };
 

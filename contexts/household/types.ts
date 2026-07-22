@@ -39,6 +39,7 @@ import {
 import { type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { type BucketSpent } from '@/utils/bucketSpentCalculator';
 import { type TrashedItem } from '@/utils/trash';
+import { type TriggerSource } from '@/utils/habitTriggers';
 
 /** Options accepted by mutations that normally toast per call. `silent: true`
  *  suppresses the per-item success toast so BULK flows (Action Queue
@@ -321,7 +322,10 @@ export interface HouseholdContextType {
   archiveHabit: (id: string) => Promise<void>;
   unarchiveHabit: (id: string) => Promise<void>;
   reorderHabits: (updates: { id: string; order: number; category?: string }[]) => Promise<void>;
-  toggleHabit: (id: string, direction: 'up' | 'down') => Promise<void>;
+  /** Habit Automations (PRD #1065): an optional `source` attributes an
+   *  automated fire (e.g. `{ type: 'geo', ... }`) — it fires exactly like a
+   *  manual tap (same batch/scoring), just with a toast + activity-log tag. */
+  toggleHabit: (id: string, direction: 'up' | 'down', source?: TriggerSource) => Promise<void>;
   resetHabit: (id: string) => Promise<void>;
   /** F-HABITS-01: set (yyyy-MM-dd) or clear (null) a habit's planned-break end
    *  date. A paused habit skips the auto-reset penalty and freeze-token
