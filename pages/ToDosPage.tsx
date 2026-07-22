@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Rows3, Grid2x2, List, Camera, Smartphone, Sparkles, Plus, Repeat } from 'lucide-react';
+import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Rows3, Grid2x2, List, Camera, Sparkles, Plus, Repeat } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { quadrantForTodo, QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhower';
@@ -1036,16 +1036,19 @@ const ToDosPage: React.FC = () => {
   return (
     <div className={cn("px-4 max-w-2xl mx-auto space-y-4 min-h-screen", isSelectionMode ? "pb-40" : "pb-nav-safe")}>
 
-      {/* Compact header unit: title + toggle/select-all row read as one block
-          (tight gap, no PageHeader padding tax) since the Plan tab-strip
-          already labels this page "To-Dos". An h2, not h1 — the page-level h1
-          is ListsPage's "Plan" masthead above the tab strip. */}
-      <div className="pt-4 flex items-center justify-between gap-3">
+      {/* Slim header row: no "To-dos" title — the highlighted Plan tab already
+          names the surface, so the row is just the Active/Completed control on
+          the left and the overflow menu on the right (heading text appears
+          only in selection mode, where the mode needs announcing). An h2, not
+          h1 — the page-level h1 is ListsPage's sr-only "Plan". */}
+      <div className="pt-3 flex items-center justify-between gap-3">
         <div className="min-w-0 flex items-center gap-3">
-          <h2 className="font-display text-xl font-semibold tracking-tight text-brand-900 dark:text-brand-50 whitespace-nowrap shrink-0">
-            {isSelectionMode ? 'Select tasks' : 'To-dos'}
-          </h2>
-          {!isSelectionMode && (
+          <h2 className="sr-only">To-dos</h2>
+          {isSelectionMode ? (
+            <span className="font-display text-xl font-semibold tracking-tight text-brand-900 dark:text-brand-50 whitespace-nowrap shrink-0">
+              Select tasks
+            </span>
+          ) : (
             <Tabs value={viewMode} onValueChange={(val) => setViewMode(val as 'active' | 'completed')}>
               {/* size="sm" (36px) was the app's only sub-44px touch target; default md keeps min-h-11. */}
               <TabsList className="w-auto inline-flex">
@@ -1180,15 +1183,6 @@ const ToDosPage: React.FC = () => {
                importance (the star). Stacked sections in actionability order;
                the quick-add bar sits in the sticky card above. */
             <>
-            {arrangement === 'grid' && !isSelectionMode && (
-              /* Portrait fallback from the 2×2 grid: the tasks stay visible;
-                 this one-liner explains why the layout differs and how to get
-                 the grid back. */
-              <p className="px-1 text-xs text-brand-400 dark:text-brand-450 flex items-center gap-1.5">
-                <Smartphone size={14} className="rotate-90" aria-hidden="true" />
-                Stacked while portrait. Rotate your phone for the 2×2 grid.
-              </p>
-            )}
             <EisenhowerMatrixView
               quadrants={quadrants}
               memberMap={memberMap}

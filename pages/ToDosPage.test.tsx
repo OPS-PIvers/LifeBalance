@@ -736,8 +736,7 @@ describe('ToDosPage', () => {
       setup(quadrantTodos);
 
       // Tasks stay visible via the matrix sections instead of hiding behind a
-      // full-screen rotate wall; an inline hint explains how to get the grid.
-      expect(screen.getByText(/Rotate your phone for the 2×2 grid/)).toBeInTheDocument();
+      // full-screen rotate wall.
       expect(screen.getByText('Do First')).toBeInTheDocument();
       expect(screen.getByText('Do First Task')).toBeInTheDocument();
       expect(screen.queryByTestId('grid-overlay')).not.toBeInTheDocument();
@@ -844,7 +843,6 @@ describe('ToDosPage', () => {
       // the lock.
       rotateTo(false);
       expect(screen.queryByTestId('grid-overlay')).not.toBeInTheDocument();
-      expect(screen.getByText(/Rotate your phone for the 2×2 grid/)).toBeInTheDocument();
       expect(document.body.style.overflow).toBe('hidden');
 
       // Close the drawer: now everything is closed — lock fully released.
