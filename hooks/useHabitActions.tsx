@@ -160,9 +160,10 @@ export const useHabitActions = (
       //
       // The caller's INTENT is distinguished by whether `triggers` is an own
       // property on the passed-in `habit` object at all, not by its value:
-      //   - key absent (e.g. HabitFormModal's baseHabitData, which never
-      //     mentions `triggers`) => an ordinary edit that didn't touch
-      //     Automations => leave the stored field untouched.
+      //   - key absent (HabitFormModal always attaches `triggers` in edit
+      //     mode — see baseHabitData — so an absent key means the call came
+      //     from a different caller entirely) => an ordinary edit that didn't
+      //     touch Automations => leave the stored field untouched.
       //   - key present but the value is empty/undefined (the Automations
       //     editor explicitly clearing the last keyword/location) => remove
       //     the field via deleteField().

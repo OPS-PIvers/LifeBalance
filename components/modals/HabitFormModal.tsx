@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { Habit } from '@/types/schema';
-import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
+import { Habit, HabitLocationTrigger } from '@/types/schema';
+import { useGamification, useHouseholdCore, useTodos } from '@/contexts/FirebaseHouseholdContext';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import Input from '@/components/ui/Input';
+import HabitAutomationsSection from '@/components/habits/HabitAutomationsSection';
 import { getLocalDateString } from '@/utils/dateHelpers';
 
 interface HabitFormModalProps {
@@ -19,7 +20,15 @@ const CATEGORIES = ['Health', 'Finance', 'Personal', 'Home', 'Work'];
 const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editingHabit }) => {
   const { addHabit, updateHabit, setHabitPause } = useGamification();
   const { members } = useHouseholdCore();
+  const { todos } = useTodos();
   const kidModeEnabled = useKidModeEnabled();
+
+  // Habit Automations (PRD #1065): the to-dos linked to the habit being edited,
+  // listed read-only inside the shared Automations section.
+  const linkedTodos = useMemo(
+    () => (editingHabit ? todos.filter(t => t.linkedHabitId === editingHabit.id) : []),
+    [todos, editingHabit],
+  );
 
   // Plan 080c-3: chore assignment targets MANAGED KIDS only (isManaged === true).
   // Parents are never in this list, so a habit with assignedTo set is, by
@@ -44,6 +53,12 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
   // F-HABITS-01: planned-break end date (yyyy-MM-dd) — editable only when editing
   // an existing habit. Empty string means "not paused".
   const [pausedUntil, setPausedUntil] = useState(() => editingHabit?.pausedUntil ?? '');
+  // Habit Automations (PRD #1065): live-edited trigger state. Seeded from the
+  // habit's stored triggers so an edit round-trips them, and rebuilt into
+  // `triggers` at save time (see handleSave) so the live values override the
+  // spread-forward stored copy.
+  const [keywords, setKeywords] = useState<string[]>(() => editingHabit?.triggers?.keywords ?? []);
+  const [locations, setLocations] = useState<HabitLocationTrigger[]>(() => editingHabit?.triggers?.locations ?? []);
 
   // Kid assignment selection. CREATE mode is a multi-select (one chore per kid);
   // EDIT mode is a single-select (0 or 1 kid). We keep both states and read only
@@ -59,14 +74,36 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
     () => seedEditAssignedUid(editingHabit),
   );
 
-  // Re-populate (or reset to defaults) the form when the habit being edited or
-  // the open state changes. Done during render on that change edge rather than
-  // in an effect so it doesn't trigger a cascading render. Mirrors the previous
-  // effect keyed on `[editingHabit, isOpen]`; the initial population is handled
-  // by the initializers above.
-  const [prevKey, setPrevKey] = useState({ editingHabit, isOpen });
-  if (prevKey.editingHabit !== editingHabit || prevKey.isOpen !== isOpen) {
-    setPrevKey({ editingHabit, isOpen });
+  // Re-populate (or reset to defaults) the form when the habit being edited
+  // (by id — NOT object reference) or the open state changes. Done during
+  // render on that change edge rather than in an effect so it doesn't trigger
+  // a cascading render. Mirrors the previous effect keyed on
+  // `[editingHabit, isOpen]`; the initial population is handled by the
+  // initializers above.
+  //
+  // Keying on `editingHabit` by reference (rather than `editingHabit?.id`)
+  // would clobber unsaved form state: the habits Firestore listener rebuilds
+  // every habit object on each snapshot, so any concurrent household activity
+  // while the modal is open for the SAME habit would produce a new object
+  // reference for that habit and wipe in-progress edits (title, keyword
+  // draft, etc.) out from under the user. Comparing by id (plus the
+  // closed->open transition, so reopening for the same habit still
+  // re-seeds) only resets on a genuine new edit session: a different habit,
+  // or switching create<->edit.
+  const [prevEditingHabitId, setPrevEditingHabitId] = useState(editingHabit?.id);
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  const idChanged = prevEditingHabitId !== editingHabit?.id;
+  const reopened = isOpen && !prevIsOpen;
+  const shouldReset = idChanged || reopened;
+  // Track the latest id/open state on every render — independently of
+  // whether a reset fires below — so a later closed->open transition for the
+  // SAME id is still detected even though closing itself doesn't reset the
+  // form. (Each write is guarded by an inequality check, the same
+  // "adjust state during render" pattern the previous single-state version
+  // used, just split so tracking isn't tied to whether a reset happened.)
+  if (idChanged) setPrevEditingHabitId(editingHabit?.id);
+  if (prevIsOpen !== isOpen) setPrevIsOpen(isOpen);
+  if (shouldReset) {
     if (editingHabit) {
       setTitle(editingHabit.title);
       setCategory(editingHabit.category);
@@ -76,6 +113,8 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       setBasePoints(editingHabit.basePoints.toString());
       setTargetCount(editingHabit.targetCount.toString());
       setPausedUntil(editingHabit.pausedUntil ?? '');
+      setKeywords(editingHabit.triggers?.keywords ?? []);
+      setLocations(editingHabit.triggers?.locations ?? []);
       setEditAssignedUid(seedEditAssignedUid(editingHabit));
       setAssignedKidUids([]);
     } else {
@@ -88,6 +127,8 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       setBasePoints('10');
       setTargetCount('1');
       setPausedUntil('');
+      setKeywords([]);
+      setLocations([]);
       setEditAssignedUid(undefined);
       setAssignedKidUids([]);
     }
@@ -111,6 +152,20 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
 
     // Enforce non-empty category
     const finalCategory = category.trim() || CATEGORIES[0] || 'Health';
+
+    // Habit Automations (PRD #1065): rebuild `triggers` from the live-edited
+    // keyword/location state (mirrors HabitCreatorWizard.handleSaveCustom).
+    // `undefined` when nothing is configured — and when EDITING the key is
+    // ALWAYS set on the payload below (even when undefined) so a full clear
+    // routes through updateHabit's hasOwnProperty presence check → deleteField.
+    const cleanedKeywords = keywords.map(k => k.trim()).filter(Boolean);
+    const triggers: Habit['triggers'] =
+      cleanedKeywords.length > 0 || locations.length > 0
+        ? {
+            ...(cleanedKeywords.length > 0 ? { keywords: cleanedKeywords } : {}),
+            ...(locations.length > 0 ? { locations } : {}),
+          }
+        : undefined;
 
     const baseHabitData: Habit = {
       // Spread the existing habit FIRST when editing so every field this form
@@ -140,6 +195,13 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       // Preserve ownership fields when editing
       isShared: editingHabit?.isShared,
       ownerId: editingHabit?.ownerId,
+      // Habit Automations (PRD #1065): when EDITING, always set `triggers` from
+      // the live form state (overriding the spread-forward stored copy). The key
+      // is present even when the value is `undefined` — a full clear must reach
+      // updateHabit's presence check to deleteField(). When CREATING, omit the
+      // key entirely (addHabit's addDoc rejects an explicit `undefined` value;
+      // the automations UI isn't shown in create mode anyway).
+      ...(editingHabit ? { triggers } : {}),
     };
 
     setIsSaving(true);
@@ -395,6 +457,21 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
               )}
             </div>
           </div>
+        )}
+
+        {/* Habit Automations (PRD #1065) — edit mode only. Collapsed by default
+            to keep the modal uncluttered; expands to the same keyword/location/
+            linked-to-do controls the wizard's custom-habit editor shows, now
+            reachable for EVERY habit (preset or custom) via the habit card. */}
+        {editingHabit && (
+          <HabitAutomationsSection
+            keywords={keywords}
+            onKeywordsChange={setKeywords}
+            locations={locations}
+            onLocationsChange={setLocations}
+            linkedTodos={linkedTodos}
+            collapsible
+          />
         )}
 
       </div>
