@@ -26,10 +26,27 @@ import { getLocalDateString } from '@/utils/dateHelpers';
  * unit-testable; no Firestore, no side effects.
  */
 export interface HabitFireDelta {
-  /** New live-period counter. */
+  /** New live-period counter (absolute — write only in the `resetCount` case). */
   count: number;
-  /** New lifetime counter. */
+  /** New lifetime counter (absolute; prefer the `totalCountDelta` increment). */
   totalCount: number;
+  /**
+   * Signed change to the live-period counter, to be written as a Firestore
+   * `increment()` delta so a stale-cache device can't clobber a concurrent
+   * writer (mirrors habitDeltaUpdate). IGNORE this and write `count` ABSOLUTELY
+   * when `resetCount` is true — see that field.
+   */
+  countDelta: number;
+  /** Signed change to the lifetime counter, to be written as `increment()`. */
+  totalCountDelta: number;
+  /**
+   * True only on a stale-habit lazy-reset ('up' fire on a habit whose counter
+   * belongs to a previous period): the reset-then-increment collapses to an
+   * ABSOLUTE write of `count` (= 0 + delta), which must NOT go through
+   * `increment()` because the stored counter is prior-period garbage the reset
+   * discards outright. In every other case write `increment(countDelta)`.
+   */
+  resetCount: boolean;
   /** Recomputed period-aware streak. */
   streakDays: number;
   /** Date newly added to completedDates (write as arrayUnion), if any. */
@@ -62,10 +79,10 @@ export function computeHabitTriggerFire(
   // if the counter were 0 (the overnight auto-reset never ran). A 'down'
   // reverse leaves the counter untouched — processToggleHabit handles the
   // decrement and its count-0 guard.
-  const effectiveHabit: Habit =
-    direction === 'up' && isHabitStale(habit)
-      ? { ...habit, count: 0, lastUpdated: new Date().toISOString() }
-      : habit;
+  const didReset = direction === 'up' && isHabitStale(habit);
+  const effectiveHabit: Habit = didReset
+    ? { ...habit, count: 0, lastUpdated: new Date().toISOString() }
+    : habit;
 
   const result = processToggleHabit(effectiveHabit, direction);
   if (!result) return null;
@@ -75,9 +92,18 @@ export function computeHabitTriggerFire(
   const addedDate = nextDates.find(d => !prevDates.includes(d));
   const removedDate = prevDates.find(d => !nextDates.includes(d));
 
+  const count = result.updatedHabit.count ?? effectiveHabit.count;
+  const totalCount = result.updatedHabit.totalCount ?? effectiveHabit.totalCount;
+
   return {
-    count: result.updatedHabit.count ?? effectiveHabit.count,
-    totalCount: result.updatedHabit.totalCount ?? effectiveHabit.totalCount,
+    count,
+    totalCount,
+    // Deltas are measured against the REAL stored habit (not the zeroed
+    // effectiveHabit) so a non-reset fire increments the actual counter. In the
+    // reset case the caller writes `count` absolutely and ignores countDelta.
+    countDelta: count - habit.count,
+    totalCountDelta: totalCount - habit.totalCount,
+    resetCount: didReset,
     streakDays: result.updatedHabit.streakDays ?? effectiveHabit.streakDays,
     ...(addedDate !== undefined ? { addedDate } : {}),
     ...(removedDate !== undefined ? { removedDate } : {}),
@@ -139,8 +165,12 @@ export function computeHabitTriggerReverse(
     // Untouched — the live counter belongs to the current period, not the
     // prior period this reversal is undoing.
     count: habit.count,
+    countDelta: 0,
     // The fire incremented the lifetime counter; disavow that one completion.
     totalCount: Math.max(0, habit.totalCount - 1),
+    // -1, but floored so a lifetime counter already at 0 isn't driven negative.
+    totalCountDelta: Math.max(0, habit.totalCount - 1) - habit.totalCount,
+    resetCount: false,
     streakDays,
     removedDate: completionDate,
     pointsChange: -earned,

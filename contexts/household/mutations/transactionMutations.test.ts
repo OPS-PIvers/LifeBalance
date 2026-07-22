@@ -428,7 +428,9 @@ describe('habit firing writes DELTAS, never whole values', () => {
     totalCount: 4,
     completedDates: ['2020-01-01'],
     streakDays: 0,
-    lastUpdated: '',
+    // Non-stale (updated today) so the forward fire exercises the normal
+    // increment() delta path; the stale lazy-reset path is covered separately.
+    lastUpdated: new Date().toISOString(),
   };
 
   const pendingTx: Transaction = {
@@ -474,6 +476,46 @@ describe('habit firing writes DELTAS, never whole values', () => {
     // Points credited on the household.
     const pointsUpdate = capturedUpdates.find(u => u.ref.__path === `households/${HOUSEHOLD_ID}`);
     expect(pointsUpdate!.data!['points.total']).toEqual({ __increment: 10 });
+  });
+
+  it('lazy-resets a STALE habit fired via a chip: counter written absolutely (0 + delta), not incremented', async () => {
+    // A period-rolled-over habit whose leftover counter is 5 from a prior day.
+    // Firing it via the transaction chip must start from 0 (parity with the
+    // to-do / manual paths) and write `count` ABSOLUTELY so the reset discards
+    // the stale stored value instead of increment()-ing on top of it.
+    const staleHabit: Habit = {
+      ...threshHabit,
+      count: 5,
+      totalCount: 4,
+      completedDates: ['2020-01-01'],
+      lastUpdated: '2020-01-01T00:00:00.000Z',
+    };
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(catDeps([pendingTx], [staleHabit]));
+    await updateTransactionCategory('tx-9', 'Groceries', ['h1']);
+
+    const habitUpdate = capturedUpdates.find(u => u.ref.__path === habitPath('h1'));
+    const data = habitUpdate!.data!;
+    // Absolute reset to 1 (0 + one fire), NOT increment (which would land on 6).
+    expect(data['count']).toBe(1);
+    // Lifetime counter is never reset — still a plain +1 increment.
+    expect(data['totalCount']).toEqual({ __increment: 1 });
+    expect(data['completedDates']).toEqual({ __arrayUnion: [today] });
+  });
+
+  it('never fires an ARCHIVED habit referenced by a transaction (skips, completes normally)', async () => {
+    const archivedHabit: Habit = {
+      ...threshHabit,
+      archivedAt: '2026-07-21T00:00:00.000Z',
+    };
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(catDeps([pendingTx], [archivedHabit]));
+    await updateTransactionCategory('tx-9', 'Groceries', ['h1']);
+
+    // No habit write at all — the archived habit is skipped.
+    const habitUpdate = capturedUpdates.find(u => u.ref.__path === habitPath('h1'));
+    expect(habitUpdate).toBeUndefined();
+    // And it is not recorded on the fired ledger.
+    const txUpdate = capturedUpdates.find(u => u.ref.__path === txnPath('tx-9'));
+    expect(txUpdate!.data!['firedHabitIds']).toBeUndefined();
   });
 
   it('reverseTransactionApproval un-fires a habit with increment() + arrayRemove, not whole values', async () => {

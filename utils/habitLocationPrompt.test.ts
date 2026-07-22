@@ -69,6 +69,33 @@ describe('findLocationMatches', () => {
     expect(matches).toHaveLength(1);
   });
 
+  it('excludes an archived habit even when its location contains the current point', () => {
+    const habit: Habit = {
+      ...baseHabit,
+      triggers: { locations: [target] },
+      archivedAt: '2026-07-20T00:00:00.000Z',
+    };
+    const matches = findLocationMatches([habit], { lat: 44.9778, lng: -93.2650 }, '2026-07-22', []);
+    expect(matches).toEqual([]);
+  });
+
+  it('skips an archived habit but still matches a co-located active one', () => {
+    const archived: Habit = {
+      ...baseHabit,
+      id: 'h1',
+      triggers: { locations: [target] },
+      archivedAt: '2026-07-20T00:00:00.000Z',
+    };
+    const active: Habit = {
+      ...baseHabit,
+      id: 'h2',
+      title: 'Impulse purchase',
+      triggers: { locations: [{ ...target, id: 'loc-target-2' }] },
+    };
+    const matches = findLocationMatches([archived, active], { lat: 44.9778, lng: -93.2650 }, '2026-07-22', []);
+    expect(matches.map((m) => m.habitId)).toEqual(['h2']);
+  });
+
   it('matches multiple habits sharing overlapping coordinates independently', () => {
     const habitA: Habit = { ...baseHabit, id: 'h1', triggers: { locations: [target] } };
     const habitB: Habit = {

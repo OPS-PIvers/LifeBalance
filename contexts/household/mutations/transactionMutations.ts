@@ -20,7 +20,7 @@ import type { MutationOpts } from '@/contexts/household/types';
 import { effectiveAccountImpact, isBankSyncTransaction, resolveTargetAccount, shouldSkipBankSyncDelta } from '@/utils/accountImpact';
 import { splitParticipantKey } from '@/utils/settlement';
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
-import { processToggleHabit } from '@/utils/habitLogic';
+import { processToggleHabit, isHabitStale } from '@/utils/habitLogic';
 import { selectHabitsToFire, transactionAttribution } from '@/utils/transactionHabitFiring';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { roundMoney } from '@/utils/money';
@@ -40,7 +40,11 @@ import type { ToggleHabitResult } from '@/utils/habitLogic';
  * stays a derived scalar (self-correcting), defended with a fallback to the
  * habit's current value when processToggleHabit omits it.
  */
-function habitDeltaUpdate(habit: Habit, result: ToggleHabitResult): Record<string, unknown> {
+function habitDeltaUpdate(
+  habit: Habit,
+  result: ToggleHabitResult,
+  opts?: { resetCount?: boolean },
+): Record<string, unknown> {
   const prevDates = habit.completedDates;
   const nextDates = result.updatedHabit.completedDates ?? prevDates;
   const addedDate = nextDates.find(d => !prevDates.includes(d));
@@ -49,7 +53,16 @@ function habitDeltaUpdate(habit: Habit, result: ToggleHabitResult): Record<strin
   const totalCountDelta = (result.updatedHabit.totalCount ?? habit.totalCount) - habit.totalCount;
 
   return {
-    ...(countDelta !== 0 ? { count: increment(countDelta) } : {}),
+    // Counter as an increment() DELTA (stale-cache-safe). EXCEPTION: a stale
+    // lazy-reset ('up' on a prior-period habit) writes the counter ABSOLUTELY —
+    // `result` was computed from a zeroed effectiveHabit, so its count is
+    // `0 + delta`, and the reset means to DISCARD the stale stored counter, not
+    // increment it. See the call site's lazy-reset for how `resetCount` is set.
+    ...(opts?.resetCount
+      ? { count: result.updatedHabit.count ?? habit.count }
+      : countDelta !== 0
+        ? { count: increment(countDelta) }
+        : {}),
     ...(totalCountDelta !== 0 ? { totalCount: increment(totalCountDelta) } : {}),
     ...(addedDate !== undefined ? { completedDates: arrayUnion(addedDate) } : {}),
     ...(removedDate !== undefined ? { completedDates: arrayRemove(removedDate) } : {}),
@@ -483,20 +496,39 @@ export function makeUpdateTransactionCategory(deps: {
     // co-commit the fired-ledger update (firedHabitIds) in the SAME op.
     for (const habitId of habitIdsToFire) {
       const habit = habits.find(h => h.id === habitId);
-      if (habit) {
-        const result = processToggleHabit(habit, 'up');
-        if (result) {
-          // DELTA WRITE (never whole client-computed values) — see
-          // habitDeltaUpdate: increment() counters + arrayUnion/arrayRemove
-          // completion history, so a stale-cache device can't clobber another
-          // device's completions (2026-07-15 incident).
-          batch.update(doc(db, `households/${householdId}/habits`, habitId), habitDeltaUpdate(habit, result));
-          totalPointsChange += result.pointsChange;
-          successfulHabitsCount++;
-          newlyFiredHabitIds.push(habitId);
-        }
-      } else {
+      if (!habit) {
         console.warn(`Habit ID ${habitId} not found in habits array. Skipping habit increment.`);
+        continue;
+      }
+      // An ARCHIVED habit must never fire (PRD #1065): a transaction's
+      // relatedHabitIds may reference a habit archived after the tag was made
+      // (keywordMatchedHabitIds already filters archived at suggestion time —
+      // this is the defense for a persisted stale reference). Skip firing; the
+      // approval completes normally with no points/streak side effect.
+      if (habit.archivedAt) continue;
+
+      // Lazy-reset parity with the to-do/manual paths: an 'up' fire on a STALE
+      // habit (counter belongs to a previous period; the overnight auto-reset
+      // never ran) acts as if count were 0. `resetCount` tells habitDeltaUpdate
+      // to write the counter ABSOLUTELY (0 + delta) instead of incrementing the
+      // prior-period stored value. See utils/habitTriggerFire.ts:59-68.
+      const stale = isHabitStale(habit);
+      const effectiveHabit = stale
+        ? { ...habit, count: 0, lastUpdated: new Date().toISOString() }
+        : habit;
+      const result = processToggleHabit(effectiveHabit, 'up');
+      if (result) {
+        // DELTA WRITE (never whole client-computed values) — see
+        // habitDeltaUpdate: increment() counters + arrayUnion/arrayRemove
+        // completion history, so a stale-cache device can't clobber another
+        // device's completions (2026-07-15 incident).
+        batch.update(
+          doc(db, `households/${householdId}/habits`, habitId),
+          habitDeltaUpdate(effectiveHabit, result, { resetCount: stale }),
+        );
+        totalPointsChange += result.pointsChange;
+        successfulHabitsCount++;
+        newlyFiredHabitIds.push(habitId);
       }
     }
 

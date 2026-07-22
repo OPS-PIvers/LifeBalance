@@ -1381,6 +1381,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const toggleHabit = useCallback(async (id: string, direction: 'up' | 'down', source?: TriggerSource) => {
     const habit = habits.find(h => h.id === id);
     if (!habit) return;
+
+    // Archived-habit guard parity with the real toggle path (useHabitActions):
+    // an archived habit never fires forward; a 'down' reverse is still allowed.
+    if (direction === 'up' && habit.archivedAt) return;
+
     const attribution = source ? attributionString(source) : null;
 
     // Lazy-reset parity with the real toggle path (useHabitActions): a stale

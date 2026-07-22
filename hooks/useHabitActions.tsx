@@ -263,6 +263,12 @@ export const useHabitActions = (
     const habit = habitsRef.current.find(h => h.id === id);
     if (!habit) return;
 
+    // An ARCHIVED habit must never fire forward (PRD #1065): a manual or geo-
+    // confirm 'up' tap is a no-op, matching the to-do/transaction automation
+    // paths (utils/habitTriggerFire.ts:computeHabitTriggerFire). A 'down'
+    // reverse is still allowed so a fire credited before archiving can be undone.
+    if (direction === 'up' && habit.archivedAt) return;
+
     // LAZY RESET CHECK
     const isStale = isHabitStale(habit);
     let effectiveHabit = habit;
@@ -344,9 +350,29 @@ export const useHabitActions = (
     const addedDate = nextDates.find(d => !prevDates.includes(d));
     const removedDate = prevDates.find(d => !nextDates.includes(d));
 
+    // Counters are written as Firestore increment() DELTAS (not the absolute
+    // client-computed values) so a stale offline cache can't clobber another
+    // device's concurrent toggle of the same counter (same class of bug as the
+    // 2026-07-15 completedDates clobber). The deltas are measured against the
+    // REAL stored habit.count/totalCount.
+    // EXCEPTION — the stale lazy-reset ('up'): effectiveHabit.count was zeroed
+    // above, so result.updatedHabit.count is already `0 + delta`. That reset
+    // deliberately DISCARDS the prior-period stored counter, so it's written
+    // ABSOLUTELY here (a reset-then-increment expressed as an absolute write);
+    // routing it through increment() would add to the stale value we mean to
+    // throw away. totalCount is a lifetime counter (never reset), so it stays a
+    // plain increment even on the stale path.
+    const nextCount = result.updatedHabit.count ?? effectiveHabit.count;
+    const nextTotalCount = result.updatedHabit.totalCount ?? effectiveHabit.totalCount;
+    const countDelta = nextCount - habit.count;
+    const totalCountDelta = nextTotalCount - habit.totalCount;
     batch.update(doc(db, `households/${householdId}/habits`, id), {
-      count: result.updatedHabit.count,
-      totalCount: result.updatedHabit.totalCount,
+      ...(isStale
+        ? { count: nextCount }
+        : countDelta !== 0
+          ? { count: increment(countDelta) }
+          : {}),
+      ...(totalCountDelta !== 0 ? { totalCount: increment(totalCountDelta) } : {}),
       ...(addedDate !== undefined ? { completedDates: arrayUnion(addedDate) } : {}),
       ...(removedDate !== undefined ? { completedDates: arrayRemove(removedDate) } : {}),
       streakDays: result.updatedHabit.streakDays,
