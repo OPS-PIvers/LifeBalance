@@ -33,6 +33,8 @@
     "functions",
     "e2e",
     "playwright.config.ts",
-    ".design-sync"
+    ".design-sync",
+    "scratch_*.ts",
+    "scratch_*.tsx"
   ]
 }
