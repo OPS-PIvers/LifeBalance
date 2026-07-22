@@ -45,6 +45,12 @@ export default tseslint.config(
       ...reactPlugin.configs.recommended.rules,
       ...reactPlugin.configs['jsx-runtime'].rules,
       'react/prop-types': 'off',
+      // TanStack Virtual's hook intentionally returns imperative helpers
+      // (`scrollToIndex`, `measureElement`) that React Compiler cannot safely
+      // memoize. The library is used deliberately for the transaction list's
+      // windowing performance, and the affected component keeps those helpers
+      // local rather than passing them through memoized component boundaries.
+      'react-hooks/incompatible-library': 'off',
       // Enforce the @/ alias over parent-relative imports (see todo #7).
       'no-restricted-imports': [
         'error',
