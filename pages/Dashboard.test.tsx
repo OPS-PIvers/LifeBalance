@@ -313,4 +313,28 @@ describe('Dashboard aggregate review queue card (Layer 4)', () => {
       expect(screen.getByTestId('review-drawer')).toHaveTextContent('t1,s1');
     });
   });
+
+  it('hides the review card when both the To-Dos and Shopping tabs are disabled', () => {
+    mockTodosAwaitingReview = [makeTodo('t1')];
+    mockShoppingAwaitingReview = [makeShoppingItem('s1')];
+    // Plan stays on, but its To-Dos/Shopping sub-tabs are both off.
+    setEnabledModules(['habits', 'money', 'plan', 'meals']);
+    renderDashboard();
+    expect(screen.queryByText(/item.*to review/)).not.toBeInTheDocument();
+  });
+
+  it('shows only the visible-domain items when one of the two tabs is disabled', async () => {
+    mockTodosAwaitingReview = [makeTodo('t1')];
+    mockShoppingAwaitingReview = [makeShoppingItem('s1')];
+    // Shopping tab hidden — only the held to-do should count/appear.
+    setEnabledModules(['habits', 'money', 'plan', 'todos', 'meals']);
+    renderDashboard();
+
+    expect(screen.getByText('1 item to review')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('1 item to review'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('review-drawer')).toHaveTextContent('t1');
+    });
+  });
 });

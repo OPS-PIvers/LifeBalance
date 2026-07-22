@@ -24,7 +24,7 @@ const CaptureModal = React.lazy(() => import('@/components/modals/CaptureModal')
 // those keep their existing individual Action Queue cards).
 const ReviewPendingDrawer = React.lazy(() => import('@/components/modals/ReviewPendingDrawer'));
 import { LazyMount } from '@/components/ui/LazyMount';
-import type { ReviewQueueItem } from '@/utils/reviewQueue';
+import { buildReviewQueueSnapshot, type ReviewQueueItem } from '@/utils/reviewQueue';
 import { ReviewQueueCard } from '@/components/dashboard/ReviewQueueCard';
 import {
   useActionQueue,
@@ -101,7 +101,7 @@ const Dashboard: React.FC = () => {
   } = useFinance();
   const { updateToDo, deleteToDo, completeToDo, todosAwaitingReview } = useTodos();
   const { shoppingAwaitingReview } = useShopping();
-  const { isModuleEnabled } = useModuleVisibility();
+  const { isModuleEnabled, isPlanTabVisible } = useModuleVisibility();
   const navigate = useNavigate();
 
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
@@ -120,15 +120,22 @@ const Dashboard: React.FC = () => {
 
   // --- Aggregate review queue (Layer 4) ---
   // Held-for-review shopping + to-do captures ONLY (todos → shopping order,
-  // matching MainLayout's on-open cycler) — transactions are deliberately
-  // excluded here since they keep their existing individual Action Queue
-  // cards; surfacing them again in this card would double-count them.
+  // matching MainLayout's on-open cycler, via the shared buildReviewQueueSnapshot
+  // helper — an empty transactions input yields exactly that ordering) —
+  // transactions are deliberately excluded here since they keep their existing
+  // individual Action Queue cards; surfacing them again in this card would
+  // double-count them. Also gated on module visibility (Plan 090) — a
+  // household that hid the To-Dos or Shopping tab must not get a review card
+  // surfacing items whose destination page is hidden.
   const reviewQueueItems = useMemo<ReviewQueueItem[]>(
-    () => [
-      ...todosAwaitingReview.map((item) => ({ kind: 'todo' as const, id: item.id, item })),
-      ...shoppingAwaitingReview.map((item) => ({ kind: 'shopping' as const, id: item.id, item })),
-    ],
-    [todosAwaitingReview, shoppingAwaitingReview]
+    () =>
+      buildReviewQueueSnapshot({
+        pendingReviewTransactions: [],
+        todosAwaitingReview: isPlanTabVisible('todos') ? todosAwaitingReview : [],
+        shoppingAwaitingReview: isPlanTabVisible('shopping') ? shoppingAwaitingReview : [],
+        householdSettings: undefined,
+      }),
+    [todosAwaitingReview, shoppingAwaitingReview, isPlanTabVisible]
   );
   const [reviewDrawerOpen, setReviewDrawerOpen] = useState(false);
   // Snapshot taken on open (not the live lists) so approvals shrinking the

@@ -1212,9 +1212,14 @@ export const quickAddShoppingItem = onRequest(
         //    'review' mode are held (needsReview: true) until approved. See
         //    captureReview.ts. Only stamped on NEWLY created rows below; a
         //    quantity-bump onto an existing item (visible or already held)
-        //    must not retroactively toggle its review state.
+        //    must not retroactively toggle its review state. Also drives the
+        //    dedup match below: a capture may only merge into an existing row
+        //    with the SAME held-state, never across the held/visible boundary
+        //    (an auto capture merging into a held row would silently vanish
+        //    into the review drawer; a held capture merging into a visible
+        //    row would silently surface without review).
         const householdSnap = await db.doc(`households/${householdId}`).get();
-        const shoppingManualReview = isManualReview(
+        const incomingHeld = isManualReview(
           householdSnap.data()?.captureReview,
           "shopping"
         );
@@ -1275,9 +1280,13 @@ export const quickAddShoppingItem = onRequest(
             continue;
           }
 
-          const duplicate = existingItems.docs.find(
-            (doc) => doc.data().name?.toLowerCase() === normalizedItem
-          );
+          const duplicate = existingItems.docs.find((doc) => {
+            const data = doc.data();
+            return (
+              data.name?.toLowerCase() === normalizedItem &&
+              (data.needsReview === true) === incomingHeld
+            );
+          });
 
           if (duplicate) {
             // Update quantity of existing item
@@ -1309,7 +1318,7 @@ export const quickAddShoppingItem = onRequest(
               // Held for review only on brand-new rows — see the mode
               // determination above. Omitted (not `false`) when auto, to
               // keep today's stored shape unchanged.
-              ...(shoppingManualReview ? { needsReview: true } : {}),
+              ...(incomingHeld ? { needsReview: true } : {}),
             };
             batch.set(newRef, shoppingItemData);
             pendingQuantities.set(normalizedItem, { ref: newRef, quantity: itemQuantity });
@@ -1382,23 +1391,31 @@ export const quickAddShoppingItem = onRequest(
     try {
       // 5. Determine the household's shopping capture-review mode (see the
       //    batch-mode branch above for the full rationale — same behavior
-      //    here: only a newly created row is stamped `needsReview`).
+      //    here: only a newly created row is stamped `needsReview`, and the
+      //    dedup match below only merges within the same held-state).
       const householdSnap = await db.doc(`households/${householdId}`).get();
-      const shoppingManualReview = isManualReview(
+      const incomingHeld = isManualReview(
         householdSnap.data()?.captureReview,
         "shopping"
       );
 
-      // 6. Check for duplicate items (case-insensitive)
+      // 6. Check for duplicate items (case-insensitive), scoped to the SAME
+      //    held-state as this capture — a visible/auto item and a held/review
+      //    item are never dedup candidates for each other (see FIX 3 comment
+      //    on the batch-mode branch above).
       const existingItems = await db
         .collection(`households/${householdId}/shoppingList`)
         .where("isPurchased", "==", false)
         .get();
 
       const normalizedItem = item.trim().toLowerCase();
-      const duplicate = existingItems.docs.find(
-        (doc) => doc.data().name?.toLowerCase() === normalizedItem
-      );
+      const duplicate = existingItems.docs.find((doc) => {
+        const data = doc.data();
+        return (
+          data.name?.toLowerCase() === normalizedItem &&
+          (data.needsReview === true) === incomingHeld
+        );
+      });
 
       if (duplicate) {
         // Update quantity instead of creating duplicate. needsReview is
@@ -1435,7 +1452,7 @@ export const quickAddShoppingItem = onRequest(
         isPurchased: false,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         source: "shortcut",
-        ...(shoppingManualReview ? { needsReview: true } : {}),
+        ...(incomingHeld ? { needsReview: true } : {}),
       };
 
       const itemRef = await db

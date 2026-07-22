@@ -1226,7 +1226,7 @@ const Settings: React.FC = () => {
           <SectionHeading
             as="h3"
             className="px-1"
-            description="Automatic adds items right away. Manual review holds them in a review drawer when you open the app."
+            description="Automatic: new captures skip the review drawer. Manual review: hold them until you open the app and confirm."
           >
             Review captured items
           </SectionHeading>

@@ -75,6 +75,24 @@ describe('ShoppingReviewForm', () => {
     expect(mockOnDone).toHaveBeenCalled();
   });
 
+  it('renders and approves a server-captured item whose quantity is a number, without throwing', async () => {
+    // The quick-add server store spreads `quantity` unchanged, so a
+    // held item can arrive with a NUMERIC quantity even though the schema
+    // types it as a string (see ShoppingReviewForm's seeding comment).
+    const numericQuantityItem = { ...baseItem, quantity: 2 } as unknown as ShoppingItem;
+    const user = userEvent.setup();
+    render(<ShoppingReviewForm item={numericQuantityItem} onDone={mockOnDone} />);
+
+    expect(screen.getByLabelText(/quantity/i)).toHaveValue('2');
+
+    await expect(
+      user.click(screen.getByRole('button', { name: /add to list/i }))
+    ).resolves.not.toThrow();
+
+    expect(mockApproveShoppingItem).toHaveBeenCalledWith('item-1', undefined);
+    expect(mockOnDone).toHaveBeenCalled();
+  });
+
   it('sends only the changed fields as overrides', async () => {
     const user = userEvent.setup();
     render(<ShoppingReviewForm item={baseItem} onDone={mockOnDone} />);

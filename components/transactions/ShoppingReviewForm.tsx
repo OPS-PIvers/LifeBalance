@@ -35,7 +35,11 @@ const ShoppingReviewForm: React.FC<ShoppingReviewFormProps> = ({ item, onDone, o
   );
 
   const [name, setName] = useState(() => item.name);
-  const [quantity, setQuantity] = useState(() => item.quantity ?? '');
+  // Held items captured server-side (quick-add API) store `quantity` as a
+  // number even though the schema types it as a string (the converter
+  // spreads it unchanged) — coerce to a string here so `.trim()` below never
+  // throws on a numeric value.
+  const [quantity, setQuantity] = useState(() => (item.quantity != null ? String(item.quantity) : ''));
   const [category, setCategory] = useState(() => item.category || 'Uncategorized');
   const [store, setStore] = useState(() => item.store ?? '');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -63,7 +67,7 @@ const ShoppingReviewForm: React.FC<ShoppingReviewFormProps> = ({ item, onDone, o
     const trimmedQuantity = quantity.trim();
     const overrides: Partial<Pick<ShoppingItem, 'name' | 'quantity' | 'category' | 'store'>> = {};
     if (trimmedName !== item.name) overrides.name = trimmedName;
-    if (trimmedQuantity !== (item.quantity ?? '')) overrides.quantity = trimmedQuantity;
+    if (trimmedQuantity !== String(item.quantity ?? '')) overrides.quantity = trimmedQuantity;
     if (category !== (item.category || 'Uncategorized')) overrides.category = category;
     if (store !== (item.store ?? '')) overrides.store = store;
 

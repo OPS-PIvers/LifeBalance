@@ -97,6 +97,20 @@ describe('TodoReviewForm', () => {
     expect(mockApproveTodo).toHaveBeenCalledWith('todo-1', { assignedTo: 'u2' });
   });
 
+  it('seeds an unassigned item to the first member and persists that choice on approve', async () => {
+    const unassignedItem: ToDo = { ...baseItem, assignedTo: '' };
+    const user = userEvent.setup();
+    render(<TodoReviewForm item={unassignedItem} onDone={mockOnDone} />);
+
+    // The displayed selection must match state — previously the <Select>
+    // visually defaulted to the first member while state stayed empty.
+    expect(screen.getByLabelText(/assign to/i)).toHaveValue('u1');
+
+    await user.click(screen.getByRole('button', { name: /add to list/i }));
+
+    expect(mockApproveTodo).toHaveBeenCalledWith('todo-1', { assignedTo: 'u1' });
+  });
+
   it('disables Add to list when the task text is emptied', async () => {
     const user = userEvent.setup();
     render(<TodoReviewForm item={baseItem} onDone={mockOnDone} />);

@@ -7,6 +7,7 @@ import { LazyMount } from '@/components/ui/LazyMount';
 import { preloadOnIdle } from '@/utils/preloadOnIdle';
 import { useHouseholdCore, useFinance, useShopping, useTodos } from '@/contexts/FirebaseHouseholdContext';
 import { isReviewSnoozed, needsReview, useActionQueue } from '@/hooks/useActionQueue';
+import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { buildReviewQueueSnapshot, type ReviewQueueItem } from '@/utils/reviewQueue';
 import { useAppReopen } from '@/hooks/useAppReopen';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -40,6 +41,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const { transactions, buckets } = useFinance();
   const { shoppingAwaitingReview } = useShopping();
   const { todosAwaitingReview } = useTodos();
+  const { isPlanTabVisible } = useModuleVisibility();
   const kidModeEnabled = useKidModeEnabled(householdId);
   // Keeps the header and fixed overlays (toasts) anchored when the iOS
   // keyboard pans the window; the ref scopes it to in-page inputs (portal
@@ -75,15 +77,19 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   // transactions still count toward Safe-to-Spend and stay reviewable via the
   // Action Queue, but must NOT be force-shown in this drawer; their inclusion
   // is independent of whether the drawer opens for a held to-do / shopping item.
+  // Held todos/shopping are additionally gated on module visibility (Plan 090)
+  // — a household that hid the To-Dos or Shopping tab must not get a review
+  // card/auto-open drawer surfacing items whose destination page is hidden.
+  // Transactions are deliberately NOT gated here (out of scope — see FIX 2).
   const reviewQueueItems = useMemo(
     () =>
       buildReviewQueueSnapshot({
         pendingReviewTransactions,
-        todosAwaitingReview,
-        shoppingAwaitingReview,
+        todosAwaitingReview: isPlanTabVisible('todos') ? todosAwaitingReview : [],
+        shoppingAwaitingReview: isPlanTabVisible('shopping') ? shoppingAwaitingReview : [],
         householdSettings,
       }),
-    [pendingReviewTransactions, todosAwaitingReview, shoppingAwaitingReview, householdSettings],
+    [pendingReviewTransactions, todosAwaitingReview, shoppingAwaitingReview, householdSettings, isPlanTabVisible],
   );
   // Once-per-app-open: snapshot the combined review queue and auto-open the
   // cycling review drawer.

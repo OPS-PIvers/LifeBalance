@@ -35,7 +35,20 @@ const TodoReviewForm: React.FC<TodoReviewFormProps> = ({ item, onDone, onDeleted
 
   const [text, setText] = useState(() => item.text);
   const [completeByDate, setCompleteByDate] = useState(() => item.completeByDate);
-  const [assignedTo, setAssignedTo] = useState(() => item.assignedTo);
+  // Seed to a guaranteed-valid value: when the item's stored assignee is a
+  // current member, use it; otherwise default to the first member so the
+  // <Select>'s displayed selection always matches state (an empty/invalid
+  // seed previously let the browser visually highlight the first <option>
+  // while state stayed empty, so approving without touching the field saved
+  // it unassigned). The "Former member" disabled-option handling below still
+  // covers a valid-at-open assignee that becomes stale later (e.g. that
+  // member is removed while this drawer is still mounted).
+  const [assignedTo, setAssignedTo] = useState(() => {
+    if (item.assignedTo && members.some((m) => m.uid === item.assignedTo)) {
+      return item.assignedTo;
+    }
+    return members[0]?.uid ?? '';
+  });
   const [isImportant, setIsImportant] = useState(() => item.isImportant === true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
