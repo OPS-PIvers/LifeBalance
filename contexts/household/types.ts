@@ -443,6 +443,15 @@ export interface HouseholdContextType {
   deleteShoppingItem: (id: string) => Promise<void>;
   toggleShoppingItemPurchased: (id: string) => Promise<void>;
   clearPurchasedShoppingItems: () => Promise<void>;
+  /**
+   * Approves a held-for-review shopping capture (`shoppingAwaitingReview`):
+   * persists any edited `overrides` AND clears `needsReview` in one write.
+   * Reject is `deleteShoppingItem` — there is no separate reject mutation.
+   */
+  approveShoppingItem: (
+    id: string,
+    overrides?: Partial<Pick<ShoppingItem, 'name' | 'quantity' | 'category' | 'store'>>
+  ) => Promise<void>;
 
   // Shopping Settings Actions
   addStore: (store: Omit<Store, 'id'>) => Promise<void>;
@@ -478,6 +487,15 @@ export interface HouseholdContextType {
   updateToDo: (id: string, updates: Partial<ToDo>) => Promise<void>;
   deleteToDo: (id: string) => Promise<void>;
   completeToDo: (id: string) => Promise<void>;
+  /**
+   * Approves a held-for-review to-do capture (`todosAwaitingReview`):
+   * persists any edited `overrides` AND clears `needsReview` in one write.
+   * Reject is `deleteToDo` — there is no separate reject mutation.
+   */
+  approveTodo: (
+    id: string,
+    overrides?: Partial<Pick<ToDo, 'text' | 'completeByDate' | 'assignedTo' | 'isImportant'>>
+  ) => Promise<void>;
   /** F-TODO-03 — Task templates ("Quick Task Lists"). */
   addTaskTemplate: (template: Omit<TaskTemplate, 'id'>) => Promise<void>;
   updateTaskTemplate: (template: TaskTemplate) => Promise<void>;
@@ -538,7 +556,7 @@ export type MealPlanContextValue = Pick<HouseholdContextType,
 export type ShoppingContextValue = Pick<HouseholdContextType,
   | 'shoppingList' | 'shoppingAwaitingReview' | 'groceryCatalog' | 'loadFullGroceryCatalog' | 'stores' | 'groceryCategories' | 'quickStockLists'
   | 'addShoppingItem' | 'addShoppingItems' | 'updateShoppingItem' | 'reorderShoppingItems'
-  | 'deleteShoppingItem' | 'toggleShoppingItemPurchased' | 'clearPurchasedShoppingItems'
+  | 'deleteShoppingItem' | 'approveShoppingItem' | 'toggleShoppingItemPurchased' | 'clearPurchasedShoppingItems'
   | 'addStore' | 'updateStore' | 'deleteStore' | 'reorderStores' | 'updateGroceryCategories'
   | 'addQuickStockList' | 'updateQuickStockList' | 'updateQuickStockLists' | 'deleteQuickStockList'
   | 'addGroceryCatalogItem' | 'updateGroceryCatalogItem' | 'deleteGroceryCatalogItem'
@@ -548,7 +566,7 @@ export type ShoppingContextValue = Pick<HouseholdContextType,
 export type MealsContextValue = MealPlanContextValue & ShoppingContextValue;
 
 export type TodosContextValue = Pick<HouseholdContextType,
-  | 'todos' | 'todosAwaitingReview' | 'addToDo' | 'updateToDo' | 'deleteToDo' | 'completeToDo'
+  | 'todos' | 'todosAwaitingReview' | 'addToDo' | 'updateToDo' | 'deleteToDo' | 'approveTodo' | 'completeToDo'
   | 'isLoadingOlderTodos' | 'hasMoreCompletedTodos' | 'loadOlderCompletedTodos'
   | 'taskTemplates' | 'addTaskTemplate' | 'updateTaskTemplate' | 'deleteTaskTemplate' | 'applyTaskTemplate'
 >;

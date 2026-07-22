@@ -119,6 +119,36 @@ export function makeShoppingListMutations(deps: {
     }
   };
 
+  /**
+   * Approves a held-for-review shopping capture (`needsReview: true` from the
+   * quick-add API — see utils/captureReview.ts): persists any edited fields
+   * AND clears the review flag in a single `updateDoc`, so the item appears
+   * in the normal shopping list immediately after. No batch is needed — no
+   * points/balance are involved (mirrors the todo analogue, approveTodo).
+   *
+   * `updateShoppingItem` (above) takes a FULL `ShoppingItem`, not a patch, so
+   * it can't be reused here without an extra read; this is a dedicated
+   * minimal patch mutation instead (same shape as `updateGroceryCatalogItem`
+   * below).
+   */
+  const approveShoppingItem = async (
+    id: string,
+    overrides?: Partial<Pick<ShoppingItem, 'name' | 'quantity' | 'category' | 'store'>>
+  ) => {
+    if (!householdId) return;
+    try {
+      const sanitizedOverrides = sanitizeFirestoreData(overrides ?? {});
+      await updateDoc(doc(db, `households/${householdId}/shoppingList`, id), {
+        ...sanitizedOverrides,
+        needsReview: false,
+      });
+      toast.success('Added to shopping list');
+    } catch (error) {
+      console.error('[approveShoppingItem] Failed:', error);
+      toast.error(describeError(error, 'approve the item'));
+    }
+  };
+
   const addStore = async (store: Omit<Store, 'id'>) => {
     if (!householdId) return;
     try {
@@ -218,7 +248,7 @@ export function makeShoppingListMutations(deps: {
 
   return {
     addShoppingItem, addShoppingItems, updateShoppingItem, reorderShoppingItems,
-    deleteShoppingItem, addStore, updateGroceryCategories,
+    deleteShoppingItem, approveShoppingItem, addStore, updateGroceryCategories,
     addQuickStockList, updateQuickStockLists,
     addGroceryCatalogItem, updateGroceryCatalogItem, deleteGroceryCatalogItem,
   };

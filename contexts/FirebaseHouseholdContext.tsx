@@ -2135,6 +2135,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await softDeleteDoc({ db, householdId, deletedBy: user?.uid ?? null }, 'shoppingItem', id);
   }, [householdId, user]);
 
+  const approveShoppingItem = useCallback(async (
+    id: string,
+    overrides?: Partial<Pick<ShoppingItem, 'name' | 'quantity' | 'category' | 'store'>>
+  ) => {
+    await makeShoppingListMutations({ db, householdId }).approveShoppingItem(id, overrides);
+  }, [householdId]);
+
   const toggleShoppingItemPurchased = useCallback(async (id: string) => {
     await makeToggleShoppingItemPurchased({ db, householdId, shoppingList, groceryCatalog }).toggleShoppingItemPurchased(id);
   }, [householdId, shoppingList, groceryCatalog]);
@@ -2259,6 +2266,17 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // F-XCUT-03: soft-delete into the unified trash (recoverable for 30 days).
     await softDeleteDoc({ db, householdId, deletedBy: user?.uid ?? null }, 'todo', id);
   }, [householdId, user]);
+
+  /**
+   * Approves a held-for-review to-do capture: persists any edited overrides
+   * AND clears `needsReview` in one write (see makeTodoCrudMutations).
+   */
+  const approveTodo = useCallback(async (
+    id: string,
+    overrides?: Partial<Pick<ToDo, 'text' | 'completeByDate' | 'assignedTo' | 'isImportant'>>
+  ) => {
+    await makeTodoCrudMutations({ db, householdId }).approveTodo(id, overrides);
+  }, [householdId]);
 
   /**
    * Marks a to-do item as completed.
@@ -2508,6 +2526,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateShoppingItem,
     reorderShoppingItems,
     deleteShoppingItem,
+    approveShoppingItem,
     toggleShoppingItemPurchased,
     clearPurchasedShoppingItems,
     addStore,
@@ -2524,7 +2543,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     deleteGroceryCatalogItem,
   }), [
     visibleShoppingList, shoppingAwaitingReview, groceryCatalog, loadFullGroceryCatalog, stores, groceryCategories, quickStockLists,
-    addShoppingItem, addShoppingItems, updateShoppingItem, reorderShoppingItems, deleteShoppingItem, toggleShoppingItemPurchased, clearPurchasedShoppingItems,
+    addShoppingItem, addShoppingItems, updateShoppingItem, reorderShoppingItems, deleteShoppingItem, approveShoppingItem, toggleShoppingItemPurchased, clearPurchasedShoppingItems,
     addStore, updateStore, deleteStore, reorderStores, updateGroceryCategories,
     addQuickStockList, updateQuickStockList, updateQuickStockLists, deleteQuickStockList,
     addGroceryCatalogItem, updateGroceryCatalogItem, deleteGroceryCatalogItem,
@@ -2539,6 +2558,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addToDo,
     updateToDo,
     deleteToDo,
+    approveTodo,
     completeToDo,
     taskTemplates,
     addTaskTemplate,
@@ -2547,7 +2567,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     applyTaskTemplate,
   }), [
     visibleTodos, todosAwaitingReview, isLoadingOlderTodos, hasMoreCompletedTodos, loadOlderCompletedTodos,
-    addToDo, updateToDo, deleteToDo, completeToDo,
+    addToDo, updateToDo, deleteToDo, approveTodo, completeToDo,
     taskTemplates, addTaskTemplate, updateTaskTemplate, deleteTaskTemplate, applyTaskTemplate,
   ]);
 

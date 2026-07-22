@@ -1496,6 +1496,16 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Shopping item deleted');
   }, [pushToTrash]);
 
+  // F-CAPTURE-01 (Layer 3a): approve a held-for-review shopping capture —
+  // apply any edited overrides AND clear needsReview in one in-memory update.
+  const approveShoppingItem = useCallback(async (
+    id: string,
+    overrides?: Partial<Pick<ShoppingItem, 'name' | 'quantity' | 'category' | 'store'>>
+  ) => {
+    setShoppingList(prev => prev.map(s => s.id === id ? { ...s, ...overrides, needsReview: false } : s));
+    toast.success('Mock: Added to shopping list');
+  }, []);
+
   // Meal plan operations
   const addMealPlan = useCallback(async (plan: Omit<MealPlanItem, 'id'>) => {
     const newPlan = { ...plan, id: generateId() } as MealPlanItem;
@@ -1542,6 +1552,16 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     });
     toast.success('Mock: ToDo deleted');
   }, [pushToTrash]);
+
+  // F-CAPTURE-01 (Layer 3a): approve a held-for-review to-do capture — apply
+  // any edited overrides AND clear needsReview in one in-memory update.
+  const approveTodo = useCallback(async (
+    id: string,
+    overrides?: Partial<Pick<ToDo, 'text' | 'completeByDate' | 'assignedTo' | 'isImportant'>>
+  ) => {
+    setTodos(prev => prev.map(t => t.id === id ? { ...t, ...overrides, needsReview: false } : t));
+    toast.success('Mock: Added to list');
+  }, []);
 
   // F-XCUT-03: restore/purge for the in-memory trash mirror.
   const restoreTrashedItem = useCallback(async (item: TrashedItem) => {
@@ -2101,6 +2121,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateShoppingItem,
     reorderShoppingItems,
     deleteShoppingItem,
+    approveShoppingItem,
     toggleShoppingItemPurchased: noOp,
     clearPurchasedShoppingItems: noOp,
     addMealPlanItem: addMealPlan,
@@ -2109,6 +2130,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     addToDo,
     updateToDo,
     deleteToDo,
+    approveTodo,
     completeToDo: useCallback(async (id: string) => {
       // Resolve the to-do being completed from the live ref (NOT a value leaked out
       // of the setTodos updater) so the points credit can't depend on the execution
