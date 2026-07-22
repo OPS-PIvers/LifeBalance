@@ -34,9 +34,12 @@ relative to `dirname(cssEntry)` = `.design-sync/`, so rewrite to
 
 ## Playwright (render check)
 
-Cached chromium build **1228** at `%LOCALAPPDATA%/ms-playwright`; matches
-`playwright@1.61.0` (repo pins `@playwright/test ^1.61.0`). Installed
-`playwright@1.61.0` into `.ds-sync/`.
+The render check needs a chromium whose build matches the installed playwright.
+Repo pins `@playwright/test ^1.61.0`, which pins chromium build **1228** — so
+install `playwright@1.61.0` into `.ds-sync/`. Find the existing cache per-OS:
+Windows `%LOCALAPPDATA%/ms-playwright`, macOS `~/Library/Caches/ms-playwright`,
+Linux `~/.cache/ms-playwright` (a `chromium-1228` dir there is the match). If
+nothing is cached, `npx playwright@1.61.0 install chromium`.
 
 ## Commands
 
