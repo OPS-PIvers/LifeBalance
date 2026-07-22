@@ -13,6 +13,7 @@ import { UndoToast } from '@/components/ui/UndoToast';
 import { cn } from '@/utils/cn';
 import { type SectionColor, dateColorMap } from './todoDisplay';
 import { formatDueTime } from '@/utils/todoTime';
+import { subtaskProgress } from '@/utils/subtasks';
 
 // Moved verbatim from pages/ToDosPage.tsx (Plan 27) — extracted because both
 // the list arrangement (still in ToDosPage) and the Eisenhower matrix view
@@ -71,6 +72,16 @@ export const TodoRow = React.memo(function TodoRow({
 
   // Quiet "has details" indicator — the row no longer expands notes/subtasks
   // inline; a muted dot after the date signals there's more in the edit drawer.
+  // Habit Automations (PRD #1065): a habit-LINKED to-do can't be completed
+  // until every subtask is done — the habit should only fire when the work is
+  // truly finished. Unlinked to-dos keep the loose behavior (subtasks are
+  // informational). The hint shows the remaining step count.
+  const subtaskCount = item.subtasks?.length ?? 0;
+  const subtasksDone = subtaskProgress(item.subtasks).done;
+  const stepsLeft = subtaskCount - subtasksDone;
+  const completionGated =
+    !!item.linkedHabitId && subtaskCount > 0 && stepsLeft > 0;
+
   const hasDetails =
     Boolean(item.notes && item.notes.trim().length > 0) ||
     (item.subtasks?.length ?? 0) > 0 ||
@@ -180,6 +191,12 @@ export const TodoRow = React.memo(function TodoRow({
   // points credit atomically with the restore, so the previous kid-task
   // suppression is no longer needed.
   const handleComplete = async () => {
+    // Habit Automations (PRD #1065): block completion of a linked to-do until
+    // every subtask is done, so the habit only fires when the work is finished.
+    if (completionGated) {
+      toast(`${stepsLeft} ${stepsLeft === 1 ? 'step' : 'steps'} left before this can be completed`);
+      return;
+    }
     try {
       await onComplete(item.id);
       toast(
@@ -234,6 +251,15 @@ export const TodoRow = React.memo(function TodoRow({
               <span className="sr-only">Reminder set</span>
             </span>
           )}
+        </span>
+      )}
+
+      {/* Habit Automations (PRD #1065): a habit-linked to-do can't be completed
+          until every subtask is done — surface the remaining count so the
+          disabled checkbox is explained. */}
+      {completionGated && (
+        <span className="flex items-center gap-1 font-semibold text-warm-600 dark:text-warm-300" data-testid="todo-steps-left">
+          {stepsLeft} {stepsLeft === 1 ? 'step' : 'steps'} left
         </span>
       )}
 
@@ -299,11 +325,23 @@ export const TodoRow = React.memo(function TodoRow({
           checked={false}
           onCheckedChange={handleComplete}
           onClick={(e) => e.stopPropagation()}
-          className="mt-0.5 p-2.5 -m-2.5 shrink-0"
-          aria-label={`Complete task: ${item.text}`}
+          disabled={completionGated}
+          className={cn('mt-0.5 p-2.5 -m-2.5 shrink-0', completionGated && 'cursor-not-allowed')}
+          aria-label={
+            completionGated
+              ? `Complete task: ${item.text} — ${stepsLeft} ${stepsLeft === 1 ? 'step' : 'steps'} left`
+              : `Complete task: ${item.text}`
+          }
         >
-          <span className="w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors border-brand-300 group-hover:border-accent-500 group-hover:bg-accent-50 group-active:bg-accent-100 dark:border-brand-600 dark:group-hover:border-accent-400 dark:group-hover:bg-accent-900/30">
-            <Check size={14} className="text-transparent group-hover:text-current group-active:text-current group-has-[:focus-visible]:text-current transition-colors" />
+          <span
+            className={cn(
+              'w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors',
+              completionGated
+                ? 'border-brand-200 bg-brand-100/60 dark:border-brand-700 dark:bg-brand-700/40'
+                : 'border-brand-300 group-hover:border-accent-500 group-hover:bg-accent-50 group-active:bg-accent-100 dark:border-brand-600 dark:group-hover:border-accent-400 dark:group-hover:bg-accent-900/30',
+            )}
+          >
+            <Check size={14} className={cn('transition-colors', completionGated ? 'text-transparent' : 'text-transparent group-hover:text-current group-active:text-current group-has-[:focus-visible]:text-current')} />
           </span>
         </HapticCheck>
       )}

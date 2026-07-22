@@ -1,9 +1,9 @@
 import React from 'react';
-import { Trash2, Sparkles } from 'lucide-react';
+import { Trash2, Sparkles, ListChecks } from 'lucide-react';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
-import { Habit, EffortLevel } from '@/types/schema';
+import { Habit, EffortLevel, ToDo } from '@/types/schema';
 import {
   EFFORT_POINTS,
   EFFORT_LABELS,
@@ -32,6 +32,12 @@ interface CustomHabitFormProps {
   onFormChange: (data: Partial<CustomHabitFormData>) => void;
   editingHabit: Habit | null;
   onDelete?: (habit: Habit) => void;
+  /**
+   * Habit Automations (PRD #1065): the to-dos linked to this habit (read-only).
+   * The link is AUTHORED on the to-do ("Counts toward habit" picker); the habit
+   * editor only lists them so all automations are visible in one place.
+   */
+  linkedTodos?: ToDo[];
 }
 
 const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
@@ -39,6 +45,7 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
   onFormChange,
   editingHabit,
   onDelete,
+  linkedTodos = [],
 }) => {
   return (
     <div className="p-6 space-y-5">
@@ -157,9 +164,10 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
         </div>
       </div>
 
-      {/* Automations (Edit mode only) — scaffold. Trigger types (linked to-dos,
-          transaction keywords, saved locations) are filled in by later PRs
-          (PRD #1065). Shown as an empty-state shell until then. */}
+      {/* Automations (Edit mode only) — PRD #1065. This PR fills in the linked
+          to-dos listing (read-only; the link is authored on the to-do's "Counts
+          toward habit" picker). Transaction keywords and saved locations are
+          added by sibling PRs. */}
       {editingHabit && (
         <section aria-labelledby="habit-automations-heading" className="pt-1">
           <h3
@@ -169,15 +177,45 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
             <Sparkles size={13} className="text-warm-500" aria-hidden="true" />
             Automations
           </h3>
-          <div className="rounded-card border border-dashed border-brand-200 dark:border-brand-700 bg-brand-50/60 dark:bg-brand-700/30 p-4 text-center">
-            <p className="text-sm font-semibold text-brand-700 dark:text-brand-200">
-              Log this habit automatically
-            </p>
-            <p className="text-xs text-brand-400 dark:text-brand-450 mt-1">
-              Link a to-do, match transaction keywords, or save a location to fire
-              this habit for you. Coming soon.
-            </p>
-          </div>
+
+          {linkedTodos.length > 0 ? (
+            <div className="rounded-card border border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800 overflow-hidden">
+              <p className="px-4 pt-3 pb-1 text-xxs font-semibold uppercase tracking-wider text-brand-400 dark:text-brand-450">
+                Linked to-dos
+              </p>
+              <ul>
+                {linkedTodos.map(todo => (
+                  <li
+                    key={todo.id}
+                    className="flex items-center gap-2.5 px-4 py-2.5 border-t border-brand-100 dark:border-brand-700/60 first:border-t-0"
+                  >
+                    <ListChecks size={16} className="shrink-0 text-warm-500" aria-hidden="true" />
+                    <span className="min-w-0 flex-1 truncate text-sm text-brand-700 dark:text-brand-200">
+                      {todo.text}
+                    </span>
+                    {todo.isCompleted && (
+                      <span className="shrink-0 text-xxs font-semibold uppercase tracking-wider text-money-pos dark:text-money-posDark">
+                        Done
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <p className="px-4 py-2.5 border-t border-brand-100 dark:border-brand-700/60 text-xs text-brand-400 dark:text-brand-450">
+                Completing one of these logs this habit for you.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-card border border-dashed border-brand-200 dark:border-brand-700 bg-brand-50/60 dark:bg-brand-700/30 p-4 text-center">
+              <p className="text-sm font-semibold text-brand-700 dark:text-brand-200">
+                Log this habit automatically
+              </p>
+              <p className="text-xs text-brand-400 dark:text-brand-450 mt-1">
+                Link a to-do to this habit (from the to-do&rsquo;s &ldquo;Counts
+                toward habit&rdquo; picker) and completing it fires this habit for you.
+              </p>
+            </div>
+          )}
         </section>
       )}
 

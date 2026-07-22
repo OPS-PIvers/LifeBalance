@@ -17,6 +17,8 @@ interface HapticCheckProps {
   pattern?: HapticPattern;
   /** Escape hatch for call sites that must e.g. stopPropagation the click. */
   onClick?: React.MouseEventHandler<HTMLLabelElement>;
+  /** When true, the control is non-interactive (input disabled, no toggle). */
+  disabled?: boolean;
   /** The visual: rendered after the visually-hidden input, inside the label. */
   children: React.ReactNode;
 }
@@ -45,12 +47,14 @@ export const HapticCheck: React.FC<HapticCheckProps> = ({
   className,
   pattern = 'light',
   onClick,
+  disabled = false,
   children,
 }) => (
   <label
     onClick={onClick}
     className={cn(
-      'group cursor-pointer rounded-sm',
+      'group rounded-sm',
+      disabled ? 'cursor-not-allowed' : 'cursor-pointer',
       'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent-500/40',
       className
     )}
@@ -60,6 +64,7 @@ export const HapticCheck: React.FC<HapticCheckProps> = ({
       ref={markAsWebKitSwitch}
       className="sr-only peer"
       checked={checked}
+      disabled={disabled}
       aria-label={ariaLabel}
       onChange={(e) => {
         hapticForNativeSwitch(pattern);

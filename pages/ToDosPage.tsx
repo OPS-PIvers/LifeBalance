@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
+import { useTodos, useHouseholdCore, useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Camera, Sparkles, Plus, Repeat, Filter, ArrowUpDown } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -55,6 +55,15 @@ const ToDosPage: React.FC = () => {
     loadOlderCompletedTodos,
   } = useTodos();
   const { members, currentUser, householdId } = useHouseholdCore();
+  // Habit Automations (PRD #1065): the "Counts toward habit" picker links a
+  // to-do to a habit so completing it fires the habit like one manual tap.
+  const { habits } = useGamification();
+  // Only active (non-archived) habits are linkable — archived ones are hidden
+  // from the Track surface, so offering them here would be confusing.
+  const linkableHabits = useMemo(
+    () => habits.filter(h => !h.archivedAt).sort((a, b) => a.title.localeCompare(b.title)),
+    [habits],
+  );
 
   // Page-level member lookup map — computed once here, passed to Section/CompletedSection
   // so the O(n) map build does not repeat per-section (previously built 3× in render).
@@ -192,6 +201,9 @@ const ToDosPage: React.FC = () => {
   // Shared notes surfaced in the editor drawer — visible to all household members
   // (to-dos are already shared). Capped to match the firestore.rules validator.
   const [notes, setNotes] = useState('');
+  // Habit Automations (PRD #1065): the habit this to-do counts toward. '' = not
+  // linked. Completing a linked to-do fires the habit like one manual tap.
+  const [linkedHabitId, setLinkedHabitId] = useState('');
   // F-TODO-08: subtask checklist edited in the drawer as local state, persisted
   // on save via addToDo/updateToDo. `subtaskInput` is the pending new-step text;
   // `aiBreakingDown` guards the "Break down with AI" request.
@@ -327,6 +339,7 @@ const ToDosPage: React.FC = () => {
     setReminderMinutesBefore(null);
     setRecurrence('none');
     setNotes('');
+    setLinkedHabitId('');
     setSubtasks([]);
     setSubtaskInput('');
     setMoreOpen(false);
@@ -378,15 +391,17 @@ const ToDosPage: React.FC = () => {
     setReminderMinutesBefore(todo.reminderMinutesBefore ?? null);
     setRecurrence(todo.recurrence?.frequency ?? 'none');
     setNotes(todo.notes ?? '');
+    setLinkedHabitId(todo.linkedHabitId ?? '');
     setSubtasks(todo.subtasks ?? []);
     setSubtaskInput('');
     // Auto-expand when any hidden-by-default field already has a value —
-    // editing a task with notes/subtasks/time/repeat must never hide them.
+    // editing a task with notes/subtasks/time/repeat/habit-link must never hide them.
     setMoreOpen(
       !!todo.dueTime ||
       todo.reminderMinutesBefore != null ||
       !!todo.recurrence ||
       !!(todo.notes && todo.notes.trim()) ||
+      !!todo.linkedHabitId ||
       (todo.subtasks?.length ?? 0) > 0
     );
     setEditingId(todo.id);
@@ -685,6 +700,8 @@ const ToDosPage: React.FC = () => {
               ? { parentRecurringId: editingTodo.recurrence.parentRecurringId }
               : {}) };
       const trimmedNotes = notes.trim();
+      // Habit Automations (PRD #1065): '' (no selection) means "not linked".
+      const linkedHabitValue = linkedHabitId || undefined;
       // Only write the `subtasks` field when there's something to persist (or when
       // clearing a task that previously had them). This keeps ordinary edits off
       // the new field until the firestore.rules whitelist ships it — a plain task
@@ -744,6 +761,11 @@ const ToDosPage: React.FC = () => {
         } else if (editingTodo?.recurrence) {
           updates.recurrence = undefined; // sanitizer writes null → inert
         }
+        // Habit Automations (PRD #1065): only touch linkedHabitId when it
+        // actually changed, so plain (never-linked) edits stay byte-identical.
+        if ((linkedHabitValue ?? null) !== (editingTodo?.linkedHabitId ?? null)) {
+          updates.linkedHabitId = linkedHabitValue; // sanitizer writes null → cleared
+        }
         await updateToDo(editingId, updates);
         toast.success('Task updated');
       } else {
@@ -758,7 +780,8 @@ const ToDosPage: React.FC = () => {
           ...subtaskField,
           ...(dueTimeValue !== undefined ? { dueTime: dueTimeValue } : {}),
           ...(reminderValue !== undefined ? { reminderMinutesBefore: reminderValue } : {}),
-          ...(recurrenceValue ? { recurrence: recurrenceValue } : {})
+          ...(recurrenceValue ? { recurrence: recurrenceValue } : {}),
+          ...(linkedHabitValue ? { linkedHabitId: linkedHabitValue } : {})
         });
         toast.success('Task added');
         setQuickText(''); // the detailed form consumed the carried-over text
@@ -1511,6 +1534,32 @@ const ToDosPage: React.FC = () => {
               </p>
             )}
           </div>
+
+          {/* Habit Automations (PRD #1065): "Counts toward habit" picker.
+              Completing this to-do fires the chosen habit like one manual tap
+              (points + streak). A pick-one field is a Select, per DESIGN.md. */}
+          {linkableHabits.length > 0 && (
+            <div>
+              <Select
+                id="linked-habit-select"
+                label="Counts toward habit"
+                icon={<Sparkles size={18} />}
+                value={linkedHabitId}
+                onChange={(e) => setLinkedHabitId(e.target.value)}
+              >
+                <option value="">None</option>
+                {linkableHabits.map(h => (
+                  <option key={h.id} value={h.id}>{h.title}</option>
+                ))}
+              </Select>
+              {linkedHabitId && (
+                <p className="mt-1.5 text-xs text-brand-400 dark:text-brand-450">
+                  Completing this task logs the habit for you. Steps below must all
+                  be done first.
+                </p>
+              )}
+            </div>
+          )}
 
           <Textarea
             id="task-notes"

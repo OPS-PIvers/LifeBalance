@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useId } from 'react';
 import { X, Plus, ChevronRight } from 'lucide-react';
 import { Habit, EffortLevel } from '@/types/schema';
-import { useGamification } from '@/contexts/FirebaseHouseholdContext';
+import { useGamification, useTodos } from '@/contexts/FirebaseHouseholdContext';
 import {
   PresetHabit,
   EFFORT_POINTS,
@@ -69,6 +69,9 @@ const DEFAULT_FORM_DATA: CustomHabitFormData = {
 
 const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose }) => {
   const { habits, addHabit, updateHabit, deleteHabit } = useGamification();
+  // Habit Automations (PRD #1065): the to-dos linked to the habit being edited,
+  // shown read-only in the CustomHabitForm's Automations section.
+  const { todos } = useTodos();
   const titleId = useId();
 
   // View state
@@ -348,6 +351,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
               onFormChange={handleFormChange}
               editingHabit={editingHabit}
               onDelete={confirmDelete}
+              linkedTodos={editingHabit ? todos.filter(t => t.linkedHabitId === editingHabit.id) : []}
             />
           )}
 
