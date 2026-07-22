@@ -16,9 +16,12 @@ import { findLocationMatches, HabitLocationMatch } from '@/utils/habitLocationPr
  * match, if any.
  *
  * Per-location daily dedup ("at most once per day per location") is enforced
- * by marking a match's dedup key as shown the moment it's SURFACED (not when
- * confirmed) — re-opening the app the same day at the same spot must not
- * re-prompt even if the first prompt was dismissed.
+ * by marking a match's dedup key as shown only when the member explicitly
+ * ACTS on it — confirms or dismisses (see `markDedup`) — never merely because
+ * it was surfaced. A banner that unmounts unanswered (navigated away,
+ * backgrounded, or obscured behind another fixed banner) must not permanently
+ * burn that location's daily slot; re-opening the app should re-offer the
+ * same prompt until the member actually responds.
  */
 
 const STORAGE_KEY = 'lb_habit_geo_prompted_v1';
@@ -83,10 +86,8 @@ export function useHabitLocationPrompt(): UseHabitLocationPromptResult {
           const prompted = readStoredDedup(today);
           const matches = findLocationMatches(habits, current, today, prompted);
           if (matches.length === 0) return;
-          writeStoredDedup(today, [
-            ...prompted,
-            ...matches.map((m) => `geo:${m.locationId}:${today}`),
-          ]);
+          // Dedup key is NOT written here — only surfacing a match must never
+          // consume its daily slot (see markDedup on confirm/dismiss below).
           setQueue(matches);
         },
         () => {
@@ -115,19 +116,33 @@ export function useHabitLocationPrompt(): UseHabitLocationPromptResult {
 
   const current = queue[0] ?? null;
 
-  const dismiss = useCallback(() => {
-    setQueue((prev) => prev.slice(1));
+  // Marks a match's dedup key as shown — called ONLY from an explicit confirm
+  // or dismiss (never when a match is merely surfaced), so an obscured or
+  // never-acted-on prompt doesn't permanently burn that location's daily slot.
+  const markDedup = useCallback((match: HabitLocationMatch) => {
+    const today = getLocalDateString();
+    const key = `geo:${match.locationId}:${today}`;
+    const prompted = readStoredDedup(today);
+    if (!prompted.includes(key)) {
+      writeStoredDedup(today, [...prompted, key]);
+    }
   }, []);
+
+  const dismiss = useCallback(() => {
+    if (current) markDedup(current);
+    setQueue((prev) => prev.slice(1));
+  }, [current, markDedup]);
 
   const confirm = useCallback(async () => {
     if (!current) return;
+    markDedup(current);
     await toggleHabit(current.habitId, 'up', {
       type: 'geo',
       locationId: current.locationId,
       label: current.locationName,
     });
     setQueue((prev) => prev.slice(1));
-  }, [current, toggleHabit]);
+  }, [current, toggleHabit, markDedup]);
 
   return { current, confirm, dismiss };
 }

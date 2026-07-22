@@ -113,6 +113,13 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
     const finalCategory = category.trim() || CATEGORIES[0] || 'Health';
 
     const baseHabitData: Habit = {
+      // Spread the existing habit FIRST when editing so every field this form
+      // doesn't surface (triggers, presetId, isCustom, effortLevel,
+      // frozenDates, assignedTo when the control is hidden, etc.) carries
+      // forward untouched instead of silently reverting/dropping on an
+      // ordinary edit — the explicit fields below override only what this
+      // form actually edits.
+      ...(editingHabit ?? {}),
       id: editingHabit ? editingHabit.id : crypto.randomUUID(),
       title,
       category: finalCategory,

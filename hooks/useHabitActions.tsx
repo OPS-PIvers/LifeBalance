@@ -151,14 +151,37 @@ export const useHabitActions = (
         }).filter(([, value]) => value !== undefined)
       );
 
+      // Habit Automations (PRD #1065): persist trigger config (keywords +
+      // saved locations) edited in the habit's Automations section. Handled
+      // OUTSIDE the generic filter above because clearing the last saved
+      // trigger must remove the field from Firestore (deleteField), not
+      // merely omit it from this update — or a stale location would linger
+      // forever.
+      //
+      // The caller's INTENT is distinguished by whether `triggers` is an own
+      // property on the passed-in `habit` object at all, not by its value:
+      //   - key absent (e.g. HabitFormModal's baseHabitData, which never
+      //     mentions `triggers`) => an ordinary edit that didn't touch
+      //     Automations => leave the stored field untouched.
+      //   - key present but the value is empty/undefined (the Automations
+      //     editor explicitly clearing the last keyword/location) => remove
+      //     the field via deleteField().
+      //   - key present with a non-empty value => write it.
+      // A plain `habit.triggers !== undefined` check can't tell these apart:
+      // both "not touched" and "explicitly cleared" often produce the same
+      // `undefined` value, so it would either wipe triggers on every
+      // unrelated edit or make clearing impossible.
+      const hasTriggersKey = Object.prototype.hasOwnProperty.call(habit, 'triggers');
+      const triggersValue = habit.triggers;
+      const triggersIsEmpty =
+        !triggersValue ||
+        (!triggersValue.keywords?.length && !triggersValue.locations?.length);
+
       await updateDoc(doc(db, `households/${householdId}/habits`, habit.id), {
         ...updateData,
-        // Habit Automations (PRD #1065): persist trigger config (keywords +
-        // saved locations) edited in the habit's Automations section. Handled
-        // OUTSIDE the generic filter above — clearing the last saved location
-        // must remove the field from Firestore (deleteField), not merely omit
-        // it from this update, or a stale location would linger forever.
-        triggers: habit.triggers ?? deleteField(),
+        ...(hasTriggersKey
+          ? { triggers: triggersIsEmpty ? deleteField() : triggersValue }
+          : {}),
         lastUpdated: serverTimestamp(),
       });
     } catch (error) {

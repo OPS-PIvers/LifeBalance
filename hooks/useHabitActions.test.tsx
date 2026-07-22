@@ -880,6 +880,59 @@ describe('useHabitActions.updateHabit (Plan 080c-3: assignedTo round-trips throu
     const payload = lastUpdatePayload();
     expect('assignedTo' in payload).toBe(false);
   });
+
+  // Regression (adversarial-review finding on PR #1073): an ordinary habit
+  // edit (e.g. bumping basePoints via the habit card's Edit form) must NEVER
+  // wipe previously-saved location/keyword triggers. HabitFormModal's
+  // baseHabitData doesn't mention `triggers` at all for such an edit, so the
+  // `habit` object passed to updateHabit has no `triggers` own property —
+  // that must leave the stored field untouched, not delete it.
+  it('does not delete existing triggers when the payload omits the triggers key entirely', async () => {
+    const habit = baseHabit({ id: 'h1' });
+    expect('triggers' in habit).toBe(false);
+
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.updateHabit(habit);
+    });
+
+    const payload = lastUpdatePayload();
+    expect('triggers' in payload).toBe(false);
+  });
+
+  it('still clears triggers via deleteField when the payload explicitly sets an empty value', async () => {
+    const habit = baseHabit({ id: 'h1', triggers: undefined });
+
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.updateHabit(habit);
+    });
+
+    const payload = lastUpdatePayload();
+    expect(payload.triggers).toEqual({ __deleteField: true });
+  });
+
+  it('writes a non-empty triggers value through when the payload explicitly provides one', async () => {
+    const triggers = { locations: [{ id: 'loc1', name: 'Target', lat: 1, lng: 2, radiusMeters: 150 }] };
+    const habit = baseHabit({ id: 'h1', triggers });
+
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.updateHabit(habit);
+    });
+
+    const payload = lastUpdatePayload();
+    expect(payload.triggers).toEqual(triggers);
+  });
 });
 
 describe('useHabitActions.toggleHabit (stale deselect — date-aware reversal)', () => {

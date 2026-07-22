@@ -1160,7 +1160,15 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   }, []);
 
   const updateHabit = useCallback(async (habit: Habit) => {
-    setHabits(prev => prev.map(h => h.id === habit.id ? habit : h));
+    // Merge rather than wholesale-replace, mirroring the real Firestore
+    // updateDoc path (which only touches the fields it's explicitly given):
+    // spreading the incoming `habit` OVER the existing doc preserves any
+    // field the caller's payload omits entirely (e.g. HabitFormModal editing
+    // basePoints doesn't carry `triggers` at all) while still honoring an
+    // explicit overwrite/clear for any key the caller DID include (even with
+    // value `undefined`, since object spread only overwrites keys actually
+    // present on the source object).
+    setHabits(prev => prev.map(h => (h.id === habit.id ? { ...h, ...habit } : h)));
     toast.success('Mock: Habit updated');
   }, []);
 

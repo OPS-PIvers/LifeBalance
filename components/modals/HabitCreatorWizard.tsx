@@ -174,6 +174,16 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
           }
         : undefined;
 
+    // updateHabit distinguishes "didn't touch triggers" from "explicitly
+    // cleared triggers" by whether `triggers` is an OWN PROPERTY of the
+    // payload, not by its value — so when EDITING (this wizard IS the
+    // Automations editor) the key must always be present, even when the
+    // computed value is `undefined` (the user removed the last saved
+    // location/keyword), or the clear would silently no-op. When CREATING,
+    // addHabit spreads the whole object straight into Firestore's addDoc,
+    // which rejects an explicit `undefined` field value, so the key must stay
+    // omitted there when there's nothing to configure.
+
     // Build base habit data
     const habitData: Habit = {
       id: editingHabit ? editingHabit.id : generateId(),
@@ -196,7 +206,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
         isShared: editingHabit.isShared,
         ownerId: editingHabit.ownerId,
       }),
-      ...(triggers ? { triggers } : {}),
+      ...(editingHabit ? { triggers } : (triggers ? { triggers } : {})),
       // Custom habits should not have presetId (contradicts isCustom: true)
     };
 
