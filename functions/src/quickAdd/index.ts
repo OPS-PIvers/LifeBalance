@@ -52,6 +52,7 @@ import {
 } from "./billMatch";
 import { fuzzyMatchMember, type MemberLike } from "./todoMatch";
 import { parseTodoPhrase } from "./todoParser";
+import { isManualReview } from "./captureReview";
 
 // Read/export GET endpoint (getTodos). Kept in its own module and re-exported
 // here so this barrel's deploy surface stays complete while the endpoint body
@@ -1102,7 +1103,15 @@ export const quickAddExpense = onRequest(
 
 /**
  * POST /quickAddShoppingItem
- * Add an item to the shopping list via voice or shortcut
+ * Add an item to the shopping list via voice or shortcut.
+ *
+ * When the household's `captureReview.shopping` setting is `'review'`, each
+ * NEWLY created row (single or batch mode) is stamped `needsReview: true`
+ * (held out of the visible list until approved) — see captureReview.ts. A
+ * quantity-bump onto an existing item (matched name, not yet purchased) never
+ * toggles `needsReview`, whether the household is in auto or review mode:
+ * merging into an already-visible item must not retroactively hide it, and
+ * merging into an already-held item must not prematurely surface it.
  */
 export const quickAddShoppingItem = onRequest(
   { cors: false, region: "us-central1" },
@@ -1198,7 +1207,19 @@ export const quickAddShoppingItem = onRequest(
       }
 
       try {
-        // 5. Fetch existing items once for duplicate checking
+        // 5. Determine the household's shopping capture-review mode ONCE per
+        //    request (not per item) — items created while shopping is in
+        //    'review' mode are held (needsReview: true) until approved. See
+        //    captureReview.ts. Only stamped on NEWLY created rows below; a
+        //    quantity-bump onto an existing item (visible or already held)
+        //    must not retroactively toggle its review state.
+        const householdSnap = await db.doc(`households/${householdId}`).get();
+        const shoppingManualReview = isManualReview(
+          householdSnap.data()?.captureReview,
+          "shopping"
+        );
+
+        // 6. Fetch existing items once for duplicate checking
         const shoppingListRef = db.collection(
           `households/${householdId}/shoppingList`
         );
@@ -1216,7 +1237,7 @@ export const quickAddShoppingItem = onRequest(
           created?: boolean;
         }> = [];
 
-        // 6. Plan all writes into a single WriteBatch so all items are
+        // 7. Plan all writes into a single WriteBatch so all items are
         //    committed atomically in one round-trip instead of N sequential
         //    awaits (matches the client's writeBatch pattern in
         //    contexts/FirebaseHouseholdContext.tsx handleShoppingItems).
@@ -1285,6 +1306,10 @@ export const quickAddShoppingItem = onRequest(
               isPurchased: false,
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
               source: "shortcut",
+              // Held for review only on brand-new rows — see the mode
+              // determination above. Omitted (not `false`) when auto, to
+              // keep today's stored shape unchanged.
+              ...(shoppingManualReview ? { needsReview: true } : {}),
             };
             batch.set(newRef, shoppingItemData);
             pendingQuantities.set(normalizedItem, { ref: newRef, quantity: itemQuantity });
@@ -1302,10 +1327,10 @@ export const quickAddShoppingItem = onRequest(
         // Commit all creates/updates in one round-trip.
         await batch.commit();
 
-        // 7. Log API call
+        // 8. Log API call
         await logApiCall(householdId, apiKey.substring(0, 16), "shopping", req.body, 200);
 
-        // 8. Return success with all results
+        // 9. Return success with all results
         jsonResponse(res, 200, {
           success: true,
           message: `Added ${results.length} item(s) to shopping list`,
@@ -1355,7 +1380,16 @@ export const quickAddShoppingItem = onRequest(
     }
 
     try {
-      // 5. Check for duplicate items (case-insensitive)
+      // 5. Determine the household's shopping capture-review mode (see the
+      //    batch-mode branch above for the full rationale — same behavior
+      //    here: only a newly created row is stamped `needsReview`).
+      const householdSnap = await db.doc(`households/${householdId}`).get();
+      const shoppingManualReview = isManualReview(
+        householdSnap.data()?.captureReview,
+        "shopping"
+      );
+
+      // 6. Check for duplicate items (case-insensitive)
       const existingItems = await db
         .collection(`households/${householdId}/shoppingList`)
         .where("isPurchased", "==", false)
@@ -1367,7 +1401,10 @@ export const quickAddShoppingItem = onRequest(
       );
 
       if (duplicate) {
-        // Update quantity instead of creating duplicate
+        // Update quantity instead of creating duplicate. needsReview is
+        // deliberately left untouched — a quantity bump onto an existing
+        // (visible or held) item must not retroactively toggle its review
+        // state.
         const currentQty = duplicate.data().quantity || 1;
         await duplicate.ref.update({
           quantity: currentQty + quantity,
@@ -1389,7 +1426,7 @@ export const quickAddShoppingItem = onRequest(
         return;
       }
 
-      // 6. Create new shopping list item
+      // 7. Create new shopping list item
       const shoppingItemData = {
         name: item.trim(),
         quantity,
@@ -1398,16 +1435,17 @@ export const quickAddShoppingItem = onRequest(
         isPurchased: false,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         source: "shortcut",
+        ...(shoppingManualReview ? { needsReview: true } : {}),
       };
 
       const itemRef = await db
         .collection(`households/${householdId}/shoppingList`)
         .add(shoppingItemData);
 
-      // 7. Log API call
+      // 8. Log API call
       await logApiCall(householdId, apiKey.substring(0, 16), "shopping", req.body, 200);
 
-      // 8. Return success
+      // 9. Return success
       jsonResponse(res, 200, {
         success: true,
         message: `Added "${item}" to shopping list`,
@@ -1887,7 +1925,9 @@ export const quickAddBillPay = onRequest(
  * match wins, otherwise a fuzzy display-name match (same tiering as
  * habitProcessor's fuzzyMatchHabit / todoMatch's fuzzyMatchMember). Writes
  * with `source: 'shortcut'` — already a valid `ToDo.source` value, so no
- * schema/rules change is needed.
+ * schema/rules change is needed. When the household's `captureReview.todo`
+ * setting is `'review'` the created to-do is stamped `needsReview: true`
+ * (held out of the visible list until approved) — see captureReview.ts.
  */
 export const quickAddTodo = onRequest(
   { cors: false, region: "us-central1" },
@@ -2030,7 +2070,13 @@ export const quickAddTodo = onRequest(
     }
 
     try {
-      // 5. Resolve assignedTo (uid or fuzzy display-name match) against the
+      // 5. Determine the household's todo capture-review mode — a todo
+      //    created while todos are in 'review' mode is held (needsReview:
+      //    true) until approved. See captureReview.ts.
+      const householdSnap = await db.doc(`households/${householdId}`).get();
+      const todoManualReview = isManualReview(householdSnap.data()?.captureReview, "todo");
+
+      // 6. Resolve assignedTo (uid or fuzzy display-name match) against the
       //    household's members. Absent when not provided — the client's
       //    ToDo form treats an unassigned todo the same way.
       let assignedTo: string | undefined;
@@ -2081,7 +2127,7 @@ export const quickAddTodo = onRequest(
         }
       }
 
-      // 6. Create the to-do document.
+      // 7. Create the to-do document.
       const todoData: Record<string, unknown> = {
         text: taskText,
         completeByDate: dueDate,
@@ -2093,16 +2139,17 @@ export const quickAddTodo = onRequest(
         ...(dueTime !== undefined ? { dueTime } : {}),
         ...(reminderMinutesBefore !== undefined ? { reminderMinutesBefore } : {}),
         ...(validation.keyCreatedBy ? { createdBy: validation.keyCreatedBy } : {}),
+        ...(todoManualReview ? { needsReview: true } : {}),
       };
 
       const todoRef = await db
         .collection(`households/${householdId}/todos`)
         .add(todoData);
 
-      // 7. Log API call
+      // 8. Log API call
       await logApiCall(householdId, apiKey.substring(0, 16), "todo", req.body, 200);
 
-      // 8. Return success
+      // 9. Return success
       jsonResponse(res, 200, {
         success: true,
         message: `Added to-do: ${taskText}`,
