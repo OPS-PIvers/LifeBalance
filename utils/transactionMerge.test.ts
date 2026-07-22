@@ -113,6 +113,30 @@ describe('mergeTransactions', () => {
     expect(mergeTransactions(keeper, dupe).relatedHabitIds).toEqual(['h1']);
   });
 
+  it('inherits bankRef + bank-sync home from a bank-sync dupe so the merged row stays exempt', () => {
+    const keeper = tx({ store: 'Cub Foods' }); // richer, but not bank-sync, no accountId
+    const dupe = tx({ id: 'dupe', bankRef: 'P0000123', accountId: 'acc-check' });
+    const patch = mergeTransactions(keeper, dupe);
+    expect(patch.bankRef).toBe('P0000123');
+    expect(patch.bankSyncAccountId).toBe('acc-check');
+    expect(patch.accountId).toBe('acc-check');
+  });
+
+  it('prefers the dupe\'s persisted bankSyncAccountId over its current (re-tagged) accountId', () => {
+    const keeper = tx();
+    const dupe = tx({ id: 'dupe', bankRef: 'P0000123', accountId: 'acc-save', bankSyncAccountId: 'acc-check' });
+    const patch = mergeTransactions(keeper, dupe);
+    expect(patch.bankSyncAccountId).toBe('acc-check');
+  });
+
+  it('never overwrites the keeper\'s own bankRef or home stamp', () => {
+    const keeper = tx({ bankRef: 'K111', bankSyncAccountId: 'acc-a' });
+    const dupe = tx({ id: 'dupe', bankRef: 'D222', bankSyncAccountId: 'acc-b' });
+    const patch = mergeTransactions(keeper, dupe);
+    expect(patch.bankRef).toBeUndefined();
+    expect(patch.bankSyncAccountId).toBeUndefined();
+  });
+
   it('never includes possibleDuplicateOf in the pure patch (Firestore rejects undefined; caller clears via deleteField())', () => {
     const keeper = tx();
     const dupe = tx({ id: 'dupe' });

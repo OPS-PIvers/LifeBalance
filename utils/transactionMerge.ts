@@ -90,6 +90,22 @@ export function mergeTransactions(keeper: Transaction, dupe: Transaction): Parti
     updates.notes = dupe.notes;
   }
 
+  // Bank-sync markers must survive the merge: the merged row represents the
+  // bank-settled purchase, and the account balance already reflects it via
+  // the email's ending balance. Without inheriting bankRef (+ the persisted
+  // home account), the keeper would sit on the bank account unexempted and a
+  // later edit/verify would double-count that account — the exact bug class
+  // the per-target skip exists to prevent. `source` is NOT copied (the keeper
+  // keeps its own provenance; the bankRef arm of isBankSyncTransaction is
+  // what classifies it).
+  if (!keeper.bankRef && dupe.bankRef) {
+    updates.bankRef = dupe.bankRef;
+    const dupeHome = dupe.bankSyncAccountId ?? dupe.accountId;
+    if (!keeper.bankSyncAccountId && dupeHome) {
+      updates.bankSyncAccountId = dupeHome;
+    }
+  }
+
   const keeperHabits = keeper.relatedHabitIds ?? [];
   const dupeHabits = dupe.relatedHabitIds ?? [];
   if (dupeHabits.some(id => !keeperHabits.includes(id))) {
