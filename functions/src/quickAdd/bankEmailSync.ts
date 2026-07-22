@@ -55,7 +55,7 @@ import {
 import { type ReconcileCandidate, buildFillUpdates } from "./reconcile";
 import {
   decideWithdrawal,
-  buildEndingBalanceUpdate,
+  buildBalanceUpdate,
   matchAccountByAccountLast4,
   getBillPayPeriodId,
   computeBalanceAsOf,
@@ -626,7 +626,8 @@ export const bankEmailSync = onRequest(
         }
       }
 
-      // 10. Overwrite the account balance with the email's ending balance —
+      // 10. Overwrite the account balance with the email's AVAILABLE balance
+      //     (posted ending balance minus authorized-but-unposted holds) —
       //     but ONLY if this email is not older than the last one we applied.
       //     A first-install backfill (or any retry storm) can deliver several
       //     historical emails out of order; without this guard the LAST batch
@@ -652,7 +653,7 @@ export const bankEmailSync = onRequest(
         );
       } else {
         batch.update(db.doc(`households/${householdId}/accounts/${resolvedAccountId}`), {
-          ...buildEndingBalanceUpdate(parsed.endingBalance),
+          ...buildBalanceUpdate(parsed.availableBalance),
           balanceAsOf: incomingBalanceAsOf,
           lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
         });
@@ -664,6 +665,7 @@ export const bankEmailSync = onRequest(
         accountId: resolvedAccountId,
         processedAt: admin.firestore.FieldValue.serverTimestamp(),
         endingBalance: parsed.endingBalance,
+        availableBalance: parsed.availableBalance,
         counts,
       });
 
@@ -678,7 +680,7 @@ export const bankEmailSync = onRequest(
       // 12. Summary push + response.
       const balanceSummary = balanceSkipped
         ? "Balance: unchanged (older email, out of order)"
-        : `Balance: ${formatCurrency(parsed.endingBalance, { currency })}`;
+        : `Balance: ${formatCurrency(parsed.availableBalance, { currency })}`;
       await pushToBankSyncMembers(
         householdId,
         "Bank sync complete",
@@ -692,6 +694,7 @@ export const bankEmailSync = onRequest(
         data: {
           accountId: resolvedAccountId,
           endingBalance: parsed.endingBalance,
+          availableBalance: parsed.availableBalance,
           withdrawals: parsed.withdrawals.length,
           balanceSkipped,
           ...counts,
