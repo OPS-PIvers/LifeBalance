@@ -192,6 +192,12 @@ const ToDosPage: React.FC = () => {
 
     const rowColors = new Map<string, SectionColor>();
     active.forEach(todo => {
+      // Legacy/blank due date: explicitly 'blue' (undated ~ far future) rather
+      // than relying on every date-fns predicate rejecting an Invalid Date.
+      if (!todo.completeByDate) {
+        rowColors.set(todo.id, 'blue');
+        return;
+      }
       const date = parseISO(todo.completeByDate);
       rowColors.set(
         todo.id,
