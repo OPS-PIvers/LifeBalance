@@ -933,6 +933,31 @@ describe('useHabitActions.updateHabit (Plan 080c-3: assignedTo round-trips throu
     const payload = lastUpdatePayload();
     expect(payload.triggers).toEqual({ __deleteField: true });
   });
+
+  // Regression (PR #1072 clear-path bug): HabitCreatorWizard.handleSaveCustom
+  // — when EDITING — always spreads an OWN `triggers` property onto the habit
+  // object, even when the computed value is `undefined` (the user removed
+  // their LAST keyword/location). That is NOT the same payload shape as an
+  // ordinary edit that never mentions `triggers` at all (tested above): here
+  // the key is present with an `undefined` value, so `hasOwnProperty` must
+  // still see it and route to deleteField() rather than being swallowed by
+  // the `habit.triggers !== undefined` style check that caused the original
+  // regression (the last keyword could never actually be cleared).
+  it('clears automations via deleteField() when the key is present with an undefined value (wizard clear path)', async () => {
+    const habit = baseHabit({ id: 'h1', triggers: undefined });
+    expect(Object.prototype.hasOwnProperty.call(habit, 'triggers')).toBe(true);
+
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.updateHabit(habit);
+    });
+
+    const payload = lastUpdatePayload();
+    expect(payload.triggers).toEqual({ __deleteField: true });
+  });
 });
 
 describe('useHabitActions.toggleHabit (stale deselect — date-aware reversal)', () => {

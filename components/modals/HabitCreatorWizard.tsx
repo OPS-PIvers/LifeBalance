@@ -172,6 +172,32 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
 
     const targetCount = parseTargetCount(formData.targetCount);
 
+    // Habit Automations (PRD #1065): merge the edited keywords back with any
+    // existing location trigger (a different PR's Automations surface — never
+    // touched here) so saving the keyword editor can't silently drop it.
+    // `triggers` itself is omitted entirely when there's nothing to
+    // configure, matching every existing habit doc (the field is absent, not
+    // an empty object).
+    const existingLocations = editingHabit?.triggers?.locations;
+    const cleanedKeywords = formData.keywords.map(k => k.trim()).filter(Boolean);
+    const triggers: Habit['triggers'] =
+      cleanedKeywords.length > 0 || (existingLocations && existingLocations.length > 0)
+        ? {
+            ...(cleanedKeywords.length > 0 ? { keywords: cleanedKeywords } : {}),
+            ...(existingLocations && existingLocations.length > 0 ? { locations: existingLocations } : {}),
+          }
+        : undefined;
+
+    // updateHabit distinguishes "didn't touch triggers" from "explicitly
+    // cleared triggers" by whether `triggers` is an OWN PROPERTY of the
+    // payload, not by its value — so when EDITING (this wizard IS the
+    // Automations editor) the key must always be present, even when the
+    // computed value is `undefined` (the user removed the last saved
+    // keyword/location), or the clear would silently no-op. When CREATING,
+    // addHabit spreads the whole object straight into Firestore's addDoc,
+    // which rejects an explicit `undefined` field value, so the key must stay
+    // omitted there when there's nothing to configure.
+
     // Build base habit data
     const habitData: Habit = {
       id: editingHabit ? editingHabit.id : generateId(),
@@ -194,21 +220,9 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
         isShared: editingHabit.isShared,
         ownerId: editingHabit.ownerId,
       }),
+      ...(editingHabit ? { triggers } : (triggers ? { triggers } : {})),
       // Custom habits should not have presetId (contradicts isCustom: true)
     };
-
-    // Habit Automations (PRD #1065): persist transaction keywords, preserving
-    // any existing saved locations (edited by a sibling PR). Only attach a
-    // `triggers` object when there is at least one keyword or location, so a
-    // habit with no automation writes nothing new.
-    const existingLocations = editingHabit?.triggers?.locations;
-    const cleanedKeywords = formData.keywords.map(k => k.trim()).filter(Boolean);
-    if (cleanedKeywords.length > 0 || (existingLocations && existingLocations.length > 0)) {
-      habitData.triggers = {
-        ...(cleanedKeywords.length > 0 ? { keywords: cleanedKeywords } : {}),
-        ...(existingLocations && existingLocations.length > 0 ? { locations: existingLocations } : {}),
-      };
-    }
 
     try {
       if (editingHabit) {

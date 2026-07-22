@@ -150,25 +150,37 @@ export const useHabitActions = (
         }).filter(([, value]) => value !== undefined)
       );
 
-      // Habit Automations (PRD #1065): the optional `triggers` structure
-      // (transaction keywords + saved locations) is a SEPARATE concern from an
-      // ordinary habit edit. `undefined` means "leave the stored triggers
-      // untouched" — an everyday edit (basePoints, title, …) via HabitFormModal
-      // must NOT wipe a habit's automations. Only an EXPLICIT triggers object
-      // touches the field: a populated one is written; an explicit EMPTY object
-      // (the Automations editor's "clear" action) removes it via deleteField().
-      // Omitting the field entirely (rather than writing `undefined`, which
-      // Firestore rejects) is what preserves the existing value.
-      let triggersUpdate: unknown;
-      if (habit.triggers !== undefined) {
-        const hasContent =
-          (habit.triggers.keywords?.length ?? 0) > 0 || (habit.triggers.locations?.length ?? 0) > 0;
-        triggersUpdate = hasContent ? habit.triggers : deleteField();
-      }
+      // Habit Automations (PRD #1065): persist trigger config (keywords +
+      // saved locations) edited in the habit's Automations section. Handled
+      // OUTSIDE the generic filter above because clearing the last saved
+      // trigger must remove the field from Firestore (deleteField), not
+      // merely omit it from this update — or a stale keyword/location would
+      // linger forever.
+      //
+      // The caller's INTENT is distinguished by whether `triggers` is an own
+      // property on the passed-in `habit` object at all, not by its value:
+      //   - key absent (e.g. HabitFormModal's baseHabitData, which never
+      //     mentions `triggers`) => an ordinary edit that didn't touch
+      //     Automations => leave the stored field untouched.
+      //   - key present but the value is empty/undefined (the Automations
+      //     editor explicitly clearing the last keyword/location) => remove
+      //     the field via deleteField().
+      //   - key present with a non-empty value => write it.
+      // A plain `habit.triggers !== undefined` check can't tell these apart:
+      // both "not touched" and "explicitly cleared" often produce the same
+      // `undefined` value, so it would either wipe triggers on every
+      // unrelated edit or make clearing impossible.
+      const hasTriggersKey = Object.prototype.hasOwnProperty.call(habit, 'triggers');
+      const triggersValue = habit.triggers;
+      const triggersIsEmpty =
+        !triggersValue ||
+        (!triggersValue.keywords?.length && !triggersValue.locations?.length);
 
       await updateDoc(doc(db, `households/${householdId}/habits`, habit.id), {
         ...updateData,
-        ...(triggersUpdate !== undefined ? { triggers: triggersUpdate } : {}),
+        ...(hasTriggersKey
+          ? { triggers: triggersIsEmpty ? deleteField() : triggersValue }
+          : {}),
         lastUpdated: serverTimestamp(),
       });
     } catch (error) {
