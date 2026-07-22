@@ -59,6 +59,21 @@ describe('keywordMatchesText', () => {
     expect(keywordMatchesText('a.b', 'axb')).toBe(false);
     expect(keywordMatchesText('a.b', 'an a.b token')).toBe(true);
   });
+
+  it('matches a single-token keyword starting/ending in a non-ASCII letter', () => {
+    expect(keywordMatchesText('café', 'café')).toBe(true);
+    expect(keywordMatchesText('café', 'Café Zupas')).toBe(true);
+    expect(keywordMatchesText('café', 'I went to café')).toBe(true);
+  });
+
+  it('still enforces ASCII whole-word semantics alongside Unicode keywords', () => {
+    // "target" must still NOT match "targeted" (regression guard).
+    expect(keywordMatchesText('target', 'targeted')).toBe(false);
+  });
+
+  it('does not match an accented keyword as a substring of a longer accented word', () => {
+    expect(keywordMatchesText('café', 'cafétéria')).toBe(false);
+  });
 });
 
 describe('habitMatchesInput', () => {

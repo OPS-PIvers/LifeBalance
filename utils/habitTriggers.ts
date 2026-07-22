@@ -6,8 +6,10 @@
  * Every automated fire behaves like one manual tap (same scoring/streak) and is
  * ATTRIBUTED visibly ("via to-do: …" / "via location: …" / "via transaction: …")
  * and DEDUPLICATED per its own rule:
- *   - to-do:        once per to-do        (a to-do can only be completed once)
- *   - transaction:  once per transaction  (re-editing a txn can't double-log)
+ *   - to-do:        once per to-do                    (a to-do can only be completed once)
+ *   - transaction:  once per (transaction, habit)      (re-editing a txn can't double-log
+ *                   the SAME habit, but one transaction may legitimately fire several
+ *                   different habits, each at most once)
  *   - geo:          once per day per location
  *   - manual:       never deduped (and cross-trigger double-fires stay allowed)
  *
@@ -52,7 +54,7 @@ export const AUTOMATED_TRIGGER_TYPES: readonly TriggerType[] = [
 export type TriggerSource =
   | { type: 'todo'; todoId: string; label: string }
   | { type: 'geo'; locationId: string; label: string }
-  | { type: 'transaction'; transactionId: string; label: string }
+  | { type: 'transaction'; transactionId: string; habitId: string; label: string }
   | { type: 'manual' };
 
 /**
@@ -76,7 +78,7 @@ export function triggerDedupKey(source: TriggerSource, date: string): string | n
     case 'todo':
       return `todo:${source.todoId}`;
     case 'transaction':
-      return `txn:${source.transactionId}`;
+      return `txn:${source.transactionId}:${source.habitId}`;
     case 'geo':
       return `geo:${source.locationId}:${date}`;
     case 'manual':

@@ -44,7 +44,15 @@ export function keywordMatchesText(keyword: string, text: string): boolean {
     return text.toLowerCase().includes(trimmed.toLowerCase());
   }
 
-  const wordBoundary = new RegExp(`\\b${escapeRegExp(trimmed)}\\b`, 'i');
+  // ASCII `\b` only understands [A-Za-z0-9_] as "word" characters, so a
+  // keyword starting/ending in a non-ASCII letter (e.g. "café") never
+  // matches. Use Unicode-aware lookaround boundaries instead: no
+  // letter/number immediately before the match start, and none immediately
+  // after the match end. This preserves the existing ASCII semantics
+  // ("target" still doesn't match "targeted") while also handling
+  // accented/non-Latin keywords.
+  const escaped = escapeRegExp(trimmed);
+  const wordBoundary = new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'iu');
   return wordBoundary.test(text);
 }
 

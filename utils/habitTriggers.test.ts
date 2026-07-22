@@ -28,7 +28,12 @@ describe('attributionString', () => {
       'via location: Target',
     );
     expect(
-      attributionString({ type: 'transaction', transactionId: 'x1', label: 'TARGET T-1234' }),
+      attributionString({
+        type: 'transaction',
+        transactionId: 'x1',
+        habitId: 'h1',
+        label: 'TARGET T-1234',
+      }),
     ).toBe('via transaction: TARGET T-1234');
   });
 
@@ -44,9 +49,30 @@ describe('triggerDedupKey', () => {
     expect(triggerDedupKey(source, '2026-07-23')).toBe('todo:t1');
   });
 
-  it('keys a transaction per transaction (date-independent)', () => {
-    const source: TriggerSource = { type: 'transaction', transactionId: 'x1', label: 'x' };
-    expect(triggerDedupKey(source, '2026-07-22')).toBe('txn:x1');
+  it('keys a transaction per (transaction, habit) pair (date-independent)', () => {
+    const source: TriggerSource = {
+      type: 'transaction',
+      transactionId: 'x1',
+      habitId: 'hA',
+      label: 'x',
+    };
+    expect(triggerDedupKey(source, '2026-07-22')).toBe('txn:x1:hA');
+  });
+
+  it('keys the same transaction differently per habit', () => {
+    const habitA: TriggerSource = {
+      type: 'transaction',
+      transactionId: 'x1',
+      habitId: 'hA',
+      label: 'x',
+    };
+    const habitB: TriggerSource = {
+      type: 'transaction',
+      transactionId: 'x1',
+      habitId: 'hB',
+      label: 'x',
+    };
+    expect(triggerDedupKey(habitA, '2026-07-22')).not.toBe(triggerDedupKey(habitB, '2026-07-22'));
   });
 
   it('keys geo per day per location', () => {
@@ -72,10 +98,44 @@ describe('shouldFireTrigger', () => {
     expect(shouldFireTrigger(source, today, ['todo:t1'])).toBe(false);
   });
 
-  it('fires a transaction once, then suppresses re-edits', () => {
-    const source: TriggerSource = { type: 'transaction', transactionId: 'x1', label: 'x' };
+  it('fires a transaction once, then suppresses re-edits (same habit)', () => {
+    const source: TriggerSource = {
+      type: 'transaction',
+      transactionId: 'x1',
+      habitId: 'hA',
+      label: 'x',
+    };
     expect(shouldFireTrigger(source, today, [])).toBe(true);
-    expect(shouldFireTrigger(source, today, ['txn:x1'])).toBe(false);
+    expect(shouldFireTrigger(source, today, ['txn:x1:hA'])).toBe(false);
+  });
+
+  it('firing habit A on a transaction does not block habit B on the same transaction', () => {
+    const habitA: TriggerSource = {
+      type: 'transaction',
+      transactionId: 'x1',
+      habitId: 'hA',
+      label: 'x',
+    };
+    const habitB: TriggerSource = {
+      type: 'transaction',
+      transactionId: 'x1',
+      habitId: 'hB',
+      label: 'x',
+    };
+    const fired = ['txn:x1:hA'];
+    expect(shouldFireTrigger(habitA, today, fired)).toBe(false);
+    expect(shouldFireTrigger(habitB, today, fired)).toBe(true);
+  });
+
+  it('firing habit A twice on the same transaction is deduped', () => {
+    const habitA: TriggerSource = {
+      type: 'transaction',
+      transactionId: 'x1',
+      habitId: 'hA',
+      label: 'x',
+    };
+    expect(shouldFireTrigger(habitA, today, [])).toBe(true);
+    expect(shouldFireTrigger(habitA, today, ['txn:x1:hA'])).toBe(false);
   });
 
   it('suppresses geo the same day but allows it the next day', () => {
