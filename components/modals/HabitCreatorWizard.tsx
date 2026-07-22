@@ -53,6 +53,7 @@ const DEFAULT_FORM_DATA: CustomHabitFormData = {
   scoringType: 'threshold',
   period: 'daily',
   targetCount: '1',
+  keywords: [],
   locations: [],
 };
 
@@ -144,6 +145,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
       scoringType: habit.scoringType,
       period: habit.period,
       targetCount: habit.targetCount.toString(),
+      keywords: habit.triggers?.keywords ?? [],
       locations: habit.triggers?.locations ?? [],
     });
     setView('edit-custom');
@@ -163,16 +165,17 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
 
     const targetCount = parseTargetCount(formData.targetCount);
 
-    // Habit Automations (PRD #1065): merge the edited locations back with any
-    // existing keyword trigger (a different PR's Automations surface — never
-    // touched here) so saving the geo editor can't silently drop it. `triggers`
-    // itself is omitted entirely when there's nothing to configure, matching
-    // every existing habit doc (the field is absent, not an empty object).
-    const existingKeywords = editingHabit?.triggers?.keywords;
+    // Habit Automations (PRD #1065): both keyword and location triggers are
+    // edited in this same form now, so build `triggers` directly from
+    // formData — no need to fall back to editingHabit's stored value for
+    // either trigger type. `triggers` itself is omitted entirely when there's
+    // nothing to configure, matching every existing habit doc (the field is
+    // absent, not an empty object).
+    const cleanedKeywords = formData.keywords.map(k => k.trim()).filter(Boolean);
     const triggers: Habit['triggers'] =
-      formData.locations.length > 0 || (existingKeywords && existingKeywords.length > 0)
+      cleanedKeywords.length > 0 || formData.locations.length > 0
         ? {
-            ...(existingKeywords && existingKeywords.length > 0 ? { keywords: existingKeywords } : {}),
+            ...(cleanedKeywords.length > 0 ? { keywords: cleanedKeywords } : {}),
             ...(formData.locations.length > 0 ? { locations: formData.locations } : {}),
           }
         : undefined;
@@ -182,7 +185,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
     // payload, not by its value — so when EDITING (this wizard IS the
     // Automations editor) the key must always be present, even when the
     // computed value is `undefined` (the user removed the last saved
-    // location/keyword), or the clear would silently no-op. When CREATING,
+    // keyword/location), or the clear would silently no-op. When CREATING,
     // addHabit spreads the whole object straight into Firestore's addDoc,
     // which rejects an explicit `undefined` field value, so the key must stay
     // omitted there when there's nothing to configure.

@@ -21,6 +21,7 @@ import { attributionString, type TriggerSource } from '@/utils/habitTriggers';
 import { selectAutoFreezeCandidates } from '@/utils/freezeBank';
 import { accountImpactOf, effectiveAccountImpact, isBankSyncTransaction, resolveTargetAccount } from '@/utils/accountImpact';
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
+import { selectHabitsToFire } from '@/utils/transactionHabitFiring';
 import { MAX_COMMENT_LENGTH } from '@/contexts/household/mutations/commentMutations';
 import { roundMoney } from '@/utils/money';
 import { splitParticipantKey } from '@/utils/settlement';
@@ -217,7 +218,12 @@ const SEED_HABITS: Habit[] = [
     id: 'h2', title: 'Exercise 30min', category: 'Fitness', type: 'positive',
     basePoints: 20, scoringType: 'threshold', period: 'daily', targetCount: 1,
     totalCount: 0, count: 0, completedDates: [], streakDays: 0,
-    createdBy: 'test-user-id', lastUpdated: new Date().toISOString()
+    createdBy: 'test-user-id', lastUpdated: new Date().toISOString(),
+    // Habit Automations (PRD #1065): seeded transaction keywords so the
+    // habit-editor Automations section AND the review-card "Also logs" chips are
+    // walkable in Test Mode — capture a transaction from "Planet Fitness" (or a
+    // "gym" note) and it fires this habit on approve.
+    triggers: { keywords: ['gym', 'planet fitness'] },
   },
   // Plan 080c-3 Test-Mode harness: one kid-assigned chore so the kid dashboard
   // chore list and the parent read-only KidChoresGroup both render live data.
@@ -962,6 +968,12 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
           : a));
       }
     }
+    // Habit Automations (PRD #1065): dedup the fire set — a transaction fires a
+    // given habit at most once (parity with makeUpdateTransactionCategory).
+    const { toFire: habitIdsToFire, nextFired } = selectHabitsToFire(
+      relatedHabitIds ?? [],
+      existing?.firedHabitIds ?? [],
+    );
     setTransactions(prev => prev.map(t => {
       if (t.id !== id) return t;
       const next: Transaction = {
@@ -969,6 +981,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         category,
         status: 'verified' as const,
         relatedHabitIds: relatedHabitIds ?? [],
+        ...(habitIdsToFire.length > 0 ? { firedHabitIds: nextFired } : {}),
         ...(accountId ? { accountId } : {}),
         ...(overrides?.amount !== undefined ? { amount: overrides.amount } : {}),
         ...(overrides?.merchant !== undefined ? { merchant: overrides.merchant } : {}),
@@ -991,13 +1004,41 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       }
       return next;
     }));
-    if (relatedHabitIds && relatedHabitIds.length > 0) {
-      setHabits(prev => prev.map(h => relatedHabitIds.includes(h.id)
+    if (habitIdsToFire.length > 0) {
+      setHabits(prev => prev.map(h => habitIdsToFire.includes(h.id)
         ? { ...h, count: h.count + 1, totalCount: h.totalCount + 1 }
         : h));
     }
     toast.success('Mock: Verified & Categorized!');
   }, [transactions, accounts]);
+
+  // Habit Automations (PRD #1065): mock parity for the atomic undo. Reverses the
+  // transaction to pending_review, restores prior category/account/relatedHabitIds,
+  // clears the fired ledger, and decrements each fired habit.
+  const reverseTransactionApproval = useCallback(async (
+    id: string,
+    prior: { category: string; accountId?: string; relatedHabitIds?: string[] },
+    firedHabitIds: string[],
+  ) => {
+    setTransactions(prev => prev.map(t => {
+      if (t.id !== id) return t;
+      const next: Transaction = {
+        ...t,
+        status: 'pending_review' as const,
+        category: prior.category,
+        relatedHabitIds: prior.relatedHabitIds ?? [],
+      };
+      delete next.firedHabitIds;
+      if (prior.accountId) next.accountId = prior.accountId;
+      else delete next.accountId;
+      return next;
+    }));
+    if (firedHabitIds.length > 0) {
+      setHabits(prev => prev.map(h => firedHabitIds.includes(h.id)
+        ? { ...h, count: Math.max(0, h.count - 1), totalCount: Math.max(0, h.totalCount - 1) }
+        : h));
+    }
+  }, []);
 
   // F-XCUT-03: push a soft-deleted record into the in-memory trash mirror so
   // Test Mode exercises the same restore/purge flow as the real listener.
@@ -2156,6 +2197,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     addTransactions,
     updateTransaction,
     updateTransactionCategory,
+    reverseTransactionApproval,
     deleteTransaction,
     splitTransaction,
     setTransactionSplit,

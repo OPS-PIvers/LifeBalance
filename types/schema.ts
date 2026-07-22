@@ -291,6 +291,15 @@ export interface Transaction {
   autoCategorized: boolean;
   payPeriodId?: string; // Pay period ID (YYYY-MM-DD of period start), empty string if no period tracking
   relatedHabitIds?: string[];
+  /** Habit Automations (PRD #1065): habit ids this transaction has ALREADY
+   *  fired (incremented) at least once. The per-(transaction, habit) dedup
+   *  ledger — `updateTransactionCategory` skips firing any habit already listed
+   *  here and appends newly-fired ids (via arrayUnion), so re-editing or
+   *  re-approving the same transaction can never double-log a habit. Cleared
+   *  when an approval is reversed (`reverseTransactionApproval`) so an undo →
+   *  re-approve can legitimately fire again. Absent on transactions that have
+   *  never fired a habit. */
+  firedHabitIds?: string[];
   store?: string;
   accountId?: string;
   /** When the transaction is tagged to a CREDIT account, marks it as a PAYMENT

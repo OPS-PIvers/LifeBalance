@@ -114,11 +114,14 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
 
     const baseHabitData: Habit = {
       // Spread the existing habit FIRST when editing so every field this form
-      // doesn't surface (triggers, presetId, isCustom, effortLevel,
-      // frozenDates, assignedTo when the control is hidden, etc.) carries
-      // forward untouched instead of silently reverting/dropping on an
-      // ordinary edit — the explicit fields below override only what this
-      // form actually edits.
+      // doesn't surface (triggers automations, presetId, isCustom,
+      // effortLevel, frozenDates, assignedTo when the control is hidden,
+      // createdBy, etc.) carries forward untouched instead of silently
+      // reverting/dropping on an ordinary edit — updateHabit only writes its
+      // own whitelist plus an explicit `triggers`, so re-supplying the
+      // existing value leaves automations untouched. The explicit fields
+      // below override only what this form actually edits. In CREATE mode
+      // editingHabit is undefined, so this spread is a no-op.
       ...(editingHabit ?? {}),
       id: editingHabit ? editingHabit.id : crypto.randomUUID(),
       title,

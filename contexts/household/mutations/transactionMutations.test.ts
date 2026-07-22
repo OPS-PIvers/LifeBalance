@@ -34,6 +34,8 @@ vi.mock('firebase/firestore', () => {
       return ref;
     }),
     increment: (n: number) => ({ __increment: n }),
+    arrayUnion: (...vals: unknown[]) => ({ __arrayUnion: vals }),
+    arrayRemove: (...vals: unknown[]) => ({ __arrayRemove: vals }),
     serverTimestamp: () => ({ __serverTimestamp: true }),
     deleteField: () => ({ __deleteField: true }),
     updateDoc: vi.fn(),
@@ -62,8 +64,9 @@ vi.mock('react-hot-toast', () => ({
 
 vi.mock('@/services/analytics', () => ({ track: vi.fn() }));
 
-import { makeAddTransaction, makeDeleteTransaction, makeUpdateTransaction, makeUpdateTransactionCategory } from './transactionMutations';
-import type { Account, Transaction } from '@/types/schema';
+import { makeAddTransaction, makeDeleteTransaction, makeUpdateTransaction, makeUpdateTransactionCategory, makeReverseTransactionApproval } from './transactionMutations';
+import { getLocalDateString } from '@/utils/dateHelpers';
+import type { Account, Habit, Transaction } from '@/types/schema';
 
 const HOUSEHOLD_ID = 'house1';
 const db = {} as never;
@@ -389,6 +392,130 @@ describe('makeUpdateTransactionCategory — bank-email-sync needsCategory row', 
     expect(savingsUpdate?.data?.['balance']).toEqual({ __increment: -42 });
     const txUpdate = capturedUpdates.find(u => u.ref.__path === txnPath('tx-bank'));
     expect(txUpdate?.data).toMatchObject({ bankSyncAccountId: 'acc-check' });
+  });
+});
+
+// Habit-history clobber guard (2026-07-15 incident): a transaction that fires
+// a habit must write completion history as arrayUnion/arrayRemove DELTAS and
+// the counters as increment() — NEVER whole client-computed arrays/scalars, or
+// a stale-cache device wipes another device's completions.
+describe('habit firing writes DELTAS, never whole values', () => {
+  beforeEach(() => {
+    capturedSets = [];
+    capturedUpdates = [];
+    capturedDeletes = [];
+    commitCount = 0;
+    commitErrors = [];
+    vi.clearAllMocks();
+  });
+
+  const habitPath = (id: string) => `households/${HOUSEHOLD_ID}/habits/${id}`;
+  const txnPath = (id: string) => `households/${HOUSEHOLD_ID}/transactions/${id}`;
+  // processToggleHabit marks the REAL current local day complete (not the
+  // transaction's date), so the completion delta targets today.
+  const today = getLocalDateString();
+
+  const threshHabit: Habit = {
+    id: 'h1',
+    title: 'Groceries under budget',
+    category: 'Finance',
+    type: 'positive',
+    scoringType: 'threshold',
+    period: 'daily',
+    basePoints: 10,
+    targetCount: 1,
+    count: 0,
+    totalCount: 4,
+    completedDates: ['2020-01-01'],
+    streakDays: 0,
+    lastUpdated: '',
+  };
+
+  const pendingTx: Transaction = {
+    id: 'tx-9',
+    amount: 30,
+    merchant: 'Whole Foods',
+    category: 'Groceries',
+    date: '2026-07-20',
+    status: 'pending_review',
+    isRecurring: false,
+    source: 'manual',
+    autoCategorized: false,
+    accountId: 'acc-check',
+  };
+
+  const catDeps = (transactions: Transaction[], habits: Habit[]) => ({
+    db,
+    householdId: HOUSEHOLD_ID,
+    currentUser: { uid: 'user-1' },
+    habits,
+    transactions,
+    accounts,
+    householdSettings: null,
+  });
+
+  it('updateTransactionCategory fires a habit with increment() + arrayUnion, not whole values', async () => {
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(catDeps([pendingTx], [threshHabit]));
+    await updateTransactionCategory('tx-9', 'Groceries', ['h1']);
+
+    const habitUpdate = capturedUpdates.find(u => u.ref.__path === habitPath('h1'));
+    expect(habitUpdate).toBeDefined();
+    const data = habitUpdate!.data!;
+    // Counters are server-side increments, never absolute numbers.
+    expect(data['count']).toEqual({ __increment: 1 });
+    expect(data['totalCount']).toEqual({ __increment: 1 });
+    // Completion history moves ONLY via an arrayUnion delta — never a whole
+    // array that a stale cache could use to clobber other completions.
+    expect(data['completedDates']).toEqual({ __arrayUnion: [today] });
+    expect(Array.isArray(data['completedDates'])).toBe(false);
+    // Fired ledger recorded on the transaction (arrayUnion delta).
+    const txUpdate = capturedUpdates.find(u => u.ref.__path === txnPath('tx-9'));
+    expect(txUpdate!.data!['firedHabitIds']).toEqual({ __arrayUnion: ['h1'] });
+    // Points credited on the household.
+    const pointsUpdate = capturedUpdates.find(u => u.ref.__path === `households/${HOUSEHOLD_ID}`);
+    expect(pointsUpdate!.data!['points.total']).toEqual({ __increment: 10 });
+  });
+
+  it('reverseTransactionApproval un-fires a habit with increment() + arrayRemove, not whole values', async () => {
+    // The verified row that the approve produced: category set, habit fired.
+    const verifiedTx: Transaction = {
+      ...pendingTx,
+      status: 'verified',
+      category: 'Groceries',
+      relatedHabitIds: ['h1'],
+      firedHabitIds: ['h1'],
+    };
+    // The habit as it now stands (today counted once).
+    const firedHabit: Habit = {
+      ...threshHabit,
+      count: 1,
+      totalCount: 5,
+      completedDates: [today, '2020-01-01'],
+      streakDays: 1,
+    };
+    const { reverseTransactionApproval } = makeReverseTransactionApproval({
+      db,
+      householdId: HOUSEHOLD_ID,
+      habits: [firedHabit],
+      transactions: [verifiedTx],
+      accounts,
+    });
+    await reverseTransactionApproval('tx-9', { category: 'Uncategorized' }, ['h1']);
+
+    const habitUpdate = capturedUpdates.find(u => u.ref.__path === habitPath('h1'));
+    expect(habitUpdate).toBeDefined();
+    const data = habitUpdate!.data!;
+    expect(data['count']).toEqual({ __increment: -1 });
+    expect(data['totalCount']).toEqual({ __increment: -1 });
+    // Today removed via arrayRemove delta — never a whole array.
+    expect(data['completedDates']).toEqual({ __arrayRemove: [today] });
+    expect(Array.isArray(data['completedDates'])).toBe(false);
+    // Points reversed.
+    const pointsUpdate = capturedUpdates.find(u => u.ref.__path === `households/${HOUSEHOLD_ID}`);
+    expect(pointsUpdate!.data!['points.total']).toEqual({ __increment: -10 });
+    // Fired ledger cleared so the row can be re-approved cleanly.
+    const txUpdate = capturedUpdates.find(u => u.ref.__path === txnPath('tx-9'));
+    expect(txUpdate!.data!['firedHabitIds']).toEqual({ __deleteField: true });
   });
 });
 

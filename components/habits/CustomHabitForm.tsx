@@ -1,9 +1,10 @@
-import React from 'react';
-import { Trash2, Sparkles, ListChecks } from 'lucide-react';
+import React, { useState } from 'react';
+import { Trash2, Sparkles, X, Plus, ListChecks } from 'lucide-react';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { Habit, EffortLevel, HabitLocationTrigger, ToDo } from '@/types/schema';
+import { normalizeKeyword } from '@/utils/habitKeywordMatch';
 import {
   EFFORT_POINTS,
   EFFORT_LABELS,
@@ -26,6 +27,10 @@ export interface CustomHabitFormData {
   scoringType: 'incremental' | 'threshold';
   period: 'daily' | 'weekly';
   targetCount: string;
+  /** Habit Automations (PRD #1065): transaction-keyword triggers. Single words
+   *  match whole-word; entries with a space match as an exact phrase. Empty on
+   *  a habit with no keyword automation. */
+  keywords: string[];
   /** Habit Automations (PRD #1065) — saved geolocation triggers being edited
    *  in this form session (merged back with any other trigger type on save). */
   locations: HabitLocationTrigger[];
@@ -51,6 +56,23 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
   onDelete,
   linkedTodos = [],
 }) => {
+  const [keywordDraft, setKeywordDraft] = useState('');
+
+  const addKeyword = () => {
+    const normalized = normalizeKeyword(keywordDraft);
+    if (!normalized) return;
+    if (formData.keywords.includes(normalized)) {
+      setKeywordDraft('');
+      return;
+    }
+    onFormChange({ keywords: [...formData.keywords, normalized] });
+    setKeywordDraft('');
+  };
+
+  const removeKeyword = (keyword: string) => {
+    onFormChange({ keywords: formData.keywords.filter(k => k !== keyword) });
+  };
+
   return (
     <div className="p-6 space-y-5">
 
@@ -168,10 +190,10 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
         </div>
       </div>
 
-      {/* Automations (Edit mode only) — PRD #1065. Geolocation triggers are fully
-          wired here (saved locations editor). Linked to-dos are listed read-only
-          (the link is authored on the to-do's "Counts toward habit" picker).
-          Transaction keywords are a not-yet-built surface from a sibling PR. */}
+      {/* Automations (Edit mode only) — PRD #1065. Transaction keywords and
+          geolocation triggers are both fully wired here (keyword chips +
+          saved locations editor); linked to-dos are listed read-only last
+          (the link is authored on the to-do's "Counts toward habit" picker). */}
       {editingHabit && (
         <section aria-labelledby="habit-automations-heading" className="pt-1 space-y-3">
           <h3
@@ -181,6 +203,68 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
             <Sparkles size={13} className="text-warm-500" aria-hidden="true" />
             Automations
           </h3>
+          <div className="rounded-card border border-brand-200 dark:border-brand-700 bg-brand-50/60 dark:bg-brand-700/30 p-4 space-y-3">
+            <div>
+              <p className="text-sm font-semibold text-brand-700 dark:text-brand-200">
+                Transaction keywords
+              </p>
+              <p className="text-xs text-brand-400 dark:text-brand-450 mt-1">
+                When an approved transaction mentions one of these, this habit is offered
+                to log automatically. Single words match whole words (“target” matches
+                “TARGET T-1234”, not “targeted”); add a space for an exact phrase
+                (“whole foods”).
+              </p>
+            </div>
+
+            {formData.keywords.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {formData.keywords.map(keyword => (
+                  <span
+                    key={keyword}
+                    className="inline-flex items-center gap-1 pl-3 pr-1.5 py-1 rounded-btn text-xs font-semibold bg-white border border-brand-200 text-brand-700 dark:bg-brand-700/60 dark:border-brand-600 dark:text-brand-200"
+                  >
+                    {keyword}
+                    <button
+                      type="button"
+                      onClick={() => removeKeyword(keyword)}
+                      aria-label={`Remove keyword ${keyword}`}
+                      className="p-0.5 rounded-full text-brand-400 hover:text-money-neg hover:bg-brand-100 dark:hover:bg-brand-600 transition-colors"
+                    >
+                      <X size={12} strokeWidth={3} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <Input
+                  label="Add a keyword"
+                  type="text"
+                  value={keywordDraft}
+                  onChange={e => setKeywordDraft(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addKeyword();
+                    }
+                  }}
+                  placeholder="e.g. target, whole foods"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={addKeyword}
+                disabled={!normalizeKeyword(keywordDraft)}
+                aria-label="Add keyword"
+                className="mb-0.5 shrink-0 h-11 px-3 rounded-card border border-accent-200 bg-accent-50 text-accent-700 font-semibold text-sm inline-flex items-center gap-1 hover:bg-accent-100 disabled:opacity-40 disabled:cursor-not-allowed dark:border-accent-700 dark:bg-accent-800/30 dark:text-accent-200 transition-colors"
+              >
+                <Plus size={16} strokeWidth={3} />
+                Add
+              </button>
+            </div>
+          </div>
 
           <div>
             <p className="text-sm font-semibold text-brand-700 dark:text-brand-200 mb-1.5">

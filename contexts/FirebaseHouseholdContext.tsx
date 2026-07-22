@@ -119,6 +119,7 @@ import {
   makeAddTransaction,
   makeAddTransactions,
   makeUpdateTransactionCategory,
+  makeReverseTransactionApproval,
   makeUpdateTransaction,
   makeDeleteTransaction,
   makeMergeTransactions,
@@ -1850,6 +1851,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }).updateTransactionCategory(id, category, relatedHabitIds, accountId, overrides);
   }, [householdId, currentUser, habits, transactions, accounts, householdSettings]);
 
+  const reverseTransactionApproval = useCallback(async (
+    id: string,
+    prior: { category: string; accountId?: string; relatedHabitIds?: string[] },
+    firedHabitIds: string[],
+  ) => {
+    await makeReverseTransactionApproval({
+      db, householdId, habits, transactions, accounts,
+    }).reverseTransactionApproval(id, prior, firedHabitIds);
+  }, [householdId, habits, transactions, accounts]);
+
   const updateTransaction = useCallback(async (id: string, updates: Partial<Transaction>, opts?: MutationOpts) => {
     await makeUpdateTransaction({
       db, householdId, transactions, householdSettings, accounts,
@@ -2440,6 +2451,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addTransaction,
     addTransactions,
     updateTransactionCategory,
+    reverseTransactionApproval,
     updateTransaction,
     deleteTransaction,
     splitTransaction,
@@ -2458,7 +2470,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, contributeToGoal,
     addBucket, updateBucket, deleteBucket, updateBucketLimit, setBucketLimits, saveCeremonyChanges, reallocateBucket,
     addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem, linkBankTransactionToBill,
-    addTransaction, addTransactions, updateTransactionCategory, updateTransaction, deleteTransaction, splitTransaction,
+    addTransaction, addTransactions, updateTransactionCategory, reverseTransactionApproval, updateTransaction, deleteTransaction, splitTransaction,
     setTransactionSplit, markSplitSettled,
     mergeTransactions, keepBothTransactions, getTransactionComments, addTransactionComment, deleteTransactionComment,
   ]);

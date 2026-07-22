@@ -38,6 +38,7 @@ vi.mock('firebase/firestore', () => {
     increment: (n: number) => incrementMock(n),
     arrayUnion: (...values: unknown[]) => ({ __arrayUnion: values }),
     arrayRemove: (...values: unknown[]) => ({ __arrayRemove: values }),
+    deleteField: () => ({ __deleteField: true }),
     serverTimestamp: vi.fn(() => '__serverTimestamp'),
     writeBatch: vi.fn(() => ({
       set: (ref: { __path: string }, data: Record<string, unknown>) => {
@@ -57,7 +58,6 @@ vi.mock('firebase/firestore', () => {
     addDoc: vi.fn(),
     updateDoc: vi.fn(),
     deleteDoc: vi.fn(),
-    deleteField: vi.fn(() => ({ __deleteField: true })),
     getDocs: vi.fn(),
     getDoc: vi.fn(),
     query: vi.fn(),
@@ -881,12 +881,12 @@ describe('useHabitActions.updateHabit (Plan 080c-3: assignedTo round-trips throu
     expect('assignedTo' in payload).toBe(false);
   });
 
-  // Regression (adversarial-review finding on PR #1073): an ordinary habit
-  // edit (e.g. bumping basePoints via the habit card's Edit form) must NEVER
-  // wipe previously-saved location/keyword triggers. HabitFormModal's
-  // baseHabitData doesn't mention `triggers` at all for such an edit, so the
-  // `habit` object passed to updateHabit has no `triggers` own property —
-  // that must leave the stored field untouched, not delete it.
+  // Regression (adversarial-review finding on PR #1073, converged with #1072):
+  // an ordinary habit edit (e.g. bumping basePoints via the habit card's Edit
+  // form) must NEVER wipe previously-saved location/keyword triggers.
+  // HabitFormModal's baseHabitData doesn't mention `triggers` at all for such
+  // an edit, so the `habit` object passed to updateHabit has no `triggers`
+  // own property — that must leave the stored field untouched, not delete it.
   it('does not delete existing triggers when the payload omits the triggers key entirely', async () => {
     const habit = baseHabit({ id: 'h1' });
     expect('triggers' in habit).toBe(false);
@@ -900,11 +900,14 @@ describe('useHabitActions.updateHabit (Plan 080c-3: assignedTo round-trips throu
     });
 
     const payload = lastUpdatePayload();
+    // Not even a deleteField() — the field is absent, so Firestore leaves the
+    // stored triggers exactly as they were.
     expect('triggers' in payload).toBe(false);
   });
 
-  it('still clears triggers via deleteField when the payload explicitly sets an empty value', async () => {
-    const habit = baseHabit({ id: 'h1', triggers: undefined });
+  it('writes a populated triggers object through unchanged', async () => {
+    const triggers = { keywords: ['whole foods'], locations: [] };
+    const habit = baseHabit({ id: 'h1', triggers });
 
     const { result } = renderHook(() =>
       useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
@@ -915,7 +918,7 @@ describe('useHabitActions.updateHabit (Plan 080c-3: assignedTo round-trips throu
     });
 
     const payload = lastUpdatePayload();
-    expect(payload.triggers).toEqual({ __deleteField: true });
+    expect(payload.triggers).toEqual(triggers);
   });
 
   it('writes a non-empty triggers value through when the payload explicitly provides one', async () => {
@@ -932,6 +935,46 @@ describe('useHabitActions.updateHabit (Plan 080c-3: assignedTo round-trips throu
 
     const payload = lastUpdatePayload();
     expect(payload.triggers).toEqual(triggers);
+  });
+
+  it('clears automations via deleteField() ONLY for an explicit empty triggers object', async () => {
+    const habit = baseHabit({ id: 'h1', triggers: { keywords: [], locations: [] } });
+
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.updateHabit(habit);
+    });
+
+    const payload = lastUpdatePayload();
+    expect(payload.triggers).toEqual({ __deleteField: true });
+  });
+
+  // Regression (PR #1072 clear-path bug): HabitCreatorWizard.handleSaveCustom
+  // — when EDITING — always spreads an OWN `triggers` property onto the habit
+  // object, even when the computed value is `undefined` (the user removed
+  // their LAST keyword/location). That is NOT the same payload shape as an
+  // ordinary edit that never mentions `triggers` at all (tested above): here
+  // the key is present with an `undefined` value, so `hasOwnProperty` must
+  // still see it and route to deleteField() rather than being swallowed by
+  // the `habit.triggers !== undefined` style check that caused the original
+  // regression (the last keyword could never actually be cleared).
+  it('clears automations via deleteField() when the key is present with an undefined value (wizard clear path)', async () => {
+    const habit = baseHabit({ id: 'h1', triggers: undefined });
+    expect(Object.prototype.hasOwnProperty.call(habit, 'triggers')).toBe(true);
+
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.updateHabit(habit);
+    });
+
+    const payload = lastUpdatePayload();
+    expect(payload.triggers).toEqual({ __deleteField: true });
   });
 });
 

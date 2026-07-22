@@ -155,8 +155,8 @@ export const useHabitActions = (
       // saved locations) edited in the habit's Automations section. Handled
       // OUTSIDE the generic filter above because clearing the last saved
       // trigger must remove the field from Firestore (deleteField), not
-      // merely omit it from this update — or a stale location would linger
-      // forever.
+      // merely omit it from this update — or a stale keyword/location would
+      // linger forever.
       //
       // The caller's INTENT is distinguished by whether `triggers` is an own
       // property on the passed-in `habit` object at all, not by its value:

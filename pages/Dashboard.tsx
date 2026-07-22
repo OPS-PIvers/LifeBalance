@@ -47,6 +47,7 @@ import {
   approvedToastMessage,
 } from '@/utils/approveDisclosure';
 import { resolveTargetAccount } from '@/utils/accountImpact';
+import { keywordMatchedHabitIds, selectHabitsToFire } from '@/utils/transactionHabitFiring';
 import { isTodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import {
@@ -97,6 +98,7 @@ const Dashboard: React.FC = () => {
     updateCalendarItem,
     deleteCalendarItem,
     updateTransactionCategory,
+    reverseTransactionApproval,
     updateTransaction,
     deleteTransaction,
   } = useFinance();
@@ -293,22 +295,28 @@ const Dashboard: React.FC = () => {
       const targetAccount = resolveTargetAccount(accountId ?? item.accountId, accounts);
       // Snapshot the pre-approve state for undo — the mutation re-tags the
       // account and rewrites the category.
-      const prior = { category: item.category, accountId: item.accountId };
-      const relatedHabitIds = item.relatedHabitIds ?? [];
-      await updateTransactionCategory(item.id, category, relatedHabitIds, accountId);
-      const message = approvedToastMessage(fmt(item.amount), targetAccount?.name);
-      if (relatedHabitIds.length > 0) {
-        // No Undo when the approve also incremented habits/points — reverting
-        // the transaction alone would leave the points applied, and a
-        // re-approve would then double-count them. The enriched message still
-        // names amount + account.
-        toast.success(message);
-        return;
-      }
-      // Cause-carrying undo: revert to pending_review and restore the prior
-      // category/tag through updateTransaction, whose writeBatch reverses the
-      // balance delta atomically with the status flip (verified→pending has an
-      // effective impact of 0, so the old target account is credited back).
+      const prior = { category: item.category, accountId: item.accountId, relatedHabitIds: item.relatedHabitIds ?? [] };
+      // Habit Automations (PRD #1065): a swipe-approve accepts ALL pre-checked
+      // chips — the transaction's explicit habit tags UNIONed with every habit
+      // whose keywords match this merchant/notes. Dedup against what this row
+      // already fired so an undo→re-approve can't double-log.
+      const requestedHabitIds = Array.from(new Set([
+        ...(item.relatedHabitIds ?? []),
+        ...keywordMatchedHabitIds(habits, item),
+      ]));
+      const { toFire: firedHabitIds } = selectHabitsToFire(requestedHabitIds, item.firedHabitIds ?? []);
+      await updateTransactionCategory(item.id, category, requestedHabitIds, accountId);
+      const baseMessage = approvedToastMessage(fmt(item.amount), targetAccount?.name);
+      const firedTitles = firedHabitIds
+        .map(id => habits.find(h => h.id === id)?.title)
+        .filter((t): t is string => !!t);
+      // Name what was logged so the undo is cause-carrying (story 19).
+      const message = firedTitles.length > 0
+        ? `${baseMessage} · logged ${firedTitles.join(', ')}`
+        : baseMessage;
+      // Cause-carrying undo. When habits fired, use the atomic
+      // reverseTransactionApproval (reverses the fires + points + balance in one
+      // batch); otherwise the plain updateTransaction status flip suffices.
       toast(
         (t) => (
           <UndoToast
@@ -317,13 +325,17 @@ const Dashboard: React.FC = () => {
               toast.dismiss(t.id);
               void (async () => {
                 try {
-                  await updateTransaction(
-                    item.id,
-                    // An empty accountId explicitly clears a tag the smart
-                    // approve added (updateTransaction deletes the field).
-                    { status: 'pending_review', category: prior.category, accountId: prior.accountId ?? '' },
-                    { silent: true }
-                  );
+                  if (firedHabitIds.length > 0) {
+                    await reverseTransactionApproval(item.id, prior, firedHabitIds);
+                  } else {
+                    await updateTransaction(
+                      item.id,
+                      // An empty accountId explicitly clears a tag the smart
+                      // approve added (updateTransaction deletes the field).
+                      { status: 'pending_review', category: prior.category, accountId: prior.accountId ?? '' },
+                      { silent: true }
+                    );
+                  }
                   toast.success('Moved back to review');
                 } catch (error) {
                   console.error('[ActionQueue] Undo approve failed:', error);
@@ -345,7 +357,7 @@ const Dashboard: React.FC = () => {
       console.error('[ActionQueue] Swipe approve failed:', error);
       toast.error('Failed to approve. Please try again.');
     }
-  }, [accounts, buckets, transactions, completeToDo, payCalendarItem, updateTransactionCategory, updateTransaction, openPaySheet, fmt]);
+  }, [accounts, buckets, transactions, habits, completeToDo, payCalendarItem, updateTransactionCategory, reverseTransactionApproval, updateTransaction, openPaySheet, fmt]);
 
   // Swipe left — instant defer: bills/to-dos move a day forward, pending
   // transactions snooze out of the queue until tomorrow.

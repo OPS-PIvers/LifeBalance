@@ -6,6 +6,7 @@ import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import { Transaction, CREDIT_CARD_CATEGORY, INCOME_CATEGORY } from '@/types/schema';
 import { Switch } from '@/components/ui/Switch';
 import { getAutoSelectedHabitIds, suggestHabitsForTransaction } from '@/utils/habitSuggestions';
+import { keywordMatchedHabitIds } from '@/utils/transactionHabitFiring';
 import { suggestAccountIdForTransaction, suggestCategoryForTransaction } from '@/utils/actionQueueSmart';
 import { buildTransactionCategoryOptions } from '@/utils/categories';
 import { getBillLinkCandidates } from '@/utils/billLinkCandidates';
@@ -174,15 +175,34 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
     () => (hasExplicitTags ? [] : getAutoSelectedHabitIds(merchant, habits, transactions)),
     [hasExplicitTags, merchant, habits, transactions]
   );
-  const [habitsTouched, setHabitsTouched] = useState(false);
-  const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>(
-    () => (hasExplicitTags ? transaction.relatedHabitIds ?? [] : autoSelectedIds)
+  // Habit Automations (PRD #1065): habits whose configured keywords match the
+  // (live) merchant or notes fire on approve. They appear as pre-checked "Also
+  // logs: …" chips below — unticking vetoes. Exclude any this transaction has
+  // already fired (dedup) so an undo→re-review doesn't re-suggest them.
+  const keywordHabitIds = useMemo(() => {
+    const alreadyFired = new Set(transaction.firedHabitIds ?? []);
+    return keywordMatchedHabitIds(habits, { merchant, notes }).filter(id => !alreadyFired.has(id));
+  }, [habits, merchant, notes, transaction.firedHabitIds]);
+  const keywordHabits = useMemo(
+    () => keywordHabitIds.map(id => habits.find(h => h.id === id)).filter((h): h is typeof habits[number] => !!h),
+    [keywordHabitIds, habits]
   );
-  const autoSelectKey = autoSelectedIds.join('|');
+  // The pre-selected baseline follows the live merchant/notes fields: history
+  // auto-selection (or explicit prior tags) unioned with the keyword matches.
+  const preselectIds = useMemo(() => {
+    const base = hasExplicitTags ? (transaction.relatedHabitIds ?? []) : autoSelectedIds;
+    return Array.from(new Set([...base, ...keywordHabitIds]));
+  }, [hasExplicitTags, transaction.relatedHabitIds, autoSelectedIds, keywordHabitIds]);
+  const [habitsTouched, setHabitsTouched] = useState(false);
+  const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>(() => preselectIds);
+  // Re-seed the selection whenever the pre-select baseline changes (merchant /
+  // notes edit re-scores both history AND keyword matches), unless the user has
+  // manually touched the chips — then pre-selection stops following.
+  const autoSelectKey = preselectIds.join('|');
   const [prevAutoSelectKey, setPrevAutoSelectKey] = useState(autoSelectKey);
   if (prevAutoSelectKey !== autoSelectKey) {
     setPrevAutoSelectKey(autoSelectKey);
-    if (!habitsTouched && !hasExplicitTags) setSelectedHabitIds(autoSelectedIds);
+    if (!habitsTouched) setSelectedHabitIds(preselectIds);
   }
   const [showAllHabits, setShowAllHabits] = useState(false);
   const [creditPayment, setCreditPayment] = useState(() => transaction.creditPayment ?? false);
@@ -538,6 +558,40 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
               ? 'Lowers this card’s balance (paying it down).'
               : 'Raises this card’s balance; never affects Safe-to-Spend.'}
           </p>
+        </div>
+      )}
+
+      {/* Also logs — keyword-triggered habits (PRD #1065). Pre-checked; approving
+          fires every ticked one. Untick to veto a false match. Only shown when at
+          least one habit's keyword matches this merchant/notes. */}
+      {keywordHabits.length > 0 && (
+        <div className="space-y-2 rounded-card border border-warm-200 bg-warm-50/70 dark:border-warm-800 dark:bg-warm-900/20 p-3">
+          <div className="flex items-center gap-1.5">
+            <Sparkles size={12} className="text-warm-500" aria-hidden="true" />
+            <Eyebrow as="p" className="text-xxs">Also logs</Eyebrow>
+          </div>
+          <p className="text-xs text-brand-500 dark:text-brand-400">
+            Matched your habit keywords — approving logs these. Untick any that don’t belong.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {keywordHabits.map(habit => {
+              const isSelected = selectedHabitIds.includes(habit.id);
+              return (
+                <SelectableChip
+                  key={habit.id}
+                  selected={isSelected}
+                  onClick={() => {
+                    setHabitsTouched(true);
+                    setSelectedHabitIds(prev =>
+                      isSelected ? prev.filter(id => id !== habit.id) : [...prev, habit.id]
+                    );
+                  }}
+                >
+                  {habit.title}
+                </SelectableChip>
+              );
+            })}
+          </div>
         </div>
       )}
 
