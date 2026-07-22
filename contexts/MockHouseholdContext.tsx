@@ -369,20 +369,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   membersRef.current = members;
   const [activeMemberId, setActiveMemberId] = useState<string | null>(null);
   const [meals, setMeals] = useState<Meal[]>([]);
-  // captureReview (F-CAPTURE-01 foundation) Test-Mode harness: one held-for-review
-  // shopping capture so the visible/awaiting-review split (and its future review UI)
-  // is walkable in Test Mode. Inert for the normal shopping list — it never appears
-  // in `shoppingList` until approved.
-  const [shoppingList, setShoppingList] = useState<ShoppingItem[]>(() => isFresh ? [] : [
-    {
-      id: 'shop_review_1',
-      name: 'Paper towels',
-      category: 'Household',
-      isPurchased: false,
-      source: 'shortcut',
-      needsReview: true,
-    },
-  ]);
+  // Test Mode seeds no held-for-review shopping captures by default: an
+  // auto-opening review drawer would intercept pointer events and break the e2e
+  // suite. The visible/awaiting-review split is covered by unit tests.
+  const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
   const [mealPlan, setMealPlan] = useState<MealPlanItem[]>([]);
   // Plan 080c-5 Test-Mode harness: one kid-assigned todo so the +pts badge and
   // the completeToDo → kid-points credit path are walkable. assignedTo targets the
@@ -437,20 +427,6 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       completeByDate: format(addDays(new Date(), 14), 'yyyy-MM-dd'),
       assignedTo: 'test-user-id',
       isCompleted: false,
-      createdBy: 'test-user-id',
-      createdAt: new Date().toISOString(),
-    },
-    // captureReview (F-CAPTURE-01 foundation) Test-Mode harness: one held-for-review
-    // todo capture so the visible/awaiting-review split is walkable in Test Mode.
-    // Inert for the normal to-do list — it never appears in `todos` until approved.
-    {
-      id: 'todo_review_1',
-      text: 'Call the plumber',
-      completeByDate: getLocalDateString(),
-      assignedTo: 'test-user-id',
-      isCompleted: false,
-      source: 'shortcut',
-      needsReview: true,
       createdBy: 'test-user-id',
       createdAt: new Date().toISOString(),
     },
