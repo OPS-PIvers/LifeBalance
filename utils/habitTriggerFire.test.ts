@@ -69,6 +69,23 @@ describe('computeHabitTriggerFire', () => {
     expect(delta!.pointsChange).toBe(-10);
   });
 
+  it('exposes increment() deltas measured against the real stored counter', () => {
+    // Fresh fire: count 0→1, totalCount 0→1, not a reset.
+    const fresh = computeHabitTriggerFire(makeHabit(), 'up');
+    expect(fresh!.countDelta).toBe(1);
+    expect(fresh!.totalCountDelta).toBe(1);
+    expect(fresh!.resetCount).toBe(false);
+
+    // A non-stale habit already at count 2 in-period: delta stays +1 relative to
+    // the stored counter (so an increment() write lands on 3, not an absolute 1).
+    const midPeriod = computeHabitTriggerFire(
+      makeHabit({ count: 2, totalCount: 2, completedDates: [today], streakDays: 1 }),
+      'up',
+    );
+    expect(midPeriod!.countDelta).toBe(1);
+    expect(midPeriod!.resetCount).toBe(false);
+  });
+
   it('lazy-resets a stale habit before an up fire (counter starts at 0)', () => {
     // lastUpdated far in the past → stale; the counter should be treated as 0,
     // so firing yields count 1 (not count+1 on top of a stale counter).
@@ -79,6 +96,11 @@ describe('computeHabitTriggerFire', () => {
     });
     const delta = computeHabitTriggerFire(habit, 'up');
     expect(delta!.count).toBe(1);
+    // The reset must be flagged so the caller writes `count` ABSOLUTELY (0+delta)
+    // rather than increment()-ing the prior-period stored value of 5.
+    expect(delta!.resetCount).toBe(true);
+    // totalCount is a lifetime counter (never reset) → plain +1 increment.
+    expect(delta!.totalCountDelta).toBe(1);
   });
 
   it('does not fire (up) an archived habit', () => {
@@ -126,8 +148,18 @@ describe('computeHabitTriggerReverse', () => {
     expect(delta!.removedDate).toBe(yesterday);
     expect(delta!.addedDate).toBeUndefined();
     expect(delta!.count).toBe(0); // untouched — belongs to the current period
+    expect(delta!.countDelta).toBe(0); // live counter must not move
     expect(delta!.totalCount).toBe(0); // one lifetime completion disavowed
+    expect(delta!.totalCountDelta).toBe(-1); // -1 lifetime completion
+    expect(delta!.resetCount).toBe(false);
     expect(delta!.pointsChange).toBe(-10); // multiplier 1.0 on a lone completion
+  });
+
+  it('floors the lifetime-counter delta so a 0 total is never driven negative', () => {
+    const habit = makeHabit({ count: 0, totalCount: 0, completedDates: [yesterday] });
+    const delta = computeHabitTriggerReverse(habit, yesterday, today);
+    expect(delta!.totalCount).toBe(0);
+    expect(delta!.totalCountDelta).toBe(0);
   });
 
   it('debits the HISTORICAL streak multiplier on a prior-day restore', () => {

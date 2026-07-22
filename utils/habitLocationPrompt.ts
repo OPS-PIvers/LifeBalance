@@ -22,7 +22,10 @@ export interface HabitLocationMatch {
  * Every (habit, saved location) pair whose radius contains `current` and
  * hasn't already been prompted today per `promptedKeys` (see
  * `shouldPromptLocation` — the once-per-day-per-location dedup rule). Habits
- * without `triggers.locations` are skipped entirely.
+ * without `triggers.locations` are skipped entirely, as are ARCHIVED habits
+ * (PRD #1065): an archived habit must never fire, so it must never surface a
+ * geo confirm-prompt in the first place (matches the fire-time archived guards
+ * in toggleHabit / computeHabitTriggerFire / the transaction path).
  */
 export function findLocationMatches(
   habits: readonly Habit[],
@@ -32,6 +35,7 @@ export function findLocationMatches(
 ): HabitLocationMatch[] {
   const matches: HabitLocationMatch[] = [];
   for (const habit of habits) {
+    if (habit.archivedAt) continue;
     const locations = habit.triggers?.locations ?? [];
     for (const location of locations) {
       if (isWithinRadius(current, location) && shouldPromptLocation(location, today, promptedKeys)) {

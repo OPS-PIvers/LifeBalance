@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { findLocationMatches, HabitLocationMatch } from '@/utils/habitLocationPrompt';
@@ -25,6 +25,17 @@ import { findLocationMatches, HabitLocationMatch } from '@/utils/habitLocationPr
  */
 
 const STORAGE_KEY = 'lb_habit_geo_prompted_v1';
+
+// Guards the ONE geolocation read per app open (per PRD #18). MODULE scope, not
+// a component ref: every protected route in App.tsx mounts its own <MainLayout>
+// element, so this hook (via HabitLocationPromptBanner) UNMOUNTS and remounts on
+// each tab switch — a component-lifetime ref would reset and re-fire
+// navigator.geolocation.getCurrentPosition on every navigation. A module-level
+// flag survives remounts and naturally resets only on a real page load (a fresh
+// module evaluation), which is exactly the "once per app open" granularity we
+// want. Not reset on sign-out: re-reading location once for a new session is
+// harmless and only happens when a habit has a saved location + permission.
+let hasCheckedThisAppOpen = false;
 
 interface StoredDedup {
   date: string;
@@ -65,18 +76,18 @@ export interface UseHabitLocationPromptResult {
 export function useHabitLocationPrompt(): UseHabitLocationPromptResult {
   const { habits, toggleHabit } = useGamification();
   const [queue, setQueue] = useState<HabitLocationMatch[]>([]);
-  // Guards the ONE geolocation read per app open (per PRD #18) — a re-render
-  // (e.g. habits list updating) must not fire a second read.
-  const hasCheckedRef = useRef(false);
 
   useEffect(() => {
-    if (hasCheckedRef.current) return;
+    // Module-level guard (see hasCheckedThisAppOpen): survives the MainLayout
+    // remount on every tab switch, so neither a re-render (habits list updating)
+    // NOR a route change can fire a second geolocation read this app open.
+    if (hasCheckedThisAppOpen) return;
     if (typeof navigator === 'undefined' || !navigator.geolocation) return;
 
     const anyLocations = habits.some((h) => (h.triggers?.locations?.length ?? 0) > 0);
     if (!anyLocations) return;
 
-    hasCheckedRef.current = true;
+    hasCheckedThisAppOpen = true;
 
     const runCheck = () => {
       const today = getLocalDateString();

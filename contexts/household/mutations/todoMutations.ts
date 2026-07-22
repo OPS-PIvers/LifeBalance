@@ -116,8 +116,18 @@ async function fireLinkedHabitInBatch(params: {
   if (!delta) return null; // no-op (e.g. reversing a habit already at 0)
 
   batch.update(doc(db, `households/${householdId}/habits`, habitId), {
-    count: delta.count,
-    totalCount: delta.totalCount,
+    // Counters as Firestore increment() DELTAS so a stale-cache device can't
+    // clobber a concurrent writer's counter (2026-07-15 incident precedent).
+    // EXCEPTION: on a stale-habit lazy-reset (resetCount), the counter is
+    // written ABSOLUTELY — the reset discards prior-period garbage outright, so
+    // reset-then-increment collapses to `count = 0 + delta` and must NOT route
+    // through increment() (which would add to the stale stored value).
+    ...(delta.resetCount
+      ? { count: delta.count }
+      : delta.countDelta !== 0
+        ? { count: increment(delta.countDelta) }
+        : {}),
+    ...(delta.totalCountDelta !== 0 ? { totalCount: increment(delta.totalCountDelta) } : {}),
     // Server-side delta, never the whole array — a stale offline cache must
     // never wholesale-overwrite completion history (2026-07-15 incident).
     ...(delta.addedDate !== undefined ? { completedDates: arrayUnion(delta.addedDate) } : {}),
