@@ -82,6 +82,10 @@ describe("shouldSendTodoReminder", () => {
     expect(shouldSendTodoReminder({ ...base, reminderMinutesBefore: undefined }, reminderAt, TZ)).toBe(false);
     expect(shouldSendTodoReminder({ ...base, dueTime: undefined }, reminderAt, TZ)).toBe(false);
   });
+
+  it("skips held-for-review todos (captureReview) until approved", () => {
+    expect(shouldSendTodoReminder({ ...base, needsReview: true }, reminderAt, TZ)).toBe(false);
+  });
 });
 
 describe("buildTodoReminderBody", () => {

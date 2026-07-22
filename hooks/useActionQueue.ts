@@ -133,6 +133,12 @@ export const useActionQueue = () => {
   // Filter out todos with invalid dates early to prevent issues downstream
   const immediateToDos: ActionQueueItem[] = useMemo(() => !showTodos ? [] : todos.filter(t => {
     if (t.isCompleted) return false;
+    // Held-for-review captures (captureReview, Plan L1) are hidden from the
+    // Action Queue as individual to-do cards — they surface only via the
+    // aggregate ReviewQueueCard until approved. `useTodos().todos` already
+    // excludes these upstream (the context splits visible vs. awaiting-review),
+    // so this is defense-in-depth rather than the primary guarantee.
+    if (t.needsReview === true) return false;
     const date = parseISO(t.completeByDate);
     // Validate the parsed date before using it
     if (!isValid(date)) {
