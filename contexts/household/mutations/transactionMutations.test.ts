@@ -256,6 +256,25 @@ describe('makeDeleteTransaction — trash mirror + balance reversal', () => {
     expect(capturedUpdates).toHaveLength(0);
   });
 
+  it('reverses the MANUAL account for a stamped bank-sync row re-tagged away from its home', async () => {
+    // Home (acc-check) is email-authoritative; the row now sits on acc-save,
+    // whose balance WAS accumulated from this row on re-tag — delete must
+    // reverse acc-save and never touch acc-check.
+    const retagged: Transaction = {
+      ...verifiedTx,
+      source: 'bank-sync',
+      bankRef: 'P0000123',
+      accountId: 'acc-save',
+      bankSyncAccountId: 'acc-check',
+    };
+    const { deleteTransaction } = makeDeleteTransaction(deleteDeps([retagged]));
+    await deleteTransaction('tx-1');
+
+    expect(capturedUpdates).toHaveLength(1);
+    expect(capturedUpdates[0]!.ref.__path.endsWith('/accounts/acc-save')).toBe(true);
+    expect(capturedUpdates[0]!.data?.balance).toEqual({ __increment: 42.5 });
+  });
+
   it('falls back to a plain delete (no mirror) when the trash write is permission-denied', async () => {
     commitErrors = [{ code: 'permission-denied' }];
     const { deleteTransaction } = makeDeleteTransaction(deleteDeps([verifiedTx]));

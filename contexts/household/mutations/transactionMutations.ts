@@ -808,6 +808,12 @@ export function makeDeleteTransaction(deps: {
         // / makeUpdateTransactionCategory) tracks which account is currently
         // authoritative; falling back to the CURRENT tag for a never-edited
         // row preserves the original always-skip behavior.
+        // KNOWN MIGRATION GAP: a row re-tagged BEFORE the stamp existed has no
+        // bankSyncAccountId, so the fallback resolves its home to the manual
+        // account it now sits on and the reversal is (wrongly) skipped. Those
+        // rows' balance data was already compromised by the pre-fix code (the
+        // old re-tag never debited the destination), so there is no correct
+        // reversal to compute — accept the skip rather than guess.
         const target = resolveTargetAccount(transaction.accountId, accounts);
         const balanceDelta = shouldSkipBankSyncDelta(transaction, target?.id, target?.id)
           ? 0
