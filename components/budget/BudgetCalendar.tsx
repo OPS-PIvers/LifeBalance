@@ -19,6 +19,7 @@ import { SurfaceList, Row } from '@/components/ui/Section';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { cn } from '@/utils/cn';
 import toast from 'react-hot-toast';
+import { isTodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
 import RecurringBillsModal from './RecurringBillsModal';
 
 /** localStorage key remembering the user's Day/Month view choice (per-device). */
@@ -629,6 +630,13 @@ const BudgetCalendar: React.FC = () => {
                         await completeToDo(todo.id);
                         toast.success('Task completed!');
                       } catch (error) {
+                        // A habit-linked to-do with unfinished subtasks is
+                        // REFUSED by the mutation (PRD #1065), not a failure —
+                        // surface the remaining step count instead.
+                        if (isTodoSubtasksIncompleteError(error)) {
+                          toast(`${error.stepsLeft} step${error.stepsLeft === 1 ? '' : 's'} left on “${error.title}”`);
+                          return;
+                        }
                         console.error('Failed to complete task:', error);
                         toast.error('Failed to complete task');
                       }

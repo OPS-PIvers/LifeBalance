@@ -12,7 +12,7 @@ export default tseslint.config(
   // .claude/ holds the Claude Code harness's git-ignored agent worktrees (full
   // repo copies); linting them double-counts errors from throwaway scratch code,
   // so keep them out of `eslint .` (mirrors the vitest exclude in vite.config.ts).
-  { ignores: ['dist', 'functions', 'coverage', 'e2e', 'playwright.config.ts', '.claude'] },
+  { ignores: ['dist', 'functions', 'coverage', 'e2e', 'playwright.config.ts', '.claude', '.design-sync'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],

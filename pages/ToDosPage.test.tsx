@@ -16,6 +16,9 @@ import toast from 'react-hot-toast';
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useTodos: vi.fn(),
   useHouseholdCore: vi.fn(),
+  // Habit Automations (PRD #1065): the "Counts toward habit" picker reads
+  // habits from this slice. Default to none so existing tests are unaffected.
+  useGamification: vi.fn(() => ({ habits: [] })),
 }));
 
 // ToDosPage reads `useTodos` and `useHouseholdCore` slices. Both mocks receive the

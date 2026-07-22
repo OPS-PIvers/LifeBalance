@@ -47,6 +47,7 @@ import {
   approvedToastMessage,
 } from '@/utils/approveDisclosure';
 import { resolveTargetAccount } from '@/utils/accountImpact';
+import { isTodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import {
   captureDeferUndo,
@@ -335,6 +336,12 @@ const Dashboard: React.FC = () => {
         { duration: 6000, icon: toastIcon(Check) }
       );
     } catch (error) {
+      // A habit-linked to-do with unfinished subtasks is REFUSED by the mutation
+      // (PRD #1065), not a failure — surface the remaining step count instead.
+      if (isTodoSubtasksIncompleteError(error)) {
+        toast(`${error.stepsLeft} step${error.stepsLeft === 1 ? '' : 's'} left on “${error.title}”`);
+        return;
+      }
       console.error('[ActionQueue] Swipe approve failed:', error);
       toast.error('Failed to approve. Please try again.');
     }
@@ -373,6 +380,7 @@ const Dashboard: React.FC = () => {
     let approved = 0;
     let approvedMoney = 0;
     let skipped = 0;
+    let gated = 0; // habit-linked to-dos with unfinished subtasks (PRD #1065)
     for (const item of selectedItems) {
       try {
         if (isTodoQueueItem(item)) {
@@ -406,6 +414,12 @@ const Dashboard: React.FC = () => {
           approvedMoney++;
         }
       } catch (error) {
+        // Subtask-gated to-do (PRD #1065): skip and report separately, not as a
+        // generic failure.
+        if (isTodoSubtasksIncompleteError(error)) {
+          gated++;
+          continue;
+        }
         console.error('[ActionQueue] Bulk approve failed for item:', item.id, error);
         skipped++;
       }
@@ -435,6 +449,7 @@ const Dashboard: React.FC = () => {
       }
     }
     if (skipped > 0) toast(`${skipped} left in the queue (needs an amount, category, or account)`, { icon: toastIcon(Eye) });
+    if (gated > 0) toast(`${gated} to-do${gated === 1 ? '' : 's'} still ${gated === 1 ? 'has' : 'have'} steps left`, { icon: toastIcon(Eye) });
     exitSelectionMode();
   }, [selectedItems, accounts, buckets, transactions, completeToDo, payCalendarItem, updateTransactionCategory, exitSelectionMode, navigate]);
 
