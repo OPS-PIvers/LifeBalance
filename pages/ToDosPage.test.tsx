@@ -723,6 +723,9 @@ describe('ToDosPage', () => {
       const idxStarredLater = titles.findIndex(t => t?.includes('Schedule Task'));
       expect(idxUrgentUnstarred).toBeGreaterThanOrEqual(0);
       expect(idxStarredLater).toBeGreaterThanOrEqual(0);
+      // Overdue unstarred (Delegate, yesterday) must precede far-future starred
+      // (Schedule, +7 days) once stars are ignored by the 'due' mode.
+      expect(idxUrgentUnstarred).toBeLessThan(idxStarredLater);
       // The trigger reflects the new mode.
       expect(screen.getByRole('button', { name: 'Sort: Due date' })).toBeInTheDocument();
     });
