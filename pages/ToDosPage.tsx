@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Camera, Sparkles, Plus, Repeat } from 'lucide-react';
+import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Camera, Sparkles, Plus, Repeat, Filter, ArrowUpDown } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { quadrantForTodo, QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhower';
@@ -31,11 +31,16 @@ import Textarea from '@/components/ui/Textarea';
 import BatchRescheduleModal from '@/components/modals/BatchRescheduleModal';
 import { TodoPhotoImportDrawer } from '@/components/modals/TodoPhotoImportDrawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import PageHeader from '@/components/ui/PageHeader';
 import { TodoRow } from '@/components/todos/TodoRow';
 import { type SectionColor } from '@/components/todos/todoDisplay';
 import { EisenhowerGridView } from '@/components/todos/EisenhowerGridView';
 import { TaskTemplateDrawer } from '@/components/todos/TaskTemplateDrawer';
-import { sortFlatTodos } from '@/utils/todoSort';
+import { sortFlatTodos, TODO_SORT_MODES, TODO_SORT_LABELS, type TodoSortMode } from '@/utils/todoSort';
+
+// Persisted like the Shopping list's sort mode — the derived view survives
+// a reload but never writes to Firestore.
+const TODO_SORT_STORAGE_KEY = 'todos-sort-mode';
 
 const ToDosPage: React.FC = () => {
   const {
@@ -84,6 +89,35 @@ const ToDosPage: React.FC = () => {
   // Top-right overflow ("…") menu of secondary actions (Export, Select multiple)
   // — mirrors the Shopping list header so the two pages share one structure.
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Person-filter popover in the title row (mirrors the Shopping list's store
+  // filter): quiet funnel icon at rest, accent pill with the member's name +
+  // inline clear when active.
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  // Sort popover in the title row (mirrors the Shopping list's sort): icon
+  // tinted when a non-default mode is active so the derived view is glanceable.
+  const [sortOpen, setSortOpen] = useState(false);
+  const [sortMode, setSortMode] = useState<TodoSortMode>(() => {
+    try {
+      const stored = typeof window !== 'undefined'
+        ? window.localStorage.getItem(TODO_SORT_STORAGE_KEY)
+        : null;
+      if (stored && (TODO_SORT_MODES as readonly string[]).includes(stored)) {
+        return stored as TodoSortMode;
+      }
+    } catch (_error) {
+      // Ignore localStorage errors
+    }
+    return 'important';
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(TODO_SORT_STORAGE_KEY, sortMode);
+    } catch (_error) {
+      // Ignore persistence errors
+    }
+  }, [sortMode]);
 
   // "More ways to add" menu next to the quick-add bar — collapses the old pair
   // of unlabeled icon buttons (full form / templates) plus Scan a list into
@@ -210,12 +244,12 @@ const ToDosPage: React.FC = () => {
     });
 
     return {
-      flatActive: sortFlatTodos(active),
+      flatActive: sortFlatTodos(active, sortMode),
       rowColors,
       allActiveCount: active.length,
       allActiveIds: active.map(t => t.id)
     };
-  }, [todos, currentDate, assigneeFilter]);
+  }, [todos, currentDate, assigneeFilter, sortMode]);
 
   // Eisenhower buckets — computed unconditionally (hooks rule) but only
   // rendered in the matrix arrangement. Urgency uses the same midnight-
@@ -876,26 +910,6 @@ const ToDosPage: React.FC = () => {
       group: 'View',
       onSelect: () => setViewMode('completed'),
     },
-    ...(members.length > 1
-      ? [
-          {
-            key: 'filter-all',
-            label: 'Everyone',
-            icon: <User size={16} />,
-            selected: assigneeFilter === null,
-            group: 'Filter',
-            onSelect: () => setAssigneeFilter(null),
-          },
-          ...members.map((member) => ({
-            key: `filter-${member.uid}`,
-            label: member.displayName?.split(' ')[0] ?? 'User',
-            ariaLabel: `Filter to ${member.displayName ?? 'User'}`,
-            selected: assigneeFilter === member.uid,
-            group: 'Filter',
-            onSelect: () => setAssigneeFilter(member.uid),
-          })),
-        ]
-      : []),
     {
       key: 'export',
       label: 'Export CSV',
@@ -922,9 +936,7 @@ const ToDosPage: React.FC = () => {
   // scrolling past the card's rounded top corners. Hidden in selection mode
   // (adding has no context there).
   const stickyQuickAdd = !isSelectionMode ? (
-    // `relative` so the kebab's Menu can anchor to the sticky wrapper — it must
-    // render OUTSIDE the card below, whose overflow-hidden would clip it.
-    <div className="relative sticky top-[var(--lists-sticky-top,0px)] z-sticky bg-brand-50 dark:bg-brand-900">
+    <div className="sticky top-[var(--lists-sticky-top,0px)] z-sticky bg-brand-50 dark:bg-brand-900">
       <div className="surface-section rounded-b-none overflow-hidden">
         <div className="flex items-center gap-2">
           <QuickAddBar
@@ -938,56 +950,162 @@ const ToDosPage: React.FC = () => {
             disabled={!quickText.trim()}
             submitLabel="Add task"
           />
-
-          {/* THE page kebab (44px target): the default view has no header row,
-              so this single menu carries the add methods, view + person
-              filters, and list actions. */}
-          <div className="flex-none mr-2">
-            <Button
-              variant="ghost-brand"
-              size="icon"
-              onClick={() => setMenuOpen((o) => !o)}
-              aria-label="To-do list actions"
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              className="rounded-full min-w-11 min-h-11"
-            >
-              <MoreHorizontal className="w-5 h-5" />
-            </Button>
-          </div>
         </div>
       </div>
-      {/* Anchored to the sticky wrapper (see `relative` above), not the card —
-          the card's overflow-hidden would clip the popover. */}
-      {menuOpen && (
+    </div>
+  ) : null;
+
+  // Person filter, inline in the title row next to the kebab (mirrors the
+  // Shopping list's store filter exactly): a quiet funnel icon at rest, an
+  // accent pill with the member's first name + inline clear when active, so
+  // the scoped view stays glanceable. Hidden for single-member households
+  // (nothing to filter) and in the Completed view (it only scopes active
+  // tasks — showing it there would lie).
+  const activeFilterMember = assigneeFilter !== null ? memberMap.get(assigneeFilter) : undefined;
+  const filterMenuItems: MenuItem[] = [
+    {
+      key: 'filter-all',
+      label: 'Everyone',
+      icon: <User size={16} />,
+      selected: assigneeFilter === null,
+      onSelect: () => setAssigneeFilter(null),
+    },
+    ...members.map((member) => ({
+      key: `filter-${member.uid}`,
+      label: member.displayName?.split(' ')[0] ?? 'User',
+      ariaLabel: `Filter to ${member.displayName ?? 'User'}`,
+      selected: assigneeFilter === member.uid,
+      onSelect: () => setAssigneeFilter(member.uid),
+    })),
+  ];
+  const filterControl = members.length > 1 ? (
+    <div className="relative flex-none">
+      {assigneeFilter !== null ? (
+        <div className="flex items-center bg-accent-50 text-accent-700 dark:bg-accent-900/30 dark:text-accent-200 rounded-full">
+          <button
+            type="button"
+            onClick={() => setFilterOpen((o) => !o)}
+            aria-label={`Filter by person: ${activeFilterMember?.displayName ?? 'User'}`}
+            aria-expanded={filterOpen}
+            aria-haspopup="menu"
+            className="flex items-center gap-1.5 pl-3 pr-1.5 py-2 text-xs font-medium max-w-[38vw]"
+          >
+            <Filter className="w-4 h-4 shrink-0" />
+            <span className="truncate">{activeFilterMember?.displayName?.split(' ')[0] ?? 'User'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setAssigneeFilter(null)}
+            aria-label="Clear person filter"
+            className="pr-2.5 py-2 hover:text-accent-900 dark:hover:text-accent-50 transition-colors"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setFilterOpen((o) => !o)}
+          aria-label="Filter by person"
+          aria-expanded={filterOpen}
+          aria-haspopup="menu"
+          className="relative before:absolute before:-inset-1 before:content-[''] p-2 text-brand-500 hover:text-accent-600 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-400 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
+        >
+          <Filter className="w-5 h-5" />
+        </button>
+      )}
+      {filterOpen && (
         <Menu
-          isOpen={menuOpen}
-          onClose={() => setMenuOpen(false)}
-          ariaLabel="To-do list actions"
-          position="top-full right-2 mt-1"
-          className="min-w-[208px]"
-          items={menuItems}
+          isOpen={filterOpen}
+          onClose={() => setFilterOpen(false)}
+          ariaLabel="Filter by person"
+          position="top-full right-0 mt-2"
+          className="min-w-[176px]"
+          items={filterMenuItems}
         />
       )}
     </div>
   ) : null;
 
-  return (
-    <div className={cn("px-4 max-w-2xl mx-auto space-y-4 min-h-screen", isSelectionMode ? "pb-40" : "pb-nav-safe")}>
+  // Sort, inline in the title row (mirrors the Shopping list's sort icon):
+  // tinted when a non-default mode is active so the derived view is glanceable.
+  const sortMenuItems: MenuItem[] = TODO_SORT_MODES.map((mode) => ({
+    key: `sort-${mode}`,
+    label: TODO_SORT_LABELS[mode],
+    selected: sortMode === mode,
+    onSelect: () => setSortMode(mode),
+  }));
+  const sortControl = (
+    <div className="relative flex-none">
+      <button
+        type="button"
+        onClick={() => setSortOpen((o) => !o)}
+        aria-label={`Sort: ${TODO_SORT_LABELS[sortMode]}`}
+        aria-expanded={sortOpen}
+        aria-haspopup="menu"
+        className={cn(
+          "relative before:absolute before:-inset-1 before:content-[''] p-2 rounded-full transition-colors hover:bg-brand-100 dark:hover:bg-brand-700/50",
+          sortMode !== 'important'
+            ? 'text-accent-600 dark:text-accent-300'
+            : 'text-brand-500 hover:text-accent-600 dark:text-brand-400 dark:hover:text-accent-300'
+        )}
+      >
+        <ArrowUpDown className="w-5 h-5" />
+      </button>
+      {sortOpen && (
+        <Menu
+          isOpen={sortOpen}
+          onClose={() => setSortOpen(false)}
+          ariaLabel="Sort tasks"
+          position="top-full right-0 mt-2"
+          className="min-w-[176px]"
+          items={sortMenuItems}
+        />
+      )}
+    </div>
+  );
 
-      {/* No header row in the default (active) view — the quick-add row's
-          kebab carries the whole menu, so content starts immediately under the
-          Plan tab strip. A slim row appears only when a mode needs announcing:
-          selection mode (Select all + Cancel) or the Completed view (label +
-          kebab, since the quick-add row — the kebab's usual home — is hidden
-          there). The sr-only h2 keeps the document outline; the page-level h1
-          is ListsPage's sr-only "Plan". */}
-      <h2 className="sr-only">To-dos</h2>
+  // THE page kebab, in the title row (mirrors the Shopping list header — the
+  // two Plan siblings must share one structure): the single menu carrying the
+  // add methods, view radio, and list actions.
+  const pageKebab = (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setMenuOpen((o) => !o)}
+        aria-label="To-do list actions"
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        className="relative before:absolute before:-inset-1 before:content-[''] p-2 text-brand-500 hover:text-accent-600 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-400 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
+      >
+        <MoreHorizontal className="w-5 h-5" />
+      </button>
+      {menuOpen && (
+        <Menu
+          isOpen={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          ariaLabel="To-do list actions"
+          position="top-full right-0 mt-2"
+          className="min-w-[208px]"
+          items={menuItems}
+        />
+      )}
+    </div>
+  );
+
+  return (
+    <div className={cn("px-4 max-w-2xl mx-auto space-y-3 min-h-screen", isSelectionMode ? "pb-40" : "pb-nav-safe")}>
+
+      {/* Title row — mirrors the Shopping tab's header exactly (serif title +
+          inline actions cluster, NOT sticky) so the two Plan siblings read as
+          one system. The kebab lives here; selection mode swaps the row for
+          its own Select all + Cancel controls. The page-level h1 is
+          ListsPage's sr-only "Plan". */}
       {isSelectionMode ? (
-        <div className="pt-3 flex items-center justify-between gap-3">
-          <span className="font-display text-xl font-semibold tracking-tight text-brand-900 dark:text-brand-50 whitespace-nowrap shrink-0">
+        <div className="pt-4 pb-2 flex items-center justify-between gap-3">
+          <h2 className="font-display text-xl font-semibold tracking-tight text-brand-900 dark:text-brand-50 whitespace-nowrap shrink-0">
             Select tasks
-          </span>
+          </h2>
           <div className="flex items-center gap-3 shrink-0">
             <Button
               variant="link"
@@ -1013,38 +1131,33 @@ const ToDosPage: React.FC = () => {
           </div>
         </div>
       ) : viewMode === 'completed' ? (
-        <div className="pt-3 flex items-center justify-between gap-3">
-          <span className="font-display text-xl font-semibold tracking-tight text-brand-900 dark:text-brand-50 whitespace-nowrap shrink-0">
-            Completed
-            <span className="ml-2 font-sans text-sm font-normal text-brand-400 dark:text-brand-450 tabular-nums">
-              {completedCount}
-            </span>
-          </span>
-          <div className="relative shrink-0">
-            <Button
-              variant="ghost-brand"
-              size="icon"
-              onClick={() => setMenuOpen((o) => !o)}
-              aria-label="To-do list actions"
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              className="rounded-full min-w-11 min-h-11"
-            >
-              <MoreHorizontal className="w-5 h-5" />
-            </Button>
-            {menuOpen && (
-              <Menu
-                isOpen={menuOpen}
-                onClose={() => setMenuOpen(false)}
-                ariaLabel="To-do list actions"
-                position="top-full right-0 mt-2"
-                className="min-w-[208px]"
-                items={menuItems}
-              />
-            )}
-          </div>
-        </div>
-      ) : null}
+        <PageHeader
+          as="h2"
+          className="px-0 pt-4 pb-2 items-center"
+          title={
+            <>
+              Completed
+              <span className="ml-2 font-sans text-sm font-normal text-brand-400 dark:text-brand-450 tabular-nums">
+                {completedCount}
+              </span>
+            </>
+          }
+          actions={pageKebab}
+        />
+      ) : (
+        <PageHeader
+          as="h2"
+          className="px-0 pt-4 pb-2 items-center"
+          title="To-dos"
+          actions={
+            <div className="flex items-center gap-1">
+              {filterControl}
+              {sortControl}
+              {pageKebab}
+            </div>
+          }
+        />
+      )}
 
       {viewMode === 'active' ? (
           <>

@@ -71,6 +71,8 @@ vi.mock('lucide-react', () => ({
   Sparkles: () => <div data-testid="sparkles-icon" />,
   ListChecks: () => <div data-testid="list-checks-icon" />,
   Repeat: () => <div data-testid="repeat-icon" />,
+  Filter: () => <div data-testid="filter-icon" />,
+  ArrowUpDown: () => <div data-testid="arrow-up-down-icon" />,
   Info: () => <div data-testid="info-icon" />,
   // data/templateIcons.ts — pulled in transitively by TaskTemplateDrawer.
   ShoppingBag: () => <div data-testid="shoppingbag-icon" />,
@@ -214,6 +216,9 @@ describe('ToDosPage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // The sort mode persists to localStorage — clear it so a test that picks a
+    // non-default sort can't leak ordering into later tests.
+    window.localStorage.clear();
   });
 
   describe('Export', () => {
@@ -679,26 +684,47 @@ describe('ToDosPage', () => {
       expect(screen.getByRole('button', { name: 'To-do list actions' })).toBeInTheDocument();
     });
 
-    it('filters by person via the overflow menu radio group', () => {
+    it('filters by person via the title-row filter popover', () => {
       setOrientation(false);
       setup();
 
-      openOverflowMenu();
-      const menu = screen.getByRole('menu', { name: 'To-do list actions' });
-      const group = within(menu).getByRole('group', { name: 'Filter' });
-      expect(within(group).getByRole('menuitemradio', { name: 'Everyone' })).toHaveAttribute('aria-checked', 'true');
-      expect(within(group).getByRole('menuitemradio', { name: 'Filter to Alice Smith' })).toHaveAttribute('aria-checked', 'false');
+      fireEvent.click(screen.getByRole('button', { name: 'Filter by person' }));
+      const menu = screen.getByRole('menu', { name: 'Filter by person' });
+      expect(within(menu).getByRole('menuitemradio', { name: 'Everyone' })).toHaveAttribute('aria-checked', 'true');
+      expect(within(menu).getByRole('menuitemradio', { name: 'Filter to Alice Smith' })).toHaveAttribute('aria-checked', 'false');
 
-      // Choose Bob — only his tasks stay visible.
-      fireEvent.click(within(group).getByRole('menuitemradio', { name: 'Filter to Bob Jones' }));
+      // Choose Bob — only his tasks stay visible, and the trigger becomes an
+      // accent pill with his name + an inline clear.
+      fireEvent.click(within(menu).getByRole('menuitemradio', { name: 'Filter to Bob Jones' }));
       expect(screen.getByText('Today Task')).toBeInTheDocument(); // user2
       expect(screen.queryByText('Overdue Task')).not.toBeInTheDocument(); // user1
 
-      // Reopening the menu marks Bob as the active choice; Everyone restores all.
-      openOverflowMenu();
+      // Reopening marks Bob as the active choice; the inline clear restores all.
+      fireEvent.click(screen.getByRole('button', { name: 'Filter by person: Bob Jones' }));
       expect(screen.getByRole('menuitemradio', { name: 'Filter to Bob Jones' })).toHaveAttribute('aria-checked', 'true');
-      fireEvent.click(screen.getByRole('menuitemradio', { name: 'Everyone' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Clear person filter' }));
       expect(screen.getByText('Overdue Task')).toBeInTheDocument();
+    });
+
+    it('re-sorts the flat list via the title-row sort popover', () => {
+      setOrientation(false);
+      setup(quadrantTodos);
+
+      // Default: important first (tinted off), menu marks it checked.
+      fireEvent.click(screen.getByRole('button', { name: 'Sort: Important first' }));
+      const menu = screen.getByRole('menu', { name: 'Sort tasks' });
+      expect(within(menu).getByRole('menuitemradio', { name: 'Important first' })).toHaveAttribute('aria-checked', 'true');
+
+      // Switch to due-date order: stars no longer jump the queue.
+      fireEvent.click(within(menu).getByRole('menuitemradio', { name: 'Due date' }));
+      const rows = screen.getAllByRole('button', { name: /^Edit task:/ });
+      const titles = rows.map(r => r.textContent);
+      const idxUrgentUnstarred = titles.findIndex(t => t?.includes('Delegate Task'));
+      const idxStarredLater = titles.findIndex(t => t?.includes('Schedule Task'));
+      expect(idxUrgentUnstarred).toBeGreaterThanOrEqual(0);
+      expect(idxStarredLater).toBeGreaterThanOrEqual(0);
+      // The trigger reflects the new mode.
+      expect(screen.getByRole('button', { name: 'Sort: Due date' })).toBeInTheDocument();
     });
 
     it('shows the grid automatically when mounted in landscape, and rotating back returns the list', () => {
