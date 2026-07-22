@@ -98,5 +98,9 @@ export function buildNextRecurringTodo(
   if (completed.reminderMinutesBefore !== undefined) {
     next.reminderMinutesBefore = completed.reminderMinutesBefore;
   }
+  // Habit Automations (PRD #1065): a linked recurring chore keeps its habit
+  // link on every spawned instance, so the automation persists without
+  // re-linking each occurrence.
+  if (completed.linkedHabitId !== undefined) next.linkedHabitId = completed.linkedHabitId;
   return next;
 }
