@@ -141,4 +141,27 @@ describe('HabitFormModal — Automations save-payload contract (PRD #1065)', () 
     const payload = call[0] as Habit;
     expect('triggers' in payload).toBe(false);
   });
+
+  it('does not clobber unsaved keyword state when editingHabit is a new object with the same id (concurrent listener rebuild)', async () => {
+    const habit = baseHabit({ triggers: { keywords: ['target'] } });
+    const { rerender } = render(
+      <HabitFormModal isOpen onClose={mockOnClose} editingHabit={habit} />,
+    );
+
+    // Simulate the user adding an unsaved keyword mid-edit.
+    fireEvent.click(screen.getByRole('button', { name: 'add-kw' }));
+    expect(screen.getByTestId('kw').textContent).toBe('target,coffee');
+
+    // Simulate a concurrent Firestore snapshot: same habit id, but the
+    // listener rebuilt a BRAND NEW object reference (as it does on every
+    // snapshot) with unrelated fields changed. This must NOT reset the form.
+    const rebuiltSameHabit = baseHabit({
+      triggers: { keywords: ['target'] },
+      lastUpdated: '2026-07-02T00:00:00.000Z',
+    });
+    expect(rebuiltSameHabit).not.toBe(habit);
+    rerender(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={rebuiltSameHabit} />);
+
+    expect(screen.getByTestId('kw').textContent).toBe('target,coffee');
+  });
 });

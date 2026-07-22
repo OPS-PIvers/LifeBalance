@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Sparkles, X, Plus, ListChecks, ChevronDown } from 'lucide-react';
+import { Sparkles, X, Plus, ListChecks } from 'lucide-react';
 import Input from '@/components/ui/Input';
 import { HabitLocationTrigger, ToDo } from '@/types/schema';
 import { normalizeKeyword } from '@/utils/habitKeywordMatch';
 import HabitLocationsEditor from '@/components/habits/HabitLocationsEditor';
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 
 /**
  * Habit Automations (PRD #1065) — the shared editor for a habit's automation
@@ -43,7 +44,6 @@ const HabitAutomationsSection: React.FC<HabitAutomationsSectionProps> = ({
   collapsible = false,
 }) => {
   const [keywordDraft, setKeywordDraft] = useState('');
-  const [isOpen, setIsOpen] = useState(false);
 
   const addKeyword = () => {
     const normalized = normalizeKeyword(keywordDraft);
@@ -189,29 +189,24 @@ const HabitAutomationsSection: React.FC<HabitAutomationsSectionProps> = ({
   if (collapsible) {
     const configuredCount = keywords.length + locations.length;
     return (
-      <section aria-labelledby="habit-automations-heading" className="pt-1">
-        <button
-          type="button"
-          onClick={() => setIsOpen(o => !o)}
-          aria-expanded={isOpen}
-          className="w-full flex items-center justify-between gap-2 py-1 text-left focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 rounded-card"
-        >
-          <span className="flex items-center gap-2">
-            {heading}
-            {configuredCount > 0 && (
-              <span className="text-xxs font-semibold text-warm-700 dark:text-warm-300 bg-warm-100 dark:bg-warm-900/40 rounded-full px-1.5 py-0.5">
-                {configuredCount}
-              </span>
-            )}
+      <CollapsibleSection
+        className="pt-1"
+        title={
+          <span className="inline-flex items-center gap-1.5">
+            <Sparkles size={13} className="text-warm-500" aria-hidden="true" />
+            Automations
           </span>
-          <ChevronDown
-            size={16}
-            className={`shrink-0 text-brand-400 transition-transform duration-(--duration-fast) ${isOpen ? 'rotate-180' : ''}`}
-            aria-hidden="true"
-          />
-        </button>
-        {isOpen && <div className="mt-3">{body}</div>}
-      </section>
+        }
+        summary={
+          configuredCount > 0 ? (
+            <span className="text-xxs font-semibold text-warm-700 dark:text-warm-300 bg-warm-100 dark:bg-warm-900/40 rounded-full px-1.5 py-0.5">
+              {configuredCount}
+            </span>
+          ) : undefined
+        }
+      >
+        {body}
+      </CollapsibleSection>
     );
   }
 

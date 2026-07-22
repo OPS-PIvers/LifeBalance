@@ -74,14 +74,36 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
     () => seedEditAssignedUid(editingHabit),
   );
 
-  // Re-populate (or reset to defaults) the form when the habit being edited or
-  // the open state changes. Done during render on that change edge rather than
-  // in an effect so it doesn't trigger a cascading render. Mirrors the previous
-  // effect keyed on `[editingHabit, isOpen]`; the initial population is handled
-  // by the initializers above.
-  const [prevKey, setPrevKey] = useState({ editingHabit, isOpen });
-  if (prevKey.editingHabit !== editingHabit || prevKey.isOpen !== isOpen) {
-    setPrevKey({ editingHabit, isOpen });
+  // Re-populate (or reset to defaults) the form when the habit being edited
+  // (by id — NOT object reference) or the open state changes. Done during
+  // render on that change edge rather than in an effect so it doesn't trigger
+  // a cascading render. Mirrors the previous effect keyed on
+  // `[editingHabit, isOpen]`; the initial population is handled by the
+  // initializers above.
+  //
+  // Keying on `editingHabit` by reference (rather than `editingHabit?.id`)
+  // would clobber unsaved form state: the habits Firestore listener rebuilds
+  // every habit object on each snapshot, so any concurrent household activity
+  // while the modal is open for the SAME habit would produce a new object
+  // reference for that habit and wipe in-progress edits (title, keyword
+  // draft, etc.) out from under the user. Comparing by id (plus the
+  // closed->open transition, so reopening for the same habit still
+  // re-seeds) only resets on a genuine new edit session: a different habit,
+  // or switching create<->edit.
+  const [prevEditingHabitId, setPrevEditingHabitId] = useState(editingHabit?.id);
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  const idChanged = prevEditingHabitId !== editingHabit?.id;
+  const reopened = isOpen && !prevIsOpen;
+  const shouldReset = idChanged || reopened;
+  // Track the latest id/open state on every render — independently of
+  // whether a reset fires below — so a later closed->open transition for the
+  // SAME id is still detected even though closing itself doesn't reset the
+  // form. (Each write is guarded by an inequality check, the same
+  // "adjust state during render" pattern the previous single-state version
+  // used, just split so tracking isn't tied to whether a reset happened.)
+  if (idChanged) setPrevEditingHabitId(editingHabit?.id);
+  if (prevIsOpen !== isOpen) setPrevIsOpen(isOpen);
+  if (shouldReset) {
     if (editingHabit) {
       setTitle(editingHabit.title);
       setCategory(editingHabit.category);
