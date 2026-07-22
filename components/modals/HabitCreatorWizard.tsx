@@ -65,6 +65,7 @@ const DEFAULT_FORM_DATA: CustomHabitFormData = {
   scoringType: 'threshold',
   period: 'daily',
   targetCount: '1',
+  keywords: [],
 };
 
 const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose }) => {
@@ -152,6 +153,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
       scoringType: habit.scoringType,
       period: habit.period,
       targetCount: habit.targetCount.toString(),
+      keywords: habit.triggers?.keywords ?? [],
     });
     setView('edit-custom');
   };
@@ -194,6 +196,19 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
       }),
       // Custom habits should not have presetId (contradicts isCustom: true)
     };
+
+    // Habit Automations (PRD #1065): persist transaction keywords, preserving
+    // any existing saved locations (edited by a sibling PR). Only attach a
+    // `triggers` object when there is at least one keyword or location, so a
+    // habit with no automation writes nothing new.
+    const existingLocations = editingHabit?.triggers?.locations;
+    const cleanedKeywords = formData.keywords.map(k => k.trim()).filter(Boolean);
+    if (cleanedKeywords.length > 0 || (existingLocations && existingLocations.length > 0)) {
+      habitData.triggers = {
+        ...(cleanedKeywords.length > 0 ? { keywords: cleanedKeywords } : {}),
+        ...(existingLocations && existingLocations.length > 0 ? { locations: existingLocations } : {}),
+      };
+    }
 
     try {
       if (editingHabit) {

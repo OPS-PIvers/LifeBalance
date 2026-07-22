@@ -6,6 +6,7 @@ import {
   writeBatch,
   increment,
   serverTimestamp,
+  arrayUnion,
   type Firestore,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
@@ -19,6 +20,7 @@ import { effectiveAccountImpact, isBankSyncTransaction, resolveTargetAccount, sh
 import { splitParticipantKey } from '@/utils/settlement';
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
 import { processToggleHabit } from '@/utils/habitLogic';
+import { selectHabitsToFire, transactionAttribution } from '@/utils/transactionHabitFiring';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { roundMoney } from '@/utils/money';
 import { trashDocId, transactionTrashData } from '@/utils/trash';
@@ -436,10 +438,47 @@ export function makeUpdateTransactionCategory(deps: {
       ? getPayPeriodForTransaction(overrides.date, householdSettings?.lastPaycheckDate)
       : undefined;
 
+    // Habit Automations (PRD #1065): DEDUP the fire set. A transaction fires a
+    // given habit at most once — `existingTx.firedHabitIds` is the ledger, so
+    // re-editing or re-approving the same row can't double-log. Everything in
+    // `relatedHabitIds` that hasn't fired before is fired now; already-fired
+    // ids stay recorded as an association but are NOT re-incremented.
+    const { toFire: habitIdsToFire } = selectHabitsToFire(
+      relatedHabitIds ?? [],
+      existingTx.firedHabitIds ?? [],
+    );
+    const newlyFiredHabitIds: string[] = [];
+
+    // 2. Increment the to-fire habits FIRST so the transaction write below can
+    // co-commit the fired-ledger update (firedHabitIds) in the SAME op.
+    for (const habitId of habitIdsToFire) {
+      const habit = habits.find(h => h.id === habitId);
+      if (habit) {
+        const result = processToggleHabit(habit, 'up');
+        if (result) {
+          batch.update(doc(db, `households/${householdId}/habits`, habitId), {
+            count: result.updatedHabit.count,
+            totalCount: result.updatedHabit.totalCount,
+            completedDates: result.updatedHabit.completedDates,
+            streakDays: result.updatedHabit.streakDays,
+            lastUpdated: serverTimestamp(),
+          });
+          totalPointsChange += result.pointsChange;
+          successfulHabitsCount++;
+          newlyFiredHabitIds.push(habitId);
+        }
+      } else {
+        console.warn(`Habit ID ${habitId} not found in habits array. Skipping habit increment.`);
+      }
+    }
+
     // 1. Update Transaction. Verifying resolves any Action-Queue snooze, so the
     // stale marker doesn't linger on the doc. Inline edits (amount/merchant/date)
     // and clearing the `needsAmount` stub flag co-commit here in the same op.
     batch.update(doc(db, `households/${householdId}/transactions`, id), {
+      // Append the just-fired habit ids to the per-transaction dedup ledger
+      // (arrayUnion so a concurrent editor can't clobber the set).
+      ...(newlyFiredHabitIds.length > 0 ? { firedHabitIds: arrayUnion(...newlyFiredHabitIds) } : {}),
       category,
       status: 'verified',
       relatedHabitIds: relatedHabitIds || [],
@@ -492,39 +531,13 @@ export function makeUpdateTransactionCategory(deps: {
       }
     }
 
-    // 2. Increment Habits if any
-    if (relatedHabitIds && relatedHabitIds.length > 0) {
-      for (const habitId of relatedHabitIds) {
-        const habit = habits.find(h => h.id === habitId);
-        if (habit) {
-          // Use extracted business logic
-          const result = processToggleHabit(habit, 'up');
-          if (result) {
-            batch.update(doc(db, `households/${householdId}/habits`, habitId), {
-              count: result.updatedHabit.count,
-              totalCount: result.updatedHabit.totalCount,
-              completedDates: result.updatedHabit.completedDates,
-              streakDays: result.updatedHabit.streakDays,
-              lastUpdated: serverTimestamp(),
-            });
-
-            // Accumulate points change
-            totalPointsChange += result.pointsChange;
-            successfulHabitsCount++;
-          }
-        } else {
-          console.warn(`Habit ID ${habitId} not found in habits array. Skipping habit increment.`);
-        }
-      }
-
-      // 3. Update Household Points
-      if (totalPointsChange !== 0) {
-        batch.update(doc(db, `households/${householdId}`), {
-          'points.daily': increment(totalPointsChange),
-          'points.weekly': increment(totalPointsChange),
-          'points.total': increment(totalPointsChange),
-        });
-      }
+    // 3. Update Household Points for the habits fired above.
+    if (totalPointsChange !== 0) {
+      batch.update(doc(db, `households/${householdId}`), {
+        'points.daily': increment(totalPointsChange),
+        'points.weekly': increment(totalPointsChange),
+        'points.total': increment(totalPointsChange),
+      });
     }
 
     // Commit all writes atomically
@@ -537,15 +550,22 @@ export function makeUpdateTransactionCategory(deps: {
     // DO NOT update bucket.spent - it's now calculated in real-time from transactions
     // The bucketSpentMap effect will automatically recalculate when transactions change
 
-    // Toast feedback for habits (only after a successful commit)
+    // Toast feedback for habits (only after a successful commit). The
+    // attribution names the source ("via transaction: <merchant>") so the user
+    // can always answer "why did my points change?" (PRD #1065 story 19).
     if (totalPointsChange !== 0) {
       const sign = totalPointsChange > 0 ? '+' : '';
       toast(
         React.createElement(
           'div',
-          { className: 'flex items-center gap-2' },
-          React.createElement('span', { className: 'font-bold' }, `${sign}${totalPointsChange} pts`),
-          React.createElement('span', { className: 'text-sm opacity-80' }, `from ${successfulHabitsCount} habit(s)`),
+          { className: 'flex flex-col' },
+          React.createElement(
+            'div',
+            { className: 'flex items-center gap-2' },
+            React.createElement('span', { className: 'font-bold' }, `${sign}${totalPointsChange} pts`),
+            React.createElement('span', { className: 'text-sm opacity-80' }, `from ${successfulHabitsCount} habit(s)`),
+          ),
+          React.createElement('span', { className: 'text-xs opacity-70' }, transactionAttribution(overrides?.merchant ?? existingTx.merchant)),
         ),
         {
           duration: 2000,
@@ -563,6 +583,102 @@ export function makeUpdateTransactionCategory(deps: {
   };
 
   return { updateTransactionCategory };
+}
+
+/**
+ * reverseTransactionApproval (Habit Automations, PRD #1065) — the atomic UNDO
+ * for a swipe-approve that fired habits. In ONE writeBatch it:
+ *   1. reverses the transaction back to `pending_review`, restoring the prior
+ *      category / account tag / relatedHabitIds and crediting back the balance
+ *      delta the approve applied (verified → pending has an effective impact of
+ *      0, so the applied amount is reversed off the target account);
+ *   2. decrements every habit the approve fired (`processToggleHabit` 'down')
+ *      and reverses the points, exactly mirroring the forward fire;
+ *   3. clears the `firedHabitIds` ledger so a later re-approve can legitimately
+ *      fire again.
+ * `firedHabitIds` is passed explicitly (the ids we just fired) rather than read
+ * from the possibly-not-yet-synced transaction doc, so the undo is race-free.
+ */
+export function makeReverseTransactionApproval(deps: {
+  db: Firestore;
+  householdId: string | null;
+  habits: Habit[];
+  transactions: Transaction[];
+  accounts: Account[];
+}) {
+  const { db, householdId, habits, transactions, accounts } = deps;
+
+  const reverseTransactionApproval = async (
+    id: string,
+    prior: { category: string; accountId?: string; relatedHabitIds?: string[] },
+    firedHabitIds: string[],
+  ) => {
+    if (!householdId) return;
+
+    const existingTx = transactions.find(t => t.id === id);
+    if (!existingTx) {
+      toast.error('Transaction not found');
+      return;
+    }
+
+    const batch = writeBatch(db);
+
+    // 1. Reverse the balance the approve applied: reverse the CURRENT verified
+    // impact off the account it landed on; the pending target's impact is 0, so
+    // nothing is re-applied. Bank-sync rows never delta a balance (guarded).
+    const currentTarget = resolveTargetAccount(existingTx.accountId, accounts);
+    const reverseDelta = shouldSkipBankSyncDelta(existingTx, currentTarget?.id, currentTarget?.id)
+      ? 0
+      : -effectiveAccountImpact(existingTx, currentTarget);
+    if (currentTarget) {
+      const rounded = roundMoney(reverseDelta);
+      if (rounded !== 0) {
+        batch.update(doc(db, `households/${householdId}/accounts`, currentTarget.id), {
+          balance: increment(rounded),
+          lastUpdated: serverTimestamp(),
+        });
+      }
+    }
+
+    // Restore the transaction to its pre-approve state and clear the fired
+    // ledger so the row can be re-approved cleanly.
+    batch.update(doc(db, `households/${householdId}/transactions`, id), {
+      status: 'pending_review',
+      category: prior.category,
+      relatedHabitIds: prior.relatedHabitIds ?? [],
+      firedHabitIds: deleteField(),
+      ...(prior.accountId ? { accountId: prior.accountId } : { accountId: deleteField() }),
+    });
+
+    // 2. Decrement each fired habit and reverse its points.
+    let totalPointsChange = 0;
+    for (const habitId of firedHabitIds) {
+      const habit = habits.find(h => h.id === habitId);
+      if (!habit) continue;
+      const result = processToggleHabit(habit, 'down');
+      if (result) {
+        batch.update(doc(db, `households/${householdId}/habits`, habitId), {
+          count: result.updatedHabit.count,
+          totalCount: result.updatedHabit.totalCount,
+          completedDates: result.updatedHabit.completedDates,
+          streakDays: result.updatedHabit.streakDays,
+          lastUpdated: serverTimestamp(),
+        });
+        totalPointsChange += result.pointsChange;
+      }
+    }
+    if (totalPointsChange !== 0) {
+      batch.update(doc(db, `households/${householdId}`), {
+        'points.daily': increment(totalPointsChange),
+        'points.weekly': increment(totalPointsChange),
+        'points.total': increment(totalPointsChange),
+      });
+    }
+
+    await batch.commit();
+  };
+
+  return { reverseTransactionApproval };
 }
 
 /**

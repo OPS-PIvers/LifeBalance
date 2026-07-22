@@ -25,6 +25,16 @@ export interface KeywordMatchInput {
   notes?: string;
 }
 
+/**
+ * Normalize a raw keyword entry from the habit-editor input: trim, collapse
+ * internal whitespace to single spaces, and lowercase. Returns '' for a blank
+ * entry (the caller drops it). Matching is already case-insensitive, so storing
+ * normalized keywords keeps the persisted list clean and de-duplicatable.
+ */
+export function normalizeKeyword(raw: string): string {
+  return raw.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
 /** Escape a string for safe literal use inside a RegExp. */
 function escapeRegExp(literal: string): string {
   return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

@@ -276,6 +276,17 @@ export interface HouseholdContextType {
     accountId?: string | null,
     overrides?: { amount?: number; merchant?: string; date?: string; notes?: string; clearNeedsAmount?: boolean; creditPayment?: boolean; isRecurring?: boolean },
   ) => Promise<void>;
+  /** Habit Automations (PRD #1065): atomic UNDO for a swipe-approve that fired
+   *  habits. Reverses the transaction to `pending_review` (restoring prior
+   *  category/account/relatedHabitIds and crediting back the balance delta),
+   *  decrements every habit in `firedHabitIds` with its points, and clears the
+   *  transaction's fired ledger — all in ONE writeBatch. `firedHabitIds` is the
+   *  set the approve just fired (passed explicitly so undo is race-free). */
+  reverseTransactionApproval: (
+    id: string,
+    prior: { category: string; accountId?: string; relatedHabitIds?: string[] },
+    firedHabitIds: string[],
+  ) => Promise<void>;
   updateTransaction: (id: string, updates: Partial<Transaction>, opts?: MutationOpts) => Promise<void>;
   deleteTransaction: (id: string, opts?: MutationOpts) => Promise<void>;
   splitTransaction: (originalTransactionId: string, newTransactions: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[]) => Promise<void>;
@@ -528,7 +539,7 @@ export type FinanceContextValue = Pick<HouseholdContextType,
   | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal'
   | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'setBucketLimits' | 'saveCeremonyChanges' | 'reallocateBucket'
   | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem' | 'linkBankTransactionToBill'
-  | 'addTransaction' | 'addTransactions' | 'updateTransactionCategory' | 'updateTransaction' | 'deleteTransaction' | 'splitTransaction'
+  | 'addTransaction' | 'addTransactions' | 'updateTransactionCategory' | 'reverseTransactionApproval' | 'updateTransaction' | 'deleteTransaction' | 'splitTransaction'
   | 'setTransactionSplit' | 'markSplitSettled'
   | 'mergeTransactions' | 'keepBothTransactions'
   | 'getTransactionComments' | 'addTransactionComment' | 'deleteTransactionComment'

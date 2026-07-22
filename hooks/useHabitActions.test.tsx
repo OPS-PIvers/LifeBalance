@@ -38,6 +38,7 @@ vi.mock('firebase/firestore', () => {
     increment: (n: number) => incrementMock(n),
     arrayUnion: (...values: unknown[]) => ({ __arrayUnion: values }),
     arrayRemove: (...values: unknown[]) => ({ __arrayRemove: values }),
+    deleteField: () => ({ __deleteField: true }),
     serverTimestamp: vi.fn(() => '__serverTimestamp'),
     writeBatch: vi.fn(() => ({
       set: (ref: { __path: string }, data: Record<string, unknown>) => {

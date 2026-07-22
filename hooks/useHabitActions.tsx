@@ -150,8 +150,19 @@ export const useHabitActions = (
         }).filter(([, value]) => value !== undefined)
       );
 
+      // Habit Automations (PRD #1065): persist the optional `triggers` structure
+      // (transaction keywords + saved locations). Written as the whole object so
+      // the editor is the single source of truth; a habit whose automation was
+      // fully removed writes `deleteField()` so no stale keywords linger.
+      const triggersUpdate =
+        habit.triggers &&
+        ((habit.triggers.keywords?.length ?? 0) > 0 || (habit.triggers.locations?.length ?? 0) > 0)
+          ? habit.triggers
+          : deleteField();
+
       await updateDoc(doc(db, `households/${householdId}/habits`, habit.id), {
         ...updateData,
+        triggers: triggersUpdate,
         lastUpdated: serverTimestamp(),
       });
     } catch (error) {
