@@ -15,7 +15,7 @@ import { Star } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { Account, Habit, Household, SplitParticipant, Transaction } from '@/types/schema';
 import type { MutationOpts } from '@/contexts/household/types';
-import { effectiveAccountImpact, resolveTargetAccount } from '@/utils/accountImpact';
+import { effectiveAccountImpact, isBankSyncTransaction, resolveTargetAccount, shouldSkipBankSyncDelta } from '@/utils/accountImpact';
 import { splitParticipantKey } from '@/utils/settlement';
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
 import { processToggleHabit } from '@/utils/habitLogic';
@@ -404,11 +404,28 @@ export function makeUpdateTransactionCategory(deps: {
     // credit-card payment pays the card down instead of raising its debt.
     const effectiveCreditPayment = overrides?.creditPayment ?? existingTx.creditPayment;
 
-    const reverseDelta = -effectiveAccountImpact(existingTx, oldTarget);
-    const applyDelta = effectiveAccountImpact(
-      { amount: effectiveAmount, category, creditPayment: effectiveCreditPayment, status: 'verified' },
-      newTarget
-    );
+    // BANK-SYNC EXCEPTION (PER-TARGET, not per-row): for a bank-email-sync row
+    // the account balance was set authoritatively from the bank email's ENDING
+    // BALANCE (already reflecting this transaction), not accumulated from the
+    // row — so a delta destined for that AUTHORITATIVE account must be
+    // skipped (see isBankSyncTransaction). But a re-tag to a DIFFERENT
+    // (manual) account is ordinary bookkeeping on THAT account — its delta
+    // must apply normally, or the destination account permanently under-counts
+    // the move. `bankSyncHomeAccountId` resolves which account is currently
+    // authoritative for this row (the persisted `bankSyncAccountId`, or — on
+    // a row never yet edited/re-tagged — the OLD account itself, which is
+    // also what gets stamped onto the doc below the first time).
+    const isBankSync = isBankSyncTransaction(existingTx);
+    const bankSyncHomeId = isBankSync ? (existingTx.bankSyncAccountId ?? oldTarget?.id) : undefined;
+    const reverseDelta = shouldSkipBankSyncDelta(existingTx, oldTarget?.id, oldTarget?.id)
+      ? 0
+      : -effectiveAccountImpact(existingTx, oldTarget);
+    const applyDelta = shouldSkipBankSyncDelta(existingTx, newTarget?.id, oldTarget?.id)
+      ? 0
+      : effectiveAccountImpact(
+          { amount: effectiveAmount, category, creditPayment: effectiveCreditPayment, status: 'verified' },
+          newTarget
+        );
     const deltasByAccountId = new Map<string, number>();
     if (oldTarget) deltasByAccountId.set(oldTarget.id, (deltasByAccountId.get(oldTarget.id) ?? 0) + reverseDelta);
     if (newTarget) deltasByAccountId.set(newTarget.id, (deltasByAccountId.get(newTarget.id) ?? 0) + applyDelta);
@@ -456,6 +473,11 @@ export function makeUpdateTransactionCategory(deps: {
       ...(overrides?.creditPayment !== undefined
         ? (overrides.creditPayment ? { creditPayment: true } : { creditPayment: deleteField() })
         : {}),
+      // Backfill-on-write: stamp the bank-sync row's authoritative account the
+      // FIRST time it's ever edited client-side, so a later re-tag away and
+      // back can still tell which account is exempt from delta bookkeeping.
+      // Never overwrites an already-stamped value.
+      ...(isBankSync && !existingTx.bankSyncAccountId && bankSyncHomeId ? { bankSyncAccountId: bankSyncHomeId } : {}),
     });
 
     // 1b. Apply the account-balance impact of the status/category transition in
@@ -594,11 +616,30 @@ export function makeUpdateTransaction(deps: {
       const oldTarget = resolveTargetAccount(transaction.accountId, accounts);
       const newTarget = resolveTargetAccount(newAccountId, accounts);
 
-      const reverseDelta = -effectiveAccountImpact(transaction, oldTarget);
-      const applyDelta = effectiveAccountImpact(
-        { amount: newAmount, category: newCategory, creditPayment: newCreditPayment, status: newStatus },
-        newTarget
-      );
+      // BANK-SYNC EXCEPTION (PER-TARGET, not per-row): a bank-email-sync row's
+      // account balance came authoritatively from the bank email's ENDING
+      // BALANCE (which already reflects the transaction) — it was never
+      // accumulated from this row, so a delta destined for that
+      // AUTHORITATIVE account must be skipped. But re-tagging the row to a
+      // DIFFERENT (manual) account moves its impact onto that account like an
+      // ordinary transaction — skipping the apply there too would silently
+      // drop the money everywhere (the original bug). `bankSyncHomeAccountId`
+      // resolves which account is currently authoritative for this row (the
+      // persisted `bankSyncAccountId`, or — on a row never yet edited/re-tagged
+      // — the OLD account itself, which is also what gets stamped onto the
+      // doc below the first time). See isBankSyncTransaction /
+      // shouldSkipBankSyncDelta.
+      const isBankSync = isBankSyncTransaction(transaction);
+      const bankSyncHomeId = isBankSync ? (transaction.bankSyncAccountId ?? oldTarget?.id) : undefined;
+      const reverseDelta = shouldSkipBankSyncDelta(transaction, oldTarget?.id, oldTarget?.id)
+        ? 0
+        : -effectiveAccountImpact(transaction, oldTarget);
+      const applyDelta = shouldSkipBankSyncDelta(transaction, newTarget?.id, oldTarget?.id)
+        ? 0
+        : effectiveAccountImpact(
+            { amount: newAmount, category: newCategory, creditPayment: newCreditPayment, status: newStatus },
+            newTarget
+          );
 
       // Merge by account id: when old and new resolve to the SAME doc, Firestore
       // rejects two writes to it in one batch, so collapse to a single net delta.
@@ -678,6 +719,11 @@ export function makeUpdateTransaction(deps: {
       updateBatch.update(doc(db, `households/${householdId}/transactions`, id), {
         ...sanitizedUpdates,
         payPeriodId,
+        // Backfill-on-write: stamp the bank-sync row's authoritative account
+        // the FIRST time it's ever edited client-side, so a later re-tag away
+        // and back can still tell which account is exempt from delta
+        // bookkeeping. Never overwrites an already-stamped value.
+        ...(isBankSync && !transaction.bankSyncAccountId && bankSyncHomeId ? { bankSyncAccountId: bankSyncHomeId } : {}),
       });
 
       // Apply each account's net effective-impact delta (atomic server-side
@@ -747,8 +793,31 @@ export function makeDeleteTransaction(deps: {
         // deleting a verified card charge lowers the card's debt again); a
         // pending_review transaction never touched any balance, so deleting it must
         // NOT move a balance (its effective impact is 0).
+        //
+        // BANK-SYNC EXCEPTION (PER-TARGET, not per-row): a bank-email-sync row
+        // (source 'bank-sync' / bankRef) is verified, but the account balance
+        // was set authoritatively from the bank email's ENDING BALANCE — which
+        // already reflects this transaction — not accumulated from the row.
+        // Deleting the row must NOT credit the money back ON ITS
+        // AUTHORITATIVE ACCOUNT: the bank's stated balance there is still
+        // correct. BUT if the row was since re-tagged to a different (manual)
+        // account, that account's balance WAS accumulated from this row (see
+        // makeUpdateTransaction) and deleting must reverse it normally, or
+        // that account is permanently overstated forever.
+        // `bankSyncAccountId` (stamped on first edit — see makeUpdateTransaction
+        // / makeUpdateTransactionCategory) tracks which account is currently
+        // authoritative; falling back to the CURRENT tag for a never-edited
+        // row preserves the original always-skip behavior.
+        // KNOWN MIGRATION GAP: a row re-tagged BEFORE the stamp existed has no
+        // bankSyncAccountId, so the fallback resolves its home to the manual
+        // account it now sits on and the reversal is (wrongly) skipped. Those
+        // rows' balance data was already compromised by the pre-fix code (the
+        // old re-tag never debited the destination), so there is no correct
+        // reversal to compute — accept the skip rather than guess.
         const target = resolveTargetAccount(transaction.accountId, accounts);
-        const balanceDelta = -effectiveAccountImpact(transaction, target);
+        const balanceDelta = shouldSkipBankSyncDelta(transaction, target?.id, target?.id)
+          ? 0
+          : -effectiveAccountImpact(transaction, target);
         if (balanceDelta !== 0 && target) {
           deleteBatch.update(doc(db, `households/${householdId}/accounts`, target.id), {
             balance: increment(roundMoney(balanceDelta)),
@@ -835,8 +904,13 @@ export function makeMergeTransactions(deps: {
       // of merging two still-pending rows; it only fires when the dupe was
       // independently verified against a (possibly different) account than
       // the keeper, so both accounts are adjusted correctly.
+      // (Bank-sync exception, same PER-TARGET rule as deleteTransaction: skip
+      // only on the dupe's currently-authoritative account — see
+      // shouldSkipBankSyncDelta / bankSyncAccountId.)
       const dupeTarget = resolveTargetAccount(dupeTx.accountId, accounts);
-      const dupeBalanceDelta = -effectiveAccountImpact(dupeTx, dupeTarget);
+      const dupeBalanceDelta = shouldSkipBankSyncDelta(dupeTx, dupeTarget?.id, dupeTarget?.id)
+        ? 0
+        : -effectiveAccountImpact(dupeTx, dupeTarget);
       if (dupeBalanceDelta !== 0 && dupeTarget) {
         mergeBatch.update(doc(db, `households/${householdId}/accounts`, dupeTarget.id), {
           balance: increment(roundMoney(dupeBalanceDelta)),

@@ -6,6 +6,7 @@ import { ToDo } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { HapticCheck } from '@/components/ui/HapticCheck';
 import { Button } from '@/components/ui/Button';
+import Eyebrow from '@/components/ui/Eyebrow';
 import { cn } from '@/utils/cn';
 import { type SectionColor, dateColorMap, sectionDotColors, QUADRANT_SECTIONS } from './todoDisplay';
 
@@ -103,9 +104,11 @@ const GridOverlay: React.FC<GridOverlayProps> = ({ quadrants, onComplete, onEdit
           the matrix itself never scrolls as a unit). */}
       <div className="flex flex-col h-full px-3 pt-1.5 pb-2 gap-1">
         <div className="flex items-center justify-between gap-2 shrink-0">
-          <h2 className="text-xxs font-semibold uppercase tracking-wider text-brand-400 dark:text-brand-450">
+          {/* size="xxs": the landscape overlay is height-starved (~375px), so
+              the eyebrow drops one size step via its sanctioned size prop. */}
+          <Eyebrow as="h2" size="xxs">
             Eisenhower matrix
-          </h2>
+          </Eyebrow>
           <Button
             ref={closeRef}
             variant="ghost-brand"
@@ -119,8 +122,8 @@ const GridOverlay: React.FC<GridOverlayProps> = ({ quadrants, onComplete, onEdit
           </Button>
         </div>
         <div className="grid grid-cols-2 gap-2 px-1 shrink-0" aria-hidden="true">
-          <span className="text-xxs font-semibold uppercase tracking-wider text-brand-400 dark:text-brand-450 text-center">Urgent</span>
-          <span className="text-xxs font-semibold uppercase tracking-wider text-brand-400 dark:text-brand-450 text-center">Not urgent</span>
+          <Eyebrow size="xxs" className="text-center">Urgent</Eyebrow>
+          <Eyebrow size="xxs" className="text-center">Not urgent</Eyebrow>
         </div>
         <div className="grid grid-cols-2 grid-rows-2 gap-2 flex-1 min-h-0">
           {QUADRANT_ORDER.map(q => (

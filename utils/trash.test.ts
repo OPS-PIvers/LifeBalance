@@ -218,6 +218,58 @@ describe('transactionRestoreImpact', () => {
     expect(transactionRestoreImpact({ category: 'Shopping', status: 'verified' }, accounts)).toEqual({ outcome: 'none' });
   });
 
+  it('is none for a bank-sync row (balance authority is the email ending balance)', () => {
+    expect(
+      transactionRestoreImpact(
+        { amount: 42.5, category: 'Shopping', status: 'verified', source: 'bank-sync', accountId: 'acc-check' },
+        accounts
+      )
+    ).toEqual({ outcome: 'none' });
+    // bankRef-stamped row from another source counts as bank-sync too.
+    expect(
+      transactionRestoreImpact(
+        { amount: 42.5, category: 'Shopping', status: 'verified', source: 'shortcut', bankRef: 'P0000123', accountId: 'acc-check' },
+        accounts
+      )
+    ).toEqual({ outcome: 'none' });
+  });
+
+  it('re-applies to a manual account when a bank-sync row was RE-TAGGED there before deletion', () => {
+    // The stamped bankSyncAccountId marks acc-check as the authoritative home;
+    // the row now lives on acc-save (manual), whose delta WAS reversed on
+    // delete — restore must symmetrically re-apply it there.
+    expect(
+      transactionRestoreImpact(
+        {
+          amount: 42.5,
+          category: 'Shopping',
+          status: 'verified',
+          source: 'bank-sync',
+          bankRef: 'P0000123',
+          accountId: 'acc-save',
+          bankSyncAccountId: 'acc-check',
+        },
+        accounts
+      )
+    ).toEqual({ outcome: 'apply', accountId: 'acc-save', delta: -42.5 });
+  });
+
+  it('still skips when a stamped bank-sync row sits on its home account', () => {
+    expect(
+      transactionRestoreImpact(
+        {
+          amount: 42.5,
+          category: 'Shopping',
+          status: 'verified',
+          source: 'bank-sync',
+          accountId: 'acc-check',
+          bankSyncAccountId: 'acc-check',
+        },
+        accounts
+      )
+    ).toEqual({ outcome: 'none' });
+  });
+
   it('rounds the delta to whole cents', () => {
     expect(
       transactionRestoreImpact({ amount: 10.001, category: 'Shopping', status: 'verified' }, accounts)

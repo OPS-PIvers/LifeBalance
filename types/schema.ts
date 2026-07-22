@@ -319,6 +319,20 @@ export interface Transaction {
    *  transaction, and it is stamped onto rows the sync fills/confirms/pays/creates.
    *  Absent on non-bank-sync transactions. */
   bankRef?: string;
+  /** The account whose balance is currently AUTHORITATIVE for a bank-sync row
+   *  (see `bankRef`/`isBankSyncTransaction`) — the account the nightly sync's
+   *  ending-balance write applies to. Stamped once, client-side, the first
+   *  time a bank-sync row is edited (backfill-on-write) to whatever account
+   *  it is tagged to AT THAT MOMENT — for a row never yet re-tagged that is
+   *  the bank account itself. Re-tagging a bank-sync row to a DIFFERENT
+   *  (manual) account moves its balance impact onto that account like an
+   *  ordinary transaction; this field keeps tracking the ORIGINAL bank
+   *  account regardless, so a later re-tag back to it — or a delete/merge
+   *  while re-tagged away — reverses/applies on the correct side. See
+   *  `utils/accountImpact.ts` `bankSyncHomeAccountId`/`shouldSkipBankSyncDelta`.
+   *  Absent on non-bank-sync transactions and on bank-sync rows never edited
+   *  since creation (falls back to the row's current `accountId`). */
+  bankSyncAccountId?: string;
   /** Nightly bank-email sync: a row CREATED from a withdrawal line that matched
    *  no stub/pending/bill. It is born `verified` (the account balance is
    *  authoritative from the email's ending balance), so this flag marks it as

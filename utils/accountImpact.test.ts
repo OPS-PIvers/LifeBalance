@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { Account, INCOME_CATEGORY } from '@/types/schema';
-import { accountImpactOf, effectiveAccountImpact, resolveTargetAccount } from './accountImpact';
+import {
+  accountImpactOf,
+  bankSyncHomeAccountId,
+  effectiveAccountImpact,
+  isBankSyncTransaction,
+  resolveTargetAccount,
+  shouldSkipBankSyncDelta,
+} from './accountImpact';
 
 const checking: Account = { id: 'chk', name: 'Checking', type: 'checking', balance: 1000, lastUpdated: '' };
 const savings: Account = { id: 'sav', name: 'Savings', type: 'savings', balance: 5000, lastUpdated: '' };
@@ -68,5 +75,57 @@ describe('resolveTargetAccount', () => {
 
   it('returns undefined when no checking account exists and no match', () => {
     expect(resolveTargetAccount('missing', [savings, card])).toBeUndefined();
+  });
+});
+
+describe('isBankSyncTransaction', () => {
+  it('matches source bank-sync', () => {
+    expect(isBankSyncTransaction({ source: 'bank-sync' })).toBe(true);
+  });
+
+  it('matches a bankRef-stamped row regardless of source', () => {
+    expect(isBankSyncTransaction({ source: 'shortcut', bankRef: 'P0000123' })).toBe(true);
+    expect(isBankSyncTransaction({ source: 'manual', bankRef: 'synth:abc' })).toBe(true);
+  });
+
+  it('rejects ordinary rows and an empty-string bankRef', () => {
+    expect(isBankSyncTransaction({ source: 'manual' })).toBe(false);
+    expect(isBankSyncTransaction({ source: 'plaid' })).toBe(false);
+    expect(isBankSyncTransaction({ source: 'manual', bankRef: '' })).toBe(false);
+  });
+});
+
+describe('bankSyncHomeAccountId', () => {
+  it('returns undefined for a non-bank-sync row', () => {
+    expect(bankSyncHomeAccountId({ source: 'manual' }, 'chk')).toBeUndefined();
+  });
+
+  it('falls back to the given account id when never stamped', () => {
+    expect(bankSyncHomeAccountId({ source: 'bank-sync' }, 'chk')).toBe('chk');
+  });
+
+  it('prefers the persisted bankSyncAccountId over the fallback', () => {
+    expect(bankSyncHomeAccountId({ source: 'bank-sync', bankSyncAccountId: 'chk' }, 'sav')).toBe('chk');
+  });
+});
+
+describe('shouldSkipBankSyncDelta', () => {
+  it('never skips for a non-bank-sync row', () => {
+    expect(shouldSkipBankSyncDelta({ source: 'manual' }, 'chk', 'chk')).toBe(false);
+  });
+
+  it('skips only when the target IS the home account (unstamped row)', () => {
+    expect(shouldSkipBankSyncDelta({ source: 'bank-sync' }, 'chk', 'chk')).toBe(true);
+    expect(shouldSkipBankSyncDelta({ source: 'bank-sync' }, 'sav', 'chk')).toBe(false);
+  });
+
+  it('re-tag case: home stays checking after the row moved to savings — skip on checking, apply on savings', () => {
+    const tx = { source: 'bank-sync' as const, bankSyncAccountId: 'chk' };
+    expect(shouldSkipBankSyncDelta(tx, 'chk', 'sav')).toBe(true); // reversing FROM checking is skipped
+    expect(shouldSkipBankSyncDelta(tx, 'sav', 'sav')).toBe(false); // applying TO savings is NOT skipped
+  });
+
+  it('returns false when there is no target account', () => {
+    expect(shouldSkipBankSyncDelta({ source: 'bank-sync' }, undefined, 'chk')).toBe(false);
   });
 });

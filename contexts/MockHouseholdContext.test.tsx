@@ -152,6 +152,138 @@ describe('MockHouseholdContext completeToDo → kid point credit', () => {
     const after = result.current.members.map(m => ({ uid: m.uid, ...m.points }));
     expect(after).toEqual(before);
   });
+
+  // Points-integrity fix: restoring a completed kid task must REVERSE the
+  // credit through the same dormancy gate (was a plain updateToDo that left
+  // the kid over-credited).
+  it('uncompleteToDo reverses the kid credit — complete→restore is points-neutral', async () => {
+    const { result } = captureHousehold();
+    const before = { ...kidPoints(result) };
+
+    await act(async () => {
+      await result.current.completeToDo('todo_kid_1'); // +5
+    });
+    expect(kidPoints(result).total).toBe(before.total + 5);
+
+    await act(async () => {
+      await result.current.uncompleteToDo('todo_kid_1'); // -5 (same-day → all three)
+    });
+
+    expect(kidPoints(result)).toEqual(before);
+    expect(result.current.todos.find(t => t.id === 'todo_kid_1')?.isCompleted).toBe(false);
+  });
+
+  it('uncompleteToDo is idempotent — restoring twice never double-reverses', async () => {
+    const { result } = captureHousehold();
+    const before = { ...kidPoints(result) };
+
+    await act(async () => {
+      await result.current.completeToDo('todo_kid_1');
+    });
+    await act(async () => {
+      await result.current.uncompleteToDo('todo_kid_1');
+    });
+    await act(async () => {
+      await result.current.uncompleteToDo('todo_kid_1'); // already active → no-op
+    });
+
+    expect(kidPoints(result)).toEqual(before);
+  });
+
+  it('uncompleteToDo does NOT change member points for a non-kid assignee', async () => {
+    const { result } = captureHousehold();
+
+    await act(async () => {
+      await result.current.addToDo({
+        text: 'Water the plants',
+        completeByDate: getLocalDateString(),
+        assignedTo: 'test-user-id',
+        isCompleted: false,
+        points: 50,
+      });
+    });
+    const created = result.current.todos.find(t => t.text === 'Water the plants')!;
+    await act(async () => {
+      await result.current.completeToDo(created.id);
+    });
+    const before = result.current.members.map(m => ({ uid: m.uid, ...m.points }));
+
+    await act(async () => {
+      await result.current.uncompleteToDo(created.id);
+    });
+
+    expect(result.current.members.map(m => ({ uid: m.uid, ...m.points }))).toEqual(before);
+    expect(result.current.todos.find(t => t.id === created.id)?.isCompleted).toBe(false);
+  });
+
+  // F-TODO-01 counterpart: completing a recurring to-do spawns the next
+  // instance; restoring must reconcile that spawn or the household ends up
+  // with two active copies of the same chore.
+  it('uncompleteToDo deletes the spawned next instance for a recurring to-do', async () => {
+    const { result } = captureHousehold();
+
+    await act(async () => {
+      await result.current.addToDo({
+        text: 'Take out the trash',
+        completeByDate: getLocalDateString(),
+        assignedTo: 'test-user-id',
+        isCompleted: false,
+        recurrence: { frequency: 'weekly' },
+      });
+    });
+    const original = result.current.todos.find(t => t.text === 'Take out the trash')!;
+
+    await act(async () => {
+      await result.current.completeToDo(original.id);
+    });
+    // Completion spawned exactly one active next instance.
+    const spawnedBefore = result.current.todos.filter(t => t.text === 'Take out the trash' && !t.isCompleted);
+    expect(spawnedBefore).toHaveLength(1);
+
+    await act(async () => {
+      await result.current.uncompleteToDo(original.id);
+    });
+
+    // The restore reconciled the spawn — only the original (now active
+    // again) remains, no orphaned duplicate.
+    const activeCopies = result.current.todos.filter(t => t.text === 'Take out the trash' && !t.isCompleted);
+    expect(activeCopies).toHaveLength(1);
+    expect(activeCopies[0]?.id).toBe(original.id);
+  });
+
+  it('uncompleteToDo leaves the recurring spawn untouched if it was already completed', async () => {
+    const { result } = captureHousehold();
+
+    await act(async () => {
+      await result.current.addToDo({
+        text: 'Mow the lawn',
+        completeByDate: getLocalDateString(),
+        assignedTo: 'test-user-id',
+        isCompleted: false,
+        recurrence: { frequency: 'weekly' },
+      });
+    });
+    const original = result.current.todos.find(t => t.text === 'Mow the lawn')!;
+
+    await act(async () => {
+      await result.current.completeToDo(original.id);
+    });
+    const spawned = result.current.todos.find(t => t.text === 'Mow the lawn' && !t.isCompleted)!;
+    expect(spawned).toBeDefined();
+
+    // The spawn itself gets completed before anyone restores the original.
+    await act(async () => {
+      await result.current.completeToDo(spawned.id);
+    });
+
+    await act(async () => {
+      await result.current.uncompleteToDo(original.id);
+    });
+
+    // The already-completed spawn is left alone — restoring the original
+    // must never delete a chore someone else already finished.
+    expect(result.current.todos.find(t => t.id === spawned.id)?.isCompleted).toBe(true);
+  });
 });
 
 // Plan 080d: the mock rewards store is now stateful (seeded with 2 rewards) and

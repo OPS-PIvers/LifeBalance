@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef, useId } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Rows3, Grid2x2, List, Camera, Smartphone, Sparkles, Plus, Repeat } from 'lucide-react';
+import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Camera, Sparkles, Plus, Repeat } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { quadrantForTodo, QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhower';
@@ -20,8 +20,9 @@ import { Button } from '@/components/ui/Button';
 import { QuickAddBar } from '@/components/ui/QuickAddBar';
 import EmptyState from '@/components/ui/EmptyState';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { SurfaceList, Row } from '@/components/ui/Section';
+import SectionHeading from '@/components/ui/SectionHeading';
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { cn } from '@/utils/cn';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
@@ -30,29 +31,11 @@ import Textarea from '@/components/ui/Textarea';
 import BatchRescheduleModal from '@/components/modals/BatchRescheduleModal';
 import { TodoPhotoImportDrawer } from '@/components/modals/TodoPhotoImportDrawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Section } from '@/components/todos/Section';
-import { EisenhowerMatrixView } from '@/components/todos/EisenhowerMatrixView';
+import { TodoRow } from '@/components/todos/TodoRow';
+import { type SectionColor } from '@/components/todos/todoDisplay';
 import { EisenhowerGridView } from '@/components/todos/EisenhowerGridView';
 import { TaskTemplateDrawer } from '@/components/todos/TaskTemplateDrawer';
-
-// localStorage key for the per-device arrangement choice.
-const ARRANGEMENT_KEY = 'lifebalance:todos-view';
-
-// Active-view arrangements: chronological list, stacked Eisenhower sections
-// ("prioritized list"), or the true 2×2 Eisenhower grid (landscape-only).
-type Arrangement = 'list' | 'matrix' | 'grid';
-
-const isArrangement = (value: string | null): value is Arrangement =>
-  value === 'list' || value === 'matrix' || value === 'grid';
-
-// View choices for the overflow menu — labeled radio-style items (the old
-// single cycle button previewed the NEXT view's icon, which read as mystery
-// meat). Order matches the old cycle: list → prioritized → grid.
-const ARRANGEMENT_OPTIONS: Array<{ value: Arrangement; icon: React.ReactNode; label: string }> = [
-  { value: 'list', icon: <List size={16} />, label: 'List view' },
-  { value: 'matrix', icon: <Rows3 size={16} />, label: 'Prioritized list' },
-  { value: 'grid', icon: <Grid2x2 size={16} />, label: '2×2 grid' },
-];
+import { sortFlatTodos } from '@/utils/todoSort';
 
 const ToDosPage: React.FC = () => {
   const {
@@ -61,6 +44,7 @@ const ToDosPage: React.FC = () => {
     updateToDo,
     deleteToDo,
     completeToDo,
+    uncompleteToDo,
     hasMoreCompletedTodos,
     isLoadingOlderTodos,
     loadOlderCompletedTodos,
@@ -82,26 +66,9 @@ const ToDosPage: React.FC = () => {
   // means "All". Filters every visible section/quadrant to one member's tasks.
   const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null);
 
-  // Active-view arrangement: chronological list, Eisenhower sections, or 2×2 grid.
-  // Persisted per-device — this is a personal lens on shared data.
-  const [arrangement, setArrangement] = useState<Arrangement>(() => {
-    try {
-      const stored = localStorage.getItem(ARRANGEMENT_KEY);
-      return isArrangement(stored) ? stored : 'list';
-    } catch {
-      return 'list'; // storage unavailable (private browsing) — default lens
-    }
-  });
-  const setArrangementPersisted = useCallback((next: Arrangement) => {
-    setArrangement(next);
-    try {
-      localStorage.setItem(ARRANGEMENT_KEY, next);
-    } catch {
-      // non-fatal: the toggle still works for this session
-    }
-  }, []);
-
-  // The 2×2 grid needs landscape; hook-driven so rotating re-renders instantly.
+  // Orientation drives the view (no persisted arrangement anymore): portrait
+  // shows the flat list; rotating to landscape auto-shows the immersive 2×2
+  // Eisenhower grid. Hook-driven so rotating re-renders instantly.
   const isLandscape = useIsLandscape();
 
   // Track current date to trigger re-categorization at midnight
@@ -121,7 +88,6 @@ const ToDosPage: React.FC = () => {
   // "More ways to add" menu next to the quick-add bar — collapses the old pair
   // of unlabeled icon buttons (full form / templates) plus Scan a list into
   // one labeled affordance.
-  const [addMenuOpen, setAddMenuOpen] = useState(false);
 
   // Mobile Action Drawer State
   const [actionTodo, setActionTodo] = useState<ToDo | null>(null);
@@ -215,45 +181,37 @@ const ToDosPage: React.FC = () => {
   // entry, so we deliberately do NOT disable the field between adds.
   const submittingQuickAddRef = useRef(false);
 
-  // Categorize To-Dos (Active)
-  const { immediate, upcoming, radar, allActiveCount, allActiveIds } = useMemo(() => {
+  // Flat active list (owner-locked spec): ONE list of every active to-do —
+  // starred first, then overdue → ascending due date → undated last (see
+  // utils/todoSort.ts). The old Immediate/Upcoming/Radar urgency windows
+  // survive only as each row's due-date COLOR (rose/amber/blue), computed here
+  // once per todo so TodoRow keeps its urgency-tinted meta line.
+  const { flatActive, rowColors, allActiveCount, allActiveIds } = useMemo(() => {
     const active = todos.filter(t => !t.isCompleted && (assigneeFilter === null || t.assignedTo === assigneeFilter));
-    const today = currentDate;
-    const endOfCurrentWeek = endOfWeek(today, { weekStartsOn: 1 }); // Monday start
+    const endOfCurrentWeek = addDays(endOfWeek(currentDate, { weekStartsOn: 1 }), 1); // Monday start
 
-    const immediate: ToDo[] = [];
-    const upcoming: ToDo[] = [];
-    const radar: ToDo[] = [];
-
-    // Create a map of parsed dates for efficient sorting
-    const dateMap = new Map<string, number>();
-
+    const rowColors = new Map<string, SectionColor>();
     active.forEach(todo => {
-      const date = parseISO(todo.completeByDate);
-      dateMap.set(todo.id, date.getTime());
-
-      // Overdue items: strictly before the start of today
-      if (isBefore(date, today)) {
-        immediate.push(todo);
-      // Immediate items: due today or tomorrow
-      } else if (isToday(date) || isTomorrow(date)) {
-        immediate.push(todo);
-      } else if (isBefore(date, addDays(endOfCurrentWeek, 1))) { // Within this week
-        upcoming.push(todo);
-      } else {
-        radar.push(todo);
+      // Legacy/blank due date: explicitly 'blue' (undated ~ far future) rather
+      // than relying on every date-fns predicate rejecting an Invalid Date.
+      if (!todo.completeByDate) {
+        rowColors.set(todo.id, 'blue');
+        return;
       }
+      const date = parseISO(todo.completeByDate);
+      rowColors.set(
+        todo.id,
+        isBefore(date, currentDate) || isToday(date) || isTomorrow(date)
+          ? 'rose' // overdue / today / tomorrow (old "Immediate" window)
+          : isBefore(date, endOfCurrentWeek)
+            ? 'amber' // this week
+            : 'blue' // future
+      );
     });
 
-    // Sort by date using pre-parsed timestamps; within the same day, timed
-    // to-dos come first ordered by their due time (F-TODO-14).
-    const sortByCompleteByDate = (a: ToDo, b: ToDo) =>
-      ((dateMap.get(a.id) || 0) - (dateMap.get(b.id) || 0)) || compareDueTimes(a, b);
-
     return {
-      immediate: immediate.sort(sortByCompleteByDate),
-      upcoming: upcoming.sort(sortByCompleteByDate),
-      radar: radar.sort(sortByCompleteByDate),
+      flatActive: sortFlatTodos(active),
+      rowColors,
       allActiveCount: active.length,
       allActiveIds: active.map(t => t.id)
     };
@@ -322,15 +280,6 @@ const ToDosPage: React.FC = () => {
 
   // Derive completed count from already-computed buckets to avoid a fourth pass over todos.
   const completedCount = completedToday.length + completedYesterday.length + completedWeek.length + completedOlder.length;
-
-  const completedBadge = (
-    <span className="flex items-center gap-1.5">
-        Completed
-        <span className="bg-brand-200 text-brand-700 dark:bg-brand-700 dark:text-brand-200 px-1.5 py-0.5 rounded-sm text-xs font-normal tabular-nums">
-            {completedCount}
-        </span>
-    </span>
-  );
 
   // Open the full add form (date + assignee). Carries over whatever is already
   // typed in the sticky quick-add field so switching to "details" never loses it.
@@ -428,16 +377,15 @@ const ToDosPage: React.FC = () => {
 
   const handleUncomplete = useCallback(async (id: string) => {
       try {
-          await updateToDo(id, {
-              isCompleted: false,
-              completedAt: undefined // Clear completion timestamp
-          });
+          // uncompleteToDo (not a plain updateToDo) so a managed-kid assignee's
+          // completion points credit is reversed atomically with the restore.
+          await uncompleteToDo(id);
           toast.success('Task restored to active');
       } catch (error) {
           console.error('Failed to restore task:', error);
           toast.error('Failed to restore task');
       }
-  }, [updateToDo]);
+  }, [uncompleteToDo]);
 
   const handleMoveToTomorrow = useCallback(async (todo: ToDo) => {
       try {
@@ -528,18 +476,38 @@ const ToDosPage: React.FC = () => {
     });
   }, []);
 
-  // The 2×2 grid falls back to the stacked quadrant sections — same buckets,
-  // full rows — whenever it can't do its job: in selection mode its compact
-  // chips have no selection affordance, and in portrait the four quadrants
-  // can't fit side by side (a full-screen "rotate your phone" wall would hide
-  // every task in the phone's default orientation). The stored preference is
-  // untouched, so rotating to landscape restores the grid.
-  const effectiveArrangement: Arrangement =
-    arrangement === 'grid' && (isSelectionMode || !isLandscape) ? 'matrix' : arrangement;
-
-  const gridOverlayVisible =
-    viewMode === 'active' && effectiveArrangement === 'grid' && isLandscape;
   const drawerOpen = isAddModalOpen || !!actionTodo;
+
+  // Rotation-driven 2×2 Eisenhower grid (owner-locked spec): rotating to
+  // landscape auto-shows the immersive grid overlay; rotating back to portrait
+  // returns to the flat list. The grid never AUTO-shows over an active layer —
+  // selection mode (its chips have no selection affordance) or any open
+  // drawer/modal — but once shown it stays put while the edit/options drawer
+  // opens ABOVE it (the guard applies at show-time only; when the blocking
+  // layer closes while still landscape, the grid then appears).
+  //
+  // `gridDismissed`: the grid's on-screen ✕ (or Escape) simply hides the grid
+  // until the next rotation — the simplest correct exit. It resets whenever
+  // the device returns to portrait, so the next rotation to landscape shows
+  // the grid again. Both use the render-phase-setState edge pattern (see
+  // wasSelectionMode above) instead of an effect cascade.
+  const [gridActive, setGridActive] = useState(false);
+  const [gridDismissed, setGridDismissed] = useState(false);
+  const blockingLayerOpen =
+    isSelectionMode || drawerOpen || isPhotoImportOpen || isTemplateDrawerOpen ||
+    isBatchRescheduleOpen || showBatchDeleteConfirm;
+  if (!isLandscape) {
+    if (gridActive) setGridActive(false);
+    if (gridDismissed) setGridDismissed(false);
+  } else if (viewMode === 'active' && !gridActive && !gridDismissed && !blockingLayerOpen) {
+    setGridActive(true);
+  }
+  const exitGrid = useCallback(() => {
+    setGridActive(false);
+    setGridDismissed(true);
+  }, []);
+
+  const gridOverlayVisible = gridActive && viewMode === 'active';
 
   // Body-scroll lock for the immersive grid overlay, held at PAGE level as a
   // latch rather than inside GridOverlay. Why: if the user rotates to portrait
@@ -863,22 +831,71 @@ const ToDosPage: React.FC = () => {
     }
   };
 
-  // Secondary header actions, collapsed into the top-right "…" overflow menu
-  // (same pattern as the Shopping list). Export targets the current view;
-  // Select-multiple (batch mode) is disabled in the Completed view, matching
-  // the previous behaviour.
-  // View arrangement lives here as labeled radio items (replacing the old
-  // icon-cycling toggle). Choosing one persists per-device; the landscape-only
-  // grid behavior (portrait falls back to stacked quadrants) is unchanged.
+  // ONE overflow menu for the whole page, anchored on the quick-add row's
+  // kebab (the default view has no separate header row at all — owner call).
+  // Groups: "Add" (the extra add methods), "View" (Active/Completed radio —
+  // replaced the old segmented toggle), "Filter" (person radio — replaced the
+  // old chips row), then the ungrouped actions. Export targets the current
+  // view; Select-multiple is disabled in the Completed view, matching the
+  // previous behaviour. Filter is skipped for single-member households.
   const menuItems: MenuItem[] = [
-    ...ARRANGEMENT_OPTIONS.map((option) => ({
-      key: `view-${option.value}`,
-      label: option.label,
-      icon: option.icon,
-      selected: arrangement === option.value,
+    {
+      key: 'details',
+      label: 'Full details',
+      icon: <SlidersHorizontal size={16} />,
+      ariaLabel: 'Add new task with full details',
+      group: 'Add',
+      onSelect: openAddModal,
+    },
+    {
+      key: 'template',
+      label: 'From template',
+      icon: <ClipboardList size={16} />,
+      ariaLabel: 'Add tasks from a template',
+      group: 'Add',
+      onSelect: () => setIsTemplateDrawerOpen(true),
+    },
+    {
+      key: 'scan',
+      label: 'Scan a list',
+      icon: <Camera size={16} />,
+      group: 'Add',
+      onSelect: () => setIsPhotoImportOpen(true),
+    },
+    {
+      key: 'view-active',
+      label: 'Active tasks',
+      selected: viewMode === 'active',
       group: 'View',
-      onSelect: () => setArrangementPersisted(option.value),
-    })),
+      onSelect: () => setViewMode('active'),
+    },
+    {
+      key: 'view-completed',
+      label: `Completed (${completedCount})`,
+      selected: viewMode === 'completed',
+      group: 'View',
+      onSelect: () => setViewMode('completed'),
+    },
+    ...(members.length > 1
+      ? [
+          {
+            key: 'filter-all',
+            label: 'Everyone',
+            icon: <User size={16} />,
+            selected: assigneeFilter === null,
+            group: 'Filter',
+            onSelect: () => setAssigneeFilter(null),
+          },
+          ...members.map((member) => ({
+            key: `filter-${member.uid}`,
+            label: member.displayName?.split(' ')[0] ?? 'User',
+            ariaLabel: `Filter to ${member.displayName ?? 'User'}`,
+            selected: assigneeFilter === member.uid,
+            group: 'Filter',
+            onSelect: () => setAssigneeFilter(member.uid),
+          })),
+        ]
+      : []),
     {
       key: 'export',
       label: 'Export CSV',
@@ -895,97 +912,20 @@ const ToDosPage: React.FC = () => {
     },
   ];
 
-  // Sticky quick-add card — reuses the shopping list's pattern: the add bar is
-  // its own top card that stays pinned while a long list scrolls beneath it, so
-  // adding a task is always one tap away. `position: sticky` dies inside an
-  // `overflow-hidden` ancestor, so the bar lives in a plain sticky wrapper
-  // (page-colored background masks rows scrolling past the card's rounded
-  // corners) with the `SurfaceList` card nested inside — never in a section's
-  // clipped surface. The sticky offset tucks it under ListsPage's sticky tab
-  // strip via --lists-sticky-top (0px fallback when the strip is hidden).
-  // Shared by the list and matrix arrangements; hidden in selection mode (adding
-  // has no context there) and in the grid arrangement (landscape-immersive).
-  // Assignee filter chips — 'All' plus one avatar-chip per member, using the
-  // same visual pattern as the assign-to fieldset in the add/edit drawer.
-  // Skipped entirely for single-member households where filtering is moot.
-  const assigneeFilterChips = !isSelectionMode && members.length > 1 ? (
-    <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Filter by assignee">
-      <button
-        type="button"
-        onClick={() => setAssigneeFilter(null)}
-        aria-pressed={assigneeFilter === null}
-        className={cn(
-          // The pill renders ~34px tall; the invisible before: extender
-          // (Button's established pattern) stretches the hit area past 44px
-          // without changing the visual size. Vertical only — adjacent pills
-          // in the row would otherwise overlap each other's zones.
-          "relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']",
-          'flex items-center px-3 py-1.5 rounded-full border text-sm font-medium whitespace-nowrap transition-colors duration-(--duration-fast) ease-(--ease-standard)',
-          'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
-          assigneeFilter === null
-            ? 'bg-accent-600 text-white border-accent-600 dark:bg-accent-600 dark:border-accent-600'
-            : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50 dark:bg-brand-700/50 dark:text-brand-200 dark:border-brand-600 dark:hover:bg-brand-700'
-        )}
-      >
-        All
-      </button>
-      {members.map(member => (
-        <button
-          key={member.uid}
-          type="button"
-          onClick={() => setAssigneeFilter(prev => (prev === member.uid ? null : member.uid))}
-          aria-label={`Filter to ${member.displayName || 'User'}`}
-          aria-pressed={assigneeFilter === member.uid}
-          className={cn(
-            "relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']",
-            'flex items-center gap-2 px-3 py-1.5 rounded-full border transition-colors duration-(--duration-fast) ease-(--ease-standard) whitespace-nowrap',
-            'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
-            assigneeFilter === member.uid
-              ? 'bg-accent-600 text-white border-accent-600 dark:bg-accent-600 dark:border-accent-600'
-              : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50 dark:bg-brand-700/50 dark:text-brand-200 dark:border-brand-600 dark:hover:bg-brand-700'
-          )}
-        >
-          {member.photoURL ? (
-            <img src={member.photoURL} alt={member.displayName ?? 'User'} className="w-5 h-5 rounded-full" />
-          ) : (
-            <div className="w-5 h-5 rounded-full bg-brand-200 dark:bg-brand-600 flex items-center justify-center text-xxs font-bold text-brand-600 dark:text-brand-200">
-              {member.displayName?.charAt(0) ?? 'U'}
-            </div>
-          )}
-          <span className="text-sm font-medium">{member.displayName?.split(' ')[0] ?? 'User'}</span>
-        </button>
-      ))}
-    </div>
-  ) : null;
-
-  // "More ways to add" menu — Full details keeps the quick-add carry-over
-  // behavior (openAddModal seeds the form with whatever is typed in the bar).
-  const addMenuItems: MenuItem[] = [
-    {
-      key: 'details',
-      label: 'Full details',
-      icon: <SlidersHorizontal size={16} />,
-      ariaLabel: 'Add new task with full details',
-      onSelect: openAddModal,
-    },
-    {
-      key: 'template',
-      label: 'From template',
-      icon: <ClipboardList size={16} />,
-      ariaLabel: 'Add tasks from a template',
-      onSelect: () => setIsTemplateDrawerOpen(true),
-    },
-    {
-      key: 'scan',
-      label: 'Scan a list',
-      icon: <Camera size={16} />,
-      onSelect: () => setIsPhotoImportOpen(true),
-    },
-  ];
-
-  const stickyQuickAdd = !isSelectionMode && effectiveArrangement !== 'grid' ? (
-    <div className="sticky top-[var(--lists-sticky-top,0px)] z-sticky bg-brand-50 dark:bg-brand-900">
-      <SurfaceList>
+  // Add row — row ONE of the list card, matching the Shopping list exactly:
+  // `position: sticky` dies inside an `overflow-hidden` ancestor, so the
+  // surface is split into a sticky top card (add row, bottom hairline = the
+  // divider) and a flush list card below (border-t-0, rounded-t-none) that
+  // together read as one rounded section. The sticky offset tucks it under
+  // ListsPage's sticky tab strip via --lists-sticky-top (0px fallback when the
+  // strip is hidden); the wrapper's page-colored background masks rows
+  // scrolling past the card's rounded top corners. Hidden in selection mode
+  // (adding has no context there).
+  const stickyQuickAdd = !isSelectionMode ? (
+    // `relative` so the kebab's Menu can anchor to the sticky wrapper — it must
+    // render OUTSIDE the card below, whose overflow-hidden would clip it.
+    <div className="relative sticky top-[var(--lists-sticky-top,0px)] z-sticky bg-brand-50 dark:bg-brand-900">
+      <div className="surface-section rounded-b-none overflow-hidden">
         <div className="flex items-center gap-2">
           <QuickAddBar
             attached
@@ -999,67 +939,65 @@ const ToDosPage: React.FC = () => {
             submitLabel="Add task"
           />
 
-          {/* One labeled "More" affordance replaces the old pair of unlabeled
-              icon buttons — opens Full details / From template / Scan a list. */}
-          <div className="relative flex-none mr-2">
-            <button
-              type="button"
-              onClick={() => setAddMenuOpen((o) => !o)}
-              aria-label="More ways to add"
+          {/* THE page kebab (44px target): the default view has no header row,
+              so this single menu carries the add methods, view + person
+              filters, and list actions. */}
+          <div className="flex-none mr-2">
+            <Button
+              variant="ghost-brand"
+              size="icon"
+              onClick={() => setMenuOpen((o) => !o)}
+              aria-label="To-do list actions"
               aria-haspopup="menu"
-              aria-expanded={addMenuOpen}
-              className="min-h-11 flex items-center gap-1 px-3 py-2 rounded-btn text-sm font-medium text-brand-600 hover:text-brand-900 hover:bg-brand-100 dark:text-brand-300 dark:hover:text-brand-50 dark:hover:bg-brand-700/50 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+              aria-expanded={menuOpen}
+              className="rounded-full min-w-11 min-h-11"
             >
-              More
-              <ChevronDown size={16} aria-hidden="true" className={cn('transition-transform duration-(--duration-fast) ease-(--ease-standard)', addMenuOpen && 'rotate-180')} />
-            </button>
-            {addMenuOpen && (
-              <Menu
-                isOpen={addMenuOpen}
-                onClose={() => setAddMenuOpen(false)}
-                ariaLabel="More ways to add"
-                position="top-full right-0 mt-2"
-                className="min-w-[208px]"
-                items={addMenuItems}
-              />
-            )}
+              <MoreHorizontal className="w-5 h-5" />
+            </Button>
           </div>
         </div>
-      </SurfaceList>
+      </div>
+      {/* Anchored to the sticky wrapper (see `relative` above), not the card —
+          the card's overflow-hidden would clip the popover. */}
+      {menuOpen && (
+        <Menu
+          isOpen={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          ariaLabel="To-do list actions"
+          position="top-full right-2 mt-1"
+          className="min-w-[208px]"
+          items={menuItems}
+        />
+      )}
     </div>
   ) : null;
 
   return (
     <div className={cn("px-4 max-w-2xl mx-auto space-y-4 min-h-screen", isSelectionMode ? "pb-40" : "pb-nav-safe")}>
 
-      {/* Compact header unit: title + toggle/select-all row read as one block
-          (tight gap, no PageHeader padding tax) since the Plan tab-strip
-          already labels this page "To-Dos". An h2, not h1 — the page-level h1
-          is ListsPage's "Plan" masthead above the tab strip. */}
-      <div className="pt-4 flex items-center justify-between gap-3">
-        <div className="min-w-0 flex items-center gap-3">
-          <h2 className="font-display text-xl font-semibold tracking-tight text-brand-900 dark:text-brand-50 whitespace-nowrap shrink-0">
-            {isSelectionMode ? 'Select tasks' : 'To-dos'}
-          </h2>
-          {!isSelectionMode && (
-            <Tabs value={viewMode} onValueChange={(val) => setViewMode(val as 'active' | 'completed')}>
-              {/* size="sm" (36px) was the app's only sub-44px touch target; default md keeps min-h-11. */}
-              <TabsList className="w-auto inline-flex">
-                <TabsTrigger value="active">Active</TabsTrigger>
-                <TabsTrigger value="completed">{completedBadge}</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          )}
-        </div>
-        {isSelectionMode ? (
+      {/* No header row in the default (active) view — the quick-add row's
+          kebab carries the whole menu, so content starts immediately under the
+          Plan tab strip. A slim row appears only when a mode needs announcing:
+          selection mode (Select all + Cancel) or the Completed view (label +
+          kebab, since the quick-add row — the kebab's usual home — is hidden
+          there). The sr-only h2 keeps the document outline; the page-level h1
+          is ListsPage's sr-only "Plan". */}
+      <h2 className="sr-only">To-dos</h2>
+      {isSelectionMode ? (
+        <div className="pt-3 flex items-center justify-between gap-3">
+          <span className="font-display text-xl font-semibold tracking-tight text-brand-900 dark:text-brand-50 whitespace-nowrap shrink-0">
+            Select tasks
+          </span>
           <div className="flex items-center gap-3 shrink-0">
-            <button
+            <Button
+              variant="link"
+              size="sm"
               onClick={handleSelectAll}
-              className="text-sm text-accent-600 dark:text-accent-300 font-medium flex items-center gap-1 hover:text-accent-700 dark:hover:text-accent-200"
+              className="min-h-11 gap-1 px-2 text-accent-600 dark:text-accent-300 hover:text-accent-700 dark:hover:text-accent-200"
+              leftIcon={<CheckSquare size={14} aria-hidden="true" className={selectedIds.size === allActiveCount && allActiveCount > 0 ? 'text-accent-600 dark:text-accent-300' : 'text-brand-300 dark:text-brand-450'} />}
             >
-              <CheckSquare size={14} aria-hidden="true" className={selectedIds.size === allActiveCount && allActiveCount > 0 ? 'text-accent-600 dark:text-accent-300' : 'text-brand-300 dark:text-brand-450'} />
               {selectedIds.size === allActiveCount && allActiveCount > 0 ? 'Deselect all' : 'Select all'}
-            </button>
+            </Button>
             {/* While selecting, a visible Cancel (X) stays in the header so the
                way out is always one tap away — the overflow menu is hidden. */}
             <Button
@@ -1067,16 +1005,21 @@ const ToDosPage: React.FC = () => {
               size="icon"
               onClick={() => setIsSelectionMode(false)}
               className="bg-brand-100 border-brand-200 dark:bg-brand-700 dark:border-brand-600"
-              title="Cancel Selection"
-              aria-label="Cancel Selection"
+              title="Cancel selection"
+              aria-label="Cancel selection"
             >
               <X size={20} />
             </Button>
           </div>
-        ) : (
-          /* Secondary actions (Export, Select multiple) collapse into one
-             top-right "…" overflow menu, matching the Shopping list header.
-             The primary add now lives in the sticky quick-add bar below. */
+        </div>
+      ) : viewMode === 'completed' ? (
+        <div className="pt-3 flex items-center justify-between gap-3">
+          <span className="font-display text-xl font-semibold tracking-tight text-brand-900 dark:text-brand-50 whitespace-nowrap shrink-0">
+            Completed
+            <span className="ml-2 font-sans text-sm font-normal text-brand-400 dark:text-brand-450 tabular-nums">
+              {completedCount}
+            </span>
+          </span>
           <div className="relative shrink-0">
             <Button
               variant="ghost-brand"
@@ -1100,166 +1043,110 @@ const ToDosPage: React.FC = () => {
               />
             )}
           </div>
-        )}
-      </div>
+        </div>
+      ) : null}
 
       {viewMode === 'active' ? (
           <>
-            {/* Sticky quick-add card — pinned at the top of the active view so
-                the add bar stays visible while a long list scrolls beneath it
-                (reused from the Shopping list). Precedes the sections in both
-                the list and matrix arrangements. */}
-            {assigneeFilterChips}
-            {stickyQuickAdd}
-            {effectiveArrangement === 'list' ? (
-            <>
-            {/* Immediate Section — Overdue, Today & Tomorrow. Quick-add now lives
-                in the sticky card above (not row one of this section), so an
-                empty Immediate section collapses away entirely. */}
-            <Section
-                title="Immediate"
-                subtitle="Overdue, Today & Tomorrow"
-                items={immediate}
-                color="rose"
-                onComplete={completeToDo}
-                onUncomplete={handleUncomplete}
-                onEdit={openEditModal}
-                onDelete={deleteToDo}
-                onMore={setActionTodo}
-                memberMap={memberMap}
-                isSelectionMode={isSelectionMode}
-                selectedIds={selectedIds}
-                onToggleSelection={toggleSelection}
-            />
-
-            {/* Upcoming Section */}
-            <Section
-                title="Upcoming"
-                subtitle="This Week"
-                items={upcoming}
-                color="amber"
-                maxVisible={5}
-                onComplete={completeToDo}
-                onUncomplete={handleUncomplete}
-                onEdit={openEditModal}
-                onDelete={deleteToDo}
-                onMore={setActionTodo}
-                memberMap={memberMap}
-                isSelectionMode={isSelectionMode}
-                selectedIds={selectedIds}
-                onToggleSelection={toggleSelection}
-            />
-
-            {/* On The Radar Section */}
-            <Section
-                title="On the Radar"
-                subtitle="Future"
-                items={radar}
-                color="blue"
-                maxVisible={5}
-                onComplete={completeToDo}
-                onUncomplete={handleUncomplete}
-                onEdit={openEditModal}
-                onDelete={deleteToDo}
-                onMore={setActionTodo}
-                memberMap={memberMap}
-                isSelectionMode={isSelectionMode}
-                selectedIds={selectedIds}
-                onToggleSelection={toggleSelection}
-            />
-            </>
-            ) : effectiveArrangement === 'matrix' ? (
-            /* Eisenhower matrix arrangement — same tasks, partitioned by
-               urgency (derived from due date, same window as Immediate) ×
-               importance (the star). Stacked sections in actionability order;
-               the quick-add bar sits in the sticky card above. */
-            <>
-            {arrangement === 'grid' && !isSelectionMode && (
-              /* Portrait fallback from the 2×2 grid: the tasks stay visible;
-                 this one-liner explains why the layout differs and how to get
-                 the grid back. */
-              <p className="px-1 text-xs text-brand-400 dark:text-brand-450 flex items-center gap-1.5">
-                <Smartphone size={14} className="rotate-90" aria-hidden="true" />
-                Stacked while portrait. Rotate your phone for the 2×2 grid.
-              </p>
-            )}
-            <EisenhowerMatrixView
-              quadrants={quadrants}
-              memberMap={memberMap}
-              isSelectionMode={isSelectionMode}
-              selectedIds={selectedIds}
-              onComplete={completeToDo}
-              onUncomplete={handleUncomplete}
-              onEdit={openEditModal}
-              onDelete={deleteToDo}
-              onMore={setActionTodo}
-              onToggleSelection={toggleSelection}
-            />
-            </>
-            ) : (
-            /* True 2×2 Eisenhower grid — auto-immersive full-screen overlay.
-               Only reachable in landscape (effectiveArrangement falls back to
-               'matrix' in portrait). */
-            <EisenhowerGridView
-              quadrants={quadrants}
-              onComplete={completeToDo}
-              onEdit={openEditModal}
-              onToggleImportant={handleToggleImportant}
-              onExit={() => setArrangementPersisted('list')}
-              escapeDisabled={isAddModalOpen || !!actionTodo}
-            />
+            {/* One flat list card. Its first row is the sticky quick-add bar
+                (Shopping's split-card pattern — see stickyQuickAdd above); the
+                flush SurfaceList below completes the same rounded section.
+                Not rendered while the immersive grid overlay is up — the
+                overlay covers the whole viewport, and rendering the same rows
+                underneath would double every task's accessible control. */}
+            {!gridOverlayVisible && (
+            <div>
+              {stickyQuickAdd}
+              {flatActive.length > 0 && (
+                <SurfaceList
+                  className={cn(
+                    // SwipeActionRow wraps each Row, so the inner hairline of
+                    // the first row needs suppressing too (as TodoSection did).
+                    '[&>*:first-child_.hairline-divider]:border-t-0',
+                    // Flush against the sticky add card — unless selection mode
+                    // hid the add row, in which case the list stands alone.
+                    !isSelectionMode && 'rounded-t-none border-t-0'
+                  )}
+                >
+                  {flatActive.map(item => (
+                    <TodoRow
+                      key={item.id}
+                      item={item}
+                      color={rowColors.get(item.id) ?? 'blue'}
+                      assignee={memberMap.get(item.assignedTo)}
+                      isSelected={selectedIds.has(item.id)}
+                      isSelectionMode={isSelectionMode}
+                      onComplete={completeToDo}
+                      onUncomplete={handleUncomplete}
+                      onEdit={openEditModal}
+                      onDelete={deleteToDo}
+                      onMore={setActionTodo}
+                      onToggleSelection={toggleSelection}
+                    />
+                  ))}
+                </SurfaceList>
+              )}
+            </div>
             )}
 
-            {/* The sticky quick-add card is always visible in the list/matrix
-                arrangements, so "add a task above" points straight at it. Shown
-                only when every section is empty; the grid arrangement has no
-                quick-add card, so the note would mislead there. */}
-            {effectiveArrangement !== 'grid' && immediate.length === 0 && upcoming.length === 0 && radar.length === 0 && (
+            {/* The add row above is always visible in the flat list, so "add a
+                task above" points straight at it (hidden with the list while
+                the grid overlay is up). */}
+            {!gridOverlayVisible && flatActive.length === 0 && (
                  <p className="px-1 text-sm text-brand-400 dark:text-brand-450 flex items-center gap-1.5">
                      <ClipboardList size={14} aria-hidden="true" />
                      All caught up — add a task above to get started.
                  </p>
+            )}
+
+            {/* Immersive 2×2 Eisenhower grid — landscape-only overlay, shown
+                automatically on rotation (see the gridActive edge logic). */}
+            {gridOverlayVisible && (
+              <EisenhowerGridView
+                quadrants={quadrants}
+                onComplete={completeToDo}
+                onEdit={openEditModal}
+                onToggleImportant={handleToggleImportant}
+                onExit={exitGrid}
+                escapeDisabled={drawerOpen}
+              />
             )}
           </>
       ) : (
           /* Completed View */
           <>
             <CompletedSection
-                title="Completed Today"
+                title="Completed today"
                 items={completedToday}
                 onUncomplete={handleUncomplete}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
-                onMore={setActionTodo}
                 memberMap={memberMap}
             />
             <CompletedSection
-                title="Completed Yesterday"
+                title="Completed yesterday"
                 items={completedYesterday}
                 onUncomplete={handleUncomplete}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
-                onMore={setActionTodo}
                 memberMap={memberMap}
             />
             <CompletedSection
-                title="This Week"
+                title="This week"
                 items={completedWeek}
                 defaultCollapsed
                 onUncomplete={handleUncomplete}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
-                onMore={setActionTodo}
                 memberMap={memberMap}
             />
             <CompletedSection
-                title="Older History"
+                title="Older"
                 items={completedOlder}
                 defaultCollapsed
                 onUncomplete={handleUncomplete}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
-                onMore={setActionTodo}
                 memberMap={memberMap}
             />
 
@@ -1290,9 +1177,13 @@ const ToDosPage: React.FC = () => {
 
       {/* Floating Action Bar (FAB) for Batch Actions */}
       {isSelectionMode && selectedIds.size > 0 && (
-        <div className="fixed bottom-24 left-0 right-0 px-4 md:px-0 flex justify-center z-50 pointer-events-none">
+        /* Offset/z recipe from TransactionMasterList's batch bar (minus its
+           md:px-0, dropped here — mobile-only surface): clears the bottom nav
+           (+ home-indicator inset) and sits at z-dropdown — above the
+           z-sticky nav, below drawers/modals. */
+        <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] left-0 right-0 px-4 flex justify-center z-dropdown pointer-events-none">
           <div className="bg-brand-900 dark:bg-brand-800 text-white p-2 rounded-card shadow-raised border border-brand-700 flex items-center gap-2 pointer-events-auto animate-in slide-in-from-bottom-4">
-            <div className="px-3 font-semibold text-sm border-r border-white/10">
+            <div className="px-3 font-semibold text-sm border-r border-brand-700 dark:border-brand-600">
               {selectedIds.size} selected
             </div>
 
@@ -1619,9 +1510,9 @@ const ToDosPage: React.FC = () => {
         isOpen={showBatchDeleteConfirm}
         onClose={() => !isBatchProcessing && setShowBatchDeleteConfirm(false)}
         onConfirm={handleBatchDelete}
-        title="Batch Delete"
+        title="Delete tasks"
         message={`Are you sure you want to delete ${selectedIds.size} task${selectedIds.size !== 1 ? 's' : ''}? This action cannot be undone.`}
-        confirmLabel={isBatchProcessing ? 'Deleting…' : 'Delete All'}
+        confirmLabel={isBatchProcessing ? 'Deleting…' : 'Delete all'}
         confirmVariant="destructive"
         isConfirming={isBatchProcessing}
       />
@@ -1637,51 +1528,42 @@ const ToDosPage: React.FC = () => {
         <div className="space-y-1">
           {actionTodo && (
             <>
-              {/* Primary Action (Edit or Uncomplete) */}
               <Button
                 variant="ghost"
                 className="w-full justify-start"
-                leftIcon={actionTodo.isCompleted ? <RotateCcw size={18} className="text-brand-500" /> : <Edit2 size={18} className="text-brand-500" />}
+                leftIcon={<Edit2 size={18} className="text-brand-500" />}
                 onClick={() => {
-                  if (actionTodo.isCompleted) {
-                    handleUncomplete(actionTodo.id);
-                  } else {
-                    openEditModal(actionTodo);
-                  }
+                  openEditModal(actionTodo);
                   setActionTodo(null);
                 }}
               >
-                {actionTodo.isCompleted ? 'Mark as active' : 'Edit'}
+                Edit
               </Button>
 
-              {!actionTodo.isCompleted && (
-                <>
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start"
-                    aria-pressed={actionTodo.isImportant === true}
-                    leftIcon={<Star size={18} className={actionTodo.isImportant ? 'text-warm-500 fill-warm-500' : 'text-brand-500'} />}
-                    onClick={() => {
-                      handleToggleImportant(actionTodo);
-                      setActionTodo(null);
-                    }}
-                  >
-                    {actionTodo.isImportant ? 'Unmark important' : 'Mark important'}
-                  </Button>
+              <Button
+                variant="ghost"
+                className="w-full justify-start"
+                aria-pressed={actionTodo.isImportant === true}
+                leftIcon={<Star size={18} className={actionTodo.isImportant ? 'text-warm-500 fill-warm-500' : 'text-brand-500'} />}
+                onClick={() => {
+                  handleToggleImportant(actionTodo);
+                  setActionTodo(null);
+                }}
+              >
+                {actionTodo.isImportant ? 'Unmark important' : 'Mark important'}
+              </Button>
 
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start"
-                    leftIcon={<Calendar size={18} className="text-brand-500" />}
-                    onClick={() => {
-                      handleMoveToTomorrow(actionTodo);
-                      setActionTodo(null);
-                    }}
-                  >
-                    Move to tomorrow
-                  </Button>
-                </>
-              )}
+              <Button
+                variant="ghost"
+                className="w-full justify-start"
+                leftIcon={<Calendar size={18} className="text-brand-500" />}
+                onClick={() => {
+                  handleMoveToTomorrow(actionTodo);
+                  setActionTodo(null);
+                }}
+              >
+                Move to tomorrow
+              </Button>
 
               <Button
                 variant="ghost"
@@ -1712,7 +1594,7 @@ const ToDosPage: React.FC = () => {
                    });
                 }}
               >
-                {actionTodo.isCompleted ? 'Delete forever' : 'Delete'}
+                Delete
               </Button>
             </>
           )}
@@ -1734,14 +1616,93 @@ const ToDosPage: React.FC = () => {
   );
 };
 
-// Sub-component for completed items
-const CompletedSection = React.memo(function CompletedSection({ title, items, onUncomplete, onDelete, onDuplicate, onMore, memberMap, defaultCollapsed = false }: {
+// A single completed to-do row on the shared Row primitive. Completed rows are
+// rare and terminal, so their two actions (duplicate, delete forever) stay
+// VISIBLE as small icon buttons — no hover-reveal (mobile-only app), no
+// gesture layer, no options-drawer indirection. Restore is the leading
+// RotateCcw circle, mirroring the active row's complete circle.
+const CompletedTodoRow = React.memo(function CompletedTodoRow({ item, assignee, onUncomplete, onDelete, onDuplicate }: {
+  item: ToDo;
+  assignee: HouseholdMember | undefined;
+  onUncomplete: (id: string) => void;
+  onDelete: (id: string) => void;
+  onDuplicate: (todo: ToDo) => void;
+}) {
+    const completedDate = item.completedAt ? parseISO(item.completedAt) : null;
+    return (
+        <Row className="items-start">
+            <HapticCheck
+                checked={true}
+                onCheckedChange={() => onUncomplete(item.id)}
+                className="mt-0.5 shrink-0"
+                aria-label={`Mark as incomplete: ${item.text}`}
+            >
+                <span
+                    title="Mark as incomplete"
+                    className="w-6 h-6 rounded-full border-2 border-brand-300 bg-brand-50 text-brand-400 flex items-center justify-center hover:bg-brand-100 hover:text-accent-600 transition-colors dark:border-brand-600 dark:bg-brand-700/50 dark:text-brand-400 dark:hover:bg-brand-700 dark:hover:text-accent-300"
+                >
+                    <RotateCcw size={14} />
+                </span>
+            </HapticCheck>
+
+            <div className="flex-1 min-w-0">
+                <p className="text-brand-500 dark:text-brand-400 line-through decoration-brand-300 dark:decoration-brand-600">{item.text}</p>
+                <div className="flex items-center gap-3 mt-1 text-xs text-brand-400 dark:text-brand-450">
+                    {completedDate && (
+                        <span className="flex items-center gap-1">
+                            <Check size={10} />
+                            {format(completedDate, 'MMM d, h:mm a')}
+                        </span>
+                    )}
+                    {assignee && (
+                         <span className="flex items-center gap-1">
+                            <User size={10} />
+                            {assignee.displayName?.split(' ')[0]}
+                         </span>
+                    )}
+                </div>
+            </div>
+
+            <div className="flex items-center gap-1 shrink-0">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onDuplicate(item)}
+                    className="min-w-11 min-h-11 text-brand-400 hover:text-accent-600 hover:bg-accent-50 dark:text-brand-450 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
+                    title="Duplicate task"
+                    aria-label={`Duplicate task: ${item.text}`}
+                >
+                    <Copy size={16} />
+                </Button>
+                <Button
+                    variant="ghost-destructive"
+                    size="icon"
+                    onClick={() => showDeleteConfirmation(async () => {
+                        haptic('medium');
+                        await onDelete(item.id);
+                        toast.success('Task deleted');
+                    })}
+                    className="min-w-11 min-h-11"
+                    title="Delete forever"
+                    aria-label={`Delete forever: ${item.text}`}
+                >
+                    <Trash2 size={16} />
+                </Button>
+            </div>
+        </Row>
+    );
+});
+
+// Date-bucketed group of completed to-dos. Recent buckets get the canonical
+// SectionHeading voice (serif, sentence case — a content grouping per
+// DESIGN.md §3); older buckets reuse the shared CollapsibleSection primitive
+// (same heading spec) with the item count as its collapsed summary.
+const CompletedSection = React.memo(function CompletedSection({ title, items, onUncomplete, onDelete, onDuplicate, memberMap, defaultCollapsed = false }: {
   title: string;
   items: ToDo[];
   onUncomplete: (id: string) => void;
   onDelete: (id: string) => void;
   onDuplicate: (todo: ToDo) => void;
-  onMore: (todo: ToDo) => void;
   /** Pre-built member lookup map from page level — avoids rebuilding per-section. */
   memberMap: ReadonlyMap<string, HouseholdMember>;
   /**
@@ -1750,134 +1711,40 @@ const CompletedSection = React.memo(function CompletedSection({ title, items, on
    */
   defaultCollapsed?: boolean;
 }) {
-    // Toggle state for collapsible buckets (hooks must run before the empty early-return).
-    const [expanded, setExpanded] = useState(!defaultCollapsed);
-    const contentId = useId();
-
     if (items.length === 0) return null;
 
-    // The prop is constant per call site, so it safely decides whether the
-    // header renders as a toggle button or the plain always-expanded title.
-    const collapsible = defaultCollapsed;
+    const rows = (
+        <SurfaceList>
+            {items.map(item => (
+                <CompletedTodoRow
+                    key={item.id}
+                    item={item}
+                    assignee={memberMap.get(item.assignedTo)}
+                    onUncomplete={onUncomplete}
+                    onDelete={onDelete}
+                    onDuplicate={onDuplicate}
+                />
+            ))}
+        </SurfaceList>
+    );
 
     return (
         <div className="animate-in slide-in-from-bottom-4 duration-(--duration-slow)">
-            <div className="flex items-center gap-2 mb-2 px-1">
-                {collapsible ? (
-                    <h3 className="min-w-0">
-                        <button
-                            type="button"
-                            onClick={() => setExpanded(v => !v)}
-                            aria-expanded={expanded}
-                            aria-controls={contentId}
-                            className="flex min-h-11 items-center gap-1.5 text-xs font-semibold text-brand-400 dark:text-brand-450 uppercase tracking-wider hover:text-brand-600 dark:hover:text-brand-300 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-sm"
-                        >
-                            {title}
-                            <span className="tabular-nums">({items.length})</span>
-                            <ChevronDown
-                                size={14}
-                                aria-hidden="true"
-                                className={cn(
-                                    'shrink-0 transition-transform duration-(--duration-base) ease-(--ease-standard)',
-                                    expanded && 'rotate-180'
-                                )}
-                            />
-                        </button>
-                    </h3>
-                ) : (
-                    <h3 className="text-xs font-semibold text-brand-400 dark:text-brand-450 uppercase tracking-wider">{title}</h3>
-                )}
-                <div className="h-px bg-brand-200 dark:bg-brand-700 flex-1"></div>
-            </div>
-
-            {(!collapsible || expanded) && (
-            <SurfaceList
-                id={contentId}
-                className={collapsible ? 'animate-in fade-in slide-in-from-top-2 duration-(--duration-base)' : undefined}
-            >
-                {items.map(item => {
-                    const assignee = memberMap.get(item.assignedTo);
-                    const completedDate = item.completedAt ? parseISO(item.completedAt) : null;
-
-                    return (
-                        <Row
-                            key={item.id}
-                            className="group items-start"
-                        >
-                            <HapticCheck
-                                checked={true}
-                                onCheckedChange={() => onUncomplete(item.id)}
-                                className="mt-0.5 shrink-0"
-                                aria-label={`Mark as incomplete: ${item.text}`}
-                            >
-                                <span
-                                    title="Mark as incomplete"
-                                    className="w-6 h-6 rounded-full border-2 border-brand-300 bg-brand-50 text-brand-400 flex items-center justify-center hover:bg-brand-100 hover:text-accent-600 transition-colors dark:border-brand-600 dark:bg-brand-700/50 dark:text-brand-400 dark:hover:bg-brand-700 dark:hover:text-accent-300"
-                                >
-                                    <RotateCcw size={14} />
-                                </span>
-                            </HapticCheck>
-
-                            <div className="flex-1 min-w-0">
-                                <p className="text-brand-500 dark:text-brand-400 line-through decoration-brand-300 dark:decoration-brand-600">{item.text}</p>
-                                <div className="flex items-center gap-3 mt-1 text-xs text-brand-400 dark:text-brand-450">
-                                    {completedDate && (
-                                        <span className="flex items-center gap-1">
-                                            <Check size={10} />
-                                            {format(completedDate, 'MMM d, h:mm a')}
-                                        </span>
-                                    )}
-                                    {assignee && (
-                                         <span className="flex items-center gap-1">
-                                            <User size={10} />
-                                            {assignee.displayName?.split(' ')[0]}
-                                         </span>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Desktop Actions */}
-                            <div className="hidden sm:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Button
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    onClick={() => onDuplicate(item)}
-                                    className="text-brand-400 hover:text-accent-600 hover:bg-accent-50 dark:text-brand-450 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
-                                    title="Duplicate task"
-                                    aria-label={`Duplicate task: ${item.text}`}
-                                >
-                                    <Copy size={14} />
-                                </Button>
-                                <Button
-                                    variant="ghost-destructive"
-                                    size="icon-sm"
-                                    onClick={() => showDeleteConfirmation(async () => {
-                                        haptic('medium');
-                                        await onDelete(item.id);
-                                        toast.success('Task deleted');
-                                    })}
-                                    title="Delete forever"
-                                    aria-label={`Delete forever: ${item.text}`}
-                                >
-                                    <Trash2 size={14} />
-                                </Button>
-                            </div>
-                            {/* Mobile Actions */}
-                            <div className="flex sm:hidden">
-                               <Button
-                                 variant="ghost"
-                                 size="icon"
-                                 onClick={(e) => { e.stopPropagation(); onMore(item); }}
-                                 className="text-brand-300 hover:text-accent-600 active:text-accent-800 active:bg-accent-50 dark:text-brand-450 dark:hover:text-brand-300 dark:active:bg-brand-700/50"
-                                 aria-label={`More options for: ${item.text}`}
-                               >
-                                 <MoreVertical size={20} />
-                               </Button>
-                            </div>
-                        </Row>
-                    );
-                })}
-            </SurfaceList>
+            {defaultCollapsed ? (
+                <CollapsibleSection title={title} summary={items.length}>
+                    {rows}
+                </CollapsibleSection>
+            ) : (
+                <>
+                    <SectionHeading
+                        as="h3"
+                        className="px-1 mb-1.5"
+                        action={<span className="text-xs tabular-nums text-brand-500 dark:text-brand-400">{items.length}</span>}
+                    >
+                        {title}
+                    </SectionHeading>
+                    {rows}
+                </>
             )}
         </div>
     );

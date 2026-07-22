@@ -496,6 +496,9 @@ export interface HouseholdContextType {
     id: string,
     overrides?: Partial<Pick<ToDo, 'text' | 'completeByDate' | 'assignedTo' | 'isImportant'>>
   ) => Promise<void>;
+  /** Counterpart of completeToDo: restores a completed to-do to active and
+   *  atomically reverses any managed-kid points the completion credited. */
+  uncompleteToDo: (id: string) => Promise<void>;
   /** F-TODO-03 — Task templates ("Quick Task Lists"). */
   addTaskTemplate: (template: Omit<TaskTemplate, 'id'>) => Promise<void>;
   updateTaskTemplate: (template: TaskTemplate) => Promise<void>;
@@ -566,7 +569,7 @@ export type ShoppingContextValue = Pick<HouseholdContextType,
 export type MealsContextValue = MealPlanContextValue & ShoppingContextValue;
 
 export type TodosContextValue = Pick<HouseholdContextType,
-  | 'todos' | 'todosAwaitingReview' | 'addToDo' | 'updateToDo' | 'deleteToDo' | 'approveTodo' | 'completeToDo'
+  | 'todos' | 'todosAwaitingReview' | 'addToDo' | 'updateToDo' | 'deleteToDo' | 'approveTodo' | 'completeToDo' | 'uncompleteToDo'
   | 'isLoadingOlderTodos' | 'hasMoreCompletedTodos' | 'loadOlderCompletedTodos'
   | 'taskTemplates' | 'addTaskTemplate' | 'updateTaskTemplate' | 'deleteTaskTemplate' | 'applyTaskTemplate'
 >;

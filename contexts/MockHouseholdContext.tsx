@@ -7,8 +7,8 @@ import { getLocalDateString } from '@/utils/dateHelpers';
 import { rollRecurringAnchorForward, isRecurringId, parseRecurringId } from '@/utils/calendarRecurrence';
 import { BUDGETED_IN_CALENDAR } from '@/utils/categories';
 import { hashKidPin } from '@/utils/kidPin';
-import { computeTodoCompletionCredit } from '@/utils/todoPoints';
-import { buildNextRecurringTodo } from '@/utils/todoRecurrence';
+import { computeTodoCompletionCredit, buildUncompleteCreditReversal } from '@/utils/todoPoints';
+import { buildNextRecurringTodo, isTodoFrequency } from '@/utils/todoRecurrence';
 import { buildToDosFromTemplate } from '@/utils/taskTemplates';
 import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
 import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
@@ -16,7 +16,7 @@ import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { processToggleHabit, processStaleDownToggle, isHabitStale, calculateResetPoints, streakForHabit } from '@/utils/habitLogic';
 import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
 import { selectAutoFreezeCandidates } from '@/utils/freezeBank';
-import { accountImpactOf, effectiveAccountImpact, resolveTargetAccount } from '@/utils/accountImpact';
+import { accountImpactOf, effectiveAccountImpact, isBankSyncTransaction, resolveTargetAccount } from '@/utils/accountImpact';
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
 import { MAX_COMMENT_LENGTH } from '@/contexts/household/mutations/commentMutations';
 import { roundMoney } from '@/utils/money';
@@ -1006,8 +1006,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
 
   // Test-Mode parity for the Merge action (plan 03 PR-3): applies the same
   // field-level winner set as the real context, deletes the dupe, and
-  // reverses the dupe's balance impact if it was verified — mirroring
-  // `deleteTransaction`'s balance-reversal rule above.
+  // reverses the dupe's balance impact if it was verified — mirroring the
+  // REAL `mergeTransactions`' balance-reversal rule (transactionMutations.ts).
+  // NOT a mirror of the mock `deleteTransaction` above, which never reverses
+  // a balance at all (see the parity note near its real-context counterpart
+  // further down this file).
   const mergeTransactions = useCallback(async (keeperId: string, dupeId: string) => {
     const keeperTx = transactions.find(t => t.id === keeperId);
     const dupeTx = transactions.find(t => t.id === dupeId);
@@ -1020,8 +1023,13 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
 
     const updates = buildMergeUpdates(keeperTx, dupeTx);
 
+    // Bank-sync exception (parity with the real mergeTransactions): a bank-sync
+    // dupe's balance came from the bank email's ending balance, so deleting it
+    // reverses nothing.
     const dupeTarget = resolveTargetAccount(dupeTx.accountId, accounts);
-    const dupeBalanceDelta = -effectiveAccountImpact(dupeTx, dupeTarget);
+    const dupeBalanceDelta = isBankSyncTransaction(dupeTx)
+      ? 0
+      : -effectiveAccountImpact(dupeTx, dupeTarget);
     if (dupeBalanceDelta !== 0 && dupeTarget) {
       setAccounts(prev => prev.map(a => a.id === dupeTarget.id
         ? { ...a, balance: roundMoney(a.balance + dupeBalanceDelta), lastUpdated: new Date().toISOString() }
@@ -2149,6 +2157,58 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
           : m);
       });
       toast.success('Mock: ToDo completed');
+    }, []),
+    uncompleteToDo: useCallback(async (id: string) => {
+      // Counterpart of completeToDo (see makeUncompleteToDo in the real
+      // context): restores the to-do AND reverses the managed-kid points
+      // credit through the SAME dormancy gate, so Test Mode mirrors the
+      // atomic restore+debit. Idempotent: an already-active todo is a no-op,
+      // so restoring twice can never double-reverse.
+      const todo = todosRef.current.find(t => t.id === id);
+      if (!todo) {
+        toast.error('Mock: ToDo not found');
+        return;
+      }
+      if (!todo.isCompleted) {
+        return; // already active — no double reversal
+      }
+      // F-TODO-01 counterpart (mirrors makeUncompleteToDo in the real
+      // context): completing a recurring to-do spawns the next instance, so
+      // restoring must reconcile it or the household ends up with two active
+      // copies. Identify the spawn the way buildNextRecurringTodo links it —
+      // same chain root (`recurrence.parentRecurringId`, or this todo's own
+      // id when it IS the root) and same text, still active — and delete
+      // ONLY when exactly one such candidate exists; ambiguous (0 or 2+)
+      // matches leave every candidate untouched rather than guessing.
+      let spawnIdToDelete: string | null = null;
+      if (todo.recurrence && isTodoFrequency(todo.recurrence.frequency)) {
+        const chainRootId = todo.recurrence.parentRecurringId ?? todo.id;
+        const matches = todosRef.current.filter(t =>
+          !t.isCompleted &&
+          t.id !== todo.id &&
+          t.recurrence?.parentRecurringId === chainRootId &&
+          t.text === todo.text,
+        );
+        if (matches.length === 1) {
+          spawnIdToDelete = matches[0]?.id ?? null;
+        }
+      }
+      setTodos(prev => prev
+        .map(t => t.id === id ? { ...t, isCompleted: false, completedAt: undefined } : t)
+        .filter(t => t.id !== spawnIdToDelete));
+      setMembers(prev => {
+        const credit = computeTodoCompletionCredit(todo, prev);
+        if (!credit) return prev;
+        const deltas = buildUncompleteCreditReversal(credit.points, todo.completedAt);
+        return prev.map(m => m.uid === credit.memberUid
+          ? { ...m, points: {
+              daily: m.points.daily + (deltas['points.daily'] ?? 0),
+              weekly: m.points.weekly + (deltas['points.weekly'] ?? 0),
+              total: m.points.total + (deltas['points.total'] ?? 0),
+            } }
+          : m);
+      });
+      toast.success('Mock: ToDo restored');
     }, []),
     addTaskTemplate,
     updateTaskTemplate,

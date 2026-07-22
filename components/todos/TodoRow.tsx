@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Trash2, AlertCircle, Clock, User, CheckSquare, Bell } from 'lucide-react';
+import { Check, Trash2, AlertCircle, Clock, User, CheckSquare, Bell, Star } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, startOfToday } from 'date-fns';
 import { ToDo, HouseholdMember } from '@/types/schema';
 import toast from 'react-hot-toast';
@@ -174,30 +174,26 @@ export const TodoRow = React.memo(function TodoRow({
   // Undo toast (F-TODO-11, mirrors ShoppingListTab's DeleteUndoToast):
   // completing a to-do assigned to a MANAGED KID credits that kid's
   // member.points in the same writeBatch as the completion (see
-  // `completeToDo` / `computeTodoCompletionCredit` in todoMutations.ts). A
-  // plain `onUncomplete` (updateToDo) only flips `isCompleted` back — it does
-  // NOT reverse that points credit, so offering "Undo" there would silently
-  // leave the kid over-credited. Suppress the undo action (plain success
-  // toast) for kid-assigned tasks; every other assignee gets Undo.
+  // `completeToDo` / `computeTodoCompletionCredit` in todoMutations.ts).
+  // Undo is now offered for EVERY assignee — `onUncomplete` routes through
+  // `uncompleteToDo` (ToDosPage.handleUncomplete), which reverses the kid
+  // points credit atomically with the restore, so the previous kid-task
+  // suppression is no longer needed.
   const handleComplete = async () => {
     try {
       await onComplete(item.id);
-      if (assignee?.isManaged === true) {
-        toast.success('To-Do completed!');
-      } else {
-        toast(
-          (t) => (
-            <UndoToast
-              message="To-Do completed"
-              onUndo={() => {
-                toast.dismiss(t.id);
-                onUncomplete(item.id);
-              }}
-            />
-          ),
-          { duration: 5000, icon: toastIcon(Check) }
-        );
-      }
+      toast(
+        (t) => (
+          <UndoToast
+            message="To-Do completed"
+            onUndo={() => {
+              toast.dismiss(t.id);
+              onUncomplete(item.id);
+            }}
+          />
+        ),
+        { duration: 5000, icon: toastIcon(Check) }
+      );
     } catch (error) {
       console.error('Failed to complete task:', error);
       toast.error('Failed to complete to-do');
@@ -210,6 +206,15 @@ export const TodoRow = React.memo(function TodoRow({
   // aria-describedby target via metaId.
   const metaLine = (
     <span id={metaId} className="flex flex-wrap items-center gap-3 mt-1.5 text-xs">
+      {/* Small amber star marks an important (starred) task — the flat list
+          sorts these first, so the mark explains the ordering at a glance.
+          Unstarred rows render nothing here (zero space cost). */}
+      {item.isImportant === true && (
+        <span className="flex items-center text-warm-500" data-testid="todo-important-star">
+          <Star size={12} aria-hidden="true" className="fill-warm-500" />
+          <span className="sr-only">Important</span>
+        </span>
+      )}
       {/* Single primary status signal: urgency-colored text, not a bordered pill. */}
       {isOverdue ? (
         <span className="flex items-center gap-1 font-semibold text-money-neg dark:text-money-negDark">
