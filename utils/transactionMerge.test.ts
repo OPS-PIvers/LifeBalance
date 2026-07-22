@@ -113,6 +113,26 @@ describe('mergeTransactions', () => {
     expect(mergeTransactions(keeper, dupe).relatedHabitIds).toEqual(['h1']);
   });
 
+  // PR #1072: the fired-habit LEDGER must survive the merge, or the merged row
+  // could later re-fire a habit the dupe had already fired.
+  it('unions firedHabitIds from both rows, deduped', () => {
+    const keeper = tx({ firedHabitIds: ['h1'] });
+    const dupe = tx({ id: 'dupe', firedHabitIds: ['h1', 'h2'] });
+    expect(mergeTransactions(keeper, dupe).firedHabitIds).toEqual(['h1', 'h2']);
+  });
+
+  it('adopts the dupe fired ledger when the keeper has none', () => {
+    const keeper = tx();
+    const dupe = tx({ id: 'dupe', firedHabitIds: ['h1'] });
+    expect(mergeTransactions(keeper, dupe).firedHabitIds).toEqual(['h1']);
+  });
+
+  it('omits firedHabitIds when the dupe adds nothing new', () => {
+    const keeper = tx({ firedHabitIds: ['h1'] });
+    const dupe = tx({ id: 'dupe', firedHabitIds: ['h1'] });
+    expect(mergeTransactions(keeper, dupe).firedHabitIds).toBeUndefined();
+  });
+
   it('inherits bankRef + bank-sync home from a bank-sync dupe so the merged row stays exempt', () => {
     const keeper = tx({ store: 'Cub Foods' }); // richer, but not bank-sync, no accountId
     const dupe = tx({ id: 'dupe', bankRef: 'P0000123', accountId: 'acc-check' });

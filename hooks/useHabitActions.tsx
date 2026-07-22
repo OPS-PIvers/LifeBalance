@@ -150,19 +150,25 @@ export const useHabitActions = (
         }).filter(([, value]) => value !== undefined)
       );
 
-      // Habit Automations (PRD #1065): persist the optional `triggers` structure
-      // (transaction keywords + saved locations). Written as the whole object so
-      // the editor is the single source of truth; a habit whose automation was
-      // fully removed writes `deleteField()` so no stale keywords linger.
-      const triggersUpdate =
-        habit.triggers &&
-        ((habit.triggers.keywords?.length ?? 0) > 0 || (habit.triggers.locations?.length ?? 0) > 0)
-          ? habit.triggers
-          : deleteField();
+      // Habit Automations (PRD #1065): the optional `triggers` structure
+      // (transaction keywords + saved locations) is a SEPARATE concern from an
+      // ordinary habit edit. `undefined` means "leave the stored triggers
+      // untouched" — an everyday edit (basePoints, title, …) via HabitFormModal
+      // must NOT wipe a habit's automations. Only an EXPLICIT triggers object
+      // touches the field: a populated one is written; an explicit EMPTY object
+      // (the Automations editor's "clear" action) removes it via deleteField().
+      // Omitting the field entirely (rather than writing `undefined`, which
+      // Firestore rejects) is what preserves the existing value.
+      let triggersUpdate: unknown;
+      if (habit.triggers !== undefined) {
+        const hasContent =
+          (habit.triggers.keywords?.length ?? 0) > 0 || (habit.triggers.locations?.length ?? 0) > 0;
+        triggersUpdate = hasContent ? habit.triggers : deleteField();
+      }
 
       await updateDoc(doc(db, `households/${householdId}/habits`, habit.id), {
         ...updateData,
-        triggers: triggersUpdate,
+        ...(triggersUpdate !== undefined ? { triggers: triggersUpdate } : {}),
         lastUpdated: serverTimestamp(),
       });
     } catch (error) {

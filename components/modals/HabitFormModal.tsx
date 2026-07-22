@@ -113,6 +113,12 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
     const finalCategory = category.trim() || CATEGORIES[0] || 'Health';
 
     const baseHabitData: Habit = {
+      // Carry through every field this form doesn't edit (e.g. `triggers`
+      // automations, createdBy) so an ordinary edit can't silently drop them —
+      // updateHabit only writes its own whitelist plus an explicit `triggers`,
+      // so re-supplying the existing value leaves automations untouched. In
+      // CREATE mode editingHabit is undefined, so this spread is a no-op.
+      ...(editingHabit ?? {}),
       id: editingHabit ? editingHabit.id : crypto.randomUUID(),
       title,
       category: finalCategory,

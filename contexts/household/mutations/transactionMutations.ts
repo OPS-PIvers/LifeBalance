@@ -7,6 +7,7 @@ import {
   increment,
   serverTimestamp,
   arrayUnion,
+  arrayRemove,
   type Firestore,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
@@ -27,6 +28,35 @@ import { trashDocId, transactionTrashData } from '@/utils/trash';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { track } from '@/services/analytics';
 import { shouldTrackFirstTime, FIRST_TRANSACTION_FLAG } from '@/utils/firstTimeFlags';
+import type { ToggleHabitResult } from '@/utils/habitLogic';
+
+/**
+ * Firestore patch for a habit fired (or un-fired) by a transaction approval,
+ * written as DELTAS — never whole client-computed values. A stale-cache device
+ * writing an absolute `completedDates` array wipes another device's completions
+ * (the 2026-07-15 habit-history clobber incident), so completion history moves
+ * only via arrayUnion/arrayRemove and the counters via increment(). A toggle
+ * touches at most one date, so we diff old→new at the write site. `streakDays`
+ * stays a derived scalar (self-correcting), defended with a fallback to the
+ * habit's current value when processToggleHabit omits it.
+ */
+function habitDeltaUpdate(habit: Habit, result: ToggleHabitResult): Record<string, unknown> {
+  const prevDates = habit.completedDates;
+  const nextDates = result.updatedHabit.completedDates ?? prevDates;
+  const addedDate = nextDates.find(d => !prevDates.includes(d));
+  const removedDate = prevDates.find(d => !nextDates.includes(d));
+  const countDelta = (result.updatedHabit.count ?? habit.count) - habit.count;
+  const totalCountDelta = (result.updatedHabit.totalCount ?? habit.totalCount) - habit.totalCount;
+
+  return {
+    ...(countDelta !== 0 ? { count: increment(countDelta) } : {}),
+    ...(totalCountDelta !== 0 ? { totalCount: increment(totalCountDelta) } : {}),
+    ...(addedDate !== undefined ? { completedDates: arrayUnion(addedDate) } : {}),
+    ...(removedDate !== undefined ? { completedDates: arrayRemove(removedDate) } : {}),
+    streakDays: result.updatedHabit.streakDays ?? habit.streakDays,
+    lastUpdated: serverTimestamp(),
+  };
+}
 
 // Pure-ish factories for the TRANSACTION mutation family — the writeBatch
 // atomicity paths documented in CLAUDE.md (checking-balance delta + habits +
@@ -456,13 +486,11 @@ export function makeUpdateTransactionCategory(deps: {
       if (habit) {
         const result = processToggleHabit(habit, 'up');
         if (result) {
-          batch.update(doc(db, `households/${householdId}/habits`, habitId), {
-            count: result.updatedHabit.count,
-            totalCount: result.updatedHabit.totalCount,
-            completedDates: result.updatedHabit.completedDates,
-            streakDays: result.updatedHabit.streakDays,
-            lastUpdated: serverTimestamp(),
-          });
+          // DELTA WRITE (never whole client-computed values) — see
+          // habitDeltaUpdate: increment() counters + arrayUnion/arrayRemove
+          // completion history, so a stale-cache device can't clobber another
+          // device's completions (2026-07-15 incident).
+          batch.update(doc(db, `households/${householdId}/habits`, habitId), habitDeltaUpdate(habit, result));
           totalPointsChange += result.pointsChange;
           successfulHabitsCount++;
           newlyFiredHabitIds.push(habitId);
@@ -657,13 +685,9 @@ export function makeReverseTransactionApproval(deps: {
       if (!habit) continue;
       const result = processToggleHabit(habit, 'down');
       if (result) {
-        batch.update(doc(db, `households/${householdId}/habits`, habitId), {
-          count: result.updatedHabit.count,
-          totalCount: result.updatedHabit.totalCount,
-          completedDates: result.updatedHabit.completedDates,
-          streakDays: result.updatedHabit.streakDays,
-          lastUpdated: serverTimestamp(),
-        });
+        // DELTA WRITE (mirrors the forward fire) — increment() counters +
+        // arrayUnion/arrayRemove completion history, never whole arrays.
+        batch.update(doc(db, `households/${householdId}/habits`, habitId), habitDeltaUpdate(habit, result));
         totalPointsChange += result.pointsChange;
       }
     }

@@ -112,5 +112,19 @@ export function mergeTransactions(keeper: Transaction, dupe: Transaction): Parti
     updates.relatedHabitIds = Array.from(new Set([...keeperHabits, ...dupeHabits]));
   }
 
+  // Union the fired-habit LEDGER (firedHabitIds) onto the keeper so the record
+  // of which habits each row already fired survives the merge. Without this the
+  // dupe's fired ids are lost when it's deleted, and the merged row could later
+  // re-fire a habit it (as the dupe) had already fired. KNOWN LIMITATION: if
+  // BOTH rows fired the SAME habit before the merge (a pre-merge double-fire),
+  // that habit was incremented twice; unioning the ledger prevents any FUTURE
+  // re-fire but does NOT auto-reverse the earlier double-credit — reconciling
+  // already-awarded points at merge time is deliberately out of scope here.
+  const keeperFired = keeper.firedHabitIds ?? [];
+  const dupeFired = dupe.firedHabitIds ?? [];
+  if (dupeFired.some(id => !keeperFired.includes(id))) {
+    updates.firedHabitIds = Array.from(new Set([...keeperFired, ...dupeFired]));
+  }
+
   return updates;
 }

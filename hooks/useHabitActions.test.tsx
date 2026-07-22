@@ -880,6 +880,59 @@ describe('useHabitActions.updateHabit (Plan 080c-3: assignedTo round-trips throu
     const payload = lastUpdatePayload();
     expect('assignedTo' in payload).toBe(false);
   });
+
+  // Regression (PR #1072): an ordinary edit (no triggers on the payload) must
+  // NOT touch a habit's automations. Writing `triggers` on every call — as the
+  // original code did — silently wiped keyword/location automations whenever a
+  // user tweaked basePoints via the habit card's Edit.
+  it('OMITS triggers entirely when the payload has none (leaves existing automations untouched)', async () => {
+    const habit = baseHabit({ id: 'h1' });
+    expect(habit.triggers).toBeUndefined();
+
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.updateHabit(habit);
+    });
+
+    const payload = lastUpdatePayload();
+    // Not even a deleteField() — the field is absent, so Firestore leaves the
+    // stored triggers exactly as they were.
+    expect('triggers' in payload).toBe(false);
+  });
+
+  it('writes a populated triggers object through unchanged', async () => {
+    const triggers = { keywords: ['whole foods'], locations: [] };
+    const habit = baseHabit({ id: 'h1', triggers });
+
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.updateHabit(habit);
+    });
+
+    const payload = lastUpdatePayload();
+    expect(payload.triggers).toEqual(triggers);
+  });
+
+  it('clears automations via deleteField() ONLY for an explicit empty triggers object', async () => {
+    const habit = baseHabit({ id: 'h1', triggers: { keywords: [], locations: [] } });
+
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.updateHabit(habit);
+    });
+
+    const payload = lastUpdatePayload();
+    expect(payload.triggers).toEqual({ __deleteField: true });
+  });
 });
 
 describe('useHabitActions.toggleHabit (stale deselect — date-aware reversal)', () => {
