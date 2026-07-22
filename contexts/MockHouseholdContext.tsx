@@ -14,7 +14,8 @@ import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redempt
 import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { processToggleHabit, processStaleDownToggle, isHabitStale, calculateResetPoints, streakForHabit } from '@/utils/habitLogic';
-import { computeHabitTriggerFire } from '@/utils/habitTriggerFire';
+import { computeHabitTriggerFire, computeHabitTriggerReverse } from '@/utils/habitTriggerFire';
+import { evaluateTodoSubtaskGate, TodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
 import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
 import { selectAutoFreezeCandidates } from '@/utils/freezeBank';
 import { accountImpactOf, effectiveAccountImpact, isBankSyncTransaction, resolveTargetAccount } from '@/utils/accountImpact';
@@ -1277,7 +1278,19 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     if (!habitId) return null;
     const habit = habitsFireRef.current.find(h => h.id === habitId);
     if (!habit) return null;
-    const delta = computeHabitTriggerFire(habit, direction);
+    // Archived linked habit never fires (parity with fireLinkedHabitInBatch).
+    if (direction === 'up' && habit.archivedAt) return null;
+    // 'down' reverses the EXACT date the fire added (from the to-do's
+    // completedAt), so a prior-day restore doesn't corrupt today's counter.
+    const delta =
+      direction === 'up'
+        ? computeHabitTriggerFire(habit, 'up')
+        : computeHabitTriggerReverse(
+            habit,
+            todo.completedAt
+              ? getLocalDateString(new Date(todo.completedAt))
+              : getLocalDateString(),
+          );
     if (!delta) return null;
     setHabits(prev => prev.map(h => {
       if (h.id !== habitId) return h;
@@ -2192,6 +2205,12 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       }
       if (completedTodo.isCompleted) {
         return; // already completed — avoid duplicate points
+      }
+      // Subtask gate parity (PRD #1065): refuse a habit-linked to-do with
+      // unfinished subtasks with the SAME typed error the real mutation throws.
+      const gate = evaluateTodoSubtaskGate(completedTodo);
+      if (gate.blocked) {
+        throw new TodoSubtasksIncompleteError(completedTodo.id, completedTodo.text, gate.stepsLeft);
       }
       // F-TODO-01: recurring todos spawn their next instance on completion,
       // mirroring the atomic completion+spawn in makeCompleteToDo.

@@ -30,7 +30,8 @@ import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { computeTodoCompletionCredit, buildUncompleteCreditReversal } from '@/utils/todoPoints';
 import { buildNextRecurringTodo, isTodoFrequency } from '@/utils/todoRecurrence';
 import { getLocalDateString } from '@/utils/dateHelpers';
-import { computeHabitTriggerFire } from '@/utils/habitTriggerFire';
+import { computeHabitTriggerFire, computeHabitTriggerReverse } from '@/utils/habitTriggerFire';
+import { evaluateTodoSubtaskGate, TodoSubtasksIncompleteError, isTodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
 import { attributionString, type TriggerSource } from '@/utils/habitTriggers';
 import { appendActivityLog } from '@/utils/activityLog';
 import { TODO_COMPLETED_PAGE_SIZE } from '@/utils/listenerWindows';
@@ -44,6 +45,17 @@ import type { User } from 'firebase/auth';
  * household doc. Mirrors `habitPointsTargetRef` in hooks/useHabitActions.tsx so
  * a to-do-fired habit routes points identically to a manual tap.
  */
+/**
+ * In-flight guard for `completeToDo` (module-level so it survives the per-render
+ * factory closure). A double-tap or a re-entrant call while a completion for the
+ * same to-do id is still pending is IGNORED, cheaply closing the double-fire
+ * window: `completeToDo` is a getDoc-check-then-batch, so without this two rapid
+ * taps can both pass the `isCompleted` check and fire the linked habit twice.
+ * (The cross-device / offline case — two devices completing the same doc while
+ * both are offline — remains theoretical and is accepted.)
+ */
+const completeToDoInFlight = new Set<string>();
+
 function habitPointsTargetRef(db: Firestore, householdId: string, assignedTo: string | undefined) {
   return assignedTo
     ? doc(db, `households/${householdId}/members`, assignedTo)
@@ -83,7 +95,24 @@ async function fireLinkedHabitInBatch(params: {
   const habit = habitSnap.data();
   if (!habit) return null; // linked habit deleted — complete the to-do normally
 
-  const delta = computeHabitTriggerFire(habit, direction);
+  // An ARCHIVED linked habit must not fire (PRD #1065): the to-do completes
+  // normally, no points/streak side effect. A reverse is still allowed so a
+  // fire credited before the habit was archived can be undone.
+  if (direction === 'up' && habit.archivedAt) return null;
+
+  // 'up' fires like one manual tap. 'down' REVERSES the exact date the fire
+  // added — derived from the to-do's completion timestamp — so restoring a
+  // to-do completed on a PRIOR day strips that day's completion and debits the
+  // points credited THEN, rather than corrupting today's counter/streak.
+  const delta =
+    direction === 'up'
+      ? computeHabitTriggerFire(habit, 'up')
+      : computeHabitTriggerReverse(
+          habit,
+          todo.completedAt
+            ? getLocalDateString(new Date(todo.completedAt))
+            : getLocalDateString(),
+        );
   if (!delta) return null; // no-op (e.g. reversing a habit already at 0)
 
   batch.update(doc(db, `households/${householdId}/habits`, habitId), {
@@ -304,6 +333,10 @@ export function makeCompleteToDo(deps: {
     if (!householdId) {
       throw new Error('Household not selected');
     }
+    // Double-fire guard: ignore re-entry while a completion for this id is
+    // already pending (closes the double-tap window before the getDoc check).
+    if (completeToDoInFlight.has(id)) return;
+    completeToDoInFlight.add(id);
     try {
       // Plan 080c-5: completing a to-do assigned to a MANAGED KID credits that
       // kid's own member.points (allowance-style). For every other assignee the
@@ -324,6 +357,14 @@ export function makeCompleteToDo(deps: {
       }
       if (todo.isCompleted) {
         return; // already completed — idempotent, no duplicate points
+      }
+      // Subtask gate (PRD #1065), enforced in the MUTATION so every completion
+      // path is covered — not just TodoRow's disabled checkbox. A habit-linked
+      // to-do with unfinished subtasks refuses completion with a typed error;
+      // call sites surface a "n steps left" message and bulk paths skip it.
+      const gate = evaluateTodoSubtaskGate(todo);
+      if (gate.blocked) {
+        throw new TodoSubtasksIncompleteError(todo.id, todo.text, gate.stepsLeft);
       }
       const credit = computeTodoCompletionCredit(todo, membersRef.current);
 
@@ -385,8 +426,15 @@ export function makeCompleteToDo(deps: {
       }
       // Note: Toast removed to allow UI-specific messaging (consistent with other CRUD operations)
     } catch (error) {
-      console.error('[completeToDo] Failed:', error);
+      // The subtask gate is an EXPECTED refusal, not a failure — rethrow it
+      // quietly so call sites can surface the "n steps left" message without a
+      // noisy error log.
+      if (!isTodoSubtasksIncompleteError(error)) {
+        console.error('[completeToDo] Failed:', error);
+      }
       throw error; // Re-throw so callers can handle the error with contextual messaging
+    } finally {
+      completeToDoInFlight.delete(id);
     }
   };
 

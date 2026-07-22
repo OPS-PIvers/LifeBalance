@@ -1,5 +1,12 @@
+import { parseISO, isSameWeek } from 'date-fns';
 import { Habit } from '@/types/schema';
-import { processToggleHabit, isHabitStale } from '@/utils/habitLogic';
+import {
+  processToggleHabit,
+  isHabitStale,
+  pointsForHabitOnDate,
+  streakForHabit,
+} from '@/utils/habitLogic';
+import { getLocalDateString } from '@/utils/dateHelpers';
 
 /**
  * Habit Automations (PRD #1065) — translating an automated trigger (a linked
@@ -45,6 +52,12 @@ export function computeHabitTriggerFire(
   habit: Habit,
   direction: 'up' | 'down',
 ): HabitFireDelta | null {
+  // An ARCHIVED habit must never fire: the automation is a no-op and the to-do
+  // completes normally (a reverse is still allowed so an already-credited fire
+  // can be undone). Guarded here AND in fireLinkedHabitInBatch (defense in
+  // depth) so no caller can accidentally re-animate a retired habit.
+  if (direction === 'up' && habit.archivedAt) return null;
+
   // Lazy-reset parity with toggleHabit: an 'up' fire on a stale habit acts as
   // if the counter were 0 (the overnight auto-reset never ran). A 'down'
   // reverse leaves the counter untouched — processToggleHabit handles the
@@ -70,5 +83,67 @@ export function computeHabitTriggerFire(
     ...(removedDate !== undefined ? { removedDate } : {}),
     pointsChange: result.pointsChange,
     multiplier: result.multiplier,
+  };
+}
+
+/**
+ * Compute the REVERSE delta for restoring a to-do that previously fired `habit`.
+ *
+ * Unlike a plain `computeHabitTriggerFire(habit, 'down')` — which keys on TODAY
+ * and only ever strips today's completion — this reverses the EXACT date the
+ * fire added (`completionDate`, derived from the to-do's `completedAt`). So
+ * restoring a to-do completed on a PRIOR day removes that day's completion
+ * (`arrayRemove`) and debits the points credited THEN (historical multiplier via
+ * `pointsForHabitOnDate`/`streakEndingOnForHabit`, matching how the fire scored
+ * them) instead of corrupting the current period's counter, streak, and points.
+ *
+ * @param completionDate yyyy-MM-dd the fire added (the local date of the to-do's
+ *                       `completedAt`). When it falls in the current period the
+ *                       reversal is identical to the manual same-day down toggle.
+ * @param today          caller-local yyyy-MM-dd; injectable for deterministic
+ *                       boundary tests.
+ * @returns the reverse delta, or `null` when there is nothing to reverse (the
+ *          habit is already at count 0 for a same-period restore, or the date is
+ *          no longer a completion — e.g. it was already restored).
+ */
+export function computeHabitTriggerReverse(
+  habit: Habit,
+  completionDate: string,
+  today: string = getLocalDateString(),
+): HabitFireDelta | null {
+  const inCurrentPeriod =
+    habit.period === 'weekly'
+      ? isSameWeek(parseISO(completionDate), parseISO(today), { weekStartsOn: 1 })
+      : completionDate === today;
+
+  // Same-period restore: the fire's effect is still described by the live
+  // counter, so the manual same-day 'down' toggle is its exact inverse (it keys
+  // on today, which equals completionDate here — count/points/date all match).
+  if (inCurrentPeriod) {
+    return computeHabitTriggerFire(habit, 'down');
+  }
+
+  // Prior-period restore: the current counter belongs to a LATER period and
+  // must be left untouched (mirrors processStaleDownToggle, but keyed to the
+  // to-do's exact completion date instead of "the most recent prior day").
+  // Nothing to reverse if that day is no longer a completion.
+  if (!habit.completedDates.includes(completionDate)) return null;
+
+  // Reverse exactly what the fire credited on that date: the historical,
+  // streak-multiplied points for that completion (0 for a no-points fire).
+  const earned = pointsForHabitOnDate(habit, completionDate, today);
+  const nextDates = habit.completedDates.filter(d => d !== completionDate);
+  const streakDays = streakForHabit({ ...habit, completedDates: nextDates });
+
+  return {
+    // Untouched — the live counter belongs to the current period, not the
+    // prior period this reversal is undoing.
+    count: habit.count,
+    // The fire incremented the lifetime counter; disavow that one completion.
+    totalCount: Math.max(0, habit.totalCount - 1),
+    streakDays,
+    removedDate: completionDate,
+    pointsChange: -earned,
+    multiplier: 1.0,
   };
 }

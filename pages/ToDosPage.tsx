@@ -37,6 +37,7 @@ import { type SectionColor } from '@/components/todos/todoDisplay';
 import { EisenhowerGridView } from '@/components/todos/EisenhowerGridView';
 import { TaskTemplateDrawer } from '@/components/todos/TaskTemplateDrawer';
 import { sortFlatTodos, TODO_SORT_MODES, TODO_SORT_LABELS, type TodoSortMode } from '@/utils/todoSort';
+import { isTodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
 
 // Persisted like the Shopping list's sort mode — the derived view survives
 // a reload but never writes to Firestore.
@@ -204,6 +205,18 @@ const ToDosPage: React.FC = () => {
   // Habit Automations (PRD #1065): the habit this to-do counts toward. '' = not
   // linked. Completing a linked to-do fires the habit like one manual tap.
   const [linkedHabitId, setLinkedHabitId] = useState('');
+  // PRD #1065: when the editing to-do links a habit that has since been ARCHIVED,
+  // that habit is filtered out of `linkableHabits`, so the Select would show
+  // "None" while the link still exists. Surface it as a disabled "(archived)"
+  // option so the UI never contradicts the stored link. null when the current
+  // pick is unlinked or still-active.
+  const archivedLinkedHabit = useMemo(
+    () =>
+      linkedHabitId && !linkableHabits.some(h => h.id === linkedHabitId)
+        ? habits.find(h => h.id === linkedHabitId && h.archivedAt) ?? null
+        : null,
+    [linkedHabitId, linkableHabits, habits],
+  );
   // F-TODO-08: subtask checklist edited in the drawer as local state, persisted
   // on save via addToDo/updateToDo. `subtaskInput` is the pending new-step text;
   // `aiBreakingDown` guards the "Break down with AI" request.
@@ -818,10 +831,25 @@ const ToDosPage: React.FC = () => {
       const promises = Array.from(selectedIds).map(id => completeToDo(id));
       const results = await Promise.allSettled(promises);
       const successful = results.filter(r => r.status === 'fulfilled').length;
-      const failed = results.filter(r => r.status === 'rejected').length;
+      const rejected = results.filter(
+        (r): r is PromiseRejectedResult => r.status === 'rejected',
+      );
+      // Habit Automations (PRD #1065): a habit-linked to-do with unfinished
+      // subtasks is REFUSED by the mutation (not a generic failure) — skip it
+      // and report it as "steps left", separate from real errors.
+      const gated = rejected.filter(r => isTodoSubtasksIncompleteError(r.reason));
+      const failed = rejected.length - gated.length;
 
       if (successful > 0) {
         toast.success(`Completed ${successful} tasks!`);
+      }
+      if (gated.length > 0) {
+        const firstGate = gated[0]?.reason;
+        toast(
+          gated.length === 1 && isTodoSubtasksIncompleteError(firstGate)
+            ? `${firstGate.stepsLeft} step${firstGate.stepsLeft === 1 ? '' : 's'} left on “${firstGate.title}”`
+            : `${gated.length} tasks still have steps left`,
+        );
       }
       if (failed > 0) {
         toast.error(`Failed to complete ${failed} tasks`);
@@ -1538,7 +1566,7 @@ const ToDosPage: React.FC = () => {
           {/* Habit Automations (PRD #1065): "Counts toward habit" picker.
               Completing this to-do fires the chosen habit like one manual tap
               (points + streak). A pick-one field is a Select, per DESIGN.md. */}
-          {linkableHabits.length > 0 && (
+          {(linkableHabits.length > 0 || archivedLinkedHabit) && (
             <div>
               <Select
                 id="linked-habit-select"
@@ -1551,11 +1579,16 @@ const ToDosPage: React.FC = () => {
                 {linkableHabits.map(h => (
                   <option key={h.id} value={h.id}>{h.title}</option>
                 ))}
+                {archivedLinkedHabit && (
+                  <option value={archivedLinkedHabit.id} disabled>
+                    {archivedLinkedHabit.title} (archived)
+                  </option>
+                )}
               </Select>
               {linkedHabitId && (
                 <p className="mt-1.5 text-xs text-brand-400 dark:text-brand-450">
-                  Completing this task logs the habit for you. Steps below must all
-                  be done first.
+                  Completing this task logs the habit for you.
+                  {subtasks.length > 0 && ' Steps below must all be done first.'}
                 </p>
               )}
             </div>
