@@ -12,24 +12,143 @@ import {
   limit,
   startAfter,
   increment,
+  arrayUnion,
+  arrayRemove,
   writeBatch,
   serverTimestamp,
   Timestamp,
   type Firestore,
+  type WriteBatch,
   type QueryDocumentSnapshot,
   type DocumentData,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 import { describeError } from '@/utils/errorMessages';
-import { todoConverter } from '@/utils/firestoreConverters';
+import { todoConverter, habitConverter } from '@/utils/firestoreConverters';
 import { ToDo, HouseholdMember } from '@/types/schema';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { computeTodoCompletionCredit, buildUncompleteCreditReversal } from '@/utils/todoPoints';
 import { buildNextRecurringTodo, isTodoFrequency } from '@/utils/todoRecurrence';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { computeHabitTriggerFire, computeHabitTriggerReverse } from '@/utils/habitTriggerFire';
+import { evaluateTodoSubtaskGate, TodoSubtasksIncompleteError, isTodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
+import { attributionString, type TriggerSource } from '@/utils/habitTriggers';
+import { appendActivityLog } from '@/utils/activityLog';
 import { TODO_COMPLETED_PAGE_SIZE } from '@/utils/listenerWindows';
 import { mergeById, mapTodoDoc } from '@/contexts/household/selectors';
 import type { User } from 'firebase/auth';
+
+/**
+ * Habit Automations (PRD #1065) — the doc that receives a habit's points. An
+ * ASSIGNED (per-member / kid chore) habit credits the assignee's own
+ * `members/{uid}.points`; an unassigned/shared habit credits the shared
+ * household doc. Mirrors `habitPointsTargetRef` in hooks/useHabitActions.tsx so
+ * a to-do-fired habit routes points identically to a manual tap.
+ */
+/**
+ * In-flight guard for `completeToDo` (module-level so it survives the per-render
+ * factory closure). A double-tap or a re-entrant call while a completion for the
+ * same to-do id is still pending is IGNORED, cheaply closing the double-fire
+ * window: `completeToDo` is a getDoc-check-then-batch, so without this two rapid
+ * taps can both pass the `isCompleted` check and fire the linked habit twice.
+ * (The cross-device / offline case — two devices completing the same doc while
+ * both are offline — remains theoretical and is accepted.)
+ */
+const completeToDoInFlight = new Set<string>();
+
+function habitPointsTargetRef(db: Firestore, householdId: string, assignedTo: string | undefined) {
+  return assignedTo
+    ? doc(db, `households/${householdId}/members`, assignedTo)
+    : doc(db, `households/${householdId}`);
+}
+
+/**
+ * Habit Automations (PRD #1065): fire (or reverse) the habit a to-do is linked
+ * to, IN the caller's existing writeBatch, so the habit + points writes
+ * co-commit atomically with the to-do complete/restore (project atomicity
+ * rule). Reads the linked habit fresh, computes the delta with
+ * `computeHabitTriggerFire` (the same scoring/streak/multiplier a manual tap
+ * uses), and appends the habit doc update, the points increment, and (on fire)
+ * an attributed activity-log entry to `batch`.
+ *
+ * Returns the fired habit's title (for the attribution toast) or `null` when
+ * nothing fired — the to-do isn't linked, the habit was deleted, or the toggle
+ * was a no-op. Dedup for the to-do trigger is "once per to-do", which the
+ * caller's own `isCompleted`/`!isCompleted` idempotency guard already enforces,
+ * so no fired-keys ledger is needed here.
+ */
+async function fireLinkedHabitInBatch(params: {
+  db: Firestore;
+  batch: WriteBatch;
+  householdId: string;
+  todo: ToDo;
+  direction: 'up' | 'down';
+  actor: User | null;
+}): Promise<string | null> {
+  const { db, batch, householdId, todo, direction, actor } = params;
+  const habitId = todo.linkedHabitId;
+  if (!habitId) return null;
+
+  const habitSnap = await getDoc(
+    doc(db, `households/${householdId}/habits`, habitId).withConverter(habitConverter),
+  );
+  const habit = habitSnap.data();
+  if (!habit) return null; // linked habit deleted — complete the to-do normally
+
+  // An ARCHIVED linked habit must not fire (PRD #1065): the to-do completes
+  // normally, no points/streak side effect. A reverse is still allowed so a
+  // fire credited before the habit was archived can be undone.
+  if (direction === 'up' && habit.archivedAt) return null;
+
+  // 'up' fires like one manual tap. 'down' REVERSES the exact date the fire
+  // added — derived from the to-do's completion timestamp — so restoring a
+  // to-do completed on a PRIOR day strips that day's completion and debits the
+  // points credited THEN, rather than corrupting today's counter/streak.
+  const delta =
+    direction === 'up'
+      ? computeHabitTriggerFire(habit, 'up')
+      : computeHabitTriggerReverse(
+          habit,
+          todo.completedAt
+            ? getLocalDateString(new Date(todo.completedAt))
+            : getLocalDateString(),
+        );
+  if (!delta) return null; // no-op (e.g. reversing a habit already at 0)
+
+  batch.update(doc(db, `households/${householdId}/habits`, habitId), {
+    count: delta.count,
+    totalCount: delta.totalCount,
+    // Server-side delta, never the whole array — a stale offline cache must
+    // never wholesale-overwrite completion history (2026-07-15 incident).
+    ...(delta.addedDate !== undefined ? { completedDates: arrayUnion(delta.addedDate) } : {}),
+    ...(delta.removedDate !== undefined ? { completedDates: arrayRemove(delta.removedDate) } : {}),
+    streakDays: delta.streakDays,
+    lastUpdated: serverTimestamp(),
+  });
+
+  if (delta.pointsChange !== 0) {
+    batch.update(habitPointsTargetRef(db, householdId, habit.assignedTo), {
+      'points.daily': increment(delta.pointsChange),
+      'points.weekly': increment(delta.pointsChange),
+      'points.total': increment(delta.pointsChange),
+    });
+  }
+
+  // Attributed activity-log entry — only on a forward fire (a reversal is a
+  // correction that shouldn't clutter the feed, matching toggleHabit's 'down'
+  // exclusion). "<name> completed <habit> via to-do: <text>".
+  if (direction === 'up') {
+    const source: TriggerSource = { type: 'todo', todoId: todo.id, label: todo.text };
+    const attribution = attributionString(source);
+    appendActivityLog(batch, db, householdId, { uid: actor?.uid ?? '', name: actor?.displayName ?? '' }, {
+      domain: 'habit',
+      action: 'habit_completed',
+      summary: `Completed ${habit.title}${attribution ? ` (${attribution})` : ''}`,
+    });
+  }
+
+  return habit.title;
+}
 
 // Pure-ish factories for the to-do mutation family, moved verbatim out of
 // FirebaseHouseholdContext. The factories are split by the exact set of
@@ -166,21 +285,25 @@ export function makeCompleteToDo(deps: {
   db: Firestore;
   householdId: string | null;
   membersRef: { current: HouseholdMember[] };
+  user?: User | null;
 }) {
-  const { db, householdId, membersRef } = deps;
+  const { db, householdId, membersRef, user = null } = deps;
 
   /**
    * Commits the completion (and optional points credit) WITHOUT the recurring
    * next-instance spawn. Used as the graceful fallback when the full batch is
    * rejected — e.g. before the Firestore rules whitelist adds the `recurrence`
    * field (see the F-TODO-01 note in the PR), a batch that `set`s a doc with
-   * `recurrence` fails, but the user's completion must still succeed.
+   * `recurrence` fails, but the user's completion must still succeed. The
+   * linked-habit fire (PRD #1065) is re-applied here so the automation isn't
+   * lost on the fallback path.
    */
   const commitCompletionOnly = async (
     hid: string,
     todoRef: ReturnType<typeof doc>,
+    todo: ToDo,
     credit: ReturnType<typeof computeTodoCompletionCredit>,
-  ) => {
+  ): Promise<string | null> => {
     const batch = writeBatch(db);
     batch.update(todoRef, { isCompleted: true, completedAt: serverTimestamp() });
     if (credit) {
@@ -190,7 +313,11 @@ export function makeCompleteToDo(deps: {
         'points.total': increment(credit.points),
       });
     }
+    const firedTitle = await fireLinkedHabitInBatch({
+      db, batch, householdId: hid, todo, direction: 'up', actor: user,
+    });
     await batch.commit();
+    return firedTitle;
   };
 
   /**
@@ -206,6 +333,10 @@ export function makeCompleteToDo(deps: {
     if (!householdId) {
       throw new Error('Household not selected');
     }
+    // Double-fire guard: ignore re-entry while a completion for this id is
+    // already pending (closes the double-tap window before the getDoc check).
+    if (completeToDoInFlight.has(id)) return;
+    completeToDoInFlight.add(id);
     try {
       // Plan 080c-5: completing a to-do assigned to a MANAGED KID credits that
       // kid's own member.points (allowance-style). For every other assignee the
@@ -226,6 +357,14 @@ export function makeCompleteToDo(deps: {
       }
       if (todo.isCompleted) {
         return; // already completed — idempotent, no duplicate points
+      }
+      // Subtask gate (PRD #1065), enforced in the MUTATION so every completion
+      // path is covered — not just TodoRow's disabled checkbox. A habit-linked
+      // to-do with unfinished subtasks refuses completion with a typed error;
+      // call sites surface a "n steps left" message and bulk paths skip it.
+      const gate = evaluateTodoSubtaskGate(todo);
+      if (gate.blocked) {
+        throw new TodoSubtasksIncompleteError(todo.id, todo.text, gate.stepsLeft);
       }
       const credit = computeTodoCompletionCredit(todo, membersRef.current);
 
@@ -259,6 +398,12 @@ export function makeCompleteToDo(deps: {
         });
       }
 
+      // Habit Automations (PRD #1065): fire the linked habit IN this batch so
+      // the habit + points writes co-commit atomically with the completion.
+      let firedHabitTitle = await fireLinkedHabitInBatch({
+        db, batch, householdId, todo, direction: 'up', actor: user,
+      });
+
       try {
         await batch.commit();
       } catch (error) {
@@ -268,15 +413,28 @@ export function makeCompleteToDo(deps: {
         // simply won't be created until the rules ship.
         if (nextInstance) {
           console.warn('[completeToDo] Recurring spawn rejected; completing without it:', error);
-          await commitCompletionOnly(householdId, todoRef, credit);
+          firedHabitTitle = await commitCompletionOnly(householdId, todoRef, todo, credit);
         } else {
           throw error;
         }
       }
+
+      // Attribution toast: a linked to-do completing fired the habit for the
+      // user (PRD #1065). The generic completion toast stays owned by the UI.
+      if (firedHabitTitle) {
+        toast.success(`Logged "${firedHabitTitle}" via to-do`);
+      }
       // Note: Toast removed to allow UI-specific messaging (consistent with other CRUD operations)
     } catch (error) {
-      console.error('[completeToDo] Failed:', error);
+      // The subtask gate is an EXPECTED refusal, not a failure — rethrow it
+      // quietly so call sites can surface the "n steps left" message without a
+      // noisy error log.
+      if (!isTodoSubtasksIncompleteError(error)) {
+        console.error('[completeToDo] Failed:', error);
+      }
       throw error; // Re-throw so callers can handle the error with contextual messaging
+    } finally {
+      completeToDoInFlight.delete(id);
     }
   };
 
@@ -292,8 +450,9 @@ export function makeUncompleteToDo(deps: {
   db: Firestore;
   householdId: string | null;
   membersRef: { current: HouseholdMember[] };
+  user?: User | null;
 }) {
-  const { db, householdId, membersRef } = deps;
+  const { db, householdId, membersRef, user = null } = deps;
 
   /**
    * Marks a completed to-do as active again ("Mark as incomplete" / undo).
@@ -376,7 +535,19 @@ export function makeUncompleteToDo(deps: {
         }
       }
 
+      // Habit Automations (PRD #1065): reverse the linked habit fire (points +
+      // completedDate) IN this batch, so it can never diverge from the restore
+      // (pattern: PR #1060 kid-points reversal). A no-op when the habit was
+      // already at 0 or the link/habit is gone.
+      const reversedTitle = await fireLinkedHabitInBatch({
+        db, batch, householdId, todo, direction: 'down', actor: user,
+      });
+
       await batch.commit();
+
+      if (reversedTitle) {
+        toast(`Reversed "${reversedTitle}"`);
+      }
     } catch (error) {
       console.error('[uncompleteToDo] Failed:', error);
       throw error; // Re-throw so callers can handle the error with contextual messaging

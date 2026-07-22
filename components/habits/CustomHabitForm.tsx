@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Trash2, Sparkles, X, Plus } from 'lucide-react';
+import { Trash2, Sparkles, X, Plus, ListChecks } from 'lucide-react';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
-import { Habit, EffortLevel } from '@/types/schema';
+import { Habit, EffortLevel, HabitLocationTrigger, ToDo } from '@/types/schema';
 import { normalizeKeyword } from '@/utils/habitKeywordMatch';
 import {
   EFFORT_POINTS,
@@ -11,6 +11,7 @@ import {
   EFFORT_COLORS,
   NEGATIVE_CATEGORY,
 } from '@/data/presetHabits';
+import HabitLocationsEditor from '@/components/habits/HabitLocationsEditor';
 
 // Categories for custom habit creation
 const CUSTOM_CATEGORIES = ['Health', 'Meal Planning', 'Household', 'Financial Planning', 'Self-Discipline', NEGATIVE_CATEGORY];
@@ -30,6 +31,9 @@ export interface CustomHabitFormData {
    *  match whole-word; entries with a space match as an exact phrase. Empty on
    *  a habit with no keyword automation. */
   keywords: string[];
+  /** Habit Automations (PRD #1065) — saved geolocation triggers being edited
+   *  in this form session (merged back with any other trigger type on save). */
+  locations: HabitLocationTrigger[];
 }
 
 interface CustomHabitFormProps {
@@ -37,6 +41,12 @@ interface CustomHabitFormProps {
   onFormChange: (data: Partial<CustomHabitFormData>) => void;
   editingHabit: Habit | null;
   onDelete?: (habit: Habit) => void;
+  /**
+   * Habit Automations (PRD #1065): the to-dos linked to this habit (read-only).
+   * The link is AUTHORED on the to-do ("Counts toward habit" picker); the habit
+   * editor only lists them so all automations are visible in one place.
+   */
+  linkedTodos?: ToDo[];
 }
 
 const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
@@ -44,6 +54,7 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
   onFormChange,
   editingHabit,
   onDelete,
+  linkedTodos = [],
 }) => {
   const [keywordDraft, setKeywordDraft] = useState('');
 
@@ -179,10 +190,12 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
         </div>
       </div>
 
-      {/* Automations (Edit mode only) — PRD #1065. Transaction keywords ship
-          here; linked to-dos and saved locations arrive in sibling PRs. */}
+      {/* Automations (Edit mode only) — PRD #1065. Transaction keywords and
+          geolocation triggers are both fully wired here (keyword chips +
+          saved locations editor); linked to-dos are listed read-only last
+          (the link is authored on the to-do's "Counts toward habit" picker). */}
       {editingHabit && (
-        <section aria-labelledby="habit-automations-heading" className="pt-1">
+        <section aria-labelledby="habit-automations-heading" className="pt-1 space-y-3">
           <h3
             id="habit-automations-heading"
             className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase mb-2 flex items-center gap-1.5"
@@ -252,6 +265,55 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
               </button>
             </div>
           </div>
+
+          <div>
+            <p className="text-sm font-semibold text-brand-700 dark:text-brand-200 mb-1.5">
+              Saved locations
+            </p>
+            <HabitLocationsEditor
+              locations={formData.locations}
+              onChange={(locations) => onFormChange({ locations })}
+            />
+          </div>
+
+          {linkedTodos.length > 0 ? (
+            <div className="rounded-card border border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800 overflow-hidden">
+              <p className="px-4 pt-3 pb-1 text-xxs font-semibold uppercase tracking-wider text-brand-400 dark:text-brand-450">
+                Linked to-dos
+              </p>
+              <ul>
+                {linkedTodos.map(todo => (
+                  <li
+                    key={todo.id}
+                    className="flex items-center gap-2.5 px-4 py-2.5 border-t border-brand-100 dark:border-brand-700/60 first:border-t-0"
+                  >
+                    <ListChecks size={16} className="shrink-0 text-warm-500" aria-hidden="true" />
+                    <span className="min-w-0 flex-1 truncate text-sm text-brand-700 dark:text-brand-200">
+                      {todo.text}
+                    </span>
+                    {todo.isCompleted && (
+                      <span className="shrink-0 text-xxs font-semibold uppercase tracking-wider text-money-pos dark:text-money-posDark">
+                        Done
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <p className="px-4 py-2.5 border-t border-brand-100 dark:border-brand-700/60 text-xs text-brand-400 dark:text-brand-450">
+                Completing one of these logs this habit for you.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-card border border-dashed border-brand-200 dark:border-brand-700 bg-brand-50/60 dark:bg-brand-700/30 p-4 text-center">
+              <p className="text-sm font-semibold text-brand-700 dark:text-brand-200">
+                Log this habit automatically
+              </p>
+              <p className="text-xs text-brand-400 dark:text-brand-450 mt-1">
+                Link a to-do to this habit (from the to-do&rsquo;s &ldquo;Counts
+                toward habit&rdquo; picker) and completing it fires this habit for you.
+              </p>
+            </div>
+          )}
         </section>
       )}
 

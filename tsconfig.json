@@ -32,6 +32,9 @@
     "node_modules",
     "functions",
     "e2e",
-    "playwright.config.ts"
+    "playwright.config.ts",
+    ".design-sync",
+    "scratch_*.ts",
+    "scratch_*.tsx"
   ]
 }

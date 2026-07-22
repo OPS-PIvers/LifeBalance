@@ -14,7 +14,10 @@ import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redempt
 import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { processToggleHabit, processStaleDownToggle, isHabitStale, calculateResetPoints, streakForHabit } from '@/utils/habitLogic';
+import { computeHabitTriggerFire, computeHabitTriggerReverse } from '@/utils/habitTriggerFire';
+import { evaluateTodoSubtaskGate, TodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
 import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
+import { attributionString, type TriggerSource } from '@/utils/habitTriggers';
 import { selectAutoFreezeCandidates } from '@/utils/freezeBank';
 import { accountImpactOf, effectiveAccountImpact, isBankSyncTransaction, resolveTargetAccount } from '@/utils/accountImpact';
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
@@ -436,6 +439,20 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       createdBy: 'test-user-id',
       createdAt: new Date().toISOString(),
     },
+    // Habit Automations (PRD #1065): a to-do LINKED to the 'Exercise 30min'
+    // habit (h2). Completing it fires the habit like one manual tap; the
+    // "Counts toward habit" picker + the habit editor's Automations listing are
+    // both walkable in Test Mode. No subtasks, so it completes immediately.
+    {
+      id: 'todo_linked_1',
+      text: 'Go for a 30 minute run',
+      completeByDate: getLocalDateString(),
+      assignedTo: 'test-user-id',
+      isCompleted: false,
+      linkedHabitId: 'h2',
+      createdBy: 'test-user-id',
+      createdAt: new Date().toISOString(),
+    },
   ]);
   // Keep a ref in sync with the latest todos so completeToDo can resolve the
   // completed to-do DETERMINISTICALLY (for the points credit) without depending on
@@ -443,6 +460,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // which is safe for a plain mirror ref (no state change, no effect needed).
   const todosRef = useRef(todos);
   todosRef.current = todos;
+  // Habit Automations (PRD #1065): mirror habits so completeToDo/uncompleteToDo
+  // can fire/reverse a linked habit off the latest state without depending on
+  // updater execution order (same pattern as todosRef above).
+  const habitsFireRef = useRef(habits);
+  habitsFireRef.current = habits;
   const [groceryCatalog, setGroceryCatalog] = useState<GroceryCatalogItem[]>(SEED_GROCERY_CATALOG);
   const [bucketHistory] = useState<BucketPeriodSnapshot[]>([]); // Mock empty history
   // Net worth history (F-MONEY-09) — 30 deterministic daily snapshots ending
@@ -1200,7 +1222,15 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   }, []);
 
   const updateHabit = useCallback(async (habit: Habit) => {
-    setHabits(prev => prev.map(h => h.id === habit.id ? habit : h));
+    // Merge rather than wholesale-replace, mirroring the real Firestore
+    // updateDoc path (which only touches the fields it's explicitly given):
+    // spreading the incoming `habit` OVER the existing doc preserves any
+    // field the caller's payload omits entirely (e.g. HabitFormModal editing
+    // basePoints doesn't carry `triggers` at all) while still honoring an
+    // explicit overwrite/clear for any key the caller DID include (even with
+    // value `undefined`, since object spread only overwrites keys actually
+    // present on the source object).
+    setHabits(prev => prev.map(h => (h.id === habit.id ? { ...h, ...habit } : h)));
     toast.success('Mock: Habit updated');
   }, []);
 
@@ -1289,13 +1319,69 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     setTotalPoints(prev => prev + delta);
   }, []);
 
+  // Habit Automations (PRD #1065): fire (or reverse) the habit a to-do is linked
+  // to, mirroring the real fireLinkedHabitInBatch — same pure scoring helper
+  // (computeHabitTriggerFire) the interactive toggle uses. Returns the fired
+  // habit's title for the attribution toast, or null when nothing fired.
+  const fireLinkedHabitMock = useCallback((todo: ToDo, direction: 'up' | 'down'): string | null => {
+    const habitId = todo.linkedHabitId;
+    if (!habitId) return null;
+    const habit = habitsFireRef.current.find(h => h.id === habitId);
+    if (!habit) return null;
+    // Archived linked habit never fires (parity with fireLinkedHabitInBatch).
+    if (direction === 'up' && habit.archivedAt) return null;
+    // 'down' reverses the EXACT date the fire added (from the to-do's
+    // completedAt), so a prior-day restore doesn't corrupt today's counter.
+    const delta =
+      direction === 'up'
+        ? computeHabitTriggerFire(habit, 'up')
+        : computeHabitTriggerReverse(
+            habit,
+            todo.completedAt
+              ? getLocalDateString(new Date(todo.completedAt))
+              : getLocalDateString(),
+          );
+    if (!delta) return null;
+    setHabits(prev => prev.map(h => {
+      if (h.id !== habitId) return h;
+      const completedDates = delta.addedDate
+        ? [...h.completedDates.filter(d => d !== delta.addedDate), delta.addedDate]
+        : delta.removedDate
+          ? h.completedDates.filter(d => d !== delta.removedDate)
+          : h.completedDates;
+      return {
+        ...h,
+        count: delta.count,
+        totalCount: delta.totalCount,
+        completedDates,
+        streakDays: delta.streakDays,
+        lastUpdated: new Date().toISOString(),
+      };
+    }));
+    if (delta.pointsChange !== 0) {
+      if (habit.assignedTo) {
+        setMembers(prev => prev.map(m => m.uid === habit.assignedTo
+          ? { ...m, points: {
+              daily: m.points.daily + delta.pointsChange,
+              weekly: m.points.weekly + delta.pointsChange,
+              total: m.points.total + delta.pointsChange,
+            } }
+          : m));
+      } else {
+        creditPoints(delta.pointsChange);
+      }
+    }
+    return habit.title;
+  }, [creditPoints]);
+
   // Full scoring parity with the real toggle path: reuse the SAME pure,
   // unit-tested logic (streaks, period-aware multiplier, threshold vs
   // incremental scoring, completedDates upkeep) instead of a bare count bump,
   // so Test Mode's points/streak behavior matches production exactly.
-  const toggleHabit = useCallback(async (id: string, direction: 'up' | 'down') => {
+  const toggleHabit = useCallback(async (id: string, direction: 'up' | 'down', source?: TriggerSource) => {
     const habit = habits.find(h => h.id === id);
     if (!habit) return;
+    const attribution = source ? attributionString(source) : null;
 
     // Lazy-reset parity with the real toggle path (useHabitActions): a stale
     // habit's counter belongs to a previous period. 'down' undoes that prior
@@ -1334,7 +1420,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     if (!result) return; // e.g. decrement below 0
     setHabits(prev => prev.map(h => h.id === id ? { ...h, ...result.updatedHabit } : h));
     creditPoints(result.pointsChange);
-    toast.success(`Mock: Habit ${direction === 'up' ? 'incremented' : 'decremented'}`);
+    toast.success(
+      `Mock: Habit ${direction === 'up' ? 'incremented' : 'decremented'}${attribution ? ` (${attribution})` : ''}`
+    );
 
     // F-HABITS-02 (streak milestone celebrations): mirrors the real
     // toggleHabit's presentation-only milestone toast + reward unlock.
@@ -2172,6 +2260,12 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       if (completedTodo.isCompleted) {
         return; // already completed — avoid duplicate points
       }
+      // Subtask gate parity (PRD #1065): refuse a habit-linked to-do with
+      // unfinished subtasks with the SAME typed error the real mutation throws.
+      const gate = evaluateTodoSubtaskGate(completedTodo);
+      if (gate.blocked) {
+        throw new TodoSubtasksIncompleteError(completedTodo.id, completedTodo.text, gate.stepsLeft);
+      }
       // F-TODO-01: recurring todos spawn their next instance on completion,
       // mirroring the atomic completion+spawn in makeCompleteToDo.
       const nextInstance = buildNextRecurringTodo(completedTodo, getLocalDateString());
@@ -2198,8 +2292,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
             } }
           : m);
       });
-      toast.success('Mock: ToDo completed');
-    }, []),
+      // Habit Automations (PRD #1065): fire the linked habit like one manual tap.
+      const firedTitle = fireLinkedHabitMock(completedTodo, 'up');
+      toast.success(firedTitle ? `Mock: logged "${firedTitle}" via to-do` : 'Mock: ToDo completed');
+    }, [fireLinkedHabitMock]),
     uncompleteToDo: useCallback(async (id: string) => {
       // Counterpart of completeToDo (see makeUncompleteToDo in the real
       // context): restores the to-do AND reverses the managed-kid points
@@ -2250,8 +2346,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
             } }
           : m);
       });
-      toast.success('Mock: ToDo restored');
-    }, []),
+      // Habit Automations (PRD #1065): reverse the linked habit fire atomically
+      // with the restore (mirrors makeUncompleteToDo).
+      const reversedTitle = fireLinkedHabitMock(todo, 'down');
+      toast.success(reversedTitle ? `Mock: reversed "${reversedTitle}"` : 'Mock: ToDo restored');
+    }, [fireLinkedHabitMock]),
     addTaskTemplate,
     updateTaskTemplate,
     deleteTaskTemplate,

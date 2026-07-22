@@ -881,13 +881,15 @@ describe('useHabitActions.updateHabit (Plan 080c-3: assignedTo round-trips throu
     expect('assignedTo' in payload).toBe(false);
   });
 
-  // Regression (PR #1072): an ordinary edit (no triggers on the payload) must
-  // NOT touch a habit's automations. Writing `triggers` on every call — as the
-  // original code did — silently wiped keyword/location automations whenever a
-  // user tweaked basePoints via the habit card's Edit.
-  it('OMITS triggers entirely when the payload has none (leaves existing automations untouched)', async () => {
+  // Regression (adversarial-review finding on PR #1073, converged with #1072):
+  // an ordinary habit edit (e.g. bumping basePoints via the habit card's Edit
+  // form) must NEVER wipe previously-saved location/keyword triggers.
+  // HabitFormModal's baseHabitData doesn't mention `triggers` at all for such
+  // an edit, so the `habit` object passed to updateHabit has no `triggers`
+  // own property — that must leave the stored field untouched, not delete it.
+  it('does not delete existing triggers when the payload omits the triggers key entirely', async () => {
     const habit = baseHabit({ id: 'h1' });
-    expect(habit.triggers).toBeUndefined();
+    expect('triggers' in habit).toBe(false);
 
     const { result } = renderHook(() =>
       useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
@@ -905,6 +907,22 @@ describe('useHabitActions.updateHabit (Plan 080c-3: assignedTo round-trips throu
 
   it('writes a populated triggers object through unchanged', async () => {
     const triggers = { keywords: ['whole foods'], locations: [] };
+    const habit = baseHabit({ id: 'h1', triggers });
+
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.updateHabit(habit);
+    });
+
+    const payload = lastUpdatePayload();
+    expect(payload.triggers).toEqual(triggers);
+  });
+
+  it('writes a non-empty triggers value through when the payload explicitly provides one', async () => {
+    const triggers = { locations: [{ id: 'loc1', name: 'Target', lat: 1, lng: 2, radiusMeters: 150 }] };
     const habit = baseHabit({ id: 'h1', triggers });
 
     const { result } = renderHook(() =>

@@ -2300,16 +2300,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
   const completeToDo = useCallback(async (id: string) => {
-    await makeCompleteToDo({ db, householdId, membersRef }).completeToDo(id);
-  }, [householdId]);
+    await makeCompleteToDo({ db, householdId, membersRef, user }).completeToDo(id);
+  }, [householdId, user]);
 
   /**
    * Restores a completed to-do to active, reversing any kid points credit in
    * the same writeBatch (counterpart of completeToDo — see makeUncompleteToDo).
    */
   const uncompleteToDo = useCallback(async (id: string) => {
-    await makeUncompleteToDo({ db, householdId, membersRef }).uncompleteToDo(id);
-  }, [householdId]);
+    await makeUncompleteToDo({ db, householdId, membersRef, user }).uncompleteToDo(id);
+  }, [householdId, user]);
 
   // --- ACTIONS: UNIFIED TRASH (F-XCUT-03) ---
 

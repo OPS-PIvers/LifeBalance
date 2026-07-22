@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useId } from 'react';
 import { X, Plus, ChevronRight } from 'lucide-react';
 import { Habit, EffortLevel } from '@/types/schema';
-import { useGamification } from '@/contexts/FirebaseHouseholdContext';
+import { useGamification, useTodos } from '@/contexts/FirebaseHouseholdContext';
 import {
   PresetHabit,
   EFFORT_POINTS,
@@ -13,19 +13,7 @@ import CustomHabitList from '@/components/habits/CustomHabitList';
 import PresetHabitList from '@/components/habits/PresetHabitList';
 import { Drawer } from '@/components/ui/Drawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-
-// UUID generator with fallback for non-secure contexts
-const generateId = (): string => {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  // Fallback for non-secure contexts
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-};
+import { generateId } from '@/utils/id';
 
 // Helper to calculate basePoints based on type and effort level
 const calculateBasePoints = (type: 'positive' | 'negative', effortLevel: EffortLevel): number => {
@@ -66,10 +54,14 @@ const DEFAULT_FORM_DATA: CustomHabitFormData = {
   period: 'daily',
   targetCount: '1',
   keywords: [],
+  locations: [],
 };
 
 const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose }) => {
   const { habits, addHabit, updateHabit, deleteHabit } = useGamification();
+  // Habit Automations (PRD #1065): the to-dos linked to the habit being edited,
+  // shown read-only in the CustomHabitForm's Automations section.
+  const { todos } = useTodos();
   const titleId = useId();
 
   // View state
@@ -154,6 +146,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
       period: habit.period,
       targetCount: habit.targetCount.toString(),
       keywords: habit.triggers?.keywords ?? [],
+      locations: habit.triggers?.locations ?? [],
     });
     setView('edit-custom');
   };
@@ -172,19 +165,18 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
 
     const targetCount = parseTargetCount(formData.targetCount);
 
-    // Habit Automations (PRD #1065): merge the edited keywords back with any
-    // existing location trigger (a different PR's Automations surface — never
-    // touched here) so saving the keyword editor can't silently drop it.
-    // `triggers` itself is omitted entirely when there's nothing to
-    // configure, matching every existing habit doc (the field is absent, not
-    // an empty object).
-    const existingLocations = editingHabit?.triggers?.locations;
+    // Habit Automations (PRD #1065): both keyword and location triggers are
+    // edited in this same form now, so build `triggers` directly from
+    // formData — no need to fall back to editingHabit's stored value for
+    // either trigger type. `triggers` itself is omitted entirely when there's
+    // nothing to configure, matching every existing habit doc (the field is
+    // absent, not an empty object).
     const cleanedKeywords = formData.keywords.map(k => k.trim()).filter(Boolean);
     const triggers: Habit['triggers'] =
-      cleanedKeywords.length > 0 || (existingLocations && existingLocations.length > 0)
+      cleanedKeywords.length > 0 || formData.locations.length > 0
         ? {
             ...(cleanedKeywords.length > 0 ? { keywords: cleanedKeywords } : {}),
-            ...(existingLocations && existingLocations.length > 0 ? { locations: existingLocations } : {}),
+            ...(formData.locations.length > 0 ? { locations: formData.locations } : {}),
           }
         : undefined;
 
@@ -377,6 +369,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
               onFormChange={handleFormChange}
               editingHabit={editingHabit}
               onDelete={confirmDelete}
+              linkedTodos={editingHabit ? todos.filter(t => t.linkedHabitId === editingHabit.id) : []}
             />
           )}
 

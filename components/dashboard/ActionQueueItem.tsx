@@ -6,6 +6,7 @@ import { toastIcon } from '@/components/ui/toastIcon';
 import { format, parseISO, isBefore, addDays, isAfter, startOfToday, isValid } from 'date-fns';
 import toast from 'react-hot-toast';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
+import { isTodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
 import {
   ActionQueueItem, isCalendarQueueItem, isTodoQueueItem, isTransactionQueueItem
 } from '@/hooks/useActionQueue';
@@ -560,6 +561,13 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                      toast.success('To-Do completed!');
                      setExpandedId(null);
                    } catch (error) {
+                     // A habit-linked to-do with unfinished subtasks is REFUSED by
+                     // the mutation (PRD #1065), not a failure — surface the
+                     // remaining step count instead.
+                     if (isTodoSubtasksIncompleteError(error)) {
+                       toast(`${error.stepsLeft} step${error.stepsLeft === 1 ? '' : 's'} left on “${error.title}”`);
+                       return;
+                     }
                      console.error('Failed to complete task:', error);
                      toast.error('Failed to complete to-do');
                    }
