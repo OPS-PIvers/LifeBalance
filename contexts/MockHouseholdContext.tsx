@@ -52,6 +52,8 @@ import {
   Household,
   FreezeBank,
   ModuleKey,
+  CaptureType,
+  CaptureReviewMode,
   DietaryProfile,
   WeeklyRecap,
   MonthlyMoneyRecap,
@@ -367,7 +369,20 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   membersRef.current = members;
   const [activeMemberId, setActiveMemberId] = useState<string | null>(null);
   const [meals, setMeals] = useState<Meal[]>([]);
-  const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
+  // captureReview (F-CAPTURE-01 foundation) Test-Mode harness: one held-for-review
+  // shopping capture so the visible/awaiting-review split (and its future review UI)
+  // is walkable in Test Mode. Inert for the normal shopping list — it never appears
+  // in `shoppingList` until approved.
+  const [shoppingList, setShoppingList] = useState<ShoppingItem[]>(() => isFresh ? [] : [
+    {
+      id: 'shop_review_1',
+      name: 'Paper towels',
+      category: 'Household',
+      isPurchased: false,
+      source: 'shortcut',
+      needsReview: true,
+    },
+  ]);
   const [mealPlan, setMealPlan] = useState<MealPlanItem[]>([]);
   // Plan 080c-5 Test-Mode harness: one kid-assigned todo so the +pts badge and
   // the completeToDo → kid-points credit path are walkable. assignedTo targets the
@@ -422,6 +437,20 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       completeByDate: format(addDays(new Date(), 14), 'yyyy-MM-dd'),
       assignedTo: 'test-user-id',
       isCompleted: false,
+      createdBy: 'test-user-id',
+      createdAt: new Date().toISOString(),
+    },
+    // captureReview (F-CAPTURE-01 foundation) Test-Mode harness: one held-for-review
+    // todo capture so the visible/awaiting-review split is walkable in Test Mode.
+    // Inert for the normal to-do list — it never appears in `todos` until approved.
+    {
+      id: 'todo_review_1',
+      text: 'Call the plumber',
+      completeByDate: getLocalDateString(),
+      assignedTo: 'test-user-id',
+      isCompleted: false,
+      source: 'shortcut',
+      needsReview: true,
       createdBy: 'test-user-id',
       createdAt: new Date().toISOString(),
     },
@@ -619,6 +648,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // legacy household. Toggling a module mutates this in-memory map so the dynamic
   // footer / route guards / Plan-tab fallback are all walkable in Test Mode.
   const [moduleVisibility, setModuleVisibilityState] = useState<Partial<Record<ModuleKey, boolean>>>({});
+  // captureReview (F-CAPTURE-01 foundation) — starts empty, mirroring a legacy
+  // household (absent map falls back to the per-type defaults in
+  // utils/captureReview.ts). Overriding a type mutates this in-memory map so
+  // the settings UI is walkable in Test Mode.
+  const [captureReview, setCaptureReviewState] = useState<Partial<Record<CaptureType, CaptureReviewMode>>>({});
   // F-MEALS-03 — standing household dietary profile, undefined until set (mirrors
   // a legacy household with no restrictions recorded).
   const [dietaryProfile, setDietaryProfileState] = useState<DietaryProfile | undefined>(undefined);
@@ -707,6 +741,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const setModuleVisibility = useCallback(async (key: ModuleKey, value: boolean) => {
     setModuleVisibilityState(prev => ({ ...prev, [key]: value }));
     toast.success(`Mock: ${key} ${value ? 'enabled' : 'disabled'}`);
+  }, []);
+
+  const setCaptureReviewMode = useCallback(async (type: CaptureType, mode: CaptureReviewMode) => {
+    setCaptureReviewState(prev => ({ ...prev, [type]: mode }));
+    toast.success(`Mock: ${type} captures set to ${mode}`);
   }, []);
 
   const setDietaryProfile = useCallback(async (profile: DietaryProfile) => {
@@ -1881,6 +1920,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     redemptionHistory,
     unlockedRewardIds,
     moduleVisibility,
+    captureReview,
     dietaryProfile,
     mealCookedHabitId,
     // F-DASH-06: seed a nonzero today's usage so the InsightWidget AI-usage
@@ -1893,6 +1933,26 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const bucketSpentMap = useMemo(
     () => calculateBucketSpent(buckets, transactions, currentPeriodId),
     [buckets, transactions, currentPeriodId]
+  );
+
+  // captureReview (F-CAPTURE-01 foundation): mirror the real context's
+  // visible/awaiting-review split so the settings UI + list views behave
+  // identically in Test Mode.
+  const visibleShoppingList = useMemo(
+    () => shoppingList.filter((item) => item.needsReview !== true),
+    [shoppingList]
+  );
+  const shoppingAwaitingReview = useMemo(
+    () => shoppingList.filter((item) => item.needsReview === true),
+    [shoppingList]
+  );
+  const visibleTodos = useMemo(
+    () => todos.filter((t) => t.needsReview !== true),
+    [todos]
+  );
+  const todosAwaitingReview = useMemo(
+    () => todos.filter((t) => t.needsReview === true),
+    [todos]
   );
 
   const contextValue: HouseholdContextType = {
@@ -1932,9 +1992,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     yearlyGoals,
     members,
     meals,
-    shoppingList,
+    shoppingList: visibleShoppingList,
+    shoppingAwaitingReview,
     mealPlan,
-    todos,
+    todos: visibleTodos,
+    todosAwaitingReview,
     groceryCatalog,
     bucketHistory,
     recaps,
@@ -2179,6 +2241,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     setHouseholdCurrency,
     setModuleVisibility,
     updateModuleVisibility,
+    setCaptureReviewMode,
     setKidModePin,
     setDietaryProfile,
     setMealCookedHabitId,

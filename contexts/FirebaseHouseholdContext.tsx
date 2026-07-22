@@ -55,6 +55,8 @@ import {
   HouseholdApiKey,
   PendingItem,
   ModuleKey,
+  CaptureType,
+  CaptureReviewMode,
   WeeklyRecap,
   MonthlyMoneyRecap,
   ActivityLogEntry,
@@ -498,6 +500,20 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // stay marked and are never re-fetched).
   const requestedMealIdsRef = useRef<Set<string>>(new Set());
   const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
+  // captureReview (F-CAPTURE-01 foundation): split the raw Firestore-synced
+  // list by `needsReview` so held-for-review captures are hidden from the
+  // visible list. Internal mutations (toggleShoppingItemPurchased,
+  // clearPurchasedShoppingItems, deleteStore) keep reading the RAW `shoppingList`
+  // state directly (their id-based lookups/filters are unaffected by review
+  // status), so only the exposed slice value swaps in the filtered lists below.
+  const visibleShoppingList = useMemo(
+    () => shoppingList.filter((item) => item.needsReview !== true),
+    [shoppingList]
+  );
+  const shoppingAwaitingReview = useMemo(
+    () => shoppingList.filter((item) => item.needsReview === true),
+    [shoppingList]
+  );
   // Meal plan: live window (current week ± 1) merged with weeks loaded on demand
   // as the user navigates the calendar.
   const [mealPlanWindow, setMealPlanWindow] = useState<MealPlanItem[]>([]);
@@ -524,6 +540,18 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const todos = useMemo(
     () => mergeById(mergeById(activeTodos, completedTodos), olderCompletedTodos),
     [activeTodos, completedTodos, olderCompletedTodos]
+  );
+  // captureReview (F-CAPTURE-01 foundation): split the raw merged list by
+  // `needsReview`, mirroring shoppingList above — held-for-review todo
+  // captures are hidden from the visible list but stay in `todos` for any
+  // future id-based internal lookup.
+  const visibleTodos = useMemo(
+    () => todos.filter((t) => t.needsReview !== true),
+    [todos]
+  );
+  const todosAwaitingReview = useMemo(
+    () => todos.filter((t) => t.needsReview === true),
+    [todos]
   );
   const [isLoadingOlderTodos, setIsLoadingOlderTodos] = useState(false);
   const [hasMoreCompletedTodos, setHasMoreCompletedTodos] = useState(false);
@@ -2051,6 +2079,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeHouseholdSettingsMutations({ db, householdId }).updateModuleVisibility(patch);
   }, [householdId]);
 
+  // Same dotted-path-merge pattern as setModuleVisibility — routes ONE quick-add
+  // capture type ('expense' | 'shopping' | 'todo') to 'auto' or 'review' without
+  // disturbing sibling keys in captureReview. See utils/captureReview.ts.
+  const setCaptureReviewMode = useCallback(async (type: CaptureType, mode: CaptureReviewMode) => {
+    await makeHouseholdSettingsMutations({ db, householdId }).setCaptureReviewMode(type, mode);
+  }, [householdId]);
+
   // Plan 080b: set/clear the Kid Mode exit PIN. A raw PIN is salted+hashed here
   // (never stored plaintext); passing null removes the PIN so exiting needs none.
   const setKidModePin = useCallback(async (pin: string | null): Promise<void> => {
@@ -2461,7 +2496,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   ]);
 
   const shoppingValue = useMemo<ShoppingContextValue>(() => ({
-    shoppingList,
+    shoppingList: visibleShoppingList,
+    shoppingAwaitingReview,
     groceryCatalog,
     loadFullGroceryCatalog,
     stores,
@@ -2487,7 +2523,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateGroceryCatalogItem,
     deleteGroceryCatalogItem,
   }), [
-    shoppingList, groceryCatalog, loadFullGroceryCatalog, stores, groceryCategories, quickStockLists,
+    visibleShoppingList, shoppingAwaitingReview, groceryCatalog, loadFullGroceryCatalog, stores, groceryCategories, quickStockLists,
     addShoppingItem, addShoppingItems, updateShoppingItem, reorderShoppingItems, deleteShoppingItem, toggleShoppingItemPurchased, clearPurchasedShoppingItems,
     addStore, updateStore, deleteStore, reorderStores, updateGroceryCategories,
     addQuickStockList, updateQuickStockList, updateQuickStockLists, deleteQuickStockList,
@@ -2495,7 +2531,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   ]);
 
   const todosValue = useMemo<TodosContextValue>(() => ({
-    todos,
+    todos: visibleTodos,
+    todosAwaitingReview,
     isLoadingOlderTodos,
     hasMoreCompletedTodos,
     loadOlderCompletedTodos,
@@ -2509,7 +2546,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     deleteTaskTemplate,
     applyTaskTemplate,
   }), [
-    todos, isLoadingOlderTodos, hasMoreCompletedTodos, loadOlderCompletedTodos,
+    visibleTodos, todosAwaitingReview, isLoadingOlderTodos, hasMoreCompletedTodos, loadOlderCompletedTodos,
     addToDo, updateToDo, deleteToDo, completeToDo,
     taskTemplates, addTaskTemplate, updateTaskTemplate, deleteTaskTemplate, applyTaskTemplate,
   ]);
@@ -2538,6 +2575,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setHouseholdCurrency,
     setModuleVisibility,
     updateModuleVisibility,
+    setCaptureReviewMode,
     setKidModePin,
     setDietaryProfile,
     setMealCookedHabitId,
@@ -2561,7 +2599,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     isLoading, currentUser, members, insight, insightsHistory, isGeneratingInsight, hasMoreInsights, loadAllInsights,
     pendingItemsCount, apiKeys,
     householdId, householdSettings, refreshInsight, rateInsight, addMember, updateMember, removeMember, deleteHousehold,
-    completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setKidModePin, setDietaryProfile, setMealCookedHabitId,
+    completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setCaptureReviewMode, setKidModePin, setDietaryProfile, setMealCookedHabitId,
     addKidProfile, updateKidProfile, removeKidProfile, activeMemberId, actAs, exitToParent,
     recaps,
     moneyRecaps,
