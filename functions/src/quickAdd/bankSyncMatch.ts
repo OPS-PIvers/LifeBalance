@@ -17,9 +17,10 @@
  *   e. CREATE  — otherwise a new verified, `needsCategory` transaction
  *
  * The account balance is NEVER moved from any of these decisions — the email's
- * ending balance already reflects every withdrawal, and the endpoint overwrites
- * the account balance with it once (see `buildEndingBalanceUpdate`). That is why
- * neither CONFIRM nor PAY applies a per-line balance delta.
+ * available balance already reflects every withdrawal (posted or held), and the
+ * endpoint overwrites the account balance with it once (see
+ * `buildBalanceUpdate`). That is why neither CONFIRM nor PAY applies a
+ * per-line balance delta.
  */
 
 import type { BankEmailWithdrawal } from "./bankEmailParser";
@@ -424,12 +425,16 @@ function getPayPeriodForTransactionLexical(
 
 /**
  * The Firestore patch that OVERWRITES an account's balance with the email's
- * ending balance (5). It is an absolute set, never an increment — the ending
- * balance already reflects every withdrawal, so this is the single source of
- * balance truth for the sync.
+ * AVAILABLE balance (5). It is an absolute set, never an increment — the
+ * available balance already reflects every withdrawal AND every
+ * authorized-but-unposted hold, so this is the single source of balance truth
+ * for the sync. (The email's "Ending balance" is the posted-only figure; it
+ * runs HIGH by the sum of pending card holds, which is exactly the money the
+ * user can no longer spend — so Available, not Ending, is what the account
+ * balance must mirror.)
  */
-export function buildEndingBalanceUpdate(endingBalance: number): { balance: number } {
-  return { balance: endingBalance };
+export function buildBalanceUpdate(availableBalance: number): { balance: number } {
+  return { balance: availableBalance };
 }
 
 // ---------------------------------------------------------------------------

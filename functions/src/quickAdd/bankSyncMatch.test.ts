@@ -13,7 +13,7 @@ import {
   decideWithdrawal,
   matchAccountByAccountLast4,
   isMessageAlreadyProcessed,
-  buildEndingBalanceUpdate,
+  buildBalanceUpdate,
   getBillPayPeriodId,
   computeBalanceAsOf,
   shouldSkipBalanceOverwrite,
@@ -461,9 +461,9 @@ describe("isMessageAlreadyProcessed", () => {
   });
 });
 
-describe("buildEndingBalanceUpdate", () => {
+describe("buildBalanceUpdate", () => {
   it("returns an absolute balance overwrite (never an increment)", () => {
-    expect(buildEndingBalanceUpdate(1277.9)).toEqual({ balance: 1277.9 });
+    expect(buildBalanceUpdate(1165.82)).toEqual({ balance: 1165.82 });
   });
 });
 

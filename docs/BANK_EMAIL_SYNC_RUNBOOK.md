@@ -40,7 +40,7 @@ bankEmailSync (Cloud Function, functions/src/quickAdd/bankEmailSync.ts)
    │       d. PAY     — a matching unpaid calendar bill, retro-filed to the
    │                    bill's OWN due-date pay period
    │       e. CREATE  — new verified, needsCategory transaction
-   │  7. OVERWRITE the account balance with the email's ending balance
+   │  7. OVERWRITE the account balance with the email's AVAILABLE balance
    │  8. commit everything (including the ledger's final record) in ONE
    │     atomic batch
    ▼
@@ -59,9 +59,11 @@ Key properties (all read directly from the merged `main` code, not assumed):
   ([functions/src/quickAdd/bankEmailParser.ts](../functions/src/quickAdd/bankEmailParser.ts)),
   so a WF format change fails loudly (a `PARSE_FAILED` push) instead of silently
   hallucinating numbers.
-- **No per-line balance delta.** The email's ending balance is the single source of
-  truth; every withdrawal is filed/matched, but the account balance is only ever
-  **overwritten** once per email (`buildEndingBalanceUpdate`), never incremented.
+- **No per-line balance delta.** The email's **available** balance is the single
+  source of truth (not the ending balance — that posted-only figure runs high by
+  the sum of authorized-but-unposted card holds, i.e. money already spent); every
+  withdrawal is filed/matched, but the account balance is only ever
+  **overwritten** once per email (`buildBalanceUpdate`), never incremented.
   **Ordering guard:** each overwrite also stamps `Account.balanceAsOf` (the email's
   own "As of" date, falling back to its newest withdrawal date, then the request's
   `today`). An email whose as-of date is *older* than the stored `balanceAsOf` still
@@ -76,7 +78,7 @@ Key properties (all read directly from the merged `main` code, not assumed):
   This is also why a **filled Apple Pay stub** and a **confirmed pending transaction**
   are both marked `status: 'verified'` in this same pass (not left `pending_review`)
   — leaving either pending would let a later client-side categorize apply its own
-  balance delta and double-count against the already-authoritative ending balance.
+  balance delta and double-count against the already-authoritative available balance.
 - **A born-verified `needsCategory` row is not "done," it's "not yet categorized."**
   The `create` branch (step e) writes the new transaction as `status: 'verified'`
   (the balance already reflects it) but `needsCategory: true`. `needsReview()` in
