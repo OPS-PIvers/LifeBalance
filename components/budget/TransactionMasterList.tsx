@@ -406,12 +406,23 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
 
   // Offset of the list wrapper inside the page scroller. Stored in a ref (the
   // standard tanstack "scrolling a parent element" pattern) and read on every
-  // render — the value is 0 on the very first render, then correct from the
-  // first post-layout render onward, which is all the virtualizer needs.
+  // render — 0 until the first re-render AFTER layout (the effect updates the
+  // ref but doesn't itself re-render); data/filter renders pick it up almost
+  // immediately, and overscan absorbs the brief window.
   const listOffsetRef = useRef(0);
   useLayoutEffect(() => {
     listOffsetRef.current = listWrapperRef.current?.offsetTop ?? 0;
   });
+
+  // Stable identity: a new getScrollElement reference makes the virtualizer
+  // detach/re-attach its scroll listener on every render.
+  const getScrollElement = useCallback(
+    () =>
+      (document.getElementById('main-content') ??
+        document.scrollingElement ??
+        document.documentElement) as HTMLElement,
+    [],
+  );
 
   // Virtualizer — the app uses a single page scroller (MainLayout's
   // <main id="main-content">), so the virtualizer windows against the PAGE
@@ -427,10 +438,7 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
   // layout paint is close to correct; rows are remeasured once they mount.
   const virtualizer = useVirtualizer({
     count: filteredTransactions.length,
-    getScrollElement: () =>
-      (document.getElementById('main-content') ??
-        document.scrollingElement ??
-        document.documentElement) as HTMLElement,
+    getScrollElement,
     scrollMargin: listOffsetRef.current,
     estimateSize: () => 84,   // ~84px per row in practice (padding + content)
     overscan: 5,
