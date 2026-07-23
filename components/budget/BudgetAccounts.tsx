@@ -361,18 +361,35 @@ const BudgetAccounts: React.FC = () => {
             </div>
             <div className="min-w-0">
               <p className="font-semibold text-brand-900 dark:text-brand-100 truncate">{account.name}</p>
-              <div className="flex items-center gap-1.5">
-                <Badge variant={isLiability ? 'danger' : 'success'} size="sm" className="uppercase">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5">
+                <Badge variant={isLiability ? 'danger' : 'success'} size="sm" className="uppercase shrink-0">
                   {account.type}
                 </Badge>
-                {allCardLast4s.length > 0 && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-mono text-brand-500 dark:text-brand-400">
+                {/* Each identifier is its own whitespace-nowrap unit so a wrap
+                    break falls between chips, never mid "···NNNN". Beyond 2
+                    cards, collapse the rest into a "+N more" chip that opens
+                    the same edit drawer used to manage them. */}
+                {allCardLast4s.slice(0, 2).map(d => (
+                  <span
+                    key={d}
+                    className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-mono text-brand-500 dark:text-brand-400 shrink-0"
+                  >
                     <CreditCard size={11} aria-hidden />
-                    {allCardLast4s.map(d => `···${d}`).join(', ')}
+                    ···{d}
                   </span>
+                ))}
+                {allCardLast4s.length > 2 && (
+                  <button
+                    type="button"
+                    onClick={() => setActionAccount(account)}
+                    aria-label={`View all ${allCardLast4s.length} cards on ${account.name}`}
+                    className="inline-flex items-center whitespace-nowrap text-[11px] font-mono text-brand-500 dark:text-brand-400 shrink-0 underline decoration-dotted underline-offset-2 hover:text-brand-700 dark:hover:text-brand-200"
+                  >
+                    +{allCardLast4s.length - 2} more
+                  </button>
                 )}
                 {account.accountLast4 && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-mono text-brand-500 dark:text-brand-400">
+                  <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-mono text-brand-500 dark:text-brand-400 shrink-0">
                     <Landmark size={11} aria-hidden />
                     ···{account.accountLast4}
                   </span>
