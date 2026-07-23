@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useFinance, useGamification, useHouseholdCore, useShopping } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
@@ -400,16 +400,38 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
     stores,
   }), [categoryFilter, sourceFilter, storeFilter, categories, stores]);
 
-  // Scroll container ref for the virtualizer
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  // List wrapper ref — used only to measure the list's offset within the page
+  // scroller (scrollMargin); the wrapper itself no longer scrolls.
+  const listWrapperRef = useRef<HTMLDivElement>(null);
 
-  // Virtualizer — dynamic measurement via the library's built-in measureElement
-  // which uses ResizeObserver borderBoxSize (when available) and falls back to
+  // Offset of the list wrapper inside the page scroller. Stored in a ref (the
+  // standard tanstack "scrolling a parent element" pattern) and read on every
+  // render — the value is 0 on the very first render, then correct from the
+  // first post-layout render onward, which is all the virtualizer needs.
+  const listOffsetRef = useRef(0);
+  useLayoutEffect(() => {
+    listOffsetRef.current = listWrapperRef.current?.offsetTop ?? 0;
+  });
+
+  // Virtualizer — the app uses a single page scroller (MainLayout's
+  // <main id="main-content">), so the virtualizer windows against the PAGE
+  // scroll element rather than a nested overflow container. scrollMargin
+  // tells it how far the list wrapper sits from the top of that scroller.
+  // In unit tests (rendered without MainLayout) #main-content is absent —
+  // fall back to the document's scrolling element so the virtualizer still
+  // has a valid scroll element and never throws.
+  //
+  // Dynamic measurement via the library's built-in measureElement which uses
+  // ResizeObserver borderBoxSize (when available) and falls back to
   // offsetHeight. estimateSize gives a reasonable first-pass so the initial
   // layout paint is close to correct; rows are remeasured once they mount.
   const virtualizer = useVirtualizer({
     count: filteredTransactions.length,
-    getScrollElement: () => scrollContainerRef.current,
+    getScrollElement: () =>
+      (document.getElementById('main-content') ??
+        document.scrollingElement ??
+        document.documentElement) as HTMLElement,
+    scrollMargin: listOffsetRef.current,
     estimateSize: () => 84,   // ~84px per row in practice (padding + content)
     overscan: 5,
     getItemKey: (index) => filteredTransactions[index]?.id ?? index,
@@ -652,16 +674,16 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
         )
       ) : (
         /*
-         * Bounded scroll container — the virtualizer needs a fixed-height
-         * element to scroll inside so it can window the list.  64vh leaves
-         * room for the header cards above and the bottom nav bar below.
-         * pb-24 is kept on the inner spacer so the last item clears the FAB.
+         * List wrapper — no nested scroller: the list occupies its natural
+         * (total-size) height and the PAGE scroller (#main-content) does the
+         * scrolling. The virtualizer positions rows relative to the page
+         * scroller, so each row subtracts scrollMargin (the wrapper's offset
+         * within the scroller) from its absolute start.
          */
         <div
-          ref={scrollContainerRef}
+          ref={listWrapperRef}
           data-testid="virtual-scroll-container"
-          className="surface-section overflow-y-auto"
-          style={{ height: '64vh' }}
+          className="surface-section"
         >
           {/* Spacer that grows to the total measured height of all items */}
           <div
@@ -684,7 +706,7 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
                     top: 0,
                     left: 0,
                     width: '100%',
-                    transform: `translateY(${virtualRow.start}px)`,
+                    transform: `translateY(${virtualRow.start - virtualizer.options.scrollMargin}px)`,
                     paddingBottom: virtualRow.index === filteredTransactions.length - 1 ? '6rem' : '0.5rem',
                   }}
                 >

@@ -111,8 +111,11 @@ vi.mock('lucide-react', () => ({
 // ---------------------------------------------------------------------------
 // jsdom layout mocks required by @tanstack/react-virtual
 //
-// The virtualizer reads offsetHeight from the scroll container element via
-// observeElementRect, and uses ResizeObserver to react to size changes.
+// The component now virtualizes against the PAGE scroller (MainLayout's
+// <main id="main-content">). Unit tests render without MainLayout, so the
+// component falls back to document.scrollingElement/documentElement as the
+// scroll element. The virtualizer reads offsetHeight from that scroll element
+// via observeElementRect, and uses ResizeObserver to react to size changes.
 // jsdom returns 0 for all layout properties and lacks ResizeObserver.
 // We mock both here so the virtualizer can compute visible item ranges.
 //
@@ -576,9 +579,12 @@ describe('TransactionMasterList', () => {
 
       render(<TransactionMasterList />);
 
-      // The scroll container must be present (list is not empty)
+      // The list wrapper must be present (list is not empty) and must NOT be
+      // a nested scroller — the page scroller owns scrolling now.
       const scrollContainer = screen.getByTestId('virtual-scroll-container');
       expect(scrollContainer).toBeInTheDocument();
+      expect(scrollContainer.className).not.toMatch(/overflow-y-auto/);
+      expect(scrollContainer.style.height).toBe('');
 
       // Count how many transaction merchant names are actually in the DOM.
       // Each virtualized row renders a TransactionItem which renders the merchant name.
