@@ -236,16 +236,19 @@ const Budget: React.FC = () => {
       <PageHeader title="Money" subtitle="Your accounts, bills, and spending." />
 
       <Tabs value={activeTab} onValueChange={selectTab}>
-        <div className="px-4">
-          {/* Sub-navigation — 4 top-level groups so every destination is on
-              screen at 375px (was 7 tabs with two off-screen). text-[13px] +
-              px-1.5 (vs the base text-sm/px-3) buy the room the widest
-              sub-view label ("Transactions ▾") + carets need at that width —
-              px is only each trigger's MINIMUM (they `grow` to fill the
-              trough), so the resting look is unchanged. The relative wrapper is the
-              anchor container for TabSubViewMenu; the capture handler
-              intercepts multi-view taps before Tabs sees them. */}
-          <div ref={tabBarRef} className="relative mb-6" onClickCapture={handleTabBarClickCapture}>
+        {/* Sub-navigation — STICKY strip (unified page-scroll model): pins at
+            the top of MainLayout's single page scroller while content passes
+            beneath, with the page background + bottom hairline matching
+            ListsPage's tab strip exactly. 4 top-level groups so every
+            destination is on screen at 375px (was 7 tabs with two off-screen).
+            text-[13px] + px-1.5 (vs the base text-sm/px-3) buy the room the
+            widest sub-view label ("Transactions ▾") + carets need at that
+            width — px is only each trigger's MINIMUM (they `grow` to fill the
+            trough), so the resting look is unchanged. The relative wrapper is
+            the anchor container for TabSubViewMenu; the capture handler
+            intercepts multi-view taps before Tabs sees them. */}
+        <div className="px-4 pt-3 pb-2 sticky top-0 z-30 bg-brand-50 dark:bg-brand-900 border-b border-brand-200 dark:border-brand-800">
+          <div ref={tabBarRef} className="relative" onClickCapture={handleTabBarClickCapture}>
             <TabsList equalWidth>
               <TabsTrigger value="overview" className="text-[13px] px-1.5">
                 Overview
@@ -295,13 +298,15 @@ const Budget: React.FC = () => {
               />
             )}
           </div>
+        </div>
 
+        <div className="px-4 pt-4">
           {/* One-time coach hint for the tab-popover nav — first visit only;
               opening any tab menu, the ×, or navigating away latches it off
-              for good (shared with the Habits page). Negative top margin
-              tucks it under the tab bar's mb-6 without shifting the layout
-              once it's gone. */}
-          <SubViewHint menuOpened={openMenu !== null} className="-mt-3 mb-6" />
+              for good (shared with the Habits page). Lives in the scrolling
+              content column (not the sticky strip) so its dismissal never
+              resizes the pinned strip. */}
+          <SubViewHint menuOpened={openMenu !== null} className="mb-6" />
 
           {/* View container */}
           <div>
