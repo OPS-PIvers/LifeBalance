@@ -382,6 +382,7 @@ const BudgetAccounts: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setActionAccount(account)}
+                    aria-label={`View all ${allCardLast4s.length} cards on ${account.name}`}
                     className="inline-flex items-center whitespace-nowrap text-[11px] font-mono text-brand-500 dark:text-brand-400 shrink-0 underline decoration-dotted underline-offset-2 hover:text-brand-700 dark:hover:text-brand-200"
                   >
                     +{allCardLast4s.length - 2} more
