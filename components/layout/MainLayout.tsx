@@ -100,6 +100,19 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
   useEffect(() => preloadOnIdle(loadReviewPendingDrawer), []);
 
+  // Pin the DOCUMENT while the app shell is mounted (`html.app-shell` rules in
+  // index.css). The shell is exactly 100dvh, so the only way the header/footer
+  // can ever move is iOS rubber-banding the document root — overscroll-behavior
+  // on the inner <main> is not reliably honored by iOS for non-root scrollers,
+  // so the pan chains past it and drags the whole shell (seen on the Plan
+  // pages). Root-level overscroll-behavior IS honored (iOS 16+); scoped via a
+  // class because the public pages (Login/Privacy/Terms) legitimately scroll
+  // the document.
+  useEffect(() => {
+    document.documentElement.classList.add('app-shell');
+    return () => document.documentElement.classList.remove('app-shell');
+  }, []);
+
   // Pay-period reset ceremony — a paycheck confirmed ON THIS DEVICE that rolled
   // (or initialized) the pay period emits an event after its batch commits; we
   // open the ceremony drawer (closed-period recap + set-your-budgets prompt).
@@ -212,7 +225,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         id="main-content"
         // Focusable as a skip-link target only; not in the tab order.
         tabIndex={-1}
-        className="flex-1 overflow-y-auto overflow-x-hidden overscroll-none relative scroll-smooth w-full focus:outline-hidden"
+        className="flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain relative scroll-smooth w-full focus:outline-hidden"
       >
         <div>
           {/* key=pathname resets the boundary on navigation so a crashed page

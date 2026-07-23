@@ -210,6 +210,24 @@ html.dark {
   background-color: var(--color-brand-900); /* dark-mode toolbar */
 }
 
+/*
+  Document pin while the app shell is mounted (class toggled by MainLayout).
+  The shell is exactly 100dvh with <main> as the single page scroller, so the
+  document root must never scroll or rubber-band — iOS does not reliably honor
+  overscroll-behavior on non-root scrollers, letting a pan chain past <main>
+  and drag the pinned header/footer with the document bounce. Root-level
+  overscroll-behavior IS honored (iOS 16+). <main> itself uses
+  overscroll-y-contain, so content keeps the subtle native edge bounce without
+  ever moving the shell. Scoped to .app-shell because the public pages
+  (Login/Privacy/Terms/Setup) legitimately scroll the document.
+*/
+html.app-shell,
+html.app-shell body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 .dark {
   --color-brand-400: #a8a399;
   --color-brand-450: #94907f;
