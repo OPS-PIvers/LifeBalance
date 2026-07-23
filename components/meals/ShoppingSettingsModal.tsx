@@ -382,7 +382,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
               {/* Add Store — flat, typography-led; no bordered form card */}
               <Section title="Add store">
                 <form onSubmit={handleAddStore} className="space-y-3">
-                  <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                  <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
                     {Object.values(STORE_COLORS).map((color) => (
                       <button
                         key={color.id}
@@ -597,7 +597,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                   {/* Icon & Color — flat, typography-labeled; no wrapping box */}
                   <div>
                     <span className="text-xs font-bold text-brand-400 dark:text-brand-450 uppercase mb-2 block">Icon</span>
-                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                    <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
                         {TEMPLATE_ICONS.map(({ id, icon: Icon }) => (
                             <button
                                 key={id}
@@ -615,7 +615,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                   </div>
                   <div>
                     <span className="text-xs font-bold text-brand-400 dark:text-brand-450 uppercase mb-2 block">Color</span>
-                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                    <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
                         {Object.values(STORE_COLORS).map((color) => (
                             <button
                                 key={color.id}

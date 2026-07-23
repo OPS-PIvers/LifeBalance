@@ -212,9 +212,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         id="main-content"
         // Focusable as a skip-link target only; not in the tab order.
         tabIndex={-1}
-        className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain relative scroll-smooth w-full focus:outline-hidden"
+        className="flex-1 overflow-y-auto overflow-x-hidden overscroll-none relative scroll-smooth w-full focus:outline-hidden"
       >
-        <div className="pb-8">
+        <div>
           {/* key=pathname resets the boundary on navigation so a crashed page
               does not stay crashed after the user navigates away */}
           <ErrorBoundary key={pathname}>
