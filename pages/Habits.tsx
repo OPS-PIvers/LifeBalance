@@ -103,7 +103,7 @@ const PastDayLogModal = React.lazy(() => import('@/components/modals/PastDayLogM
 const DayCompleteCelebration = React.lazy(() => import('@/components/habits/DayCompleteCelebration'));
 
 const HabitsSkeleton: React.FC = () => (
-  <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe pt-6" aria-busy="true" aria-live="polite">
+  <div className="bg-brand-50 dark:bg-brand-900 pb-nav-safe pt-6" aria-busy="true" aria-live="polite">
     <span className="sr-only">Loading habits…</span>
     <div className="px-4 mb-6">
       {/* Header row */}
@@ -506,7 +506,7 @@ const Habits: React.FC = () => {
   const hasNoHabits = habits.length === 0;
 
   return (
-    <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe">
+    <div className="bg-brand-50 dark:bg-brand-900 pb-nav-safe">
       <Tabs value={activeTab} onValueChange={selectTab}>
         {/* Compact PageHeader (title+subtitle) with the overflow menu as its
             actions slot, replacing the hand-rolled pt-8/text-3xl header — see
