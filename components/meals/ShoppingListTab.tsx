@@ -648,7 +648,7 @@ const ShoppingListTab: React.FC = () => {
             closed menu. */}
         <div
             ref={stickyTitleRowRef}
-            className="sticky top-[var(--lists-sticky-top,0px)] z-20 bg-brand-50 dark:bg-brand-900"
+            className="sticky top-[var(--lists-sticky-top,0px)] z-30 bg-brand-50 dark:bg-brand-900"
         >
         <PageHeader
             as="h2"

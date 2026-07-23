@@ -4,7 +4,7 @@ import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers,
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { quadrantForTodo, QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhower';
-import { toggleSubtask, appendSubtask, removeSubtask, subtasksFromTexts, isPermissionDeniedError, subtaskProgress } from '@/utils/subtasks';
+import { toggleSubtask, appendSubtask, removeSubtask, subtasksFromTexts, subtaskLinesFromPaste, isPermissionDeniedError, subtaskProgress, MAX_SUBTASKS } from '@/utils/subtasks';
 import { TODO_FREQUENCIES, TODO_FREQUENCY_LABELS, type TodoFrequency } from '@/utils/todoRecurrence';
 import { REMINDER_OFFSET_OPTIONS, compareDueTimes } from '@/utils/todoTime';
 import { ToDo, HouseholdMember, Subtask } from '@/types/schema';
@@ -226,6 +226,10 @@ const ToDosPage: React.FC = () => {
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [subtaskInput, setSubtaskInput] = useState('');
   const [aiBreakingDown, setAiBreakingDown] = useState(false);
+  // "Scan steps": photo → parseTaskList OCR → appended as subtasks. The hidden
+  // file input is reset after each run so re-picking the same photo re-fires.
+  const [aiScanningSteps, setAiScanningSteps] = useState(false);
+  const subtaskImageInputRef = useRef<HTMLInputElement>(null);
   // Progressive disclosure: the drawer shows only the core fields (task, due
   // date, assignee, important) until "More options" is expanded. Editing a task
   // that already has any secondary value auto-expands so nothing is hidden.
@@ -493,6 +497,72 @@ const ToDosPage: React.FC = () => {
   const handleToggleSubtaskLocal = useCallback((id: string) => {
     setSubtasks(prev => toggleSubtask(prev, id));
   }, []);
+
+  // Shared append for the multi-line paths (paste, photo scan): clamps to the
+  // firestore.rules MAX_SUBTASKS cap and reports how many actually landed.
+  const appendSubtaskLines = useCallback((lines: string[]) => {
+    const room = Math.max(0, MAX_SUBTASKS - subtasks.length);
+    const built = subtasksFromTexts(lines.slice(0, room));
+    if (built.length === 0) {
+      toast.error(`Subtask limit reached (${MAX_SUBTASKS}).`);
+      return;
+    }
+    setSubtasks(prev => [...prev, ...built]);
+    toast.success(
+      lines.length > built.length
+        ? `Added ${built.length} steps (limit ${MAX_SUBTASKS})`
+        : `Added ${built.length} step${built.length === 1 ? '' : 's'}`
+    );
+  }, [subtasks.length]);
+
+  // Pasting a multi-line list into the "Add a step" input turns each line into
+  // its own subtask (bullets/numbering stripped). Single-line pastes keep the
+  // default paste-into-the-input behavior.
+  const handleSubtaskPaste = useCallback((e: React.ClipboardEvent<HTMLInputElement>) => {
+    const lines = subtaskLinesFromPaste(e.clipboardData.getData('text'));
+    if (lines.length < 2) return;
+    e.preventDefault();
+    appendSubtaskLines(lines);
+    setSubtaskInput('');
+  }, [appendSubtaskLines]);
+
+  // "Scan steps from a photo": OCR the image via the same parseTaskList vision
+  // path as the page-level "Scan a list", appending each line as a subtask.
+  const handleSubtaskImage = useCallback(async (file: File | undefined) => {
+    if (!file) return;
+    if (!householdId) {
+      toast.error('Household not ready — try again in a moment');
+      return;
+    }
+    setAiScanningSteps(true);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+      });
+      const { parseTaskList } = await import('@/services/geminiService');
+      const result = await parseTaskList(householdId, base64);
+      const lines = subtaskLinesFromPaste(result.tasks.map(t => t.text).join('\n'));
+      if (lines.length === 0) {
+        toast('No steps found in that photo. Try a clearer shot.', { icon: 'ℹ️' });
+        return;
+      }
+      appendSubtaskLines(lines);
+    } catch (error) {
+      console.error('Failed to scan steps from photo:', error);
+      const message = error instanceof Error && error.message.includes('temporarily disabled')
+        ? 'AI features are turned off right now.'
+        : error instanceof Error && error.message.toLowerCase().includes('quota')
+          ? error.message
+          : 'Could not read steps from that photo. Please try again.';
+      toast.error(message);
+    } finally {
+      setAiScanningSteps(false);
+      if (subtaskImageInputRef.current) subtaskImageInputRef.current.value = '';
+    }
+  }, [householdId, appendSubtaskLines]);
 
   // "Break down with AI": ask the Gemini proxy to decompose the task into steps,
   // appending any it returns. Fully guarded — a disabled kill-switch, quota cap,
@@ -1178,7 +1248,7 @@ const ToDosPage: React.FC = () => {
           sr-only "Plan". */}
       <div
         ref={stickyTitleRowRef}
-        className="sticky top-[var(--lists-sticky-top,0px)] z-20 bg-brand-50 dark:bg-brand-900"
+        className="sticky top-[var(--lists-sticky-top,0px)] z-30 bg-brand-50 dark:bg-brand-900"
       >
       {isSelectionMode ? (
         <div className="pt-4 pb-2 flex items-center justify-between gap-3">
@@ -1642,18 +1712,40 @@ const ToDosPage: React.FC = () => {
               <Eyebrow>
                 Subtasks{subtasks.length > 0 ? ` (${subtaskProgress(subtasks).done}/${subtasks.length})` : ''}
               </Eyebrow>
-              <Button
-                type="button"
-                variant="ghost-brand"
-                size="sm"
-                onClick={handleBreakDownWithAI}
-                isLoading={aiBreakingDown}
-                disabled={aiBreakingDown || !text.trim()}
-                className="gap-1.5 text-accent-600 dark:text-accent-300"
-              >
-                {!aiBreakingDown && <Sparkles size={15} aria-hidden="true" />}
-                Break down with AI
-              </Button>
+              <div className="flex items-center gap-1">
+                <input
+                  ref={subtaskImageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleSubtaskImage(e.target.files?.[0])}
+                />
+                <Button
+                  type="button"
+                  variant="ghost-brand"
+                  size="icon"
+                  onClick={() => subtaskImageInputRef.current?.click()}
+                  isLoading={aiScanningSteps}
+                  disabled={aiScanningSteps || aiBreakingDown}
+                  aria-label="Scan steps from a photo"
+                  title="Scan steps from a photo"
+                  className="text-accent-600 dark:text-accent-300"
+                >
+                  {!aiScanningSteps && <Camera size={15} aria-hidden="true" />}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost-brand"
+                  size="sm"
+                  onClick={handleBreakDownWithAI}
+                  isLoading={aiBreakingDown}
+                  disabled={aiBreakingDown || aiScanningSteps || !text.trim()}
+                  className="gap-1.5 text-accent-600 dark:text-accent-300"
+                >
+                  {!aiBreakingDown && <Sparkles size={15} aria-hidden="true" />}
+                  Break down with AI
+                </Button>
+              </div>
             </div>
 
             {subtasks.length > 0 && (
@@ -1700,7 +1792,8 @@ const ToDosPage: React.FC = () => {
                     handleAddSubtaskInput();
                   }
                 }}
-                placeholder="Add a step"
+                onPaste={handleSubtaskPaste}
+                placeholder="Add a step — or paste a list"
                 maxLength={200}
                 className="flex-1"
               />

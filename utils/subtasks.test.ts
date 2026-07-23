@@ -9,6 +9,7 @@ import {
   updateSubtaskText,
   appendSubtask,
   subtasksFromTexts,
+  subtaskLinesFromPaste,
   isPermissionDeniedError,
   subtaskWriteErrorMessage,
 } from '@/utils/subtasks';
@@ -152,5 +153,26 @@ describe('subtaskWriteErrorMessage', () => {
 
   it('gives a generic message otherwise', () => {
     expect(subtaskWriteErrorMessage(new Error('boom'))).toBe('Failed to update subtask');
+  });
+});
+
+describe('subtaskLinesFromPaste', () => {
+  it('splits lines, strips bullets/numbering, drops blanks', () => {
+    expect(subtaskLinesFromPaste('- Milk\n2) Eggs\n\n• Bread\r\n  * Butter  ')).toEqual([
+      'Milk', 'Eggs', 'Bread', 'Butter',
+    ]);
+  });
+
+  it('keeps a plain single line as one label', () => {
+    expect(subtaskLinesFromPaste('Just one step')).toEqual(['Just one step']);
+  });
+
+  it('clamps each line to 200 chars', () => {
+    const long = 'x'.repeat(250);
+    expect(subtaskLinesFromPaste(long)[0]).toHaveLength(200);
+  });
+
+  it('returns [] for whitespace-only input', () => {
+    expect(subtaskLinesFromPaste('  \n \r\n')).toEqual([]);
   });
 });

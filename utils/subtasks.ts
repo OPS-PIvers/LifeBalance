@@ -19,6 +19,22 @@ export function newSubtaskId(): string {
   return `st_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/** Firestore-rules cap on a to-do's subtask list size (firestore.rules). */
+export const MAX_SUBTASKS = 50;
+
+/**
+ * Splits pasted (or OCR'd) multi-line text into subtask labels: one per line,
+ * leading list markers (bullets, dashes, "1." / "1)") stripped, blank lines
+ * dropped, each clamped to the editor's 200-char input cap.
+ */
+export function subtaskLinesFromPaste(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map(line => line.replace(/^\s*(?:[-*•·–—]+|\d+[.)])\s*/, '').trim())
+    .filter(line => line.length > 0)
+    .map(line => line.slice(0, 200));
+}
+
 /** Creates a new, incomplete subtask from a text label. Returns null for blank text. */
 export function makeSubtask(text: string): Subtask | null {
   const trimmed = text.trim();
