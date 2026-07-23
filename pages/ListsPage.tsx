@@ -119,7 +119,14 @@ const ListsPage: React.FC = () => {
             <MealPlanTab />
           </div>
         ) : (
-          <div className="max-w-2xl mx-auto px-4 pb-nav-safe pt-4">
+          // No pt-4 here (unlike the Meals wrapper above): ShoppingListTab's
+          // own sticky title row already carries `pt-4` on its PageHeader, so
+          // stacking a second pt-4 on this container made the at-rest title
+          // row (container pt-4 + PageHeader pt-4) taller than the pinned one
+          // (container padding scrolls away, only the sticky PageHeader's
+          // pt-4 remains) — the same "3B" compact spacing the To-Dos tab
+          // already has, since ToDosPage renders with no such wrapper.
+          <div className="max-w-2xl mx-auto px-4 pb-nav-safe">
             <ShoppingListTab />
           </div>
         )}
