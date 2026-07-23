@@ -78,7 +78,7 @@ const BottomNav: React.FC = () => {
   // Active tab reads in the evergreen accent (the app's primary), inactive in the
   // calm paper neutrals. No glass — a solid surface with a hairline top edge.
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-    `relative flex flex-col items-center justify-center w-full h-16 gap-1 transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
+    `relative flex flex-col items-center justify-center w-full h-14 gap-0.5 transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
       isActive
         ? 'text-accent-600 dark:text-accent-300'
         : 'text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300'
@@ -125,7 +125,7 @@ const BottomNav: React.FC = () => {
         aria-label="Main navigation"
         className="w-full bg-white dark:bg-brand-800 border-t border-brand-200 dark:border-brand-700 shadow-nav pb-safe"
       >
-        <div className="flex items-center justify-between h-16 px-2 relative">
+        <div className="flex items-center justify-between h-14 px-2 relative">
 
           {/* Left Group */}
           <div className="flex items-center flex-1 justify-around">
@@ -144,7 +144,7 @@ const BottomNav: React.FC = () => {
               primary action color. Hidden when no capture module is enabled; the
               centered spacer above keeps the balanced left/right split intact. */}
           {showCaptureFab && (
-            <div className="absolute left-1/2 -translate-x-1/2 -top-6">
+            <div className="absolute left-1/2 -translate-x-1/2 -top-7">
               <button
                 onClick={() => setIsModalOpen(true)}
                 className="group flex items-center justify-center w-16 h-16 bg-accent-600 hover:bg-accent-700 dark:bg-accent-500 dark:hover:bg-accent-400 text-white rounded-full shadow-raised border-4 border-brand-50 dark:border-brand-900 active:scale-95 transition-[transform,background-color] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/50 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900"

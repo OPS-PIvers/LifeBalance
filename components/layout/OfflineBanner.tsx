@@ -35,12 +35,12 @@ const OfflineBanner: React.FC = () => {
       role="status"
       aria-live="polite"
       aria-atomic="true"
-      // Fixed just above the BottomNav: BottomNav is h-16 (4rem) + safe-area-inset-bottom
+      // Fixed just above the BottomNav: BottomNav content row is h-14 (3.5rem) + safe-area-inset-bottom
       // motion-safe: use a subtle slide-up; motion-reduce: no animation
       className={[
         'fixed left-0 right-0 z-dropdown',
         // Position above BottomNav
-        'bottom-[calc(4rem+env(safe-area-inset-bottom,0px))]',
+        'bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))]',
         // Visual style: warm-amber warning, consistent with the app palette
         'bg-warm-500 dark:bg-warm-600',
         'text-white text-xs font-semibold text-center',

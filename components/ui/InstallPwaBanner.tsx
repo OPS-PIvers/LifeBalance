@@ -81,7 +81,7 @@ export const InstallPwaBanner: React.FC = () => {
       aria-label="Install LifeBalance"
       className={cn(
         'fixed left-0 right-0 z-dropdown',
-        'bottom-[calc(4rem+env(safe-area-inset-bottom,0px))]',
+        'bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))]',
         'mx-3 mb-2 rounded-xl border border-brand-200 dark:border-brand-700',
         'bg-white dark:bg-brand-800 shadow-lg',
         'px-4 py-3 flex items-center gap-3',

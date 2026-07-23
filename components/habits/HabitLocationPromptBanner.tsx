@@ -31,7 +31,7 @@ export const HabitLocationPromptBanner: React.FC = () => {
     <div
       role="status"
       aria-live="polite"
-      className="fixed left-0 right-0 z-dropdown bottom-[calc(4rem+2.5rem+env(safe-area-inset-bottom,0px))] px-3 pb-2"
+      className="fixed left-0 right-0 z-dropdown bottom-[calc(3.5rem+2.5rem+env(safe-area-inset-bottom,0px))] px-3 pb-2"
     >
       <div className="flex items-center gap-3 rounded-card border border-warm-300 dark:border-warm-800/60 bg-warm-50 dark:bg-warm-900/90 shadow-raised px-4 py-3">
         <MapPin size={18} className="text-warm-600 dark:text-warm-300 shrink-0" aria-hidden="true" />
