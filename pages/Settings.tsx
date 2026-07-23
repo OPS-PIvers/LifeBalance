@@ -633,7 +633,7 @@ const Settings: React.FC = () => {
 
   if (!householdSettings) {
     return (
-      <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe px-4 pt-6" aria-busy="true" aria-live="polite">
+      <div className="bg-brand-50 dark:bg-brand-900 pb-nav-safe px-4 pt-6" aria-busy="true" aria-live="polite">
         <span className="sr-only">Loading settings…</span>
         <div className="max-w-2xl mx-auto space-y-6">
           <Skeleton className="h-9 w-40" />
@@ -1456,7 +1456,7 @@ const Settings: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe">
+    <div className="bg-brand-50 dark:bg-brand-900 pb-nav-safe">
       {section === null ? (
         <>
           <PageHeader

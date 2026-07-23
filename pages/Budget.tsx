@@ -114,7 +114,7 @@ const GROUP_MENU_NAMES: Record<MoneyGroup, string> = {
 };
 
 const BudgetSkeleton: React.FC = () => (
-  <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe" aria-busy="true" aria-live="polite">
+  <div className="bg-brand-50 dark:bg-brand-900 pb-nav-safe" aria-busy="true" aria-live="polite">
     <span className="sr-only">Loading money…</span>
 
     {/* Editorial title placeholder */}
@@ -232,7 +232,7 @@ const Budget: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe">
+    <div className="bg-brand-50 dark:bg-brand-900 pb-nav-safe">
       <PageHeader title="Money" subtitle="Your accounts, bills, and spending." />
 
       <Tabs value={activeTab} onValueChange={selectTab}>

@@ -298,17 +298,33 @@ html.dark {
   scrollbar-width: none;
 }
 
+/* This is a touch-first app — on coarse-pointer (touch) devices, scrollbars are
+   pure visual noise (touch scrolling doesn't need the affordance and the OS
+   already shows a transient overlay indicator). Desktop/mouse users keep the
+   native scrollbar as the discoverability affordance for "there's more below". */
+@media (pointer: coarse) {
+  * {
+    scrollbar-width: none;
+  }
+  *::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @utility scroll-contain-y {
   /* Unified scroll container preventing touch-through overscroll */
   @apply overflow-y-auto overscroll-contain;
 }
 
 @utility pb-nav-safe {
-  /* Bottom padding that clears the fixed BottomNav (content row h-14 = 3.5rem)
-     plus the centered FAB overhang and the device safe-area, so page content
-     never sits under the footer. The single source of truth for footer
-     clearance — replaces the ad-hoc per-page pb-20 / pb-24 / pb-28 / pb-32. */
-  padding-bottom: calc(6.5rem + var(--spacing-safe, 0px));
+  /* Bottom padding that clears the BottomNav's FAB. The nav itself is a
+     flex SIBLING below MainLayout's <main> scroller — page content can never
+     underlap the nav row or the device safe-area (the nav's own pb-safe owns
+     that), so neither belongs in this padding. Only the centered FAB pokes
+     into the scrollport (-top-7 = 1.75rem above the nav top); +0.5rem
+     breathing = 2.25rem. The single source of truth for footer clearance —
+     replaces the ad-hoc per-page pb-20 / pb-24 / pb-28 / pb-32. */
+  padding-bottom: 2.25rem;
 }
 
 @utility p-screen-safe {
