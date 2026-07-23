@@ -40,6 +40,7 @@ import { type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { type BucketSpent } from '@/utils/bucketSpentCalculator';
 import { type TrashedItem } from '@/utils/trash';
 import { type TriggerSource } from '@/utils/habitTriggers';
+import { type TodoSubtaskToggleResult, type TodoCompletionOptions } from '@/contexts/household/mutations/todoMutations';
 
 /** Options accepted by mutations that normally toast per call. `silent: true`
  *  suppresses the per-item success toast so BULK flows (Action Queue
@@ -501,7 +502,10 @@ export interface HouseholdContextType {
   addToDo: (todo: Omit<ToDo, 'id' | 'createdAt' | 'createdBy'>) => Promise<void>;
   updateToDo: (id: string, updates: Partial<ToDo>) => Promise<void>;
   deleteToDo: (id: string) => Promise<void>;
-  completeToDo: (id: string) => Promise<void>;
+  /** @param options.subtaskToggle by-id subtask flip persisted in the SAME
+   *  completion batch — used by inline subtask auto-complete so the triggering
+   *  step is written (merged onto a fresh read) atomically with the completion. */
+  completeToDo: (id: string, options?: TodoCompletionOptions) => Promise<void>;
   /**
    * Approves a held-for-review to-do capture (`todosAwaitingReview`):
    * persists any edited `overrides` AND clears `needsReview` in one write.
@@ -512,8 +516,16 @@ export interface HouseholdContextType {
     overrides?: Partial<Pick<ToDo, 'text' | 'completeByDate' | 'assignedTo' | 'isImportant'>>
   ) => Promise<void>;
   /** Counterpart of completeToDo: restores a completed to-do to active and
-   *  atomically reverses any managed-kid points the completion credited. */
-  uncompleteToDo: (id: string) => Promise<void>;
+   *  atomically reverses any managed-kid points the completion credited.
+   *  @param options.subtaskToggle by-id subtask flip to apply in the same batch
+   *  — used to re-uncheck (`{ done: false }`) the subtask that triggered an
+   *  auto-complete, merged onto a fresh read. */
+  uncompleteToDo: (id: string, options?: TodoCompletionOptions) => Promise<void>;
+  /** Inline subtask access (owner-approved): flip one subtask's done state from
+   *  the list row. Checking the LAST step auto-completes the parent to-do in a
+   *  single writeBatch (subtasks + completion + linked-habit fire + kid points);
+   *  every other toggle is a plain subtasks-array update. */
+  toggleTodoSubtask: (todoId: string, subtaskId: string) => Promise<TodoSubtaskToggleResult>;
   /** F-TODO-03 — Task templates ("Quick Task Lists"). */
   addTaskTemplate: (template: Omit<TaskTemplate, 'id'>) => Promise<void>;
   updateTaskTemplate: (template: TaskTemplate) => Promise<void>;
@@ -584,7 +596,7 @@ export type ShoppingContextValue = Pick<HouseholdContextType,
 export type MealsContextValue = MealPlanContextValue & ShoppingContextValue;
 
 export type TodosContextValue = Pick<HouseholdContextType,
-  | 'todos' | 'todosAwaitingReview' | 'addToDo' | 'updateToDo' | 'deleteToDo' | 'approveTodo' | 'completeToDo' | 'uncompleteToDo'
+  | 'todos' | 'todosAwaitingReview' | 'addToDo' | 'updateToDo' | 'deleteToDo' | 'approveTodo' | 'completeToDo' | 'uncompleteToDo' | 'toggleTodoSubtask'
   | 'isLoadingOlderTodos' | 'hasMoreCompletedTodos' | 'loadOlderCompletedTodos'
   | 'taskTemplates' | 'addTaskTemplate' | 'updateTaskTemplate' | 'deleteTaskTemplate' | 'applyTaskTemplate'
 >;

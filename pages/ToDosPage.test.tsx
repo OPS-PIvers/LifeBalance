@@ -450,8 +450,9 @@ describe('ToDosPage', () => {
 
           await waitFor(() => {
               // Restore routes through uncompleteToDo (atomic kid-points
-              // reversal), NOT a plain updateToDo.
-              expect(mockUncompleteToDo).toHaveBeenCalledWith('3');
+              // reversal), NOT a plain updateToDo. The second arg is the
+              // optional subtasks-override (undefined for a plain restore).
+              expect(mockUncompleteToDo).toHaveBeenCalledWith('3', undefined);
           });
       });
 
@@ -667,10 +668,13 @@ describe('ToDosPage', () => {
 
       // Exactly the two starred fixtures carry the star.
       expect(screen.getAllByTestId('todo-important-star')).toHaveLength(2);
-      const starredRow = screen.getByRole('button', { name: 'Edit task: Do First Task' });
-      expect(within(starredRow).getByText('Important')).toBeInTheDocument();
-      const plainRow = screen.getByRole('button', { name: 'Edit task: Delegate Task' });
-      expect(within(plainRow).queryByTestId('todo-important-star')).not.toBeInTheDocument();
+      // The meta line (star, due, pill, assignee) is now a SIBLING of the edit
+      // button — not nested inside it — so query within the shared row body
+      // container (the button's parent) rather than the button itself.
+      const starredBody = screen.getByRole('button', { name: 'Edit task: Do First Task' }).parentElement as HTMLElement;
+      expect(within(starredBody).getByText('Important')).toBeInTheDocument();
+      const plainBody = screen.getByRole('button', { name: 'Edit task: Delegate Task' }).parentElement as HTMLElement;
+      expect(within(plainBody).queryByTestId('todo-important-star')).not.toBeInTheDocument();
     });
 
     it('renders the quick-add bar as the first row of the list card', () => {

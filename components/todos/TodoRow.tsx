@@ -1,7 +1,8 @@
 import React from 'react';
-import { Check, Trash2, AlertCircle, Clock, User, CheckSquare, Bell, Star } from 'lucide-react';
+import { Check, Trash2, AlertCircle, Clock, User, CheckSquare, Bell, Star, ListChecks } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, startOfToday } from 'date-fns';
 import { ToDo, HouseholdMember } from '@/types/schema';
+import type { TodoSubtaskToggleResult, TodoCompletionOptions } from '@/contexts/household/mutations/todoMutations';
 import toast from 'react-hot-toast';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { haptic } from '@/utils/haptics';
@@ -36,12 +37,16 @@ export interface TodoRowProps {
   isSelected: boolean;
   isSelectionMode: boolean;
   onComplete: (id: string) => void;
-  onUncomplete: (id: string) => void;
+  onUncomplete: (id: string, options?: TodoCompletionOptions) => void;
   onEdit: (todo: ToDo) => void;
   onDelete: (id: string) => void;
   /** Opens the Task-options drawer (long-press / context-menu). */
   onMore: (todo: ToDo) => void;
   onToggleSelection: (id: string) => void;
+  /** Inline subtask access (owner-approved): flip a subtask directly from the
+   *  list. Resolves with whether checking it auto-completed the parent to-do
+   *  (and the pre-toggle subtasks to restore on undo). */
+  onToggleSubtask: (todoId: string, subtaskId: string) => Promise<TodoSubtaskToggleResult>;
 }
 
 // Memoized row for a single active to-do.
@@ -60,6 +65,7 @@ export const TodoRow = React.memo(function TodoRow({
   onDelete,
   onMore,
   onToggleSelection,
+  onToggleSubtask,
 }: TodoRowProps) {
   // Parse the due date once per row render to avoid repeated parseISO calls
   const dueDate = parseISO(item.completeByDate);
@@ -82,10 +88,25 @@ export const TodoRow = React.memo(function TodoRow({
   const completionGated =
     !!item.linkedHabitId && subtaskCount > 0 && stepsLeft > 0;
 
+  // Subtasks now surface through the checklist pill + inline expansion below, so
+  // they no longer feed the generic "has details" dot — that dot is reserved for
+  // notes and recurrence, which have no other row affordance.
   const hasDetails =
     Boolean(item.notes && item.notes.trim().length > 0) ||
-    (item.subtasks?.length ?? 0) > 0 ||
     Boolean(item.recurrence?.frequency);
+
+  // Inline subtask access (owner-approved): ephemeral per-row expand state.
+  // Multiple rows may be open at once; collapsed by default.
+  const [subtasksExpanded, setSubtasksExpanded] = React.useState(false);
+  const subtaskListId = `todo-row-subtasks-${item.id}`;
+
+  // Entering bulk-selection mode collapses any open inline checklist: in
+  // selection mode the pill is an inert count indicator (a row tap toggles
+  // selection), so the expansion — and its silent auto-complete path — must not
+  // stay reachable.
+  React.useEffect(() => {
+    if (isSelectionMode) setSubtasksExpanded(false);
+  }, [isSelectionMode]);
 
   // id for the meta line (due/overdue, reminder, details, assignee), wired to
   // the row button via aria-describedby — see handleBodyClick's button below.
@@ -169,6 +190,16 @@ export const TodoRow = React.memo(function TodoRow({
     onEdit(item);
   };
 
+  // The body is a role="button" div (not a native <button>) so it can host the
+  // nested, interactive checklist pill — that costs us the free keyboard
+  // activation, so Enter/Space open the edit drawer explicitly here.
+  const handleBodyKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onEdit(item);
+    }
+  };
+
   // Right-click / keyboard context-menu → Task-options drawer. Guarded by
   // suppressClick so a long-press that already fired (some platforms
   // synthesize contextmenu around the same ~500ms mark) doesn't open it twice.
@@ -217,6 +248,143 @@ export const TodoRow = React.memo(function TodoRow({
     }
   };
 
+  // The checklist pill toggles the inline subtask list. It sits INSIDE the
+  // row's gesture area (SwipeActionRow + the body's tap/long-press), so it must
+  // swallow both its click (else the row opens the edit drawer / toggles
+  // selection) AND its pointerdown (else it arms the long-press timer or starts
+  // a swipe — see the gesture-model comments above).
+  const handlePillPointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
+  };
+  const handlePillClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSubtasksExpanded(v => !v);
+  };
+  // Keyboard activation (Enter/Space) on the pill must NOT bubble to any
+  // ancestor role="button" (the selection-mode Row): the native <button> already
+  // fires its own click from these keys, so letting them propagate would also
+  // toggle selection / open a drawer. (In normal mode the pill is a SIBLING of
+  // the edit body, so this is belt-and-suspenders — the pill isn't a descendant
+  // there.)
+  const handlePillKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.stopPropagation();
+    }
+  };
+
+  // Check/uncheck a subtask straight from the list. Checking the LAST step
+  // auto-completes the parent to-do (owner-approved reversal of PRD #1065's
+  // out-of-scope call); the mutation commits subtasks + completion + any linked
+  // habit fire + kid points in ONE batch, then we offer the standard 5s undo
+  // that reverses EVERYTHING atomically (restoring the to-do re-unchecks the
+  // triggering subtask BY ID against uncompleteToDo's own fresh read — never a
+  // stale whole-array snapshot).
+  const handleSubtaskCheck = async (subtaskId: string) => {
+    try {
+      const result = await onToggleSubtask(item.id, subtaskId);
+      if (result.autoCompleted) {
+        toast(
+          (t) => (
+            <UndoToast
+              message="All steps done — to-do completed"
+              onUndo={() => {
+                toast.dismiss(t.id);
+                onUncomplete(item.id, {
+                  subtaskToggle: { subtaskId: result.toggledSubtaskId, done: false },
+                });
+              }}
+            />
+          ),
+          { duration: 5000, icon: toastIcon(Check) }
+        );
+      }
+    } catch (error) {
+      console.error('Failed to toggle subtask:', error);
+      toast.error('Failed to update subtask');
+    }
+  };
+
+  // Merged checklist pill (replaces the old "n steps left" hint). Amber warning
+  // tone while a habit-linked to-do still has steps left (completion is gated on
+  // them); quiet neutral tone otherwise.
+  //
+  // In NORMAL mode it's a real <button> that expands the inline list (padding
+  // trick gives it a ≥44px touch target per DESIGN.md) and is rendered as a
+  // SIBLING of the edit body (never an interactive descendant of a role=button).
+  // In SELECTION mode it's an inert count indicator — the whole Row is a
+  // role="button" toggling selection, so the pill must not be interactive
+  // (ARIA forbids interactive descendants of role=button) and its silent
+  // auto-complete path must be unreachable during bulk actions (finding 3).
+  const pillToneClass = completionGated
+    ? 'text-warm-700 dark:text-warm-300'
+    : 'text-brand-500 dark:text-brand-400';
+  const subtaskPill = subtaskCount > 0 && (
+    isSelectionMode ? (
+      <span
+        data-testid="todo-subtask-pill"
+        className={cn('inline-flex items-center gap-1 font-semibold', pillToneClass)}
+      >
+        <ListChecks size={12} aria-hidden="true" />
+        {subtasksDone}/{subtaskCount}
+        <span className="sr-only"> steps done</span>
+      </span>
+    ) : (
+      <button
+        type="button"
+        onClick={handlePillClick}
+        onPointerDown={handlePillPointerDown}
+        onKeyDown={handlePillKeyDown}
+        aria-expanded={subtasksExpanded}
+        aria-controls={subtaskListId}
+        aria-label={`${subtasksDone} of ${subtaskCount} steps done — ${subtasksExpanded ? 'hide' : 'show'} steps`}
+        data-testid="todo-subtask-pill"
+        className={cn(
+          'inline-flex items-center gap-1 rounded-full px-2 py-3 -my-2 font-semibold transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
+          completionGated
+            ? 'text-warm-700 dark:text-warm-300'
+            : 'text-brand-500 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-200'
+        )}
+      >
+        <ListChecks size={12} aria-hidden="true" />
+        {subtasksDone}/{subtaskCount}
+      </button>
+    )
+  );
+
+  // Inline subtask checklist rendered beneath the row content when expanded.
+  // Kept OUTSIDE the tap-to-edit body so checking a step never opens the drawer;
+  // stops pointerdown from bubbling into SwipeActionRow so a checkbox tap can't
+  // start a swipe. Styling mirrors the edit drawer's subtask list.
+  const subtaskList = subtasksExpanded && subtaskCount > 0 && (
+    <ul
+      id={subtaskListId}
+      aria-label={`Subtasks for ${item.text}`}
+      className="mt-2 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-(--duration-fast)"
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      {(item.subtasks ?? []).map(sub => (
+        <li key={sub.id}>
+          <label className="flex items-center gap-2.5 py-2.5 min-h-[44px] cursor-pointer">
+            <input
+              type="checkbox"
+              checked={sub.isDone}
+              onChange={() => handleSubtaskCheck(sub.id)}
+              onClick={(e) => e.stopPropagation()}
+              aria-label={`Mark "${sub.text}" ${sub.isDone ? 'not done' : 'done'}`}
+              className="w-4 h-4 shrink-0 rounded-sm border-brand-300 text-accent-600 focus-visible:ring-2 focus-visible:ring-accent-500 dark:border-brand-600 dark:bg-brand-700"
+            />
+            <span className={cn(
+              'flex-1 min-w-0 text-sm',
+              sub.isDone ? 'line-through text-brand-400 dark:text-brand-500' : 'text-brand-700 dark:text-brand-200'
+            )}>
+              {sub.text}
+            </span>
+          </label>
+        </li>
+      ))}
+    </ul>
+  );
+
   // Meta line (urgency date/time, reminder bell, details dot, assignee) —
   // rendered in BOTH selection and normal modes so bulk-select doesn't hide
   // the row's status; in normal mode it doubles as the button's
@@ -254,17 +422,13 @@ export const TodoRow = React.memo(function TodoRow({
         </span>
       )}
 
-      {/* Habit Automations (PRD #1065): a habit-linked to-do can't be completed
-          until every subtask is done — surface the remaining count so the
-          disabled checkbox is explained. */}
-      {completionGated && (
-        <span className="flex items-center gap-1 font-semibold text-warm-600 dark:text-warm-300" data-testid="todo-steps-left">
-          {stepsLeft} {stepsLeft === 1 ? 'step' : 'steps'} left
-        </span>
-      )}
+      {/* Merged checklist pill — shows done/total, opens the inline subtask
+          list, and (amber) doubles as the "steps left" gate hint for a
+          habit-linked to-do. Replaces the old standalone "n steps left" text. */}
+      {subtaskPill}
 
-      {/* Quiet "has details" indicator — notes, subtasks, or recurrence
-          live in the edit drawer; the dot just signals there's more. */}
+      {/* Quiet "has details" indicator — notes or recurrence live in the edit
+          drawer; the dot just signals there's more (subtasks have the pill). */}
       {hasDetails && (
         <span className="text-brand-300 dark:text-brand-500" data-testid="todo-details-dot">
           <span aria-hidden="true">•</span>
@@ -352,33 +516,51 @@ export const TodoRow = React.memo(function TodoRow({
             <span className={isSelected ? 'text-accent-800 dark:text-accent-200' : 'text-brand-900 dark:text-brand-50'}>{item.text}</span>
           </p>
           {metaLine}
+          {subtaskList}
         </div>
       ) : (
-        /* Row body — TAP = edit drawer, LONG-PRESS / context-menu = options
-           drawer. A real <button> so keyboard/AT get the edit path for free;
-           the context-menu key (fired on the focused element) reaches the
-           options drawer. select-none + no touch-callout keep iOS from
-           starting text selection / the share sheet during a long-press. */
-        <button
-          type="button"
-          onClick={handleBodyClick}
+        /* Row body — TAP (on the title button) = edit drawer, LONG-PRESS /
+           context-menu (anywhere on the body) = options drawer. The long-press
+           and context-menu handlers live on this outer container so they cover
+           the whole body, while the click/keyboard EDIT affordance is a
+           role="button" wrapping ONLY the title (below). */
+        <div
+          className="flex-1 min-w-0"
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={cancelLongPress}
           onPointerCancel={cancelLongPress}
           onContextMenu={handleContextMenu}
-          aria-label={`Edit task: ${item.text}`}
-          aria-describedby={metaId}
-          className="flex-1 min-w-0 text-left select-none [-webkit-touch-callout:none] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-card"
         >
-          <span className="block font-medium leading-snug text-brand-900 dark:text-brand-50">{item.text}</span>
+          {/* The edit affordance is a role="button" wrapping ONLY the title, so
+              it has NO interactive descendant — ARIA forbids interactive
+              descendants of role=button, which would swallow the checklist pill
+              for VoiceOver/TalkBack. The meta line (which HOSTS the interactive
+              pill) is a SIBLING below, still wired here via aria-describedby.
+              Keyboard activation (Enter/Space → edit) is handled explicitly since
+              a role=button div gets no free activation. */}
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={handleBodyClick}
+            onKeyDown={handleBodyKeyDown}
+            aria-label={`Edit task: ${item.text}`}
+            aria-describedby={metaId}
+            className="block w-full text-left select-none [-webkit-touch-callout:none] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-card"
+          >
+            <span className="block font-medium leading-snug text-brand-900 dark:text-brand-50">{item.text}</span>
+          </div>
 
-          {/* aria-describedby (not folded into the button's aria-label above)
-              so AT still announces urgency/reminder/details/assignee — an
-              explicit aria-label on the button would otherwise remove this
-              whole subtree from the accessibility tree. */}
+          {/* Meta line — SIBLING of the edit button (not a descendant) so the
+              interactive checklist pill it hosts is never nested inside a
+              role=button. Wired to the button above via aria-describedby={metaId}
+              so AT still announces urgency/reminder/details/assignee. */}
           {metaLine}
-        </button>
+
+          {/* Inline subtask checklist — outside the tap-to-edit body so checking
+              a step never opens the drawer. */}
+          {subtaskList}
+        </div>
       )}
     </Row>
   );

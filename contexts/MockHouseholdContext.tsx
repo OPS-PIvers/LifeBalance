@@ -16,6 +16,8 @@ import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { processToggleHabit, processStaleDownToggle, isHabitStale, calculateResetPoints, streakForHabit } from '@/utils/habitLogic';
 import { computeHabitTriggerFire, computeHabitTriggerReverse } from '@/utils/habitTriggerFire';
 import { evaluateTodoSubtaskGate, TodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
+import { setSubtaskDone, subtaskProgress } from '@/utils/subtasks';
+import type { TodoSubtaskToggleResult, TodoCompletionOptions } from '@/contexts/household/mutations/todoMutations';
 import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
 import { attributionString, type TriggerSource } from '@/utils/habitTriggers';
 import { selectAutoFreezeCandidates } from '@/utils/freezeBank';
@@ -1675,6 +1677,93 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: ToDo updated');
   }, []);
 
+  // Mock parity with makeCompleteToDo — named so `toggleTodoSubtask` can DELEGATE
+  // its escalation here (rather than reimplementing recurrence spawn + credit +
+  // habit fire, which would let the two drift). An inline subtask auto-complete
+  // hands a by-id `subtaskToggle` descriptor applied to the mock's OWN fresh ref
+  // read, mirroring the real mutation's clobber-safe merge contract.
+  const completeToDoMock = useCallback(async (id: string, options?: TodoCompletionOptions) => {
+    const found = todosRef.current.find(t => t.id === id);
+    if (!found) {
+      toast.error('Mock: ToDo not found');
+      return;
+    }
+    if (found.isCompleted) {
+      return; // already completed — avoid duplicate points
+    }
+    const subtaskToggle = options?.subtaskToggle;
+    const effectiveSubtasks = subtaskToggle
+      ? setSubtaskDone(found.subtasks, subtaskToggle.subtaskId, subtaskToggle.done)
+      : undefined;
+    const completedTodo: ToDo = effectiveSubtasks
+      ? { ...found, subtasks: effectiveSubtasks }
+      : found;
+    // Subtask gate parity (PRD #1065): refuse a habit-linked to-do with
+    // unfinished subtasks with the SAME typed error the real mutation throws.
+    const gate = evaluateTodoSubtaskGate(completedTodo);
+    if (gate.blocked) {
+      throw new TodoSubtasksIncompleteError(completedTodo.id, completedTodo.text, gate.stepsLeft);
+    }
+    // F-TODO-01: recurring todos spawn their next instance on completion,
+    // mirroring the atomic completion+spawn in makeCompleteToDo.
+    const nextInstance = buildNextRecurringTodo(completedTodo, getLocalDateString());
+    setTodos(prev => {
+      const updated = prev.map(t =>
+        t.id === id
+          ? { ...t, isCompleted: true, completedAt: new Date().toISOString(), ...(effectiveSubtasks ? { subtasks: effectiveSubtasks } : {}) }
+          : t,
+      );
+      if (!nextInstance) return updated;
+      return [...updated, {
+        ...nextInstance,
+        id: generateId(),
+        createdAt: new Date().toISOString(),
+        createdBy: completedTodo.createdBy,
+      } as ToDo];
+    });
+    setMembers(prev => {
+      const credit = computeTodoCompletionCredit(completedTodo, prev);
+      if (!credit) return prev;
+      return prev.map(m => m.uid === credit.memberUid
+        ? { ...m, points: {
+            daily: m.points.daily + credit.points,
+            weekly: m.points.weekly + credit.points,
+            total: m.points.total + credit.points,
+          } }
+        : m);
+    });
+    // Habit Automations (PRD #1065): fire the linked habit like one manual tap.
+    const firedTitle = fireLinkedHabitMock(completedTodo, 'up');
+    toast.success(firedTitle ? `Mock: logged "${firedTitle}" via to-do` : 'Mock: ToDo completed');
+  }, [fireLinkedHabitMock]);
+
+  // Inline subtask access (owner-approved) — parity with makeToggleTodoSubtask.
+  // Checking the last step escalates by DELEGATING to completeToDoMock (single
+  // completion implementation, no divergence); every other toggle is a plain
+  // by-id subtasks update.
+  const toggleTodoSubtask = useCallback(async (todoId: string, subtaskId: string): Promise<TodoSubtaskToggleResult> => {
+    const todo = todosRef.current.find(t => t.id === todoId);
+    if (!todo) {
+      toast.error('Mock: ToDo not found');
+      return { autoCompleted: false, toggledSubtaskId: subtaskId };
+    }
+    const current = (todo.subtasks ?? []).find(s => s.id === subtaskId);
+    if (!current) {
+      return { autoCompleted: false, toggledSubtaskId: subtaskId };
+    }
+    const targetDone = !current.isDone;
+    const nextSubtasks = setSubtaskDone(todo.subtasks, subtaskId, targetDone);
+    const { allDone } = subtaskProgress(nextSubtasks);
+
+    if (!todo.isCompleted && targetDone && allDone) {
+      await completeToDoMock(todoId, { subtaskToggle: { subtaskId, done: true } });
+      return { autoCompleted: true, toggledSubtaskId: subtaskId };
+    }
+
+    setTodos(prev => prev.map(t => t.id === todoId ? { ...t, subtasks: nextSubtasks } : t));
+    return { autoCompleted: false, toggledSubtaskId: subtaskId };
+  }, [completeToDoMock]);
+
   const deleteToDo = useCallback(async (id: string) => {
     setTodos(prev => {
       const target = prev.find(t => t.id === id);
@@ -2261,60 +2350,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     deleteMealPlanItem: deleteMealPlan,
     addToDo,
     updateToDo,
+    toggleTodoSubtask,
     deleteToDo,
     approveTodo,
-    completeToDo: useCallback(async (id: string) => {
-      // Resolve the to-do being completed from the live ref (NOT a value leaked out
-      // of the setTodos updater) so the points credit can't depend on the execution
-      // order of two separate setState updaters — that coupling silently dropped the
-      // credit when the to-do was added earlier in the same flush. The SAME dormancy
-      // gate the real Firebase context uses (computeTodoCompletionCredit) decides
-      // whether a managed kid is credited.
-      const completedTodo = todosRef.current.find(t => t.id === id);
-      if (!completedTodo) {
-        toast.error('Mock: ToDo not found');
-        return;
-      }
-      if (completedTodo.isCompleted) {
-        return; // already completed — avoid duplicate points
-      }
-      // Subtask gate parity (PRD #1065): refuse a habit-linked to-do with
-      // unfinished subtasks with the SAME typed error the real mutation throws.
-      const gate = evaluateTodoSubtaskGate(completedTodo);
-      if (gate.blocked) {
-        throw new TodoSubtasksIncompleteError(completedTodo.id, completedTodo.text, gate.stepsLeft);
-      }
-      // F-TODO-01: recurring todos spawn their next instance on completion,
-      // mirroring the atomic completion+spawn in makeCompleteToDo.
-      const nextInstance = buildNextRecurringTodo(completedTodo, getLocalDateString());
-      setTodos(prev => {
-        const updated = prev.map(t =>
-          t.id === id ? { ...t, isCompleted: true, completedAt: new Date().toISOString() } : t,
-        );
-        if (!nextInstance) return updated;
-        return [...updated, {
-          ...nextInstance,
-          id: generateId(),
-          createdAt: new Date().toISOString(),
-          createdBy: completedTodo.createdBy,
-        } as ToDo];
-      });
-      setMembers(prev => {
-        const credit = computeTodoCompletionCredit(completedTodo, prev);
-        if (!credit) return prev;
-        return prev.map(m => m.uid === credit.memberUid
-          ? { ...m, points: {
-              daily: m.points.daily + credit.points,
-              weekly: m.points.weekly + credit.points,
-              total: m.points.total + credit.points,
-            } }
-          : m);
-      });
-      // Habit Automations (PRD #1065): fire the linked habit like one manual tap.
-      const firedTitle = fireLinkedHabitMock(completedTodo, 'up');
-      toast.success(firedTitle ? `Mock: logged "${firedTitle}" via to-do` : 'Mock: ToDo completed');
-    }, [fireLinkedHabitMock]),
-    uncompleteToDo: useCallback(async (id: string) => {
+    completeToDo: completeToDoMock,
+    uncompleteToDo: useCallback(async (id: string, options?: TodoCompletionOptions) => {
       // Counterpart of completeToDo (see makeUncompleteToDo in the real
       // context): restores the to-do AND reverses the managed-kid points
       // credit through the SAME dormancy gate, so Test Mode mirrors the
@@ -2349,8 +2389,12 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
           spawnIdToDelete = matches[0]?.id ?? null;
         }
       }
+      const subtaskToggle = options?.subtaskToggle;
+      const effectiveSubtasks = subtaskToggle
+        ? setSubtaskDone(todo.subtasks, subtaskToggle.subtaskId, subtaskToggle.done)
+        : undefined;
       setTodos(prev => prev
-        .map(t => t.id === id ? { ...t, isCompleted: false, completedAt: undefined } : t)
+        .map(t => t.id === id ? { ...t, isCompleted: false, completedAt: undefined, ...(effectiveSubtasks ? { subtasks: effectiveSubtasks } : {}) } : t)
         .filter(t => t.id !== spawnIdToDelete));
       setMembers(prev => {
         const credit = computeTodoCompletionCredit(todo, prev);

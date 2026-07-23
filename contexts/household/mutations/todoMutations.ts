@@ -15,6 +15,7 @@ import {
   arrayUnion,
   arrayRemove,
   writeBatch,
+  runTransaction,
   serverTimestamp,
   Timestamp,
   type Firestore,
@@ -25,8 +26,9 @@ import {
 import toast from 'react-hot-toast';
 import { describeError } from '@/utils/errorMessages';
 import { todoConverter, habitConverter } from '@/utils/firestoreConverters';
-import { ToDo, HouseholdMember } from '@/types/schema';
+import { ToDo, HouseholdMember, Subtask } from '@/types/schema';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
+import { setSubtaskDone, subtaskProgress } from '@/utils/subtasks';
 import { computeTodoCompletionCredit, buildUncompleteCreditReversal } from '@/utils/todoPoints';
 import { buildNextRecurringTodo, isTodoFrequency } from '@/utils/todoRecurrence';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -37,6 +39,29 @@ import { appendActivityLog } from '@/utils/activityLog';
 import { TODO_COMPLETED_PAGE_SIZE } from '@/utils/listenerWindows';
 import { mergeById, mapTodoDoc } from '@/contexts/household/selectors';
 import type { User } from 'firebase/auth';
+
+/**
+ * A by-id subtask flip, applied to each mutation's OWN freshest read of the
+ * subtasks array at commit time. Replaces the old "pass the whole computed
+ * array" contract, which let a stale caller-supplied snapshot silently revert a
+ * concurrent add/toggle of a DIFFERENT subtask from another device (the
+ * 2026-07-15 whole-array-clobber incident class). `done` is the intended target
+ * state (idempotent set, not a blind toggle), so re-applying it is safe.
+ */
+export interface SubtaskToggleDescriptor {
+  subtaskId: string;
+  done: boolean;
+}
+
+/**
+ * Options shared by `completeToDo` / `uncompleteToDo`: an inline subtask
+ * auto-complete (and its undo) hands a by-id descriptor that each function
+ * applies to its own fresh doc read, persisting the flip in the SAME batch as
+ * the completion / restore.
+ */
+export interface TodoCompletionOptions {
+  subtaskToggle?: SubtaskToggleDescriptor;
+}
 
 /**
  * Habit Automations (PRD #1065) — the doc that receives a habit's points. An
@@ -313,9 +338,14 @@ export function makeCompleteToDo(deps: {
     todoRef: ReturnType<typeof doc>,
     todo: ToDo,
     credit: ReturnType<typeof computeTodoCompletionCredit>,
+    effectiveSubtasks?: Subtask[],
   ): Promise<string | null> => {
     const batch = writeBatch(db);
-    batch.update(todoRef, { isCompleted: true, completedAt: serverTimestamp() });
+    batch.update(todoRef, {
+      isCompleted: true,
+      completedAt: serverTimestamp(),
+      ...(effectiveSubtasks ? { subtasks: effectiveSubtasks } : {}),
+    });
     if (credit) {
       batch.update(doc(db, `households/${hid}/members`, credit.memberUid), {
         'points.daily': increment(credit.points),
@@ -339,7 +369,10 @@ export function makeCompleteToDo(deps: {
    *
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
-  const completeToDo = async (id: string) => {
+  const completeToDo = async (
+    id: string,
+    options?: TodoCompletionOptions,
+  ) => {
     if (!householdId) {
       throw new Error('Household not selected');
     }
@@ -368,27 +401,41 @@ export function makeCompleteToDo(deps: {
       if (todo.isCompleted) {
         return; // already completed — idempotent, no duplicate points
       }
+      // Inline subtask auto-complete (owner-approved): when checking the LAST
+      // subtask escalates to completion, the caller hands a by-id descriptor
+      // that we apply to THIS function's OWN fresh read (`todo.subtasks`) — not
+      // a stale whole array — so the gate, credit, recurring-spawn, and habit
+      // fire all evaluate the FINISHED checklist while a concurrent edit of a
+      // DIFFERENT subtask survives, and the merged array is persisted in-batch.
+      const subtaskToggle = options?.subtaskToggle;
+      const effectiveSubtasks = subtaskToggle
+        ? setSubtaskDone(todo.subtasks, subtaskToggle.subtaskId, subtaskToggle.done)
+        : undefined;
+      const effectiveTodo: ToDo = effectiveSubtasks
+        ? { ...todo, subtasks: effectiveSubtasks }
+        : todo;
       // Subtask gate (PRD #1065), enforced in the MUTATION so every completion
       // path is covered — not just TodoRow's disabled checkbox. A habit-linked
       // to-do with unfinished subtasks refuses completion with a typed error;
       // call sites surface a "n steps left" message and bulk paths skip it.
-      const gate = evaluateTodoSubtaskGate(todo);
+      const gate = evaluateTodoSubtaskGate(effectiveTodo);
       if (gate.blocked) {
-        throw new TodoSubtasksIncompleteError(todo.id, todo.text, gate.stepsLeft);
+        throw new TodoSubtasksIncompleteError(effectiveTodo.id, effectiveTodo.text, gate.stepsLeft);
       }
-      const credit = computeTodoCompletionCredit(todo, membersRef.current);
+      const credit = computeTodoCompletionCredit(effectiveTodo, membersRef.current);
 
       // F-TODO-01: for a recurring to-do, spawn the next instance in the SAME
       // writeBatch as the completion so the two can never diverge (matching the
       // payCalendarItem atomicity convention). buildNextRecurringTodo returns
       // null for non-recurring todos, so this is byte-for-byte the prior
       // behaviour for every existing (non-recurring) todo.
-      const nextInstance = buildNextRecurringTodo(todo, getLocalDateString());
+      const nextInstance = buildNextRecurringTodo(effectiveTodo, getLocalDateString());
 
       const batch = writeBatch(db);
       batch.update(todoRef, {
         isCompleted: true,
         completedAt: serverTimestamp(),
+        ...(effectiveSubtasks ? { subtasks: effectiveSubtasks } : {}),
       });
       if (credit) {
         // Atomic points credit on the kid member doc (Firestore increment()).
@@ -410,8 +457,22 @@ export function makeCompleteToDo(deps: {
 
       // Habit Automations (PRD #1065): fire the linked habit IN this batch so
       // the habit + points writes co-commit atomically with the completion.
+      //
+      // Residual window (accepted): the completion path stays a writeBatch, not
+      // a runTransaction, because the atomic habit fire must co-commit with the
+      // completion and `fireLinkedHabitInBatch` reads the linked habit AFTER the
+      // to-do write is staged — an ordering a Firestore transaction (all reads
+      // before writes) can't express without unwinding the shared batch helper.
+      // So the `effectiveSubtasks` array written here is merged from the getDoc
+      // read at the TOP of this function, not re-read at commit time: a subtask
+      // ADDED by another device between that read and this commit is overwritten.
+      // This is far narrower than the old whole-array-override contract (a stale
+      // CALLER snapshot could clobber at any age); an auto-complete also ends the
+      // to-do's active life, so a lost concurrent add is a corner of a corner.
+      // The plain (non-escalating) toggle path DOES use runTransaction — see
+      // makeToggleTodoSubtask.
       let firedHabitTitle = await fireLinkedHabitInBatch({
-        db, batch, householdId, todo, direction: 'up', actor: user,
+        db, batch, householdId, todo: effectiveTodo, direction: 'up', actor: user,
       });
 
       try {
@@ -423,7 +484,7 @@ export function makeCompleteToDo(deps: {
         // simply won't be created until the rules ship.
         if (nextInstance) {
           console.warn('[completeToDo] Recurring spawn rejected; completing without it:', error);
-          firedHabitTitle = await commitCompletionOnly(householdId, todoRef, todo, credit);
+          firedHabitTitle = await commitCompletionOnly(householdId, todoRef, effectiveTodo, credit, effectiveSubtasks);
         } else {
           throw error;
         }
@@ -488,7 +549,10 @@ export function makeUncompleteToDo(deps: {
    *
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
-  const uncompleteToDo = async (id: string) => {
+  const uncompleteToDo = async (
+    id: string,
+    options?: TodoCompletionOptions,
+  ) => {
     if (!householdId) {
       throw new Error('Household not selected');
     }
@@ -504,8 +568,23 @@ export function makeUncompleteToDo(deps: {
       }
       const credit = computeTodoCompletionCredit(todo, membersRef.current);
 
+      // Inline subtask auto-complete undo (owner-approved): restoring an
+      // auto-completed to-do also RE-UNCHECKS the subtask that triggered it. The
+      // caller passes a by-id descriptor (`{ subtaskId, done: false }`) applied
+      // to THIS function's OWN fresh read, so undo re-unchecks the one triggering
+      // step without restoring a stale whole-array snapshot over a concurrent
+      // edit of a different subtask.
+      const subtaskToggle = options?.subtaskToggle;
+      const effectiveSubtasks = subtaskToggle
+        ? setSubtaskDone(todo.subtasks, subtaskToggle.subtaskId, subtaskToggle.done)
+        : undefined;
+
       const batch = writeBatch(db);
-      batch.update(todoRef, { isCompleted: false, completedAt: null });
+      batch.update(todoRef, {
+        isCompleted: false,
+        completedAt: null,
+        ...(effectiveSubtasks ? { subtasks: effectiveSubtasks } : {}),
+      });
       if (credit) {
         const deltas = buildUncompleteCreditReversal(credit.points, todo.completedAt);
         const pointUpdates: Record<string, unknown> = {};
@@ -565,6 +644,98 @@ export function makeUncompleteToDo(deps: {
   };
 
   return { uncompleteToDo };
+}
+
+/**
+ * Result of a `toggleTodoSubtask` call — tells the UI whether checking the
+ * subtask escalated to auto-completing the parent to-do (so it can offer the
+ * standard 5s undo) and carries the id of the toggled subtask so undo can
+ * re-uncheck it BY ID against `uncompleteToDo`'s own fresh read (rather than
+ * restoring a stale whole-array snapshot, which could clobber a concurrent edit).
+ */
+export interface TodoSubtaskToggleResult {
+  /** True when this toggle checked the LAST subtask and auto-completed the parent. */
+  autoCompleted: boolean;
+  /** The subtask id that was toggled — undo re-unchecks THIS id by descriptor. */
+  toggledSubtaskId: string;
+}
+
+/**
+ * toggleTodoSubtask (owner-approved inline subtask access) — flips one subtask's
+ * done state directly from the list row.
+ *
+ * - Checking a NON-final subtask (or unchecking any subtask) is a plain
+ *   subtasks update committed inside a `runTransaction` (read fresh → flip the
+ *   one entry by id → write) so two devices toggling DIFFERENT subtasks can't
+ *   lose each other's update; it never (un)completes anything.
+ * - Checking the LAST remaining subtask on a still-open to-do ESCALATES to
+ *   completion: the subtasks write + parent completion + linked-habit fire +
+ *   kid-points credit all co-commit in the ONE writeBatch `completeToDo` builds
+ *   (via its `subtaskToggle` descriptor), so they can never diverge.
+ *
+ * Shares `makeCompleteToDo` so the escalation path is byte-identical to a normal
+ * completion.
+ */
+export function makeToggleTodoSubtask(deps: {
+  db: Firestore;
+  householdId: string | null;
+  membersRef: { current: HouseholdMember[] };
+  user?: User | null;
+}) {
+  const { db, householdId, membersRef, user = null } = deps;
+  const { completeToDo } = makeCompleteToDo({ db, householdId, membersRef, user });
+
+  const toggleTodoSubtask = async (
+    todoId: string,
+    subtaskId: string,
+  ): Promise<TodoSubtaskToggleResult> => {
+    if (!householdId) {
+      throw new Error('Household not selected');
+    }
+    // Unconverted ref for writes (plain field map, no toFirestore); converted
+    // ref for typed reads.
+    const plainRef = doc(db, `households/${householdId}/todos`, todoId);
+    const convRef = plainRef.withConverter(todoConverter);
+    const snap = await getDoc(convRef);
+    const todo = snap.data();
+    if (!todo) {
+      throw new Error('To-Do not found');
+    }
+    const current = (todo.subtasks ?? []).find(s => s.id === subtaskId);
+    if (!current) {
+      // Subtask no longer exists (removed elsewhere) — nothing to toggle.
+      return { autoCompleted: false, toggledSubtaskId: subtaskId };
+    }
+    const targetDone = !current.isDone;
+    const { allDone } = subtaskProgress(setSubtaskDone(todo.subtasks, subtaskId, targetDone));
+
+    // Escalate only when this toggle CHECKS the last remaining step on a
+    // still-open to-do. `completeToDo` applies the SAME by-id flip to its own
+    // fresh read, co-committing the subtask write + completion + linked-habit
+    // fire + kid points in one batch.
+    if (!todo.isCompleted && targetDone && allDone) {
+      await completeToDo(todoId, { subtaskToggle: { subtaskId, done: true } });
+      return { autoCompleted: true, toggledSubtaskId: subtaskId };
+    }
+
+    // Plain toggle: run inside a runTransaction (read fresh → set THIS id by
+    // descriptor → write) so two devices toggling DIFFERENT subtasks can't lose
+    // each other's update — the transaction re-reads and merges on write
+    // contention instead of overwriting with a stale array.
+    await runTransaction(db, async (transaction) => {
+      const freshSnap = await transaction.get(convRef);
+      const fresh = freshSnap.data();
+      if (!fresh) {
+        throw new Error('To-Do not found');
+      }
+      transaction.update(plainRef, {
+        subtasks: setSubtaskDone(fresh.subtasks, subtaskId, targetDone),
+      });
+    });
+    return { autoCompleted: false, toggledSubtaskId: subtaskId };
+  };
+
+  return { toggleTodoSubtask };
 }
 
 /**
