@@ -213,18 +213,24 @@ html.dark {
 /*
   Document pin while the app shell is mounted (class toggled by MainLayout).
   The shell is exactly 100dvh with <main> as the single page scroller, so the
-  document root must never scroll or rubber-band — iOS does not reliably honor
+  document root must never rubber-band — iOS does not reliably honor
   overscroll-behavior on non-root scrollers, letting a pan chain past <main>
   and drag the pinned header/footer with the document bounce. Root-level
   overscroll-behavior IS honored (iOS 16+). <main> itself uses
   overscroll-y-contain, so content keeps the subtle native edge bounce without
   ever moving the shell. Scoped to .app-shell because the public pages
   (Login/Privacy/Terms/Setup) legitimately scroll the document.
+
+  ONLY overscroll-behavior here — never `height: 100%` or `overflow: hidden`
+  on the root: in an iOS standalone PWA those make WebKit re-lay-out the page
+  INSIDE the safe areas (regression: bottom nav floated above the home
+  indicator, and the header lost its status-bar underlap because the page no
+  longer extended under the Dynamic Island). overscroll-behavior has zero
+  layout effect, and the 100dvh shell means the document never truly scrolls
+  anyway — the elastic bounce is the only thing to suppress.
 */
 html.app-shell,
 html.app-shell body {
-  height: 100%;
-  overflow: hidden;
   overscroll-behavior: none;
 }
 
