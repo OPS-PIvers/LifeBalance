@@ -86,6 +86,28 @@ export function removeSubtask(subtasks: Subtask[] | undefined, id: string): Subt
   return (subtasks ?? []).filter(s => s.id !== id);
 }
 
+/**
+ * Returns a new array with the given subtask's `assigneeId` set to a member's
+ * uid, or cleared (pass `undefined`) for "unassigned". Firestore rejects
+ * `undefined` inside array elements, so clearing DELETES the key rather than
+ * writing it as `undefined` — callers must never spread `{ ...s, assigneeId }`
+ * with an undefined value directly into a write.
+ */
+export function setSubtaskAssignee(
+  subtasks: Subtask[] | undefined,
+  id: string,
+  assigneeId: string | undefined,
+): Subtask[] {
+  return (subtasks ?? []).map(s => {
+    if (s.id !== id) return s;
+    if (assigneeId === undefined) {
+      const { assigneeId: _drop, ...rest } = s;
+      return rest;
+    }
+    return { ...s, assigneeId };
+  });
+}
+
 /** Returns a new array with the subtask's text updated (trimmed). No-op for a blank result. */
 export function updateSubtaskText(
   subtasks: Subtask[] | undefined,
@@ -135,6 +157,6 @@ export function isPermissionDeniedError(error: unknown): boolean {
 /** User-facing toast message for a failed subtask write. */
 export function subtaskWriteErrorMessage(error: unknown): string {
   return isPermissionDeniedError(error)
-    ? "Subtasks aren't available yet — try again later."
+    ? "This change couldn't be saved — the app may need an update."
     : 'Failed to update subtask';
 }

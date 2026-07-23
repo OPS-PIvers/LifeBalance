@@ -12,6 +12,7 @@ import {
   subtaskLinesFromPaste,
   isPermissionDeniedError,
   subtaskWriteErrorMessage,
+  setSubtaskAssignee,
 } from '@/utils/subtasks';
 
 const st = (id: string, text: string, isDone = false): Subtask => ({ id, text, isDone });
@@ -146,9 +147,30 @@ describe('isPermissionDeniedError', () => {
   });
 });
 
+describe('setSubtaskAssignee', () => {
+  it('sets the assignee on the matching subtask', () => {
+    const next = setSubtaskAssignee([st('1', 'a'), st('2', 'b')], '2', 'uid-1');
+    expect(next[1]).toEqual({ id: '2', text: 'b', isDone: false, assigneeId: 'uid-1' });
+    expect(next[0]).toEqual(st('1', 'a'));
+  });
+
+  it('clears the assignee (drops the key, never writes undefined)', () => {
+    const withAssignee = [{ id: '1', text: 'a', isDone: false, assigneeId: 'uid-1' }];
+    const next = setSubtaskAssignee(withAssignee, '1', undefined);
+    expect(next[0]).toEqual({ id: '1', text: 'a', isDone: false });
+    expect(next[0] && 'assigneeId' in next[0]).toBe(false);
+  });
+
+  it('handles undefined and unknown id', () => {
+    expect(setSubtaskAssignee(undefined, 'x', 'uid-1')).toEqual([]);
+    const list = [st('1', 'a')];
+    expect(setSubtaskAssignee(list, 'x', 'uid-1')).toEqual(list);
+  });
+});
+
 describe('subtaskWriteErrorMessage', () => {
   it('gives a specific message for permission errors', () => {
-    expect(subtaskWriteErrorMessage({ code: 'permission-denied' })).toMatch(/available yet/i);
+    expect(subtaskWriteErrorMessage({ code: 'permission-denied' })).toMatch(/couldn't be saved/i);
   });
 
   it('gives a generic message otherwise', () => {

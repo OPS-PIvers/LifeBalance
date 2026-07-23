@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { Reorder, useDragControls } from 'framer-motion';
 import { useTodos, useHouseholdCore, useGamification } from '@/contexts/FirebaseHouseholdContext';
-import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Camera, Sparkles, Plus, Repeat, Filter, ArrowUpDown } from 'lucide-react';
+import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Camera, Sparkles, Plus, Repeat, Filter, ArrowUpDown, GripVertical, UserPlus } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { quadrantForTodo, QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhower';
-import { toggleSubtask, appendSubtask, removeSubtask, subtasksFromTexts, subtaskLinesFromPaste, isPermissionDeniedError, subtaskProgress, MAX_SUBTASKS } from '@/utils/subtasks';
+import { toggleSubtask, appendSubtask, removeSubtask, subtasksFromTexts, subtaskLinesFromPaste, isPermissionDeniedError, subtaskProgress, MAX_SUBTASKS, updateSubtaskText, setSubtaskAssignee } from '@/utils/subtasks';
 import { TODO_FREQUENCIES, TODO_FREQUENCY_LABELS, type TodoFrequency } from '@/utils/todoRecurrence';
 import { REMINDER_OFFSET_OPTIONS, compareDueTimes } from '@/utils/todoTime';
 import { ToDo, HouseholdMember, Subtask } from '@/types/schema';
@@ -44,6 +45,151 @@ import type { TodoCompletionOptions } from '@/contexts/household/mutations/todoM
 // Persisted like the Shopping list's sort mode — the derived view survives
 // a reload but never writes to Firestore.
 const TODO_SORT_STORAGE_KEY = 'todos-sort-mode';
+
+// Sentinel for the "Whole household" option in the Assign-to picker — no
+// member's uid ever collides with this. Selecting it stores `assignedTo:
+// undefined` (unassigned/shared), never a literal member id.
+const WHOLE_HOUSEHOLD_ASSIGNEE = '__whole_household__';
+
+// One subtask row in the drawer editor: tap-to-edit text (wraps instead of
+// truncating while read-only), a drag handle for Reorder, and a small
+// assignee button opening a member picker. A separate component so each row
+// can own its own `useDragControls` (Reorder.Item forbids calling hooks
+// inside the parent's .map).
+interface SubtaskEditorRowProps {
+  sub: Subtask;
+  members: HouseholdMember[];
+  isEditing: boolean;
+  editingText: string;
+  onEditingTextChange: (value: string) => void;
+  onStartEdit: () => void;
+  onCommitEdit: () => void;
+  onCancelEdit: () => void;
+  onToggleDone: () => void;
+  onRemove: () => void;
+  assigneePickerOpen: boolean;
+  onOpenAssigneePicker: () => void;
+  onCloseAssigneePicker: () => void;
+  onPickAssignee: (uid: string | undefined) => void;
+}
+
+const SubtaskEditorRow: React.FC<SubtaskEditorRowProps> = ({
+  sub, members, isEditing, editingText, onEditingTextChange,
+  onStartEdit, onCommitEdit, onCancelEdit, onToggleDone, onRemove,
+  assigneePickerOpen, onOpenAssigneePicker, onCloseAssigneePicker, onPickAssignee,
+}) => {
+  const dragControls = useDragControls();
+  const assignee = sub.assigneeId ? members.find(m => m.uid === sub.assigneeId) : undefined;
+  const assigneeMenuItems: MenuItem[] = [
+    {
+      key: 'unassigned',
+      label: 'Unassigned',
+      selected: !sub.assigneeId,
+      onSelect: () => onPickAssignee(undefined),
+    },
+    ...members.map(m => ({
+      key: m.uid,
+      label: m.displayName ?? 'User',
+      selected: sub.assigneeId === m.uid,
+      onSelect: () => onPickAssignee(m.uid),
+    })),
+  ];
+
+  return (
+    <Reorder.Item
+      value={sub}
+      dragListener={false}
+      dragControls={dragControls}
+      as="li"
+      className="flex items-center gap-1.5 bg-brand-50 dark:bg-brand-900/40 rounded-btn"
+    >
+      <button
+        type="button"
+        onPointerDown={(e) => dragControls.start(e)}
+        aria-label={`Reorder step: ${sub.text}`}
+        className="shrink-0 p-2 -mr-1 touch-none text-brand-300 hover:text-brand-500 dark:text-brand-500 dark:hover:text-brand-300 cursor-grab active:cursor-grabbing"
+      >
+        <GripVertical size={16} aria-hidden="true" />
+      </button>
+      <input
+        type="checkbox"
+        checked={sub.isDone}
+        onChange={onToggleDone}
+        aria-label={`Mark "${sub.text}" ${sub.isDone ? 'not done' : 'done'}`}
+        className="w-4 h-4 shrink-0 rounded-sm border-brand-300 text-accent-600 focus-visible:ring-2 focus-visible:ring-accent-500 dark:border-brand-600 dark:bg-brand-700"
+      />
+      {isEditing ? (
+        <Input
+          autoFocus
+          value={editingText}
+          onChange={(e) => onEditingTextChange(e.target.value)}
+          onBlur={onCommitEdit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              onCommitEdit();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              onCancelEdit();
+            }
+          }}
+          maxLength={200}
+          aria-label={`Edit step: ${sub.text}`}
+          className="flex-1 min-w-0"
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={onStartEdit}
+          className={cn(
+            'flex-1 min-w-0 text-left text-sm py-1.5 break-words rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
+            sub.isDone ? 'line-through text-brand-400 dark:text-brand-500' : 'text-brand-700 dark:text-brand-200'
+          )}
+        >
+          {sub.text}
+        </button>
+      )}
+      <div className="relative shrink-0">
+        <button
+          type="button"
+          onClick={assigneePickerOpen ? onCloseAssigneePicker : onOpenAssigneePicker}
+          aria-label={assignee ? `Assigned to ${assignee.displayName ?? 'User'} — change` : 'Assign this step'}
+          aria-haspopup="menu"
+          aria-expanded={assigneePickerOpen}
+          className="flex items-center justify-center w-6 h-6 rounded-full text-brand-400 hover:text-accent-600 dark:text-brand-500 dark:hover:text-accent-300"
+        >
+          {assignee ? (
+            <span className="w-5 h-5 rounded-full bg-brand-200 dark:bg-brand-600 flex items-center justify-center text-[9px] font-bold text-brand-700 dark:text-brand-100">
+              {assignee.displayName?.charAt(0) || '?'}
+            </span>
+          ) : (
+            <UserPlus size={16} aria-hidden="true" />
+          )}
+        </button>
+        {assigneePickerOpen && (
+          <Menu
+            isOpen={assigneePickerOpen}
+            onClose={onCloseAssigneePicker}
+            ariaLabel="Assign this step"
+            position="top-full right-0 mt-1"
+            className="min-w-[160px]"
+            items={assigneeMenuItems}
+          />
+        )}
+      </div>
+      <Button
+        type="button"
+        variant="ghost-brand"
+        size="icon"
+        onClick={onRemove}
+        aria-label={`Remove subtask: ${sub.text}`}
+        className="shrink-0 hover:text-money-neg dark:hover:text-money-negDark"
+      >
+        <X size={16} />
+      </Button>
+    </Reorder.Item>
+  );
+};
 
 const ToDosPage: React.FC = () => {
   const {
@@ -226,6 +372,13 @@ const ToDosPage: React.FC = () => {
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [subtaskInput, setSubtaskInput] = useState('');
   const [aiBreakingDown, setAiBreakingDown] = useState(false);
+  // Inline tap-to-edit for a subtask's text (paper cut #1) — which step's
+  // label is currently swapped for an Input, and its pending edited value.
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
+  const [editingSubtaskText, setEditingSubtaskText] = useState('');
+  // Which subtask's assignee popover is open (paper cut #2). At most one at a
+  // time — opening another closes the previous.
+  const [assigneePickerSubtaskId, setAssigneePickerSubtaskId] = useState<string | null>(null);
   // "Scan steps": photo → parseTaskList OCR → appended as subtasks. The hidden
   // file input is reset after each run so re-picking the same photo re-fires.
   const [aiScanningSteps, setAiScanningSteps] = useState(false);
@@ -362,6 +515,8 @@ const ToDosPage: React.FC = () => {
     setLinkedHabitId('');
     setSubtasks([]);
     setSubtaskInput('');
+    setEditingSubtaskId(null);
+    setAssigneePickerSubtaskId(null);
     setMoreOpen(false);
     setEditingId(null);
     setIsAddModalOpen(true);
@@ -405,7 +560,7 @@ const ToDosPage: React.FC = () => {
   const openEditModal = useCallback((todo: ToDo) => {
     setText(todo.text);
     setCompleteByDate(todo.completeByDate);
-    setAssignedTo(todo.assignedTo);
+    setAssignedTo(todo.assignedTo ?? WHOLE_HOUSEHOLD_ASSIGNEE);
     setIsImportant(todo.isImportant === true);
     setDueTime(todo.dueTime ?? '');
     setReminderMinutesBefore(todo.reminderMinutesBefore ?? null);
@@ -414,6 +569,8 @@ const ToDosPage: React.FC = () => {
     setLinkedHabitId(todo.linkedHabitId ?? '');
     setSubtasks(todo.subtasks ?? []);
     setSubtaskInput('');
+    setEditingSubtaskId(null);
+    setAssigneePickerSubtaskId(null);
     // Auto-expand when any hidden-by-default field already has a value —
     // editing a task with notes/subtasks/time/repeat/habit-link must never hide them.
     setMoreOpen(
@@ -496,6 +653,30 @@ const ToDosPage: React.FC = () => {
 
   const handleToggleSubtaskLocal = useCallback((id: string) => {
     setSubtasks(prev => toggleSubtask(prev, id));
+  }, []);
+
+  // --- Inline tap-to-edit subtask text (paper cut #1) ---
+  const handleStartEditSubtask = useCallback((sub: Subtask) => {
+    setEditingSubtaskId(sub.id);
+    setEditingSubtaskText(sub.text);
+  }, []);
+
+  const handleCommitEditSubtask = useCallback(() => {
+    if (editingSubtaskId) {
+      // Blank result keeps the original (updateSubtaskText no-ops on blank).
+      setSubtasks(prev => updateSubtaskText(prev, editingSubtaskId, editingSubtaskText));
+    }
+    setEditingSubtaskId(null);
+  }, [editingSubtaskId, editingSubtaskText]);
+
+  const handleCancelEditSubtask = useCallback(() => {
+    setEditingSubtaskId(null);
+  }, []);
+
+  // --- Per-subtask assignee (paper cut #2) ---
+  const handlePickSubtaskAssignee = useCallback((id: string, uid: string | undefined) => {
+    setSubtasks(prev => setSubtaskAssignee(prev, id, uid));
+    setAssigneePickerSubtaskId(null);
   }, []);
 
   // Shared append for the multi-line paths (paste, photo scan): clamps to the
@@ -771,7 +952,8 @@ const ToDosPage: React.FC = () => {
       toast.error('Please fill in all required fields');
       return;
     }
-    const isValidAssignee = members.some(member => member.uid === assignedTo);
+    const isValidAssignee =
+      assignedTo === WHOLE_HOUSEHOLD_ASSIGNEE || members.some(member => member.uid === assignedTo);
     if (!isValidAssignee) {
       if (assignedTo) {
         toast.error('The selected household member is no longer available. Please choose another member.');
@@ -780,6 +962,9 @@ const ToDosPage: React.FC = () => {
       }
       return;
     }
+    // "Whole household" stores an absent assignedTo (unassigned/shared) — the
+    // sentinel value never reaches Firestore.
+    const assignedToValue = assignedTo === WHOLE_HOUSEHOLD_ASSIGNEE ? undefined : assignedTo;
 
     setIsSaving(true);
     try {
@@ -831,7 +1016,7 @@ const ToDosPage: React.FC = () => {
         // (Stored values may be null after a clear — normalize for comparison.)
         const updates: Partial<ToDo> = {
           text: trimmedText,
-          assignedTo,
+          assignedTo: assignedToValue,
           isImportant,
           notes: trimmedNotes,
           ...subtaskField
@@ -868,7 +1053,7 @@ const ToDosPage: React.FC = () => {
         await addToDo({
           text: trimmedText,
           completeByDate,
-          assignedTo,
+          assignedTo: assignedToValue,
           isCompleted: false,
           isImportant,
           notes: trimmedNotes,
@@ -1336,7 +1521,7 @@ const ToDosPage: React.FC = () => {
                       key={item.id}
                       item={item}
                       color={rowColors.get(item.id) ?? 'blue'}
-                      assignee={memberMap.get(item.assignedTo)}
+                      assignee={item.assignedTo ? memberMap.get(item.assignedTo) : undefined}
                       isSelected={selectedIds.has(item.id)}
                       isSelectionMode={isSelectionMode}
                       onComplete={completeToDo}
@@ -1346,6 +1531,7 @@ const ToDosPage: React.FC = () => {
                       onMore={setActionTodo}
                       onToggleSelection={toggleSelection}
                       onToggleSubtask={toggleTodoSubtask}
+                      memberMap={memberMap}
                     />
                   ))}
                 </SurfaceList>
@@ -1547,9 +1733,10 @@ const ToDosPage: React.FC = () => {
               {assignedTo === '' && (
                 <option value="" disabled>Choose a member</option>
               )}
-              {assignedTo !== '' && !members.some(m => m.uid === assignedTo) && (
+              {assignedTo !== '' && assignedTo !== WHOLE_HOUSEHOLD_ASSIGNEE && !members.some(m => m.uid === assignedTo) && (
                 <option value={assignedTo} disabled>Former member</option>
               )}
+              <option value={WHOLE_HOUSEHOLD_ASSIGNEE}>Whole household</option>
               {members.map(member => (
                 <option key={member.uid} value={member.uid}>
                   {member.displayName ?? 'User'}
@@ -1749,35 +1936,34 @@ const ToDosPage: React.FC = () => {
             </div>
 
             {subtasks.length > 0 && (
-              <ul className="space-y-1 mb-2" aria-label="Subtasks">
+              <Reorder.Group
+                as="ul"
+                axis="y"
+                values={subtasks}
+                onReorder={setSubtasks}
+                className="space-y-1 mb-2"
+                aria-label="Subtasks"
+              >
                 {subtasks.map(sub => (
-                  <li key={sub.id} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={sub.isDone}
-                      onChange={() => handleToggleSubtaskLocal(sub.id)}
-                      aria-label={`Mark "${sub.text}" ${sub.isDone ? 'not done' : 'done'}`}
-                      className="w-4 h-4 shrink-0 rounded-sm border-brand-300 text-accent-600 focus-visible:ring-2 focus-visible:ring-accent-500 dark:border-brand-600 dark:bg-brand-700"
-                    />
-                    <span className={cn(
-                      'flex-1 min-w-0 text-sm truncate',
-                      sub.isDone ? 'line-through text-brand-400 dark:text-brand-500' : 'text-brand-700 dark:text-brand-200'
-                    )}>
-                      {sub.text}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost-brand"
-                      size="icon"
-                      onClick={() => handleRemoveSubtaskLocal(sub.id)}
-                      aria-label={`Remove subtask: ${sub.text}`}
-                      className="shrink-0 hover:text-money-neg dark:hover:text-money-negDark"
-                    >
-                      <X size={16} />
-                    </Button>
-                  </li>
+                  <SubtaskEditorRow
+                    key={sub.id}
+                    sub={sub}
+                    members={members}
+                    isEditing={editingSubtaskId === sub.id}
+                    editingText={editingSubtaskText}
+                    onEditingTextChange={setEditingSubtaskText}
+                    onStartEdit={() => handleStartEditSubtask(sub)}
+                    onCommitEdit={handleCommitEditSubtask}
+                    onCancelEdit={handleCancelEditSubtask}
+                    onToggleDone={() => handleToggleSubtaskLocal(sub.id)}
+                    onRemove={() => handleRemoveSubtaskLocal(sub.id)}
+                    assigneePickerOpen={assigneePickerSubtaskId === sub.id}
+                    onOpenAssigneePicker={() => setAssigneePickerSubtaskId(sub.id)}
+                    onCloseAssigneePicker={() => setAssigneePickerSubtaskId(null)}
+                    onPickAssignee={(uid) => handlePickSubtaskAssignee(sub.id, uid)}
+                  />
                 ))}
-              </ul>
+              </Reorder.Group>
             )}
 
             <div className="flex items-center gap-2">
@@ -2037,7 +2223,7 @@ const CompletedSection = React.memo(function CompletedSection({ title, items, on
                 <CompletedTodoRow
                     key={item.id}
                     item={item}
-                    assignee={memberMap.get(item.assignedTo)}
+                    assignee={item.assignedTo ? memberMap.get(item.assignedTo) : undefined}
                     onUncomplete={onUncomplete}
                     onDelete={onDelete}
                     onDuplicate={onDuplicate}

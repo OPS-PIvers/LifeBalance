@@ -81,8 +81,14 @@ interface SwipeActionRowProps {
 const OPEN_PX = 88;
 /** Breathing room the commit distance keeps beyond the stuck-open width. */
 const COMMIT_BEYOND_OPEN_PX = 48;
-/** Minimum travel (px) for a release to stick open instead of snapping shut. */
-const STICK_PX = 32;
+/**
+ * Minimum travel (px) for a release to stick open instead of snapping shut.
+ * Raised from 32 (paper cut): a row nested inside scrollable content (e.g. the
+ * expanded subtask checklist) needs a more deliberate horizontal commitment
+ * before the reveal sticks, so an incidental diagonal touch while scrolling
+ * doesn't pop it open.
+ */
+const STICK_PX = 40;
 /** Outward fling speed (px/s) that commits from anywhere past STICK_PX. */
 const FLICK_VELOCITY = 800;
 /**
@@ -319,6 +325,12 @@ export const SwipeActionRow: React.FC<SwipeActionRowProps> = ({
 
       <motion.div
         drag="x"
+        // Paper cut: without a direction lock, a mostly-vertical scroll touch
+        // that starts with a hair of horizontal drift could still register as
+        // an "x" drag (framer's drag="x" ignores the y component entirely).
+        // Locking to whichever axis the gesture actually commits to first
+        // means a real vertical scroll never gets mistaken for a swipe.
+        dragDirectionLock
         dragConstraints={{ left: hasEnd ? -DRAG_LIMIT_PX : 0, right: hasStart ? DRAG_LIMIT_PX : 0 }}
         dragElastic={{ left: hasEnd ? 0 : 0.15, right: hasStart ? 0 : 0.15 }}
         dragMomentum={false}

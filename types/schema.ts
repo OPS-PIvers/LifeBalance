@@ -1034,13 +1034,20 @@ export interface Subtask {
   id: string; // stable client-generated id (see utils/subtasks.ts)
   text: string; // short step description
   isDone: boolean; // completion state
+  // Optional per-step assignee — a household member's uid, or absent for
+  // "unassigned". Purely informational (like the parent's assignedTo); no
+  // migration needed since it's absent on every existing subtask.
+  assigneeId?: string;
 }
 
 export interface ToDo {
   id: string;
   text: string;
   completeByDate: string; // Due date for task completion (YYYY-MM-DD format)
-  assignedTo: string; // uid of household member
+  // uid of household member, or absent for "whole household" (no single
+  // assignee). Absent on a to-do means every member can see it as shared —
+  // it is not an error state.
+  assignedTo?: string;
   isCompleted: boolean;
   completedAt?: string; // ISO timestamp
   createdBy: string; // uid

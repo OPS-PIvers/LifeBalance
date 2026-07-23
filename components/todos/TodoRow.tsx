@@ -16,6 +16,27 @@ import { type SectionColor, dateColorMap } from './todoDisplay';
 import { formatDueTime } from '@/utils/todoTime';
 import { subtaskProgress } from '@/utils/subtasks';
 
+// Small per-subtask assignee chip — read-only here (assignment happens in the
+// edit drawer). Mirrors ActionQueueItem's renderAssigneeChip styling at a
+// slightly smaller size to fit the subtask row.
+function SubtaskAssigneeChip({ assignee }: { assignee: HouseholdMember | undefined }) {
+  if (!assignee) return null;
+  return assignee.photoURL ? (
+    <img
+      src={assignee.photoURL}
+      alt={assignee.displayName ?? 'Assigned member'}
+      className="w-4 h-4 rounded-full object-cover shrink-0"
+    />
+  ) : (
+    <span
+      title={assignee.displayName ?? 'Assigned member'}
+      className="w-4 h-4 rounded-full bg-brand-200 dark:bg-brand-500/30 flex items-center justify-center text-[8px] font-bold text-brand-600 dark:text-brand-200 shrink-0"
+    >
+      {assignee.displayName?.charAt(0) || '?'}
+    </span>
+  );
+}
+
 // Moved verbatim from pages/ToDosPage.tsx (Plan 27) — extracted because both
 // the list arrangement (still in ToDosPage) and the Eisenhower matrix view
 // (components/todos/EisenhowerMatrixView.tsx) render rows via `Section`,
@@ -47,6 +68,10 @@ export interface TodoRowProps {
    *  list. Resolves with whether checking it auto-completed the parent to-do
    *  (and the pre-toggle subtasks to restore on undo). */
   onToggleSubtask: (todoId: string, subtaskId: string) => Promise<TodoSubtaskToggleResult>;
+  /** Member lookup for per-subtask assignee chips in the expanded checklist
+   *  (read-only here — assignment happens in the edit drawer). Optional so
+   *  existing callers/tests that don't pass it still render (no chips shown). */
+  memberMap?: ReadonlyMap<string, HouseholdMember>;
 }
 
 // Memoized row for a single active to-do.
@@ -66,6 +91,7 @@ export const TodoRow = React.memo(function TodoRow({
   onMore,
   onToggleSelection,
   onToggleSubtask,
+  memberMap,
 }: TodoRowProps) {
   // Parse the due date once per row render to avoid repeated parseISO calls
   const dueDate = parseISO(item.completeByDate);
@@ -88,6 +114,12 @@ export const TodoRow = React.memo(function TodoRow({
   const completionGated =
     !!item.linkedHabitId && subtaskCount > 0 && stepsLeft > 0;
 
+  // Paper cut #3: a parent task with unfinished subtasks shouldn't offer
+  // swipe-to-complete at all (even when there's no linked-habit gate) — the
+  // "right swipe = done" gesture is only for tasks that are actually finishable
+  // in one motion. Swipe-to-delete stays available either way.
+  const swipeCompleteAllowed = subtaskCount === 0 || stepsLeft === 0;
+
   // Subtasks now surface through the checklist pill + inline expansion below, so
   // they no longer feed the generic "has details" dot — that dot is reserved for
   // notes and recurrence, which have no other row affordance.
@@ -104,7 +136,12 @@ export const TodoRow = React.memo(function TodoRow({
   // selection mode the pill is an inert count indicator (a row tap toggles
   // selection), so the expansion — and its silent auto-complete path — must not
   // stay reachable.
+  // Syncing ephemeral UI state (collapse an open checklist) to an external
+  // mode switch; a render-phase edge-pattern isn't a good fit per-row since
+  // many rows mount/unmount as the list filters, unlike the page-level
+  // toggles that use that pattern.
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (isSelectionMode) setSubtasksExpanded(false);
   }, [isSelectionMode]);
 
@@ -364,22 +401,39 @@ export const TodoRow = React.memo(function TodoRow({
     >
       {(item.subtasks ?? []).map(sub => (
         <li key={sub.id}>
-          <label className="flex items-center gap-2.5 py-2.5 min-h-[44px] cursor-pointer">
-            <input
-              type="checkbox"
-              checked={sub.isDone}
-              onChange={() => handleSubtaskCheck(sub.id)}
-              onClick={(e) => e.stopPropagation()}
-              aria-label={`Mark "${sub.text}" ${sub.isDone ? 'not done' : 'done'}`}
-              className="w-4 h-4 shrink-0 rounded-sm border-brand-300 text-accent-600 focus-visible:ring-2 focus-visible:ring-accent-500 dark:border-brand-600 dark:bg-brand-700"
-            />
-            <span className={cn(
-              'flex-1 min-w-0 text-sm',
-              sub.isDone ? 'line-through text-brand-400 dark:text-brand-500' : 'text-brand-700 dark:text-brand-200'
-            )}>
-              {sub.text}
-            </span>
-          </label>
+          {/* Lighter version of the row's own swipe-to-complete: swiping a
+              subtask right toggles ITS done state (same handler as the
+              checkbox). Deliberate-intent thresholds are shared with every
+              swipeable row via SwipeActionRow's own commit distance. */}
+          <SwipeActionRow
+            startActions={[{
+              icon: Check,
+              label: sub.isDone ? 'Undo' : 'Done',
+              tone: 'positive',
+              hapticPattern: 'success',
+              onAction: () => handleSubtaskCheck(sub.id),
+            }]}
+          >
+            <label className="flex items-center gap-2.5 py-2.5 min-h-[44px] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sub.isDone}
+                onChange={() => handleSubtaskCheck(sub.id)}
+                onClick={(e) => e.stopPropagation()}
+                aria-label={`Mark "${sub.text}" ${sub.isDone ? 'not done' : 'done'}`}
+                className="w-4 h-4 shrink-0 rounded-sm border-brand-300 text-accent-600 focus-visible:ring-2 focus-visible:ring-accent-500 dark:border-brand-600 dark:bg-brand-700"
+              />
+              <span className={cn(
+                'flex-1 min-w-0 text-sm',
+                sub.isDone ? 'line-through text-brand-400 dark:text-brand-500' : 'text-brand-700 dark:text-brand-200'
+              )}>
+                {sub.text}
+              </span>
+              {sub.assigneeId && (
+                <SubtaskAssigneeChip assignee={memberMap?.get(sub.assigneeId)} />
+              )}
+            </label>
+          </SwipeActionRow>
         </li>
       ))}
     </ul>
@@ -576,13 +630,13 @@ export const TodoRow = React.memo(function TodoRow({
   // own checkbox and the options drawer remain the accessible path).
   return (
     <SwipeActionRow
-      startActions={[{
+      startActions={swipeCompleteAllowed ? [{
         icon: Check,
         label: 'Complete',
         tone: 'positive',
         hapticPattern: 'success',
         onAction: handleComplete,
-      }]}
+      }] : undefined}
       endActions={[{
         icon: Trash2,
         label: 'Delete',

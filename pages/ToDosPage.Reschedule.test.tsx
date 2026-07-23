@@ -69,6 +69,8 @@ vi.mock('lucide-react', () => ({
   Grid2x2: () => <div data-testid="grid2x2-icon" />,
   Smartphone: () => <div data-testid="smartphone-icon" />,
   Sparkles: () => <div data-testid="sparkles-icon" />,
+  GripVertical: () => <div data-testid="grip-vertical-icon" />,
+  UserPlus: () => <div data-testid="user-plus-icon" />,
   ListChecks: () => <div data-testid="list-checks-icon" />,
   Repeat: () => <div data-testid="repeat-icon" />,
   Filter: () => <div data-testid="filter-icon" />,
