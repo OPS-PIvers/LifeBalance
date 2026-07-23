@@ -4,8 +4,8 @@
   "description": "Manage your household finances, habits, and goals",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#F8FAFC",
-  "theme_color": "#1E293B",
+  "background_color": "#f8f7f4",
+  "theme_color": "#161512",
   "orientation": "portrait",
   "icons": [
     {

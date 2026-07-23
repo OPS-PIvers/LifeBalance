@@ -1375,7 +1375,7 @@ const ToDosPage: React.FC = () => {
            md:px-0, dropped here — mobile-only surface): clears the bottom nav
            (+ home-indicator inset) and sits at z-dropdown — above the
            z-sticky nav, below drawers/modals. */
-        <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] left-0 right-0 px-4 flex justify-center z-dropdown pointer-events-none">
+        <div className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-0 right-0 px-4 flex justify-center z-dropdown pointer-events-none">
           <div className="bg-brand-900 dark:bg-brand-800 text-white p-2 rounded-card shadow-raised border border-brand-700 flex items-center gap-2 pointer-events-auto animate-in slide-in-from-bottom-4">
             <div className="px-3 font-semibold text-sm border-r border-brand-700 dark:border-brand-600">
               {selectedIds.size} selected
