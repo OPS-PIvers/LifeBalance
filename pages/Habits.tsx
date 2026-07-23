@@ -549,8 +549,11 @@ const Habits: React.FC = () => {
 
         {/* Tab Switcher — sm size: this is a secondary in-page filter, not
             primary bottom-nav-adjacent navigation (only "Track" is the
-            daily-use default). */}
-        <div className="px-4 mb-4">
+            daily-use default). STICKY strip (unified page-scroll model): pins
+            at the top of MainLayout's single page scroller while content
+            passes beneath, with the page background + bottom hairline matching
+            ListsPage's tab strip exactly. */}
+        <div className="px-4 pt-3 pb-2 sticky top-0 z-30 bg-brand-50 dark:bg-brand-900 border-b border-brand-200 dark:border-brand-800">
           {/* Text-only triggers (matching Money's tab bar) — icons made the
               consolidated bar overflow 375px, which is the exact problem this
               consolidation removes. text-[13px] + px-2.5 buy the room the
@@ -604,13 +607,13 @@ const Habits: React.FC = () => {
         {/* One-time coach hint for the tab-popover nav — first visit only;
             opening any tab menu, the ×, or navigating away latches it off for
             good (shared with the Money page). Sibling of the tab-bar wrapper,
-            not a child (review): inside the wrapper its dismissal shrank the
-            wrapper and jumped the main content up; out here the wrapper's own
-            spacing stays put and only the hint's slot collapses. */}
-        <SubViewHint menuOpened={openMenu !== null} className="mx-4 -mt-1 mb-4" />
+            not a child: inside the (now sticky) strip its dismissal would
+            resize the pinned strip; out here it scrolls with the content and
+            only its own slot collapses. */}
+        <SubViewHint menuOpened={openMenu !== null} className="mx-4 mt-4" />
 
         {/* Main Content */}
-        <div className="px-4 pb-6">
+        <div className="px-4 pt-4 pb-6">
           <TabsContent value="track" className="space-y-6">
             {categories.length === 0 && !showArchived && (
               <EmptyState
