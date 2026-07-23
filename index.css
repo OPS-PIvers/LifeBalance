@@ -198,14 +198,16 @@
   when the ROOT element has no background of its own, iOS 17+ falls back to an
   opaque black strip that reads as a seam above the (always-dark) TopToolbar.
   Painting <html> in the toolbar's own color makes the strip continuous with
-  the header in both schemes. Keep these hexes in sync with TopToolbar's
-  `bg-brand-800 dark:bg-brand-900` and index.html's theme-color metas.
+  the header in both schemes. Uses the @theme tokens directly (emitted on
+  :root, not overridden in .dark) so they track TopToolbar's
+  `bg-brand-800 dark:bg-brand-900`; index.html's theme-color metas hold the
+  same values as literals — keep those in sync.
 */
 html {
-  background-color: #242220; /* --color-brand-800, light-mode toolbar */
+  background-color: var(--color-brand-800); /* light-mode toolbar */
 }
 html.dark {
-  background-color: #161512; /* --color-brand-900, dark-mode toolbar */
+  background-color: var(--color-brand-900); /* dark-mode toolbar */
 }
 
 .dark {
