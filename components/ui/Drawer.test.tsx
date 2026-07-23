@@ -129,6 +129,40 @@ describe('Drawer', () => {
     expect(document.body.style.overflow).toBe('');
   });
 
+  it('restores a pre-existing inline overflow value on close', () => {
+    document.body.style.overflow = 'scroll';
+    const { rerender } = render(
+      <Drawer isOpen={true} onClose={onCloseMock}>
+        <div>Content</div>
+      </Drawer>
+    );
+    expect(document.body.style.overflow).toBe('hidden');
+
+    rerender(
+      <Drawer isOpen={false} onClose={onCloseMock}>
+        <div>Content</div>
+      </Drawer>
+    );
+    expect(document.body.style.overflow).toBe('scroll');
+    document.body.style.overflow = '';
+  });
+
+  it('leaves no stale inline overflow when the body had none before opening', () => {
+    document.body.style.removeProperty('overflow');
+    const { rerender } = render(
+      <Drawer isOpen={true} onClose={onCloseMock}>
+        <div>Content</div>
+      </Drawer>
+    );
+    rerender(
+      <Drawer isOpen={false} onClose={onCloseMock}>
+        <div>Content</div>
+      </Drawer>
+    );
+    // Must restore to the empty INLINE style, not write back a computed default.
+    expect(document.body.getAttribute('style') ?? '').not.toContain('overflow');
+  });
+
   it('does not close when disableClose is true', () => {
     render(
       <Drawer isOpen={true} onClose={onCloseMock} disableClose={true}>

@@ -78,7 +78,11 @@ export const Drawer: React.FC<DrawerProps> = ({
   // Lock body scroll when open
   useEffect(() => {
     if (isOpen) {
-      const originalStyle = window.getComputedStyle(document.body).overflow;
+      // Capture the previous INLINE overflow (not the computed style): restoring
+      // a computed value would write the stylesheet default back as an explicit
+      // inline style — and worse, if another layer holds a concurrent lock
+      // (e.g. ToDosPage's grid-overlay latch), it would re-pin 'hidden' on close.
+      const originalStyle = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
       return () => {
         document.body.style.overflow = originalStyle;

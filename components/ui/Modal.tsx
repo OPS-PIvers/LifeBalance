@@ -114,7 +114,10 @@ export const Modal: React.FC<ModalProps> = ({
   // Lock body scroll
   React.useEffect(() => {
     if (isOpen) {
-      const originalStyle = window.getComputedStyle(document.body).overflow;
+      // Capture the previous INLINE overflow (not the computed style), so closing
+      // restores exactly what was there — including nothing — and never re-pins
+      // a concurrent lock holder's 'hidden' as our "original".
+      const originalStyle = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
       return () => {
         document.body.style.overflow = originalStyle;
