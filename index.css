@@ -257,6 +257,20 @@
   }
 }
 
+/* iOS auto-zooms the whole page when a focused form field's font-size is under
+   16px. Rather than clamping the viewport (maximum-scale=1 — which Android
+   Chrome honors and would kill pinch-zoom, WCAG 1.4.4), floor every text-entry
+   field at 16px on touch devices. Desktop keeps the designed sm sizes.
+   Checkboxes/radios/ranges/buttons never trigger focus-zoom, so only typing
+   fields need the floor. */
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea {
+    font-size: max(1rem, 1em);
+  }
+}
+
 @utility no-scrollbar {
   /* Hide scrollbar for clean UI in chips */
   &::-webkit-scrollbar {
