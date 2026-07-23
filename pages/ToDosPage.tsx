@@ -38,6 +38,7 @@ import { EisenhowerGridView } from '@/components/todos/EisenhowerGridView';
 import { TaskTemplateDrawer } from '@/components/todos/TaskTemplateDrawer';
 import { sortFlatTodos, TODO_SORT_MODES, TODO_SORT_LABELS, type TodoSortMode } from '@/utils/todoSort';
 import { isTodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
+import type { TodoCompletionOptions } from '@/contexts/household/mutations/todoMutations';
 
 // Persisted like the Shopping list's sort mode — the derived view survives
 // a reload but never writes to Firestore.
@@ -438,12 +439,12 @@ const ToDosPage: React.FC = () => {
       }
   }, [addToDo]);
 
-  const handleUncomplete = useCallback(async (id: string, options?: { subtasksOverride?: Subtask[] }) => {
+  const handleUncomplete = useCallback(async (id: string, options?: TodoCompletionOptions) => {
       try {
           // uncompleteToDo (not a plain updateToDo) so a managed-kid assignee's
           // completion points credit is reversed atomically with the restore.
-          // `options.subtasksOverride` (from an inline subtask auto-complete undo)
-          // re-unchecks the triggering subtask in the same batch.
+          // `options.subtaskToggle` (from an inline subtask auto-complete undo)
+          // re-unchecks the triggering subtask by id in the same batch.
           await uncompleteToDo(id, options);
           toast.success('Task restored to active');
       } catch (error) {

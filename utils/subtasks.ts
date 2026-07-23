@@ -53,6 +53,18 @@ export function toggleSubtask(subtasks: Subtask[] | undefined, id: string): Subt
   return (subtasks ?? []).map(s => (s.id === id ? { ...s, isDone: !s.isDone } : s));
 }
 
+/**
+ * Returns a new array with the given subtask's `isDone` set to an EXPLICIT value
+ * (idempotent, unlike `toggleSubtask`). This is the merge primitive for inline
+ * subtask edits: a completion/undo path applies the caller's intended state to
+ * ITS OWN freshest read of the array by id, so a concurrent add/toggle of a
+ * DIFFERENT subtask from another device survives instead of being clobbered by a
+ * stale whole-array snapshot. Absent id → array returned unchanged.
+ */
+export function setSubtaskDone(subtasks: Subtask[] | undefined, id: string, done: boolean): Subtask[] {
+  return (subtasks ?? []).map(s => (s.id === id ? { ...s, isDone: done } : s));
+}
+
 /** Returns a new array with the subtask removed. */
 export function removeSubtask(subtasks: Subtask[] | undefined, id: string): Subtask[] {
   return (subtasks ?? []).filter(s => s.id !== id);

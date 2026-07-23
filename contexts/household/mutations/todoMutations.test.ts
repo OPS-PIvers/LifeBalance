@@ -16,7 +16,7 @@ import type { HouseholdMember, ToDo } from '@/types/schema';
 
 interface Ref { __path: string; withConverter: (c: unknown) => Ref }
 interface BatchOp {
-  op: 'update' | 'delete';
+  op: 'update' | 'delete' | 'txn-update';
   ref: Ref;
   data?: Record<string, unknown>;
 }
@@ -59,6 +59,17 @@ vi.mock('firebase/firestore', () => {
       delete: (ref: Ref) => { batchOps.push({ op: 'delete', ref }); },
       commit: () => commitMock(),
     })),
+    // Plain (non-escalating) subtask toggles run inside a runTransaction: read
+    // fresh via transaction.get, then transaction.update the merged array. The
+    // mock records updates into `batchOps` (op: 'txn-update') so tests can
+    // assert the by-id merge without a real Firestore.
+    runTransaction: async (_db: unknown, cb: (txn: unknown) => Promise<unknown>) => {
+      const transaction = {
+        get: (ref: unknown) => getDocMock(ref),
+        update: (ref: Ref, data: Record<string, unknown>) => { batchOps.push({ op: 'txn-update', ref, data }); },
+      };
+      return cb(transaction);
+    },
     serverTimestamp: vi.fn(() => '__serverTimestamp'),
     Timestamp: class {},
   };
@@ -279,7 +290,7 @@ describe('makeToggleTodoSubtask', () => {
     await expect(toggleTodoSubtask('todo-1', 's1')).rejects.toThrow('Household not selected');
   });
 
-  it('checking a NON-final subtask is a plain update — never completes the to-do', async () => {
+  it('checking a NON-final subtask runs a runTransaction by-id update — never completes the to-do', async () => {
     mockTodoDoc(activeTodo([
       { id: 's1', text: 'a', isDone: false },
       { id: 's2', text: 'b', isDone: false },
@@ -288,9 +299,16 @@ describe('makeToggleTodoSubtask', () => {
     const result = await toggleTodoSubtask('todo-1', 's1');
 
     expect(result.autoCompleted).toBe(false);
-    expect(result.priorSubtasks).toHaveLength(2);
-    // Plain update goes through updateDoc, not a completion writeBatch.
+    expect(result.toggledSubtaskId).toBe('s1');
+    // Plain update goes through a runTransaction (txn-update), not a completion
+    // writeBatch (commit).
     expect(commitMock).not.toHaveBeenCalled();
+    const txnOp = batchOps.find(o => o.op === 'txn-update');
+    expect(txnOp?.ref.__path).toBe('households/hh-1/todos/todo-1');
+    expect(txnOp?.data?.subtasks).toEqual([
+      { id: 's1', text: 'a', isDone: true },
+      { id: 's2', text: 'b', isDone: false },
+    ]);
   });
 
   it('unchecking a subtask on a still-open to-do never (un)completes anything', async () => {
@@ -303,6 +321,48 @@ describe('makeToggleTodoSubtask', () => {
 
     expect(result.autoCompleted).toBe(false);
     expect(commitMock).not.toHaveBeenCalled();
+    const txnOp = batchOps.find(o => o.op === 'txn-update');
+    expect(txnOp?.data?.subtasks).toEqual([
+      { id: 's1', text: 'a', isDone: false },
+      { id: 's2', text: 'b', isDone: false },
+    ]);
+  });
+
+  it('is a no-op when the subtask id no longer exists (removed elsewhere)', async () => {
+    mockTodoDoc(activeTodo([{ id: 's1', text: 'a', isDone: false }]));
+    const { toggleTodoSubtask } = makeToggleTodoSubtask({ db, householdId, membersRef });
+    const result = await toggleTodoSubtask('todo-1', 'ghost');
+
+    expect(result.autoCompleted).toBe(false);
+    expect(batchOps).toHaveLength(0);
+    expect(commitMock).not.toHaveBeenCalled();
+  });
+
+  it('merges the by-id flip onto the TRANSACTION\'s own fresh read — a concurrent edit of a different subtask survives', async () => {
+    // Outer read (escalation/target decision) sees the pre-concurrent state...
+    getDocMock.mockResolvedValueOnce({
+      data: () => activeTodo([
+        { id: 's1', text: 'a', isDone: false },
+        { id: 's2', text: 'b', isDone: false },
+      ]),
+    });
+    // ...but by the time the transaction reads, another device has checked s2.
+    // The write must set s1 (our target) WITHOUT clobbering s2's fresh value.
+    getDocMock.mockResolvedValueOnce({
+      data: () => activeTodo([
+        { id: 's1', text: 'a', isDone: false },
+        { id: 's2', text: 'b', isDone: true },
+      ]),
+    });
+    const { toggleTodoSubtask } = makeToggleTodoSubtask({ db, householdId, membersRef });
+    const result = await toggleTodoSubtask('todo-1', 's1');
+
+    expect(result.autoCompleted).toBe(false);
+    const txnOp = batchOps.find(o => o.op === 'txn-update');
+    expect(txnOp?.data?.subtasks).toEqual([
+      { id: 's1', text: 'a', isDone: true },  // our flip
+      { id: 's2', text: 'b', isDone: true },  // concurrent edit preserved
+    ]);
   });
 
   it('checking the LAST subtask auto-completes the parent in ONE batch, persisting the finished checklist', async () => {
@@ -314,12 +374,9 @@ describe('makeToggleTodoSubtask', () => {
     const result = await toggleTodoSubtask('todo-1', 's2');
 
     expect(result.autoCompleted).toBe(true);
-    // Pre-toggle subtasks are returned so an undo can re-uncheck the trigger.
-    expect(result.priorSubtasks).toEqual([
-      { id: 's1', text: 'a', isDone: true },
-      { id: 's2', text: 'b', isDone: false },
-    ]);
-    // Completion committed atomically.
+    // The toggled id is returned so an undo can re-uncheck the trigger by id.
+    expect(result.toggledSubtaskId).toBe('s2');
+    // Completion committed atomically via writeBatch.
     expect(commitMock).toHaveBeenCalledTimes(1);
     const todoOp = batchOps.find(o => o.ref.__path === 'households/hh-1/todos/todo-1');
     expect(todoOp?.data).toMatchObject({ isCompleted: true });

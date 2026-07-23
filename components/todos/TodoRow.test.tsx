@@ -26,7 +26,7 @@ const handlers = {
   onDelete: vi.fn(),
   onMore: vi.fn(),
   onToggleSelection: vi.fn(),
-  onToggleSubtask: vi.fn(async () => ({ autoCompleted: false, priorSubtasks: [] })),
+  onToggleSubtask: vi.fn(async () => ({ autoCompleted: false, toggledSubtaskId: 's2' })),
 };
 
 const baseProps = {
@@ -153,6 +153,52 @@ describe('TodoRow', () => {
       render(<TodoRow {...baseProps} item={withSubtasks} />);
       expect(screen.getByTestId('todo-subtask-pill')).toBeInTheDocument();
       expect(screen.queryByTestId('todo-details-dot')).toBeNull();
+    });
+
+    it('renders the pill as a SIBLING of the edit button, not a descendant (ARIA: no interactive descendant of role=button)', () => {
+      render(<TodoRow {...baseProps} item={withSubtasks} />);
+      const editButton = screen.getByRole('button', { name: `Edit task: ${item.text}` });
+      const pill = screen.getByTestId('todo-subtask-pill');
+      expect(editButton.contains(pill)).toBe(false);
+    });
+
+    it('keyboard activation on the pill does not bubble to the body and open the edit drawer', () => {
+      render(<TodoRow {...baseProps} item={withSubtasks} />);
+      const pill = screen.getByTestId('todo-subtask-pill');
+      // Enter/Space on the focused pill must never reach the row body's
+      // handleBodyKeyDown (which would preventDefault + open edit).
+      fireEvent.keyDown(pill, { key: 'Enter' });
+      fireEvent.keyDown(pill, { key: ' ' });
+      expect(handlers.onEdit).not.toHaveBeenCalled();
+    });
+
+    it('clicking the pill toggles expansion via the keyboard-reachable button path', () => {
+      render(<TodoRow {...baseProps} item={withSubtasks} />);
+      const pill = screen.getByTestId('todo-subtask-pill');
+      // The pill is a real <button>, so keyboard users get native Enter/Space
+      // activation (which fires click) — exercised here via click.
+      fireEvent.click(pill);
+      expect(pill.getAttribute('aria-expanded')).toBe('true');
+      expect(handlers.onEdit).not.toHaveBeenCalled();
+    });
+
+    describe('selection mode', () => {
+      it('renders the pill as an inert count indicator (not a button)', () => {
+        render(<TodoRow {...baseProps} item={withSubtasks} isSelectionMode />);
+        const pill = screen.getByTestId('todo-subtask-pill');
+        expect(pill.tagName).toBe('SPAN');
+        expect(pill).not.toHaveAttribute('aria-expanded');
+        expect(pill.textContent).toContain('1/2');
+      });
+
+      it('does not expose the expand/auto-complete path — clicking does not expand the checklist', () => {
+        render(<TodoRow {...baseProps} item={withSubtasks} isSelectionMode />);
+        const pill = screen.getByTestId('todo-subtask-pill');
+        fireEvent.click(pill);
+        // Inert indicator: no inline checklist, no onToggleSubtask reachable.
+        expect(screen.queryByText('Wheel to curb')).toBeNull();
+        expect(handlers.onToggleSubtask).not.toHaveBeenCalled();
+      });
     });
   });
 });

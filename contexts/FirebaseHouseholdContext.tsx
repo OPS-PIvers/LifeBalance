@@ -46,7 +46,6 @@ import {
   ShoppingItem,
   MealPlanItem,
   ToDo,
-  Subtask,
   Insight,
   HabitInsightsDoc,
   GroceryCatalogItem,
@@ -141,6 +140,7 @@ import {
   makeUncompleteToDo,
   makeToggleTodoSubtask,
   makeLoadOlderCompletedTodos,
+  type TodoCompletionOptions,
 } from '@/contexts/household/mutations/todoMutations';
 import {
   softDeleteDoc,
@@ -2301,7 +2301,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
    *
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
-  const completeToDo = useCallback(async (id: string, options?: { subtasksOverride?: Subtask[] }) => {
+  const completeToDo = useCallback(async (id: string, options?: TodoCompletionOptions) => {
     await makeCompleteToDo({ db, householdId, membersRef, user }).completeToDo(id, options);
   }, [householdId, user]);
 
@@ -2309,7 +2309,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
    * Restores a completed to-do to active, reversing any kid points credit in
    * the same writeBatch (counterpart of completeToDo — see makeUncompleteToDo).
    */
-  const uncompleteToDo = useCallback(async (id: string, options?: { subtasksOverride?: Subtask[] }) => {
+  const uncompleteToDo = useCallback(async (id: string, options?: TodoCompletionOptions) => {
     await makeUncompleteToDo({ db, householdId, membersRef, user }).uncompleteToDo(id, options);
   }, [householdId, user]);
 
