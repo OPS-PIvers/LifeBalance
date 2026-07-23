@@ -4,8 +4,12 @@
     <meta charset="UTF-8" />
     <!-- interactive-widget=resizes-content: where supported (Chrome/Android), the
          layout viewport shrinks with the software keyboard so the header/toasts
-         stay anchored; iOS ignores it (useKeyboardViewportAnchor covers it there). -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+         stay anchored; iOS ignores it (useKeyboardViewportAnchor covers it there).
+         maximum-scale=1: stops iOS Safari's auto-zoom when a sub-16px input is
+         focused (the whole-screen zoom jump on form fields). iOS deliberately
+         still allows user pinch-zoom despite this cap, so accessibility zoom is
+         unaffected. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
     <title>LifeBalance</title>
 
     <!-- Favicons -->
