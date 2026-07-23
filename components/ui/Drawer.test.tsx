@@ -93,6 +93,34 @@ describe('Drawer', () => {
     expect(onCloseMock).toHaveBeenCalledTimes(1);
   });
 
+  it('Escape only closes the topmost drawer when drawers are nested', () => {
+    const onCloseOuter = vi.fn();
+    const onCloseInner = vi.fn();
+    // The inner drawer opens AFTER the outer is already up (the real flow:
+    // e.g. the habit picker opened from within the review drawer) — the stack
+    // is ordered by open time, so the later-opened sheet owns Escape.
+    const ui = (outerOpen: boolean, innerOpen: boolean) => (
+      <Drawer isOpen={outerOpen} onClose={onCloseOuter}>
+        <div>Outer</div>
+        <Drawer isOpen={innerOpen} onClose={onCloseInner}>
+          <div>Inner</div>
+        </Drawer>
+      </Drawer>
+    );
+    const { rerender } = render(ui(true, false));
+    rerender(ui(true, true));
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onCloseInner).toHaveBeenCalledTimes(1);
+    expect(onCloseOuter).not.toHaveBeenCalled();
+
+    // Close inner-then-outer so the body scroll-lock unwinds in stack order
+    // and doesn't leak 'hidden' into the next test.
+    rerender(ui(true, false));
+    rerender(ui(false, false));
+    expect(document.body.style.overflow).toBe('');
+  });
+
   it('does not close when pressing other keys', () => {
     render(
       <Drawer isOpen={true} onClose={onCloseMock}>

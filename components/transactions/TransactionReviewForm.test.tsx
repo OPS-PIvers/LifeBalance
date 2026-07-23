@@ -65,6 +65,8 @@ vi.mock('lucide-react', () => ({
   Sparkles: () => <div data-testid="icon-sparkles" />,
   Trash2: () => <div data-testid="icon-trash" />,
   Loader2: () => <div data-testid="icon-loader" />,
+  Search: () => <div data-testid="icon-search" />,
+  X: () => <div data-testid="icon-x" />,
 }));
 
 const baseTx: Transaction = {

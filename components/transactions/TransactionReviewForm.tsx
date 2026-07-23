@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { Check, ChevronDown, Copy, Link2, Sparkles, Trash2 } from 'lucide-react';
+import { Check, Copy, Link2, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { subMonths, addMonths, parseISO, format as formatDate } from 'date-fns';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import { Transaction, CREDIT_CARD_CATEGORY, INCOME_CATEGORY } from '@/types/schema';
 import { Switch } from '@/components/ui/Switch';
-import { getAutoSelectedHabitIds, suggestHabitsForTransaction } from '@/utils/habitSuggestions';
+import { getAutoSelectedHabitIds } from '@/utils/habitSuggestions';
 import { keywordMatchedHabitIds } from '@/utils/transactionHabitFiring';
 import { suggestAccountIdForTransaction, suggestCategoryForTransaction } from '@/utils/actionQueueSmart';
 import { buildTransactionCategoryOptions } from '@/utils/categories';
@@ -13,46 +13,11 @@ import { getBillLinkCandidates } from '@/utils/billLinkCandidates';
 import { roundMoney } from '@/utils/money';
 import { pickKeeper } from '@/utils/transactionMerge';
 import { useFinance, useGamification, useExpandedCalendarItems } from '@/contexts/FirebaseHouseholdContext';
-import { cn } from '@/utils/cn';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
-import Eyebrow from '@/components/ui/Eyebrow';
-
-interface SelectableChipProps {
-  selected: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-  /** Small pulsing dot hinting a high-confidence suggestion (unselected state only). */
-  showSuggestionDot?: boolean;
-}
-
-/**
- * A single unified selection-chip treatment for the habit-suggestion chips
- * (multi-select tagging — the one legitimate chip form role per DESIGN.md §6's
- * picker rule; the pick-one budget category is a `Select`). Moved here from
- * ActionQueueItem so both review surfaces (the Action Queue drawer and the
- * on-open review drawer) share one chip language.
- */
-const SelectableChip: React.FC<SelectableChipProps> = ({ selected, onClick, children, showSuggestionDot }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={cn(
-      'relative px-3 py-1.5 rounded-btn text-xs font-semibold transition-colors duration-(--duration-fast) ease-(--ease-standard) inline-flex items-center gap-1',
-      selected
-        ? 'bg-accent-600 text-white'
-        : 'bg-white border border-brand-200 text-brand-600 hover:bg-brand-50 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-300 dark:hover:bg-brand-700'
-    )}
-  >
-    {selected && <Check size={12} strokeWidth={3} />}
-    {children}
-    {!selected && showSuggestionDot && (
-      <span className="absolute -top-1 -right-1 w-2 h-2 bg-warm-500 rounded-full motion-safe:animate-pulse" aria-hidden="true" />
-    )}
-  </button>
-);
+import { HabitMultiSelect } from '@/components/habits/HabitMultiSelect';
 
 export interface TransactionReviewFormProps {
   /** The pending transaction being reviewed. */
@@ -183,10 +148,6 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
     const alreadyFired = new Set(transaction.firedHabitIds ?? []);
     return keywordMatchedHabitIds(habits, { merchant, notes }).filter(id => !alreadyFired.has(id));
   }, [habits, merchant, notes, transaction.firedHabitIds]);
-  const keywordHabits = useMemo(
-    () => keywordHabitIds.map(id => habits.find(h => h.id === id)).filter((h): h is typeof habits[number] => !!h),
-    [keywordHabitIds, habits]
-  );
   // The pre-selected baseline follows the live merchant/notes fields: history
   // auto-selection (or explicit prior tags) unioned with the keyword matches.
   const preselectIds = useMemo(() => {
@@ -204,7 +165,6 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
     setPrevAutoSelectKey(autoSelectKey);
     if (!habitsTouched) setSelectedHabitIds(preselectIds);
   }
-  const [showAllHabits, setShowAllHabits] = useState(false);
   const [creditPayment, setCreditPayment] = useState(() => transaction.creditPayment ?? false);
   // Recurring toggle — defaults OFF; the host drawer remounts the form per
   // transaction (keyed), so it resets between review items. When ON, a nested
@@ -226,15 +186,6 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
   // (subscription) toggle is hidden/ignored in that mode (same rationale as
   // the manual-capture form).
   const isCreditPaymentMode = isSelectedAccountCredit && creditPayment;
-
-  // Smart habit suggestions follow the live merchant field (so editing the
-  // merchant re-scores suggestions, matching the manual-capture path).
-  const suggestedHabits = useMemo(
-    () => (merchant.trim() ? suggestHabitsForTransaction(merchant, habits, transactions, 5) : []),
-    [merchant, habits, transactions]
-  );
-  const lowConfidenceHabits = suggestedHabits.filter(s => s.confidence === 'low');
-  const remainingLowConfidenceHabits = lowConfidenceHabits.filter(s => !selectedHabitIds.includes(s.habit.id));
 
   // Round to whole cents up front so a sub-cent entry (e.g. 0.004 on a $0 stub)
   // can't slip past the approve gate and verify an effectively-$0 transaction.
@@ -561,128 +512,25 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
         </div>
       )}
 
-      {/* Also logs — keyword-triggered habits (PRD #1065). Pre-checked; approving
-          fires every ticked one. Untick to veto a false match. Only shown when at
-          least one habit's keyword matches this merchant/notes. */}
-      {keywordHabits.length > 0 && (
-        <div className="space-y-2 rounded-card border border-warm-200 bg-warm-50/70 dark:border-warm-800 dark:bg-warm-900/20 p-3">
-          <div className="flex items-center gap-1.5">
-            <Sparkles size={12} className="text-warm-500" aria-hidden="true" />
-            <Eyebrow as="p" className="text-xxs">Also logs</Eyebrow>
-          </div>
-          <p className="text-xs text-brand-500 dark:text-brand-400">
-            Matched your habit keywords — approving logs these. Untick any that don’t belong.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {keywordHabits.map(habit => {
-              const isSelected = selectedHabitIds.includes(habit.id);
-              return (
-                <SelectableChip
-                  key={habit.id}
-                  selected={isSelected}
-                  onClick={() => {
-                    setHabitsTouched(true);
-                    setSelectedHabitIds(prev =>
-                      isSelected ? prev.filter(id => id !== habit.id) : [...prev, habit.id]
-                    );
-                  }}
-                >
-                  {habit.title}
-                </SelectableChip>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Connect habits — smart suggestions */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-1.5">
-          <Eyebrow as="p" className="text-xxs">Connect Habits</Eyebrow>
-          {suggestedHabits.some(s => s.confidence !== 'low') && (
-            <Sparkles size={10} className="text-warm-500" />
-          )}
-        </div>
-        {habits.length === 0 && (
-          <p className="text-xs text-brand-400 dark:text-brand-450 italic">No habits found. Create some in Habits tab.</p>
-        )}
-        {autoSelectedIds.some(id => selectedHabitIds.includes(id)) && (
-          <p className="text-xs text-brand-400 dark:text-brand-450">
-            Pre-selected from your history with this merchant — tap a chip to remove.
-          </p>
-        )}
-
-        {habits.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {/* High/medium-confidence suggestions first */}
-            {suggestedHabits
-              .filter(s => s.confidence === 'high' || s.confidence === 'medium')
-              .map(({ habit, confidence }) => {
-                const isSelected = selectedHabitIds.includes(habit.id);
-                return (
-                  <SelectableChip
-                    key={habit.id}
-                    selected={isSelected}
-                    showSuggestionDot={confidence === 'high'}
-                    onClick={() => {
-                      setHabitsTouched(true);
-                      setSelectedHabitIds(prev =>
-                        isSelected ? prev.filter(id => id !== habit.id) : [...prev, habit.id]
-                      );
-                    }}
-                  >
-                    {habit.title}
-                  </SelectableChip>
-                );
-              })}
-
-            {/* Already-selected low-confidence habits stay visible when collapsed. */}
-            {lowConfidenceHabits
-              .filter(s => selectedHabitIds.includes(s.habit.id))
-              .map(({ habit }) => (
-                <SelectableChip
-                  key={habit.id}
-                  selected
-                  onClick={() => {
-                    setHabitsTouched(true);
-                    setSelectedHabitIds(prev => prev.filter(id => id !== habit.id));
-                  }}
-                >
-                  {habit.title}
-                </SelectableChip>
-              ))}
-
-            {/* Remaining low-confidence habits, revealed via a plain toggle. */}
-            {showAllHabits && remainingLowConfidenceHabits.map(({ habit }) => (
-              <SelectableChip
-                key={habit.id}
-                selected={false}
-                onClick={() => {
-                  setHabitsTouched(true);
-                  setSelectedHabitIds(prev => [...prev, habit.id]);
-                }}
-              >
-                {habit.title}
-              </SelectableChip>
-            ))}
-
-            {remainingLowConfidenceHabits.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowAllHabits(prev => !prev)}
-                aria-expanded={showAllHabits}
-                className="px-3 py-1.5 rounded-btn text-xs font-semibold bg-white border border-brand-200 text-brand-500 hover:bg-brand-50 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-400 dark:hover:bg-brand-700 inline-flex items-center gap-1"
-              >
-                {showAllHabits ? 'Show less' : `+ More (${remainingLowConfidenceHabits.length})`}
-                <ChevronDown
-                  size={12}
-                  className={cn('transition-transform duration-(--duration-fast) ease-(--ease-standard)', showAllHabits && 'rotate-180')}
-                />
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+      {/* Connect habits — searchable multi-select drawer (replaces the old
+          chip wall, which was unscannable past ~20 habits). Keyword-matched
+          "Also logs" automations (PRD #1065) and merchant-history matches are
+          pre-selected via `preselectIds` and simply badged with a sparkle in
+          the picker list rather than getting a separate banner. */}
+      <HabitMultiSelect
+        habits={habits}
+        selectedHabitIds={selectedHabitIds}
+        onChange={(ids) => {
+          setHabitsTouched(true);
+          setSelectedHabitIds(ids);
+        }}
+        automationHabitIds={keywordHabitIds}
+        helperText={
+          autoSelectedIds.some(id => selectedHabitIds.includes(id)) || keywordHabitIds.length > 0
+            ? 'Pre-selected from your history and habit keyword matches — tap a chip to remove, or open the picker to adjust.'
+            : undefined
+        }
+      />
 
       {/* Recurring (subscription) toggle — hidden for a credit-card PAYMENT,
           that's a transfer, not subscription-style recurring spend. */}
