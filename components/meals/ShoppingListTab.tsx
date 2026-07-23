@@ -24,6 +24,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import PageHeader from '@/components/ui/PageHeader';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
+import { useStackedStickyOffset } from '@/hooks/useStackedStickyOffset';
 import { usePowerToolsEnabled } from '@/hooks/usePowerToolsEnabled';
 import { haptic } from '@/utils/haptics';
 import { generateCsvExport } from '@/utils/exportUtils';
@@ -262,6 +263,13 @@ const ShoppingListTab: React.FC = () => {
   // the Lists "Shopping" tab, the Meals "Shopping List" tab, and the standalone
   // Shopping page), shifting the view up — see the Capture drawer fix.
   const addInputRef = useAutoFocus<HTMLInputElement>();
+
+  // Stacked sticky header (owner decision, shared with the To-Dos tab): tab
+  // strip, then the title row, then the add row all pin; list rows scroll
+  // beneath. The hook measures the title row and publishes
+  // --lists-sticky-top-2 (strip + title height) for the add row's offset.
+  const { containerRef: stickyContainerRef, titleRowRef: stickyTitleRowRef } =
+    useStackedStickyOffset<HTMLDivElement, HTMLDivElement>();
 
   // Modal States
   const [editingItem, setEditingItem] = useState<ShoppingItem | null>(null);
@@ -629,12 +637,19 @@ const ShoppingListTab: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-3 pb-20">
-        {/* Title row — NOT sticky (scrolls away). Every secondary/bulk action
-            collapses into one top-right overflow menu (Reminders/Todoist/To-Do
-            pattern), reclaiming the old 4-icon cluster + the 3-button row. The
-            trigger shows a spinner while AI Optimize runs so feedback survives a
+    <div ref={stickyContainerRef} className="space-y-3 pb-20">
+        {/* Title row — STICKY (owner decision, matching the To-Dos tab): pins
+            flush below the tab strip at --lists-sticky-top, with the add row
+            pinned below it in turn; the opaque page background masks rows
+            scrolling beneath. Every secondary/bulk action collapses into one
+            top-right overflow menu (Reminders/Todoist/To-Do pattern),
+            reclaiming the old 4-icon cluster + the 3-button row. The trigger
+            shows a spinner while AI Optimize runs so feedback survives a
             closed menu. */}
+        <div
+            ref={stickyTitleRowRef}
+            className="sticky top-[var(--lists-sticky-top,0px)] z-20 bg-brand-50 dark:bg-brand-900"
+        >
         <PageHeader
             as="h2"
             className="px-0 pt-4 pb-2"
@@ -762,6 +777,7 @@ const ShoppingListTab: React.FC = () => {
                 </div>
             }
         />
+        </div>
 
         {/* Clear Checked */}
         {hasPurchasedItems && (
@@ -785,11 +801,12 @@ const ShoppingListTab: React.FC = () => {
             sticky top card (add row, bottom border = the divider) and a
             flush list card below (border-t-0, rounded-t-none) that together
             read as one rounded section. The sticky offset tucks it under
-            ListsPage's sticky tab strip via --lists-sticky-top (0px fallback
-            when the strip is hidden). The wrapper's page-colored background
-            masks rows scrolling past the card's rounded top corners. */}
+            the pinned title row via --lists-sticky-top-2 (strip + title
+            height, published by useStackedStickyOffset; 0px fallback when
+            neither renders). The wrapper's page-colored background masks
+            rows scrolling past the card's rounded top corners. */}
         <div>
-            <div className="sticky top-[var(--lists-sticky-top,0px)] z-20 bg-brand-50 dark:bg-brand-900">
+            <div className="sticky top-[var(--lists-sticky-top-2,0px)] z-20 bg-brand-50 dark:bg-brand-900">
                 <div className="surface-section rounded-b-none overflow-hidden">
                     <div className="flex items-center gap-2">
                         <QuickAddBar

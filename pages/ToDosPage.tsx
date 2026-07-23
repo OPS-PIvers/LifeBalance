@@ -38,6 +38,7 @@ import { EisenhowerGridView } from '@/components/todos/EisenhowerGridView';
 import { TaskTemplateDrawer } from '@/components/todos/TaskTemplateDrawer';
 import { sortFlatTodos, TODO_SORT_MODES, TODO_SORT_LABELS, type TodoSortMode } from '@/utils/todoSort';
 import { isTodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
+import { useStackedStickyOffset } from '@/hooks/useStackedStickyOffset';
 import type { TodoCompletionOptions } from '@/contexts/household/mutations/todoMutations';
 
 // Persisted like the Shopping list's sort mode — the derived view survives
@@ -544,6 +545,13 @@ const ToDosPage: React.FC = () => {
 
   const drawerOpen = isAddModalOpen || !!actionTodo;
 
+  // Stacked sticky header (owner decision): tab strip (ListsPage), then the
+  // title row, then the quick-add row all pin; list rows scroll beneath the
+  // stack. The hook measures the title row and publishes --lists-sticky-top-2
+  // (strip + title height) on the page root for the add row's offset.
+  const { containerRef: stickyContainerRef, titleRowRef: stickyTitleRowRef } =
+    useStackedStickyOffset<HTMLDivElement, HTMLDivElement>();
+
   // Rotation-driven 2×2 Eisenhower grid (owner-locked spec): rotating to
   // landscape auto-shows the immersive grid overlay; rotating back to portrait
   // returns to the flat list. The grid never AUTO-shows over an active layer —
@@ -986,12 +994,14 @@ const ToDosPage: React.FC = () => {
   // surface is split into a sticky top card (add row, bottom hairline = the
   // divider) and a flush list card below (border-t-0, rounded-t-none) that
   // together read as one rounded section. The sticky offset tucks it under
-  // ListsPage's sticky tab strip via --lists-sticky-top (0px fallback when the
-  // strip is hidden); the wrapper's page-colored background masks rows
-  // scrolling past the card's rounded top corners. Hidden in selection mode
-  // (adding has no context there).
+  // the pinned title row via --lists-sticky-top-2 (strip + title height,
+  // published by useStackedStickyOffset; 0px fallback when neither renders);
+  // the wrapper's page-colored background masks rows scrolling past the
+  // card's rounded top corners. z-20 keeps it under the tab strip's z-30,
+  // matching the Shopping list. Hidden in selection mode (adding has no
+  // context there).
   const stickyQuickAdd = !isSelectionMode ? (
-    <div className="sticky top-[var(--lists-sticky-top,0px)] z-sticky bg-brand-50 dark:bg-brand-900">
+    <div className="sticky top-[var(--lists-sticky-top-2,0px)] z-20 bg-brand-50 dark:bg-brand-900">
       <div className="surface-section rounded-b-none overflow-hidden">
         <div className="flex items-center gap-2">
           <QuickAddBar
@@ -1149,13 +1159,27 @@ const ToDosPage: React.FC = () => {
   );
 
   return (
-    <div className={cn("px-4 max-w-2xl mx-auto space-y-3 min-h-screen", isSelectionMode ? "pb-40" : "pb-nav-safe")}>
+    // NO min-h-screen here: the page renders inside MainLayout's <main>
+    // scroller, so a 100vh floor (measured against the WINDOW, not the
+    // scrollport) manufactured ~2–300px of phantom scroll range on short
+    // lists — flinging every row up beneath the pinned add row and leaving a
+    // blank page (the "list content gone" iPhone bug).
+    <div ref={stickyContainerRef} className={cn("px-4 max-w-2xl mx-auto space-y-3", isSelectionMode ? "pb-40" : "pb-nav-safe")}>
 
       {/* Title row — mirrors the Shopping tab's header exactly (serif title +
-          inline actions cluster, NOT sticky) so the two Plan siblings read as
-          one system. The kebab lives here; selection mode swaps the row for
-          its own Select all + Cancel controls. The page-level h1 is
-          ListsPage's sr-only "Plan". */}
+          inline actions cluster) so the two Plan siblings read as one system.
+          STICKY (owner decision): pins flush below the tab strip at
+          --lists-sticky-top, with the quick-add row pinned below it in turn;
+          the opaque page background masks rows scrolling beneath. All three
+          variants (normal / selection / completed) share this one measured
+          wrapper so --lists-sticky-top-2 tracks whichever is showing. The
+          kebab lives here; selection mode swaps the row for its own
+          Select all + Cancel controls. The page-level h1 is ListsPage's
+          sr-only "Plan". */}
+      <div
+        ref={stickyTitleRowRef}
+        className="sticky top-[var(--lists-sticky-top,0px)] z-20 bg-brand-50 dark:bg-brand-900"
+      >
       {isSelectionMode ? (
         <div className="pt-4 pb-2 flex items-center justify-between gap-3">
           <h2 className="font-display text-xl font-semibold tracking-tight text-brand-900 dark:text-brand-50 whitespace-nowrap shrink-0">
@@ -1213,6 +1237,7 @@ const ToDosPage: React.FC = () => {
           }
         />
       )}
+      </div>
 
       {viewMode === 'active' ? (
           <>
