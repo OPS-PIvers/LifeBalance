@@ -192,6 +192,22 @@
   negDark): #cc433a keeps white 10px badge text at 4.74:1 (the old #d4483f
   measured 4.38) while staying ≥3:1 as an icon/dot on brand-800/900.
 */
+/*
+  iOS PWA status-bar backdrop. With `black-translucent`, iOS composites the
+  status-bar / Dynamic-Island strip over whatever paints behind the page — and
+  when the ROOT element has no background of its own, iOS 17+ falls back to an
+  opaque black strip that reads as a seam above the (always-dark) TopToolbar.
+  Painting <html> in the toolbar's own color makes the strip continuous with
+  the header in both schemes. Keep these hexes in sync with TopToolbar's
+  `bg-brand-800 dark:bg-brand-900` and index.html's theme-color metas.
+*/
+html {
+  background-color: #242220; /* --color-brand-800, light-mode toolbar */
+}
+html.dark {
+  background-color: #161512; /* --color-brand-900, dark-mode toolbar */
+}
+
 .dark {
   --color-brand-400: #a8a399;
   --color-brand-450: #94907f;
