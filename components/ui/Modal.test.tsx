@@ -135,4 +135,38 @@ describe('Modal', () => {
     );
     expect(document.body.style.overflow).toBe('');
   });
+
+  it('restores a pre-existing inline overflow value on close', () => {
+    document.body.style.overflow = 'scroll';
+    const { rerender } = render(
+      <Modal isOpen={true} onClose={onCloseMock}>
+        <div>Modal Content</div>
+      </Modal>
+    );
+    expect(document.body.style.overflow).toBe('hidden');
+
+    rerender(
+      <Modal isOpen={false} onClose={onCloseMock}>
+        <div>Modal Content</div>
+      </Modal>
+    );
+    expect(document.body.style.overflow).toBe('scroll');
+    document.body.style.overflow = '';
+  });
+
+  it('leaves no stale inline overflow when the body had none before opening', () => {
+    document.body.style.removeProperty('overflow');
+    const { rerender } = render(
+      <Modal isOpen={true} onClose={onCloseMock}>
+        <div>Modal Content</div>
+      </Modal>
+    );
+    rerender(
+      <Modal isOpen={false} onClose={onCloseMock}>
+        <div>Modal Content</div>
+      </Modal>
+    );
+    // Must restore to the empty INLINE style, not write back a computed default.
+    expect(document.body.getAttribute('style') ?? '').not.toContain('overflow');
+  });
 });
