@@ -119,7 +119,8 @@ const ListsPage: React.FC = () => {
             <MealPlanTab />
           </div>
         ) : (
-          <div className="max-w-2xl mx-auto px-4 pb-nav-safe pt-4">
+          // No pt-4: ShoppingListTab's sticky PageHeader owns pt-4; stacking a second made at-rest taller than pinned.
+          <div className="max-w-2xl mx-auto px-4 pb-nav-safe">
             <ShoppingListTab />
           </div>
         )}
