@@ -4,7 +4,11 @@
     <meta charset="UTF-8" />
     <!-- interactive-widget=resizes-content: where supported (Chrome/Android), the
          layout viewport shrinks with the software keyboard so the header/toasts
-         stay anchored; iOS ignores it (useKeyboardViewportAnchor covers it there). -->
+         stay anchored; iOS ignores it (useKeyboardViewportAnchor covers it there).
+         NO maximum-scale here: iOS ignores it for pinch-zoom but Android Chrome
+         honors it and would block zoom entirely (WCAG 1.4.4). iOS's focus
+         auto-zoom is instead prevented at the source — a global 16px font floor
+         for form fields on coarse pointers in index.css. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <title>LifeBalance</title>
 

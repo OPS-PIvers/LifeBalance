@@ -127,24 +127,45 @@ export const HabitMultiSelect: React.FC<HabitMultiSelectProps> = ({
         </div>
       )}
 
-      <Drawer isOpen={isOpen} onClose={handleClose} title={label}>
-        <div className="space-y-3">
-          <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-400 dark:text-brand-450" aria-hidden="true" />
-            <input
-              type="text"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="Search habits…"
-              aria-label="Search habits"
-              data-autofocus
-              className="w-full min-h-11 pl-9 pr-3 py-2 rounded-xl border border-brand-200 bg-white text-sm text-brand-800 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-100 outline-hidden focus:border-accent-500"
-            />
+      {/* height="tall": a fixed tall detent so the sheet opens fully instead of
+          sizing to (and being capped by) its content. Search pins in the Drawer
+          header and Done in its footer; the list is the drawer body's single
+          scroller — no nested max-h scroller.
+          The search input deliberately has NO autofocus: on iOS, focusing it on
+          open pops the keyboard over the list (and 14px inputs additionally
+          auto-zoom the page — hence text-base = 16px). The user taps to search. */}
+      <Drawer
+        isOpen={isOpen}
+        onClose={handleClose}
+        title={label}
+        height="tall"
+        header={
+          <div className="px-4 pb-3">
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-400 dark:text-brand-450" aria-hidden="true" />
+              <input
+                type="text"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Search habits…"
+                aria-label="Search habits"
+                className="w-full min-h-11 pl-9 pr-3 py-2 rounded-xl border border-brand-200 bg-white text-base text-brand-800 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-100 outline-hidden focus:border-accent-500"
+              />
+            </div>
           </div>
-
+        }
+        footer={
+          <div className="px-4 pt-3 pb-1 border-t border-brand-200 dark:border-brand-700">
+            <Button variant="primary" size="md" className="w-full" onClick={handleClose}>
+              Done
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
           {/* Plain checkbox list, not role="listbox"/"option" — listbox mandates
               arrow-key navigation and would double-announce native checked state. */}
-          <div className="space-y-0.5 max-h-80 overflow-y-auto">
+          <div className="space-y-0.5">
             {filteredHabits.length === 0 && (
               <p className="text-xs text-brand-400 dark:text-brand-450 italic px-1 py-2">No habits match &ldquo;{query}&rdquo;.</p>
             )}
@@ -169,10 +190,6 @@ export const HabitMultiSelect: React.FC<HabitMultiSelectProps> = ({
               );
             })}
           </div>
-
-          <Button variant="primary" size="md" className="w-full" onClick={handleClose}>
-            Done
-          </Button>
         </div>
       </Drawer>
     </div>
