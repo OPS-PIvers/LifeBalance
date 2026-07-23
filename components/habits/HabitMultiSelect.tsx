@@ -1,4 +1,4 @@
-import React, { useId, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Check, ChevronDown, Search, Sparkles, X } from 'lucide-react';
 import { Habit } from '@/types/schema';
 import { Drawer } from '@/components/ui/Drawer';
@@ -35,19 +35,12 @@ export interface HabitMultiSelectProps {
  * `CaptureTransactionManual` so the two review/capture surfaces stay visually
  * consistent (see components/transactions & components/modals).
  *
- * Nesting note: both hosts already render inside their own Drawer. Nesting a
- * second portalled Drawer here works fine in practice — each manages its own
- * isOpen/backdrop/focus-trap independently, and the later-mounted (inner)
- * Drawer's DOM/portal ordering keeps it visually and focus-order on top; the
- * outer Drawer's Escape/backdrop handlers stay inert while the inner one is
- * open because the inner backdrop intercepts the click and the inner Escape
- * listener is attached after (last-registered fires… but both would close on
- * Escape) — to avoid an Escape from closing BOTH sheets at once, the picker's
- * Drawer close is also wired as the only Escape/backdrop target while open by
- * virtue of it being the topmost dialog; no special-casing was needed beyond
- * that. No repo precedent for Drawer-in-Drawer was found (grepped for nested
- * `<Drawer` usage) — this is the first; watch for double-backdrop darkening,
- * which is an accepted trade-off matching iOS's stacked-sheet look.
+ * Nesting note: both hosts already render inside their own Drawer — this is
+ * the repo's first Drawer-in-Drawer. Backdrop clicks are naturally scoped (the
+ * inner backdrop intercepts), and Escape is scoped to the TOPMOST sheet by
+ * Drawer's open-drawer stack, so closing the picker never discards the host
+ * form. Double-backdrop darkening is an accepted trade-off matching iOS's
+ * stacked-sheet look.
  */
 export const HabitMultiSelect: React.FC<HabitMultiSelectProps> = ({
   habits,
@@ -59,7 +52,6 @@ export const HabitMultiSelect: React.FC<HabitMultiSelectProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const listboxId = useId();
 
   const selectedHabits = useMemo(
     () => selectedHabitIds.map(id => habits.find(h => h.id === id)).filter((h): h is Habit => !!h),
@@ -150,7 +142,9 @@ export const HabitMultiSelect: React.FC<HabitMultiSelectProps> = ({
             />
           </div>
 
-          <div role="listbox" aria-multiselectable="true" id={listboxId} aria-label={label} className="space-y-0.5 max-h-80 overflow-y-auto">
+          {/* Plain checkbox list, not role="listbox"/"option" — listbox mandates
+              arrow-key navigation and would double-announce native checked state. */}
+          <div className="space-y-0.5 max-h-80 overflow-y-auto">
             {filteredHabits.length === 0 && (
               <p className="text-xs text-brand-400 dark:text-brand-450 italic px-1 py-2">No habits match &ldquo;{query}&rdquo;.</p>
             )}
@@ -160,8 +154,6 @@ export const HabitMultiSelect: React.FC<HabitMultiSelectProps> = ({
               return (
                 <label
                   key={habit.id}
-                  role="option"
-                  aria-selected={isSelected}
                   className="flex items-center gap-3 min-h-11 px-2 py-2 rounded-lg cursor-pointer hover:bg-brand-50 dark:hover:bg-brand-700/50"
                 >
                   <input
