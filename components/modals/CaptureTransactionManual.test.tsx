@@ -24,6 +24,8 @@ vi.mock('lucide-react', () => ({
   AlertCircle: () => <div data-testid="icon-alert-circle" />,
   Loader2: () => <div data-testid="icon-loader" />,
   ChevronDown: () => <div data-testid="icon-chevron-down" />,
+  Search: () => <div data-testid="icon-search" />,
+  X: () => <div data-testid="icon-x" />,
 }));
 
 describe('CaptureTransactionManual', () => {
@@ -454,7 +456,10 @@ describe('CaptureTransactionManual', () => {
       />
     );
     fireEvent.click(screen.getByRole('button', { name: /add details/i }));
-    expect(screen.queryByText('Connect Habits (Optional)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Connect Habits (Optional)')).toBeInTheDocument();
+    expect(screen.getByText(/no habits found/i)).toBeInTheDocument();
+    // No picker trigger renders when there are no habits to pick from.
+    expect(screen.queryByRole('button', { name: /none — tap to connect/i })).not.toBeInTheDocument();
   });
 
   it('lets the user pick ANY habit even when there are no merchant suggestions', async () => {
@@ -472,11 +477,11 @@ describe('CaptureTransactionManual', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /add details/i }));
 
-    // Label is shown, and a non-empty affordance ("Choose a habit") accompanies it.
+    // Label is shown; tapping the picker trigger opens the searchable drawer.
     expect(screen.getByText('Connect Habits (Optional)')).toBeInTheDocument();
-    const summary = screen.getByText(/choose a habit \(2\)/i);
-    fireEvent.click(summary);
+    fireEvent.click(screen.getByRole('button', { name: /none — tap to connect/i }));
     fireEvent.click(screen.getByText('No takeout'));
+    fireEvent.click(screen.getByRole('button', { name: /^done$/i }));
 
     fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '12.00' } });
     fireEvent.change(screen.getByPlaceholderText('e.g. Starbucks'), { target: { value: 'Anywhere' } });

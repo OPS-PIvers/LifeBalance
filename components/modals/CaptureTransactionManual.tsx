@@ -1,5 +1,5 @@
 import React, { useId, useState, useMemo } from 'react';
-import { Check, CheckCircle2, Sparkles } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { describeError } from '@/utils/errorMessages';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -13,6 +13,7 @@ import Select from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
+import { HabitMultiSelect } from '@/components/habits/HabitMultiSelect';
 
 /** Per-field validation messages, set on a failed submit attempt and cleared
  *  field-by-field as the user fixes each input. */
@@ -174,18 +175,13 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
     }
   }
 
-  // Habit picker chip sets. The section previously gated its label on
-  // `habits.length` but rendered chips only from high/medium suggestions, so
-  // the label could sit above an empty row. Now: primary chips are the
-  // high/medium suggestions, any OTHER selected habit renders as a selected
-  // chip, and EVERY remaining habit is reachable behind the "+ More"
-  // disclosure — so the user can always optionally tag any habit, and the
-  // label never renders above nothing (when habits exist, "+ More" or chips
-  // are always present; with no habits the whole section is omitted).
-  const primaryChips = suggestedHabits.filter(s => s.confidence === 'high' || s.confidence === 'medium');
-  const primaryChipIds = new Set(primaryChips.map(s => s.habit.id));
-  const selectedExtraHabits = habits.filter(h => selectedHabitIds.includes(h.id) && !primaryChipIds.has(h.id));
-  const moreHabits = habits.filter(h => !primaryChipIds.has(h.id) && !selectedHabitIds.includes(h.id));
+  // Ids the merchant-history/keyword suggester would auto-select — badged
+  // with a sparkle in the HabitMultiSelect picker list, same treatment as the
+  // review form's "Also logs" automations.
+  const suggestedHabitIds = useMemo(
+    () => suggestedHabits.filter(s => s.confidence === 'high' || s.confidence === 'medium').map(s => s.habit.id),
+    [suggestedHabits]
+  );
 
   // Merchant now doubles as the Store field (a separate lower-cased "store"
   // dropdown was redundant with the free-text merchant name). A native
@@ -470,96 +466,20 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
             </div>
           )}
 
-          {/* Habit Tagging Section */}
-          {habits.length > 0 && (
-            <div>
-              <div className="flex items-center gap-1.5 mb-2">
-                <label className="block text-xs font-semibold text-brand-400 dark:text-brand-400 uppercase tracking-wider">
-                  Connect Habits (Optional)
-                </label>
-                {primaryChips.length > 0 && (
-                  <Sparkles size={12} className="text-warm-500 dark:text-warm-300" />
-                )}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {/* Show suggested habits first */}
-                {primaryChips
-                  .map(({ habit, confidence }) => {
-                    const isSelected = selectedHabitIds.includes(habit.id);
-                    return (
-                      <button
-                        key={habit.id}
-                        type="button"
-                        onClick={() => {
-                          setHabitsTouched(true);
-                          setSelectedHabitIds(prev =>
-                            isSelected
-                              ? prev.filter(id => id !== habit.id)
-                              : [...prev, habit.id]
-                          );
-                        }}
-                        className={`px-3 py-1.5 rounded-btn text-xs font-bold transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center gap-1 relative ${
-                          isSelected
-                            ? 'bg-money-pos text-white'
-                            : confidence === 'high'
-                            ? 'bg-warm-50 dark:bg-warm-900/30 border border-warm-300 dark:border-warm-700 text-warm-700 dark:text-warm-300 hover:bg-warm-100 dark:hover:bg-warm-900/50'
-                            : 'bg-habit-blue/10 dark:bg-habit-blue/20 border border-habit-blue/30 text-habit-blue hover:bg-habit-blue/20'
-                        }`}
-                      >
-                        {isSelected && <Check size={12} strokeWidth={3} />}
-                        {habit.title}
-                        {!isSelected && confidence === 'high' && (
-                          <span className="absolute -top-1 -right-1 w-2 h-2 bg-warm-500 rounded-full motion-safe:animate-pulse" />
-                        )}
-                      </button>
-                    );
-                  })}
-
-                {/* Show any selected habit that isn't already a suggestion chip */}
-                {selectedExtraHabits
-                  .map((habit) => (
-                    <button
-                      key={habit.id}
-                      type="button"
-                      onClick={() => {
-                        setHabitsTouched(true);
-                        setSelectedHabitIds(prev => prev.filter(id => id !== habit.id));
-                      }}
-                      className="px-3 py-1.5 rounded-btn text-xs font-bold transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center gap-1 bg-money-pos text-white"
-                    >
-                      <Check size={12} strokeWidth={3} />
-                      {habit.title}
-                    </button>
-                  ))}
-
-                {/* Disclosure listing EVERY remaining habit, so any habit can be
-                    tagged even with no merchant-based suggestions. */}
-                {moreHabits.length > 0 && (
-                  <details className="inline">
-                    <summary className="px-3 py-1.5 rounded-lg text-xs font-bold bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 text-brand-500 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-700/50 cursor-pointer inline-flex items-center gap-1">
-                      {primaryChips.length > 0 ? `+ More (${moreHabits.length})` : `Choose a habit (${moreHabits.length})`}
-                    </summary>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {moreHabits
-                        .map((habit) => (
-                          <button
-                            key={habit.id}
-                            type="button"
-                            onClick={() => {
-                              setHabitsTouched(true);
-                              setSelectedHabitIds(prev => [...prev, habit.id]);
-                            }}
-                            className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 text-brand-500 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-700/50"
-                          >
-                            {habit.title}
-                          </button>
-                        ))}
-                    </div>
-                  </details>
-                )}
-              </div>
-            </div>
-          )}
+          {/* Habit tagging — searchable multi-select drawer (replaces the old
+              chip wall, which was unscannable past ~20 habits). Merchant-based
+              suggestions are pre-selected via the auto-select effect above and
+              simply badged with a sparkle in the picker list. */}
+          <HabitMultiSelect
+            habits={habits}
+            selectedHabitIds={selectedHabitIds}
+            onChange={(ids) => {
+              setHabitsTouched(true);
+              setSelectedHabitIds(ids);
+            }}
+            automationHabitIds={suggestedHabitIds}
+            label="Connect Habits (Optional)"
+          />
 
           {/* Hidden for a credit-card PAYMENT — that's a transfer, not a
               subscription-style recurring spend. */}
