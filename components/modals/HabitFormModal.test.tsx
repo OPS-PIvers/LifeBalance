@@ -167,3 +167,44 @@ describe('HabitFormModal — Automations save-payload contract (PRD #1065)', () 
     expect(screen.getByTestId('kw').textContent).toBe('target,coffee');
   });
 });
+
+describe('HabitFormModal — category chip seeding', () => {
+  const mockUpdateHabit = vi.fn(() => Promise.resolve());
+  const mockOnClose = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (useGamification as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      addHabit: vi.fn(),
+      updateHabit: mockUpdateHabit,
+      setHabitPause: vi.fn(() => Promise.resolve()),
+      habitCategories: [],
+      updateHabitCategories: vi.fn(),
+    });
+    (useHouseholdCore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ members: [] });
+    (useTodos as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ todos: [] });
+  });
+
+  it('lights up the canonical chip when a legacy category differs only in case', async () => {
+    // Legacy habit stored "health" (lower-case) — must still select the
+    // "Health" default chip, since the chip-only UI has no text field to show
+    // the raw value.
+    render(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={baseHabit({ category: 'health' })} />);
+
+    const healthChip = screen.getByRole('button', { name: 'Health' });
+    expect(healthChip).toHaveAttribute('aria-pressed', 'true');
+
+    // Saving untouched normalizes the stored value to the canonical casing.
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() => expect(mockUpdateHabit).toHaveBeenCalledTimes(1));
+    const call = (mockUpdateHabit.mock.calls as unknown[][])[0];
+    if (!call) throw new Error('expected updateHabit to have been called');
+    expect((call[0] as Habit).category).toBe('Health');
+  });
+
+  it('renders an unmatched legacy category as its own selected chip', () => {
+    render(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={baseHabit({ category: 'Meditation' })} />);
+    const chip = screen.getByRole('button', { name: 'Meditation' });
+    expect(chip).toHaveAttribute('aria-pressed', 'true');
+  });
+});

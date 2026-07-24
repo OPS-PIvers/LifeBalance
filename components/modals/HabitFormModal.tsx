@@ -41,10 +41,21 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
   );
   const showAssignControl = kidModeEnabled && managedKids.length > 0;
 
+  // Seed the category to the canonical chip form when it matches an existing
+  // chip case-insensitively, so an existing habit whose stored category differs
+  // only in case from a chip (e.g. legacy "health" vs "Health") still lights up
+  // the matching chip — the chip-only UI has no text field to reveal the raw
+  // value otherwise. Falls back to the raw value (rendered as its own chip via
+  // `mergedCategories`) when there's no match.
+  const canonicalCategory = (raw: string): string => {
+    const key = raw.trim().toLowerCase();
+    return [...CATEGORIES, ...habitCategories].find(c => c.trim().toLowerCase() === key) ?? raw;
+  };
+
   // Form State — lazy initializers so the first render is already populated for
   // the edit case; the defaults match the reset branch below for the new case.
   const [title, setTitle] = useState(() => editingHabit?.title ?? '');
-  const [category, setCategory] = useState<string>(() => editingHabit?.category ?? (CATEGORIES[0] ?? 'Health'));
+  const [category, setCategory] = useState<string>(() => editingHabit ? canonicalCategory(editingHabit.category) : (CATEGORIES[0] ?? 'Health'));
   const [type, setType] = useState<'positive' | 'negative'>(() => editingHabit?.type ?? 'positive');
   const [scoringType, setScoringType] = useState<'incremental' | 'threshold'>(() => editingHabit?.scoringType || 'threshold');
   const [period, setPeriod] = useState<'daily' | 'weekly'>(() => editingHabit?.period ?? 'daily');
@@ -106,7 +117,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
   if (shouldReset) {
     if (editingHabit) {
       setTitle(editingHabit.title);
-      setCategory(editingHabit.category);
+      setCategory(canonicalCategory(editingHabit.category));
       setType(editingHabit.type);
       setScoringType(editingHabit.scoringType || 'threshold');
       setPeriod(editingHabit.period);
