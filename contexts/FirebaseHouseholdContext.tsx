@@ -67,6 +67,7 @@ import {
 } from '@/types/schema';
 import { calculateSafeToSpendBreakdownFromExpanded, calculateSafeToSpendExpansionStart } from '@/utils/safeToSpendCalculator';
 import { calculatePointsForDate, calculatePointsForDateRange, computeManagedMemberPointsReset, isHabitStale, getHabitResetUpdate } from '@/utils/habitLogic';
+import { fetchSubmissionTotals } from '@/utils/habitSubmissionTotals';
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { migrateBucketsToPeriods, needsMigration, migrateToPaycheckPeriods, needsPaycheckMigration } from '@/utils/migrations/payPeriodMigration';
 import { migrateOrphanedHabits, needsHabitMigration } from '@/utils/migrations/habitMigration';
@@ -1415,22 +1416,35 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     const currentHabits = habitsRef.current;
     const weekStartStr = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
+    // Score from the stored submissions where they exist, so a back-dated or
+    // multi-unit log keeps the points it actually earned instead of being
+    // flattened to one-completion-per-day by the derived attribution. Bounded:
+    // hasSubmissionTracking habits only, over this week only, and this callback
+    // already returned unless a day/week boundary was actually crossed — so it
+    // runs at most twice a day, not on the 5-minute tick.
+    const submissionTotals = await fetchSubmissionTotals(
+      currentHabits,
+      weekStartStr,
+      today,
+      habitActions.getHabitSubmissions,
+    );
+
     // Household pool. calculatePointsForDate/Range default-exclude assigned chores —
     // those belong to each kid's own balance, rolled over below.
     const householdUpdates: Record<string, number | string> = {};
     if (dayRolled) {
-      householdUpdates['points.daily'] = calculatePointsForDate(currentHabits, today);
+      householdUpdates['points.daily'] = calculatePointsForDate(currentHabits, today, undefined, submissionTotals);
       householdUpdates['lastDailyPointsReset'] = today;
     }
     if (weekRolled) {
-      householdUpdates['points.weekly'] = calculatePointsForDateRange(currentHabits, weekStartStr, today);
+      householdUpdates['points.weekly'] = calculatePointsForDateRange(currentHabits, weekStartStr, today, undefined, submissionTotals);
       householdUpdates['lastWeeklyPointsReset'] = today;
     }
 
     // Plan 080c-2: roll over each managed kid's daily/weekly from THEIR assigned
     // chores on the same boundary (empty for non-Kid-Mode households → no member
     // writes, so this is a no-op there).
-    const kidResets = computeManagedMemberPointsReset(membersRef.current, currentHabits, weekStartStr, today);
+    const kidResets = computeManagedMemberPointsReset(membersRef.current, currentHabits, weekStartStr, today, submissionTotals);
 
     try {
       const batch = writeBatch(db);
@@ -1445,7 +1459,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     } catch (error) {
       console.error('[checkPointsReset] Failed to reset points:', error);
     }
-  }, [householdId, lastDailyPointsReset, lastWeeklyPointsReset]);
+  }, [householdId, lastDailyPointsReset, lastWeeklyPointsReset, habitActions.getHabitSubmissions]);
 
   // Use the midnight scheduler hook for points resets
   // Add 100ms delay to stagger initialization and prevent race conditions with habit resets
@@ -1639,6 +1653,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     points: householdSettings?.points,
     habits,
     writePoints: writeSyncedPoints,
+    getHabitSubmissions: habitActions.getHabitSubmissions,
   });
 
   // Refresh FCM token periodically to prevent token staleness

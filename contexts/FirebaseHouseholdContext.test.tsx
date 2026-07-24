@@ -1086,7 +1086,10 @@ describe('FirebaseHouseholdContext — autoApplyFreezes (Plan 25)', () => {
 
     // Seeding the household doc fires the unrelated once-per-login points sync
     // (an updateDoc write); clear it so the assertion below scopes to the
-    // mutation under test.
+    // mutation under test. It settles a microtask later than the emit — the
+    // sync awaits the week's stored submissions before scoring — so flush
+    // first, or its write lands after the clear and trips the assertion.
+    await act(async () => { await Promise.resolve(); });
     updateDocMock.mockClear();
 
     commitController.failNextCommit = true;

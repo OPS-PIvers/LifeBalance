@@ -1945,6 +1945,168 @@ describe('calculateDayNetPoints', () => {
   });
 });
 
+/**
+ * PRD #1065 follow-up: the corrective recompute reconciles stored submissions
+ * with the derived attribution instead of picking one and discarding the other.
+ *
+ * Submissions are a PARTIAL record — the submissions path writes one, the toggle
+ * path writes none — so a single date can carry both. Each case below is built so
+ * that "derived only" (the pre-change behaviour) and "stored overrides the day"
+ * give visibly WRONG answers, pinning the reconciliation rather than an
+ * arithmetic coincidence.
+ */
+describe('submission-aware scoring (stored covers what it recorded, derived the rest)', () => {
+  // Deterministic mid-week clock: Wed 2026-06-03 (ISO week starts Mon 2026-06-01).
+  const WED = '2026-06-03';
+  const TUE = '2026-06-02';
+  const MON = '2026-06-01';
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-03T12:00:00'));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const make = (overrides: Partial<Habit>): Habit => ({
+    id: 'h1',
+    title: 'Order from Amazon',
+    category: 'Home',
+    count: 0,
+    totalCount: 0,
+    targetCount: 1,
+    basePoints: 10,
+    scoringType: 'incremental',
+    type: 'positive',
+    period: 'daily',
+    completedDates: [],
+    streakDays: 0,
+    lastUpdated: '2026-06-03T12:00:00.000Z',
+    createdBy: 'u1',
+    ...overrides,
+  });
+
+  /** habitId → date → totals, the shape the scorers consume. */
+  const totalsFor = (byDate: Record<string, { count: number; points: number }>) =>
+    new Map([['h1', new Map(Object.entries(byDate))]]);
+
+  describe('incremental', () => {
+    it('credits every unit a past day recorded, not the derived single completion', () => {
+      // The headline drift: two Amazon orders logged against Monday. Without the
+      // stored record the recompute flattens the day to ONE completion and claws
+      // the second back on the next login.
+      const habit = make({ completedDates: [MON], count: 0, totalCount: 2 });
+      expect(pointsForHabitOnDate(habit, MON, WED)).toBe(10); // derived: 1 unit
+      expect(pointsForHabitOnDate(habit, MON, WED, totalsFor({ [MON]: { count: 2, points: 20 } }).get('h1'))).toBe(20);
+    });
+
+    it('counts toggle units the submissions never saw (a mixed day)', () => {
+      // Tapped by hand twice today, then the day's Amazon charge was approved and
+      // fired a third unit at a 1.5x streak (15 pts). Neither source alone is
+      // right: derived-only says 30, stored-overrides says 15.
+      const habit = make({ completedDates: [WED], count: 3 });
+      const stored = totalsFor({ [WED]: { count: 1, points: 15 } }).get('h1');
+      expect(pointsForHabitOnDate(habit, WED, WED, stored)).toBe(15 + 2 * 10);
+    });
+
+    it('never goes negative when the record exceeds the derived attribution', () => {
+      const habit = make({ completedDates: [MON] });
+      const stored = totalsFor({ [MON]: { count: 9, points: 90 } }).get('h1');
+      expect(pointsForHabitOnDate(habit, MON, WED, stored)).toBe(90);
+    });
+
+    it('reports a submission that outlived its completion date', () => {
+      // A reverted toggle strips the date from completedDates, but a submission's
+      // credit is only undone by deleting the submission.
+      const habit = make({ completedDates: [] });
+      const stored = totalsFor({ [MON]: { count: 1, points: 10 } }).get('h1');
+      expect(pointsForHabitOnDate(habit, MON, WED, stored)).toBe(10);
+    });
+  });
+
+  describe('threshold (one award per period)', () => {
+    const thresholdHabit = (overrides: Partial<Habit> = {}) =>
+      make({ scoringType: 'threshold', basePoints: 50, targetCount: 3, completedDates: [MON], ...overrides });
+
+    it('keeps the derived award when the submission scored zero', () => {
+      // The toggle path had already crossed the target, so the submission earned
+      // nothing — dropping the day to 0 would erase the award the toggle credited.
+      const stored = totalsFor({ [MON]: { count: 1, points: 0 } }).get('h1');
+      expect(pointsForHabitOnDate(thresholdHabit(), MON, WED, stored)).toBe(50);
+    });
+
+    it('does not add the derived award on top of the submission that carried it', () => {
+      const stored = totalsFor({ [MON]: { count: 3, points: 75 } }).get('h1');
+      expect(pointsForHabitOnDate(thresholdHabit(), MON, WED, stored)).toBe(75);
+    });
+  });
+
+  describe('weekly', () => {
+    it('keeps the per-day attributions summing to the week (submission off the latest day)', () => {
+      // Mon fired 2 units via a submission, Tue and Wed were toggles: count=4.
+      // The derived "one unit per other day" guess would leave Wed a remainder of
+      // 4-2=2 and double-count Mon's extra unit.
+      const habit = make({ period: 'weekly', completedDates: [MON, TUE, WED], count: 4 });
+      const stored = totalsFor({ [MON]: { count: 2, points: 20 } }).get('h1');
+      const perDay = [MON, TUE, WED].map(d => pointsForHabitOnDate(habit, d, WED, stored));
+      expect(perDay).toEqual([20, 10, 10]);
+      expect(perDay.reduce((a, b) => a + b)).toBe(4 * 10);
+    });
+
+    it('awards a threshold week once when a submission elsewhere in it crossed the target', () => {
+      const habit = make({
+        period: 'weekly',
+        scoringType: 'threshold',
+        basePoints: 50,
+        targetCount: 3,
+        completedDates: [MON, WED],
+        count: 4,
+      });
+      const stored = totalsFor({ [WED]: { count: 3, points: 50 } }).get('h1');
+      // MON is the week's first completed day and would carry the derived award.
+      expect(pointsForHabitOnDate(habit, MON, WED, stored)).toBe(0);
+      expect(pointsForHabitOnDate(habit, WED, WED, stored)).toBe(50);
+    });
+  });
+
+  describe('range recompute', () => {
+    it('credits the full week including a multi-unit back-dated day', () => {
+      const habit = make({ completedDates: [MON, WED], count: 1, totalCount: 3 });
+      // Derived only: Mon 1 unit + Wed count(1) = 20. Mon actually recorded 2.
+      expect(calculatePointsForDateRange([habit], MON, WED)).toBe(20);
+      expect(calculatePointsForDateRange([habit], MON, WED, undefined, totalsFor({ [MON]: { count: 2, points: 20 } })))
+        .toBe(30);
+    });
+
+    it('includes a date that has submissions but no completion record', () => {
+      const habit = make({ completedDates: [WED], count: 1 });
+      expect(calculatePointsForDateRange([habit], MON, WED, undefined, totalsFor({ [TUE]: { count: 1, points: 10 } })))
+        .toBe(20);
+    });
+
+    it('ignores stored dates outside the range', () => {
+      const habit = make({ completedDates: [WED], count: 1 });
+      const stored = totalsFor({ '2026-05-25': { count: 5, points: 50 }, [WED]: { count: 1, points: 10 } });
+      expect(calculatePointsForDateRange([habit], MON, WED, undefined, stored)).toBe(10);
+    });
+
+    it('is unchanged for a habit with no stored submissions in the window', () => {
+      const habit = make({ id: 'other', completedDates: [MON, WED], count: 2 });
+      const stored = totalsFor({ [MON]: { count: 9, points: 900 } }); // keyed to h1, not this habit
+      expect(calculatePointsForDateRange([habit], MON, WED, undefined, stored))
+        .toBe(calculatePointsForDateRange([habit], MON, WED));
+    });
+
+    it('matches calculatePointsForDate on the same day, with and without stored totals', () => {
+      const habit = make({ completedDates: [WED], count: 3 });
+      const stored = totalsFor({ [WED]: { count: 1, points: 15 } });
+      expect(calculatePointsForDate([habit], WED, undefined, stored)).toBe(
+        calculateDayNetPoints([habit], WED, stored, WED)
+      );
+      expect(calculatePointsForDate([habit], WED, undefined, stored)).toBe(35);
+    });
+  });
+});
+
 describe('pointsForHabitOnDate (weekly incremental, past ISO week)', () => {
   it("does not leak the CURRENT week's live counter into a past week's days", () => {
     // A weekly incremental habit completed twice in a PAST ISO week, with a

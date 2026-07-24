@@ -3,11 +3,11 @@ import { format } from 'date-fns';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { Habit } from '@/types/schema';
 import {
-  DaySubmissionTotals,
   SubmissionTotalsByHabitDate,
   calculateDayNetPoints,
   isHabitStale,
 } from '@/utils/habitLogic';
+import { fetchSubmissionTotals } from '@/utils/habitSubmissionTotals';
 import { getLocalDateString } from '@/utils/dateHelpers';
 
 /**
@@ -42,30 +42,14 @@ export const useHabitCalendarData = (habits: Habit[], days: Date[]) => {
   useEffect(() => {
     if (!startDate || !endDate) return;
 
-    // Only habits flagged hasSubmissionTracking can have submission docs; an
+    // fetchSubmissionTotals reads only hasSubmissionTracking habits, so an
     // all-toggle household resolves through the same async path with zero reads.
-    const tracked = habits.filter(h => h.hasSubmissionTracking);
-
+    // Shared with the points recompute so the calendar and the ledger score a
+    // day from exactly the same stored submissions.
     let cancelled = false;
     (async () => {
-      const results = await Promise.all(
-        tracked.map(async habit =>
-          [habit.id, await getHabitSubmissions(habit.id, startDate, endDate)] as const
-        )
-      );
+      const next = await fetchSubmissionTotals(habits, startDate, endDate, getHabitSubmissions);
       if (cancelled) return;
-
-      const next: SubmissionTotalsByHabitDate = new Map();
-      results.forEach(([habitId, submissions]) => {
-        const byDate = new Map<string, DaySubmissionTotals>();
-        submissions.forEach(s => {
-          const day = byDate.get(s.date) ?? { count: 0, points: 0 };
-          day.count += s.count;
-          day.points += s.pointsEarned;
-          byDate.set(s.date, day);
-        });
-        if (byDate.size > 0) next.set(habitId, byDate);
-      });
       setSubmissionTotals(next);
     })();
 

@@ -799,12 +799,16 @@ export const getHabitResetUpdate = (
  * @param targetDate - The date to check completions for (YYYY-MM-DD format)
  * @param assignedTo - Optional scope: omit for the shared household pool (assigned
  *   chores excluded); pass a member uid to score ONLY that member's assigned chores.
+ * @param submissionTotals - Optional stored submissions for the date, so days with
+ *   a record score from it instead of the lossy derived attribution. Omitting it
+ *   keeps the pre-submissions behaviour exactly.
  * @returns Total points earned from habits completed on that date
  */
 export const calculatePointsForDate = (
   habits: Habit[],
   targetDate: string,
   assignedTo?: string,
+  submissionTotals?: SubmissionTotalsByHabitDate,
 ): number => {
   let totalPoints = 0;
   const today = getLocalDateString();
@@ -818,35 +822,93 @@ export const calculatePointsForDate = (
       continue;
     }
 
-    totalPoints += pointsForHabitOnDate(habit, targetDate, today);
+    totalPoints += pointsForHabitOnDate(habit, targetDate, today, submissionTotals?.get(habit.id));
   }
 
   return totalPoints;
 };
 
+/** Per-(habit, date) totals derived from stored submissions. */
+export interface DaySubmissionTotals {
+  /** Sum of the day's submission counts. */
+  count: number;
+  /** Sum of the day's stored (signed) pointsEarned. */
+  points: number;
+}
+
+/** Map keyed habitId → date (YYYY-MM-DD) → that day's submission totals. */
+export type SubmissionTotalsByHabitDate = Map<string, Map<string, DaySubmissionTotals>>;
+
+/**
+ * Reconcile one date's DERIVED attribution with what that date's stored
+ * submissions actually recorded.
+ *
+ * Submissions are a PARTIAL record: the submissions path (back-dated hand logs,
+ * transaction-fired habits) writes one, the toggle path writes none. So a single
+ * date can carry both — tap "Order from Amazon" by hand, then approve that day's
+ * Amazon charge. Neither extreme is right: ignoring submissions loses the units
+ * they recorded (no historical per-day counters exist to recover them), while
+ * letting them override the whole day loses the toggle units they never saw.
+ *
+ * The rule is therefore "stored covers what it recorded, derived covers the
+ * rest":
+ *   - incremental — take the stored points, then add the derived units the
+ *     submissions did NOT account for (`derived - stored.count`, floored at 0);
+ *   - threshold — the period earns ONE award, so a submission that crossed the
+ *     target (non-zero points) carries it; a submission that scored zero means
+ *     the toggle path had already crossed, and the derived award stands.
+ *
+ * With no stored submissions this returns `derived * perUnitPoints` — i.e. every
+ * pre-submissions call site is bit-for-bit unchanged.
+ *
+ * @param scoringType - The habit's scoring mode
+ * @param derived - Derived units for the date (threshold: 1 if it awards, else 0)
+ * @param perUnitPoints - SIGNED points per unit/award (magnitude × multiplier × sign)
+ * @param stored - That date's summed submission totals, when any exist
+ */
+const reconcileStoredDayPoints = (
+  scoringType: Habit['scoringType'],
+  derived: number,
+  perUnitPoints: number,
+  stored: DaySubmissionTotals | undefined,
+): number => {
+  if (!stored) return derived * perUnitPoints;
+  if (scoringType === 'threshold') {
+    return stored.points !== 0 ? stored.points : derived * perUnitPoints;
+  }
+  return stored.points + Math.max(derived - stored.count, 0) * perUnitPoints;
+};
+
 /**
  * Signed points ONE habit contributed on ONE date, derived from
- * `completedDates` + the live period counter (the same attribution rules the
- * corrective recompute uses). Extracted from `calculatePointsForDate` so the
- * habit-calendar day cells and the day-reset reversal fallback score a single
- * (habit, date) pair with identical logic.
+ * `completedDates` + the live period counter, reconciled against any stored
+ * submissions for that date. Extracted from `calculatePointsForDate` so the
+ * habit-calendar day cells, the corrective points recompute, and the day-reset
+ * reversal fallback score a single (habit, date) pair with identical logic.
  *
- * Returns 0 when the date isn't a completion for this habit. Note: past
- * incremental days count as ONE completion (no historical per-day counters are
- * stored) — days logged via the submissions path should be scored from their
- * stored submissions instead (see calculateDayNetPoints).
+ * Returns 0 when the date is neither a completion nor carries submissions.
+ * Without `storedByDate` a past incremental day counts as ONE completion (no
+ * historical per-day counters are stored) — pass the habit's stored submissions
+ * to score the days that do have a record exactly.
  *
  * @param habit - The habit to score
  * @param targetDate - The date to check (YYYY-MM-DD)
  * @param today - "Today" (YYYY-MM-DD, caller-local); injectable for tests
+ * @param storedByDate - THIS habit's submission totals keyed by date, when known
  */
 export const pointsForHabitOnDate = (
   habit: Habit,
   targetDate: string,
   today: string = getLocalDateString(),
+  storedByDate?: Map<string, DaySubmissionTotals>,
 ): number => {
-  // Check if habit was completed on the target date
-  if (!habit.completedDates.includes(targetDate)) return 0;
+  const stored = storedByDate?.get(targetDate);
+
+  // Not a completion. Stored points still stand on their own: a submission's
+  // credit is only reversed by deleting it, so a record that outlives its
+  // completion date (a reverted toggle, a count-0 reflection) is reported as-is
+  // rather than silently dropped.
+  if (!habit.completedDates.includes(targetDate)) return stored?.points ?? 0;
 
   // The live `count` only describes the CURRENT period (today for daily
   // habits, the current ISO week for weekly ones) — it is zeroed by every
@@ -858,7 +920,7 @@ export const pointsForHabitOnDate = (
     habit.period === 'weekly'
       ? isSameWeek(parseISO(targetDate), parseISO(today), { weekStartsOn: 1 })
       : targetDate === today;
-  if (targetInCurrentPeriod && habit.count === 0) return 0;
+  if (targetInCurrentPeriod && habit.count === 0) return stored?.points ?? 0;
 
   // Use the streak that ended on the target date, not the habit's CURRENT
   // streak. Retro-applying the current multiplier to a past day over- or
@@ -888,9 +950,17 @@ export const pointsForHabitOnDate = (
         // other completed day of the week and the remainder to the LATEST day
         // (in practice "today", where the live counter keeps growing) — the
         // per-day attributions then sum to `count`, matching the range recompute.
+        //
+        // "One each" is only a guess where nothing was recorded: a day whose
+        // submissions state it carried 3 units must subtract 3, or the latest
+        // day's remainder double-counts the extra 2. Falls back to 1 for every
+        // unrecorded day, so an all-toggle week is unchanged.
+        const otherDaysUnits = sameWeekDates
+          .filter(d => d !== latestSameWeekDay)
+          .reduce((sum, d) => sum + (storedByDate?.get(d)?.count ?? 1), 0);
         completionsOnDate =
           targetDate === latestSameWeekDay
-            ? Math.max(habit.count - (sameWeekDates.length - 1), 0)
+            ? Math.max(habit.count - otherDaysUnits, 0)
             : 1;
       } else {
         // PAST ISO week: the live `count` describes the CURRENT week only, so
@@ -900,7 +970,7 @@ export const pointsForHabitOnDate = (
         // per-day sum across the week then matches calculatePointsForDateRange.
         completionsOnDate = targetDate === latestSameWeekDay ? 1 : 0;
       }
-      return sign * completionsOnDate * perDayPoints;
+      return reconcileStoredDayPoints('incremental', completionsOnDate, sign * perDayPoints, stored);
     }
     // Threshold: the week's single award landed on the FIRST completed day
     // of the week; later toggle-days entered completedDates with 0 points.
@@ -910,10 +980,27 @@ export const pointsForHabitOnDate = (
     // isCurrentWeek bypass in calculatePointsForDateRange.
     const firstSameWeekDay = sameWeekDates.reduce((a, b) => (a < b ? a : b));
     const isCurrentWeek = isSameWeek(parseISO(today), ref, { weekStartsOn: 1 });
-    if ((!isCurrentWeek || habit.count >= habit.targetCount) && targetDate === firstSameWeekDay) {
-      return sign * perDayPoints;
+    // A submission ANYWHERE in the week that scored points already carries the
+    // week's one award, so the derived award must not be added on top of it —
+    // the awarding submission's own day reports it via reconcileStoredDayPoints.
+    // Scanned over the stored dates rather than `sameWeekDates`, so an award
+    // recorded on a date that has since left completedDates still counts.
+    let weekAwardStored = false;
+    if (storedByDate) {
+      for (const [storedDate, totals] of storedByDate) {
+        if (totals.points !== 0 && isSameWeek(parseISO(storedDate), ref, { weekStartsOn: 1 })) {
+          weekAwardStored = true;
+          break;
+        }
+      }
     }
-    return 0;
+    const derivedAward =
+      !weekAwardStored &&
+      (!isCurrentWeek || habit.count >= habit.targetCount) &&
+      targetDate === firstSameWeekDay
+        ? 1
+        : 0;
+    return reconcileStoredDayPoints('threshold', derivedAward, sign * perDayPoints, stored);
   }
 
   if (habit.scoringType === 'incremental') {
@@ -921,37 +1008,25 @@ export const pointsForHabitOnDate = (
     // stored, so a past day counts as a single completion — only "today" is
     // scored from the live counter (mirrors calculatePointsForDateRange).
     const completionsOnDate = targetDate === today ? habit.count : 1;
-    return sign * completionsOnDate * perDayPoints;
+    return reconcileStoredDayPoints('incremental', completionsOnDate, sign * perDayPoints, stored);
   }
   // For threshold: points only if target met. The live counter only
   // describes today — a past day's presence in completedDates already
   // proves its target was reached (mirrors calculatePointsForDateRange).
-  if (targetDate !== today || habit.count >= habit.targetCount) {
-    return sign * perDayPoints;
-  }
-  return 0;
+  const derivedAward = targetDate !== today || habit.count >= habit.targetCount ? 1 : 0;
+  return reconcileStoredDayPoints('threshold', derivedAward, sign * perDayPoints, stored);
 };
-
-/** Per-(habit, date) totals derived from stored submissions. */
-export interface DaySubmissionTotals {
-  /** Sum of the day's submission counts. */
-  count: number;
-  /** Sum of the day's stored (signed) pointsEarned. */
-  points: number;
-}
-
-/** Map keyed habitId → date (YYYY-MM-DD) → that day's submission totals. */
-export type SubmissionTotalsByHabitDate = Map<string, Map<string, DaySubmissionTotals>>;
 
 /**
  * Net signed points ALL given habits earned on one date, for the habit
  * calendar day cells.
  *
- * When a habit has stored submissions for the date, their summed
- * `pointsEarned` is authoritative (it captures multi-count backfills exactly);
- * otherwise fall back to the derived `pointsForHabitOnDate` attribution (days
- * completed via the toggle path leave no submission docs). Callers pass the
- * habit set already scoped to the surface (e.g. parent-visible habits only).
+ * Each habit is scored by `pointsForHabitOnDate`, which reconciles the day's
+ * stored submissions against the derived attribution (see
+ * `reconcileStoredDayPoints`) — so a day that mixes hand-tapped toggles with a
+ * transaction-fired submission counts both, rather than letting either erase the
+ * other. Callers pass the habit set already scoped to the surface (e.g.
+ * parent-visible habits only).
  *
  * @param habits - Habits to score (pre-filtered by the caller)
  * @param date - The date to score (YYYY-MM-DD)
@@ -966,12 +1041,7 @@ export const calculateDayNetPoints = (
 ): number => {
   let net = 0;
   for (const habit of habits) {
-    const dayTotals = submissionTotals?.get(habit.id)?.get(date);
-    if (dayTotals) {
-      net += dayTotals.points;
-    } else {
-      net += pointsForHabitOnDate(habit, date, today);
-    }
+    net += pointsForHabitOnDate(habit, date, today, submissionTotals?.get(habit.id));
   }
   return net;
 };
@@ -984,6 +1054,9 @@ export const calculateDayNetPoints = (
  * @param endDate - End of the range (YYYY-MM-DD format, inclusive)
  * @param assignedTo - Optional scope: omit for the shared household pool (assigned
  *   chores excluded); pass a member uid to score ONLY that member's assigned chores.
+ * @param submissionTotals - Optional stored submissions covering the range. A habit
+ *   with a record in it is scored per-date via `pointsForHabitOnDate` instead of the
+ *   derived collapse below; omitting it keeps the pre-submissions behaviour exactly.
  * @returns Total points earned from habits completed in that range
  */
 export const calculatePointsForDateRange = (
@@ -991,6 +1064,7 @@ export const calculatePointsForDateRange = (
   startDate: string,
   endDate: string,
   assignedTo?: string,
+  submissionTotals?: SubmissionTotalsByHabitDate,
 ): number => {
   let totalPoints = 0;
   const today = getLocalDateString();
@@ -1006,6 +1080,30 @@ export const calculatePointsForDateRange = (
     const completionsInRange = habit.completedDates.filter(date =>
       date >= startDate && date <= endDate
     );
+
+    const storedByDate = submissionTotals?.get(habit.id);
+    if (storedByDate) {
+      // This habit has a stored record in the range, so score it the same way
+      // the habit calendar does: one `pointsForHabitOnDate` per date, over the
+      // union of its completions and its submission dates (a submission can
+      // outlive its completion date). Summing per-date reproduces the collapsed
+      // arithmetic below when nothing is stored — `pointsForHabitOnDate` already
+      // attributes a weekly habit's single award to one day of the week — while
+      // additionally crediting the exact units each submission recorded.
+      //
+      // Caveat: the weekly attribution picks that day from the habit's WHOLE
+      // week, so a range starting mid-week would drop an award landing before
+      // `startDate`. Every caller passes a Monday-anchored `weekStart..today`,
+      // so no week is ever clipped.
+      const dates = new Set(completionsInRange);
+      for (const date of storedByDate.keys()) {
+        if (date >= startDate && date <= endDate) dates.add(date);
+      }
+      for (const date of dates) {
+        totalPoints += pointsForHabitOnDate(habit, date, today, storedByDate);
+      }
+      continue;
+    }
 
     if (completionsInRange.length === 0) continue;
 
@@ -1107,18 +1205,22 @@ export interface PointsSyncResult {
  * @param habits - All habits to score
  * @param currentPoints - The points currently stored on the household doc
  * @param now - "Now" (injected for deterministic tests)
+ * @param submissionTotals - Optional stored submissions covering `weekStart..today`,
+ *   so the recompute credits back-dated/multi-unit logs at what they actually
+ *   earned instead of the derived one-per-day approximation.
  * @returns The corrected points plus whether they differ from `currentPoints`
  */
 export const computeHouseholdPointsSync = (
   habits: Habit[],
   currentPoints: HouseholdPoints,
   now: Date,
+  submissionTotals?: SubmissionTotalsByHabitDate,
 ): PointsSyncResult => {
   const today = format(now, 'yyyy-MM-dd');
   const weekStartStr = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
-  const correctDaily = calculatePointsForDate(habits, today);
-  const correctWeekly = calculatePointsForDateRange(habits, weekStartStr, today);
+  const correctDaily = calculatePointsForDate(habits, today, undefined, submissionTotals);
+  const correctWeekly = calculatePointsForDateRange(habits, weekStartStr, today, undefined, submissionTotals);
 
   // If every completion is within the current week, the cumulative total equals
   // the weekly total; otherwise keep the stored total (don't clamp it down).
@@ -1166,12 +1268,15 @@ export interface ManagedMemberPointsReset {
  * @param habits - All habits (each kid's assigned chores are selected per member)
  * @param weekStartStr - Monday of the current week (YYYY-MM-DD)
  * @param today - Today (YYYY-MM-DD), caller's local timezone
+ * @param submissionTotals - Optional stored submissions covering `weekStart..today`
+ *   (a kid's chore can be back-dated/transaction-fired like any other habit)
  */
 export const computeManagedMemberPointsReset = (
   members: Pick<HouseholdMember, 'uid' | 'isManaged'>[],
   habits: Habit[],
   weekStartStr: string,
   today: string,
+  submissionTotals?: SubmissionTotalsByHabitDate,
 ): ManagedMemberPointsReset[] => {
   const out: ManagedMemberPointsReset[] = [];
   for (const member of members) {
@@ -1179,8 +1284,8 @@ export const computeManagedMemberPointsReset = (
     if (!habits.some(h => h.assignedTo === member.uid)) continue;
     out.push({
       memberUid: member.uid,
-      daily: calculatePointsForDate(habits, today, member.uid),
-      weekly: calculatePointsForDateRange(habits, weekStartStr, today, member.uid),
+      daily: calculatePointsForDate(habits, today, member.uid, submissionTotals),
+      weekly: calculatePointsForDateRange(habits, weekStartStr, today, member.uid, submissionTotals),
     });
   }
   return out;
