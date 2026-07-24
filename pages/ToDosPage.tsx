@@ -459,7 +459,13 @@ const ToDosPage: React.FC = () => {
     if (!node) return;
     node.scrollIntoView({ block: 'center', behavior: reducedMotion ? 'auto' : 'smooth' });
     setHighlightedTodoId(targetId);
-    setSearchParams({}, { replace: true });
+    // Remove only the `todo` key so any other params (filters, sort, etc.)
+    // survive the deep-link arrival.
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.delete('todo');
+      return next;
+    }, { replace: true });
   }, [searchParams, flatActive, reducedMotion, setSearchParams]);
 
   // Clear the highlight ~2s after it lands. A dedicated effect keyed on the
