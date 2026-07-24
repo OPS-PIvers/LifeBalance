@@ -15,7 +15,7 @@ Suppressions should only exist for:
 
 ## Current Suppressions
 
-### Status: No blanket suppressions; 22 granular ones remain (re-audited 2026-07-10, Plan 23)
+### Status: No blanket suppressions; 23 granular ones remain in the root app, +1 in `functions/` (re-audited 2026-07-24)
 
 `pnpm lint` is green (0 errors, 0 warnings — the one `react-hooks/incompatible-library` warning that
 `eslint-plugin-react-hooks@7` reports on `useVirtualizer` is turned off by config; see **Accepted
@@ -27,22 +27,31 @@ Refresh this audit with:
 grep -rn "eslint-disable" --include="*.ts" --include="*.tsx" . | grep -v node_modules
 ```
 
-#### Current granular `eslint-disable-next-line` inventory (22 total)
+Line numbers below drift as files are edited; re-run the grep rather than trusting them if a
+lookup misses.
+
+#### Current granular `eslint-disable-next-line` inventory (23 in the root app + 1 in `functions/`)
 
 **`react-refresh/only-export-components` — 12× (legitimate pattern per policy — keep):**
 context/hook exports in `contexts/AuthContext.tsx` (×2), `contexts/ThemeContext.tsx` (×1), and
 `contexts/FirebaseHouseholdContext.tsx` (×9, one per exported slice hook).
 
-**`react-hooks/set-state-in-effect` — 6× (each carries a justification comment — review when touched):**
-- `components/modals/HabitSubmissionLogModal.tsx:65` — intentional load-on-open
-- `components/modals/BucketFormModal.tsx:37` — form state reset on open
-- `components/modals/DeveloperConsole.tsx:141` — intentional load-on-open
-- `contexts/FirebaseHouseholdContext.tsx:893` — intentional cross-household state teardown
-- `contexts/FirebaseHouseholdContext.tsx:1512` — intentional listener-window re-baseline
-- `components/transactions/TransactionCommentThread.tsx:64` (Plan 23) — intentional load-on-open, mirrors HabitSubmissionLogModal
+**`react-hooks/set-state-in-effect` — 7× (each carries a justification comment — review when touched):**
+- `components/modals/HabitSubmissionLogModal.tsx:74` — intentional load-on-open
+- `components/modals/BucketFormModal.tsx:35` — form state reset on open
+- `components/modals/DeveloperConsole.tsx:188` — intentional load-on-open
+- `components/todos/TodoRow.tsx:144` — collapse an open checklist when selection mode turns on; a
+  render-phase pattern is a poor fit per-row because rows mount/unmount constantly as the list filters
+- `components/transactions/TransactionCommentThread.tsx:73` (Plan 23) — intentional load-on-open, mirrors HabitSubmissionLogModal
+- `contexts/FirebaseHouseholdContext.tsx:711` — intentional cross-household state teardown
+- `contexts/FirebaseHouseholdContext.tsx:1163` — intentional listener-window re-baseline
 
 **`@typescript-eslint/no-explicit-any` — 4× (test-only — eliminate when next editing the file):**
 all in `pages/Habits.Export.test.tsx` (lines 132, 150, 173, 175).
+
+**`no-control-regex` — 1× (in the `functions/` workspace, outside root `eslint .`):**
+- `functions/src/quickAdd/bankEmailSync.ts:103` — deliberately strips C0/C1 control characters and
+  newlines from bank-email text; the control-character class is the point of the regex.
 
 ### Historical Fixes
 
