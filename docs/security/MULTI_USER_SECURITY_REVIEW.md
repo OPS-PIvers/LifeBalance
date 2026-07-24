@@ -228,8 +228,19 @@ rule) and the dead `subBucketId`/`subBuckets` cleanup — so the rules surface i
 whose `inviteCodes/{code}` doc points at the household. The rule blocks self-assigned `role: 'admin'`, but
 it does not otherwise validate the member document schema, allowed keys, string lengths, or server-managed
 fields in that invite path. (Contrast the sibling managed-kid path in the same block, which *does* enforce
-`keys().hasOnly([...])` plus per-field validators — the login-backed invite path has no equivalent.) Notably
-`points` is unconstrained on that path, so a joiner can seed their own member doc with arbitrary values.
+`keys().hasOnly([...])` plus per-field validators — the login-backed invite path has no equivalent.)
+
+Notably `points` is unconstrained on that path, and that is not a theoretical field: `member.points` is the
+member's personal balance for rewards and allowance redemption (see `hooks/useHabitActions.tsx`, which
+credits an assignee's `member.points` rather than the shared household pool, and the kid-redemption path
+that spends it). A joiner can therefore seed their own member doc with an arbitrary `points.total` and
+redeem real rewards against points they never earned.
+
+What makes this a clear inconsistency rather than a judgement call: the members **update** rule already
+protects `points` deliberately — a member editing their own doc is restricted to
+`hasOnly(['displayName', 'email', 'photoURL', 'telegramChatId', 'notificationPreferences', 'fcmTokens',
+'lastTokenRefresh'])`, which excludes `points`. So points are locked *after* join and wide open *at* join.
+The create path is the only hole in an otherwise-closed control.
 
 The household update rule then allows a member to add themself to `memberUids` once they have a member doc,
 which is the intended join flow.
@@ -308,7 +319,10 @@ it from scratch.
   and arbitrary `contents`/`config` to Gemini with no allowlist. Because the cap counts **requests**, not
   tokens or model tier, a member can point the household's daily allotment at an arbitrarily expensive model
   on the operator's key. Bounded (member-only, count-capped, kill-switchable) but worth an allowlist —
-  `GEMINI_MODEL` is already a single constant client-side, so the server can pin it. **Low-Medium.**
+  `GEMINI_MODEL` is already a single constant client-side, and the client always sends exactly that, so
+  the server fix is **one line**: ignore the caller's `model` and use the server's own constant (or
+  allowlist the single permitted value). Cheap enough that it should not queue behind the larger
+  findings. **Low-Medium.**
 
 ### Controls that already hold (verified — do not re-scope work here)
 
