@@ -16,6 +16,11 @@ let commitCount = 0;
 // Errors thrown by successive commit() calls (shifted per commit) — lets a test
 // exercise the trash-mirror permission-denied fallback in deleteTransaction.
 let commitErrors: unknown[] = [];
+interface MockWhere { field: string; op: string; value: unknown }
+// Stored habit submissions, keyed by subcollection path, served to getDocs.
+// Back-dated fires read these (a threshold habit's prior-period unit count) and
+// the undo reads them to find what a given transaction actually credited.
+let submissionDocs: Record<string, ({ id: string } & Record<string, unknown>)[]> = {};
 
 vi.mock('firebase/firestore', () => {
   return {
@@ -39,6 +44,32 @@ vi.mock('firebase/firestore', () => {
     serverTimestamp: () => ({ __serverTimestamp: true }),
     deleteField: () => ({ __deleteField: true }),
     updateDoc: vi.fn(),
+    // Submission reads (back-dated habit fires + their undo). The `where`
+    // clauses are actually EVALUATED — the undo's correctness depends on
+    // filtering by sourceTransactionId (so it can't consume a hand-logged or
+    // another transaction's submission), so a mock that ignored filters would
+    // pass while the real query misbehaved. Seed via `submissionDocs[path]`.
+    query: vi.fn((ref: { __path: string }, ...constraints: MockWhere[]) => ({
+      __path: ref.__path,
+      __where: constraints,
+    })),
+    where: vi.fn((field: string, op: string, value: unknown): MockWhere => ({ field, op, value })),
+    getDocs: vi.fn(async (ref: { __path: string; __where?: MockWhere[] }) => {
+      const matches = (d: Record<string, unknown>) =>
+        (ref.__where ?? []).every(({ field, op, value }) => {
+          const actual = d[field];
+          if (op === '==') return actual === value;
+          if (op === '>=') return String(actual) >= String(value);
+          if (op === '<=') return String(actual) <= String(value);
+          if (op === 'in') return (value as unknown[]).includes(actual);
+          throw new Error(`Unsupported mock query operator: ${op}`);
+        });
+      return {
+        docs: (submissionDocs[ref.__path] ?? [])
+          .filter(matches)
+          .map(d => ({ id: d.id, data: () => d })),
+      };
+    }),
     writeBatch: vi.fn(() => ({
       set: (ref: { __path: string }, data: Record<string, unknown>) => {
         capturedSets.push({ ref, data });
@@ -66,7 +97,8 @@ vi.mock('@/services/analytics', () => ({ track: vi.fn() }));
 
 import { makeAddTransaction, makeDeleteTransaction, makeUpdateTransaction, makeUpdateTransactionCategory, makeReverseTransactionApproval } from './transactionMutations';
 import { getLocalDateString } from '@/utils/dateHelpers';
-import type { Account, Habit, Transaction } from '@/types/schema';
+import { addDays, format, parseISO, subDays } from 'date-fns';
+import type { Account, FreezeBank, Habit, Transaction } from '@/types/schema';
 
 const HOUSEHOLD_ID = 'house1';
 const db = {} as never;
@@ -110,6 +142,7 @@ describe('makeAddTransaction — credit-card payment funding transfer', () => {
     capturedDeletes = [];
     commitCount = 0;
     commitErrors = [];
+    submissionDocs = {};
     vi.clearAllMocks();
   });
 
@@ -200,6 +233,7 @@ describe('makeDeleteTransaction — trash mirror + balance reversal', () => {
     capturedDeletes = [];
     commitCount = 0;
     commitErrors = [];
+    submissionDocs = {};
     vi.clearAllMocks();
   });
 
@@ -305,6 +339,7 @@ describe('makeUpdateTransactionCategory — bank-email-sync needsCategory row', 
     capturedDeletes = [];
     commitCount = 0;
     commitErrors = [];
+    submissionDocs = {};
     vi.clearAllMocks();
   });
 
@@ -337,6 +372,7 @@ describe('makeUpdateTransactionCategory — bank-email-sync needsCategory row', 
       transactions,
       accounts,
       householdSettings: null,
+      freezeBank: null,
     };
   }
 
@@ -406,14 +442,17 @@ describe('habit firing writes DELTAS, never whole values', () => {
     capturedDeletes = [];
     commitCount = 0;
     commitErrors = [];
+    submissionDocs = {};
     vi.clearAllMocks();
   });
 
   const habitPath = (id: string) => `households/${HOUSEHOLD_ID}/habits/${id}`;
   const txnPath = (id: string) => `households/${HOUSEHOLD_ID}/transactions/${id}`;
-  // processToggleHabit marks the REAL current local day complete (not the
-  // transaction's date), so the completion delta targets today.
+  const submissionsPath = (id: string) => `${habitPath(id)}/submissions`;
   const today = getLocalDateString();
+  // A transaction dated a few days ago — the shape the nightly bankEmailSync
+  // produces. The fire must credit THIS date, not today.
+  const backDate = format(subDays(parseISO(today), 4), 'yyyy-MM-dd');
 
   const threshHabit: Habit = {
     id: 'h1',
@@ -438,13 +477,15 @@ describe('habit firing writes DELTAS, never whole values', () => {
     amount: 30,
     merchant: 'Whole Foods',
     category: 'Groceries',
-    date: '2026-07-20',
+    date: backDate,
     status: 'pending_review',
     isRecurring: false,
     source: 'manual',
     autoCategorized: false,
     accountId: 'acc-check',
   };
+  // Same row, dated today — the live-counter path.
+  const todayTx: Transaction = { ...pendingTx, id: 'tx-today', date: today };
 
   const catDeps = (transactions: Transaction[], habits: Habit[]) => ({
     db,
@@ -454,35 +495,100 @@ describe('habit firing writes DELTAS, never whole values', () => {
     transactions,
     accounts,
     householdSettings: null,
+    freezeBank: null,
   });
 
-  it('updateTransactionCategory fires a habit with increment() + arrayUnion, not whole values', async () => {
+  it('BACK-DATES the fire to the transaction date, leaving the live counter alone', async () => {
     const { updateTransactionCategory } = makeUpdateTransactionCategory(catDeps([pendingTx], [threshHabit]));
     await updateTransactionCategory('tx-9', 'Groceries', ['h1']);
 
     const habitUpdate = capturedUpdates.find(u => u.ref.__path === habitPath('h1'));
     expect(habitUpdate).toBeDefined();
     const data = habitUpdate!.data!;
-    // Counters are server-side increments, never absolute numbers.
-    expect(data['count']).toEqual({ __increment: 1 });
-    expect(data['totalCount']).toEqual({ __increment: 1 });
+    // THE BUG THIS FIXES: the completion lands on the transaction's date, not on
+    // the day the row happened to be reviewed.
+    expect(data['completedDates']).toEqual({ __arrayUnion: [backDate] });
+    expect(data['completedDates']).not.toEqual({ __arrayUnion: [today] });
     // Completion history moves ONLY via an arrayUnion delta — never a whole
     // array that a stale cache could use to clobber other completions.
-    expect(data['completedDates']).toEqual({ __arrayUnion: [today] });
     expect(Array.isArray(data['completedDates'])).toBe(false);
+    // A PAST-period fire must not touch the live counter at all: it describes a
+    // later period than the one being credited.
+    expect(data['count']).toBeUndefined();
+    // The lifetime counter is period-independent, so it still increments.
+    expect(data['totalCount']).toEqual({ __increment: 1 });
     // Fired ledger recorded on the transaction (arrayUnion delta).
     const txUpdate = capturedUpdates.find(u => u.ref.__path === txnPath('tx-9'));
     expect(txUpdate!.data!['firedHabitIds']).toEqual({ __arrayUnion: ['h1'] });
-    // Points credited on the household.
-    const pointsUpdate = capturedUpdates.find(u => u.ref.__path === `households/${HOUSEHOLD_ID}`);
-    expect(pointsUpdate!.data!['points.total']).toEqual({ __increment: 10 });
   });
 
-  it('lazy-resets a STALE habit fired via a chip: counter written absolutely (0 + delta), not incremented', async () => {
+  it('gates the points buckets by fire date: total only, never a past day into today', async () => {
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(catDeps([pendingTx], [threshHabit]));
+    await updateTransactionCategory('tx-9', 'Groceries', ['h1']);
+
+    const householdUpdate = capturedUpdates.find(u => u.ref.__path === `households/${HOUSEHOLD_ID}`);
+    // Lifetime total absorbs it...
+    expect(householdUpdate!.data!['points.total']).toEqual({ __increment: 10 });
+    // ...but a 4-day-old fire must not inflate today's daily total.
+    expect(householdUpdate!.data!['points.daily']).toBeUndefined();
+  });
+
+  it('writes a submission doc carrying the fire date, points and source transaction', async () => {
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(catDeps([pendingTx], [threshHabit]));
+    await updateTransactionCategory('tx-9', 'Groceries', ['h1']);
+
+    const submission = capturedSets.find(s => s.ref.__path.startsWith(submissionsPath('h1')));
+    expect(submission).toBeDefined();
+    expect(submission!.data).toMatchObject({
+      habitId: 'h1',
+      date: backDate,
+      count: 1,
+      pointsEarned: 10,
+      // What makes the undo exact rather than a recomputation.
+      sourceTransactionId: 'tx-9',
+    });
+    // And the habit is flagged so the calendar reads its stored per-date units.
+    const habitUpdate = capturedUpdates.find(u => u.ref.__path === habitPath('h1'));
+    expect(habitUpdate!.data!['hasSubmissionTracking']).toBe(true);
+  });
+
+  it('records the association but fires NOTHING beyond the back-date window', async () => {
+    const ancientTx: Transaction = {
+      ...pendingTx,
+      id: 'tx-old',
+      date: format(subDays(parseISO(today), 45), 'yyyy-MM-dd'),
+    };
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(catDeps([ancientTx], [threshHabit]));
+    await updateTransactionCategory('tx-old', 'Groceries', ['h1']);
+
+    // No habit write, no submission, no points — a 45-day-old row must not
+    // rewrite settled streak history.
+    expect(capturedUpdates.find(u => u.ref.__path === habitPath('h1'))).toBeUndefined();
+    expect(capturedSets.find(s => s.ref.__path.startsWith(submissionsPath('h1')))).toBeUndefined();
+    // But the association IS still recorded on the transaction.
+    const txUpdate = capturedUpdates.find(u => u.ref.__path === txnPath('tx-old'));
+    expect(txUpdate!.data!['relatedHabitIds']).toEqual(['h1']);
+    expect(txUpdate!.data!['firedHabitIds']).toBeUndefined();
+  });
+
+  it('refuses to fire a FUTURE-dated transaction (would corrupt the streak chain)', async () => {
+    const futureTx: Transaction = {
+      ...pendingTx,
+      id: 'tx-future',
+      date: format(addDays(parseISO(today), 3), 'yyyy-MM-dd'),
+    };
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(catDeps([futureTx], [threshHabit]));
+    await updateTransactionCategory('tx-future', 'Groceries', ['h1']);
+
+    expect(capturedUpdates.find(u => u.ref.__path === habitPath('h1'))).toBeUndefined();
+  });
+
+  it('lazy-resets a STALE habit on a SAME-DAY fire: counter written absolutely (0 + delta)', async () => {
     // A period-rolled-over habit whose leftover counter is 5 from a prior day.
-    // Firing it via the transaction chip must start from 0 (parity with the
-    // to-do / manual paths) and write `count` ABSOLUTELY so the reset discards
-    // the stale stored value instead of increment()-ing on top of it.
+    // A same-day fire must start from 0 (parity with the to-do / manual paths)
+    // and write `count` ABSOLUTELY so the reset discards the stale stored value
+    // instead of increment()-ing on top of it. Only a CURRENT-period fire can
+    // reach this path — a back-dated one never touches the live counter.
     const staleHabit: Habit = {
       ...threshHabit,
       count: 5,
@@ -490,8 +596,8 @@ describe('habit firing writes DELTAS, never whole values', () => {
       completedDates: ['2020-01-01'],
       lastUpdated: '2020-01-01T00:00:00.000Z',
     };
-    const { updateTransactionCategory } = makeUpdateTransactionCategory(catDeps([pendingTx], [staleHabit]));
-    await updateTransactionCategory('tx-9', 'Groceries', ['h1']);
+    const { updateTransactionCategory } = makeUpdateTransactionCategory(catDeps([todayTx], [staleHabit]));
+    await updateTransactionCategory('tx-today', 'Groceries', ['h1']);
 
     const habitUpdate = capturedUpdates.find(u => u.ref.__path === habitPath('h1'));
     const data = habitUpdate!.data!;
@@ -500,6 +606,85 @@ describe('habit firing writes DELTAS, never whole values', () => {
     // Lifetime counter is never reset — still a plain +1 increment.
     expect(data['totalCount']).toEqual({ __increment: 1 });
     expect(data['completedDates']).toEqual({ __arrayUnion: [today] });
+    // A same-day fire DOES credit today's daily bucket.
+    const householdUpdate = capturedUpdates.find(u => u.ref.__path === `households/${HOUSEHOLD_ID}`);
+    expect(householdUpdate!.data!['points.daily']).toEqual({ __increment: 10 });
+  });
+
+  it('un-freezes and refunds a token when the fire completes an auto-frozen day', async () => {
+    // The midnight pass burned a token to protect backDate as a "miss"; the
+    // transaction proves the habit was actually completed that day.
+    const frozenHabit: Habit = {
+      ...threshHabit,
+      frozenDates: [backDate],
+      completedDates: [format(subDays(parseISO(backDate), 1), 'yyyy-MM-dd')],
+    };
+    const bank: FreezeBank = {
+      tokens: 1,
+      maxTokens: 2,
+      lastRolloverDate: today,
+      lastRolloverMonth: today.slice(0, 7),
+      history: [],
+    };
+    const { updateTransactionCategory } = makeUpdateTransactionCategory({
+      ...catDeps([pendingTx], [frozenHabit]),
+      freezeBank: bank,
+    });
+    await updateTransactionCategory('tx-9', 'Groceries', ['h1']);
+
+    const habitUpdate = capturedUpdates.find(u => u.ref.__path === habitPath('h1'));
+    // The date moves OUT of frozenDates and INTO completedDates — the schema's
+    // invariant is that a frozen date never appears in completedDates.
+    expect(habitUpdate!.data!['frozenDates']).toEqual({ __arrayRemove: [backDate] });
+    expect(habitUpdate!.data!['completedDates']).toEqual({ __arrayUnion: [backDate] });
+    // And the token spent protecting a miss that didn't happen comes back.
+    const householdUpdate = capturedUpdates.find(u => u.ref.__path === `households/${HOUSEHOLD_ID}`);
+    const nextBank = householdUpdate!.data!['freezeBank'] as FreezeBank;
+    expect(nextBank.tokens).toBe(2);
+    expect(nextBank.history).toHaveLength(1);
+    expect(nextBank.history[0]).toMatchObject({ type: 'earned', amount: 1, habitDate: backDate });
+  });
+
+  it('caps a freeze refund at the bank maximum', async () => {
+    const frozenHabit: Habit = { ...threshHabit, frozenDates: [backDate], completedDates: [] };
+    const fullBank: FreezeBank = {
+      tokens: 2,
+      maxTokens: 2,
+      lastRolloverDate: today,
+      lastRolloverMonth: today.slice(0, 7),
+      history: [],
+    };
+    const { updateTransactionCategory } = makeUpdateTransactionCategory({
+      ...catDeps([pendingTx], [frozenHabit]),
+      freezeBank: fullBank,
+    });
+    await updateTransactionCategory('tx-9', 'Groceries', ['h1']);
+
+    const householdUpdate = capturedUpdates.find(u => u.ref.__path === `households/${HOUSEHOLD_ID}`);
+    expect((householdUpdate!.data!['freezeBank'] as FreezeBank).tokens).toBe(2);
+  });
+
+  it('commits the habit, submission, points and freeze refund in ONE batch', async () => {
+    const frozenHabit: Habit = { ...threshHabit, frozenDates: [backDate], completedDates: [] };
+    const bank: FreezeBank = {
+      tokens: 0,
+      maxTokens: 2,
+      lastRolloverDate: today,
+      lastRolloverMonth: today.slice(0, 7),
+      history: [],
+    };
+    const { updateTransactionCategory } = makeUpdateTransactionCategory({
+      ...catDeps([pendingTx], [frozenHabit]),
+      freezeBank: bank,
+    });
+    await updateTransactionCategory('tx-9', 'Groceries', ['h1']);
+
+    // The atomicity invariant: everything lands together or not at all.
+    expect(commitCount).toBe(1);
+    // And the household doc is written exactly ONCE — a batch may not write the
+    // same document twice, so points and the freeze refund must be merged.
+    const householdWrites = capturedUpdates.filter(u => u.ref.__path === `households/${HOUSEHOLD_ID}`);
+    expect(householdWrites).toHaveLength(1);
   });
 
   it('never fires an ARCHIVED habit referenced by a transaction (skips, completes normally)', async () => {
@@ -518,8 +703,10 @@ describe('habit firing writes DELTAS, never whole values', () => {
     expect(txUpdate!.data!['firedHabitIds']).toBeUndefined();
   });
 
-  it('reverseTransactionApproval un-fires a habit with increment() + arrayRemove, not whole values', async () => {
-    // The verified row that the approve produced: category set, habit fired.
+  it('reverseTransactionApproval falls back to a same-day un-fire when NO submission exists', async () => {
+    // Backward compatibility: a fire made before back-dating shipped left no
+    // submission behind, and those fires all landed on the day of approval — so
+    // the legacy same-day decrement is exactly right for them.
     const verifiedTx: Transaction = {
       ...pendingTx,
       status: 'verified',
@@ -559,6 +746,143 @@ describe('habit firing writes DELTAS, never whole values', () => {
     const txUpdate = capturedUpdates.find(u => u.ref.__path === txnPath('tx-9'));
     expect(txUpdate!.data!['firedHabitIds']).toEqual({ __deleteField: true });
   });
+
+  // --- Undo of a BACK-DATED fire, reversed from its submission -------------
+
+  const verifiedBackdatedTx: Transaction = {
+    ...pendingTx,
+    status: 'verified',
+    category: 'Groceries',
+    relatedHabitIds: ['h1'],
+    firedHabitIds: ['h1'],
+  };
+
+  /** The submission a back-dated fire would have written for `tx-9`. */
+  const firedSubmission = (overrides: Record<string, unknown> = {}) => ({
+    id: 'sub-1',
+    habitId: 'h1',
+    habitTitle: 'Groceries under budget',
+    timestamp: `${backDate}T12:00:00.000Z`,
+    date: backDate,
+    count: 1,
+    pointsEarned: 15,
+    streakDaysAtTime: 3,
+    multiplierApplied: 1.5,
+    createdBy: 'user-1',
+    createdAt: `${backDate}T12:00:00.000Z`,
+    sourceTransactionId: 'tx-9',
+    ...overrides,
+  });
+
+  const reverseDeps = (habits: Habit[], transactions: Transaction[]) => ({
+    db,
+    householdId: HOUSEHOLD_ID,
+    habits,
+    transactions,
+    accounts,
+  });
+
+  it('reverses the EXACT points the submission credited, not a recomputation', async () => {
+    // The submission recorded 15 (a 1.5x day). Recomputing today could easily
+    // land on 10 — the stored value is the only reliable source.
+    submissionDocs[submissionsPath('h1')] = [firedSubmission()];
+    const firedHabit: Habit = {
+      ...threshHabit,
+      count: 0,
+      totalCount: 5,
+      completedDates: [backDate],
+    };
+    const { reverseTransactionApproval } = makeReverseTransactionApproval(
+      reverseDeps([firedHabit], [verifiedBackdatedTx])
+    );
+    await reverseTransactionApproval('tx-9', { category: 'Uncategorized' }, ['h1']);
+
+    const householdUpdate = capturedUpdates.find(u => u.ref.__path === `households/${HOUSEHOLD_ID}`);
+    expect(householdUpdate!.data!['points.total']).toEqual({ __increment: -15 });
+    // A past-dated reversal must not drain TODAY's daily bucket.
+    expect(householdUpdate!.data!['points.daily']).toBeUndefined();
+  });
+
+  it('removes the BACK-DATED completion, not today’s, and leaves the live counter alone', async () => {
+    submissionDocs[submissionsPath('h1')] = [firedSubmission()];
+    // The habit has since been completed today by hand — that must survive.
+    const firedHabit: Habit = {
+      ...threshHabit,
+      count: 1,
+      totalCount: 6,
+      completedDates: [today, backDate],
+    };
+    const { reverseTransactionApproval } = makeReverseTransactionApproval(
+      reverseDeps([firedHabit], [verifiedBackdatedTx])
+    );
+    await reverseTransactionApproval('tx-9', { category: 'Uncategorized' }, ['h1']);
+
+    const data = capturedUpdates.find(u => u.ref.__path === habitPath('h1'))!.data!;
+    expect(data['completedDates']).toEqual({ __arrayRemove: [backDate] });
+    // The live counter belongs to today's period, which this reversal isn't
+    // undoing — touching it would corrupt today's count.
+    expect(data['count']).toBeUndefined();
+    expect(data['totalCount']).toEqual({ __increment: -1 });
+  });
+
+  it('deletes the submission so a re-approve can fire cleanly', async () => {
+    submissionDocs[submissionsPath('h1')] = [firedSubmission()];
+    const firedHabit: Habit = { ...threshHabit, completedDates: [backDate], totalCount: 5 };
+    const { reverseTransactionApproval } = makeReverseTransactionApproval(
+      reverseDeps([firedHabit], [verifiedBackdatedTx])
+    );
+    await reverseTransactionApproval('tx-9', { category: 'Uncategorized' }, ['h1']);
+
+    expect(capturedDeletes.some(d => d.ref.__path === `${submissionsPath('h1')}/sub-1`)).toBe(true);
+  });
+
+  it('KEEPS the date completed when another submission still justifies it', async () => {
+    // A hand-logged submission on the same date (no sourceTransactionId) must not
+    // be erased by undoing the transaction's own fire.
+    submissionDocs[submissionsPath('h1')] = [
+      firedSubmission(),
+      { ...firedSubmission({ pointsEarned: 10 }), id: 'sub-manual', sourceTransactionId: undefined },
+    ];
+    const firedHabit: Habit = { ...threshHabit, completedDates: [backDate], totalCount: 6 };
+    const { reverseTransactionApproval } = makeReverseTransactionApproval(
+      reverseDeps([firedHabit], [verifiedBackdatedTx])
+    );
+    await reverseTransactionApproval('tx-9', { category: 'Uncategorized' }, ['h1']);
+
+    const data = capturedUpdates.find(u => u.ref.__path === habitPath('h1'))!.data!;
+    // Date stays — the manual log still stands on its own.
+    expect(data['completedDates']).toBeUndefined();
+    // Only the transaction's own submission is deleted and refunded.
+    expect(capturedDeletes.some(d => d.ref.__path === `${submissionsPath('h1')}/sub-manual`)).toBe(false);
+    const householdUpdate = capturedUpdates.find(u => u.ref.__path === `households/${HOUSEHOLD_ID}`);
+    expect(householdUpdate!.data!['points.total']).toEqual({ __increment: -15 });
+  });
+
+  it('ignores a submission belonging to a DIFFERENT transaction', async () => {
+    submissionDocs[submissionsPath('h1')] = [
+      { ...firedSubmission(), id: 'sub-other', sourceTransactionId: 'tx-somebody-else' },
+    ];
+    const firedHabit: Habit = { ...threshHabit, count: 1, completedDates: [today], totalCount: 5 };
+    const { reverseTransactionApproval } = makeReverseTransactionApproval(
+      reverseDeps([firedHabit], [verifiedBackdatedTx])
+    );
+    await reverseTransactionApproval('tx-9', { category: 'Uncategorized' }, ['h1']);
+
+    // No submission matched tx-9, so it takes the legacy same-day path and never
+    // consumes another transaction's record.
+    expect(capturedDeletes.some(d => d.ref.__path.includes('sub-other'))).toBe(false);
+  });
+
+  it('reverses in ONE batch', async () => {
+    submissionDocs[submissionsPath('h1')] = [firedSubmission()];
+    const firedHabit: Habit = { ...threshHabit, completedDates: [backDate], totalCount: 5 };
+    const { reverseTransactionApproval } = makeReverseTransactionApproval(
+      reverseDeps([firedHabit], [verifiedBackdatedTx])
+    );
+    await reverseTransactionApproval('tx-9', { category: 'Uncategorized' }, ['h1']);
+
+    expect(commitCount).toBe(1);
+  });
 });
 
 describe('makeUpdateTransaction — bank-sync rows never delta a balance', () => {
@@ -568,6 +892,7 @@ describe('makeUpdateTransaction — bank-sync rows never delta a balance', () =>
     capturedDeletes = [];
     commitCount = 0;
     commitErrors = [];
+    submissionDocs = {};
     vi.clearAllMocks();
   });
 

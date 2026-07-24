@@ -14,7 +14,7 @@ import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redempt
 import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { processToggleHabit, processStaleDownToggle, isHabitStale, calculateResetPoints, streakForHabit } from '@/utils/habitLogic';
-import { computeHabitTriggerFire, computeHabitTriggerReverse } from '@/utils/habitTriggerFire';
+import { computeBackdatedHabitFire, computeHabitTriggerFire, computeHabitTriggerReverse } from '@/utils/habitTriggerFire';
 import { evaluateTodoSubtaskGate, TodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
 import { setSubtaskDone, subtaskProgress } from '@/utils/subtasks';
 import type { TodoSubtaskToggleResult, TodoCompletionOptions } from '@/contexts/household/mutations/todoMutations';
@@ -1010,22 +1010,35 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       return next;
     }));
     if (habitIdsToFire.length > 0) {
+      // PRD #1065 parity with makeUpdateTransactionCategory: the fire is
+      // BACK-DATED to the transaction's date, not to today — a habit logged from
+      // an overnight-synced charge belongs to the day the money moved. Archived
+      // habits and out-of-window dates return null and never fire.
+      const fireDate = overrides?.date ?? existing?.date ?? getLocalDateString();
+      const today = getLocalDateString();
+      let pointsChange = 0;
       setHabits(prev => prev.map(h => {
         if (!habitIdsToFire.includes(h.id)) return h;
-        // PRD #1065 parity with makeUpdateTransactionCategory: an archived
-        // habit must never fire (skip entirely — no count/points change).
-        if (h.archivedAt) return h;
-        // Lazy-reset parity: a stale habit (counter belongs to a previous
-        // period) fires as if count were 0, so it ends at exactly the delta
-        // (here always +1) instead of incrementing the prior-period value.
-        // totalCount still increments normally regardless of staleness.
-        const stale = isHabitStale(h);
+        const fire = computeBackdatedHabitFire(h, fireDate, today);
+        if (!fire) return h;
+        pointsChange += fire.pointsDelta.total;
         return {
           ...h,
-          count: stale ? 1 : h.count + 1,
-          totalCount: h.totalCount + 1,
+          count: fire.resetCount ? fire.count : h.count + fire.countDelta,
+          totalCount: h.totalCount + fire.totalCountDelta,
+          ...(fire.addedDate ? { completedDates: [...h.completedDates, fire.addedDate] } : {}),
+          ...(fire.unfrozenDate
+            ? { frozenDates: (h.frozenDates ?? []).filter(d => d !== fire.unfrozenDate) }
+            : {}),
+          streakDays: fire.streakDays,
+          hasSubmissionTracking: true,
+          lastUpdated: new Date().toISOString(),
         };
       }));
+      // Only the lifetime total is mirrored here: pointsDelta.total is the
+      // bucket a back-dated fire always credits, while daily/weekly are gated by
+      // date and would be 0 for the common overnight-sync case anyway.
+      if (pointsChange !== 0) setTotalPoints(prev => prev + pointsChange);
     }
     toast.success('Mock: Verified & Categorized!');
   }, [transactions, accounts]);

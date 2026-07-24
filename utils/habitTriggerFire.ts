@@ -1,12 +1,18 @@
-import { parseISO, isSameWeek } from 'date-fns';
+import { parseISO, isSameWeek, format, startOfWeek } from 'date-fns';
 import { Habit } from '@/types/schema';
 import {
   processToggleHabit,
   isHabitStale,
+  isHabitCompletedInCurrentPeriod,
+  getMultiplier,
+  habitPeriodStart,
   pointsForHabitOnDate,
+  signedHabitPoints,
+  streakEndingOnForHabit,
   streakForHabit,
 } from '@/utils/habitLogic';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { isWithinBackdateWindow } from '@/utils/transactionHabitFiring';
 
 /**
  * Habit Automations (PRD #1065) — translating an automated trigger (a linked
@@ -60,6 +66,52 @@ export interface HabitFireDelta {
 }
 
 /**
+ * The delta for a BACK-DATED fire (`computeBackdatedHabitFire`). Distinct from
+ * `HabitFireDelta` in three ways that matter at the write site:
+ *   - the live counter may legitimately not move at all (a past-period fire);
+ *   - points are split per BUCKET rather than a single scalar, because a past
+ *     fire credits `total` but not today's `daily`;
+ *   - it can require un-freezing a date.
+ * Plain data — no Firestore `FieldValue`s — so the caller writes
+ * `completedDates` / `frozenDates` as arrayUnion/arrayRemove DELTAS, never whole
+ * arrays (2026-07-15 habit-history clobber incident).
+ */
+export interface BackdatedHabitFireDelta {
+  /** True when `fireDate` falls in the habit's CURRENT period. */
+  inCurrentPeriod: boolean;
+  /** Live-counter change, to write as `increment()`. 0 for a past-period fire. */
+  countDelta: number;
+  /**
+   * True only on a current-period stale lazy-reset: write `count` ABSOLUTELY
+   * (the stored counter is prior-period garbage the reset discards) and ignore
+   * `countDelta`. See `HabitFireDelta.resetCount`.
+   */
+  resetCount: boolean;
+  /** Absolute live counter — write only when `resetCount` is true. */
+  count: number;
+  /** Lifetime-counter change, to write as `increment()`. Always 1. */
+  totalCountDelta: number;
+  /** Date to arrayUnion into `completedDates`, when this fire newly completes it. */
+  addedDate?: string;
+  /**
+   * Date to arrayRemove from `frozenDates` — set when the fire completes a day a
+   * freeze token had been spent protecting. The caller must ALSO refund the
+   * token, in the same batch.
+   */
+  unfrozenDate?: string;
+  /** Recomputed period-aware streak for the habit doc. */
+  streakDays: number;
+  /** Signed points this fire credits (may be 0). Stored on the submission doc. */
+  pointsEarned: number;
+  /** `pointsEarned` split by bucket — see the DATE gating in the implementation. */
+  pointsDelta: { daily: number; weekly: number; total: number };
+  /** The multiplier that produced `pointsEarned` (1.0 / 1.5 / 2.0). */
+  multiplier: number;
+  /** Streak ending on `fireDate`, snapshotted onto the submission doc. */
+  streakAtFireDate: number;
+}
+
+/**
  * Compute the fire (`'up'`) or reverse (`'down'`) delta for firing `habit` from
  * an automated trigger. Returns `null` when the toggle is a no-op (e.g. a
  * `'down'` reverse of a habit already at count 0), mirroring
@@ -109,6 +161,137 @@ export function computeHabitTriggerFire(
     ...(removedDate !== undefined ? { removedDate } : {}),
     pointsChange: result.pointsChange,
     multiplier: result.multiplier,
+  };
+}
+
+/**
+ * The delta for firing a habit on a date that is NOT necessarily today — the
+ * transaction-keyword path (PRD #1065).
+ *
+ * Why this exists rather than reusing `computeHabitTriggerFire`: that helper
+ * bottoms out in `processToggleHabit`, which hard-codes `getLocalDateString()`
+ * and has no date parameter. A transaction row is dated to when the money
+ * actually moved, and the nightly `bankEmailSync` delivers it the following
+ * morning, so firing "today" credited the wrong day on every automated import.
+ *
+ * This mirrors `addHabitSubmission`'s back-dated semantics exactly (see
+ * hooks/useHabitActions.tsx): the multiplier comes from the streak ending ON
+ * `fireDate`, the live counter only moves when `fireDate` is in the current
+ * period, and the points buckets are gated by date so a past fire can't inflate
+ * today's daily or this week's weekly total.
+ *
+ * @param habit    The habit to fire
+ * @param fireDate yyyy-MM-dd the completion belongs to (the transaction's date)
+ * @param today    caller-local yyyy-MM-dd; injectable for deterministic tests
+ * @param priorPeriodCount Units ALREADY recorded for `fireDate`'s period when
+ *   that period is in the past — the sum of its stored submissions, since the
+ *   live counter says nothing about a past day/week. Ignored for a
+ *   current-period fire (the live counter is authoritative) and for incremental
+ *   habits (scoring is per-action), so callers may pass 0 in those cases.
+ * @returns the delta, or `null` when the fire is a no-op: an archived habit, or
+ *   a date outside the back-date window. The window is re-checked here as
+ *   defense in depth — writing a FUTURE completion would corrupt the streak
+ *   chain rather than merely misdate it, so no caller may bypass it.
+ */
+export function computeBackdatedHabitFire(
+  habit: Habit,
+  fireDate: string,
+  today: string = getLocalDateString(),
+  priorPeriodCount = 0,
+): BackdatedHabitFireDelta | null {
+  if (habit.archivedAt) return null;
+  if (!isWithinBackdateWindow(fireDate, today)) return null;
+
+  const inCurrentPeriod =
+    habitPeriodStart(habit.period, fireDate) === habitPeriodStart(habit.period, today);
+
+  // Lazy-reset parity with toggleHabit: a stale habit's counter belongs to a
+  // previous period, so its live period counter is effectively 0.
+  const stale = isHabitStale(habit);
+  const liveCount = stale ? 0 : habit.count;
+
+  // A past-period fire must leave the live counter completely alone — it
+  // describes a LATER period than the one being credited.
+  const basePeriodCount = inCurrentPeriod ? liveCount : priorPeriodCount;
+  const newPeriodCount = basePeriodCount + 1;
+
+  // Threshold habits only mark the date complete once the fire's OWN period
+  // reaches the target, preserving the subsystem-wide invariant "date in
+  // completedDates ⟹ target met that period". Incremental habits complete on
+  // any action (toggle parity).
+  const marksDateComplete =
+    habit.scoringType === 'incremental' || newPeriodCount >= habit.targetCount;
+  const dateNewlyCompleted = marksDateComplete && !habit.completedDates.includes(fireDate);
+
+  const nextCompletedDates = dateNewlyCompleted
+    ? [...habit.completedDates, fireDate].sort((a, b) => (a < b ? 1 : -1))
+    : habit.completedDates;
+
+  // A day that turns out to have been completed must not stay frozen: the
+  // schema's invariant is that a frozen date NEVER appears in completedDates,
+  // and the token it cost was spent protecting a miss that didn't happen. The
+  // caller arrayRemoves this date and refunds the token in the same batch.
+  const unfrozenDate =
+    dateNewlyCompleted && (habit.frozenDates ?? []).includes(fireDate) ? fireDate : undefined;
+  const nextFrozenDates = (habit.frozenDates ?? []).filter(d => d !== unfrozenDate);
+
+  // Multiplier from the streak ending ON fireDate — never the habit's CURRENT
+  // streak, which would retro-apply today's multiplier to a past day.
+  const streakAtFireDate = streakEndingOnForHabit(
+    {
+      period: habit.period,
+      completedDates: nextCompletedDates,
+      frozenDates: nextFrozenDates,
+      pausedUntil: habit.pausedUntil,
+    },
+    fireDate,
+  );
+  const multiplier = getMultiplier(streakAtFireDate, habit.type === 'positive', habit.period);
+
+  // Mirrors addHabitSubmission: incremental scores every action; threshold
+  // scores only the unit that pushes its own period over the target, and never
+  // when that period was already credited (a period completed via the toggle
+  // path leaves no submissions behind, so completedDates is the guard).
+  let pointsEarned = 0;
+  if (habit.scoringType === 'incremental') {
+    pointsEarned = signedHabitPoints(habit, multiplier);
+  } else if (
+    newPeriodCount >= habit.targetCount &&
+    basePeriodCount < habit.targetCount &&
+    !isHabitCompletedInCurrentPeriod(habit, fireDate)
+  ) {
+    pointsEarned = signedHabitPoints(habit, multiplier);
+  }
+
+  // Bucket gating by DATE (mirrors addHabitSubmission): `total` is lifetime so
+  // it always absorbs the points; `daily` only when the fire lands on today;
+  // `weekly` only when it lands in the current Monday-anchored week. Without
+  // this a Monday fire approved on Tuesday would inflate Tuesday's daily total.
+  const weekStart = format(startOfWeek(parseISO(today), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+  const pointsDelta = {
+    daily: fireDate === today ? pointsEarned : 0,
+    weekly: fireDate >= weekStart && fireDate <= today ? pointsEarned : 0,
+    total: pointsEarned,
+  };
+
+  return {
+    inCurrentPeriod,
+    countDelta: inCurrentPeriod ? 1 : 0,
+    resetCount: inCurrentPeriod && stale,
+    count: liveCount + 1,
+    totalCountDelta: 1,
+    ...(dateNewlyCompleted ? { addedDate: fireDate } : {}),
+    ...(unfrozenDate !== undefined ? { unfrozenDate } : {}),
+    streakDays: streakForHabit({
+      period: habit.period,
+      completedDates: nextCompletedDates,
+      frozenDates: nextFrozenDates,
+      pausedUntil: habit.pausedUntil,
+    }),
+    pointsEarned,
+    pointsDelta,
+    multiplier,
+    streakAtFireDate,
   };
 }
 

@@ -47,7 +47,11 @@ import {
   approvedToastMessage,
 } from '@/utils/approveDisclosure';
 import { resolveTargetAccount } from '@/utils/accountImpact';
-import { keywordMatchedHabitIds, selectHabitsToFire } from '@/utils/transactionHabitFiring';
+import {
+  keywordMatchedHabitIds,
+  selectHabitsToFire,
+  suppressAlreadyLoggedHabitIds,
+} from '@/utils/transactionHabitFiring';
 import { isTodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import {
@@ -300,9 +304,15 @@ const Dashboard: React.FC = () => {
       // chips — the transaction's explicit habit tags UNIONed with every habit
       // whose keywords match this merchant/notes. Dedup against what this row
       // already fired so an undo→re-approve can't double-log.
+      // A swipe has no UI moment to offer an override, so the cross-source dedup
+      // applies as the effective default: a keyword match whose habit was already
+      // logged for this transaction's date is dropped rather than double-counted
+      // (you tapped it by hand; the overnight sync's charge is the same event).
+      // Reviewing the row in the drawer is how you force a second log.
+      // Explicit prior tags are NOT suppressed — those were asked for by hand.
       const requestedHabitIds = Array.from(new Set([
         ...(item.relatedHabitIds ?? []),
-        ...keywordMatchedHabitIds(habits, item),
+        ...suppressAlreadyLoggedHabitIds(habits, keywordMatchedHabitIds(habits, item), item.date),
       ]));
       const { toFire: firedHabitIds } = selectHabitsToFire(requestedHabitIds, item.firedHabitIds ?? []);
       await updateTransactionCategory(item.id, category, requestedHabitIds, accountId);

@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { Habit } from '@/types/schema';
 import {
+  HABIT_BACKDATE_MAX_DAYS,
+  isWithinBackdateWindow,
   keywordMatchedHabitIds,
   selectHabitsToFire,
+  suppressAlreadyLoggedHabitIds,
   transactionAttribution,
 } from '@/utils/transactionHabitFiring';
 
@@ -83,6 +86,62 @@ describe('selectHabitsToFire', () => {
 
   it('preserves request order', () => {
     expect(selectHabitsToFire(['b', 'a'], []).toFire).toEqual(['b', 'a']);
+  });
+});
+
+describe('isWithinBackdateWindow', () => {
+  const today = '2026-07-24';
+
+  it('allows today and the nightly-sync range', () => {
+    expect(isWithinBackdateWindow(today, today)).toBe(true);
+    expect(isWithinBackdateWindow('2026-07-23', today)).toBe(true);
+    expect(isWithinBackdateWindow('2026-07-21', today)).toBe(true);
+  });
+
+  it('allows exactly the window edge and rejects one day past it', () => {
+    expect(isWithinBackdateWindow('2026-06-24', today)).toBe(true); // 30 days
+    expect(isWithinBackdateWindow('2026-06-23', today)).toBe(false); // 31
+  });
+
+  it('rejects FUTURE dates — a future completion corrupts the streak chain', () => {
+    expect(isWithinBackdateWindow('2026-07-25', today)).toBe(false);
+  });
+
+  it('pins the documented window so a silent widening fails here', () => {
+    expect(HABIT_BACKDATE_MAX_DAYS).toBe(30);
+  });
+});
+
+describe('suppressAlreadyLoggedHabitIds', () => {
+  it('drops a DAILY habit already completed on the fire date', () => {
+    const h = habit('a', ['amazon'], { completedDates: ['2026-07-20'] });
+    expect(suppressAlreadyLoggedHabitIds([h], ['a'], '2026-07-20')).toEqual([]);
+  });
+
+  it('keeps a DAILY habit completed on a DIFFERENT day', () => {
+    const h = habit('a', ['amazon'], { completedDates: ['2026-07-19'] });
+    expect(suppressAlreadyLoggedHabitIds([h], ['a'], '2026-07-20')).toEqual(['a']);
+  });
+
+  it('drops a WEEKLY habit completed anywhere in the fire date’s ISO week', () => {
+    // 2026-07-20 is a Monday; 2026-07-23 is the Thursday of the same ISO week.
+    const h = habit('a', ['amazon'], { period: 'weekly', completedDates: ['2026-07-23'] });
+    expect(suppressAlreadyLoggedHabitIds([h], ['a'], '2026-07-20')).toEqual([]);
+  });
+
+  it('keeps a WEEKLY habit whose completion is in the PREVIOUS ISO week', () => {
+    const h = habit('a', ['amazon'], { period: 'weekly', completedDates: ['2026-07-19'] });
+    expect(suppressAlreadyLoggedHabitIds([h], ['a'], '2026-07-20')).toEqual(['a']);
+  });
+
+  it('suppresses per habit, not wholesale', () => {
+    const logged = habit('a', ['amazon'], { completedDates: ['2026-07-20'] });
+    const fresh = habit('b', ['amazon']);
+    expect(suppressAlreadyLoggedHabitIds([logged, fresh], ['a', 'b'], '2026-07-20')).toEqual(['b']);
+  });
+
+  it('passes an unknown id through — the mutation’s own lookup drops it', () => {
+    expect(suppressAlreadyLoggedHabitIds([], ['ghost'], '2026-07-20')).toEqual(['ghost']);
   });
 });
 

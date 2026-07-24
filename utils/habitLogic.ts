@@ -437,6 +437,20 @@ export const streakEndingOnForHabit = (
  * @param today - "Today" in YYYY-MM-DD (caller's local timezone)
  * @returns true if the habit is complete for the current day/week
  */
+/**
+ * The first date of the period `date` falls in for a habit of this cadence:
+ * the date itself for a daily habit, its Monday-anchored ISO week start for a
+ * weekly one.
+ *
+ * Two dates are in the same period iff this returns the same value for both —
+ * the check every back-dated path needs to decide whether a date belongs to the
+ * LIVE period (counter is authoritative) or a past one (counter must not move).
+ */
+export const habitPeriodStart = (period: HabitPeriod, date: string): string =>
+  period === 'weekly'
+    ? format(startOfWeek(parseISO(date), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+    : date;
+
 export const isHabitCompletedInCurrentPeriod = (
   habit: Pick<Habit, 'period' | 'completedDates'>,
   today: string,

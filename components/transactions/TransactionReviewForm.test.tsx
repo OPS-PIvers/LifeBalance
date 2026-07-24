@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import TransactionReviewForm from './TransactionReviewForm';
 import { Transaction } from '@/types/schema';
+import { getLocalDateString } from '@/utils/dateHelpers';
+import { format, parseISO, subDays } from 'date-fns';
 
 // Hoisted mocks (available before the module imports run).
 const {
@@ -31,7 +33,15 @@ const mockTransactions: Transaction[] = [];
 // Accounts, mutable the same way (credit-account tests seed a card).
 const mockAccounts: { id: string; name: string; type: string }[] = [];
 // Habits, mutable the same way (habit pre-selection tests seed these).
-const mockHabits: { id: string; title: string; category: string; type: string }[] = [];
+// Deliberately NOT `Partial<Habit>`: the existing fixtures declare `type` as a
+// plain string, which can't narrow to Habit's 'positive' | 'negative' union.
+// The optional fields are the ones the keyword-automation tests need.
+const mockHabits: {
+  id: string; title: string; category: string; type: string;
+  period?: 'daily' | 'weekly';
+  triggers?: { keywords?: string[] };
+  completedDates?: string[];
+}[] = [];
 
 // Mock the domain slices consumed by the form (same pattern as
 // EditTransactionModal.test.tsx).
@@ -350,6 +360,87 @@ describe('TransactionReviewForm', () => {
 
       expect(mockToast.error).toHaveBeenCalledWith('Failed to update transaction');
       expect(screen.getByText(/possible duplicate of/i)).toBeInTheDocument();
+    });
+  });
+
+  // PRD #1065: a transaction fires its keyword habits on the transaction's own
+  // DATE, so the pre-selection has to reason about that date rather than today.
+  describe('keyword automations — cross-source dedup and the back-date window', () => {
+    const today = getLocalDateString();
+    const fourDaysAgo = format(subDays(parseISO(today), 4), 'yyyy-MM-dd');
+    const amazonHabit = {
+      id: 'h-amazon',
+      title: 'Order from Amazon',
+      category: 'spending',
+      type: 'negative',
+      period: 'daily' as const,
+      triggers: { keywords: ['amazon'] },
+      completedDates: [] as string[],
+    };
+    // A recent charge, the shape the nightly bankEmailSync produces. Keeps
+    // baseTx's category so the approve button is enabled.
+    const recentAmazonTx: Transaction = {
+      ...baseTx, merchant: 'AMAZON MKTPL', date: fourDaysAgo,
+    };
+
+    it('pre-selects a keyword habit that has NOT been logged for the transaction date', async () => {
+      const user = userEvent.setup();
+      mockHabits.push({ ...amazonHabit, completedDates: [] });
+
+      render(<TransactionReviewForm transaction={recentAmazonTx} onDone={mockOnDone} />);
+
+      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      expect(mockUpdateTransactionCategory.mock.calls[0]![2]).toEqual(['h-amazon']);
+    });
+
+    it('does NOT pre-select a habit already logged for that date, and says why', async () => {
+      const user = userEvent.setup();
+      // You tapped "Order from Amazon" by hand that day; the overnight sync's
+      // charge for the same purchase must not log it a second time.
+      mockHabits.push({ ...amazonHabit, completedDates: [fourDaysAgo] });
+
+      render(<TransactionReviewForm transaction={recentAmazonTx} onDone={mockOnDone} />);
+
+      expect(screen.getByText(/already logged/i)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      expect(mockUpdateTransactionCategory.mock.calls[0]![2]).toEqual([]);
+    });
+
+    it('lets you OVERRIDE the suppression for a genuine second purchase', async () => {
+      const user = userEvent.setup();
+      mockHabits.push({ ...amazonHabit, completedDates: [fourDaysAgo] });
+
+      render(<TransactionReviewForm transaction={recentAmazonTx} onDone={mockOnDone} />);
+
+      // Suppressed means "not pre-selected", NOT "removed" — the habit is still
+      // in the picker, so ticking it forces the second log.
+      await user.click(screen.getByRole('button', { name: /none — tap to connect/i }));
+      await user.click(screen.getByRole('checkbox', { name: /order from amazon/i }));
+      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      expect(mockUpdateTransactionCategory.mock.calls[0]![2]).toEqual(['h-amazon']);
+    });
+
+    it('suppresses on a completion ELSEWHERE IN THE WEEK for a weekly habit', async () => {
+      mockHabits.push({
+        ...amazonHabit,
+        period: 'weekly',
+        // Two days after the fire date — a different day, same ISO week.
+        completedDates: [format(subDays(parseISO(today), 2), 'yyyy-MM-dd')],
+      });
+
+      render(<TransactionReviewForm transaction={recentAmazonTx} onDone={mockOnDone} />);
+      expect(screen.getByText(/already logged/i)).toBeInTheDocument();
+    });
+
+    it('warns that an out-of-window transaction records links only', () => {
+      mockHabits.push({ ...amazonHabit, completedDates: [] });
+      const ancient: Transaction = {
+        ...recentAmazonTx,
+        date: format(subDays(parseISO(today), 45), 'yyyy-MM-dd'),
+      };
+
+      render(<TransactionReviewForm transaction={ancient} onDone={mockOnDone} />);
+      expect(screen.getByText(/too far back to log habits/i)).toBeInTheDocument();
     });
   });
 
