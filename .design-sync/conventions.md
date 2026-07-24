@@ -4,14 +4,42 @@ LifeBalance is a warm, editorial household-management UI (finance + habits +
 planning). Build on-brand by composing these real components and styling your
 own layout glue with the token vocabulary below.
 
-## Setup — no provider needed
+## Setup — almost never needs a provider
 
-These primitives are self-contained: they read no React context, theme, or
-router. Render them directly. The only requirement is that the design system's
-`styles.css` is loaded (it `@import`s the compiled tokens, fonts, and component
-CSS). Dark mode is driven by a `dark` class on a `<html>`/ancestor element —
-components already carry their `dark:` variants, so toggling that class themes
-everything.
+Nearly every primitive is self-contained: it reads no React context, theme, or
+router, so you can render it directly. The only requirement is that the design
+system's `styles.css` is loaded (it `@import`s the compiled tokens, fonts, and
+component CSS). Dark mode is driven by a `dark` class on a `<html>`/ancestor
+element — components already carry their `dark:` variants, so toggling that
+class themes everything.
+
+Two components DO read context, and both throw without it: **`SwipeActionRow`**
+(reads the resolved theme to paint its swipe rails) and **`SectionActionLink`**
+(renders a router `Link`). Wrap those — or the whole design, which is equally
+safe — in the exported `AppProviders`:
+
+```tsx
+import { AppProviders, SwipeActionRow } from 'lifebalance';
+
+<AppProviders>
+  <SwipeActionRow endActions={[…]}>…</SwipeActionRow>
+</AppProviders>
+```
+
+## Compound components (bundled, no card of their own)
+
+Some primitives are families. The parent has the preview card; its parts are
+importable from the same bundle:
+
+| Card | Also exported |
+|---|---|
+| `Section` | `SurfaceList`, `Row`, `DisclosureRow`, `Stat`, `StatGroup` |
+| `Tabs` | `TabsList`, `TabsTrigger`, `TabsContent` |
+| `Skeleton` | `SkeletonText`, `SkeletonCard` |
+
+`Section` + `SurfaceList` + `Row` is the app's core list idiom — a solid grouped
+surface with 1px hairline dividers between rows, not a stack of floating cards.
+Reach for it before `Card`.
 
 ## Styling idiom — Tailwind v4 utility classes
 

@@ -14,7 +14,17 @@
     "CollapsibleSection": { "cardMode": "column" },
     "EmptyState": { "cardMode": "column" },
     "PageHeader": { "cardMode": "column" },
-    "Tabs": { "cardMode": "column" }
+    "Tabs": { "cardMode": "column" },
+    "ConfirmDialog": { "cardMode": "single", "viewport": "440x380" },
+    "Menu": { "cardMode": "single", "viewport": "320x260" },
+    "Popover": { "cardMode": "single", "viewport": "340x290" },
+    "TabSubViewMenu": { "cardMode": "single", "viewport": "380x230" },
+    "Section": { "cardMode": "column" },
+    "SectionActionLink": { "cardMode": "column" },
+    "SwipeActionRow": { "cardMode": "column" },
+    "QuickAddBar": { "cardMode": "column" },
+    "SectionHeading": { "cardMode": "column" },
+    "ShowMoreRow": { "cardMode": "column" }
   },
   "dtsPropsFor": {
     "Button": "variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'dashed' | 'subtle' | 'ghost-danger' | 'success' | 'warning' | 'destructive' | 'ghost-destructive' | 'link' | 'ghost-inverted' | 'ghost-brand'; size?: 'sm' | 'md' | 'lg' | 'icon' | 'icon-sm'; layout?: 'horizontal' | 'vertical'; isLoading?: boolean; leftIcon?: React.ReactNode; rightIcon?: React.ReactNode; children?: React.ReactNode; disabled?: boolean; onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void; type?: 'button' | 'submit' | 'reset'; className?: string;",
@@ -33,7 +43,22 @@
     "CollapsibleSection": "title: React.ReactNode; subtitle?: React.ReactNode; summary?: React.ReactNode; defaultOpen?: boolean; open?: boolean; onOpenChange?: (open: boolean) => void; action?: React.ReactNode; children: React.ReactNode; className?: string;",
     "ListRow": "leading?: React.ReactNode; accessories?: React.ReactNode; grip?: { onPointerDownCapture: (e: React.PointerEvent<HTMLDivElement>) => void }; menu?: { ariaLabel: string; onOpen: () => void; hasPopup?: 'menu' | 'dialog'; expanded?: boolean }; children: React.ReactNode; className?: string;",
     "Drawer": "isOpen: boolean; onClose: () => void; title?: string; header?: React.ReactNode; footer?: React.ReactNode; children: React.ReactNode; noPadding?: boolean; disableClose?: boolean; height?: 'auto' | 'tall'; ariaLabel?: string; ariaLabelledBy?: string; className?: string;",
-    "Modal": "isOpen: boolean; onClose: () => void; children: React.ReactNode; maxWidth?: string; centerContent?: boolean; backdropColor?: string; mobileSafePadding?: boolean; fullScreenOnMobile?: boolean; disableBackdropClose?: boolean; ariaLabelledBy?: string; className?: string;"
+    "Modal": "isOpen: boolean; onClose: () => void; children: React.ReactNode; maxWidth?: string; centerContent?: boolean; backdropColor?: string; mobileSafePadding?: boolean; fullScreenOnMobile?: boolean; disableBackdropClose?: boolean; ariaLabelledBy?: string; className?: string;",
+    "ConfirmDialog": "isOpen: boolean; onClose: () => void; onConfirm: () => void; title: string; message: React.ReactNode; confirmLabel?: string; cancelLabel?: string; confirmVariant?: 'primary' | 'secondary' | 'destructive' | 'danger' | 'warning'; isConfirming?: boolean;",
+    "Popover": "isOpen: boolean; onClose: () => void; children: React.ReactNode; position?: string; role?: 'menu' | 'listbox' | 'dialog'; ariaLabel?: string; ariaLabelledBy?: string; ariaOrientation?: 'vertical' | 'horizontal'; unstyled?: boolean; className?: string;",
+    "Menu": "isOpen: boolean; onClose: () => void; items: { key: string; label: string; icon?: React.ReactNode; onSelect: () => void; disabled?: boolean; tone?: 'default' | 'primary' | 'danger' | 'info'; ariaLabel?: string; selected?: boolean; group?: string }[]; ariaLabel: string; position?: string; stopPropagation?: boolean; className?: string;",
+    "TabSubViewMenu": "isOpen: boolean; onClose: () => void; options: { value: string; label: string }[]; value?: string; onSelect: (value: string) => void; name: string; anchorValue: string; anchorRef: React.RefObject<HTMLElement | null>; tone?: 'accent' | 'warm';",
+    "SubViewHint": "menuOpened: boolean; className?: string;",
+    "CountBadge": "count: number; max?: number; icon?: React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>; variant?: 'overlay' | 'inline'; className?: string;",
+    "Eyebrow": "tone?: 'default' | 'warm' | 'accent'; size?: 'xs' | 'xxs'; as?: 'span' | 'p' | 'div' | 'h2' | 'h3' | 'h4' | 'legend'; children?: React.ReactNode; className?: string;",
+    "SectionHeading": "as?: 'h2' | 'h3' | 'h4'; description?: React.ReactNode; action?: React.ReactNode; id?: string; children: React.ReactNode; className?: string;",
+    "Section": "title?: React.ReactNode; action?: React.ReactNode; children: React.ReactNode; className?: string;",
+    "SectionActionLink": "to: string; state?: unknown; children: React.ReactNode; className?: string;",
+    "ShowMoreRow": "hiddenCount: number; expanded: boolean; onToggle: () => void; noun?: string; collapseLabel?: string; className?: string;",
+    "Skeleton": "className?: string;",
+    "CompactSelect": "value: string; onChange: (value: string) => void; options: { id: string; label: string }[]; placeholder: string; 'aria-label'?: string; className?: string;",
+    "QuickAddBar": "value: string; onChange: (v: string) => void; onSubmit: (e: React.FormEvent) => void; placeholder: string; inputRef?: React.Ref<HTMLInputElement>; 'aria-label'?: string; 'aria-labelledby'?: string; disabled?: boolean; icon?: React.ReactNode; submitLabel?: string; attached?: boolean; className?: string;",
+    "SwipeActionRow": "/** Revealed under the LEFT edge (swipe right). First entry is the primary — a full swipe fires it. */\n  startActions?: { icon: React.ComponentType<{ size?: number }>; label: string; ariaLabel?: string; tone: 'positive' | 'destructive' | 'warm'; detail?: string; onAction: () => void; hapticPattern?: string }[];\n  /** Revealed under the RIGHT edge (swipe left). Same order rules. */\n  endActions?: { icon: React.ComponentType<{ size?: number }>; label: string; ariaLabel?: string; tone: 'positive' | 'destructive' | 'warm'; detail?: string; onAction: () => void; hapticPattern?: string }[];\n  disabled?: boolean; onSwipeStart?: () => void; children: React.ReactNode; className?: string;"
   },
   "componentSrcMap": {
     "Badge": "components/ui/Badge.tsx",
