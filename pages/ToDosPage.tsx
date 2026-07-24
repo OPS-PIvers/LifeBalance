@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Reorder, useDragControls } from 'framer-motion';
 import { useTodos, useHouseholdCore, useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Camera, Sparkles, Plus, Repeat, Filter, ArrowUpDown, GripVertical, UserPlus } from 'lucide-react';
@@ -40,6 +41,7 @@ import { TaskTemplateDrawer } from '@/components/todos/TaskTemplateDrawer';
 import { sortFlatTodos, TODO_SORT_MODES, TODO_SORT_LABELS, type TodoSortMode } from '@/utils/todoSort';
 import { isTodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
 import { useStackedStickyOffset } from '@/hooks/useStackedStickyOffset';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type { TodoCompletionOptions } from '@/contexts/household/mutations/todoMutations';
 
 // Persisted like the Shopping list's sort mode — the derived view survives
@@ -435,6 +437,46 @@ const ToDosPage: React.FC = () => {
       allActiveIds: active.map(t => t.id)
     };
   }, [todos, currentDate, assigneeFilter, sortMode]);
+
+  // Deep-link + highlight from the dashboard Action Queue: tapping "Review" on
+  // a to-do navigates here with `?todo=<id>`. We scroll that row into view and
+  // briefly ring it so the user sees its full text + subtasks in context.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const reducedMotion = useReducedMotion();
+  const [highlightedTodoId, setHighlightedTodoId] = useState<string | null>(null);
+  // Ref map of active-list row wrappers, keyed by todo id — the scroll anchor.
+  const todoRowRefs = useRef(new Map<string, HTMLDivElement>());
+
+  // When the target row is rendered, scroll to it, mark it highlighted, and
+  // consume the param (replace, so it doesn't re-fire). If the row isn't
+  // present yet (list still loading) or is hidden (filtered out / completed
+  // view), we no-op and leave the param in place — the effect re-runs when
+  // `flatActive` changes, so it fires once the row appears.
+  useEffect(() => {
+    const targetId = searchParams.get('todo');
+    if (!targetId) return;
+    const node = todoRowRefs.current.get(targetId);
+    if (!node) return;
+    node.scrollIntoView({ block: 'center', behavior: reducedMotion ? 'auto' : 'smooth' });
+    setHighlightedTodoId(targetId);
+    // Remove only the `todo` key so any other params (filters, sort, etc.)
+    // survive the deep-link arrival.
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.delete('todo');
+      return next;
+    }, { replace: true });
+  }, [searchParams, flatActive, reducedMotion, setSearchParams]);
+
+  // Clear the highlight ~2s after it lands. A dedicated effect keyed on the
+  // highlighted id (not the deep-link effect's cleanup) so consuming the param
+  // — which re-runs that effect — can't cancel this timer early. Timer is
+  // cleared on unmount / re-highlight.
+  useEffect(() => {
+    if (!highlightedTodoId) return;
+    const timer = window.setTimeout(() => setHighlightedTodoId(null), 2000);
+    return () => window.clearTimeout(timer);
+  }, [highlightedTodoId]);
 
   // Eisenhower buckets — computed unconditionally (hooks rule) but only
   // rendered in the matrix arrangement. Urgency uses the same midnight-
@@ -1517,22 +1559,43 @@ const ToDosPage: React.FC = () => {
                   )}
                 >
                   {flatActive.map(item => (
-                    <TodoRow
+                    <div
                       key={item.id}
-                      item={item}
-                      color={rowColors.get(item.id) ?? 'blue'}
-                      assignee={item.assignedTo ? memberMap.get(item.assignedTo) : undefined}
-                      isSelected={selectedIds.has(item.id)}
-                      isSelectionMode={isSelectionMode}
-                      onComplete={completeToDo}
-                      onUncomplete={handleUncomplete}
-                      onEdit={openEditModal}
-                      onDelete={deleteToDo}
-                      onMore={setActionTodo}
-                      onToggleSelection={toggleSelection}
-                      onToggleSubtask={toggleTodoSubtask}
-                      memberMap={memberMap}
-                    />
+                      ref={(el) => {
+                        if (el) todoRowRefs.current.set(item.id, el);
+                        else todoRowRefs.current.delete(item.id);
+                      }}
+                      // scroll-mt clears the stacked sticky header when the row
+                      // is scrolled into view; `relative` anchors the transient
+                      // deep-link highlight overlay below (see the ?todo= effect).
+                      className="relative scroll-mt-32"
+                    >
+                      <TodoRow
+                        item={item}
+                        color={rowColors.get(item.id) ?? 'blue'}
+                        assignee={item.assignedTo ? memberMap.get(item.assignedTo) : undefined}
+                        isSelected={selectedIds.has(item.id)}
+                        isSelectionMode={isSelectionMode}
+                        onComplete={completeToDo}
+                        onUncomplete={handleUncomplete}
+                        onEdit={openEditModal}
+                        onDelete={deleteToDo}
+                        onMore={setActionTodo}
+                        onToggleSelection={toggleSelection}
+                        onToggleSubtask={toggleTodoSubtask}
+                        memberMap={memberMap}
+                      />
+                      {/* Transient deep-link highlight (~2s): an absolutely
+                          positioned, non-interactive ring overlay painted OVER
+                          the opaque row (an inset ring on the wrapper would sit
+                          behind the row's own background and never show). */}
+                      {highlightedTodoId === item.id && (
+                        <span
+                          aria-hidden="true"
+                          className="pointer-events-none absolute inset-0 z-10 rounded-card ring-2 ring-inset ring-accent-500 dark:ring-accent-400"
+                        />
+                      )}
+                    </div>
                   ))}
                 </SurfaceList>
               )}

@@ -48,6 +48,24 @@ const BatchCategorizeModal: React.FC<BatchCategorizeModalProps> = ({
       title="Batch Categorize"
       disableClose={isSaving}
       noPadding={true}
+      footer={
+        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800 flex gap-3">
+          <button
+            onClick={onClose}
+            disabled={isSaving}
+            className="flex-1 py-3 bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 font-semibold rounded-btn hover:bg-brand-200 dark:hover:bg-brand-700 transition-colors duration-(--duration-fast) ease-(--ease-standard) disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={isSaving || !selectedCategory}
+            className="flex-1 py-3 bg-accent-600 dark:bg-accent-500 text-white font-semibold rounded-btn hover:bg-accent-700 dark:hover:bg-accent-400 transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center justify-center gap-2 disabled:opacity-50 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+          >
+            {isSaving ? <Loader2 className="animate-spin w-5 h-5" /> : 'Apply Category'}
+          </button>
+        </div>
+      }
     >
       {/* Content */}
       <div className="p-4 space-y-4">
@@ -68,24 +86,6 @@ const BatchCategorizeModal: React.FC<BatchCategorizeModalProps> = ({
             </option>
           ))}
         </Select>
-      </div>
-
-      {/* Footer */}
-      <div className="sticky bottom-0 p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800 flex gap-3">
-        <button
-          onClick={onClose}
-          disabled={isSaving}
-          className="flex-1 py-3 bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 font-semibold rounded-btn hover:bg-brand-200 dark:hover:bg-brand-700 transition-colors duration-(--duration-fast) ease-(--ease-standard) disabled:opacity-50"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleConfirm}
-          disabled={isSaving || !selectedCategory}
-          className="flex-1 py-3 bg-accent-600 dark:bg-accent-500 text-white font-semibold rounded-btn hover:bg-accent-700 dark:hover:bg-accent-400 transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center justify-center gap-2 disabled:opacity-50 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
-        >
-          {isSaving ? <Loader2 className="animate-spin w-5 h-5" /> : 'Apply Category'}
-        </button>
       </div>
     </Drawer>
   );

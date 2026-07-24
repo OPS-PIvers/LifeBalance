@@ -246,6 +246,53 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
       onClose={isSaving ? () => {} : onClose}
       title="Edit Transaction"
       noPadding={true}
+      footer={
+        <div className="bg-white dark:bg-brand-800 border-t border-brand-200 dark:border-brand-700 p-4 space-y-2">
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              disabled={isSaving}
+              className="flex-1 py-3 bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 font-semibold rounded-btn hover:bg-brand-200 dark:hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="flex-1 py-3 bg-accent-600 dark:bg-accent-500 text-white font-semibold rounded-btn hover:bg-accent-700 dark:hover:bg-accent-400 transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                'Save Changes'
+              )}
+            </button>
+          </div>
+
+          {/* Secondary Actions Row */}
+          <div className="flex gap-2">
+            <button
+              onClick={handleDuplicate}
+              disabled={isSaving}
+              className="flex-1 py-3 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 text-brand-600 dark:text-brand-300 font-semibold rounded-btn hover:bg-brand-50 dark:hover:bg-brand-700/50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Copy size={16} />
+              Duplicate
+            </button>
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              disabled={isSaving}
+              className="flex-1 py-3 bg-money-bgNeg text-money-neg dark:text-money-negDark font-semibold rounded-btn hover:bg-money-neg/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Trash2 size={16} />
+              Delete
+            </button>
+          </div>
+        </div>
+      }
     >
       {/* Form */}
       <div className="p-4 space-y-4">
@@ -402,53 +449,6 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
 
         <div className="pt-2 border-t border-brand-100 dark:border-brand-700">
           <TransactionCommentThread transactionId={transaction.id} isOpen={isOpen} />
-        </div>
-      </div>
-
-      {/* Actions */}
-      <div className="sticky bottom-0 bg-white dark:bg-brand-800 border-t border-brand-200 dark:border-brand-700 p-4 space-y-2">
-        <div className="flex gap-2">
-          <button
-            onClick={onClose}
-            disabled={isSaving}
-            className="flex-1 py-3 bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 font-semibold rounded-btn hover:bg-brand-200 dark:hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="flex-1 py-3 bg-accent-600 dark:bg-accent-500 text-white font-semibold rounded-btn hover:bg-accent-700 dark:hover:bg-accent-400 transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Saving...</span>
-              </>
-            ) : (
-              'Save Changes'
-            )}
-          </button>
-        </div>
-
-        {/* Secondary Actions Row */}
-        <div className="flex gap-2">
-          <button
-            onClick={handleDuplicate}
-            disabled={isSaving}
-            className="flex-1 py-3 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 text-brand-600 dark:text-brand-300 font-semibold rounded-btn hover:bg-brand-50 dark:hover:bg-brand-700/50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Copy size={16} />
-            Duplicate
-          </button>
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            disabled={isSaving}
-            className="flex-1 py-3 bg-money-bgNeg text-money-neg dark:text-money-negDark font-semibold rounded-btn hover:bg-money-neg/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Trash2 size={16} />
-            Delete
-          </button>
         </div>
       </div>
 

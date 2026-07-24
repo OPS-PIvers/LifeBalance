@@ -111,7 +111,7 @@ const TopToolbar: React.FC = () => {
 
   return (
     <>
-      <div className="relative z-dropdown">
+      <div className="relative z-dropdown -mb-px">
         <span className="sr-only" role="status">
           {liveMessage}
         </span>
