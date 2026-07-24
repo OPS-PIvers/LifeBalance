@@ -171,6 +171,11 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
   // Inline "+ Add" category editor.
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCategoryDraft, setNewCategoryDraft] = useState('');
+  // In-flight guard for the category write: `isSaving` covers the habit-form
+  // save, not this. Without it a double-tap on Add (before the editor closes in
+  // `finally`) fires a redundant second write; blocking it also disables the
+  // controls for feedback during the round-trip.
+  const [isAddingCategoryBusy, setIsAddingCategoryBusy] = useState(false);
   // Reset the inline editor whenever the form re-seeds (new/switched habit or
   // reopen), mirroring the field resets in the shouldReset block above.
   if (shouldReset && (isAddingCategory || newCategoryDraft)) {
@@ -184,7 +189,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
   };
 
   const confirmAddCategory = async () => {
-    if (isSaving) return;
+    if (isSaving || isAddingCategoryBusy) return;
     const trimmed = newCategoryDraft.trim();
     // Empty → just close the editor (no write).
     if (!trimmed) {
@@ -199,6 +204,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       return;
     }
     // New value → persist alongside the current customs, select it, close.
+    setIsAddingCategoryBusy(true);
     try {
       await updateHabitCategories([...habitCategories, trimmed]);
       setCategory(trimmed);
@@ -206,6 +212,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       console.error('[HabitFormModal] Add category failed:', error);
       // Error toast is handled by updateHabitCategories.
     } finally {
+      setIsAddingCategoryBusy(false);
       cancelAddCategory();
     }
   };
@@ -406,7 +413,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
                   placeholder="New category"
                   aria-label="New category name"
                   autoFocus
-                  disabled={isSaving}
+                  disabled={isSaving || isAddingCategoryBusy}
                   className="flex-1 min-w-0 p-2 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-lg text-sm disabled:opacity-50"
                 />
                 <Button
@@ -414,7 +421,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
                   variant="primary"
                   size="sm"
                   onClick={() => void confirmAddCategory()}
-                  disabled={isSaving}
+                  disabled={isSaving || isAddingCategoryBusy}
                   aria-label="Confirm new category"
                 >
                   Add
@@ -424,7 +431,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
                   variant="ghost"
                   size="sm"
                   onClick={cancelAddCategory}
-                  disabled={isSaving}
+                  disabled={isSaving || isAddingCategoryBusy}
                   aria-label="Cancel adding category"
                 >
                   Cancel

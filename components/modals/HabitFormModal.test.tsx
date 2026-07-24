@@ -207,4 +207,32 @@ describe('HabitFormModal — category chip seeding', () => {
     const chip = screen.getByRole('button', { name: 'Meditation' });
     expect(chip).toHaveAttribute('aria-pressed', 'true');
   });
+
+  it('guards a category add in flight: disables the control and ignores a second tap', async () => {
+    let resolveWrite!: () => void;
+    const mockUpdateHabitCategories = vi.fn(() => new Promise<void>(r => { resolveWrite = r; }));
+    (useGamification as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      addHabit: vi.fn(),
+      updateHabit: mockUpdateHabit,
+      setHabitPause: vi.fn(() => Promise.resolve()),
+      habitCategories: [],
+      updateHabitCategories: mockUpdateHabitCategories,
+    });
+
+    render(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={undefined} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /add a category/i }));
+    fireEvent.change(screen.getByLabelText(/new category name/i), { target: { value: 'Yoga' } });
+    const confirm = screen.getByRole('button', { name: /confirm new category/i });
+    fireEvent.click(confirm);
+
+    // The write is in flight → the confirm control is disabled, so a second tap
+    // can't fire a redundant duplicate write.
+    await waitFor(() => expect(confirm).toBeDisabled());
+    expect(mockUpdateHabitCategories).toHaveBeenCalledTimes(1);
+    fireEvent.click(confirm);
+    expect(mockUpdateHabitCategories).toHaveBeenCalledTimes(1);
+
+    resolveWrite();
+  });
 });
