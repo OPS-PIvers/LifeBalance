@@ -183,6 +183,7 @@ import {
   makeRedemptionResolutionMutations,
   makeAutoApplyFreezes,
   makeRolloverFreezeBankTokens,
+  makeUpdateHabitCategories,
 } from '@/contexts/household/mutations/gamificationMutations';
 import {
   makeHouseholdSettingsMutations,
@@ -686,6 +687,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // Shopping Settings state derived from householdSettings
   const stores = useMemo(() => householdSettings?.stores || [], [householdSettings?.stores]);
   const groceryCategories = useMemo(() => householdSettings?.groceryCategories || [], [householdSettings?.groceryCategories]);
+  const habitCategories = useMemo(() => householdSettings?.habitCategories || [], [householdSettings?.habitCategories]);
   const quickStockLists = useMemo(() => householdSettings?.quickStockLists || [], [householdSettings?.quickStockLists]);
   const taskTemplates = useMemo(() => householdSettings?.taskTemplates || [], [householdSettings?.taskTemplates]);
 
@@ -1965,6 +1967,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeRewardCrudMutations({ db, householdId }).deleteReward(id);
   }, [householdId]);
 
+  const updateHabitCategories = useCallback(async (categories: string[]) => {
+    await makeUpdateHabitCategories({ db, householdId }).updateHabitCategories(categories);
+  }, [householdId]);
+
   const requestRedemption = useCallback(async (rewardId: string, memberId: string) => {
     await makeRequestRedemption({ db, householdId, user, rewards }).requestRedemption(rewardId, memberId);
   }, [householdId, user, rewards]);
@@ -2491,6 +2497,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     weeklyPoints,
     totalPoints,
     habits,
+    habitCategories,
     activeChallenge,
     challenges,
     yearlyGoals,
@@ -2502,6 +2509,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     isGeneratingHabitPatterns,
     refreshHabitPatterns,
     ...habitActions,
+    updateHabitCategories,
     updateChallenge,
     addChallenge,
     markChallengeComplete,
@@ -2519,9 +2527,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     autoApplyFreezes,
     rolloverFreezeBankTokens,
   }), [
-    dailyPoints, weeklyPoints, totalPoints, habits, activeChallenge, challenges, yearlyGoals, activeYearlyGoals,
+    dailyPoints, weeklyPoints, totalPoints, habits, habitCategories, activeChallenge, challenges, yearlyGoals, activeYearlyGoals,
     primaryYearlyGoal, rewards, freezeBank, habitPatterns, isGeneratingHabitPatterns, refreshHabitPatterns, habitActions,
-    updateChallenge, addChallenge, markChallengeComplete, redeemReward,
+    updateHabitCategories, updateChallenge, addChallenge, markChallengeComplete, redeemReward,
     addReward, updateReward, deleteReward,
     requestRedemption, approveRedemption, denyRedemption,
     createYearlyGoal, updateYearlyGoal, updateYearlyGoalProgress, deleteYearlyGoal,

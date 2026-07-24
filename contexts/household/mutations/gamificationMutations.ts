@@ -172,6 +172,36 @@ export function makeUpdateYearlyGoalProgress(deps: {
 }
 
 /**
+ * updateHabitCategories — original closure captures only `householdId`.
+ *
+ * Persists the household's custom habit-category chip list to the household
+ * doc (mirrors updateGroceryCategories in shoppingMutations). The default
+ * categories are UI-only; only the user-added extras are stored here so they
+ * become reusable chips in the habit form on every device.
+ */
+export function makeUpdateHabitCategories(deps: {
+  db: Firestore;
+  householdId: string | null;
+}) {
+  const { db, householdId } = deps;
+
+  const updateHabitCategories = async (categories: string[]) => {
+    if (!householdId) return;
+    try {
+      await updateDoc(doc(db, `households/${householdId}`), {
+        habitCategories: categories,
+      });
+      toast.success('Categories updated');
+    } catch (error) {
+      console.error('[updateHabitCategories] Failed:', error);
+      toast.error(describeError(error, 'update the categories'));
+    }
+  };
+
+  return { updateHabitCategories };
+}
+
+/**
  * updateChallenge — original closure captured `householdId`, `habits`,
  * `activeChallenge`, `user`.
  */

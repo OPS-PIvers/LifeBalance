@@ -178,7 +178,29 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
     : 'Plan my week';
 
   return (
-    <Drawer isOpen={isOpen} onClose={handleClose} title={title} className="max-h-[92vh]">
+    <Drawer
+      isOpen={isOpen}
+      onClose={handleClose}
+      title={title}
+      className="max-h-[92vh]"
+      footer={
+        mode === 'preview' && plan ? (
+          <div className="bg-white dark:bg-brand-800 p-4 flex gap-3 border-t border-brand-200 dark:border-brand-700">
+            <Button variant="secondary" size="lg" className="flex-1" onClick={reset}>Discard</Button>
+            <Button
+              variant="primary"
+              size="lg"
+              className="flex-2"
+              onClick={handleApply}
+              isLoading={busy}
+              leftIcon={<CalendarPlus className="w-5 h-5" />}
+            >
+              Add to my week
+            </Button>
+          </div>
+        ) : undefined
+      }
+    >
       {/* Choose */}
       {mode === 'choose' && (
         <div className="space-y-3 pb-2">
@@ -283,22 +305,7 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
 
       {/* Preview */}
       {mode === 'preview' && plan && (
-        <div className="space-y-4">
-          <MealGuide plan={plan} />
-          <div className="sticky bottom-0 bg-white dark:bg-brand-800 pt-2 pb-1 flex gap-3 border-t border-brand-200 dark:border-brand-700">
-            <Button variant="secondary" size="lg" className="flex-1" onClick={reset}>Discard</Button>
-            <Button
-              variant="primary"
-              size="lg"
-              className="flex-2"
-              onClick={handleApply}
-              isLoading={busy}
-              leftIcon={<CalendarPlus className="w-5 h-5" />}
-            >
-              Add to my week
-            </Button>
-          </div>
-        </div>
+        <MealGuide plan={plan} />
       )}
     </Drawer>
   );

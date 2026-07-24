@@ -81,6 +81,9 @@ export interface HouseholdContextType {
   primaryYearlyGoal: YearlyGoal | null;
   rewardsInventory: RewardItem[];
   freezeBank: FreezeBank | null;
+  /** Household-defined custom habit categories (reusable chips in the habit
+   *  form). Defaults are UI-only; only user-added extras are stored/persisted. */
+  habitCategories: string[];
   /** F-DASH-03 — Habit Coach card. Latest `analyzeHabitPatterns()` output,
    *  null until first generated for this household. */
   habitPatterns: HabitInsightsDoc | null;
@@ -343,6 +346,10 @@ export interface HouseholdContextType {
    *  date. A paused habit skips the auto-reset penalty and freeze-token
    *  consumption, and its streak bridges the break. */
   setHabitPause: (id: string, pausedUntil: string | null) => Promise<void>;
+  /** Persists the household's custom habit-category chip list to the household
+   *  doc (mirrors updateGroceryCategories). Pass only the user-added extras —
+   *  the default categories are UI-only and not stored. */
+  updateHabitCategories: (categories: string[]) => Promise<void>;
 
   // Habit Submission Actions
   addHabitSubmission: (habitId: string, count: number, timestamp?: string, note?: string, mood?: HabitSubmission['mood']) => Promise<void>;
@@ -562,12 +569,12 @@ export type FinanceContextValue = Pick<HouseholdContextType,
 >;
 
 export type GamificationContextValue = Pick<HouseholdContextType,
-  | 'dailyPoints' | 'weeklyPoints' | 'totalPoints' | 'habits'
+  | 'dailyPoints' | 'weeklyPoints' | 'totalPoints' | 'habits' | 'habitCategories'
   | 'activeChallenge' | 'challenges'
   | 'yearlyGoals' | 'activeYearlyGoals' | 'primaryYearlyGoal'
   | 'rewardsInventory' | 'freezeBank'
   | 'habitPatterns' | 'isGeneratingHabitPatterns' | 'refreshHabitPatterns'
-  | 'addHabit' | 'updateHabit' | 'deleteHabit' | 'archiveHabit' | 'unarchiveHabit' | 'reorderHabits' | 'toggleHabit' | 'resetHabit' | 'setHabitPause'
+  | 'addHabit' | 'updateHabit' | 'deleteHabit' | 'archiveHabit' | 'unarchiveHabit' | 'reorderHabits' | 'toggleHabit' | 'resetHabit' | 'setHabitPause' | 'updateHabitCategories'
   | 'addHabitSubmission' | 'updateHabitSubmission' | 'deleteHabitSubmission' | 'getHabitSubmissions'
   | 'resetHabitDay'
   | 'updateChallenge' | 'addChallenge' | 'markChallengeComplete' | 'redeemReward'

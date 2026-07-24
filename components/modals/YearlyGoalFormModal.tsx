@@ -86,6 +86,20 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
       disableClose={isSaving}
       title={editingGoal ? 'Edit Yearly Goal' : 'New Yearly Goal'}
       noPadding={true}
+      footer={
+        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
+          <Button
+            variant="warning"
+            size="lg"
+            onClick={handleSave}
+            isLoading={isSaving}
+            disabled={!title || requiredMonths < 1 || requiredMonths > 12}
+            className="w-full"
+          >
+            {editingGoal ? 'Update Goal' : 'Create Goal'}
+          </Button>
+        </div>
+      }
     >
       <div className="p-4 space-y-4">
         {/* Title */}
@@ -150,19 +164,6 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
             challenges to achieve this yearly goal.
           </p>
         </div>
-      </div>
-
-      <div className="sticky bottom-0 p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
-        <Button
-          variant="warning"
-          size="lg"
-          onClick={handleSave}
-          isLoading={isSaving}
-          disabled={!title || requiredMonths < 1 || requiredMonths > 12}
-          className="w-full"
-        >
-          {editingGoal ? 'Update Goal' : 'Create Goal'}
-        </Button>
       </div>
     </Drawer>
   );

@@ -1,4 +1,5 @@
 import { render as rtlRender, screen, within, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
 import type { ReactElement } from 'react';
@@ -77,6 +78,8 @@ const renderCard = (
   { isExpanded = false, approveDetail }: { isExpanded?: boolean; approveDetail?: string } = {}
 ) => {
   const ui: ReactElement = (
+    // MemoryRouter: the card's Review button calls useNavigate() for to-do items.
+    <MemoryRouter>
     <ThemeProvider>
       {/* Real app-level confirmation host, so these tests assert the actual
           end-to-end gate (request → centered ConfirmDialog → callback). */}
@@ -99,6 +102,7 @@ const renderCard = (
         {...handlers}
       />
     </ThemeProvider>
+    </MemoryRouter>
   );
   return rtlRender(ui);
 };

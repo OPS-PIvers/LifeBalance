@@ -154,6 +154,47 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
       title="Split Transaction"
       disableClose={isProcessing}
       noPadding={true}
+      footer={
+        <div className="bg-white dark:bg-brand-800 border-t border-brand-200 dark:border-brand-700 p-4 space-y-3">
+          {/* Validation Status */}
+          <div className={`flex items-center justify-between text-sm font-bold px-1 ${isValidTotal ? 'text-money-pos dark:text-money-posDark' : 'text-money-neg dark:text-money-negDark'}`}>
+            <div className="flex items-center gap-2">
+              {!isValidTotal && <AlertCircle size={16} />}
+              <span>{isValidTotal ? 'Total Matches' : 'Total Mismatch'}</span>
+            </div>
+            <div className="text-right">
+               <div>Total: {fmt(currentTotal)}</div>
+               {!isValidTotal && (
+                 <div className="text-xs opacity-80">
+                   {remaining > 0 ? `Remaining: ${fmt(remaining)}` : `Over: ${fmt(Math.abs(remaining))}`}
+                 </div>
+               )}
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              size="lg"
+              onClick={onClose}
+              disabled={isProcessing}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              size="lg"
+              onClick={handleSplit}
+              disabled={!isValidTotal}
+              isLoading={isProcessing}
+              leftIcon={<Scissors size={18} />}
+              className="flex-1"
+            >
+              <span>Split Transaction</span>
+            </Button>
+          </div>
+        </div>
+      }
     >
       <div className="p-4 bg-brand-50 dark:bg-brand-700/50 border-b border-brand-200 dark:border-brand-700">
         <div className="flex justify-between items-center mb-1">
@@ -248,46 +289,6 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
         >
           Add Another Split
         </Button>
-      </div>
-
-      <div className="sticky bottom-0 bg-white dark:bg-brand-800 border-t border-brand-200 dark:border-brand-700 p-4 space-y-3">
-        {/* Validation Status */}
-        <div className={`flex items-center justify-between text-sm font-bold px-1 ${isValidTotal ? 'text-money-pos dark:text-money-posDark' : 'text-money-neg dark:text-money-negDark'}`}>
-          <div className="flex items-center gap-2">
-            {!isValidTotal && <AlertCircle size={16} />}
-            <span>{isValidTotal ? 'Total Matches' : 'Total Mismatch'}</span>
-          </div>
-          <div className="text-right">
-             <div>Total: {fmt(currentTotal)}</div>
-             {!isValidTotal && (
-               <div className="text-xs opacity-80">
-                 {remaining > 0 ? `Remaining: ${fmt(remaining)}` : `Over: ${fmt(Math.abs(remaining))}`}
-               </div>
-             )}
-          </div>
-        </div>
-
-        <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            size="lg"
-            onClick={onClose}
-            disabled={isProcessing}
-            className="flex-1"
-          >
-            Cancel
-          </Button>
-          <Button
-            size="lg"
-            onClick={handleSplit}
-            disabled={!isValidTotal}
-            isLoading={isProcessing}
-            leftIcon={<Scissors size={18} />}
-            className="flex-1"
-          >
-            <span>Split Transaction</span>
-          </Button>
-        </div>
       </div>
     </Drawer>
   );

@@ -18,7 +18,7 @@ interface HabitFormModalProps {
 const CATEGORIES = ['Health', 'Finance', 'Personal', 'Home', 'Work'];
 
 const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editingHabit }) => {
-  const { addHabit, updateHabit, setHabitPause } = useGamification();
+  const { addHabit, updateHabit, setHabitPause, habitCategories, updateHabitCategories } = useGamification();
   const { members } = useHouseholdCore();
   const { todos } = useTodos();
   const kidModeEnabled = useKidModeEnabled();
@@ -135,6 +135,69 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
   }
 
   const [isSaving, setIsSaving] = useState(false);
+
+  // Category chips: the UI-only defaults first, then the household's custom
+  // categories (case-insensitive de-dupe), then the habit's own category if it
+  // is a legacy/custom value not otherwise represented — so an existing habit's
+  // category always renders as a selectable chip.
+  const mergedCategories = useMemo(() => {
+    const result = [...CATEGORIES];
+    const seen = new Set(CATEGORIES.map(c => c.toLowerCase()));
+    for (const c of habitCategories) {
+      const key = c.trim().toLowerCase();
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        result.push(c);
+      }
+    }
+    const editingCat = editingHabit?.category?.trim();
+    if (editingCat && !seen.has(editingCat.toLowerCase())) {
+      result.push(editingCat);
+    }
+    return result;
+  }, [habitCategories, editingHabit?.category]);
+
+  // Inline "+ Add" category editor.
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCategoryDraft, setNewCategoryDraft] = useState('');
+  // Reset the inline editor whenever the form re-seeds (new/switched habit or
+  // reopen), mirroring the field resets in the shouldReset block above.
+  if (shouldReset && (isAddingCategory || newCategoryDraft)) {
+    setIsAddingCategory(false);
+    setNewCategoryDraft('');
+  }
+
+  const cancelAddCategory = () => {
+    setIsAddingCategory(false);
+    setNewCategoryDraft('');
+  };
+
+  const confirmAddCategory = async () => {
+    if (isSaving) return;
+    const trimmed = newCategoryDraft.trim();
+    // Empty → just close the editor (no write).
+    if (!trimmed) {
+      cancelAddCategory();
+      return;
+    }
+    // Case-insensitive dupe of an existing chip → select the existing one, no write.
+    const existing = mergedCategories.find(c => c.toLowerCase() === trimmed.toLowerCase());
+    if (existing) {
+      setCategory(existing);
+      cancelAddCategory();
+      return;
+    }
+    // New value → persist alongside the current customs, select it, close.
+    try {
+      await updateHabitCategories([...habitCategories, trimmed]);
+      setCategory(trimmed);
+    } catch (error) {
+      console.error('[HabitFormModal] Add category failed:', error);
+      // Error toast is handled by updateHabitCategories.
+    } finally {
+      cancelAddCategory();
+    }
+  };
 
   const toggleKidSelection = (uid: string) => {
     setAssignedKidUids(prev =>
@@ -254,6 +317,20 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       onClose={isSaving ? () => {} : onClose}
       title={editingHabit ? 'Edit Habit' : 'New Habit'}
       noPadding={true}
+      footer={
+        <div className="bg-white dark:bg-brand-800 border-t border-brand-200 dark:border-brand-700 p-4">
+          <Button
+            type="button"
+            variant="warning"
+            size="lg"
+            onClick={handleSave}
+            isLoading={isSaving}
+            className="w-full"
+          >
+            {editingHabit ? 'Save Changes' : 'Create Habit'}
+          </Button>
+        </div>
+      }
     >
       <div className="p-4 space-y-4">
 
@@ -270,21 +347,15 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
         {/* Type & Category */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <Input
-              label="Category"
-              type="text"
-              value={category}
-              onChange={e => setCategory(e.target.value)}
-              placeholder="Select or type..."
-              disabled={isSaving}
-            />
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {CATEGORIES.map(c => (
+            <span className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase" id="habit-category-label">Category</span>
+            <div className="flex flex-wrap gap-1.5 mt-2" role="group" aria-labelledby="habit-category-label">
+              {mergedCategories.map(c => (
                 <button
                   key={c}
                   type="button"
                   onClick={() => setCategory(c)}
                   disabled={isSaving}
+                  aria-pressed={category === c}
                   className={`text-xxs px-2 py-1 rounded-lg border transition-all ${
                     category === c
                       ? 'bg-brand-200 dark:bg-brand-700 border-brand-300 dark:border-brand-600 text-brand-800 dark:text-brand-100 font-bold'
@@ -294,7 +365,61 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
                   {c}
                 </button>
               ))}
+              {!isAddingCategory && (
+                <button
+                  type="button"
+                  onClick={() => setIsAddingCategory(true)}
+                  disabled={isSaving}
+                  aria-label="Add a category"
+                  className="text-xxs px-2 py-1 rounded-lg border border-dashed border-brand-300 dark:border-brand-600 text-brand-500 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-700/50 transition-all disabled:opacity-50"
+                >
+                  + Add
+                </button>
+              )}
             </div>
+            {isAddingCategory && (
+              <div className="flex items-center gap-1.5 mt-2">
+                <input
+                  type="text"
+                  value={newCategoryDraft}
+                  onChange={e => setNewCategoryDraft(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void confirmAddCategory();
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault();
+                      cancelAddCategory();
+                    }
+                  }}
+                  placeholder="New category"
+                  aria-label="New category name"
+                  autoFocus
+                  disabled={isSaving}
+                  className="flex-1 min-w-0 p-2 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-lg text-sm disabled:opacity-50"
+                />
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={() => void confirmAddCategory()}
+                  disabled={isSaving}
+                  aria-label="Confirm new category"
+                >
+                  Add
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={cancelAddCategory}
+                  disabled={isSaving}
+                  aria-label="Cancel adding category"
+                >
+                  Cancel
+                </Button>
+              </div>
+            )}
           </div>
           <div>
             <span className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase">Type</span>
@@ -474,19 +599,6 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
           />
         )}
 
-      </div>
-
-      <div className="sticky bottom-0 bg-white dark:bg-brand-800 border-t border-brand-200 dark:border-brand-700 p-4">
-        <Button
-          type="button"
-          variant="warning"
-          size="lg"
-          onClick={handleSave}
-          isLoading={isSaving}
-          className="w-full"
-        >
-          {editingHabit ? 'Save Changes' : 'Create Habit'}
-        </Button>
       </div>
     </Drawer>
   );

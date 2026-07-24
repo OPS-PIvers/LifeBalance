@@ -1,4 +1,5 @@
 import React, { useMemo, memo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   CalendarClock, Receipt, Check, Trash2, Clock, ListTodo, AlertCircle, Pencil, Tag
 } from 'lucide-react';
@@ -173,6 +174,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
 }) => {
 
   const fmt = useFormatCurrency();
+  const navigate = useNavigate();
 
   // --- Swipe-to-triage gesture (right = approve/complete, left = defer) ---
   // Swipe is a shortcut, never the only path: the Review button and expanded
@@ -283,6 +285,25 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
   };
 
   const handleExpand = () => setExpandedId(item.id);
+
+  // Review affordance. Calendar/transaction items open the in-place review
+  // bottom-sheet (handleExpand); a to-do instead deep-links to the To-Dos list
+  // page and highlights the row, so the user sees its full text + subtasks in
+  // context (ToDosPage reads the `?todo=<id>` param). Seed the Lists tab
+  // preference first so /lists opens on the To-Dos tab.
+  const handleReview = () => {
+    if (isTodoQueueItem(item)) {
+      try {
+        localStorage.setItem('lists-active-tab', 'todos');
+      } catch {
+        // Private-mode / storage-disabled: navigation still works, ListsPage
+        // just falls back to its default tab.
+      }
+      navigate(`/lists?todo=${encodeURIComponent(item.id)}`);
+      return;
+    }
+    handleExpand();
+  };
 
   const handleClose = () => setExpandedId(null);
 
@@ -452,7 +473,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
               variant="primary"
               size="sm"
               className="px-4 min-h-11"
-              onClick={handleExpand}
+              onClick={handleReview}
               aria-label={`Review ${itemLabel}`}
             >
               Review

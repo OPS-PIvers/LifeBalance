@@ -646,6 +646,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [trashedItems, setTrashedItems] = useState<TrashedItem[]>([]);
   const [stores, setStores] = useState<Store[]>(SEED_STORES);
   const [groceryCategories, setGroceryCategories] = useState<string[]>([]);
+  // Sample custom habit categories so Test Mode demonstrates the reusable-chip
+  // behavior in the habit form (merged after the UI-only defaults).
+  const [habitCategories, setHabitCategories] = useState<string[]>(['Fitness', 'Learning']);
   const [quickStockLists, setQuickStockLists] = useState<QuickStockList[]>([]);
   const [taskTemplates, setTaskTemplates] = useState<TaskTemplate[]>([]);
   const [currency, setCurrency] = useState<string>('USD');
@@ -1841,6 +1844,12 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Categories updated');
   }, []);
 
+  // Habit categories — mutate in-memory so newly added chips appear immediately.
+  const updateHabitCategories = useCallback(async (categories: string[]) => {
+    setHabitCategories(categories);
+    toast.success('Mock: Categories updated');
+  }, []);
+
   // Quick Stock Lists
   const addQuickStockList = useCallback(async (list: Omit<QuickStockList, 'id'>) => {
     const newList = { ...list, id: generateId() } as QuickStockList;
@@ -2154,6 +2163,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     coreTemplates: { expenses: [], buckets: [] },
     stores: stores,
     groceryCategories: groceryCategories,
+    habitCategories: habitCategories,
     currency,
     kidModePinHash,
     pendingRedemptions,
@@ -2228,6 +2238,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     transactions,
     calendarItems,
     habits,
+    habitCategories,
     challenges,
     yearlyGoals,
     members,
@@ -2329,6 +2340,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toggleHabit,
     resetHabit,
     setHabitPause,
+    updateHabitCategories,
     addHabitSubmission: noOp,
     resetHabitDay: noOp,
     updateHabitSubmission: noOp,

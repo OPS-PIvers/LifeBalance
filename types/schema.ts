@@ -853,6 +853,7 @@ export interface Household {
   name: string;
   inviteCode: string;
   groceryCategories?: string[]; // Custom categories
+  habitCategories?: string[]; // Custom habit categories
   stores?: Store[]; // User-defined stores
   quickStockLists?: QuickStockList[]; // User-defined shopping templates
   taskTemplates?: TaskTemplate[]; // User-defined task-bundle templates ("Quick Task Lists", F-TODO-03)

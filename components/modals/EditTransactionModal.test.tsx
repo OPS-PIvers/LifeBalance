@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import EditTransactionModal from './EditTransactionModal';
@@ -289,12 +289,15 @@ describe('EditTransactionModal', () => {
     await user.click(screen.getByRole('button', { name: /^delete$/i }));
 
     // The shared ConfirmDialog appears (async portal mount → findBy retries).
-    expect(await screen.findByText(/are you sure/i)).toBeInTheDocument();
+    const confirmMessage = await screen.findByText(/are you sure/i);
 
-    // There are now two "Delete" buttons (the trigger + the dialog's confirm,
-    // which renders later in a portal). Click the dialog's confirm — the last.
-    const deleteButtons = screen.getAllByRole('button', { name: /^delete$/i });
-    await user.click(deleteButtons[deleteButtons.length - 1]!);
+    // There are now two "Delete" buttons (the modal footer's trigger + the
+    // confirm dialog's button) and both the Drawer sheet and the ConfirmDialog
+    // carry role="dialog". Scope to the dialog that owns the confirm message so
+    // the click is independent of DOM order and dialog count.
+    const confirmDialog = confirmMessage.closest('[role="dialog"]');
+    if (!confirmDialog) throw new Error('expected the confirm message inside a dialog');
+    await user.click(within(confirmDialog as HTMLElement).getByRole('button', { name: /^delete$/i }));
 
     expect(mockDeleteTransaction).toHaveBeenCalledWith('tx123');
     expect(mockOnClose).toHaveBeenCalled();

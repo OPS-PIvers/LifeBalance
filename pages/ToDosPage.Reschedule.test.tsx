@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render as rtlRender, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { ReactElement } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import ToDosPage from './ToDosPage';
 
-// TodoRow's SwipeActionRow reads the resolved theme from ThemeContext.
-const render = (ui: ReactElement) => rtlRender(<ThemeProvider>{ui}</ThemeProvider>);
+// TodoRow's SwipeActionRow reads the resolved theme from ThemeContext;
+// MemoryRouter supplies the router context ToDosPage's useSearchParams() needs.
+const render = (ui: ReactElement) => rtlRender(<MemoryRouter><ThemeProvider>{ui}</ThemeProvider></MemoryRouter>);
 import { useTodos, useHouseholdCore, type TodosContextValue, type HouseholdCoreContextValue } from '@/contexts/FirebaseHouseholdContext';
 import { format, addDays, startOfToday } from 'date-fns';
 

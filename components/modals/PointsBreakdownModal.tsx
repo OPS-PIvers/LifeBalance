@@ -363,6 +363,16 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
       onClose={onClose}
       title={getTitle()}
       noPadding={true}
+      footer={
+        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-700 text-center text-xs text-brand-400 dark:text-brand-450">
+          {view === 'total' && "Total points are estimated from lifetime counts."}
+          {view === 'weekly' && "Points are calculated based on completed days this week."}
+          {view === 'daily' && "Points earned today."}
+          {/* Primer entry point: the drawer portals to document.body after this
+              one, so it stacks on top; same quiet-link idiom as the Track tab. */}
+          <HabitsModelPrimerLink className="mt-1.5 flex justify-center" />
+        </div>
+      }
     >
       <div className="p-4">
           {contributions.length === 0 ? (
@@ -414,15 +424,6 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
               })}
             </SurfaceList>
           )}
-      </div>
-
-      <div className="sticky bottom-0 p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-700/50 text-center text-xs text-brand-400 dark:text-brand-450">
-        {view === 'total' && "Total points are estimated from lifetime counts."}
-        {view === 'weekly' && "Points are calculated based on completed days this week."}
-        {view === 'daily' && "Points earned today."}
-        {/* Primer entry point: the drawer portals to document.body after this
-            one, so it stacks on top; same quiet-link idiom as the Track tab. */}
-        <HabitsModelPrimerLink className="mt-1.5 flex justify-center" />
       </div>
     </Drawer>
   );

@@ -77,6 +77,8 @@ describe('HabitFormModal — Automations save-payload contract (PRD #1065)', () 
       addHabit: mockAddHabit,
       updateHabit: mockUpdateHabit,
       setHabitPause: mockSetHabitPause,
+      habitCategories: [],
+      updateHabitCategories: vi.fn(),
     });
     (useHouseholdCore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ members: [] });
     (useTodos as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ todos: [] });
