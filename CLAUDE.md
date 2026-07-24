@@ -393,9 +393,10 @@ See [LINT_SUPPRESSIONS.md](LINT_SUPPRESSIONS.md) for:
 - Status of each suppression (acceptable vs. needs fixing)
 - Action items for eliminating technical debt
 
-**Current stats** (2026-07-04 audit; run `grep -rn "eslint-disable" --include="*.ts" --include="*.tsx" . | grep -v node_modules` to refresh):
-- 0 blanket `/* eslint-disable */` files — all removed; only granular `eslint-disable-next-line` remain (21 total)
-- 12× `react-refresh/only-export-components` on context/hook exports (legitimate pattern), 5× `react-hooks/set-state-in-effect` (each with a justification comment), 4× `@typescript-eslint/no-explicit-any` (all in one test file) — locations tracked in [LINT_SUPPRESSIONS.md](LINT_SUPPRESSIONS.md) - **REVIEW WHEN TOUCHED**
+**Current stats** (2026-07-24 audit; run `grep -rn "eslint-disable" --include="*.ts" --include="*.tsx" . | grep -v node_modules` to refresh):
+- 0 blanket `/* eslint-disable */` files — all removed; only granular `eslint-disable-next-line` remain (23 in the root app + 1 in `functions/`)
+- 12× `react-refresh/only-export-components` on context/hook exports (legitimate pattern), 7× `react-hooks/set-state-in-effect` (each with a justification comment), 4× `@typescript-eslint/no-explicit-any` (all in one test file), and 1× `no-control-regex` in `functions/` — locations tracked in [LINT_SUPPRESSIONS.md](LINT_SUPPRESSIONS.md) - **REVIEW WHEN TOUCHED**
+- 1 config-level rule override (`react-hooks/incompatible-library`, scoped to the single `useVirtualizer` consumer) — see LINT_SUPPRESSIONS.md "Accepted Configurations"
 - 0 `@ts-ignore` / `@ts-expect-error` / `@ts-nocheck`
 
 #### Enforcement
