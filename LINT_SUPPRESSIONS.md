@@ -17,8 +17,10 @@ Suppressions should only exist for:
 
 ### Status: No blanket suppressions; 22 granular ones remain (re-audited 2026-07-10, Plan 23)
 
-`pnpm lint` is green (0 errors, 0 warnings). There are **zero** blanket `/* eslint-disable */`
-files and **zero** `@ts-ignore`/`@ts-expect-error`/`@ts-nocheck`.
+`pnpm lint` is green (0 errors, 0 warnings — the one `react-hooks/incompatible-library` warning that
+`eslint-plugin-react-hooks@7` reports on `useVirtualizer` is turned off by config; see **Accepted
+Configurations** §4). There are **zero** blanket `/* eslint-disable */` files and **zero**
+`@ts-ignore`/`@ts-expect-error`/`@ts-nocheck`.
 
 Refresh this audit with:
 ```bash
@@ -83,3 +85,14 @@ The following rules have been globally adjusted in `eslint.config.js` to align w
 1.  **`react/prop-types`**: Disabled (`off`). We rely on TypeScript interfaces for prop validation.
 2.  **`@typescript-eslint/no-unused-vars`**: Configured to ignore variables starting with `_` (e.g., `_prev`, `_error`).
 3.  **`react-refresh/only-export-components`**: Suppressed inline for Context files where exporting non-components (like context objects) is necessary.
+4.  **`react-hooks/incompatible-library`**: Disabled (`off`) for `components/budget/TransactionMasterList.tsx`
+    only — the single `@tanstack/react-virtual` `useVirtualizer` consumer. Third-party library issue
+    (policy §2): the hook returns an internally-mutable object that `eslint-plugin-react-hooks@7`'s
+    recommended set flags as "Compilation Skipped: Use of incompatible library".
+    Upstream: [TanStack/virtual#1119](https://github.com/TanStack/virtual/issues/1119) (open).
+    It is a **warning**, not an error, and `eslint .` runs without `--max-warnings`, so this removes
+    permanent noise rather than unblocking CI. The rule ships in the v7 recommended preset regardless of
+    React Compiler, which this project does **not** run (no `babel-plugin-react-compiler`), so the
+    skipped-memoization consequence does not apply here.
+    **Remove when:** TanStack/virtual#1119 is resolved upstream. **Revisit if:** React Compiler is
+    adopted — the warning becomes real then and needs a `'use no memo'` fix, not a disable.

@@ -67,12 +67,27 @@ export default tseslint.config(
   {
     files: ['components/budget/TransactionMasterList.tsx'],
     rules: {
-      // TanStack Virtual's `useVirtualizer` intentionally returns imperative
-      // helpers (`scrollToIndex`, `measureElement`) that trigger
-      // eslint-plugin-react-hooks@7.x's recommended incompatible-library rule.
-      // This project does not currently run React Compiler; keep the exception
-      // scoped to the only component using this hook pattern so future library
-      // integrations still get the rule's signal.
+      // Third-party library issue (CLAUDE.md suppression policy §2).
+      //
+      // `useVirtualizer` returns an internally-mutable object whose methods
+      // (`scrollToIndex`, `measureElement`, …) cannot be memoized safely, so
+      // eslint-plugin-react-hooks@7.x's recommended set reports
+      // "Compilation Skipped: Use of incompatible library" on the call site.
+      // Upstream: https://github.com/TanStack/virtual/issues/1119 (open).
+      //
+      // The report is a WARNING, and `pnpm lint` runs `eslint .` with no
+      // --max-warnings, so nothing is failing today — this only removes
+      // permanent noise from an otherwise clean run. Note also that the rule
+      // ships in the v7 recommended preset regardless of React Compiler, which
+      // this project does NOT run (no babel-plugin-react-compiler); the
+      // skipped-memoization consequence it warns about therefore does not apply
+      // to us at all.
+      //
+      // Scoped to the single `useVirtualizer` consumer so a genuinely
+      // incompatible library elsewhere still gets flagged.
+      // TODO: remove when TanStack/virtual#1119 is resolved upstream, or
+      // revisit wholesale if React Compiler is ever adopted (at which point the
+      // warning becomes real and needs a `'use no memo'` fix, not a disable).
       'react-hooks/incompatible-library': 'off',
     },
   },
