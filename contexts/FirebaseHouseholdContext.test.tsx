@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { render, act } from '@testing-library/react';
 import { format, subDays } from 'date-fns';
+import { getLocalDateString } from '@/utils/dateHelpers';
 import type {
   Account,
   BudgetBucket,
@@ -518,7 +519,17 @@ describe('FirebaseHouseholdContext — verified-only balance (Plan 015)', () => 
 
     it('still co-commits habit + points writes alongside the balance debit (one batch)', async () => {
       renderProvider();
-      seed([baseTx({ id: 'tx1', amount: 2500, category: 'Dining', status: 'pending_review' })]);
+      // Dated TODAY on purpose: a habit fire is back-dated to the transaction's
+      // date, and baseTx's default is far enough in the past to fall outside
+      // HABIT_BACKDATE_MAX_DAYS — which would (correctly) fire nothing and leave
+      // this atomicity assertion with no habit write to find.
+      seed([baseTx({
+        id: 'tx1',
+        amount: 2500,
+        category: 'Dining',
+        status: 'pending_review',
+        date: getLocalDateString(),
+      })]);
       emitCollection(`${householdPath}/habits`, [
         docSnap('hb1', baseHabit({ id: 'hb1', completedDates: [], count: 0 })),
       ]);

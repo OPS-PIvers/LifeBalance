@@ -1851,9 +1851,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     overrides?: { amount?: number; merchant?: string; date?: string; clearNeedsAmount?: boolean; creditPayment?: boolean; isRecurring?: boolean },
   ) => {
     await makeUpdateTransactionCategory({
-      db, householdId, currentUser, habits, transactions, accounts, householdSettings,
+      db, householdId, currentUser, habits, transactions, accounts, householdSettings, freezeBank,
     }).updateTransactionCategory(id, category, relatedHabitIds, accountId, overrides);
-  }, [householdId, currentUser, habits, transactions, accounts, householdSettings]);
+  }, [householdId, currentUser, habits, transactions, accounts, householdSettings, freezeBank]);
 
   const reverseTransactionApproval = useCallback(async (
     id: string,

@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { computeHabitTriggerFire, computeHabitTriggerReverse } from '@/utils/habitTriggerFire';
+import { format, parseISO, startOfWeek } from 'date-fns';
+import {
+  computeBackdatedHabitFire,
+  computeHabitTriggerFire,
+  computeHabitTriggerReverse,
+} from '@/utils/habitTriggerFire';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { Habit } from '@/types/schema';
 
@@ -180,5 +185,129 @@ describe('computeHabitTriggerReverse', () => {
   it('returns null when the completion date is no longer present (already restored)', () => {
     const habit = makeHabit({ count: 0, totalCount: 0, completedDates: [] });
     expect(computeHabitTriggerReverse(habit, yesterday, today)).toBeNull();
+  });
+});
+
+describe('computeBackdatedHabitFire', () => {
+  // The canonical scenario: a charge from four days ago, reviewed today.
+  const fourDaysAgo = getLocalDateString(new Date(Date.now() - 4 * 86400000));
+
+  it('credits the TRANSACTION date, not today — the bug this fixes', () => {
+    const delta = computeBackdatedHabitFire(makeHabit(), fourDaysAgo, today);
+    expect(delta).not.toBeNull();
+    expect(delta!.addedDate).toBe(fourDaysAgo);
+    expect(delta!.addedDate).not.toBe(today);
+  });
+
+  it('leaves the live counter untouched for a PAST-period fire', () => {
+    // The stored counter describes today; crediting a past day must not move it.
+    const habit = makeHabit({ count: 3, totalCount: 7 });
+    const delta = computeBackdatedHabitFire(habit, fourDaysAgo, today)!;
+    expect(delta.inCurrentPeriod).toBe(false);
+    expect(delta.countDelta).toBe(0);
+    expect(delta.resetCount).toBe(false);
+    // Lifetime counter is period-independent.
+    expect(delta.totalCountDelta).toBe(1);
+  });
+
+  it('increments the live counter for a SAME-DAY fire', () => {
+    const delta = computeBackdatedHabitFire(makeHabit({ count: 2 }), today, today)!;
+    expect(delta.inCurrentPeriod).toBe(true);
+    expect(delta.countDelta).toBe(1);
+  });
+
+  it('lazy-resets a stale habit on a same-day fire (absolute count, not increment)', () => {
+    const stale = makeHabit({ count: 5, lastUpdated: '2020-01-01T00:00:00.000Z' });
+    const delta = computeBackdatedHabitFire(stale, today, today)!;
+    expect(delta.resetCount).toBe(true);
+    expect(delta.count).toBe(1);
+  });
+
+  it('gates the points buckets by date: past fire credits total only', () => {
+    const delta = computeBackdatedHabitFire(makeHabit(), fourDaysAgo, today)!;
+    expect(delta.pointsDelta.total).toBe(10);
+    expect(delta.pointsDelta.daily).toBe(0);
+  });
+
+  it('credits all three buckets for a same-day fire', () => {
+    const delta = computeBackdatedHabitFire(makeHabit(), today, today)!;
+    expect(delta.pointsDelta).toEqual({ daily: 10, weekly: 10, total: 10 });
+  });
+
+  it('scores with the multiplier that applied ON the fire date, not the current one', () => {
+    // Completed the two days before the fire date → firing it makes a 3-day
+    // streak ending THEN, so 1.5x. Later completions must not change this.
+    const d1 = getLocalDateString(new Date(Date.now() - 5 * 86400000));
+    const d2 = getLocalDateString(new Date(Date.now() - 6 * 86400000));
+    const habit = makeHabit({ completedDates: [d1, d2] });
+    const delta = computeBackdatedHabitFire(habit, fourDaysAgo, today)!;
+    expect(delta.multiplier).toBe(1.5);
+    expect(delta.streakAtFireDate).toBe(3);
+    expect(delta.pointsEarned).toBe(15);
+  });
+
+  it('debits points for a NEGATIVE habit', () => {
+    const habit = makeHabit({ type: 'negative', scoringType: 'incremental' });
+    expect(computeBackdatedHabitFire(habit, fourDaysAgo, today)!.pointsEarned).toBe(-10);
+  });
+
+  it('un-freezes a day the fire proves was completed, and reports it', () => {
+    const habit = makeHabit({ frozenDates: [fourDaysAgo] });
+    const delta = computeBackdatedHabitFire(habit, fourDaysAgo, today)!;
+    expect(delta.unfrozenDate).toBe(fourDaysAgo);
+    expect(delta.addedDate).toBe(fourDaysAgo);
+  });
+
+  it('reports no un-freeze when the fire date was never frozen', () => {
+    expect(computeBackdatedHabitFire(makeHabit(), fourDaysAgo, today)!.unfrozenDate).toBeUndefined();
+  });
+
+  it('returns null for an ARCHIVED habit', () => {
+    const habit = makeHabit({ archivedAt: '2026-01-01T00:00:00.000Z' });
+    expect(computeBackdatedHabitFire(habit, fourDaysAgo, today)).toBeNull();
+  });
+
+  it('returns null beyond the back-date window and for future dates', () => {
+    const ancient = getLocalDateString(new Date(Date.now() - 45 * 86400000));
+    const future = getLocalDateString(new Date(Date.now() + 3 * 86400000));
+    expect(computeBackdatedHabitFire(makeHabit(), ancient, today)).toBeNull();
+    expect(computeBackdatedHabitFire(makeHabit(), future, today)).toBeNull();
+  });
+
+  it('does not mark a THRESHOLD date complete until its own period hits the target', () => {
+    const habit = makeHabit({ targetCount: 3 });
+    // Only one prior unit recorded for that past period → 2 of 3, not complete.
+    const partial = computeBackdatedHabitFire(habit, fourDaysAgo, today, 1)!;
+    expect(partial.addedDate).toBeUndefined();
+    expect(partial.pointsEarned).toBe(0);
+    // A third unit crosses the target and scores once.
+    const crossing = computeBackdatedHabitFire(habit, fourDaysAgo, today, 2)!;
+    expect(crossing.addedDate).toBe(fourDaysAgo);
+    expect(crossing.pointsEarned).toBe(10);
+  });
+
+  it('scores an INCREMENTAL habit on every unit regardless of prior count', () => {
+    const habit = makeHabit({ scoringType: 'incremental', targetCount: 1 });
+    expect(computeBackdatedHabitFire(habit, fourDaysAgo, today, 5)!.pointsEarned).toBe(10);
+  });
+
+  it('does not re-score a period already credited', () => {
+    // The date is already a completion (logged by hand, toggle path). A second
+    // threshold fire adds the unit but must not pay for the period twice.
+    const habit = makeHabit({ completedDates: [fourDaysAgo] });
+    const delta = computeBackdatedHabitFire(habit, fourDaysAgo, today)!;
+    expect(delta.addedDate).toBeUndefined();
+    expect(delta.pointsEarned).toBe(0);
+    expect(delta.totalCountDelta).toBe(1);
+  });
+
+  it('anchors a WEEKLY habit to its ISO week for the live-counter decision', () => {
+    // Monday of this ISO week is in the CURRENT period for a weekly habit even
+    // though it is not today, so the live counter does move.
+    const habit = makeHabit({ period: 'weekly' });
+    const monday = format(startOfWeek(parseISO(today), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    const delta = computeBackdatedHabitFire(habit, monday, today)!;
+    expect(delta.inCurrentPeriod).toBe(true);
+    expect(delta.countDelta).toBe(1);
   });
 });

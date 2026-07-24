@@ -611,6 +611,14 @@ export interface HabitSubmission {
   // F-HABITS-06: optional lightweight journal attached to a completion.
   note?: string; // Free-text reflection, capped ~280 chars
   mood?: HabitMood;
+  // Habit Automations (PRD #1065): set when this submission was written by a
+  // TRANSACTION approval firing a keyword-matched habit, rather than by a hand
+  // log. Two jobs: (1) it makes the fire self-describing, so the transaction's
+  // undo can reverse the EXACT points this submission credited instead of
+  // recomputing a historical multiplier that intervening completions may have
+  // shifted; (2) it distinguishes automated from manual units on a date.
+  // Absent on every hand-entered submission.
+  sourceTransactionId?: string;
 }
 
 export interface RewardItem {
