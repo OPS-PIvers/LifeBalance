@@ -625,7 +625,14 @@ export function makeUpdateTransactionCategory(deps: {
       const submission: Omit<HabitSubmission, 'id'> = {
         habitId,
         habitTitle: habit.title,
-        timestamp: `${fireDate}T12:00:00.000Z`,
+        // A transaction carries a DATE but no time of day, so there is no true
+        // timestamp to record. Noon LOCAL on the fire date is the deliberate
+        // placeholder: HabitSubmissionLogModal renders this as a clock time and
+        // bins it by hour, and midday reads as "time unknown" rather than
+        // implying a precise moment. Local (not noon UTC) so the timestamp's
+        // calendar day always equals `date` in the user's own timezone — the
+        // app's date convention — instead of rolling over for UTC+13/+14.
+        timestamp: new Date(`${fireDate}T12:00:00`).toISOString(),
         date: fireDate,
         count: 1,
         pointsEarned: fire.pointsEarned,
@@ -937,8 +944,16 @@ export function makeReverseTransactionApproval(deps: {
       // toggle that put the date there — keeps it completed.
       const remainingByDate = new Map<string, number>();
       try {
+        // Scoped to the dates being reversed rather than reading the whole
+        // subcollection: a habit logged daily for a year holds 365+ docs and all
+        // but one would be discarded here. A transaction fire writes exactly one
+        // submission per habit, so this is a 1-value `in` in practice; the guard
+        // is for Firestore's 30-value ceiling, above which the full scan is the
+        // only correct read.
+        const dates = [...reversedDates];
+        const submissionsRef = collection(db, `households/${householdId}/habits/${habitId}/submissions`);
         const allSnap = await getDocs(
-          collection(db, `households/${householdId}/habits/${habitId}/submissions`),
+          dates.length <= 30 ? query(submissionsRef, where('date', 'in', dates)) : submissionsRef,
         );
         for (const d of allSnap.docs) {
           const s = d.data() as HabitSubmission;

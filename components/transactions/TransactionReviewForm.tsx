@@ -162,13 +162,15 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
   // Monday charge shouldn't log it a second time. Advisory, not a block: the
   // habit stays in the picker, so ticking it is the override for a genuine
   // second purchase that day. See suppressAlreadyLoggedHabitIds.
-  const suppressedHabitIds = useMemo(
-    () => keywordHabitIds.filter(id => !suppressAlreadyLoggedHabitIds(habits, [id], fireDate).length),
+  // One pass over the whole set — the survivors are what still fires, and the
+  // rest are what to explain in the helper text.
+  const firableKeywordHabitIds = useMemo(
+    () => suppressAlreadyLoggedHabitIds(habits, keywordHabitIds, fireDate),
     [habits, keywordHabitIds, fireDate]
   );
-  const firableKeywordHabitIds = useMemo(
-    () => keywordHabitIds.filter(id => !suppressedHabitIds.includes(id)),
-    [keywordHabitIds, suppressedHabitIds]
+  const suppressedHabitIds = useMemo(
+    () => keywordHabitIds.filter(id => !firableKeywordHabitIds.includes(id)),
+    [keywordHabitIds, firableKeywordHabitIds]
   );
   // Beyond the back-date window nothing fires at all, however it's selected —
   // the mutation hard-blocks it (an out-of-window write would rewrite settled

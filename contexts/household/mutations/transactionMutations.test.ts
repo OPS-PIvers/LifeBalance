@@ -61,6 +61,7 @@ vi.mock('firebase/firestore', () => {
           if (op === '==') return actual === value;
           if (op === '>=') return String(actual) >= String(value);
           if (op === '<=') return String(actual) <= String(value);
+          if (op === 'in') return (value as unknown[]).includes(actual);
           throw new Error(`Unsupported mock query operator: ${op}`);
         });
       return {
