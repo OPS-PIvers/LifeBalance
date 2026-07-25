@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import * as serverRules from "./merchantRules";
 import {
-  displayMerchant,
   normalizeForRuleMatch,
   pickMerchantRule,
   ruleMatches,
@@ -14,7 +14,6 @@ import {
 // tables would drift silently; one table run through both implementations
 // cannot.
 import {
-  displayMerchant as clientDisplayMerchant,
   normalizeForRuleMatch as clientNormalize,
   pickMerchantRule as clientPick,
   ruleMatches as clientRuleMatches,
@@ -205,13 +204,17 @@ describe("merchantRules — client/server parity", () => {
     }
   });
 
-  it.each(PICK_CASES)("displayMerchant: $name", ({ descriptor, amount, rules, expected }) => {
-    const row = amount === undefined ? { merchant: descriptor } : { merchant: descriptor, amount };
-    const server = displayMerchant(row, rules);
-    expect(server).toBe(clientDisplayMerchant(row, rules));
-    // A winning rule with no `name` classifies without relabelling.
-    const winner = rules.find((r) => r.id === expected);
-    expect(server).toBe(winner?.name ?? descriptor);
+  // `displayMerchant` is deliberately absent from the server copy: it is the one
+  // function that returns a rule's friendly NAME, and omitting it makes
+  // "the server never persists a display label" structural instead of advisory.
+  // If someone ports it, this fails and they have to justify it here.
+  it("exposes no way for the server to produce a display name", () => {
+    expect(Object.keys(serverRules).sort()).toEqual([
+      "normalizeForRuleMatch",
+      "pickMerchantRule",
+      "ruleMatches",
+      "ruleSpecificity",
+    ]);
   });
 
   const NORMALIZE_CASES = [

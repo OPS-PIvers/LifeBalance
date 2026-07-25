@@ -24,9 +24,13 @@
  * rules. Rules may drive CLASSIFICATION (category, bill link, no-spend
  * exemption); they may never rewrite identity.
  *
- * Deliberately NOT ported (all editor-only affordances with no server caller):
- * `merchantSearchTerms`, `findShadowingRule`, `suggestPatternFromDescriptor`.
- * Port one the day a server path needs it — and add it to the parity table.
+ * Deliberately NOT ported: `merchantSearchTerms`, `findShadowingRule` and
+ * `suggestPatternFromDescriptor` (editor-only affordances with no server
+ * caller), and — more pointedly — `displayMerchant`. Omitting the one function
+ * that returns a rule's friendly NAME makes the invariant above structural
+ * rather than advisory: no server code can accidentally reach for a display
+ * label, because this module cannot produce one. Port something the day a
+ * server path genuinely needs it, and add it to the parity table then.
  *
  * Dependency-light on purpose: types only, no date-fns, no firebase, no clock,
  * no side effects. Every function here is pure and total.
@@ -184,25 +188,3 @@ export function pickMerchantRule(
   return winner;
 }
 
-/** The friendly name a winning rule contributes, or '' when it contributes none. */
-function ruleDisplayName(rule: MerchantRule | null): string {
-  return rule?.name?.trim() ?? "";
-}
-
-/**
- * The name to SHOW for a transaction-like row: the winning rule's `name`, else
- * the raw merchant. A winning rule with no `name` (a category-only or bill-only
- * rule) still returns the raw merchant — such a rule exists to classify, not to
- * relabel.
- *
- * SERVER CAUTION: this is a rendering helper (log lines, human-facing copy). Its
- * return value must never be persisted into a `merchant` field — see the module
- * header. Every write path in this package stores `withdrawal.descriptor`.
- */
-export function displayMerchant(
-  row: { merchant: string; amount?: number },
-  rules: readonly MerchantRule[] | undefined
-): string {
-  const name = ruleDisplayName(pickMerchantRule(row.merchant, row.amount, rules));
-  return name || row.merchant;
-}
