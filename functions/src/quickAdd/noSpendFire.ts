@@ -155,8 +155,8 @@ interface ReadyFire {
  * the fire is all-or-nothing along with the rest of the email.
  */
 export async function applyNoSpendDay(deps: ApplyNoSpendDayDeps): Promise<NoSpendOutcome> {
-  const { db, householdId, batch, targetDate, today, extraSpend, householdData } = deps;
-  const merchantRules = deps.merchantRules;
+  const { db, householdId, batch, targetDate, today, extraSpend, householdData, merchantRules } =
+    deps;
   const notNoSpend: NoSpendOutcome = {
     targetDate,
     isNoSpendDay: false,

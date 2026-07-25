@@ -597,8 +597,14 @@ export const bankEmailSync = onRequest(
         // within this email (parser guarantees unique refs, but be defensive).
         existingBankRefs.add(w.bankRef);
 
-        // The one rule that wins this descriptor+amount, resolved ONCE per line
-        // and reused by the create branch and the reporting counters below.
+        // The one rule that wins this descriptor+amount, shared by the create
+        // branch and the reporting counters below. `pickBillToPay` resolves it
+        // independently for the bill tier rather than taking it as an argument,
+        // so a given line matches twice — the function is pure and total on the
+        // same inputs, so the two always agree, and a nightly batch of a few
+        // dozen lines against a bounded rule list makes the cost irrelevant.
+        // Threading it through `decideWithdrawal` would put a caller-supplied
+        // rule into a signature whose other steps must never see one.
         const rule = pickMerchantRule(w.descriptor, w.amount, merchantRules);
         // Counts CHARGES IN THIS EMAIL whose exemption the rule actually earned
         // — a statement about the withdrawal lines, whose descriptors are the
