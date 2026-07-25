@@ -111,4 +111,36 @@ describe('computeAnyNotificationsEnabled', () => {
   it('is false when all categories including bankEmailSync are explicitly false', () => {
     expect(computeAnyNotificationsEnabled(basePrefs, ['token1'])).toBe(false);
   });
+
+  // F-HABITS-03. These matter only because every other category is explicitly
+  // off in basePrefs — that's the one arrangement where a per-habit reminder can
+  // decide the flag on its own.
+  it('is true when a per-habit reminder is the only enabled category', () => {
+    const prefs = {
+      ...basePrefs,
+      perHabitReminders: { h1: { enabled: true, time: '08:00', days: [1] } },
+    };
+    expect(computeAnyNotificationsEnabled(prefs, ['token1'])).toBe(true);
+  });
+
+  it('stays false for a per-habit reminder that could never fire', () => {
+    const disabled = {
+      ...basePrefs,
+      perHabitReminders: { h1: { enabled: false, time: '08:00', days: [1] } },
+    };
+    const noDays = {
+      ...basePrefs,
+      perHabitReminders: { h1: { enabled: true, time: '08:00', days: [] } },
+    };
+    expect(computeAnyNotificationsEnabled(disabled, ['token1'])).toBe(false);
+    expect(computeAnyNotificationsEnabled(noDays, ['token1'])).toBe(false);
+  });
+
+  it('is false with an enabled reminder but no tokens to send to', () => {
+    const prefs = {
+      ...basePrefs,
+      perHabitReminders: { h1: { enabled: true, time: '08:00', days: [1] } },
+    };
+    expect(computeAnyNotificationsEnabled(prefs, [])).toBe(false);
+  });
 });

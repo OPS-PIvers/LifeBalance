@@ -19,14 +19,27 @@
 export const NOTIFICATION_ACTION_PARAM = 'nact';
 
 /**
+ * Query/hash param carrying the habit an action targets (F-HABITS-03).
+ *
+ * The action id alone can't express "log THIS habit" — the ids are a fixed,
+ * validated set, so the target travels beside the action rather than being
+ * encoded into it. Set by the sending job on the deep link, not by the SW.
+ */
+export const NOTIFICATION_HABIT_PARAM = 'nhabit';
+
+/**
  * Known action ids. Kept deliberately small; the SW validates against these so a
  * malformed/foreign action can never drive an app-side mutation.
  *  - `pay-bill`   : bill reminder → jump to the budget/pay flow.
  *  - `snooze-bill`: bill reminder → snooze the reminder category for one day.
+ *  - `log-habit`  : habit reminder → log the habit named by `nhabit` (one unit,
+ *    today), exactly as a manual tap would. Undo comes from the points toast the
+ *    toggle already raises, so there is no separate reverse action id.
  */
 export const NOTIFICATION_ACTIONS = {
   payBill: 'pay-bill',
   snoozeBill: 'snooze-bill',
+  logHabit: 'log-habit',
 } as const;
 
 export type NotificationActionId =
@@ -73,8 +86,20 @@ export function getNotificationActions(type: string): NotificationActionButton[]
  * query, or hash route — matching `appendNotificationSource`'s placement rules.
  */
 export function appendNotificationAction(path: string, action: string): string {
+  return appendParam(path, NOTIFICATION_ACTION_PARAM, action);
+}
+
+/**
+ * Append the habit target an action applies to (F-HABITS-03). Composes with
+ * `appendNotificationAction` in either order — both use the same placement rules.
+ */
+export function appendNotificationHabit(path: string, habitId: string): string {
+  return appendParam(path, NOTIFICATION_HABIT_PARAM, habitId);
+}
+
+function appendParam(path: string, param: string, value: string): string {
   const sep = path.includes('?') ? '&' : '?';
-  return `${path}${sep}${NOTIFICATION_ACTION_PARAM}=${encodeURIComponent(action)}`;
+  return `${path}${sep}${param}=${encodeURIComponent(value)}`;
 }
 
 /**
@@ -87,30 +112,43 @@ export function appendNotificationAction(path: string, action: string): string {
 export function extractNotificationAction(
   href: string
 ): { action: string | null; cleanedHref: string } {
+  const { value, cleanedHref } = extractNotificationParam(href, NOTIFICATION_ACTION_PARAM);
+  return { action: value, cleanedHref };
+}
+
+/**
+ * The generic form of the above: read + strip `param` from either the real query
+ * string or a HashRouter hash query. Pure — exported for tests and for the habit
+ * target param.
+ */
+export function extractNotificationParam(
+  href: string,
+  param: string
+): { value: string | null; cleanedHref: string } {
   try {
     const url = new URL(href);
 
-    const fromSearch = url.searchParams.get(NOTIFICATION_ACTION_PARAM);
+    const fromSearch = url.searchParams.get(param);
     if (fromSearch !== null) {
-      url.searchParams.delete(NOTIFICATION_ACTION_PARAM);
-      return { action: fromSearch, cleanedHref: url.toString() };
+      url.searchParams.delete(param);
+      return { value: fromSearch, cleanedHref: url.toString() };
     }
 
     const queryStart = url.hash.indexOf('?');
     if (queryStart !== -1) {
       const params = new URLSearchParams(url.hash.slice(queryStart + 1));
-      const fromHash = params.get(NOTIFICATION_ACTION_PARAM);
+      const fromHash = params.get(param);
       if (fromHash !== null) {
-        params.delete(NOTIFICATION_ACTION_PARAM);
+        params.delete(param);
         const rest = params.toString();
         url.hash = url.hash.slice(0, queryStart) + (rest ? `?${rest}` : '');
-        return { action: fromHash, cleanedHref: url.toString() };
+        return { value: fromHash, cleanedHref: url.toString() };
       }
     }
 
-    return { action: null, cleanedHref: href };
+    return { value: null, cleanedHref: href };
   } catch {
-    return { action: null, cleanedHref: href };
+    return { value: null, cleanedHref: href };
   }
 }
 
@@ -125,10 +163,31 @@ export function consumeNotificationAction(): NotificationActionId | null {
   if (typeof window === 'undefined') return null;
   const { action, cleanedHref } = extractNotificationAction(window.location.href);
   if (action === null || action === '') return null;
+  stripFromAddressBar(cleanedHref);
+  return isKnownNotificationAction(action) ? action : null;
+}
+
+/**
+ * Consume the `nhabit` target param (F-HABITS-03). Returns the raw habit id or
+ * null, and strips it from the address bar. The id is NOT validated here — the
+ * caller resolves it against the household's live habits, and an id that doesn't
+ * resolve simply does nothing. Safe to call unconditionally.
+ */
+export function consumeNotificationHabitId(): string | null {
+  if (typeof window === 'undefined') return null;
+  const { value, cleanedHref } = extractNotificationParam(
+    window.location.href,
+    NOTIFICATION_HABIT_PARAM
+  );
+  if (value === null || value === '') return null;
+  stripFromAddressBar(cleanedHref);
+  return value;
+}
+
+function stripFromAddressBar(cleanedHref: string): void {
   try {
     window.history.replaceState(window.history.state, '', cleanedHref);
   } catch {
     // Best-effort cleanup; the value has already been read.
   }
-  return isKnownNotificationAction(action) ? action : null;
 }

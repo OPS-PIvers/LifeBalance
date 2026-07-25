@@ -26,12 +26,36 @@ export const INCOME_CATEGORY = 'Income';
 // a bucket name. Excluded from bucket spent-tracking and category suggestions.
 export const CREDIT_CARD_CATEGORY = 'Credit Card';
 
+// F-HABITS-03: one habit's own reminder schedule, in the member's local time.
+// `time` is an arbitrary HH:MM — the scheduled job runs every 15 minutes and
+// fires at or just after it (the F-TODO-14 model), so the fire is "within a
+// quarter hour of", not "exactly at". `days` are 0 (Sunday) … 6 (Saturday); an
+// empty array is a valid "never fires" state rather than an error.
+export interface HabitReminderConfig {
+  enabled: boolean;
+  time: string; // "HH:MM", 24-hour, member-local
+  days: number[]; // 0 = Sunday … 6 = Saturday
+}
+
 export interface NotificationPreferences {
   // Habit reminders
   habitReminders: {
     enabled: boolean;
     time: string; // HH:MM format (24-hour)
   };
+
+  // F-HABITS-03: per-habit timed reminders, keyed by habit id.
+  //
+  // Deliberately on the MEMBER doc rather than the habit doc: habits are shared
+  // household documents, so a per-uid map on the habit would put every member on
+  // the same document's write path — the exact shape behind the habit-history
+  // clobber incident. One writer per member doc sidesteps it, and the scheduled
+  // job already loads member docs first anyway.
+  //
+  // The trade is that an entry outlives a deleted habit. That's inert (the job
+  // skips ids it can't resolve to a live habit) and cleaned up opportunistically
+  // rather than transactionally — a stale key costs a map entry, not a wrong push.
+  perHabitReminders?: Record<string, HabitReminderConfig>;
 
   // Action queue (todos) morning reminder
   actionQueueReminders: {

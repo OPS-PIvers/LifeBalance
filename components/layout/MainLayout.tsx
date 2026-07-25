@@ -15,6 +15,7 @@ import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { useKeyboardViewportAnchor } from '@/hooks/useKeyboardViewportAnchor';
 import { InstallPwaBanner } from '@/components/ui/InstallPwaBanner';
 import HabitLocationPromptBanner from '@/components/habits/HabitLocationPromptBanner';
+import HabitLogIntent from '@/components/habits/HabitLogIntent';
 import { useAppBadge } from '@/hooks/useAppBadge';
 import { useNotificationActionIntent } from '@/hooks/useNotificationActionIntent';
 import { subscribePayPeriodCeremony, type PayPeriodCeremonyEvent } from '@/utils/payPeriodCeremony';
@@ -57,8 +58,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   useAppBadge(actionQueue.length);
   // F-NOTIF-05: dispatch a bill-reminder push action-button tap (Pay bill /
   // Snooze) if the app was opened via one. Unconditional (above Kid-Mode early
-  // returns) to satisfy rules-of-hooks.
-  useNotificationActionIntent();
+  // returns) to satisfy rules-of-hooks. `logHabitId` is handed to a child below
+  // rather than acted on here — see HabitLogIntent.
+  const { logHabitId, clearLogHabit } = useNotificationActionIntent();
 
   // Every un-snoozed pending_review transaction is a review candidate. Ordered
   // newest-first (date desc) so the most recent activity is reviewed first.
@@ -270,6 +272,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
       <InstallPwaBanner />
       <HabitLocationPromptBanner />
+      {/* F-HABITS-03: renders only while a `log-habit` notification tap is
+          pending, so the gamification subscription it needs never reaches this
+          shell (which reads narrow slices to stay off the toggle render path). */}
+      {logHabitId && <HabitLogIntent habitId={logHabitId} onDone={clearLogHabit} />}
     </div>
   );
 };
