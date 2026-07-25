@@ -41,6 +41,7 @@ import { type BucketSpent } from '@/utils/bucketSpentCalculator';
 import { type TrashedItem } from '@/utils/trash';
 import { type TriggerSource } from '@/utils/habitTriggers';
 import { type TodoSubtaskToggleResult, type TodoCompletionOptions } from '@/contexts/household/mutations/todoMutations';
+import { type MerchantRuleDraft } from '@/contexts/household/mutations/merchantRuleMutations';
 
 /** Options accepted by mutations that normally toast per call. `silent: true`
  *  suppresses the per-item success toast so BULK flows (Action Queue
@@ -457,6 +458,19 @@ export interface HouseholdContextType {
   /** F-MEALS-04: set (habit id) or clear (null) the habit auto-credited when a meal is marked cooked. */
   setMealCookedHabitId: (habitId: string | null) => Promise<void>;
 
+  // Merchant rule actions (F-MONEY-14). `Household.merchantRules` is a bounded
+  // array on the household settings doc, so these sit on the CORE slice
+  // alongside the other household-doc writers — every consumer of the rules
+  // already reads them through `householdSettings` on that same slice.
+  // All three transact on the household doc; see merchantRuleMutations.ts for
+  // why no array operator is safe here. Each rejects (after toasting) when the
+  // save does not happen, so an editor form can stay open.
+  /** Append a rule, enforcing MAX_MERCHANT_RULES against the server's array. */
+  addMerchantRule: (draft: MerchantRuleDraft) => Promise<void>;
+  /** Replace a rule's draft fields; createdAt/matchCount/lastMatchedAt survive. */
+  updateMerchantRule: (id: string, draft: MerchantRuleDraft) => Promise<void>;
+  deleteMerchantRule: (id: string) => Promise<void>;
+
   // Meal Actions
   addMeal: (meal: Omit<Meal, 'id'>, options?: { suppressToast?: boolean }) => Promise<string>;
   updateMeal: (meal: Meal) => Promise<void>;
@@ -633,6 +647,7 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'householdId' | 'householdSettings' | 'household'
   | 'refreshInsight' | 'rateInsight' | 'addMember' | 'updateMember' | 'removeMember' | 'deleteHousehold'
   | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'updateModuleVisibility' | 'setCaptureReviewMode' | 'setKidModePin' | 'setDietaryProfile' | 'setMealCookedHabitId'
+  | 'addMerchantRule' | 'updateMerchantRule' | 'deleteMerchantRule'
   | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
   | 'activeMemberId' | 'actAs' | 'exitToParent'
   | 'recaps' | 'moneyRecaps' | 'activityLog'

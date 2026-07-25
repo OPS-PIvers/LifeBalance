@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 
 import * as HouseholdContext from '@/contexts/FirebaseHouseholdContext';
 import type { Household, MerchantRule } from '@/types/schema';
@@ -7,11 +7,13 @@ import type { Household, MerchantRule } from '@/types/schema';
 import { useMerchantRules } from './useMerchantRules';
 
 /**
- * Covers the accessor's two contracts. The matching itself lives in
- * `utils/merchantRules.ts` and is tested there — what only this hook can be held
- * to is (a) fail-open behaviour when a household has no rules, and (b) the
- * CONTENT-stable memo identity that keeps consumers' memos alive across the
- * household-doc rewrites that ordinary traffic (points updates) causes.
+ * Covers the accessor's contracts. The matching itself lives in
+ * `utils/merchantRules.ts` and the writes in
+ * `contexts/household/mutations/merchantRuleMutations.ts`, both tested there —
+ * what only this hook can be held to is (a) fail-open behaviour when a household
+ * has no rules, (b) the CONTENT-stable memo identity that keeps consumers' memos
+ * alive across the household-doc rewrites that ordinary traffic (points updates)
+ * causes, and (c) that the new `saving` state cannot invalidate (b).
  */
 
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
@@ -25,11 +27,18 @@ const RULE: MerchantRule = {
   createdAt: '2026-07-01T00:00:00.000Z',
 };
 
+const addMerchantRule = vi.fn(async () => {});
+const updateMerchantRule = vi.fn(async () => {});
+const deleteMerchantRule = vi.fn(async () => {});
+
 /** Set the household doc, mimicking the listener's fresh-object-per-snapshot behaviour. */
 function setRules(rules: MerchantRule[] | undefined) {
   (HouseholdContext.useHouseholdCore as Mock).mockReturnValue({
     // A NEW settings object each call, exactly as coreListeners.ts produces.
     householdSettings: { id: 'h1', ...(rules ? { merchantRules: rules } : {}) } as Household,
+    addMerchantRule,
+    updateMerchantRule,
+    deleteMerchantRule,
   });
 }
 
@@ -119,5 +128,79 @@ describe('useMerchantRules — memo identity is content-stable', () => {
     rerender();
 
     expect(result.current.displayNameFor).not.toBe(first);
+  });
+});
+
+describe('useMerchantRules — authoring', () => {
+  it('forwards each draft to the matching household mutation', async () => {
+    setRules([RULE]);
+    const { result } = renderHook(() => useMerchantRules());
+
+    await act(async () => {
+      await result.current.addRule({ pattern: 'SAFEWAY', name: 'Groceries' });
+      await result.current.updateRule('r1', { pattern: 'APPLE.COM', name: 'Apple' });
+      await result.current.deleteRule('r1');
+    });
+
+    expect(addMerchantRule).toHaveBeenCalledWith({ pattern: 'SAFEWAY', name: 'Groceries' });
+    expect(updateMerchantRule).toHaveBeenCalledWith('r1', { pattern: 'APPLE.COM', name: 'Apple' });
+    expect(deleteMerchantRule).toHaveBeenCalledWith('r1');
+  });
+
+  it('flags `saving` while a write is in flight and clears it after', async () => {
+    setRules([RULE]);
+    let release: (() => void) | undefined;
+    addMerchantRule.mockImplementationOnce(
+      () => new Promise<void>(resolve => { release = resolve; }),
+    );
+
+    const { result } = renderHook(() => useMerchantRules());
+    expect(result.current.saving).toBe(false);
+
+    let pending: Promise<void> | undefined;
+    act(() => { pending = result.current.addRule({ pattern: 'SAFEWAY' }); });
+    await waitFor(() => expect(result.current.saving).toBe(true));
+
+    await act(async () => { release?.(); await pending; });
+    expect(result.current.saving).toBe(false);
+  });
+
+  it('clears `saving` and rethrows when the mutation rejects, so a form can stay open', async () => {
+    setRules([RULE]);
+    addMerchantRule.mockRejectedValueOnce(new Error('rule-cap-reached'));
+
+    const { result } = renderHook(() => useMerchantRules());
+    await act(async () => {
+      await expect(result.current.addRule({ pattern: 'SAFEWAY' })).rejects.toThrow('rule-cap-reached');
+    });
+
+    expect(result.current.saving).toBe(false);
+  });
+
+  it('keeps displayNameFor stable across a save — the read helpers are memoized apart from `saving`', async () => {
+    // The regression this guards: folding the whole API into one memo would
+    // re-create displayNameFor whenever `saving` flipped, and
+    // useDashboardTransactionStats memoizes its O(n) pass on that identity.
+    setRules([RULE]);
+    const { result } = renderHook(() => useMerchantRules());
+    const first = result.current.displayNameFor;
+    const firstRules = result.current.rules;
+
+    await act(async () => { await result.current.addRule({ pattern: 'SAFEWAY' }); });
+
+    expect(result.current.saving).toBe(false);
+    expect(result.current.displayNameFor).toBe(first);
+    expect(result.current.rules).toBe(firstRules);
+  });
+
+  it('keeps the write callbacks stable across an unrelated household-doc rewrite', () => {
+    setRules([RULE]);
+    const { result, rerender } = renderHook(() => useMerchantRules());
+    const firstAdd = result.current.addRule;
+
+    setRules([{ ...RULE }]);
+    rerender();
+
+    expect(result.current.addRule).toBe(firstAdd);
   });
 });
