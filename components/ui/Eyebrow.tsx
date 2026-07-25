@@ -43,14 +43,20 @@ const Eyebrow: React.FC<EyebrowProps> = ({
   ...props
 }) => {
   const Tag = as as React.ElementType;
+  // The font-size class is concatenated by hand rather than passed through
+  // cn(): tailwind-merge does not recognise the custom `text-xxs` @theme token
+  // as a font-size, so it treats it as a text-COLOUR utility conflicting with
+  // TONE_CLASSES' `text-<colour>` and drops one of the two. They set different
+  // CSS properties, so there is no real conflict. Same precedent as Badge /
+  // TodoRow / EisenhowerGridView. Do NOT fold this back into cn().
+  const sizeClass = size === 'xxs' ? 'text-xxs' : 'text-xs';
   return (
     <Tag
-      className={cn(
+      className={`${sizeClass} ${cn(
         'font-semibold uppercase tracking-wider',
-        size === 'xxs' ? 'text-xxs' : 'text-xs',
         TONE_CLASSES[tone],
         className
-      )}
+      )}`}
       {...props}
     >
       {children}

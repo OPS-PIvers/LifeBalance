@@ -243,7 +243,10 @@ const GridChip = React.memo(function GridChip({ item, color, onComplete, onEdit,
               Overdue ({format(dueDate, 'MMM d')})
             </span>
           ) : (
-            <span className={cn('block text-xxs font-semibold', dateColorMap[color])}>
+            /* `text-xxs` outside cn(): tailwind-merge reads the custom token as
+               a text-COLOUR class and would drop it in favour of dateColorMap's
+               `text-<colour>`. Same precedent as the category chip below. */
+            <span className={`text-xxs ${cn('block font-semibold', dateColorMap[color])}`}>
               {isToday(dueDate) ? 'Today' : isTomorrow(dueDate) ? 'Tomorrow' : format(dueDate, 'MMM d')}
             </span>
           )}

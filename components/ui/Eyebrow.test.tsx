@@ -39,4 +39,23 @@ describe('Eyebrow', () => {
     render(<Eyebrow className="mb-3">X</Eyebrow>);
     expect(screen.getByText('X')).toHaveClass('mb-3');
   });
+
+  // Regression: `text-xxs` is a custom @theme token that tailwind-merge misreads
+  // as a text-COLOUR utility. Routed through cn() next to TONE_CLASSES it was
+  // dropped entirely, so size="xxs" silently fell back to the inherited 16px.
+  // The size and the tone colour must BOTH survive, for every tone.
+  it.each([
+    ['default', 'text-brand-500'],
+    ['warm', 'text-warm-600'],
+    ['accent', 'text-accent-700'],
+  ] as const)('keeps size="xxs" alongside the %s tone colour', (tone, toneClass) => {
+    render(
+      <Eyebrow tone={tone} size="xxs">
+        Tiny
+      </Eyebrow>
+    );
+    const el = screen.getByText('Tiny');
+    expect(el).toHaveClass('text-xxs', toneClass);
+    expect(el).not.toHaveClass('text-xs');
+  });
 });

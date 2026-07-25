@@ -24,13 +24,27 @@ export const Badge: React.FC<BadgeProps> = ({
     outline: 'bg-transparent border border-brand-200 text-brand-600 dark:border-brand-700 dark:text-brand-400',
   };
 
-  const sizes = {
-    sm: 'text-xxs px-2 py-0.5',
-    md: 'text-xs px-2.5 py-0.5',
+  // The font-size half of the size scale is kept OUT of cn()/tailwind-merge and
+  // concatenated by hand below. `text-xxs` is a custom @theme token (index.css)
+  // that tailwind-merge does not know as a font-size, so it classifies it as a
+  // text-COLOUR utility and treats it as conflicting with the variant's
+  // `text-<colour>` — whichever came last won and the other was silently
+  // dropped, so every `size="sm"` badge lost its semantic colour. They set
+  // different CSS properties, so there is no real conflict. Same precedent as
+  // TodoRow / EisenhowerGridView / ToDosPage. Do NOT fold these back into cn().
+  const sizeText = {
+    sm: 'text-xxs',
+    md: 'text-xs',
+  };
+
+  // Padding still goes through cn() so `className` can override it.
+  const sizePadding = {
+    sm: 'px-2 py-0.5',
+    md: 'px-2.5 py-0.5',
   };
 
   return (
-    <span className={cn('inline-flex items-center justify-center font-bold tracking-tight rounded-full whitespace-nowrap', variants[variant], sizes[size], className)}>
+    <span className={`${sizeText[size]} ${cn('inline-flex items-center justify-center font-bold tracking-tight rounded-full whitespace-nowrap', variants[variant], sizePadding[size], className)}`}>
       {children}
     </span>
   );
