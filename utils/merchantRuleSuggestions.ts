@@ -217,12 +217,24 @@ function modeOf(values: readonly string[]): string | undefined {
 }
 
 /**
- * The raw descriptor to show as evidence: the most recent one the chosen
- * pattern actually matches (ties broken alphabetically). Restricting to matched
- * rows keeps the card honest — the user must never read "we'd rename THIS" next
- * to a descriptor the proposed pattern would leave alone.
+ * The most recent row the chosen pattern ACTUALLY matches (ties broken
+ * alphabetically), or undefined when it matches none.
+ *
+ * Both the evidence descriptor and the "last seen" date are read off this one
+ * row, so the card cannot advertise a date the proposed rule would not cover.
+ * Deriving the date from the cluster tail instead would be wrong whenever the
+ * chosen pattern covers only PART of its cluster, which is reachable: clustering
+ * groups on `merchantSimilar` (token-set subset, order-INdependent) while the
+ * extra pattern candidate is a POSITIONAL `commonTokenPrefix`. A cluster whose
+ * descriptors share their tokens in a different order ("COSTCO WHSE" vs "WHSE
+ * COSTCO") therefore gets an empty prefix, no pattern covers the whole cluster,
+ * and the tail can belong to the losing half — showing "last on Jul 10" for a
+ * rule that only reaches Jul 8.
  */
-function chooseSample(pattern: string, cluster: readonly Candidate[]): string {
+function latestMatchingRow(
+  pattern: string,
+  cluster: readonly Candidate[],
+): Candidate | undefined {
   let best: Candidate | undefined;
   for (const row of cluster) {
     if (!normalizeForRuleMatch(row.merchant).includes(pattern)) continue;
@@ -234,7 +246,7 @@ function chooseSample(pattern: string, cluster: readonly Candidate[]): string {
       best = row;
     }
   }
-  return best?.merchant ?? '';
+  return best;
 }
 
 /** Strongest first: occurrences, then recency, then pattern for determinism. */
@@ -312,15 +324,20 @@ export function suggestMerchantRules(
     const pattern = choosePattern(cluster);
     if (!pattern) continue;
 
-    // Candidates are sorted date-ascending and clustering preserves that order.
-    const lastDate = cluster[cluster.length - 1]?.date ?? '';
+    // Evidence descriptor and date come from ONE scan of the rows this pattern
+    // matches, so they agree by construction — see `latestMatchingRow`.
+    // `occurrences` deliberately still counts the WHOLE cluster: it answers
+    // "how many unlabelled rows look like this", which is what earns the
+    // suggestion its place, whereas the date answers "what would this rule
+    // reach".
+    const latestMatch = latestMatchingRow(pattern, cluster);
     const suggestedCategory = modeOf(cluster.map((row) => row.category).filter((c) => c.trim() !== ''));
 
     suggestions.push({
       pattern,
-      sampleDescriptor: chooseSample(pattern, cluster),
+      sampleDescriptor: latestMatch?.merchant ?? '',
       occurrences: cluster.length,
-      lastDate,
+      lastDate: latestMatch?.date ?? '',
       ...(suggestedCategory === undefined ? {} : { suggestedCategory }),
     });
   }

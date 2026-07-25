@@ -343,3 +343,40 @@ describe('suggestMerchantRules — the proposed pattern is usable as-is', () => 
     expect(suggestMerchantRules(corpus, accepted, { limit: 99 })).toEqual([]);
   });
 });
+
+describe('suggestMerchantRules — lastDate never overstates a rule s reach', () => {
+  // Clustering groups on `merchantSimilar` (token-set SUBSET, order-independent)
+  // while the extra pattern candidate is a POSITIONAL common token prefix. Two
+  // spellings that share their tokens in a different ORDER therefore cluster
+  // together but get an empty prefix, so no candidate pattern covers the whole
+  // cluster. The tail of the cluster then belongs to the half the winning
+  // pattern does NOT match — which is exactly when reading the date off the
+  // tail advertises a reach the rule does not have.
+  const corpus: Row[] = [
+    ...repeat('COSTCO WHSE', 3, 1),
+    row('WHSE COSTCO', '2026-07-31'),
+  ];
+
+  it('reports a date belonging to a row the proposed pattern actually matches', () => {
+    const [suggestion] = suggestMerchantRules(corpus, [], { limit: 99 });
+    expect(suggestion).toBeDefined();
+
+    const rule = makeRule({ pattern: suggestion!.pattern });
+    const matched = corpus.filter((r) => ruleMatches(rule, r.merchant));
+    // The premise of the test: the winner really does leave part of its cluster
+    // behind. If this ever stops being true the guarantee below is vacuous.
+    expect(matched.length).toBeLessThan(corpus.length);
+
+    expect(matched.map((r) => r.date)).toContain(suggestion!.lastDate);
+    expect(suggestion!.lastDate).not.toBe('2026-07-31');
+  });
+
+  it('keeps lastDate and sampleDescriptor describing the same row', () => {
+    for (const suggestion of suggestMerchantRules(corpus, [], { limit: 99 })) {
+      const sampleRow = corpus.find(
+        (r) => r.merchant === suggestion.sampleDescriptor && r.date === suggestion.lastDate,
+      );
+      expect(sampleRow).toBeDefined();
+    }
+  });
+});
