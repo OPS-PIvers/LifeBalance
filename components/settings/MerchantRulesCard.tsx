@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { format, isValid, parseISO } from 'date-fns';
 import {
   CalendarClock,
@@ -8,20 +8,27 @@ import {
   ShieldCheck,
   Tag,
   Tags,
+  X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
 import { Row, Section, SurfaceList } from '@/components/ui/Section';
-import { useFinance } from '@/contexts/FirebaseHouseholdContext';
+import SectionHeading from '@/components/ui/SectionHeading';
+import { useFinance, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { useMerchantRules, type MerchantRuleDraft } from '@/hooks/useMerchantRules';
 import { MAX_MERCHANT_RULES, type MerchantRule } from '@/types/schema';
 import { buildTransactionCategoryOptions } from '@/utils/categories';
-import { cn } from '@/utils/cn';
+import {
+  suggestMerchantRules,
+  SUGGESTION_MIN_OCCURRENCES,
+  type MerchantRuleSuggestion,
+} from '@/utils/merchantRuleSuggestions';
 import MerchantRuleFormDrawer, {
   type MerchantRuleBillOption,
+  type MerchantRuleSeed,
 } from '@/components/settings/MerchantRuleFormDrawer';
 
 /**
@@ -31,12 +38,40 @@ import MerchantRuleFormDrawer, {
  */
 const CAP_NOTICE_HEADROOM = 20;
 
-/** `MMM d` for a `lastMatchedAt` ISO timestamp, or null when it is unusable. */
+/** `MMM d` for an ISO timestamp or `yyyy-MM-dd` date, or null when unusable. */
 function formatMatchDate(iso: string | undefined): string | null {
   if (!iso) return null;
   const parsed = parseISO(iso);
   return isValid(parsed) ? format(parsed, 'MMM d') : null;
 }
+
+/**
+ * localStorage dismissal key for a rule SUGGESTION, keyed on household + the
+ * proposed pattern. Shape mirrors `RecurringBillsModal`'s
+ * `detectionDismissKey` (prefix, discriminator, raw text lower-cased).
+ *
+ * The key is built from the RAW descriptor pattern, never a friendly name: it
+ * establishes identity, and identity in this codebase is always the bank's own
+ * text. A later rename must not resurrect a suggestion the user dismissed.
+ */
+const suggestionDismissKey = (householdId: string, pattern: string) =>
+  `lb_merchant_rule_dismissed_${householdId}_${pattern.toLowerCase().trim()}`;
+
+const isSuggestionDismissed = (householdId: string, pattern: string): boolean => {
+  try {
+    return window.localStorage.getItem(suggestionDismissKey(householdId, pattern)) === '1';
+  } catch {
+    return false;
+  }
+};
+
+const persistSuggestionDismiss = (householdId: string, pattern: string): void => {
+  try {
+    window.localStorage.setItem(suggestionDismissKey(householdId, pattern), '1');
+  } catch {
+    // Best-effort — the in-session state still hides the row.
+  }
+};
 
 interface RuleActionChipProps {
   icon: LucideIcon;
@@ -45,16 +80,27 @@ interface RuleActionChipProps {
   tone?: 'neutral' | 'caution';
 }
 
+/**
+ * NOTE — these are joined by hand rather than through `cn()`. tailwind-merge
+ * does not recognise the project's custom `text-xxs` (10px) as a font size, so
+ * it treats it as conflicting with any `text-<color>` in the same `cn()` call
+ * and drops one of the two. Plain concatenation keeps both, which is correct:
+ * they set different CSS properties. (Verified: `twMerge('text-xxs',
+ * 'text-brand-600')` returns only `text-brand-600`.)
+ */
+const CHIP_BASE =
+  'inline-flex max-w-full items-center gap-1 rounded-full border px-1.5 py-0.5 text-xxs';
+
+const CHIP_TONES: Record<'neutral' | 'caution', string> = {
+  neutral:
+    'border-brand-200 bg-brand-100 text-brand-600 dark:border-brand-700 dark:bg-brand-700/50 dark:text-brand-300',
+  caution:
+    'border-warm-200 bg-warm-50 font-semibold text-warm-700 dark:border-warm-700 dark:bg-warm-900/40 dark:text-warm-200',
+};
+
 /** One of the four things a rule can do, as a compact pill. */
 const RuleActionChip: React.FC<RuleActionChipProps> = ({ icon: Icon, children, tone = 'neutral' }) => (
-  <span
-    className={cn(
-      'inline-flex max-w-full items-center gap-1 rounded-full border px-1.5 py-0.5 text-xxs',
-      tone === 'caution'
-        ? 'border-warm-200 bg-warm-50 font-semibold text-warm-700 dark:border-warm-700 dark:bg-warm-900/40 dark:text-warm-200'
-        : 'border-brand-200 bg-brand-100 text-brand-600 dark:border-brand-700 dark:bg-brand-700/50 dark:text-brand-300'
-    )}
-  >
+  <span className={`${CHIP_BASE} ${CHIP_TONES[tone]}`}>
     <Icon size={10} className="shrink-0" aria-hidden="true" />
     <span className="truncate">{children}</span>
   </span>
@@ -119,13 +165,14 @@ const MerchantRuleRow: React.FC<MerchantRuleRowProps> = ({
             )}
           </span>
 
+          {/* Concatenated, not `cn()` — see the CHIP_BASE note: tailwind-merge
+              would drop `text-xxs` against the text colour. */}
           <span
-            className={cn(
-              'mt-1.5 block text-xxs',
+            className={`mt-1.5 block text-xxs ${
               hasMatched
                 ? 'text-brand-400 dark:text-brand-450'
                 : 'font-semibold text-warm-600 dark:text-warm-300'
-            )}
+            }`}
           >
             {matchLabel}
           </span>
@@ -136,6 +183,61 @@ const MerchantRuleRow: React.FC<MerchantRuleRowProps> = ({
           aria-hidden="true"
         />
       </button>
+    </Row>
+  );
+};
+
+interface SuggestionRowProps {
+  suggestion: MerchantRuleSuggestion;
+  onAccept: () => void;
+  onDismiss: () => void;
+}
+
+/**
+ * One proposed rule: the pattern it would use, the raw descriptor it was read
+ * off (the evidence), and how often that descriptor has been seen. Tapping the
+ * row opens the create sheet seeded from it; the trailing control dismisses it.
+ */
+const SuggestionRow: React.FC<SuggestionRowProps> = ({ suggestion, onAccept, onDismiss }) => {
+  const lastSeen = formatMatchDate(suggestion.lastDate);
+  // `p-0` (not `pl-0 pr-2`) so tailwind-merge fully drops the Row's own
+  // padding — a child `pl-*` would leave `px-4` in the class list and let
+  // stylesheet order, not this call site, decide the left inset.
+  return (
+    <Row className="p-0 gap-1">
+      <button
+        type="button"
+        onClick={onAccept}
+        aria-label={`Create a rule for ${suggestion.pattern}`}
+        className="flex min-w-0 flex-1 items-start gap-3 py-3.5 pl-4 pr-1 text-left transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-brand-50 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-inset dark:hover:bg-brand-700/40"
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold tracking-tight text-brand-900 dark:text-brand-50">
+            {suggestion.pattern}
+          </span>
+          <span className="mt-0.5 block truncate font-mono text-xs text-brand-500 dark:text-brand-400">
+            {suggestion.sampleDescriptor}
+          </span>
+          {suggestion.suggestedCategory && (
+            <span className="mt-1.5 flex flex-wrap items-center gap-1">
+              <RuleActionChip icon={FolderTree}>{suggestion.suggestedCategory}</RuleActionChip>
+            </span>
+          )}
+          <span className="mt-1.5 block text-xxs text-brand-400 dark:text-brand-450">
+            Seen {suggestion.occurrences} {suggestion.occurrences === 1 ? 'time' : 'times'}
+            {lastSeen ? ` · last on ${lastSeen}` : ''}
+          </span>
+        </span>
+      </button>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onDismiss}
+        className="mr-2"
+        aria-label={`Dismiss the suggestion for ${suggestion.pattern}`}
+      >
+        <X size={16} />
+      </Button>
     </Row>
   );
 };
@@ -152,11 +254,14 @@ const MerchantRuleRow: React.FC<MerchantRuleRowProps> = ({
  */
 const MerchantRulesCard: React.FC = () => {
   const { rules, addRule, updateRule, deleteRule, saving } = useMerchantRules();
-  const { buckets, calendarItems } = useFinance();
+  const { buckets, calendarItems, transactions } = useFinance();
+  const { householdId } = useHouseholdCore();
   const formatMoney = useFormatCurrency();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [seed, setSeed] = useState<MerchantRuleSeed | null>(null);
+  const [dismissedKeys, setDismissedKeys] = useState<Set<string>>(new Set());
 
   const editingRule = editingId ? rules.find((rule) => rule.id === editingId) ?? null : null;
 
@@ -186,13 +291,68 @@ const MerchantRulesCard: React.FC = () => {
   const atCap = rules.length >= MAX_MERCHANT_RULES;
   const showCapNotice = rules.length >= MAX_MERCHANT_RULES - CAP_NOTICE_HEADROOM;
 
+  /**
+   * PERFORMANCE — `suggestMerchantRules` is an O(n) pass with clustering over
+   * the household's ENTIRE transaction history, and this card sits on a Settings
+   * screen that re-renders for reasons of its own. Both deps are stable against
+   * unrelated traffic:
+   *  - `rules` comes from `useMerchantRules`, which memoizes on the rules'
+   *    CONTENT (a JSON signature), not the array identity the household listener
+   *    hands out fresh on every household-doc write. So a points update cannot
+   *    churn this.
+   *  - `transactions` is `useMemo(() => mergeById(recentTransactions,
+   *    olderTransactions), …)` in `FirebaseHouseholdContext`, so its identity
+   *    changes only when the transactions listener fires or a "load older" page
+   *    lands — never on a household-doc write.
+   * The dismissal filter is deliberately a SEPARATE memo: dismissing a
+   * suggestion must not re-run the clustering pass.
+   */
+  const suggestions = useMemo(
+    () => suggestMerchantRules(transactions, rules),
+    [transactions, rules]
+  );
+
+  const visibleSuggestions = useMemo(
+    () =>
+      suggestions.filter((suggestion) => {
+        const key = suggestionDismissKey(householdId ?? '', suggestion.pattern);
+        return !dismissedKeys.has(key) && !isSuggestionDismissed(householdId ?? '', suggestion.pattern);
+      }),
+    [suggestions, dismissedKeys, householdId]
+  );
+
+  const dismissSuggestion = useCallback(
+    (suggestion: MerchantRuleSuggestion) => {
+      const key = suggestionDismissKey(householdId ?? '', suggestion.pattern);
+      persistSuggestionDismiss(householdId ?? '', suggestion.pattern);
+      setDismissedKeys((prev) => new Set(prev).add(key));
+    },
+    [householdId]
+  );
+
   const openCreate = () => {
     setEditingId(null);
+    setSeed(null);
     setIsFormOpen(true);
   };
 
   const openEdit = (id: string) => {
     setEditingId(id);
+    setSeed(null);
+    setIsFormOpen(true);
+  };
+
+  // Accepting a suggestion opens the ordinary CREATE sheet with its fields
+  // pre-filled — the user still reviews and can change anything before saving,
+  // and `editingId` stays null so the save goes through `addRule`.
+  const openCreateFromSuggestion = (suggestion: MerchantRuleSuggestion) => {
+    setEditingId(null);
+    setSeed({
+      pattern: suggestion.pattern,
+      ...(suggestion.suggestedCategory === undefined
+        ? {}
+        : { category: suggestion.suggestedCategory }),
+    });
     setIsFormOpen(true);
   };
 
@@ -227,7 +387,8 @@ const MerchantRulesCard: React.FC = () => {
         </Button>
       }
     >
-      <div className="space-y-2">
+      <div className="space-y-4">
+        <div className="space-y-2">
         {rules.length === 0 ? (
           <EmptyState
             variant="surface"
@@ -271,12 +432,36 @@ const MerchantRulesCard: React.FC = () => {
             )}
           </>
         )}
+        </div>
+
+        {visibleSuggestions.length > 0 && (
+          <div className="space-y-2">
+            <SectionHeading
+              as="h3"
+              className="px-1"
+              description={`Bank wording seen ${SUGGESTION_MIN_OCCURRENCES} or more times that no rule renames yet. A merchant you have already pinned to one amount can still appear here — its other charges are still showing raw.`}
+            >
+              Suggested from your history
+            </SectionHeading>
+            <SurfaceList>
+              {visibleSuggestions.map((suggestion) => (
+                <SuggestionRow
+                  key={suggestion.pattern}
+                  suggestion={suggestion}
+                  onAccept={() => openCreateFromSuggestion(suggestion)}
+                  onDismiss={() => dismissSuggestion(suggestion)}
+                />
+              ))}
+            </SurfaceList>
+          </div>
+        )}
       </div>
 
       <MerchantRuleFormDrawer
         isOpen={isFormOpen}
         onClose={() => setIsFormOpen(false)}
         rule={editingRule}
+        seed={seed}
         rules={rules}
         categoryOptions={categoryOptions}
         billOptions={billOptions}

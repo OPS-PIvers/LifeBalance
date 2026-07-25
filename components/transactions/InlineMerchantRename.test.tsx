@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import InlineMerchantRename, { looksLikeBankDescriptor } from '@/components/transactions/InlineMerchantRename';
+import InlineMerchantRename from '@/components/transactions/InlineMerchantRename';
 import type { MerchantRule } from '@/types/schema';
 
 const addRule = vi.fn<(draft: { pattern: string; name?: string }) => Promise<void>>();
@@ -25,23 +25,6 @@ beforeEach(() => {
   addRule.mockReset();
   addRule.mockResolvedValue(undefined);
   storedRules = [];
-});
-
-describe('looksLikeBankDescriptor', () => {
-  it.each([
-    ['AMERICAN EXPRESS ACH PMT', true, 'all-caps with no trailing noise'],
-    ['AMEX ACH PAYMENT', true, 'the motivating example'],
-    ['APPLE.COM/BILL 866-712-7753 CA', true, 'all-caps with digits'],
-    ['sq *blue bottle', true, 'lowercase but carries a * marker'],
-    ['7-Eleven 22371', true, 'mixed case with digits'],
-    ['Target', false, 'a name someone typed'],
-    ["Trader Joe's", false, 'apostrophes are not descriptor markers'],
-    ['Coffee', false, 'a hand-entered merchant'],
-    ['', false, 'blank'],
-    ['A', false, 'too short to judge'],
-  ])('%s → %s (%s)', (merchant, expected) => {
-    expect(looksLikeBankDescriptor(merchant)).toBe(expected);
-  });
 });
 
 describe('InlineMerchantRename', () => {

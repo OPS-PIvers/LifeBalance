@@ -2,6 +2,7 @@ import { useId, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { useMerchantRules } from '@/hooks/useMerchantRules';
+import { looksLikeBankDescriptor } from '@/utils/bankDescriptor';
 import { suggestPatternFromDescriptor } from '@/utils/merchantRules';
 
 /**
@@ -17,31 +18,6 @@ import { suggestPatternFromDescriptor } from '@/utils/merchantRules';
  * qualifiers, category, bill links and no-spend exemptions to the Settings
  * editor, which is linked from the helper text.
  */
-
-/**
- * Whether a merchant string reads like raw bank text rather than something a
- * person typed. Gates the affordance so a hand-entered "Coffee" isn't offered a
- * rename it doesn't need, while both of the descriptors this feature exists for
- * DO qualify:
- *
- *   "AMERICAN EXPRESS ACH PMT"        → all-caps          ✓
- *   "APPLE.COM/BILL 866-712-7753 CA"  → all-caps + digits ✓
- *   "Target" / "Trader Joe's"         → neither           ✗
- *
- * Note the all-caps test alone is what catches `AMEX ACH PAYMENT`, which has no
- * trailing noise at all — gating on "did `suggestPatternFromDescriptor` strip
- * something" would have missed exactly the case that motivated the feature.
- * A lowercase-but-ugly descriptor falls through to the Settings editor; that's
- * an accepted miss, not an oversight.
- */
-export function looksLikeBankDescriptor(merchant: string): boolean {
-  const trimmed = merchant.trim();
-  if (trimmed.length < 2) return false;
-  const letters = trimmed.replace(/[^\p{L}]/gu, '');
-  if (letters.length >= 2 && letters === letters.toUpperCase()) return true;
-  if (/\d/.test(trimmed)) return true;
-  return /[*/#]/.test(trimmed);
-}
 
 export interface InlineMerchantRenameProps {
   /** The RAW bank descriptor, exactly as stored on the transaction. */

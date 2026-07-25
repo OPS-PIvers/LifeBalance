@@ -3,7 +3,13 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import MerchantRulesCard from './MerchantRulesCard';
-import { MAX_MERCHANT_RULES, type BudgetBucket, type CalendarItem, type MerchantRule } from '@/types/schema';
+import {
+  MAX_MERCHANT_RULES,
+  type BudgetBucket,
+  type CalendarItem,
+  type MerchantRule,
+  type Transaction,
+} from '@/types/schema';
 
 const { mockAddRule, mockUpdateRule, mockDeleteRule } = vi.hoisted(() => ({
   mockAddRule: vi.fn(),
@@ -15,6 +21,7 @@ let mockRules: MerchantRule[] = [];
 let mockSaving = false;
 let mockBuckets: BudgetBucket[] = [];
 let mockCalendarItems: CalendarItem[] = [];
+let mockTransactions: Transaction[] = [];
 
 vi.mock('@/hooks/useMerchantRules', () => ({
   useMerchantRules: () => ({
@@ -40,8 +47,14 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
     get calendarItems() {
       return mockCalendarItems;
     },
+    get transactions() {
+      return mockTransactions;
+    },
   }),
-  useHouseholdCore: () => ({ householdSettings: { currency: 'USD' } }),
+  useHouseholdCore: () => ({
+    householdId: 'hh-1',
+    householdSettings: { currency: 'USD' },
+  }),
 }));
 
 function makeRule(overrides: Partial<MerchantRule> & { pattern: string }): MerchantRule {
@@ -56,6 +69,31 @@ function makeBill(id: string, title: string): CalendarItem {
   return { id, title, amount: 90, date: '2026-07-01', type: 'expense', isPaid: false };
 }
 
+function makeTransaction(id: string, merchant: string, date: string, category: string): Transaction {
+  return {
+    id,
+    merchant,
+    date,
+    category,
+    amount: 2.99,
+    status: 'verified',
+    isRecurring: false,
+    source: 'bank-sync',
+    autoCategorized: false,
+  };
+}
+
+/**
+ * Three sightings of the same Apple descriptor with different trailing noise —
+ * enough to clear SUGGESTION_MIN_OCCURRENCES, and they seed the single pattern
+ * "APPLE.COM/BILL".
+ */
+const APPLE_HISTORY: Transaction[] = [
+  makeTransaction('t1', 'APPLE.COM/BILL 866-712-7753 CA', '2026-07-01', 'Subscriptions'),
+  makeTransaction('t2', 'APPLE.COM/BILL 240710', '2026-07-10', 'Subscriptions'),
+  makeTransaction('t3', 'APPLE.COM/BILL 240722', '2026-07-22', 'Subscriptions'),
+];
+
 describe('MerchantRulesCard', () => {
   beforeEach(() => {
     mockAddRule.mockReset().mockResolvedValue(undefined);
@@ -67,6 +105,8 @@ describe('MerchantRulesCard', () => {
       { id: 'b1', name: 'Subscriptions', limit: 50, color: 'evergreen', isVariable: false, isCore: true },
     ];
     mockCalendarItems = [makeBill('bill-1', 'Electric Bill')];
+    mockTransactions = [];
+    window.localStorage.clear();
   });
 
   it('shows an empty state with a create affordance when no rules exist', () => {
@@ -211,5 +251,109 @@ describe('MerchantRulesCard', () => {
 
     await waitFor(() => expect(mockAddRule).toHaveBeenCalledTimes(1));
     expect(screen.getByRole('textbox', { name: 'Bank description contains' })).toHaveValue('NETFLIX');
+  });
+
+  describe('suggestions', () => {
+    it('renders no suggestions section when history proposes nothing', () => {
+      // Two sightings is under SUGGESTION_MIN_OCCURRENCES.
+      mockTransactions = APPLE_HISTORY.slice(0, 2);
+      render(<MerchantRulesCard />);
+
+      expect(screen.queryByText('Suggested from your history')).not.toBeInTheDocument();
+    });
+
+    it('proposes a rule for a descriptor seen often enough, with its evidence', () => {
+      mockTransactions = APPLE_HISTORY;
+      render(<MerchantRulesCard />);
+
+      expect(screen.getByText('Suggested from your history')).toBeInTheDocument();
+      const row = screen.getByRole('button', { name: 'Create a rule for APPLE.COM/BILL' });
+      expect(within(row).getByText('APPLE.COM/BILL')).toBeInTheDocument();
+      // The raw descriptor is the evidence — the most recent matching one.
+      expect(within(row).getByText('APPLE.COM/BILL 240722')).toBeInTheDocument();
+      expect(within(row).getByText(/Seen 3 times/)).toBeInTheDocument();
+      expect(within(row).getByText('Subscriptions')).toBeInTheDocument();
+    });
+
+    it('opens the CREATE sheet prefilled from the suggestion and adds the rule', async () => {
+      const user = userEvent.setup();
+      mockTransactions = APPLE_HISTORY;
+      render(<MerchantRulesCard />);
+
+      await user.click(screen.getByRole('button', { name: 'Create a rule for APPLE.COM/BILL' }));
+
+      // Create mode, not edit mode — title, save label, and no delete affordance.
+      expect(await screen.findByText('New merchant rule')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Delete rule' })).not.toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: 'Bank description contains' })).toHaveValue(
+        'APPLE.COM/BILL'
+      );
+      expect(screen.getByRole('combobox', { name: 'Category' })).toHaveValue('Subscriptions');
+
+      await user.click(screen.getByRole('button', { name: 'Create rule' }));
+
+      await waitFor(() =>
+        expect(mockAddRule).toHaveBeenCalledWith({
+          pattern: 'APPLE.COM/BILL',
+          category: 'Subscriptions',
+        })
+      );
+      expect(mockUpdateRule).not.toHaveBeenCalled();
+    });
+
+    it('does not leak a seed into a subsequent edit of a real rule', async () => {
+      const user = userEvent.setup();
+      mockTransactions = APPLE_HISTORY;
+      mockRules = [makeRule({ id: 'netflix', pattern: 'NETFLIX', name: 'Netflix' })];
+      render(<MerchantRulesCard />);
+
+      await user.click(screen.getByRole('button', { name: 'Create a rule for APPLE.COM/BILL' }));
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      await user.click(screen.getByRole('button', { name: 'Edit merchant rule Netflix' }));
+
+      expect(await screen.findByText('Edit merchant rule')).toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: 'Bank description contains' })).toHaveValue('NETFLIX');
+      expect(screen.getByRole('combobox', { name: 'Category' })).toHaveValue('');
+    });
+
+    it('hides a dismissed suggestion, and keeps it hidden across a remount', async () => {
+      const user = userEvent.setup();
+      mockTransactions = APPLE_HISTORY;
+      const { unmount } = render(<MerchantRulesCard />);
+
+      await user.click(
+        screen.getByRole('button', { name: 'Dismiss the suggestion for APPLE.COM/BILL' })
+      );
+      expect(screen.queryByText('Suggested from your history')).not.toBeInTheDocument();
+
+      // Persisted per household + RAW pattern, so a fresh mount stays quiet.
+      expect(
+        window.localStorage.getItem('lb_merchant_rule_dismissed_hh-1_apple.com/bill')
+      ).toBe('1');
+
+      unmount();
+      render(<MerchantRulesCard />);
+      expect(screen.queryByText('Suggested from your history')).not.toBeInTheDocument();
+    });
+
+    it('never proposes a descriptor a bare rule already covers', () => {
+      mockTransactions = APPLE_HISTORY;
+      mockRules = [makeRule({ id: 'apple', pattern: 'APPLE.COM', name: 'Apple' })];
+      render(<MerchantRulesCard />);
+
+      expect(screen.queryByText('Suggested from your history')).not.toBeInTheDocument();
+    });
+
+    it('still proposes a descriptor whose only rule is amount-qualified', () => {
+      // An amount-qualified rule covers a SUBSET of the descriptor's history, so
+      // the remaining charges are still unnamed and worth suggesting.
+      mockTransactions = APPLE_HISTORY;
+      mockRules = [
+        makeRule({ id: 'apple299', pattern: 'APPLE.COM', amount: 2.99, name: 'iCloud+' }),
+      ];
+      render(<MerchantRulesCard />);
+
+      expect(screen.getByText('Suggested from your history')).toBeInTheDocument();
+    });
   });
 });

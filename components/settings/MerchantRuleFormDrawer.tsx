@@ -22,11 +22,28 @@ export interface MerchantRuleBillOption {
   title: string;
 }
 
+/** Starting values for a brand-new rule (see the `seed` prop). */
+export interface MerchantRuleSeed {
+  pattern: string;
+  category?: string;
+}
+
 export interface MerchantRuleFormDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   /** The saved rule being edited, or null/undefined to author a new one. */
   rule?: MerchantRule | null;
+  /**
+   * Field values to prefill a NEW rule with — the accept path for a
+   * `utils/merchantRuleSuggestions` proposal. Purely a seed: the sheet stays in
+   * CREATE mode (its title, its save label, and the parent's add-vs-update
+   * choice are all unaffected), so this is only ever the starting text.
+   *
+   * Ignored entirely when `rule` is set: an existing rule is its own source of
+   * truth, and letting a seed bleed into an edit would silently rewrite fields
+   * the user did not touch.
+   */
+  seed?: MerchantRuleSeed | null;
   /**
    * Every saved rule, used ONLY for the duplicate-pattern warning
    * ({@link findShadowingRule}). Includes the rule being edited — the engine
@@ -85,17 +102,37 @@ interface FormState {
   submitAttempted: boolean;
 }
 
-const toFormState = (rule: MerchantRule | null | undefined): FormState => ({
-  pattern: rule?.pattern ?? '',
-  // Presence, never truthiness: `0` is a legitimate qualifier (an Apple Pay
-  // pre-authorization stub), and `rule.amount && …` would drop it.
-  amount: rule?.amount !== undefined ? String(rule.amount) : '',
-  name: rule?.name ?? '',
-  category: rule?.category ?? '',
-  billId: rule?.billId ?? '',
-  exempt: rule?.exempt ?? false,
+const EMPTY_FORM: FormState = {
+  pattern: '',
+  amount: '',
+  name: '',
+  category: '',
+  billId: '',
+  exempt: false,
   submitAttempted: false,
-});
+};
+
+const toFormState = (
+  rule: MerchantRule | null | undefined,
+  seed?: MerchantRuleSeed | null
+): FormState => {
+  // A seed only ever starts a NEW rule — never merged field-by-field into an
+  // existing one, so an edit can't silently pick up a suggestion's values.
+  if (!rule) {
+    return { ...EMPTY_FORM, pattern: seed?.pattern ?? '', category: seed?.category ?? '' };
+  }
+  return {
+    ...EMPTY_FORM,
+    pattern: rule.pattern,
+    // Presence, never truthiness: `0` is a legitimate qualifier (an Apple Pay
+    // pre-authorization stub), and `rule.amount && …` would drop it.
+    amount: rule.amount !== undefined ? String(rule.amount) : '',
+    name: rule.name ?? '',
+    category: rule.category ?? '',
+    billId: rule.billId ?? '',
+    exempt: rule.exempt ?? false,
+  };
+};
 
 /**
  * Parse the optional amount qualifier. `undefined` value + `ok: true` means the
@@ -127,6 +164,7 @@ const MerchantRuleFormDrawer: React.FC<MerchantRuleFormDrawerProps> = ({
   isOpen,
   onClose,
   rule,
+  seed,
   rules,
   categoryOptions,
   billOptions,
@@ -134,18 +172,18 @@ const MerchantRuleFormDrawer: React.FC<MerchantRuleFormDrawerProps> = ({
   onDelete,
   saving = false,
 }) => {
-  const [form, setForm] = useState<FormState>(() => toFormState(rule));
+  const [form, setForm] = useState<FormState>(() => toFormState(rule, seed));
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // Reset the draft whenever the sheet opens, or switches to a different rule.
-  // Done during render on that edge (not in an effect) so there is no extra
-  // commit — the same pattern NotificationSettings uses to mirror a prop.
-  const formKey = `${isOpen ? 'open' : 'closed'}:${rule?.id ?? 'new'}`;
+  // Reset the draft whenever the sheet opens, or switches to a different rule
+  // or seed. Done during render on that edge (not in an effect) so there is no
+  // extra commit — the same pattern NotificationSettings uses to mirror a prop.
+  const formKey = `${isOpen ? 'open' : 'closed'}:${rule?.id ?? `new:${seed?.pattern ?? ''}`}`;
   const [prevFormKey, setPrevFormKey] = useState(formKey);
   if (prevFormKey !== formKey) {
     setPrevFormKey(formKey);
-    setForm(toFormState(rule));
+    setForm(toFormState(rule, seed));
     setConfirmDelete(false);
   }
 
