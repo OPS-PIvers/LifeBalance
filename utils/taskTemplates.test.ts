@@ -72,6 +72,40 @@ describe('buildToDosFromTemplate', () => {
     expect(result[0]).not.toHaveProperty('points');
   });
 
+  it('carries a template item category onto the spawned to-do (F-TODO-16)', () => {
+    const template: TaskTemplate = {
+      id: 't6',
+      name: 'Saturday reset',
+      items: [{ text: 'Vacuum', category: 'Household' }],
+    };
+
+    expect(buildToDosFromTemplate(template, today, 'uid-parent')[0]?.category).toBe('Household');
+  });
+
+  it('omits category entirely when the template item has none or it is blank', () => {
+    const template: TaskTemplate = {
+      id: 't7',
+      name: 'Mixed',
+      items: [{ text: 'No category' }, { text: 'Blank category', category: '   ' }],
+    };
+
+    const result = buildToDosFromTemplate(template, today, 'uid-parent');
+
+    // Absence is the canonical "Uncategorized" value — never an empty string.
+    expect(result[0]).not.toHaveProperty('category');
+    expect(result[1]).not.toHaveProperty('category');
+  });
+
+  it('trims a template item category', () => {
+    const template: TaskTemplate = {
+      id: 't8',
+      name: 'Padded',
+      items: [{ text: 'Sweep', category: '  Household  ' }],
+    };
+
+    expect(buildToDosFromTemplate(template, today, 'uid-parent')[0]?.category).toBe('Household');
+  });
+
   it('returns an empty array for a template with no items', () => {
     const template: TaskTemplate = { id: 't5', name: 'Empty', items: [] };
 

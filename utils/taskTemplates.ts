@@ -29,5 +29,10 @@ export const buildToDosFromTemplate = (
       assignedTo: item.assignedTo || fallbackAssignee,
       isCompleted: false,
       source: 'manual' as const,
+      // F-TODO-16 — a template item's category carries onto the spawned to-do.
+      // Omitted rather than written as '' when blank: absence is the canonical
+      // "Uncategorized" representation. Unlike `points` above, `category` IS on
+      // the `todos` rules whitelist, so this actually persists.
+      ...(item.category?.trim() ? { category: item.category.trim() } : {}),
     }));
 };

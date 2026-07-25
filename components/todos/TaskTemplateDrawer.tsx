@@ -9,13 +9,31 @@ import { Button } from '@/components/ui/Button';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import Input from '@/components/ui/Input';
 import Textarea from '@/components/ui/Textarea';
+import { CategoryChipPicker } from '@/components/ui/CategoryChipPicker';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import toast from 'react-hot-toast';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { Info } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import { getTodoCategoryColor } from '@/utils/todoCategoryColor';
 
 const templateIconMap = new Map(TEMPLATE_ICONS.map(i => [i.id, i.icon]));
+
+/**
+ * F-TODO-16 — the category a template hands to the to-dos it spawns, when its
+ * items agree on one. Items carry the category individually (TaskTemplateItem
+ * .category) so a future per-item editor can diverge them, but this drawer
+ * authors one category per template (see the create form), so the row can show
+ * a single chip. Returns undefined for a template with no/mixed categories.
+ */
+const sharedTemplateCategory = (template: TaskTemplate): string | undefined => {
+  const first = template.items[0]?.category?.trim();
+  if (!first) return undefined;
+  const allMatch = template.items.every(
+    item => (item.category ?? '').trim().toLowerCase() === first.toLowerCase()
+  );
+  return allMatch ? first : undefined;
+};
 
 interface TaskTemplateDrawerProps {
   isOpen: boolean;
@@ -31,11 +49,19 @@ interface TaskTemplateDrawerProps {
  * in scope for this size-medium feature.
  */
 export const TaskTemplateDrawer: React.FC<TaskTemplateDrawerProps> = ({ isOpen, onClose }) => {
-  const { taskTemplates, applyTaskTemplate, deleteTaskTemplate, addTaskTemplate } = useTodos();
+  const {
+    taskTemplates,
+    applyTaskTemplate,
+    deleteTaskTemplate,
+    addTaskTemplate,
+    todoCategories,
+    updateTodoCategories,
+  } = useTodos();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [newItemsText, setNewItemsText] = useState('');
+  const [newCategory, setNewCategory] = useState<string | undefined>(undefined);
   const [isSavingNew, setIsSavingNew] = useState(false);
 
   // Reset the create form each time the drawer reopens.
@@ -46,6 +72,7 @@ export const TaskTemplateDrawer: React.FC<TaskTemplateDrawerProps> = ({ isOpen, 
       setIsCreating(false);
       setNewName('');
       setNewItemsText('');
+      setNewCategory(undefined);
     }
   }
 
@@ -70,13 +97,21 @@ export const TaskTemplateDrawer: React.FC<TaskTemplateDrawerProps> = ({ isOpen, 
     showDeleteConfirmation(() => deleteTaskTemplate(template.id), template.name);
   };
 
+  const handleAddCategory = async (category: string) => {
+    await updateTodoCategories([...todoCategories, category]);
+  };
+
   const handleSaveNew = async () => {
     const name = newName.trim();
+    // F-TODO-16 — one category for the whole template, stamped onto every item.
+    // Absent (never '') is the canonical "Uncategorized" value on the spawned
+    // to-dos, so the field is only written when a category was picked.
+    const category = newCategory?.trim();
     const items = newItemsText
       .split('\n')
       .map(line => line.trim())
       .filter(Boolean)
-      .map(text => ({ text }));
+      .map(text => ({ text, ...(category ? { category } : {}) }));
 
     if (!name || items.length === 0) {
       toast.error('Give the template a name and at least one task');
@@ -89,6 +124,7 @@ export const TaskTemplateDrawer: React.FC<TaskTemplateDrawerProps> = ({ isOpen, 
       setIsCreating(false);
       setNewName('');
       setNewItemsText('');
+      setNewCategory(undefined);
     } catch {
       // Error is already handled and toasted by addTaskTemplate
     } finally {
@@ -121,6 +157,8 @@ export const TaskTemplateDrawer: React.FC<TaskTemplateDrawerProps> = ({ isOpen, 
                   : `${template.items.length} ${template.items.length === 1 ? 'task' : 'tasks'}: ${template.items
                       .map(item => item.text)
                       .join(', ')}`;
+              const category = sharedTemplateCategory(template);
+              const categoryColor = getTodoCategoryColor(category);
 
               return (
                 // Bare hairline/clip wrapper for the two-button compound row below
@@ -155,6 +193,18 @@ export const TaskTemplateDrawer: React.FC<TaskTemplateDrawerProps> = ({ isOpen, 
                         {template.name}
                       </span>
                       <span className="block text-xs text-brand-500 dark:text-brand-400 truncate">
+                        {category && (
+                          <span
+                            className={cn(
+                              'inline-flex items-center rounded-full border px-1.5 py-0.5 text-xxs mr-1.5 align-middle',
+                              categoryColor.bg,
+                              categoryColor.text,
+                              categoryColor.border
+                            )}
+                          >
+                            {category}
+                          </span>
+                        )}
                         {itemPreview}
                       </span>
                     </span>
@@ -202,6 +252,19 @@ export const TaskTemplateDrawer: React.FC<TaskTemplateDrawerProps> = ({ isOpen, 
               onChange={(e) => setNewItemsText(e.target.value)}
               placeholder={'Take out trash\nBring in bins'}
               rows={3}
+            />
+            {/* F-TODO-16 — ONE picker for the whole template rather than a chip
+                row per line: items are authored here as free-text lines, so a
+                per-item control would need a per-item editor and would dwarf
+                the three-field form. Every spawned to-do inherits this. */}
+            <CategoryChipPicker
+              label="Category (optional)"
+              categories={todoCategories}
+              value={newCategory}
+              onChange={setNewCategory}
+              onAddCategory={handleAddCategory}
+              allowClear
+              disabled={isSavingNew}
             />
             <div className="flex items-center gap-2 justify-end">
               <Button variant="secondary" size="sm" onClick={() => setIsCreating(false)} disabled={isSavingNew}>

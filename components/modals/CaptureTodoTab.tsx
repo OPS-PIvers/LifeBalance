@@ -4,6 +4,7 @@ import { HouseholdMember } from '@/types/schema';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
+import { CategoryChipPicker } from '@/components/ui/CategoryChipPicker';
 
 interface CaptureTodoTabProps {
   text: string;
@@ -13,6 +14,14 @@ interface CaptureTodoTabProps {
   assignee: string;
   setAssignee: (value: string) => void;
   members: HouseholdMember[];
+  /** F-TODO-16 — the household's to-do category vocabulary. */
+  categories: string[];
+  /** F-TODO-16 — chosen category, or undefined for "Uncategorized" (the
+   *  canonical absent value; the parent must not write ''). */
+  category: string | undefined;
+  setCategory: (value: string | undefined) => void;
+  /** Persists a newly minted category name to the household vocabulary. */
+  onAddCategory: (name: string) => Promise<void>;
   onSubmit: () => void;
 }
 
@@ -24,6 +33,10 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
   assignee,
   setAssignee,
   members,
+  categories,
+  category,
+  setCategory,
+  onAddCategory,
   onSubmit,
 }) => {
   const taskInputRef = useAutoFocus<HTMLInputElement>();
@@ -82,6 +95,20 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
           </div>
         )}
       </fieldset>
+
+      {/* F-TODO-16 — optional category, kept LAST so the fast path (type →
+          Create Task) is untouched: the task field still autofocuses and the
+          submit button stays directly under the fields the capture flow
+          actually requires. One wrapping chip row (plus its inline "+ Add"),
+          not a disclosure, because a single tap is the whole interaction. */}
+      <CategoryChipPicker
+        label="Category (optional)"
+        categories={categories}
+        value={category}
+        onChange={setCategory}
+        onAddCategory={onAddCategory}
+        allowClear
+      />
 
       <Button
         onClick={onSubmit}

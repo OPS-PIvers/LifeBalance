@@ -68,7 +68,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
   const { addTransaction, addTransactions, updateTransaction, addCalendarItem, buckets, transactions, accounts } = useFinance();
   const { habits } = useGamification();
   const { currentUser, members, householdId } = useHouseholdCore();
-  const { addToDo } = useTodos();
+  const { addToDo, todoCategories, updateTodoCategories } = useTodos();
   const { addShoppingItem, stores } = useShopping();
   // Resolve AI-returned store names to existing stores, creating new ones only
   // when they're certainly not duplicates.
@@ -133,6 +133,9 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
   const [todoText, setTodoText] = useState('');
   const [todoDate, setTodoDate] = useState('');
   const [todoAssignee, setTodoAssignee] = useState('');
+  // F-TODO-16 — optional category. `undefined` (never '') is the canonical
+  // "Uncategorized" value, so it is only put on the payload when set.
+  const [todoCategory, setTodoCategory] = useState<string | undefined>(undefined);
 
   // --- Shopping List State ---
   const [shoppingName, setShoppingName] = useState('');
@@ -224,6 +227,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
     setTodoText('');
     setTodoDate(getLocalDateString());
     setTodoAssignee(currentUser?.uid ?? '');
+    setTodoCategory(undefined);
 
     // Reset Shopping State
     setShoppingName('');
@@ -585,6 +589,12 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
   };
 
   // --- To-Do Logic ---
+  // F-TODO-16 — mint a new category from the capture form. Callers pass the
+  // WHOLE next vocabulary to updateTodoCategories (see the mutation's contract).
+  const handleAddTodoCategory = async (name: string) => {
+    await updateTodoCategories([...todoCategories, name]);
+  };
+
   const handleToDoSubmit = async () => {
     if (members.length === 0) {
       toast.error('No household members available.');
@@ -611,11 +621,14 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
     }
 
     try {
+      const trimmedCategory = todoCategory?.trim();
       await addToDo({
         text: todoText.trim(),
         completeByDate: todoDate,
         assignedTo: todoAssignee,
-        isCompleted: false
+        isCompleted: false,
+        // Absent (not '') is the canonical "Uncategorized" value — see ToDo.category.
+        ...(trimmedCategory ? { category: trimmedCategory } : {})
       });
       toast.success('Task added');
       handleClose();
@@ -837,6 +850,10 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
               assignee={todoAssignee}
               setAssignee={setTodoAssignee}
               members={members}
+              categories={todoCategories}
+              category={todoCategory}
+              setCategory={setTodoCategory}
+              onAddCategory={handleAddTodoCategory}
               onSubmit={handleToDoSubmit}
             />
           )}
