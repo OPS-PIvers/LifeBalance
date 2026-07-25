@@ -63,8 +63,13 @@ export const BUDGETED_IN_CALENDAR = "Budgeted in Calendar";
  * in its name (e.g. a money-transfer service). That direction of error is the
  * safer one: it can only make a day count as no-spend that arguably shouldn't,
  * never break a day that should count.
+ *
+ * The optional trailing `s` catches a plural descriptor ("ONLINE TRANSFERS TO
+ * …"). Wells Fargo uses the singular in practice; the word boundary would
+ * otherwise reject the plural outright, which is a silent miss rather than a
+ * visible one.
  */
-const TRANSFER_DESCRIPTOR_RE = /\btransfer\b/i;
+const TRANSFER_DESCRIPTOR_RE = /\btransfers?\b/i;
 
 /** The transaction fields the classifier reads. */
 export interface SpendCandidate {

@@ -465,6 +465,17 @@ already has one. The per-`messageId` ledger claim stops the same email being
 processed twice; this stops a *second* email the same morning (another account, a
 backfill) re-crediting the day.
 
+That second guard is sequential, not atomic. Two emails for the same household
+and the same target day, processed *concurrently*, could both pass the
+`sourceNoSpendDate` check before either batch commits, and both credit the day —
+one day of doubled points. Not reachable in the current setup: the Apps Script
+POSTs each email in turn and awaits the response, so two runs never overlap. It
+is deliberately not fixed with a transactional claim on the verdict doc, because
+that claim would have to commit separately from the money batch — and if that
+batch then failed, the retry would find the claim present and skip firing,
+losing the credit permanently. A doubled day is recoverable by hand (delete the
+extra submission and decrement `points`); a silently lost one is not.
+
 **Configuring it.** On the habit itself: Habits → edit a habit → Automations →
 **No-spend days**, then pick "Every clean day" or "Clean weekend". Nothing fires
 until at least one habit is wired up; the push still reports the clean day.

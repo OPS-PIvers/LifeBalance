@@ -46,6 +46,11 @@ describe("spendExemption", () => {
     expect(spendExemption(tx({ merchant: "Transfer to savings" }))).toBe("transfer");
   });
 
+  // The word boundary would otherwise reject the plural outright — a silent miss.
+  it("exempts a plural transfer descriptor too", () => {
+    expect(spendExemption(tx({ merchant: "ONLINE TRANSFERS TO SAVINGS" }))).toBe("transfer");
+  });
+
   // Word-bounded, so a merchant that merely CONTAINS the letters doesn't slip
   // through as a transfer.
   it("does not treat a merchant with 'transferred' inside it as a transfer", () => {
