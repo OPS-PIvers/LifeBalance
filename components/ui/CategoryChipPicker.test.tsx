@@ -50,6 +50,30 @@ describe('CategoryChipPicker', () => {
     expect(onChange).toHaveBeenCalledWith(undefined);
   });
 
+  it('dismisses an open "+ Add" editor when an existing chip is picked instead', () => {
+    const onChange = vi.fn();
+    const onAddCategory = vi.fn();
+    render(
+      <CategoryChipPicker
+        categories={CATEGORIES}
+        value={undefined}
+        onChange={onChange}
+        onAddCategory={onAddCategory}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add a category' }));
+    fireEvent.change(screen.getByLabelText('New category name'), { target: { value: 'Yard' } });
+
+    // Changing your mind and tapping an existing chip should not leave the
+    // half-typed editor hanging beside the new selection.
+    fireEvent.click(screen.getByRole('button', { name: 'Errands' }));
+
+    expect(onChange).toHaveBeenCalledWith('Errands');
+    expect(onAddCategory).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('New category name')).not.toBeInTheDocument();
+  });
+
   it('does NOT clear when allowClear is omitted', () => {
     const onChange = vi.fn();
     render(

@@ -152,6 +152,10 @@ export const CategoryChipPicker: React.FC<CategoryChipPickerProps> = ({
               key={chip}
               type="button"
               onClick={() => {
+                // Picking an existing chip while the "+ Add" editor is open is
+                // a change of mind, so dismiss the editor rather than leaving
+                // it hanging beside the new selection.
+                closeEditor();
                 if (selected) {
                   if (allowClear) onChange(undefined);
                   return;
