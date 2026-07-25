@@ -84,15 +84,16 @@ interface RuleMatchStats {
 /**
  * Per-rule match counts derived from the household's OWN transactions.
  *
- * WHY NOT `MerchantRule.matchCount` / `lastMatchedAt`: those stored counters are
- * reserved for the server-side sync pipeline that stamps them where rules are
- * APPLIED — which does not exist yet. Nothing in the client ever writes them, so
- * reading them made every working rule report "never matched" and invited the
- * user to delete a rule that was renaming charges in front of them. The stored
- * fields are deliberately left untouched on the document (that pipeline still
- * owns them) and deliberately ignored here. They are also a DIFFERENT quantity —
+ * WHY NOT `MerchantRule.matchCount` / `lastMatchedAt`: nothing writes those
+ * stored counters — not the client, and (by decision) not the nightly sync
+ * either, which would have to read-modify-write the whole `merchantRules` array
+ * inside a non-transactional batch to do it. Reading them made every working
+ * rule report "never matched" and invited the user to delete a rule that was
+ * renaming charges in front of them. They are also a DIFFERENT quantity —
  * "times a pipeline fired" vs. "charges this rule renames" — so summing them or
- * falling back between them would produce a number that means nothing.
+ * falling back between them would produce a number that means nothing. The
+ * fields are left untouched on the document (an old value must survive an edit)
+ * and deliberately ignored here; see the `MerchantRule` doc in types/schema.ts.
  *
  * Attribution goes through `pickMerchantRule`, so each transaction is credited
  * to the ONE rule that actually wins it. Counting every rule whose pattern
