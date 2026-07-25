@@ -25,6 +25,7 @@ import {
   weekendPartnerDate,
   type SpendCandidate,
 } from "./noSpendDay";
+import type { MerchantRule } from "./merchantRules";
 import { addDays, format, parseISO } from "date-fns";
 
 /** The no-spend scope stored on a habit (mirrors `NoSpendScope` in types/schema.ts). */
@@ -123,6 +124,13 @@ export interface ApplyNoSpendDayDeps {
   extraSpend: SpendCandidate[];
   /** The household doc's data, for the freeze bank (already loaded by the caller). */
   householdData: Record<string, unknown> | undefined;
+  /**
+   * The household's merchant rules, so an `exempt` rule stops a charge breaking
+   * the day. Applied to EVERY row the query loads, not just this email's new
+   * ones — an exempted subscription must stay exempt on every later sync too.
+   * Omit for the pre-rules behaviour.
+   */
+  merchantRules?: readonly MerchantRule[];
 }
 
 /** A habit that survived the read phase and is ready to be scored + staged. */
@@ -148,6 +156,7 @@ interface ReadyFire {
  */
 export async function applyNoSpendDay(deps: ApplyNoSpendDayDeps): Promise<NoSpendOutcome> {
   const { db, householdId, batch, targetDate, today, extraSpend, householdData } = deps;
+  const merchantRules = deps.merchantRules;
   const notNoSpend: NoSpendOutcome = {
     targetDate,
     isNoSpendDay: false,
@@ -183,7 +192,7 @@ export async function applyNoSpendDay(deps: ApplyNoSpendDayDeps): Promise<NoSpen
     ];
     candidateCount = candidates.length;
 
-    const blocked = candidates.filter((c) => spendExemption(c) === null);
+    const blocked = candidates.filter((c) => spendExemption(c, merchantRules) === null);
     if (blocked.length > 0) {
       logger.info(
         `noSpend: ${targetDate} is not a no-spend day — ${blocked.length} unplanned ` +
