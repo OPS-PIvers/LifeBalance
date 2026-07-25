@@ -136,11 +136,16 @@ export function computeAnyNotificationsEnabled(
   const todoRemindersEnabled = prefs.todoReminders?.enabled !== false;
   // bankEmailSync is fail-open like weeklyRecap/todoReminders — absent means ON.
   const bankEmailSyncEnabled = prefs.bankEmailSync?.enabled !== false;
-  // F-HABITS-03: a reminder with no days selected can never fire, so it doesn't
-  // make the member reachable. Mirrors hasEnabledHabitReminder on the client.
+  // F-HABITS-03: a reminder can only fire if it's enabled, has a day, AND has a
+  // usable time. The time check matters for parity: the client reaches this
+  // through normalizeHabitReminder, which rejects a malformed time outright, so
+  // omitting it here would count a corrupt `99:99` entry as reachable on the
+  // server and not on the client. Keep in step with isValidReminderTime.
   const anyHabitReminderEnabled = Object.values(prefs.perHabitReminders ?? {}).some(
     (config) =>
       config?.enabled === true &&
+      typeof config.time === "string" &&
+      /^([01]\d|2[0-3]):[0-5]\d$/.test(config.time) &&
       Array.isArray(config.days) &&
       config.days.length > 0
   );

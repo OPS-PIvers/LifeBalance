@@ -95,6 +95,16 @@ describe("computeAnyNotificationsEnabled", () => {
     expect(computeAnyNotificationsEnabled(noDays, ["token1"])).toBe(false);
   });
 
+  // Parity guard: the client reaches this via normalizeHabitReminder, which
+  // rejects a malformed time, so a corrupt entry must not count here either.
+  it("stays false for a reminder whose stored time is unusable", () => {
+    const prefs = {
+      ...basePrefs,
+      perHabitReminders: { h1: { enabled: true, time: "99:99", days: [1] } },
+    };
+    expect(computeAnyNotificationsEnabled(prefs, ["token1"])).toBe(false);
+  });
+
   it("treats weeklyRecap as enabled by default when absent, even if every other category is off", () => {
     const { weeklyRecap: _omit, ...rest } = basePrefs;
     expect(computeAnyNotificationsEnabled(rest, ["token1"])).toBe(true);
