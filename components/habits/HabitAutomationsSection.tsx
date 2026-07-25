@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { Sparkles, X, Plus, ListChecks } from 'lucide-react';
 import Input from '@/components/ui/Input';
 import Switch from '@/components/ui/Switch';
@@ -52,6 +52,12 @@ const HabitAutomationsSection: React.FC<HabitAutomationsSectionProps> = ({
   collapsible = false,
 }) => {
   const [keywordDraft, setKeywordDraft] = useState('');
+  // Generated rather than hardcoded so two mounted instances can't collide on the
+  // same DOM id and silently break each other's aria-labelledby association.
+  // (Both current consumers are modals that can't be open at once, but a
+  // duplicate id is invalid DOM and fails automated a11y audits regardless.)
+  const headingId = useId();
+  const noSpendLabelId = useId();
 
   const addKeyword = () => {
     const normalized = normalizeKeyword(keywordDraft);
@@ -70,7 +76,7 @@ const HabitAutomationsSection: React.FC<HabitAutomationsSectionProps> = ({
 
   const heading = (
     <h3
-      id="habit-automations-heading"
+      id={headingId}
       className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase flex items-center gap-1.5"
     >
       <Sparkles size={13} className="text-warm-500" aria-hidden="true" />
@@ -157,7 +163,7 @@ const HabitAutomationsSection: React.FC<HabitAutomationsSectionProps> = ({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p
-              id="habit-no-spend-label"
+              id={noSpendLabelId}
               className="text-sm font-semibold text-brand-700 dark:text-brand-200"
             >
               No-spend days
@@ -172,7 +178,7 @@ const HabitAutomationsSection: React.FC<HabitAutomationsSectionProps> = ({
             checked={noSpend !== undefined}
             onCheckedChange={on => onNoSpendChange(on ? 'day' : undefined)}
             tone="warm"
-            aria-labelledby="habit-no-spend-label"
+            aria-labelledby={noSpendLabelId}
           />
         </div>
 
@@ -264,7 +270,7 @@ const HabitAutomationsSection: React.FC<HabitAutomationsSectionProps> = ({
   }
 
   return (
-    <section aria-labelledby="habit-automations-heading" className="pt-1 space-y-3">
+    <section aria-labelledby={headingId} className="pt-1 space-y-3">
       {heading}
       {body}
     </section>

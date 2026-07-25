@@ -96,8 +96,9 @@ const UNCATEGORIZED = "Uncategorized";
  * overwrite + the ledger record), plus AT MOST 22 for the no-spend habit fire
  * (`MAX_NO_SPEND_HABITS * 2` for the habit + submission docs, the verdict doc,
  * and the merged household update — see noSpendFire.ts). Worst-case batch:
- *   MAX_WITHDRAWALS * 3 + 2 + 22 = 150 * 3 + 24 = 474 < 500 (Firestore's limit).
- * Keep this total under 500 if any factor changes. */
+ *   MAX_WITHDRAWALS * 3 + 2 + 22 = 150 * 3 + 2 + 22 = 474 < 500 (the hard limit).
+ * Each term is kept separate so any one factor can be changed independently:
+ * withdrawals, the fixed email overhead, and the no-spend fire. */
 const MAX_WITHDRAWALS = 150;
 
 /** Max length for bank-derived error text echoed into a push body (item 7). */
