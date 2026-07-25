@@ -310,6 +310,21 @@ it from scratch.
 
 ### Gaps
 
+- **Client-writable arrays on the household doc have no server-side size bound.** The household
+  `allow update` rule in [`firestore.rules`](../../firestore.rules) is a *denylist*: it blocks immutable
+  keys and `subscription`, and validates a handful of named fields (`name`, `lastPaycheckDate`, `aiUsage`,
+  the member roster), but it does not whitelist permitted keys and it does not bound the length of any
+  array a member may write. `merchantRules` (Plan F-MONEY-14), `todoCategories`, `habitCategories` and
+  `redemptionHistory` are each capped only inside client code — `MAX_MERCHANT_RULES` is enforced in the
+  `runTransaction` body, which a member calling the Firestore SDK directly simply does not run.
+  Member-only (not anonymous), so this is abuse-by-insider rather than a public hole, and the practical
+  ceiling is Firestore's 1 MiB document limit. That ceiling is the real damage: the household doc is read
+  by every listener on every client, so a member who inflates it past the limit renders the document
+  unwritable and takes the whole household down, not just their own session. **The pattern to copy already
+  exists in the same file** — `withinMemberCap()` bounds the member roster exactly this way, so the fix is
+  extending that shape to the other arrays, not inventing anything. Called out by review on
+  [#1102](https://github.com/OPS-PIvers/LifeBalance/pull/1102). **Low severity, cheap fix — should land
+  before public launch.**
 - **CSP is Report-Only.** [`firebase.json`](../../firebase.json) sets `Content-Security-Policy-Report-Only`,
   not an enforcing header, and it allows `'unsafe-inline'` scripts. Not necessarily a launch blocker if
   intentional during development, but it weakens XSS defense-in-depth for a finance app. Already tracked:
