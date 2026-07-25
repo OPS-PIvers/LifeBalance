@@ -290,13 +290,54 @@ const ACH_LINE_RE = /^([A-Z][^$]*?)\s*\$\s*([\d,]+\.\d{2})$/i;
 // it, never by a full line of unrelated text.
 const AMOUNT_ONLY_LINE_RE = /^\$\s*[\d,]+\.\d{2}$/;
 
-// Anywhere-in-the-body probe for a card-purchase line, used ONLY to decide
-// whether a MISSING/EMPTY Withdrawals section is believable (see
-// `acceptZeroWithdrawals`). Deliberately loose — it matches the lead verb
-// alone, without requiring the ref/CARD/amount tail — because its job is to
-// notice "this email clearly contains withdrawals" even when the exact line
-// shape has drifted, not to parse them.
-const WITHDRAWAL_SHAPED_LINE_RE = /^(?:PURCHASE|RECURRING PAYMENT) AUTHORIZED ON\b/im;
+// The two lines that legitimately carry a dollar amount OUTSIDE the Withdrawals
+// section, in both renderings: "Ending balance: $949.51" on one line (plain
+// text), or the label alone followed by an amount-only line (HTML table cells).
+// The optional trailing digit absorbs the superscript footnote marker.
+const BALANCE_AMOUNT_LINE_RE = /^(?:ending|available)\s+balance\s*\d*\s*:\s*\$/i;
+const BALANCE_LABEL_ONLY_RE = /^(?:ending|available)\s+balance\s*\d*\s*:?\s*$/i;
+const TRAILING_AMOUNT_RE = /\$\s*[\d,]+\.\d{2}\s*$/;
+
+/**
+ * Does the body contain a money-shaped line that the Balance summary doesn't
+ * account for?
+ *
+ * Used ONLY to decide whether a MISSING/EMPTY Withdrawals section is believable.
+ * A withdrawal line — card or ACH — always ends in a dollar amount, so "every
+ * amount in this email belongs to the Balance summary" is strong evidence that
+ * there genuinely were no withdrawals, and any other amount is evidence that
+ * there were (under a header we failed to recognize).
+ *
+ * This deliberately does NOT reuse `CARD_LINE_RE`/`ACH_LINE_RE`. Probing for the
+ * card lead verb alone would miss an ACH-only night under a renamed section
+ * (`COMCAST-XFINITY CABLE SVCS … $153.95` carries no lead verb), and probing
+ * with `ACH_LINE_RE` body-wide would match the Balance-summary lines themselves —
+ * the exact fabrication the section boundary exists to prevent. Matching on
+ * "ends in an amount, and isn't the balance summary" covers both shapes without
+ * needing to classify anything.
+ *
+ * Errs toward failing loudly: an unrelated dollar figure elsewhere in the email
+ * (a promotional footer, a fee disclosure) makes a genuine no-spend night report
+ * a parse failure. That is the recoverable direction — the alternative silently
+ * drops real spend AND credits a no-spend day that was never earned.
+ */
+function hasUnexplainedAmountLine(text: string): boolean {
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+
+  return lines.some((line, i) => {
+    if (!TRAILING_AMOUNT_RE.test(line)) return false;
+    if (BALANCE_AMOUNT_LINE_RE.test(line)) return false;
+    // HTML table-cell rendering: an amount on its own line is explained when the
+    // line above it is a bare balance label.
+    if (AMOUNT_ONLY_LINE_RE.test(line) && i > 0 && BALANCE_LABEL_ONLY_RE.test(lines[i - 1]!)) {
+      return false;
+    }
+    return true;
+  });
+}
 
 /**
  * Split the Withdrawals section into logical line items: each item is one
@@ -411,7 +452,9 @@ export function parseBankEmail(input: BankEmailParseInput): BankEmailParseResult
   //    the withdrawals. Require it.
   //  - A FORMAT CHANGE (the section renamed, e.g. "Withdrawals/Debits"): the
   //    withdrawal LINES would still be in the body even though the header no
-  //    longer matches. Require that no withdrawal-shaped line appears anywhere.
+  //    longer matches. Require that every dollar amount in the body is accounted
+  //    for by the Balance summary — see `hasUnexplainedAmountLine` for why that
+  //    test rather than a withdrawal-line-shape probe.
   //
   // Anything else keeps the original loud failure, because silently reporting a
   // no-spend day for an email we failed to read would lose real money data AND
@@ -424,9 +467,9 @@ export function parseBankEmail(input: BankEmailParseInput): BankEmailParseResult
           : "The \"Withdrawals\" section was empty and the email has no \"As of\" footer.",
       };
     }
-    if (WITHDRAWAL_SHAPED_LINE_RE.test(text)) {
+    if (hasUnexplainedAmountLine(text)) {
       return {
-        error: "Found withdrawal lines outside a \"Withdrawals\" section — the email format may have changed.",
+        error: "Found amounts outside the Balance summary with no \"Withdrawals\" section — the email format may have changed.",
       };
     }
     return { accountLast4, endingBalance, availableBalance, asOf, withdrawals: [] };

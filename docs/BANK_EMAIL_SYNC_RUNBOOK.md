@@ -311,9 +311,16 @@ per `getQuickAddBaseUrl()` in [services/apiKeyService.ts](../services/apiKeyServ
 what Wells Fargo sends when nothing was withdrawn — a successful sync with zero
 withdrawals, not a failure. The balance is still overwritten as normal. This
 requires the email's `As of` footer to be present (proof the body wasn't
-truncated above the withdrawals) and no withdrawal-shaped line anywhere in it
-(proof the section wasn't merely renamed); failing either of those keeps the loud
-`PARSE_FAILED` below. See `parseBankEmail`'s zero-withdrawal acceptance rules.
+truncated above the withdrawals) and every dollar amount in the body to be
+accounted for by the Balance summary (proof the section wasn't merely renamed —
+this catches an ACH-only night under a renamed header, which a
+withdrawal-line-shape probe would miss, since ACH lines carry no
+`PURCHASE AUTHORIZED ON` lead verb). Failing either keeps the loud
+`PARSE_FAILED` below. Note the second guard errs toward a loud failure: if Wells
+Fargo ever adds an unrelated trailing dollar figure to the layout, a genuine
+no-spend night starts reporting a parse failure — that is the recoverable
+direction, and the fix is to teach `hasUnexplainedAmountLine` about the new line.
+See `parseBankEmail`'s zero-withdrawal acceptance rules.
 
 **"Bank sync failed" push (`PARSE_FAILED`).** `parseBankEmail()` couldn't find the
 expected shape — missing "for account …NNNN", missing the Ending/Available balance

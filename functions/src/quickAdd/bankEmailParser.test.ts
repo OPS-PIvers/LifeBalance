@@ -396,6 +396,70 @@ As of 07/21/2026 at 01:50 a.m., Central Time
       const result = parseBankEmail({ subject: "x", rawBody: renamed, today: TODAY });
       expect("error" in result).toBe(true);
     });
+
+    // Review catch: an ACH/biller line carries no "PURCHASE AUTHORIZED ON" lead
+    // verb, so probing for the card shape alone would let a renamed section on an
+    // ACH-ONLY night pass as a no-spend day — silently dropping real spend AND
+    // crediting a habit that was never earned. The guard tests for amounts the
+    // Balance summary doesn't account for, which covers both line shapes.
+    it("still errors when ONLY ACH lines hide under a renamed section", () => {
+      const renamed = `
+for account ...5581
+Balance summary
+Ending balance: $1,277.90
+Available balance1: $1,165.82
+Debits
+COMCAST-XFINITY CABLE SVCS 260718 0078881 JENNIFER *KING $153.95
+AMERICAN EXPRESS ACH PMT 260720 M6486 JENNIFER IVERS $372.00
+As of 07/21/2026 at 01:50 a.m., Central Time
+`;
+      const result = parseBankEmail({ subject: "x", rawBody: renamed, today: TODAY });
+      expect("error" in result).toBe(true);
+      if ("error" in result) {
+        expect(result.error.toLowerCase()).toContain("format");
+      }
+    });
+
+    it("still errors when a lone ACH line follows no section header at all", () => {
+      const body = `
+for account ...5581
+Balance summary
+Ending balance: $1,277.90
+Available balance1: $1,165.82
+COMCAST-XFINITY CABLE SVCS 260718 0078881 JENNIFER *KING $153.95
+As of 07/21/2026 at 01:50 a.m., Central Time
+`;
+      expect("error" in parseBankEmail({ subject: "x", rawBody: body, today: TODAY })).toBe(true);
+    });
+
+    // The documented cost of that guard: it errs toward a loud failure. If Wells
+    // Fargo ever adds an unrelated dollar figure to the layout, a genuine
+    // no-spend night reports a parse failure rather than fabricating a clean day.
+    // Pinned so the trade-off is a decision on record, not a surprise.
+    it("errs toward failing loudly on an unrelated dollar amount in the body", () => {
+      const promo = `
+for account ...5581
+Balance summary
+Ending balance: $949.51
+Available balance1: $949.51
+Earn a $200 bonus when you open a new account
+As of 07/25/2026 at 03:19 a.m., Central Time
+`;
+      // Note: "$200 bonus" does not END the line, so it is not amount-shaped and
+      // is correctly ignored — only a TRAILING amount reads as a money line.
+      const ignored = parseBankEmail({ subject: "x", rawBody: promo, today: "2026-07-25" });
+      if ("error" in ignored) throw new Error(`expected a parse, got: ${ignored.error}`);
+      expect(ignored.withdrawals).toEqual([]);
+
+      // But a trailing one does trip the guard.
+      const trailing = promo.replace(
+        "Earn a $200 bonus when you open a new account",
+        "New account bonus $200.00"
+      );
+      expect(
+        "error" in parseBankEmail({ subject: "x", rawBody: trailing, today: "2026-07-25" })
+      ).toBe(true);
+    });
   });
 
   it("parses a RECURRING PAYMENT AUTHORIZED ON line like a PURCHASE line", () => {
