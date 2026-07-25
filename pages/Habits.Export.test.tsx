@@ -7,9 +7,12 @@ import { Habit } from '@/types/schema';
 
 // Mock dependencies. useLocation is consumed by the page's tab deep-link hook
 // (useDeepLinkTab); a stable empty-state location keeps the default tab active.
+// useSearchParams backs the F-HABITS-03 `?due=` reminder filter; an empty set
+// keeps the full habit list rendered, which is what this export test asserts on.
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
   useLocation: () => ({ key: 'default', pathname: '/habits', state: null }),
+  useSearchParams: () => [new URLSearchParams(), vi.fn()],
 }));
 
 vi.mock('@/utils/exportUtils', () => ({

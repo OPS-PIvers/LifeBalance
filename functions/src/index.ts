@@ -22,7 +22,18 @@ import {
   type DigestHabit,
   type DigestTodo,
 } from "./shared/digest";
-import { buildActionsDataField, isBillReminderSnoozed } from "./shared/notificationActions";
+import {
+  buildActionsDataField,
+  buildHabitLogActionsDataField,
+  isBillReminderSnoozed,
+} from "./shared/notificationActions";
+import {
+  buildHabitReminderMessage,
+  isRemindableHabit,
+  isReminderDue,
+  localClock,
+  normalizeHabitReminder,
+} from "./shared/habitReminders";
 
 // Re-export for consumers that imported this from index.ts before the
 // extraction to shared/notifications.ts.
@@ -105,7 +116,15 @@ export { purgetrash } from "./purgeTrash";
 const db = admin.firestore();
 
 /**
- * Scheduled function: Runs every hour to check for habit reminders
+ * Scheduled function: Runs every hour to send the household-wide daily habit
+ * nudge (the single `habitReminders.time` toggle in Notification settings).
+ *
+ * F-HABITS-03 made this CONTENT-AWARE: it now counts what the member actually
+ * has left today and stays silent when the answer is zero, instead of pushing
+ * the same "keep those streaks alive" line at someone who finished everything.
+ * Habits carrying their OWN per-habit reminder are excluded from the count —
+ * `sendperhabitreminders` below owns those, and double-nudging the same habit
+ * from two jobs is exactly what a per-habit schedule is meant to replace.
  */
 export const sendhabitreminders = onSchedule("every 1 hours", async () => {
   logger.info("Checking for habit reminders to send");
@@ -115,6 +134,17 @@ export const sendhabitreminders = onSchedule("every 1 hours", async () => {
 
   for (const group of groups) {
     logger.info(`Household ${group.householdId}: ${group.memberDocs.length} member(s)`);
+
+    // One habits read per household, shared by every member below and paid for
+    // only once a member actually reaches the send window.
+    let habitDocsPromise: Promise<admin.firestore.QueryDocumentSnapshot[]> | undefined;
+    const getHabitDocs = () => {
+      habitDocsPromise ??= group.householdRef
+        .collection("habits")
+        .get()
+        .then((snap) => snap.docs);
+      return habitDocsPromise;
+    };
 
     for (const memberDoc of group.memberDocs) {
       const member = memberDoc.data() as HouseholdMember;
@@ -139,11 +169,26 @@ export const sendhabitreminders = onSchedule("every 1 hours", async () => {
 
       // Check if it's time to send
       if (isTimeToSend(prefs.habitReminders.time, prefs.timezone)) {
-        logger.info(`Member ${member.uid}: sending habit reminder now`);
+        const today = formatInTimeZone(new Date(), prefs.timezone || "UTC", "yyyy-MM-dd");
+        const ownReminders = prefs.perHabitReminders ?? {};
+        const pending = (await getHabitDocs()).filter((doc) => {
+          // A habit the member scheduled for themselves is handled by
+          // sendperhabitreminders — even when its own minute hasn't arrived yet,
+          // since being reminded twice is worse than being reminded once late.
+          if (normalizeHabitReminder(ownReminders[doc.id])?.enabled) return false;
+          return isRemindableHabit(doc.data(), today, member.uid);
+        });
+
+        if (pending.length === 0) {
+          logger.info(`Member ${member.uid}: nothing left to log today, skipping nudge`);
+          continue;
+        }
+
+        logger.info(`Member ${member.uid}: sending habit reminder now (${pending.length} pending)`);
         await sendNotificationToUser(
           member.fcmTokens,
           "Time for your daily habit check-in!",
-          "Let's keep those streaks alive and hit your goals today.",
+          `${pending.length} habit${pending.length > 1 ? "s" : ""} still to log — let's keep those streaks alive.`,
           {
             type: "habit_reminder",
             url: "/habits",
@@ -154,6 +199,132 @@ export const sendhabitreminders = onSchedule("every 1 hours", async () => {
       } else {
         logger.info(`Member ${member.uid}: not time to send yet (current check didn't match scheduled time)`);
       }
+    }
+  }
+});
+
+/**
+ * F-HABITS-03: Scheduled function running every 15 minutes to deliver PER-HABIT
+ * timed reminders — the `notificationPreferences.perHabitReminders[habitId]`
+ * `{enabled, time, days}` schedules written by the habit form.
+ *
+ * Shape mirrors `sendtodoreminders`: an arbitrary member-local HH:MM matched
+ * inside a 15-minute cadence, a generous late-catch-up window, and a claim
+ * written BEFORE the send so an overlapping invocation can't double-push. The
+ * claim lives in a server-owned `habitReminderSentDates` map (habit id → local
+ * yyyy-MM-dd) on the member doc rather than on the shared habit document, for
+ * the same reason the schedules themselves do — see the `perHabitReminders`
+ * comment in types/schema.ts.
+ *
+ * Like `sendtodoreminders`, it deliberately IGNORES `digestMode`: a reminder
+ * aimed at one habit at one minute is an alarm, not a briefing. Every habit due
+ * in the same window is coalesced into ONE push so a member with a 07:00
+ * morning routine gets a single notification, not five.
+ */
+export const sendperhabitreminders = onSchedule("every 15 minutes", async () => {
+  logger.info("Checking for per-habit reminders to send");
+
+  const groups = await loadNotifiableMembersByHousehold(db);
+  const nowMs = Date.now();
+
+  for (const group of groups) {
+    // Resolve who is due BEFORE reading any habit, so the overwhelming majority
+    // of 15-minute runs (nobody due) cost zero extra reads per household.
+    const candidates = group.memberDocs.flatMap((memberDoc) => {
+      const member = memberDoc.data() as HouseholdMember;
+      const prefs = member.notificationPreferences;
+      if (!member.fcmTokens || member.fcmTokens.length === 0) return [];
+
+      const stored = prefs?.perHabitReminders;
+      if (!stored) return [];
+
+      const clock = localClock(nowMs, prefs?.timezone || "UTC");
+      const dueHabitIds = Object.entries(stored).flatMap(([habitId, raw]) => {
+        const config = normalizeHabitReminder(raw);
+        return config && isReminderDue(config, clock) ? [habitId] : [];
+      });
+
+      // Carry the tokens explicitly: the guard above narrows them here, but that
+      // narrowing can't survive being stashed on `member`, and re-defaulting at
+      // the send site would read as though they might be missing.
+      return dueHabitIds.length > 0
+        ? [{ member, fcmTokens: member.fcmTokens, ref: memberDoc.ref, clock, dueHabitIds }]
+        : [];
+    });
+
+    if (candidates.length === 0) continue;
+
+    const habitsSnapshot = await group.householdRef.collection("habits").get();
+    const habitsById = new Map(habitsSnapshot.docs.map((doc) => [doc.id, doc.data()]));
+
+    for (const { member, fcmTokens, ref, clock, dueHabitIds } of candidates) {
+      // Drop reminders whose habit is gone, archived, paused, already done for
+      // its period, or personal to someone else.
+      const remindable = dueHabitIds.flatMap((habitId) => {
+        const habit = habitsById.get(habitId);
+        if (!habit || !isRemindableHabit(habit, clock.date, member.uid)) return [];
+        const title = typeof habit.title === "string" ? habit.title : "";
+        return [{ habitId, title }];
+      });
+      if (remindable.length === 0) continue;
+
+      // Claim BEFORE sending, in a transaction that re-reads the member doc, so
+      // a slow run still going when the next 15-minute trigger fires can't
+      // double-push: only one claimant flips a habit's stamp to today's local
+      // date. A send failure after the claim drops one reminder, which is the
+      // safer failure mode. The same pass prunes stamps for habits that no
+      // longer exist, so the map can't grow without bound.
+      const claimed = await db.runTransaction(async (tx) => {
+        const liveSnap = await tx.get(ref);
+        if (!liveSnap.exists) return [];
+        const live = liveSnap.data() ?? {};
+        const sentDates = (live.habitReminderSentDates ?? {}) as Record<string, unknown>;
+
+        const toSend = remindable.filter(({ habitId }) => sentDates[habitId] !== clock.date);
+        if (toSend.length === 0) return [];
+
+        const next: Record<string, string> = {};
+        for (const [habitId, sentOn] of Object.entries(sentDates)) {
+          if (typeof sentOn === "string" && habitsById.has(habitId)) next[habitId] = sentOn;
+        }
+        for (const { habitId } of toSend) next[habitId] = clock.date;
+
+        // Whole-map write is safe here (unlike completedDates): this field is
+        // server-owned, no client ever touches it, and the transaction just
+        // re-read it.
+        tx.update(ref, { habitReminderSentDates: next });
+        return toSend;
+      });
+      if (claimed.length === 0) continue;
+
+      const message = buildHabitReminderMessage(claimed.map((entry) => entry.title));
+      if (!message) continue;
+
+      // The habits page filters to exactly what this push is about. A push
+      // naming ONE habit can also carry a "Log it" action button, since the
+      // `nhabit` target is unambiguous; a coalesced push has no single target,
+      // so it deep-links only. (iOS renders no action buttons either way — see
+      // buildHabitLogActionsDataField.)
+      const single = claimed.length === 1 ? claimed[0] : undefined;
+      const dueParam = claimed.map((entry) => encodeURIComponent(entry.habitId)).join(",");
+
+      logger.info(
+        `Household ${group.householdId}: sending per-habit reminder for ${claimed.length} habit(s) to ${member.uid}`
+      );
+      await sendNotificationToUser(
+        fcmTokens,
+        message.title,
+        message.body,
+        {
+          type: "habit_reminder",
+          url: single
+            ? `/habits?due=${dueParam}&nhabit=${encodeURIComponent(single.habitId)}`
+            : `/habits?due=${dueParam}`,
+          ...(single ? { actions: buildHabitLogActionsDataField() } : {}),
+        },
+        ref,
+        { householdId: group.householdId, recipientUid: member.uid, type: "habit_reminder" }
+      );
     }
   }
 });
@@ -901,12 +1072,6 @@ export const sendtestnotification = onCall(
       {
         type: "test_notification",
         url: "/settings",
-        // Capability probe: see getNotificationActions("test_notification").
-        // Long-press the resulting notification to find out whether this device
-        // renders web-push action buttons at all.
-        ...(buildActionsDataField("test_notification")
-          ? { actions: buildActionsDataField("test_notification") as string }
-          : {}),
       },
       memberRef
     );

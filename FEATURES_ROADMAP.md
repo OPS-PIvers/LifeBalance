@@ -595,30 +595,40 @@ decisions, taken with the owner 2026-07-24:
   free here: `sendtodoreminders` already runs 96×/day and gates on member eligibility before
   querying items.
 - **Suppressed when** the habit is already complete for its period, the habit is paused or
-  archived, or the member has digest mode on. Quiet hours deliberately omitted — the member picked
-  the time.
+  archived, or it is someone else's personal habit. Quiet hours deliberately omitted — the member
+  picked the time. **Digest mode is NOT a suppressor** (revised during PR 2): a reminder aimed at
+  one habit at one minute is an alarm, not a briefing, so it follows the `sendtodoreminders`
+  precedent rather than the four hourly summary jobs that fold into the digest.
 - **Location and API-signal triggers are out of scope.** PRD #1065 already shipped foreground
   geo prompts (`HabitTriggers.locations`), and the app-closed case belongs to an iOS Shortcuts
   automation calling `quickAddHabit` directly — no server round trip to push back to the same phone.
 - **No snooze.** A missed habit reminder fires again tomorrow.
 
-**Platform caveat:** OS-rendered action buttons are almost certainly unavailable on iOS — MDN's
-compat data marks `Notification.actions` unsupported in Safari/Safari iOS and Apple's Declarative
-Web Push material never mentions them. The design therefore treats body-tap as the primary
-interaction, with a `Log` button as a bonus where it renders (Android/desktop Chrome). A temporary
-capability probe rides on the "Send a test notification" control so a real device can settle it.
+**Platform caveat — settled on device (2026-07-24):** a temporary two-button probe on the "Send a
+test notification" control confirmed that an installed iOS PWA renders **no** web-push action
+buttons at all (long-press does nothing from either the Lock Screen or Notification Center),
+matching MDN's compat data and Apple's Declarative Web Push material. Body-tap is therefore the
+primary interaction on iOS and the `Log` button is a bonus where it renders (Android/desktop
+Chrome). The probe has been removed.
 
-**Status:** PR 1 landed — schema, the reminder editor in `HabitFormModal`, the `log-habit` /
-`nhabit` deep-link dispatch, and the probe. PR 2 remains: the sending job (extending
-`sendhabitreminders` to a 15-minute cadence), coalescing, the `?due=` filter on the habits page,
-and making the legacy household-wide nudge content-aware while skipping habits that now have their
-own reminder.
+The same probe surfaced a second, larger problem: the deep link only appeared to work because the
+service worker was **focusing an already-open window**, not routing it. Two bugs were behind that,
+both fixed in PR 2 — `sw.js` was opening a path (`/habits`) that a HashRouter SPA routes as `/`,
+and its `postMessage({type:'NAVIGATE'})` for the focused-window case had no listener anywhere in
+the app. On iOS, where an installed PWA nearly always has a live window client, that second one
+meant deep links effectively never landed.
+
+**Status: SHIPPED.** PR 1 — schema, the reminder editor in `HabitFormModal`, the `log-habit` /
+`nhabit` deep-link dispatch. PR 2 — the `sendperhabitreminders` 15-minute job (window coalescing,
+once-per-local-day claim, period-aware suppression), the `?due=` filter on the habits page, the
+content-aware household-wide nudge, and the two deep-link fixes above.
 
 **Key files:**
-- `types/schema.ts` (`HabitReminderConfig`), `utils/habitReminders.ts`, `utils/notificationActions.ts`
+- `types/schema.ts` (`HabitReminderConfig`), `utils/habitReminders.ts`, `utils/notificationActions.ts`,
+  `utils/swNavigation.ts`
 - `components/habits/HabitReminderEditor.tsx`, `components/habits/HabitLogIntent.tsx`,
-  `components/modals/HabitFormModal.tsx`
-- `functions/src/index.ts`, `functions/src/quickAdd/streakLogic.ts` (period-aware completion check)
+  `components/modals/HabitFormModal.tsx`, `pages/Habits.tsx`, `public/sw.js`
+- `functions/src/shared/habitReminders.ts` (pure send logic), `functions/src/index.ts`
 
 ### F-HABITS-04 — Export habit history to CSV
 

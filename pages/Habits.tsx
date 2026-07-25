@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useRef, Suspense } from 'react';
+import React, { useCallback, useEffect, useState, useMemo, useRef, Suspense } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Habit, HouseholdMember } from '@/types/schema';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -364,6 +365,52 @@ const Habits: React.FC = () => {
       <ChevronDown size={12} aria-hidden="true" className="-ml-1.5" />
     </>
   );
+  // F-HABITS-03: a per-habit reminder push deep-links to `?due=<id>,<id>` so
+  // the page opens on exactly the habits it just nudged about, instead of the
+  // full list the member then has to search. Read straight from the router (no
+  // read-and-strip) so the filter survives a refresh and can't race the
+  // nact/nhabit consumers; the chip's "Show all" is what clears it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const dueParam = searchParams.get('due');
+  const dueIds = useMemo(() => {
+    const ids = (dueParam ?? '').split(',').map(id => id.trim()).filter(Boolean);
+    return ids.length > 0 ? new Set(ids) : null;
+  }, [dueParam]);
+  // Only filter on ids that actually resolve — a stale link (habit since
+  // deleted) should show the normal list, not an empty page.
+  const dueFilter = useMemo(
+    () => (dueIds && habits.some(h => dueIds.has(h.id)) ? dueIds : null),
+    [dueIds, habits]
+  );
+  const clearDueFilter = useCallback(() => {
+    setSearchParams(
+      prev => {
+        prev.delete('due');
+        return prev;
+      },
+      { replace: true }
+    );
+  }, [setSearchParams]);
+  // Land on Track when a reminder deep-links in: the filtered habits only exist
+  // there, so arriving with Progress/Rewards still selected would show nothing
+  // of what the push was about.
+  useEffect(() => {
+    if (dueFilter) {
+      setActiveView('track');
+      return;
+    }
+    // A link whose habits have all since been deleted renders no banner, so
+    // there'd be no visible way to clear the param it left behind — drop it
+    // ourselves rather than let a dead filter ride along in a refresh or share.
+    if (dueIds) clearDueFilter();
+  }, [dueFilter, dueIds, setActiveView, clearDueFilter]);
+  // The archived view and the reminder filter can't both hold: their intersection
+  // is always empty (a reminder never names an archived habit), which would show
+  // a bare "From your reminder: 0 habits". Asking for archived habits SUSPENDS
+  // the filter rather than clearing it, so toggling back restores what the push
+  // was about instead of silently discarding the link.
+  const appliedDueFilter = showArchived ? null : dueFilter;
+
   // Global search deep-link (v1.1): scroll-to + briefly flash the specific
   // habit row selected in SearchOverlay, on top of the tab-level jump above.
   const highlightHabitId = useDeepLinkHighlight();
@@ -385,8 +432,9 @@ const Habits: React.FC = () => {
     () => habits
       .filter(h => !h.assignedTo)
       .filter(h => showArchived ? !!h.archivedAt : !h.archivedAt)
+      .filter(h => !appliedDueFilter || appliedDueFilter.has(h.id))
       .sort((a, b) => (a.order ?? 999) - (b.order ?? 999)),
-    [habits, showArchived]
+    [habits, showArchived, appliedDueFilter]
   );
 
   // F-HABITS-09: habits eligible for the "Catch up yesterday" bulk action —
@@ -411,10 +459,11 @@ const Habits: React.FC = () => {
         .filter(h => h.category === category)
         .filter(h => !h.assignedTo) // Hide kid chores from the parent tracker (assignedTo is set only for managed-kid chores; dormant by default)
         .filter(h => showArchived ? !!h.archivedAt : !h.archivedAt)
+        .filter(h => !appliedDueFilter || appliedDueFilter.has(h.id))
         .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
       return acc;
     }, {} as Record<string, Habit[]>),
-    [categories, habits, showArchived]
+    [categories, habits, showArchived, appliedDueFilter]
   );
 
   // --- Kids chores (read-only parent view, Plan 080c-4) ---
@@ -615,6 +664,25 @@ const Habits: React.FC = () => {
         {/* Main Content */}
         <div className="px-4 pt-4 pb-6">
           <TabsContent value="track" className="space-y-6">
+            {/* F-HABITS-03: arrived from a per-habit reminder push. Says what
+                was filtered out and offers the way back, so a narrowed list is
+                never mistaken for "these are all my habits". */}
+            {appliedDueFilter && (
+              <div className="flex items-center justify-between gap-3 rounded-card border border-warm-200 dark:border-warm-900 bg-warm-50 dark:bg-warm-900/20 px-3 py-2.5">
+                <p className="text-sm text-brand-700 dark:text-brand-200">
+                  From your reminder: {sortedHabits.length} habit
+                  {sortedHabits.length === 1 ? '' : 's'}
+                </p>
+                <button
+                  type="button"
+                  onClick={clearDueFilter}
+                  className="shrink-0 text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-accent-700 dark:hover:text-accent-300 min-h-11 -my-3 px-2 -mx-2 transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 rounded-sm"
+                >
+                  Show all
+                </button>
+              </div>
+            )}
+
             {categories.length === 0 && !showArchived && (
               <EmptyState
                 variant="dashed"
@@ -658,7 +726,10 @@ const Habits: React.FC = () => {
                 tracking view — see UX content audit Batch 4. Gated on Kid Mode
                 + at least one managed kid with at least one chore, so it stays
                 fully dormant in a normal household. */}
-            {!showArchived && kidModeEnabled && kidsWithChores.length > 0 && (
+            {/* Also hidden while a reminder link is filtering the page: the
+                banner above says "N habits", and kid chores are neither in that
+                count nor part of what the push was about. */}
+            {!showArchived && !appliedDueFilter && kidModeEnabled && kidsWithChores.length > 0 && (
               <section aria-label="Kids chores">
                 <Eyebrow as="h2" tone="warm" className="flex items-center gap-2 mb-2 px-1">
                   <Star size={14} className="fill-current" />

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   getNotificationActions,
   buildActionsDataField,
+  buildHabitLogActionsDataField,
   isBillReminderSnoozed,
   NOTIFICATION_ACTIONS,
 } from "./notificationActions";
@@ -18,18 +19,25 @@ describe("getNotificationActions", () => {
     expect(getNotificationActions("habit_reminder")).toEqual([]);
   });
 
-  // Temporary capability probe: two buttons on the test notification so a real
-  // device can answer whether iOS renders web-push actions at all. The ids are
-  // intentionally NOT in NOTIFICATION_ACTIONS, which is what makes a tap inert
-  // (the client strips an unrecognized id and dispatches nothing).
-  it("attaches inert probe buttons to the test notification", () => {
-    const actions = getNotificationActions("test_notification");
-    expect(actions).toHaveLength(2);
-    const known = new Set<string>(Object.values(NOTIFICATION_ACTIONS));
-    for (const action of actions) {
-      expect(known.has(action.action)).toBe(false);
-      expect(action.title.length).toBeGreaterThan(0);
-    }
+  // The capability probe that briefly rode along here has served its purpose:
+  // an installed iOS PWA renders no action buttons at all (2026-07-24), so the
+  // test notification is back to carrying none.
+  it("returns [] for the test notification", () => {
+    expect(getNotificationActions("test_notification")).toEqual([]);
+  });
+});
+
+describe("buildHabitLogActionsDataField", () => {
+  it("serializes a single log-habit button", () => {
+    expect(JSON.parse(buildHabitLogActionsDataField())).toEqual([
+      { action: NOTIFICATION_ACTIONS.logHabit, title: "Log it" },
+    ]);
+  });
+
+  // The client only dispatches ids it recognizes, so drift here would silently
+  // turn the button into a no-op.
+  it("uses an id the client knows how to dispatch", () => {
+    expect(NOTIFICATION_ACTIONS.logHabit).toBe("log-habit");
   });
 });
 

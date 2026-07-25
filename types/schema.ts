@@ -190,6 +190,13 @@ export interface HouseholdMember {
   // every household/member (see functions/src/shared/notifications.ts).
   anyNotificationsEnabled?: boolean;
 
+  // F-HABITS-03: SERVER-OWNED once-per-day claim for per-habit reminders —
+  // habit id → the member-local yyyy-MM-dd that habit's reminder was last sent
+  // on. Written only by the `sendperhabitreminders` Cloud Function; no client
+  // path reads or writes it. Declared here so the member converter's
+  // spread-through is documented rather than accidental.
+  habitReminderSentDates?: Record<string, string>;
+
   // F-XCUT-02: per-member Dashboard widget customization. `dashboardLayout`
   // is the widget-id order (see utils/dashboardLayout.ts DASHBOARD_WIDGET_IDS
   // for valid ids); missing/unknown ids fall back to the default order.

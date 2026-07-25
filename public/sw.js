@@ -50,6 +50,16 @@ function sanitizeUrl(url) {
   return isValidUrl(url) ? url : '/';
 }
 
+/**
+ * Convert an app path into the HashRouter form the SPA can actually route on.
+ * Already-hash paths are left alone apart from being anchored at the origin.
+ */
+function toHashRoute(path) {
+  if (path.startsWith('#')) return '/' + path;
+  if (path.startsWith('/')) return '/#' + path;
+  return path;
+}
+
 // F-NOTIF-05: inline notification action buttons.
 // The sending job serializes an array of {action, title} to the `actions` field
 // of the FCM data payload (JSON string, since data values must be strings). We
@@ -239,14 +249,13 @@ self.addEventListener('notificationclick', (event) => {
   // Get the URL from the notification data, validate it, default to home
   const rawUrl = event.notification.data?.url || '/';
   const targetPath = sanitizeUrl(rawUrl);
-  // Build full URL for comparison and opening
-  const fullUrlToOpen = new URL(targetPath, self.location.origin).href;
 
   // Tag the URL we NAVIGATE/open with the notification type so the app can
   // attribute the open (`notification_opened`): a service worker cannot call
   // the GA client SDK, so the client reads + strips `nsrc` on boot. Window
-  // MATCHING above/below stays on the untagged path so focusing an already-open
-  // window behaves exactly as before. Keep this tagging in sync with
+  // MATCHING below stays on the untagged path (a window sitting on a clean
+  // `#/habits` should still count as "already there"), but the window we focus
+  // is always HANDED the tagged path. Keep this tagging in sync with
   // utils/notificationSource.ts (appendNotificationSource).
   const notificationType = typeof event.notification.data?.type === 'string'
     ? event.notification.data.type
@@ -264,33 +273,39 @@ self.addEventListener('notificationclick', (event) => {
     taggedPath = taggedPath + (taggedPath.includes('?') ? '&' : '?') + 'nact=' + encodeURIComponent(actionId);
   }
 
-  const fullTaggedUrlToOpen = new URL(taggedPath, self.location.origin).href;
+  // The app is a HashRouter SPA (see App.tsx). A path sitting in the real
+  // pathname — `/habits` — is rewritten to index.html by hosting and then
+  // routed as `/`, so a cold-start deep link silently lands on the Dashboard.
+  // Opening the HASH form instead (`/#/habits?...`) is what actually reaches
+  // the target route, and every param consumer already parses a hash query
+  // (utils/notificationSource.ts, notificationActions.ts, recapParam.ts).
+  const fullTaggedUrlToOpen = new URL(toHashRoute(taggedPath), self.location.origin).href;
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Check if there's already a window open with matching URL or hash
-      for (const client of clientList) {
-        // Compare full URLs or check if client URL ends with the target path/hash
-        const clientUrl = new URL(client.url);
-        const targetUrl = new URL(fullUrlToOpen);
+      const focusable = clientList.filter((client) => 'focus' in client);
 
-        // For HashRouter apps, compare the hash portions
-        const hashMatch = clientUrl.hash && targetPath.startsWith('/') &&
-          clientUrl.hash === '#' + targetPath;
-        const exactMatch = client.url === fullUrlToOpen;
+      // Prefer a window already showing the target ROUTE, so we surface the most
+      // relevant one rather than an arbitrary tab. Compared route-only (hash up
+      // to any query) because this is a HashRouter app and the deep-link target
+      // usually carries params — matching the full string would mean a window
+      // sitting on a clean `#/habits` never counted as showing `/habits`, and
+      // this preference would silently never fire.
+      const targetRoute = targetPath.split('?')[0];
+      const alreadyThere = focusable.find(
+        (client) => new URL(client.url).hash.split('?')[0] === '#' + targetRoute
+      );
 
-        if ((exactMatch || hashMatch) && 'focus' in client) {
-          return client.focus();
-        }
-      }
-      // If no matching window, try to focus any existing window and navigate
-      for (const client of clientList) {
-        if ('focus' in client) {
-          return client.focus().then(() => {
-            // Navigate to the target URL via postMessage
-            client.postMessage({ type: 'NAVIGATE', url: taggedPath });
-          });
-        }
+      // Whichever window we focus, it ALWAYS gets the tagged path. This branch
+      // used to `return client.focus()` bare for a matching window, which
+      // dropped `nact` / `nhabit` / `nsrc` on the floor — the destination can't
+      // reconstruct them, so a tap on a habit reminder while parked on the
+      // habits page logged nothing. That was the common case on iOS.
+      const target = alreadyThere || focusable[0];
+      if (target) {
+        return target.focus().then(() => {
+          target.postMessage({ type: 'NAVIGATE', url: taggedPath });
+        });
       }
       // If no window is open, open a new one
       if (clients.openWindow) {
