@@ -10,6 +10,15 @@
  * needs-category row) and finally OVERWRITES the account balance with the
  * email's ending balance.
  *
+ * Merchant rules (F-MONEY-14) modulate three of those outcomes and nothing else:
+ * a rule's `billId` can name the bill a charge pays (step d, bypassing the amount
+ * tolerance — an explicit link is not a guess), a rule's `category` files a new
+ * row instead of leaving it for review (step e), and a rule's `exempt` flag stops
+ * a charge breaking the no-spend day. They never touch steps a-c, which ask an
+ * IDENTITY question, and — the invariant this whole feature rests on — a rule's
+ * friendly NAME is never written into a stored `merchant`. The raw bank
+ * descriptor stays the transaction's permanent identity key.
+ *
  * Authenticated by the same `lb_..._...` Bearer API key the other quickAdd
  * endpoints use, gated on the dedicated `bankSync` scope (not `read`/write
  * scopes) via `hasScope`. Idempotent per Message-ID via a small ledger doc.
@@ -74,6 +83,13 @@ import {
   type SpendCandidate,
 } from "./noSpendDay";
 import { applyNoSpendDay, type NoSpendOutcome } from "./noSpendFire";
+import { pickMerchantRule } from "./merchantRules";
+import {
+  describeRuleEffects,
+  emptyRuleEffectCounts,
+  readMerchantRules,
+  ruleCreateCategory,
+} from "./merchantRuleEffects";
 
 const db = admin.firestore();
 
@@ -333,6 +349,13 @@ export const bankEmailSync = onRequest(
       const householdDoc = await householdRef.get();
       const householdData = householdDoc.data();
       const currency = householdData?.currency || "USD";
+      // Household-authored merchant rules (F-MONEY-14). They drive three
+      // CLASSIFICATION decisions below — which bill a charge pays, what category
+      // a new row is born with, and whether a charge breaks a no-spend day — and
+      // no more than that. Nothing here may write `rule.name` into a stored
+      // `merchant`: the raw bank descriptor is the transaction's identity key,
+      // which is what makes a rule retroactive, reversible and auditable.
+      const merchantRules = readMerchantRules(householdData?.merchantRules);
 
       // 6. Resolve the account by parsed bank-account last-4.
       const accountsSnap = await db.collection(`households/${householdId}/accounts`).get();
@@ -505,7 +528,17 @@ export const bankEmailSync = onRequest(
       const batch = db.batch();
       const transactionsPath = `households/${householdId}/transactions`;
       const calendarPath = `households/${householdId}/calendarItems`;
-      const counts = { created: 0, confirmed: 0, filled: 0, billsPaid: 0, skipped: 0 };
+      const counts = {
+        created: 0,
+        confirmed: 0,
+        filled: 0,
+        billsPaid: 0,
+        skipped: 0,
+        // What the household's rules actually did to this email — reported in
+        // the response, the ledger and the push, so a rule's effect is visible
+        // rather than something the user has to infer from the ledger diff.
+        ...emptyRuleEffectCounts(),
+      };
 
       // Mutable candidate pools: once a withdrawal CONSUMES a stub/pending/bill,
       // it is pruned so a second withdrawal in the SAME email can't be routed to
@@ -556,19 +589,38 @@ export const bankEmailSync = onRequest(
           pendingCandidates: pendingPool,
           billCandidates: billPool,
           resolvedAccountId,
+          merchantRules,
         });
 
         // Guard against two withdrawal lines racing onto the same target/ref
         // within this email (parser guarantees unique refs, but be defensive).
         existingBankRefs.add(w.bankRef);
 
+        // The one rule that wins this descriptor+amount, resolved ONCE per line
+        // and reused by the create branch and the reporting counters below.
+        const rule = pickMerchantRule(w.descriptor, w.amount, merchantRules);
+        // Reported for every line this email actually acted on. A skip means the
+        // row was already recorded on an earlier run, which already counted it.
+        if (rule?.exempt === true && decision.kind !== "skip_bankref") {
+          counts.ruleExempted++;
+        }
+        // The category a brand-new row would be born with — needed BEFORE the
+        // switch because the no-spend declaration below has to describe the row
+        // this email is about to write, not a guess at it.
+        const createCategory = ruleCreateCategory(rule, UNCATEGORIZED);
+
         // Declare a BRAND-NEW row landing on the judged day to the no-spend
         // judgement — see `shouldDeclareToNoSpend` for why only that branch.
+        // It carries the rule's category so the declaration and the stored row
+        // are the same row: a rule filing a charge as e.g. a card payment must
+        // exempt it here exactly as the stored row will be exempted tomorrow.
+        // (A rule's `exempt` flag is honoured independently — `spendExemption`
+        // re-derives it from the raw merchant, which this row carries.)
         if (shouldDeclareToNoSpend(decision.kind, w.date, noSpendTargetDate)) {
           noSpendExtraSpend.push({
             amount: w.amount,
             merchant: w.descriptor,
-            category: UNCATEGORIZED,
+            category: createCategory.category,
           });
         }
 
@@ -679,22 +731,28 @@ export const bankEmailSync = onRequest(
               });
             }
             counts.billsPaid++;
+            if (matchedBy === "rule") counts.ruleBilled++;
             break;
           }
           case "create": {
             // Born verified (the account balance is authoritative from the
-            // email), flagged needsCategory so it surfaces for bucket
-            // assignment in review WITHOUT a balance delta on categorize.
+            // email), and flagged needsCategory so it surfaces for bucket
+            // assignment in review WITHOUT a balance delta on categorize —
+            // UNLESS a merchant rule already names the category, in which case
+            // the row is filed there and `needsCategory` is omitted (the
+            // household has answered that question already). See
+            // `ruleCreateCategory`.
+            //
+            // `merchant` is the RAW bank descriptor, always. A rule's friendly
+            // name is applied at render time and must never be persisted here.
             batch.set(db.collection(transactionsPath).doc(), {
               amount: Math.round(w.amount * 100) / 100,
               merchant: w.descriptor,
-              category: UNCATEGORIZED,
               date: w.date,
               status: "verified",
               isRecurring: false,
               source: "bank-sync",
-              autoCategorized: false,
-              needsCategory: true,
+              ...createCategory,
               payPeriodId,
               accountId: resolvedAccountId,
               bankRef: w.bankRef,
@@ -702,6 +760,7 @@ export const bankEmailSync = onRequest(
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
             });
             counts.created++;
+            if (createCategory.autoCategorized) counts.ruleCategorized++;
             break;
           }
         }
@@ -720,6 +779,10 @@ export const bankEmailSync = onRequest(
         today,
         extraSpend: noSpendExtraSpend,
         householdData,
+        // An `exempt` rule must apply to every row dated to the judged day, not
+        // just the ones this email creates — an exempted subscription is an
+        // ordinary stored transaction on every later sync.
+        merchantRules,
       });
 
       // 10. Overwrite the account balance with the email's AVAILABLE balance
@@ -798,10 +861,15 @@ export const bankEmailSync = onRequest(
         : noSpend.isNoSpendDay
           ? "No spend day"
           : "Bank sync complete";
+      // What the household's rules did, between the outcome and the balance.
+      // Counts only, and omitted entirely when the rules did nothing, so a
+      // household without rules sees the exact push it saw before — the body is
+      // already close to what iOS will truncate.
+      const ruleSummary = describeRuleEffects(counts);
       const summaryBody = noSpend.isNoSpendDay
-        ? `${describeNoSpendFires(noSpend)}${balanceSummary}`
+        ? `${describeNoSpendFires(noSpend)}${ruleSummary}${balanceSummary}`
         : `${counts.created} new, ${counts.confirmed} confirmed, ${counts.filled} filled, ` +
-          `${counts.billsPaid} bills paid. ${balanceSummary}`;
+          `${counts.billsPaid} bills paid. ${ruleSummary}${balanceSummary}`;
       await pushToBankSyncMembers(householdId, summaryTitle, summaryBody);
       await logApiCall(householdId, apiKey.substring(0, 16), "bankSync", req.body, 200);
       jsonResponse(res, 200, {
