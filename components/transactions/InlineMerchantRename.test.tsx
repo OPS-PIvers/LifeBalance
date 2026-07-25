@@ -106,6 +106,21 @@ describe('InlineMerchantRename', () => {
     expect(screen.getByLabelText('Show this merchant as')).toHaveValue('AmEx payment');
   });
 
+  it('moves focus to the field when the panel opens', async () => {
+    // The Drawer's `data-autofocus` convention does not reach this panel — the
+    // sheet is already open by the time it expands — so the focus move is ours
+    // to make. Without it a keyboard user has to hunt for the field they asked
+    // for.
+    const user = userEvent.setup();
+    render(<InlineMerchantRename merchant="AMEX ACH PAYMENT" amount={412.5} />);
+
+    await user.click(screen.getByRole('button', { name: OFFER }));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Show this merchant as')).toHaveFocus(),
+    );
+  });
+
   it('closes without writing on cancel', async () => {
     const user = userEvent.setup();
     render(<InlineMerchantRename merchant="AMEX ACH PAYMENT" amount={412.5} />);

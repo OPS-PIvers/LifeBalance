@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { useMerchantRules } from '@/hooks/useMerchantRules';
@@ -38,6 +38,16 @@ const InlineMerchantRename: React.FC<InlineMerchantRenameProps> = ({
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const fieldId = useId();
+  const fieldRef = useRef<HTMLInputElement>(null);
+
+  // `data-autofocus` is the DRAWER's convention — `useFocusTrap` reads it once,
+  // when the sheet opens. This panel expands inside an already-open Drawer, so
+  // nothing would move focus and a keyboard user would be left having to hunt
+  // for the field they just asked for. Verified in the browser: without this,
+  // document.activeElement stays on the trigger.
+  useEffect(() => {
+    if (isOpen) fieldRef.current?.focus();
+  }, [isOpen]);
 
   // A rule that already NAMES this row is the end state this control exists to
   // reach, so once one applies the control retires and the host's "Your bank
@@ -99,7 +109,7 @@ const InlineMerchantRename: React.FC<InlineMerchantRenameProps> = ({
         placeholder="e.g. AmEx payment"
         disabled={disabled || saving}
         autoComplete="off"
-        data-autofocus
+        ref={fieldRef}
         aria-describedby={`${fieldId}-help`}
         onKeyDown={e => {
           if (e.key === 'Enter') {
