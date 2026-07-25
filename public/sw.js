@@ -287,13 +287,16 @@ self.addEventListener('notificationclick', (event) => {
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       const focusable = clientList.filter((client) => 'focus' in client);
 
-      // Prefer a window already showing the target route, so we surface the most
-      // relevant one rather than an arbitrary tab. (Hash comparison, because
-      // this is a HashRouter app; `targetPath` is the UNTAGGED path so a window
-      // sitting on a clean `#/habits` still counts as a match.)
+      // Prefer a window already showing the target ROUTE, so we surface the most
+      // relevant one rather than an arbitrary tab. Compared route-only (hash up
+      // to any query) because this is a HashRouter app and the deep-link target
+      // usually carries params — matching the full string would mean a window
+      // sitting on a clean `#/habits` never counted as showing `/habits`, and
+      // this preference would silently never fire.
+      const targetRoute = targetPath.split('?')[0];
       const alreadyThere = focusable.find((client) => {
-        const clientUrl = new URL(client.url);
-        return client.url === fullUrlToOpen || clientUrl.hash === '#' + targetPath;
+        const clientHash = new URL(client.url).hash.split('?')[0];
+        return client.url === fullUrlToOpen || clientHash === '#' + targetRoute;
       });
 
       // Whichever window we focus, it ALWAYS gets the tagged path. This branch

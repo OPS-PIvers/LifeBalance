@@ -144,6 +144,25 @@ describe('Habits page — reminder deep-link filter (F-HABITS-03)', () => {
     expect(renderedTitles()).toEqual(['Vitamins']);
   });
 
+  // The two views can't both hold — a reminder never names an archived habit —
+  // so asking for archived habits suspends the filter instead of intersecting to
+  // nothing and reporting "0 habits".
+  it('suspends the filter while archived habits are showing, and restores it after', () => {
+    searchParams.current = new URLSearchParams('due=h1');
+    render(<Habits />);
+    expect(screen.getByText('From your reminder: 1 habit')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /habit actions menu/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Show archived habits' }));
+    expect(screen.queryByText(/From your reminder/)).not.toBeInTheDocument();
+    // Suspended, not discarded: the link is still in the URL.
+    expect(searchParams.current.get('due')).toBe('h1');
+
+    fireEvent.click(screen.getByRole('button', { name: /habit actions menu/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Show active habits' }));
+    expect(screen.getByText('From your reminder: 1 habit')).toBeInTheDocument();
+  });
+
   it('ignores an empty due param', () => {
     searchParams.current = new URLSearchParams('due=');
     render(<Habits />);

@@ -404,6 +404,12 @@ const Habits: React.FC = () => {
     // ourselves rather than let a dead filter ride along in a refresh or share.
     if (dueIds) clearDueFilter();
   }, [dueFilter, dueIds, setActiveView, clearDueFilter]);
+  // The archived view and the reminder filter can't both hold: their intersection
+  // is always empty (a reminder never names an archived habit), which would show
+  // a bare "From your reminder: 0 habits". Asking for archived habits SUSPENDS
+  // the filter rather than clearing it, so toggling back restores what the push
+  // was about instead of silently discarding the link.
+  const appliedDueFilter = showArchived ? null : dueFilter;
 
   // Global search deep-link (v1.1): scroll-to + briefly flash the specific
   // habit row selected in SearchOverlay, on top of the tab-level jump above.
@@ -426,9 +432,9 @@ const Habits: React.FC = () => {
     () => habits
       .filter(h => !h.assignedTo)
       .filter(h => showArchived ? !!h.archivedAt : !h.archivedAt)
-      .filter(h => !dueFilter || dueFilter.has(h.id))
+      .filter(h => !appliedDueFilter || appliedDueFilter.has(h.id))
       .sort((a, b) => (a.order ?? 999) - (b.order ?? 999)),
-    [habits, showArchived, dueFilter]
+    [habits, showArchived, appliedDueFilter]
   );
 
   // F-HABITS-09: habits eligible for the "Catch up yesterday" bulk action —
@@ -453,11 +459,11 @@ const Habits: React.FC = () => {
         .filter(h => h.category === category)
         .filter(h => !h.assignedTo) // Hide kid chores from the parent tracker (assignedTo is set only for managed-kid chores; dormant by default)
         .filter(h => showArchived ? !!h.archivedAt : !h.archivedAt)
-        .filter(h => !dueFilter || dueFilter.has(h.id))
+        .filter(h => !appliedDueFilter || appliedDueFilter.has(h.id))
         .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
       return acc;
     }, {} as Record<string, Habit[]>),
-    [categories, habits, showArchived, dueFilter]
+    [categories, habits, showArchived, appliedDueFilter]
   );
 
   // --- Kids chores (read-only parent view, Plan 080c-4) ---
@@ -661,7 +667,7 @@ const Habits: React.FC = () => {
             {/* F-HABITS-03: arrived from a per-habit reminder push. Says what
                 was filtered out and offers the way back, so a narrowed list is
                 never mistaken for "these are all my habits". */}
-            {dueFilter && (
+            {appliedDueFilter && (
               <div className="flex items-center justify-between gap-3 rounded-card border border-warm-200 dark:border-warm-900 bg-warm-50 dark:bg-warm-900/20 px-3 py-2.5">
                 <p className="text-sm text-brand-700 dark:text-brand-200">
                   From your reminder: {sortedHabits.length} habit
@@ -723,7 +729,7 @@ const Habits: React.FC = () => {
             {/* Also hidden while a reminder link is filtering the page: the
                 banner above says "N habits", and kid chores are neither in that
                 count nor part of what the push was about. */}
-            {!showArchived && !dueFilter && kidModeEnabled && kidsWithChores.length > 0 && (
+            {!showArchived && !appliedDueFilter && kidModeEnabled && kidsWithChores.length > 0 && (
               <section aria-label="Kids chores">
                 <Eyebrow as="h2" tone="warm" className="flex items-center gap-2 mb-2 px-1">
                   <Star size={14} className="fill-current" />
