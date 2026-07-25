@@ -4,6 +4,7 @@ import {
   emptyRuleEffectCounts,
   readMerchantRules,
   ruleCreateCategory,
+  ruleExemptedCharge,
 } from "./merchantRuleEffects";
 import type { MerchantRule } from "./merchantRules";
 import { pickMerchantRule } from "./merchantRules";
@@ -208,5 +209,73 @@ describe("describeRuleEffects", () => {
     expect(
       describeRuleEffects({ ruleCategorized: 150, ruleExempted: 150, ruleBilled: 150 }).length
     ).toBeLessThan(60);
+  });
+});
+
+describe("ruleExemptedCharge", () => {
+  const EXEMPT: MerchantRule = {
+    id: "r1",
+    pattern: "COSTCO GAS",
+    exempt: true,
+    createdAt: "2026-01-01T00:00:00.000Z",
+  };
+  const PLAIN: MerchantRule = {
+    id: "r2",
+    pattern: "COSTCO GAS",
+    name: "Gas",
+    createdAt: "2026-01-01T00:00:00.000Z",
+  };
+
+  it("counts the decisions whose row carries an ordinary category", () => {
+    expect(ruleExemptedCharge(EXEMPT, "create")).toBe(true);
+    expect(ruleExemptedCharge(EXEMPT, "fill_stub")).toBe(true);
+    expect(ruleExemptedCharge(EXEMPT, "confirm_pending")).toBe(true);
+  });
+
+  it("does not count a bill payment — the bill category already exempted it", () => {
+    // A rule carrying BOTH billId and exempt would otherwise report the same
+    // charge under two headings of a one-line summary. `ruleBilled` owns it.
+    expect(ruleExemptedCharge(EXEMPT, "pay_bill")).toBe(false);
+  });
+
+  it("does not count a charge an earlier run already recorded", () => {
+    expect(ruleExemptedCharge(EXEMPT, "skip_bankref")).toBe(false);
+  });
+
+  it("ignores a rule that does not set exempt", () => {
+    for (const kind of ["create", "fill_stub", "confirm_pending", "pay_bill", "skip_bankref"] as const) {
+      expect(ruleExemptedCharge(PLAIN, kind)).toBe(false);
+      expect(ruleExemptedCharge(null, kind)).toBe(false);
+      expect(ruleExemptedCharge(undefined, kind)).toBe(false);
+    }
+  });
+
+  // The counters report EFFECTS THE RULE APPLIED, not distinct charges, so they
+  // are not mutually exclusive — and should not be. What must hold is narrower:
+  // a counter may only fire when the rule is what actually produced that effect.
+  const EVERYTHING: MerchantRule = {
+    id: "r3",
+    pattern: "AMEX",
+    name: "AmEx",
+    category: "Bills",
+    billId: "bill-1",
+    exempt: true,
+    createdAt: "2026-01-01T00:00:00.000Z",
+  };
+
+  it("reports both effects on a new row, because the rule really applied both", () => {
+    // One charge, two genuine effects: the rule filed the category AND its
+    // exempt flag is what spares the no-spend day. Reporting both is honest.
+    expect(ruleCreateCategory(EVERYTHING, UNCATEGORIZED).autoCategorized).toBe(true);
+    expect(ruleExemptedCharge(EVERYTHING, "create")).toBe(true);
+  });
+
+  it("reports only the bill link on a bill payment, never a free exemption", () => {
+    // `ruleBilled` owns this charge. The exemption came from the stored
+    // BUDGETED_IN_CALENDAR category, which `spendExemption` reaches first — so
+    // crediting the rule for it would inflate the summary with work it did not do.
+    expect(ruleExemptedCharge(EVERYTHING, "pay_bill")).toBe(false);
+    // And the create-only categorization never coincides with a bill payment.
+    expect(ruleCreateCategory(EVERYTHING, UNCATEGORIZED).autoCategorized).toBe(true);
   });
 });

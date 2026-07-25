@@ -89,6 +89,7 @@ import {
   emptyRuleEffectCounts,
   readMerchantRules,
   ruleCreateCategory,
+  ruleExemptedCharge,
 } from "./merchantRuleEffects";
 
 const db = admin.firestore();
@@ -599,14 +600,14 @@ export const bankEmailSync = onRequest(
         // The one rule that wins this descriptor+amount, resolved ONCE per line
         // and reused by the create branch and the reporting counters below.
         const rule = pickMerchantRule(w.descriptor, w.amount, merchantRules);
-        // Counts CHARGES IN THIS EMAIL that a rule marks planned — a statement
-        // about the withdrawal lines, whose descriptors are the raw text the
-        // rule matched. It is not a count of rows the day's verdict exempted:
-        // that set also includes rows stored on earlier nights (the whole point
-        // of exemption reaching the loaded query), and a confirmed row keeps its
-        // own merchant rather than the descriptor. A skip is excluded because an
-        // earlier run already recorded — and counted — that charge.
-        if (rule?.exempt === true && decision.kind !== "skip_bankref") {
+        // Counts CHARGES IN THIS EMAIL whose exemption the rule actually earned
+        // — a statement about the withdrawal lines, whose descriptors are the
+        // raw text the rule matched. It is not a count of rows the day's verdict
+        // exempted: that set also includes rows stored on earlier nights (the
+        // whole point of exemption reaching the loaded query). See
+        // `ruleExemptedCharge` for which decisions are excluded and why the
+        // three counters have to stay disjoint.
+        if (ruleExemptedCharge(rule, decision.kind)) {
           counts.ruleExempted++;
         }
         // The category a brand-new row would be born with — needed BEFORE the

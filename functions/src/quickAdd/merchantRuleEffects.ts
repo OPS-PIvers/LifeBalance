@@ -18,6 +18,7 @@
  */
 
 import type { MerchantRule } from "./merchantRules";
+import type { WithdrawalDecisionKind } from "./noSpendDay";
 
 /**
  * Coerce `household.merchantRules` into rules safe to match against.
@@ -82,14 +83,43 @@ export function ruleCreateCategory(
   return { category, autoCategorized: true };
 }
 
+/**
+ * Did a rule's `exempt` flag actually do the work of keeping this charge off the
+ * no-spend day?
+ *
+ * Only when nothing else already had. The three counters feed a one-line summary
+ * ("Rules: 1 categorized, 1 exempted, 1 to bills"), so they must describe
+ * DISJOINT sets of charges — otherwise one charge reads as three.
+ *
+ *  - `skip_bankref` — an earlier run already recorded, and counted, this charge.
+ *  - `pay_bill` — the row is stored under `BUDGETED_IN_CALENDAR`, so
+ *    `spendExemption` exempts it as a "bill" before the merchant-rule check is
+ *    ever reached. The exemption was free; the rule's contribution was the bill
+ *    link, which `ruleBilled` already counts. Without this, a rule carrying both
+ *    `billId` and `exempt: true` reports the same charge under two headings.
+ *
+ * `fill_stub` and `confirm_pending` DO count: those rows carry an ordinary
+ * category, so the rule's `exempt` really is what spares the day. (A confirmed
+ * row keeps its own merchant rather than the bank descriptor, so whether the
+ * rule still matches it tomorrow is a separate question — see `RuleEffectCounts`.)
+ */
+export function ruleExemptedCharge(
+  rule: MerchantRule | null | undefined,
+  kind: WithdrawalDecisionKind
+): boolean {
+  if (rule?.exempt !== true) return false;
+  return kind !== "skip_bankref" && kind !== "pay_bill";
+}
+
 /** What the household's rules actually did to ONE nightly email. */
 export interface RuleEffectCounts {
   /** New rows a rule filed under a category instead of leaving for review. */
   ruleCategorized: number;
   /**
-   * Charges IN THIS EMAIL that a rule marks `exempt`, so they can't break the
-   * no-spend day. Not the number of rows the day's verdict exempted — that set
-   * also covers rows stored on earlier nights.
+   * Charges IN THIS EMAIL that a rule's `exempt` flag is what keeps off the
+   * no-spend day — see {@link ruleExemptedCharge} for the ones that don't count.
+   * Not the number of rows the day's verdict exempted: that set also covers rows
+   * stored on earlier nights.
    */
   ruleExempted: number;
   /** Bills paid because a rule's `billId` named them. */
