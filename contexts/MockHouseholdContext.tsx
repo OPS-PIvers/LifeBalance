@@ -1881,10 +1881,12 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // (makeUpdateTodoCategories / makeTodoCategoryEditMutations): same
   // case-insensitive matching, same merge-on-collision rule, and the same
   // "clearing a category REMOVES the field" invariant, so Test Mode exercises
-  // the real semantics.
+  // the real semantics. Deliberately silent, matching the real mutations'
+  // "callers own the toast" contract — the manage-categories drawer reports
+  // the outcome itself, so toasting here would double every message (and
+  // would announce a plain rename on the merge path).
   const updateTodoCategories = useCallback(async (categories: string[]) => {
     setTodoCategories(categories);
-    toast.success('Mock: Categories updated');
   }, []);
 
   const renameTodoCategory = useCallback(async (oldName: string, newName: string) => {
@@ -1915,7 +1917,6 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       normalizeCategory(t.category) === oldKey ? { ...t, category: targetName } : t,
     ));
     setTodoCategories(next);
-    toast.success('Mock: Category renamed');
   }, [todoCategories]);
 
   const deleteTodoCategory = useCallback(async (name: string) => {
@@ -1928,7 +1929,6 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       const { category: _removed, ...rest } = t;
       return rest as ToDo;
     }));
-    toast.success('Mock: Category deleted');
   }, []);
 
   // Quick Stock Lists

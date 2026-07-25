@@ -9,16 +9,20 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import Input from '@/components/ui/Input';
 import { cn } from '@/utils/cn';
+import { describeError } from '@/utils/errorMessages';
+import { MAX_TODO_CATEGORY_LENGTH } from '@/utils/todoCategoryLimits';
 
 /**
- * Matches the 50-character cap firestore.rules enforces on each stored category
- * name — validated here too so an over-long name is refused with a readable
- * message instead of a rules rejection.
+ * Usage counts are a FLOOR, not a total: they are derived from the `todos`
+ * context slice, whose completed-to-do listener is windowed to the recent past
+ * (see contexts/household/listeners/todoListeners.ts + utils/listenerWindows.ts)
+ * with older completions paged in on demand. The rename/delete mutations query
+ * Firestore directly and rewrite EVERY match including those older completions,
+ * so the copy here says "at least" rather than asserting a total the client
+ * cannot know without an extra read.
  */
-const MAX_CATEGORY_LENGTH = 50;
-
 const taskCountLabel = (count: number): string =>
-  count === 0 ? 'No tasks' : `${count} ${count === 1 ? 'task' : 'tasks'}`;
+  count === 0 ? 'No recent tasks' : `${count}+ ${count === 1 ? 'task' : 'tasks'}`;
 
 /** Case-insensitive key used for both usage counts and duplicate detection. */
 const normalize = (value: string): string => value.trim().toLowerCase();
@@ -42,11 +46,15 @@ export interface TodoCategoryManagerDrawerProps {
  *   ConfirmDialog with the concrete count of tasks that will fall back to
  *   Uncategorized.
  *
- * Counts are computed case-insensitively over ALL to-dos (a task stored as
- * "home" counts toward "Home"), matching how the mutations match documents.
+ * Counts are computed case-insensitively over the LOADED to-dos (a task stored
+ * as "home" counts toward "Home"), matching how the mutations match documents —
+ * but see `taskCountLabel`: they are a floor, because old completed tasks live
+ * outside the listener window while the mutations still rewrite them.
  *
- * Error toasts are owned by the mutations themselves — failures are logged here
- * and swallowed so the user never sees the same problem reported twice.
+ * This drawer owns BOTH the success and the failure message for all three
+ * mutations (they re-throw and toast nothing themselves), so a rejected write
+ * never reads as a success: the rename editor stays open with the typed name and
+ * the delete confirmation stays put.
  * Motion/focus/Escape are the Drawer primitive's job (it already honors
  * prefers-reduced-motion and traps focus), so nothing extra is wired here.
  */
@@ -106,8 +114,8 @@ export const TodoCategoryManagerDrawer: React.FC<TodoCategoryManagerDrawerProps>
       setAddError('Give the category a name.');
       return;
     }
-    if (trimmed.length > MAX_CATEGORY_LENGTH) {
-      setAddError(`Keep it to ${MAX_CATEGORY_LENGTH} characters or fewer.`);
+    if (trimmed.length > MAX_TODO_CATEGORY_LENGTH) {
+      setAddError(`Keep it to ${MAX_TODO_CATEGORY_LENGTH} characters or fewer.`);
       return;
     }
     const existing = todoCategories.find(category => normalize(category) === normalize(trimmed));
@@ -124,7 +132,9 @@ export const TodoCategoryManagerDrawer: React.FC<TodoCategoryManagerDrawerProps>
       toast.success(`Added "${trimmed}"`);
     } catch (error) {
       console.error('[TodoCategoryManagerDrawer] Add category failed:', error);
-      // updateTodoCategories surfaces its own error toast.
+      // The write didn't land: keep the typed name in the field and report it
+      // where the user is looking (the mutation toasts nothing).
+      setAddError(describeError(error, 'add the category'));
     } finally {
       setIsAdding(false);
     }
@@ -140,20 +150,29 @@ export const TodoCategoryManagerDrawer: React.FC<TodoCategoryManagerDrawerProps>
       setEditing(null);
       return;
     }
-    if (trimmed.length > MAX_CATEGORY_LENGTH) {
-      toast.error(`Keep it to ${MAX_CATEGORY_LENGTH} characters or fewer.`);
+    if (trimmed.length > MAX_TODO_CATEGORY_LENGTH) {
+      toast.error(`Keep it to ${MAX_TODO_CATEGORY_LENGTH} characters or fewer.`);
       return;
     }
+
+    // The mutation MERGES when the new name collides case-insensitively with a
+    // different existing category (tasks adopt that category's stored spelling).
+    // Resolve the same target here so the confirmation matches what happened
+    // instead of claiming a rename to the typed spelling.
+    const mergeTarget = todoCategories.find(
+      category => normalize(category) === normalize(trimmed) && normalize(category) !== normalize(original),
+    );
 
     setRenamingName(original);
     try {
       await renameTodoCategory(original, trimmed);
-      toast.success(`Renamed to "${trimmed}"`);
+      toast.success(mergeTarget ? `Merged into "${mergeTarget}"` : `Renamed to "${trimmed}"`);
       setEditing(null);
     } catch (error) {
       console.error('[TodoCategoryManagerDrawer] Rename category failed:', error);
-      // renameTodoCategory surfaces its own error toast; leave the editor open
-      // so the entered name isn't lost.
+      // The write didn't land — report it and leave the editor open so the
+      // entered name isn't lost.
+      toast.error(describeError(error, 'rename the category'));
     } finally {
       setRenamingName(null);
     }
@@ -170,18 +189,24 @@ export const TodoCategoryManagerDrawer: React.FC<TodoCategoryManagerDrawerProps>
       setPendingDelete(null);
     } catch (error) {
       console.error('[TodoCategoryManagerDrawer] Delete category failed:', error);
-      // deleteTodoCategory surfaces its own error toast.
-      setPendingDelete(null);
+      // The category is still there — report it and KEEP the confirmation open
+      // so the user can retry without hunting for the row again.
+      toast.error(describeError(error, 'delete the category'));
     } finally {
       setIsDeleting(false);
     }
   };
 
+  // The count is a floor (see taskCountLabel), so the copy never promises an
+  // exact total: every to-do using the category is cleared, including completed
+  // ones older than the loaded window.
   const deleteMessage = pendingDelete
     ? `Delete "${pendingDelete.name}"? ${
         pendingDelete.count === 0
-          ? 'No tasks are using it.'
-          : `${taskCountLabel(pendingDelete.count)} will become ${UNCATEGORIZED_LABEL}.`
+          ? `No recent tasks are using it; any older completed ones become ${UNCATEGORIZED_LABEL}.`
+          : `At least ${pendingDelete.count} ${
+              pendingDelete.count === 1 ? 'task' : 'tasks'
+            } (plus any older completed ones) will become ${UNCATEGORIZED_LABEL}.`
       } This can't be undone.`
     : '';
 
@@ -202,7 +227,7 @@ export const TodoCategoryManagerDrawer: React.FC<TodoCategoryManagerDrawerProps>
               if (addError) setAddError(null);
             }}
             placeholder="e.g. Errands"
-            maxLength={MAX_CATEGORY_LENGTH}
+            maxLength={MAX_TODO_CATEGORY_LENGTH}
             error={addError ?? undefined}
             disabled={isAdding}
           />
@@ -251,7 +276,7 @@ export const TodoCategoryManagerDrawer: React.FC<TodoCategoryManagerDrawerProps>
                         // the field and the control that opened it never share an
                         // accessible name.
                         aria-label={`New name for ${category}`}
-                        maxLength={MAX_CATEGORY_LENGTH}
+                        maxLength={MAX_TODO_CATEGORY_LENGTH}
                         autoFocus
                         disabled={rowBusy}
                         className="flex-1 min-w-0 p-2 rounded-btn bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-600 text-sm text-brand-900 dark:text-brand-50 focus:outline-hidden focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 disabled:opacity-50"

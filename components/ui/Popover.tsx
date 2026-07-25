@@ -33,7 +33,8 @@ interface PopoverProps {
  * - Escape-to-close,
  * - focus management via {@link useFocusTrap} (focus-in on open, Tab trapping,
  *   focus restoration to the trigger on close),
- * - roving ArrowUp/Down/Home/End focus across descendant `menuitem`(radio)s,
+ * - roving ArrowUp/Down/Home/End focus across descendant `menuitem`s
+ *   (including `menuitemradio` / `menuitemcheckbox`),
  * - grouped-flat surface + entrance animation + z-index.
  *
  * It positions itself absolutely within the nearest positioned ancestor (so it
@@ -77,7 +78,11 @@ export const Popover: React.FC<PopoverProps> = ({
     if (!panel) return;
     const items = Array.from(
       panel.querySelectorAll<HTMLElement>(
-        '[role="menuitem"]:not([disabled]),[role="menuitemradio"]:not([disabled])'
+        // The whole `menuitem` family — radios (single-select filters) AND
+        // checkboxes (multi-select filters, e.g. the To-Dos category filter).
+        // Omitting `menuitemcheckbox` left those panels with an empty item list,
+        // silently disabling roving focus.
+        '[role="menuitem"]:not([disabled]),[role="menuitemradio"]:not([disabled]),[role="menuitemcheckbox"]:not([disabled])'
       )
     );
     if (items.length === 0) return;

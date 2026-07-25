@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TodoCategoryManagerDrawer } from './TodoCategoryManagerDrawer';
 import { useTodos } from '@/contexts/FirebaseHouseholdContext';
@@ -34,13 +34,20 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useTodos: vi.fn(),
 }));
 
+const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('react-hot-toast', () => ({
-  default: { success: vi.fn(), error: vi.fn() },
+  default: toastMock,
 }));
 
-const mockUpdateTodoCategories = vi.fn(() => Promise.resolve());
-const mockRenameTodoCategory = vi.fn(() => Promise.resolve());
-const mockDeleteTodoCategory = vi.fn(() => Promise.resolve());
+// Typed as the context's contract (Promise<void>) so a test can reject them —
+// the real mutations re-throw, and this drawer owns both messages.
+const mockUpdateTodoCategories = vi.fn<(categories: string[]) => Promise<void>>(() =>
+  Promise.resolve(),
+);
+const mockRenameTodoCategory = vi.fn<(oldName: string, newName: string) => Promise<void>>(() =>
+  Promise.resolve(),
+);
+const mockDeleteTodoCategory = vi.fn<(name: string) => Promise<void>>(() => Promise.resolve());
 
 const todo = (id: string, category?: string): ToDo => ({
   id,
@@ -82,16 +89,19 @@ describe('TodoCategoryManagerDrawer', () => {
     setupContext();
   });
 
-  it('lists each category with its case-insensitive usage count', () => {
+  // The counts come from the `todos` slice, whose completed-to-do listener is
+  // windowed — older completions are rewritten by the mutations but invisible
+  // here — so every count reads as a floor ("2+ tasks"), never a total.
+  it('lists each category with its case-insensitive usage count, phrased as a floor', () => {
     renderDrawer();
 
     expect(screen.getByText('Home')).toBeInTheDocument();
-    expect(screen.getByText('2 tasks')).toBeInTheDocument(); // Home + home
+    expect(screen.getByText('2+ tasks')).toBeInTheDocument(); // Home + home
     expect(screen.getByText('Work')).toBeInTheDocument();
-    expect(screen.getByText('1 task')).toBeInTheDocument(); // completed task counts
+    expect(screen.getByText('1+ task')).toBeInTheDocument(); // completed task counts
     // Absent and blank categories both land in the read-only Uncategorized row.
     expect(screen.getByText('Uncategorized')).toBeInTheDocument();
-    expect(screen.getByText('3 tasks')).toBeInTheDocument();
+    expect(screen.getByText('3+ tasks')).toBeInTheDocument();
   });
 
   it('renders the empty state when the household has no categories', () => {
@@ -182,8 +192,12 @@ describe('TodoCategoryManagerDrawer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete Home' }));
 
     expect(mockDeleteTodoCategory).not.toHaveBeenCalled();
+    // "At least", not an exact total: completed tasks older than the listener
+    // window are cleared too but aren't counted client-side.
     expect(
-      screen.getByText('Delete "Home"? 2 tasks will become Uncategorized. This can\'t be undone.')
+      screen.getByText(
+        'Delete "Home"? At least 2 tasks (plus any older completed ones) will become Uncategorized. This can\'t be undone.'
+      )
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
@@ -191,6 +205,16 @@ describe('TodoCategoryManagerDrawer', () => {
     await waitFor(() => {
       expect(mockDeleteTodoCategory).toHaveBeenCalledWith('Home');
     });
+  });
+
+  it('never claims a category is unused, since old completed tasks are invisible here', () => {
+    setupContext({ todoCategories: ['Home', 'Work', 'Spare'] });
+    renderDrawer();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Spare' }));
+
+    expect(screen.getByText(/No recent tasks are using it/)).toBeInTheDocument();
+    expect(screen.getByText(/any older completed ones become Uncategorized/)).toBeInTheDocument();
   });
 
   it('cancelling the delete confirmation performs no write', async () => {
@@ -203,5 +227,71 @@ describe('TodoCategoryManagerDrawer', () => {
       expect(screen.queryByText(/will become Uncategorized/)).not.toBeInTheDocument();
     });
     expect(mockDeleteTodoCategory).not.toHaveBeenCalled();
+  });
+
+  // The mutations re-throw and toast nothing, so every "it worked" message on
+  // this surface has to be conditional on the write actually landing.
+  describe('when the mutation rejects', () => {
+    let errorSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      errorSpy.mockRestore();
+    });
+
+    it('a failed add reports the error in the field and keeps the typed name', async () => {
+      mockUpdateTodoCategories.mockRejectedValueOnce(new Error('permission-denied'));
+      renderDrawer();
+
+      fireEvent.change(screen.getByLabelText('New category'), { target: { value: 'Errands' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+      await waitFor(() => expect(mockUpdateTodoCategories).toHaveBeenCalled());
+      await waitFor(() => expect(toastMock.success).not.toHaveBeenCalled());
+      expect(screen.getByLabelText('New category')).toHaveValue('Errands');
+      // Something readable is shown under the field.
+      expect(screen.getByText(/add the category/i)).toBeInTheDocument();
+    });
+
+    it('a failed rename leaves the editor open with the entered name and no success toast', async () => {
+      mockRenameTodoCategory.mockRejectedValueOnce(new Error('unavailable'));
+      renderDrawer();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Rename Home' }));
+      fireEvent.change(screen.getByLabelText('New name for Home'), { target: { value: 'House' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save name for Home' }));
+
+      await waitFor(() => expect(toastMock.error).toHaveBeenCalled());
+      expect(toastMock.success).not.toHaveBeenCalled();
+      // The editor is still open, still holding the typed name.
+      expect(screen.getByLabelText('New name for Home')).toHaveValue('House');
+    });
+
+    it('a failed delete keeps the confirmation open and reports the failure', async () => {
+      mockDeleteTodoCategory.mockRejectedValueOnce(new Error('unavailable'));
+      renderDrawer();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Delete Home' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+      await waitFor(() => expect(toastMock.error).toHaveBeenCalled());
+      expect(toastMock.success).not.toHaveBeenCalled();
+      expect(screen.getByText(/will become Uncategorized/)).toBeInTheDocument();
+    });
+  });
+
+  it('says MERGED (not renamed) when the new name collides with another category', async () => {
+    renderDrawer();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rename Home' }));
+    fireEvent.change(screen.getByLabelText('New name for Home'), { target: { value: 'work' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save name for Home' }));
+
+    // The mutation adopts the EXISTING spelling ("Work"), so the confirmation
+    // must not claim a rename to "work".
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith('Merged into "Work"'));
   });
 });

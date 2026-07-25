@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { ToDo } from '@/types/schema';
 import {
   categoryFilterKey,
+  categoryFilterVocabulary,
   describeCategoryFilter,
   isCategoryFilterEntrySelected,
   matchesCategoryFilter,
@@ -90,10 +91,61 @@ describe('toggleCategoryFilterEntry / isCategoryFilterEntrySelected', () => {
   });
 });
 
+describe('categoryFilterVocabulary', () => {
+  it('is the union of the household list and the categories present on to-dos', () => {
+    expect(
+      categoryFilterVocabulary(['Home', 'Errands'], [todo('Home'), todo('Groceries')]),
+    ).toEqual(['Home', 'Errands', 'Groceries']);
+  });
+
+  it('keeps the household order, then sorts the task-only extras', () => {
+    expect(
+      categoryFilterVocabulary(
+        ['Zed', 'Alpha'],
+        [todo('zulu'), todo('Beta'), todo('apple pie')],
+      ),
+    ).toEqual(['Zed', 'Alpha', 'apple pie', 'Beta', 'zulu']);
+  });
+
+  it('prefers the household spelling when a to-do spells the same category differently', () => {
+    expect(categoryFilterVocabulary(['Home'], [todo('  HOME  ')])).toEqual(['Home']);
+  });
+
+  it('de-dupes task-only categories case-insensitively, keeping the first spelling', () => {
+    expect(categoryFilterVocabulary([], [todo('Groceries'), todo('groceries')])).toEqual([
+      'Groceries',
+    ]);
+  });
+
+  it('excludes absent / blank / whitespace-only categories (they are the Uncategorized bucket)', () => {
+    expect(categoryFilterVocabulary([], [todo(), todo(''), todo('   ')])).toEqual([]);
+    expect(categoryFilterVocabulary(['', '  '], [])).toEqual([]);
+  });
+
+  it('trims the stored spelling of a task-only category', () => {
+    expect(categoryFilterVocabulary([], [todo('  Groceries  ')])).toEqual(['Groceries']);
+  });
+
+  it('is stable as unrelated tasks come and go', () => {
+    const a = categoryFilterVocabulary(['Home'], [todo('Groceries'), todo('Home')]);
+    const b = categoryFilterVocabulary(['Home'], [todo('Home'), todo('Groceries')]);
+    expect(a).toEqual(b);
+  });
+});
+
 describe('pruneCategoryFilter', () => {
   it('drops names that left the vocabulary but keeps the uncategorized bucket', () => {
     expect(pruneCategoryFilter(['Home', 'Gone', null], ['Home', 'Work'])).toEqual(['Home', null]);
     expect(pruneCategoryFilter([null], [])).toEqual([null]);
+  });
+
+  it('keeps a task-only category when fed the union vocabulary, but drops a deleted one', () => {
+    const vocabulary = categoryFilterVocabulary(['Home'], [todo('Groceries')]);
+    // "Groceries" exists only on a task (Shortcut-created) — it must survive.
+    expect(pruneCategoryFilter(['Home', 'Groceries', 'Gone'], vocabulary)).toEqual([
+      'Home',
+      'Groceries',
+    ]);
   });
 
   it('compares against the vocabulary case-insensitively', () => {

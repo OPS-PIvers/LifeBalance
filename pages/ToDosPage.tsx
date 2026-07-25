@@ -45,6 +45,7 @@ import { TodoTriageDrawer } from '@/components/todos/TodoTriageDrawer';
 import { sortFlatTodos, groupTodosByCategory, TODO_SORT_MODES, TODO_SORT_LABELS, type TodoSortMode } from '@/utils/todoSort';
 import { getTodoCategoryColor, UNCATEGORIZED_LABEL } from '@/utils/todoCategoryColor';
 import {
+  categoryFilterVocabulary,
   describeCategoryFilter,
   isCategoryFilterEntrySelected,
   matchesCategoryFilter,
@@ -322,19 +323,33 @@ const ToDosPage: React.FC = () => {
     }
   }, [categoryFilter]);
 
-  // Drop persisted entries whose category no longer exists (renamed/deleted
-  // elsewhere) — the Uncategorized bucket always survives, since it isn't part
-  // of the vocabulary. Deliberately NOT done while reading storage: the initial
-  // render can happen before `todoCategories` has loaded, which would nuke every
-  // saved entry on reload. Instead this runs on the vocabulary-changed EDGE
-  // during render (the same pattern as `wasSelectionMode` below) — no effect
-  // cascade — and `pruneCategoryFilter` returns the same array reference when
-  // nothing is dropped, so React bails out of the re-render in the common case.
-  const categoryVocabKey = isLoading ? null : `v:${todoCategories.join('\u0000')}`;
+  // The vocabulary the filter menu offers and the prune validates against: the
+  // UNION of the household's `todoCategories` and the categories actually
+  // present on to-dos. `quickAddTodo` never mints a Shortcut-created category
+  // into the household list, so a vocabulary-only menu could neither offer it
+  // nor keep it in a saved filter — the prune below would drop it on every
+  // reload and the persistence effect would write the emptied filter back,
+  // silently resetting the selection to "All". See utils/todoCategoryFilter.ts
+  // for the stable ordering / canonical-spelling rules.
+  const categoryVocabulary = useMemo(
+    () => categoryFilterVocabulary(todoCategories, todos),
+    [todoCategories, todos],
+  );
+
+  // Drop persisted entries whose category no longer exists ANYWHERE — gone from
+  // the vocabulary AND unused by every to-do. The Uncategorized bucket always
+  // survives, since it isn't part of the vocabulary. Deliberately NOT done while
+  // reading storage: the initial render can happen before `todoCategories` /
+  // `todos` have loaded, which would nuke every saved entry on reload. Instead
+  // this runs on the vocabulary-changed EDGE during render (the same pattern as
+  // `wasSelectionMode` below) — no effect cascade — and `pruneCategoryFilter`
+  // returns the same array reference when nothing is dropped, so React bails out
+  // of the re-render in the common case.
+  const categoryVocabKey = isLoading ? null : `v:${categoryVocabulary.join('\u0000')}`;
   const [lastCategoryVocabKey, setLastCategoryVocabKey] = useState<string | null>(null);
   if (categoryVocabKey !== null && categoryVocabKey !== lastCategoryVocabKey) {
     setLastCategoryVocabKey(categoryVocabKey);
-    setCategoryFilter(prev => pruneCategoryFilter(prev, todoCategories));
+    setCategoryFilter(prev => pruneCategoryFilter(prev, categoryVocabulary));
   }
 
   // Orientation drives the view (no persisted arrangement anymore): portrait
@@ -1642,8 +1657,11 @@ const ToDosPage: React.FC = () => {
   // wrong for a checkbox list you tick several times. Items are
   // `menuitemcheckbox`es that toggle in place; Escape / click-away close.
   const categoryFilterLabel = describeCategoryFilter(categoryFilter, UNCATEGORIZED_LABEL);
-  const categoryFilterEntries: TodoCategoryFilterEntry[] = [...todoCategories, null];
-  const categoryFilterControl = (todoCategories.length > 0 || categoryFilter.length > 0) ? (
+  // Entries come from the UNION vocabulary (household list + categories present
+  // on tasks), so a Shortcut-created category is reachable here instead of only
+  // via a row chip — and the control stays available for it.
+  const categoryFilterEntries: TodoCategoryFilterEntry[] = [...categoryVocabulary, null];
+  const categoryFilterControl = (categoryVocabulary.length > 0 || categoryFilter.length > 0) ? (
     <div className="relative flex-none">
       {categoryFilterLabel !== null ? (
         <div className="flex items-center bg-accent-50 text-accent-700 dark:bg-accent-900/30 dark:text-accent-200 rounded-full">
@@ -1688,7 +1706,10 @@ const ToDosPage: React.FC = () => {
           position="top-full right-0 mt-2"
           className="w-56 overflow-hidden py-1"
         >
-          <div className="max-h-72 scroll-contain-y">
+          {/* role="none": a scroll container between the `menu` and its
+              `menuitemcheckbox`es would otherwise break the required
+              menu → menuitem* ownership relation for assistive tech. */}
+          <div role="none" className="max-h-72 scroll-contain-y">
             <button
               type="button"
               role="menuitemcheckbox"
@@ -2022,14 +2043,20 @@ const ToDosPage: React.FC = () => {
                             </button>
                           </h3>
                         </div>
-                        {!collapsed && (
-                          <SurfaceList
-                            id={contentId}
-                            className="[&>*:first-child_.hairline-divider]:border-t-0"
-                          >
-                            {section.todos.map(renderTodoRow)}
-                          </SurfaceList>
-                        )}
+                        {/* Always mounted (hidden when collapsed) so the header
+                            button's aria-controls never references an absent id
+                            — exactly when aria-expanded="false" makes the
+                            reference matter most. `hidden` removes the rows from
+                            the a11y tree and from tab order, so collapsed
+                            content stays genuinely unreachable. Mirrors the
+                            "More options" disclosure in the drawer below. */}
+                        <SurfaceList
+                          id={contentId}
+                          hidden={collapsed}
+                          className="[&>*:first-child_.hairline-divider]:border-t-0"
+                        >
+                          {section.todos.map(renderTodoRow)}
+                        </SurfaceList>
                       </section>
                     );
                   })}

@@ -60,7 +60,7 @@ describe('buildToDosFromTemplate', () => {
     expect(result[0]?.text).toBe('Real task');
   });
 
-  it('never includes points on the created payload (todos rules whitelist gap)', () => {
+  it('never includes points on the created payload (deliberate product choice, not a rules gap)', () => {
     const template: TaskTemplate = {
       id: 't4',
       name: 'Chores',

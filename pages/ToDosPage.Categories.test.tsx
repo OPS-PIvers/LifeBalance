@@ -103,8 +103,8 @@ beforeEach(() => {
 });
 
 describe('ToDosPage — category filter', () => {
-  it('hides the control entirely when the household has no categories', () => {
-    setup({ todoCategories: [] });
+  it('hides the control entirely when nothing anywhere carries a category', () => {
+    setup({ todoCategories: [], todos: [todo('1', 'Loose one'), todo('2', 'Loose two')] });
     // Exact name: the ROW chips are also "Filter by category: <name>" buttons.
     expect(screen.queryByRole('button', { name: 'Filter by category' })).toBeNull();
   });
@@ -169,12 +169,97 @@ describe('ToDosPage — category filter', () => {
     expect(window.localStorage.getItem('todos-category-filter')).toBe('[]');
   });
 
-  it('drops a persisted category that has left the household vocabulary', () => {
+  it('drops a persisted category that was genuinely DELETED (vocabulary + every task)', () => {
     window.localStorage.setItem('todos-category-filter', '["Gone",null]');
+    // No to-do carries "Gone" either, so it exists nowhere — the prune must
+    // still drop it. Only the uncategorized bucket survives.
     setup();
-    // Only the uncategorized bucket survives the prune.
     expect(activeTaskNames()).toEqual(['Edit task: Something loose']);
     expect(window.localStorage.getItem('todos-category-filter')).toBe('[null]');
+  });
+
+  // A category created by an iOS Shortcut lives on the TASK but never enters
+  // `household.todoCategories` (quickAddTodo deliberately doesn't mint it), so
+  // a vocabulary-only menu/prune silently reset the saved filter to "All" on
+  // every reload. The vocabulary is the UNION of both.
+  it('offers a category that only exists on tasks, never in the vocabulary', () => {
+    setup({
+      todoCategories: ['Home'],
+      todos: [todo('1', 'Mow the lawn', 'Home'), todo('2', 'Shortcut task', 'Groceries')],
+    });
+    openCategoryFilter();
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Groceries/ }));
+    expect(activeTaskNames()).toEqual(['Edit task: Shortcut task']);
+  });
+
+  it('keeps a task-only (Shortcut-created) category in the persisted filter across a reload', () => {
+    window.localStorage.setItem('todos-category-filter', '["Groceries"]');
+    setup({
+      todoCategories: ['Home', 'Errands'],
+      todos: [todo('1', 'Mow the lawn', 'Home'), todo('2', 'Shortcut task', 'Groceries')],
+    });
+    // Survives the vocabulary-edge prune...
+    expect(activeTaskNames()).toEqual(['Edit task: Shortcut task']);
+    // ...and the persistence effect must not write an emptied filter back.
+    expect(window.localStorage.getItem('todos-category-filter')).toBe('["Groceries"]');
+  });
+
+  it('shows the control when only tasks carry categories', () => {
+    setup({
+      todoCategories: [],
+      todos: [todo('1', 'Shortcut task', 'Groceries')],
+    });
+    expect(screen.getByRole('button', { name: 'Filter by category' })).toBeInTheDocument();
+  });
+
+  it('orders the menu household-first, then task-only extras alphabetically', () => {
+    setup({
+      todoCategories: ['Home', 'Errands'],
+      todos: [
+        todo('1', 'Zed task', 'Zebra'),
+        todo('2', 'Ay task', 'Apples'),
+        todo('3', 'Home task', 'home'), // same category, different spelling
+      ],
+    });
+    openCategoryFilter();
+    const items = screen
+      .getAllByRole('menuitemcheckbox')
+      .map(el => el.textContent?.trim());
+    // "All categories" first, then the household's own order (its canonical
+    // "Home" spelling wins over the task's "home"), then the extras sorted.
+    expect(items).toEqual([
+      'All categories',
+      'Home',
+      'Errands',
+      'Apples',
+      'Zebra',
+      'Uncategorized',
+    ]);
+  });
+
+  // Finding 3 regression: the popover's roving-focus item list must include
+  // `menuitemcheckbox`, not just menuitem/menuitemradio.
+  it('roves focus across the checkbox items with the arrow / Home / End keys', () => {
+    setup();
+    openCategoryFilter();
+    const panel = screen.getByRole('menu', { name: 'Filter by category' });
+    const items = screen.getAllByRole('menuitemcheckbox');
+    expect(items).toHaveLength(4); // All + Home + Errands + Uncategorized
+
+    fireEvent.keyDown(panel, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(items[0]);
+
+    fireEvent.keyDown(panel, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(items[1]);
+
+    fireEvent.keyDown(panel, { key: 'ArrowUp' });
+    expect(document.activeElement).toBe(items[0]);
+
+    fireEvent.keyDown(panel, { key: 'End' });
+    expect(document.activeElement).toBe(items[items.length - 1]);
+
+    fireEvent.keyDown(panel, { key: 'Home' });
+    expect(document.activeElement).toBe(items[0]);
   });
 
   it('ignores a malformed persisted value instead of throwing', () => {
@@ -229,6 +314,31 @@ describe('ToDosPage — category sort mode sections', () => {
       expect.arrayContaining(['Edit task: Pick up parcel', 'Edit task: Something loose']),
     );
     expect(activeTaskNames()).not.toContain('Edit task: Mow the lawn');
+  });
+
+  // Finding 6 regression: the list was only rendered while expanded, so exactly
+  // in the collapsed state — where aria-expanded="false" makes the reference
+  // matter most — aria-controls pointed at a nonexistent id.
+  it('keeps the aria-controls target in the DOM (but hidden) while collapsed', () => {
+    setup();
+    chooseCategorySort();
+    const homeHeader = screen
+      .getAllByRole('button', { expanded: true })
+      .find(h => h.textContent?.includes('Home')) as HTMLElement;
+
+    const controlsId = homeHeader.getAttribute('aria-controls');
+    expect(controlsId).toBeTruthy();
+    expect(document.getElementById(controlsId as string)).not.toBeNull();
+
+    fireEvent.click(homeHeader);
+    expect(homeHeader).toHaveAttribute('aria-expanded', 'false');
+
+    const target = document.getElementById(controlsId as string);
+    expect(target).not.toBeNull();
+    // `hidden` keeps it out of the a11y tree AND out of tab order, so the
+    // collapsed rows stay genuinely unreachable.
+    expect(target).toHaveAttribute('hidden');
+    expect(within(target as HTMLElement).queryAllByRole('button')).toHaveLength(0);
   });
 
   it('keeps rendering the flat (section-less) list in every other sort mode', () => {

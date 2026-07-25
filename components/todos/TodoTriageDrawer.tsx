@@ -294,6 +294,13 @@ export const TodoTriageDrawer: React.FC<TodoTriageDrawerProps> = ({ isOpen, onCl
 
               <div>
                 <CategoryChipPicker
+                  // Remount on every card so the picker's own transient
+                  // isAdding/draft/isBusy state (it owns no domain state, see
+                  // CategoryChipPicker's header comment) can never survive
+                  // past an advance — see the header comment above about no
+                  // edit being lost by advancing; a stale "+ Add" draft
+                  // surviving Skip would apply to the WRONG task otherwise.
+                  key={current.id}
                   label="Category"
                   categories={todoCategories}
                   value={current.category}

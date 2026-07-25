@@ -25,8 +25,11 @@ export const MAX_TODO_CATEGORY_LENGTH = 50;
  *
  * - `undefined`/empty/whitespace-only → `undefined` (nothing to store; the
  *   to-do stays Uncategorized).
- * - Case-insensitive match against `householdCategories` → the household's
- *   canonical casing (so "home" resolves to the stored "Home").
+ * - Case-insensitive, trim-insensitive match against `householdCategories` →
+ *   the household's canonical (trimmed) spelling (so "home" resolves to a
+ *   stored " Home " as "Home"). Household entries are trimmed before
+ *   comparison, mirroring every client-side comparator, so an untrimmed
+ *   vocabulary entry still matches instead of silently missing.
  * - No match → the trimmed input, stored as-is (never silently dropped).
  * - Input longer than `MAX_TODO_CATEGORY_LENGTH` is truncated before
  *   matching/storing, same cap the file already applies to category fields.
@@ -46,9 +49,13 @@ export function resolveTodoCategory(
       : trimmed;
 
   const cappedLower = capped.toLowerCase();
+  // Trim household entries before comparing — every client-side comparator
+  // trims both sides, and an untrimmed vocabulary entry (e.g. " Home ")
+  // should still match "home" instead of silently falling through to the
+  // "no match, store as-is" branch below.
   const canonical = (householdCategories ?? []).find(
-    (c) => c.toLowerCase() === cappedLower
+    (c) => c.trim().toLowerCase() === cappedLower
   );
 
-  return canonical ?? capped;
+  return canonical?.trim() ?? capped;
 }

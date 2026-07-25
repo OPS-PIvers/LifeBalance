@@ -5,7 +5,9 @@
  * todoMutations.test.ts) so these are pure logic tests: refs carry their
  * `__path`, each `writeBatch` records its own ops, and `getDocs` is driven with
  * fake to-do docs. Covers the chunking boundary, case-insensitive matching,
- * the merge-on-collision rule, the deleteField() clear, and the no-op guards.
+ * the merge-on-collision rule, the deleteField() clear, the no-op guards, and
+ * the rethrow contract (these mutations toast nothing and re-throw, so callers
+ * can't report success for a write that never landed).
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -127,19 +129,33 @@ describe('chunkForBatches', () => {
 });
 
 describe('updateTodoCategories', () => {
-  it('writes the list to the household doc', async () => {
+  it('writes the list to the household doc and toasts NOTHING (callers own the message)', async () => {
     const { updateTodoCategories } = makeUpdateTodoCategories({ db, householdId });
     await updateTodoCategories(['Home', 'Work']);
     expect(updateDocMock).toHaveBeenCalledTimes(1);
     const [, payload] = updateDocMock.mock.calls[0] as unknown as [Ref, Record<string, unknown>];
     expect(payload).toEqual({ todoCategories: ['Home', 'Work'] });
-    expect(toastMock.success).toHaveBeenCalled();
+    expect(toastMock.success).not.toHaveBeenCalled();
   });
 
   it('is a no-op without a household', async () => {
     const { updateTodoCategories } = makeUpdateTodoCategories({ db, householdId: null });
     await updateTodoCategories(['Home']);
     expect(updateDocMock).not.toHaveBeenCalled();
+  });
+
+  // The whole point of the rethrow: a caller that awaits this must be able to
+  // tell a failed write from a successful one (it previously always resolved,
+  // so callers reported success on top of the mutation's error toast).
+  it('RE-THROWS a failed write instead of swallowing it', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    updateDocMock.mockRejectedValueOnce(new Error('permission-denied'));
+    const { updateTodoCategories } = makeUpdateTodoCategories({ db, householdId });
+
+    await expect(updateTodoCategories(['Home'])).rejects.toThrow('permission-denied');
+    expect(toastMock.error).not.toHaveBeenCalled();
+    expect(toastMock.success).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 });
 
@@ -206,6 +222,52 @@ describe('renameTodoCategory', () => {
     expect(commitMock).toHaveBeenCalledTimes(2);
   });
 
+  it('RE-THROWS when the vocabulary write fails, and toasts nothing', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    getDocsDocs.current = [todo('a', 'Home')];
+    updateDocMock.mockRejectedValueOnce(new Error('permission-denied'));
+
+    await expect(make(['Home']).renameTodoCategory('Home', 'House')).rejects.toThrow(
+      'permission-denied',
+    );
+    expect(toastMock.success).not.toHaveBeenCalled();
+    expect(toastMock.error).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  // The mutation's doc comment claims a part-way failure is safe to retry
+  // because the to-do rewrites commit BEFORE the vocabulary list. This is that
+  // claim, executed: the failed run leaves the old name listed, and the retry
+  // re-queries by the old name so it only touches what is left.
+  it('converges on retry when one chunk of the rewrite fails', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const all = Array.from({ length: FIRESTORE_BATCH_LIMIT + 1 }, (_, i) => todo(`t${i}`, 'Home'));
+    getDocsDocs.current = all;
+    // First chunk commits, second is rejected.
+    commitMock.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('unavailable'));
+
+    await expect(make(['Home']).renameTodoCategory('Home', 'House')).rejects.toThrow('unavailable');
+    // Vocabulary untouched — 'Home' is still listed, so the tasks the first
+    // chunk did NOT reach are still reachable through the UI.
+    expect(updateDocMock).not.toHaveBeenCalled();
+
+    // Retry: Firestore now only returns the to-dos still carrying 'Home' (the
+    // first chunk was rewritten to 'House' and no longer matches).
+    batches.length = 0;
+    commitMock.mockClear();
+    getDocsDocs.current = all.slice(FIRESTORE_BATCH_LIMIT);
+    await make(['Home']).renameTodoCategory('Home', 'House');
+
+    expect(batches).toHaveLength(1);
+    expect(batches[0]?.ops).toHaveLength(1);
+    expect(categoryUpdates()).toEqual([
+      { id: `t${FIRESTORE_BATCH_LIMIT}`, data: { category: 'House' } },
+    ]);
+    const [, payload] = updateDocMock.mock.calls[0] as unknown as [Ref, Record<string, unknown>];
+    expect(payload).toEqual({ todoCategories: ['House'] });
+    errorSpy.mockRestore();
+  });
+
   it('is a no-op for a blank new name, an unchanged name, or no household', async () => {
     getDocsDocs.current = [todo('a', 'Home')];
     await make(['Home']).renameTodoCategory('Home', '   ');
@@ -248,6 +310,19 @@ describe('deleteTodoCategory', () => {
     expect(batches).toHaveLength(2);
     expect(batches[0]?.ops).toHaveLength(FIRESTORE_BATCH_LIMIT);
     expect(batches[1]?.ops).toHaveLength(1);
+  });
+
+  it('RE-THROWS a failed clear instead of resolving, and toasts nothing', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    getDocsDocs.current = [todo('a', 'Home')];
+    commitMock.mockRejectedValueOnce(new Error('unavailable'));
+
+    await expect(make(['Home']).deleteTodoCategory('Home')).rejects.toThrow('unavailable');
+    // The vocabulary entry survives, so the category is still there to retry.
+    expect(updateDocMock).not.toHaveBeenCalled();
+    expect(toastMock.success).not.toHaveBeenCalled();
+    expect(toastMock.error).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 
   it('is a no-op for a blank name or no household', async () => {

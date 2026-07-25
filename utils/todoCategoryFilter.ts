@@ -72,11 +72,60 @@ export function toggleCategoryFilterEntry(
 }
 
 /**
- * Drop name entries that are no longer in the household's vocabulary (a
+ * The category names the filter MENU offers, and the vocabulary
+ * {@link pruneCategoryFilter} validates against: the UNION of the household's
+ * own `todoCategories` and every distinct category actually present on a to-do.
+ *
+ * Why the union and not just the household list: `quickAddTodo` deliberately
+ * does NOT mint an unrecognised category into `household.todoCategories`
+ * (minting is a UI action), so a category created by an iOS Shortcut exists on
+ * tasks but not in the vocabulary. A vocabulary-only menu could never offer it,
+ * and — worse — the prune would drop it from a saved filter on every reload,
+ * silently resetting the persisted selection to "All".
+ *
+ * Ordering is deliberately STABLE so the menu doesn't jitter as tasks change:
+ * the household's list first, in its own order (its spelling wins when a
+ * to-do spells the same category differently), then the task-only extras
+ * sorted case-insensitively. De-duplication is case-insensitive throughout,
+ * and blank/whitespace-only categories are the Uncategorized bucket — never a
+ * name — so they are excluded here.
+ */
+export function categoryFilterVocabulary(
+  categories: readonly string[],
+  todos: readonly Pick<ToDo, 'category'>[],
+): string[] {
+  const seen = new Set<string>();
+  const fromHousehold: string[] = [];
+  for (const name of categories) {
+    const key = categoryFilterKey(name);
+    if (key === null || seen.has(key)) continue;
+    seen.add(key);
+    fromHousehold.push(name);
+  }
+
+  const fromTodos: string[] = [];
+  for (const todo of todos) {
+    const key = categoryFilterKey(todo.category);
+    if (key === null || seen.has(key)) continue;
+    seen.add(key);
+    fromTodos.push((todo.category ?? '').trim());
+  }
+  fromTodos.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+  return [...fromHousehold, ...fromTodos];
+}
+
+/**
+ * Drop name entries that are no longer in the given vocabulary (a
  * renamed/deleted category must not keep scoping the list) while ALWAYS keeping
  * the `null` Uncategorized bucket, which exists independently of the
  * vocabulary. Returns the SAME array reference when nothing changed, so callers
  * can feed the result straight back into `setState` without re-rendering.
+ *
+ * Pass the {@link categoryFilterVocabulary} union, not the raw household list:
+ * a category that only exists on tasks (Shortcut-created) must SURVIVE, while a
+ * genuinely deleted one — gone from the vocabulary AND from every to-do — is
+ * still dropped.
  */
 export function pruneCategoryFilter(
   filter: TodoCategoryFilterEntry[],

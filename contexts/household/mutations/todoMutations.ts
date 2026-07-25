@@ -787,10 +787,17 @@ async function fetchTodosInCategory(db: Firestore, householdId: string, key: str
 /**
  * updateTodoCategories — original closure captures only `householdId`.
  *
- * Persists the household's to-do category vocabulary to the household doc.
- * Deliberately mirrors `makeUpdateHabitCategories` (gamificationMutations):
- * same single `updateDoc`, same toast conventions, same swallow-and-report
- * error handling — the chip pickers call it with `[...todoCategories, newName]`.
+ * Persists the household's to-do category vocabulary to the household doc with a
+ * single `updateDoc` — the chip pickers call it with
+ * `[...todoCategories, newName]`.
+ *
+ * Toast Behavior: none here, matching `updateToDo`/`deleteToDo` above — the
+ * callers (the chip picker's inline editor, the category manager drawer) own
+ * both the success and the failure message, and they can only do that honestly
+ * if a failed write actually REJECTS.
+ *
+ * @throws Re-throws any caught error so callers don't report success for a write
+ *         that never landed.
  */
 export function makeUpdateTodoCategories(deps: {
   db: Firestore;
@@ -804,10 +811,9 @@ export function makeUpdateTodoCategories(deps: {
       await updateDoc(doc(db, `households/${householdId}`), {
         todoCategories: categories,
       });
-      toast.success('Categories updated');
     } catch (error) {
       console.error('[updateTodoCategories] Failed:', error);
-      toast.error(describeError(error, 'update the categories'));
+      throw error; // Re-throw so callers can handle the error with contextual messaging
     }
   };
 
@@ -824,8 +830,14 @@ export function makeUpdateTodoCategories(deps: {
  *
  * Ordering matters because multiple batches are not one atomic unit: the to-do
  * rewrites commit FIRST and the household vocabulary list LAST. A failure part
- * way through therefore leaves the old name still listed (the user simply
- * retries) rather than dropping a category whose tasks still point at it.
+ * way through therefore leaves the old name still listed rather than dropping a
+ * category whose tasks still point at it — and a retry CONVERGES, because the
+ * re-run re-queries by the old name and so only touches the to-dos the failed
+ * run hadn't rewritten yet (covered in todoCategoryMutations.test.ts).
+ *
+ * Toast Behavior: none here — both functions RE-THROW so their single caller
+ * (TodoCategoryManagerDrawer) owns the success/failure message and can keep its
+ * rename editor open when the write didn't land.
  */
 export function makeTodoCategoryEditMutations(deps: {
   db: Firestore;
@@ -845,6 +857,8 @@ export function makeTodoCategoryEditMutations(deps: {
    *   category, the rename MERGES into it: tasks are rewritten to that
    *   category's stored spelling and the old entry is dropped from the list —
    *   never producing two vocabulary entries that differ only by case.
+   *
+   * @throws Re-throws any caught error (see the toast note above).
    */
   const renameTodoCategory = async (oldName: string, newName: string) => {
     if (!householdId) return;
@@ -889,10 +903,9 @@ export function makeTodoCategoryEditMutations(deps: {
       await updateDoc(doc(db, `households/${householdId}`), {
         todoCategories: nextCategories,
       });
-      toast.success(mergeTarget ? `Merged into "${targetName}"` : `Renamed to "${targetName}"`);
     } catch (error) {
       console.error('[renameTodoCategory] Failed:', error);
-      toast.error(describeError(error, 'rename the category'));
+      throw error; // Re-throw so callers can handle the error with contextual messaging
     }
   };
 
@@ -901,9 +914,15 @@ export function makeTodoCategoryEditMutations(deps: {
    * to-do that used it, so those tasks fall back to Uncategorized.
    *
    * The field is removed with `deleteField()` rather than set to `''`: the
-   * "absent means Uncategorized" invariant (types/schema.ts `ToDo.category`) is
-   * what the sort/group/color helpers key off, and leaving an empty string
-   * behind would put a blank chip in the vocabulary-derived UI.
+   * sort/group/color helpers treat an ABSENT (or null) category as
+   * Uncategorized, and leaving an empty string behind would put a blank chip in
+   * the vocabulary-derived UI. Note "absent" is not an invariant the whole app
+   * upholds — clearing the category from the to-do FORM passes `undefined`
+   * through `updateToDo`, and `sanitizeFirestoreData` turns both `undefined` and
+   * `''` into `null` — so consumers must handle absent AND null. This path just
+   * picks the cleaner of the two.
+   *
+   * @throws Re-throws any caught error (see the toast note above).
    */
   const deleteTodoCategory = async (name: string) => {
     if (!householdId) return;
@@ -924,10 +943,9 @@ export function makeTodoCategoryEditMutations(deps: {
       await updateDoc(doc(db, `households/${householdId}`), {
         todoCategories: nextCategories,
       });
-      toast.success('Category deleted');
     } catch (error) {
       console.error('[deleteTodoCategory] Failed:', error);
-      toast.error(describeError(error, 'delete the category'));
+      throw error; // Re-throw so callers can handle the error with contextual messaging
     }
   };
 

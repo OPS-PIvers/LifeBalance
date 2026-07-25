@@ -1178,11 +1178,17 @@ export interface ToDo {
   linkedHabitId?: string;
 
   // F-TODO-16: a single optional category ("Home", "Work"...) chosen from the
-  // household's `todoCategories` vocabulary. ABSENT means "Uncategorized" — that
-  // is the invariant every consumer relies on (see utils/todoCategoryColor.ts and
-  // the 'category' sort mode in utils/todoSort.ts), so clearing a category must
-  // delete the field rather than write ''. Absent on every existing to-do — no
-  // migration needed; `todoConverter` spreads the raw doc so it passes through.
+  // household's `todoCategories` vocabulary. ABSENT OR NULL both mean
+  // "Uncategorized" — that is the invariant every consumer relies on (see
+  // utils/todoCategoryColor.ts and the 'category' sort mode in utils/todoSort.ts),
+  // so every reader must treat the two representations identically (the
+  // standard guard is `(x ?? '')`). Both occur in practice: the dedicated
+  // "clear category" action (deleteTodoCategory) deletes the field, but the
+  // generic form-edit path writes `category: undefined`, which
+  // `utils/firestoreSanitizer.ts` converts to `null` before the write lands —
+  // the same pattern `linkedHabitId` follows. Absent on every existing to-do —
+  // no migration needed; `todoConverter` spreads the raw doc so it passes
+  // through.
   category?: string;
 }
 

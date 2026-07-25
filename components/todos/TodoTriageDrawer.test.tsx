@@ -159,6 +159,27 @@ describe('TodoTriageDrawer', () => {
     expect(screen.getByText('All caught up')).toBeInTheDocument();
   });
 
+  it('does not leak an open "+ Add" category draft from one card to the next', () => {
+    openDrawer([todo('t1', 'First task'), todo('t2', 'Second task')]);
+
+    // Open the inline add-category editor on card 1 and type a draft, but
+    // don't confirm it.
+    fireEvent.click(screen.getByRole('button', { name: 'Add a category' }));
+    fireEvent.change(screen.getByLabelText('New category name'), {
+      target: { value: 'Garden' },
+    });
+    expect(screen.getByLabelText('New category name')).toHaveValue('Garden');
+
+    // Advance to card 2 without confirming the draft.
+    fireEvent.click(screen.getByRole('button', { name: /^Skip/ }));
+    expect(screen.getByText('Second task')).toBeInTheDocument();
+
+    // The editor must be closed and the draft gone — not open with "Garden"
+    // still in it, which would apply to card 2 if confirmed.
+    expect(screen.queryByLabelText('New category name')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add a category' })).toBeInTheDocument();
+  });
+
   it('goes back to the previous card, showing its saved values', async () => {
     openDrawer([todo('t1', 'First task'), todo('t2', 'Second task')]);
 

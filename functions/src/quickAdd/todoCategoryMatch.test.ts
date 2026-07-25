@@ -55,6 +55,10 @@ describe("resolveTodoCategory", () => {
     expect(result).toBe(long.slice(0, MAX_TODO_CATEGORY_LENGTH));
   });
 
+  it("trims household entries before matching, resolving to the canonical trimmed spelling", () => {
+    expect(resolveTodoCategory("home", [" Home "])).toBe("Home");
+  });
+
   it("truncates before matching, so an over-length near-match still resolves to canonical casing", () => {
     const canonical = "A".repeat(MAX_TODO_CATEGORY_LENGTH);
     // Same first 50 chars (lowercased) plus extra tail that truncation drops
