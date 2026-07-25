@@ -395,8 +395,15 @@ const Habits: React.FC = () => {
   // there, so arriving with Progress/Rewards still selected would show nothing
   // of what the push was about.
   useEffect(() => {
-    if (dueFilter) setActiveView('track');
-  }, [dueFilter, setActiveView]);
+    if (dueFilter) {
+      setActiveView('track');
+      return;
+    }
+    // A link whose habits have all since been deleted renders no banner, so
+    // there'd be no visible way to clear the param it left behind — drop it
+    // ourselves rather than let a dead filter ride along in a refresh or share.
+    if (dueIds) clearDueFilter();
+  }, [dueFilter, dueIds, setActiveView, clearDueFilter]);
 
   // Global search deep-link (v1.1): scroll-to + briefly flash the specific
   // habit row selected in SearchOverlay, on top of the tab-level jump above.

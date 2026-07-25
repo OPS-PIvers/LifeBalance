@@ -123,6 +123,21 @@ describe('Habits page — reminder deep-link filter (F-HABITS-03)', () => {
     expect(screen.queryByRole('button', { name: 'Show all' })).not.toBeInTheDocument();
   });
 
+  // No banner renders for an all-stale link, so there'd be no "Show all" to
+  // clear the param — the page has to drop it itself.
+  it('drops a fully stale param instead of leaving it stuck in the URL', () => {
+    searchParams.current = new URLSearchParams('due=gone,alsogone');
+    render(<Habits />);
+    expect(setSearchParams).toHaveBeenCalledTimes(1);
+    expect(searchParams.current.has('due')).toBe(false);
+  });
+
+  it('leaves a resolving param alone', () => {
+    searchParams.current = new URLSearchParams('due=h1');
+    render(<Habits />);
+    expect(setSearchParams).not.toHaveBeenCalled();
+  });
+
   it('keeps the habits that do resolve when only some of the ids are stale', () => {
     searchParams.current = new URLSearchParams('due=h2,gone');
     render(<Habits />);
