@@ -797,4 +797,87 @@ describe('TransactionReviewForm', () => {
       expect(screen.queryByText(rawDescriptor)).not.toBeInTheDocument();
     });
   });
+
+  describe('merchant rules — amount-qualified keyword suggestion', () => {
+    const rawDescriptor = 'APPLE.COM/BILL 866-712-7753 CA';
+    const icloudHabit = {
+      id: 'h-icloud',
+      title: 'Log a subscription charge',
+      category: 'spending',
+      type: 'negative',
+      period: 'daily' as const,
+      // Keyed on the FRIENDLY name, which is the point: the bank never says
+      // "iCloud" anywhere in the descriptor.
+      triggers: { keywords: ['icloud'] },
+      completedDates: [] as string[],
+    };
+
+    it('pre-selects a habit keyed on a name only an amount-qualified rule produces', async () => {
+      const user = userEvent.setup();
+      mockHabits.push({ ...icloudHabit });
+      mockMerchantRules.push({
+        id: 'rule-icloud',
+        pattern: 'APPLE.COM',
+        amount: 2.99,
+        name: 'iCloud storage',
+        createdAt: '2026-07-01T00:00:00.000Z',
+      });
+
+      render(
+        <TransactionReviewForm
+          transaction={{ ...baseTx, merchant: rawDescriptor, amount: 2.99 }}
+          onDone={mockOnDone}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /approve transaction/i }));
+      expect(mockUpdateTransactionCategory.mock.calls[0]![2]).toEqual(['h-icloud']);
+    });
+
+    // A $0 row cannot be approved, so these assert on the keyword-match helper
+    // text, which renders precisely when the amount-qualified rule resolved.
+    // The date must sit INSIDE the back-date window, or the "too far back to log
+    // habits" branch pre-empts that message.
+    const recentDate = format(subDays(parseISO(getLocalDateString()), 2), 'yyyy-MM-dd');
+    const preauthRule = (amount: number): MerchantRule => ({
+      id: 'rule-preauth',
+      pattern: 'APPLE.COM',
+      amount,
+      name: 'Apple pre-auth',
+      createdAt: '2026-07-01T00:00:00.000Z',
+    });
+
+    it('honours a $0 amount qualifier rather than treating zero as "no amount"', () => {
+      // Regression guard: `parseFloat(amount) || undefined` collapses a real 0
+      // to undefined, which would make an amount-qualified rule for a $0 Apple
+      // Pay pre-auth stub permanently unmatchable.
+      mockHabits.push({ ...icloudHabit, id: 'h-preauth', triggers: { keywords: ['pre-auth'] } });
+      mockMerchantRules.push(preauthRule(0));
+
+      render(
+        <TransactionReviewForm
+          transaction={{ ...baseTx, merchant: rawDescriptor, amount: 0, date: recentDate }}
+          onDone={mockOnDone}
+        />
+      );
+
+      expect(screen.getByText(/habit keyword matches/i)).toBeInTheDocument();
+    });
+
+    it('does not match that rule when the row is not $0', () => {
+      // The negative control: without it, the test above would pass even if the
+      // amount qualifier were being ignored entirely.
+      mockHabits.push({ ...icloudHabit, id: 'h-preauth', triggers: { keywords: ['pre-auth'] } });
+      mockMerchantRules.push(preauthRule(0));
+
+      render(
+        <TransactionReviewForm
+          transaction={{ ...baseTx, merchant: rawDescriptor, amount: 12.5, date: recentDate }}
+          onDone={mockOnDone}
+        />
+      );
+
+      expect(screen.queryByText(/habit keyword matches/i)).not.toBeInTheDocument();
+    });
+  });
 });

@@ -168,8 +168,17 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
     // field, matching `merchant`, so a mid-edit row suggests against what the
     // user is actually entering. This is the same set the Dashboard's
     // swipe-approve path fires — they must not diverge.
-    return keywordMatchedHabitIds(habits, { merchant, notes, amount: parseFloat(amount) || undefined }, merchantRules)
-      .filter(id => !alreadyFired.has(id));
+    //
+    // Guard on Number.isFinite, NOT truthiness: `0` is a legitimate qualifier
+    // (an Apple Pay $0 pre-auth stub), and `parseFloat('0') || undefined` would
+    // silently discard it. An empty or unparseable field yields NaN → undefined,
+    // which correctly means "no amount to offer" rather than "amount is zero".
+    const parsedAmount = parseFloat(amount);
+    return keywordMatchedHabitIds(
+      habits,
+      { merchant, notes, amount: Number.isFinite(parsedAmount) ? parsedAmount : undefined },
+      merchantRules,
+    ).filter(id => !alreadyFired.has(id));
   }, [habits, merchant, notes, amount, merchantRules, transaction.firedHabitIds]);
   // The habits a fire would credit are back-dated to the transaction's date, so
   // the dedup and window checks below are both keyed to that date, not to today.
