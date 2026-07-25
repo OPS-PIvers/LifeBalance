@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { useMerchantRules } from '@/hooks/useMerchantRules';
