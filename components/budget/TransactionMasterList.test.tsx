@@ -351,6 +351,56 @@ describe('TransactionMasterList', () => {
       expect(screen.queryByText('Groceries')).not.toBeInTheDocument();
     });
 
+    // Merchant rules rename at DISPLAY time only — the stored descriptor is
+    // untouched — so the text filter has to accept either spelling.
+    describe('with a merchant rule renaming a row', () => {
+      const renamedMockValue = () => ({
+        ...defaultMockValue(),
+        transactions: [
+          { ...mockTransactions[0]!, merchant: 'APPLE.COM/BILL 866-712-7753 CA' },
+          ...mockTransactions.slice(1),
+        ],
+        householdSettings: {
+          merchantRules: [
+            { id: 'r1', pattern: 'APPLE.COM/BILL', name: 'Apple', createdAt: '2026-07-01T00:00:00.000Z' },
+          ],
+        },
+      });
+
+      const renderRenamed = () => {
+        vi.mocked(useHousehold).mockReturnValue(
+          renamedMockValue() as unknown as ReturnType<typeof useHousehold>
+        );
+        render(<TransactionMasterList />);
+      };
+
+      it('shows the friendly name in place of the raw descriptor', () => {
+        renderRenamed();
+        expect(screen.getByText('Apple')).toBeInTheDocument();
+        expect(screen.queryByText('APPLE.COM/BILL 866-712-7753 CA')).not.toBeInTheDocument();
+      });
+
+      it('still matches the RAW bank descriptor in the search filter', () => {
+        renderRenamed();
+        fireEvent.change(screen.getByPlaceholderText('Search transactions'), {
+          target: { value: 'APPLE.COM' },
+        });
+
+        expect(screen.getByText('Apple')).toBeInTheDocument();
+        expect(screen.queryByText('Netflix')).not.toBeInTheDocument();
+      });
+
+      it('also matches the friendly name in the search filter', () => {
+        renderRenamed();
+        fireEvent.change(screen.getByPlaceholderText('Search transactions'), {
+          target: { value: 'apple' },
+        });
+
+        expect(screen.getByText('Apple')).toBeInTheDocument();
+        expect(screen.queryByText('Netflix')).not.toBeInTheDocument();
+      });
+    });
+
     it('clears filters', () => {
       render(<TransactionMasterList />);
       // Set a category filter so the "Clear" button appears
@@ -543,6 +593,26 @@ describe('TransactionMasterList', () => {
           expect.objectContaining({ Merchant: 'Netflix' }),
           expect.objectContaining({ Merchant: 'Groceries' })
         ]),
+        'transactions-export'
+      );
+    });
+
+    it('passes the household merchant rules to the exporter (raw Merchant + friendly Name)', () => {
+      vi.mocked(useHousehold).mockReturnValue({
+        ...defaultMockValue(),
+        transactions: [{ ...mockTransactions[0]!, merchant: 'APPLE.COM/BILL 866-712-7753 CA' }],
+        householdSettings: {
+          merchantRules: [
+            { id: 'r1', pattern: 'APPLE.COM/BILL', name: 'Apple', createdAt: '2026-07-01T00:00:00.000Z' },
+          ],
+        },
+      } as unknown as ReturnType<typeof useHousehold>);
+
+      render(<TransactionMasterList />);
+      fireEvent.click(screen.getByTitle('Export filtered transactions to CSV'));
+
+      expect(generateCsvExport).toHaveBeenCalledWith(
+        [expect.objectContaining({ Merchant: 'APPLE.COM/BILL 866-712-7753 CA', Name: 'Apple' })],
         'transactions-export'
       );
     });

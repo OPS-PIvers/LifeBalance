@@ -1,5 +1,5 @@
 import { differenceInCalendarDays, parseISO } from 'date-fns';
-import { Habit, Transaction } from '@/types/schema';
+import { Habit, MerchantRule, Transaction } from '@/types/schema';
 import { findMatchingHabits } from '@/utils/habitKeywordMatch';
 import { isHabitCompletedInCurrentPeriod } from '@/utils/habitLogic';
 import { attributionString } from '@/utils/habitTriggers';
@@ -18,14 +18,22 @@ import { attributionString } from '@/utils/habitTriggers';
  * the set pre-checked as "Also logs: …" chips on the review card. Order follows
  * the input `habits` array. Excludes archived habits (an archived habit should
  * never be auto-suggested).
+ *
+ * `rules` (optional) is the household's merchant rules: with them a keyword
+ * also matches the row's friendly name, so a habit keyed on "coffee" fires on a
+ * transaction the household renamed "Coffee run". `transaction.amount` is
+ * likewise optional — pass it so amount-qualified rules can resolve (a
+ * `Transaction` satisfies this shape as-is).
  */
 export function keywordMatchedHabitIds(
   habits: Habit[],
-  transaction: Pick<Transaction, 'merchant' | 'notes'>,
+  transaction: Pick<Transaction, 'merchant' | 'notes'> & { amount?: number },
+  rules?: readonly MerchantRule[],
 ): string[] {
   return findMatchingHabits(
     habits.filter(h => !h.archivedAt),
-    { merchant: transaction.merchant, notes: transaction.notes },
+    { merchant: transaction.merchant, notes: transaction.notes, amount: transaction.amount },
+    rules,
   ).map(h => h.id);
 }
 

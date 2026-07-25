@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback, useRef, useLayoutEffect } from '
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useFinance, useGamification, useHouseholdCore, useShopping } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
+import { useMerchantRules } from '@/hooks/useMerchantRules';
 import { Search, Filter, X, Trash2, Loader2, Download, Layers, CheckSquare, Tag, Check, Edit, Copy, Scissors, Receipt, PlusCircle } from 'lucide-react';
 import { Transaction, INCOME_CATEGORY } from '@/types/schema';
 import EditTransactionModal from '@/components/modals/EditTransactionModal';
@@ -55,6 +56,10 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
   const { stores } = useShopping();
   const { habits } = useGamification();
   const fmt = useFormatCurrency();
+  // Merchant rules resolved ONCE at the component level — never per virtualized
+  // row inside the render callback, which would rebuild the helper identities on
+  // every scroll frame. Rows resolve their own display name (see TransactionItem).
+  const { displayNameFor, searchTermsFor, rules: merchantRules } = useMerchantRules();
   const powerToolsEnabled = usePowerToolsEnabled();
 
   // State
@@ -110,10 +115,19 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
   // Shared predicate so "Export all" can apply the same active filters to the
   // full loaded history, not just the live windowed `transactions` set.
   const matchesActiveFilters = useCallback((tx: Transaction) => {
-    // Search Filter (Merchant or Amount)
+    // Search Filter (Merchant or Amount).
+    //
+    // The merchant side matches EITHER spelling: the raw bank descriptor the
+    // user remembers from their statement, or the friendly name a merchant rule
+    // renamed it to — `searchTermsFor` returns both, so renaming a merchant
+    // never makes a row unfindable by the text it was originally found by.
+    // An empty query short-circuits so a rule-less scroll does no matching work.
+    const query = searchTerm.trim().toLowerCase();
     const matchesSearch =
-      tx.merchant.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tx.amount.toString().includes(searchTerm);
+      query === '' ||
+      searchTermsFor({ merchant: tx.merchant, amount: tx.amount })
+        .some(term => term.toLowerCase().includes(query)) ||
+      tx.amount.toString().includes(query);
 
     // Category Filter
     const matchesCategory = categoryFilter === 'all' || tx.category === categoryFilter;
@@ -136,7 +150,9 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
     const matchesStore = storeFilter === 'all' || tx.store === storeFilter;
 
     return matchesSearch && matchesCategory && matchesSource && matchesStore;
-  }, [searchTerm, categoryFilter, sourceFilter, storeFilter]);
+    // `searchTermsFor` is memoized on the rules array identity, so editing a
+    // merchant rule re-runs the filter (and the memos below it) exactly once.
+  }, [searchTerm, categoryFilter, sourceFilter, storeFilter, searchTermsFor]);
 
   const filteredTransactions = useMemo(() => {
     return transactions
@@ -352,7 +368,10 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
         return;
       }
 
-      const exportData = buildTransactionExportRows(filteredTransactions, accountsById, household?.currency);
+      // Rules add the friendly `Name` column alongside the untouched raw
+      // `Merchant` column, so the sheet is readable AND still reconcilable
+      // against the bank statement.
+      const exportData = buildTransactionExportRows(filteredTransactions, accountsById, household?.currency, merchantRules);
       generateCsvExport(exportData, 'transactions-export');
       toast.success('Export started');
     } catch (error) {
@@ -375,7 +394,7 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
         return;
       }
 
-      const exportData = buildTransactionExportRows(scoped, accountsById, household?.currency);
+      const exportData = buildTransactionExportRows(scoped, accountsById, household?.currency, merchantRules);
       generateCsvExport(exportData, 'transactions-export-all');
       toast.success(`Exported ${scoped.length} transactions`);
     } catch (error) {
@@ -859,7 +878,7 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
         message={
           transactionToDelete ? (
             <>
-              Are you sure you want to delete the transaction from <strong>{transactionToDelete.merchant}</strong> for <strong>{fmt(transactionToDelete.amount)}</strong>? This action cannot be undone.
+              Are you sure you want to delete the transaction from <strong>{displayNameFor({ merchant: transactionToDelete.merchant, amount: transactionToDelete.amount })}</strong> for <strong>{fmt(transactionToDelete.amount)}</strong>? This action cannot be undone.
             </>
           ) : null
         }

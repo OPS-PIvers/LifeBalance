@@ -14,6 +14,7 @@ import {
 import { HouseholdMember, BudgetBucket, Transaction, ToDo } from '@/types/schema';
 import { suggestCategoryForTransaction } from '@/utils/actionQueueSmart';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
+import { useMerchantRules } from '@/hooks/useMerchantRules';
 import { roundMoney } from '@/utils/money';
 import { cn } from '@/utils/cn';
 import { haptic } from '@/utils/haptics';
@@ -174,6 +175,12 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
 }) => {
 
   const fmt = useFormatCurrency();
+  // Household merchant rules relabel a transaction's ugly bank descriptor at
+  // DISPLAY time only. Called at component level (never inside a row callback)
+  // and read via context, so a saved rule re-renders this card even though the
+  // memo comparator below deliberately still compares the RAW merchant — the
+  // stored descriptor stays the row's identity for change detection.
+  const { displayNameFor } = useMerchantRules();
   const navigate = useNavigate();
 
   // --- Swipe-to-triage gesture (right = approve/complete, left = defer) ---
@@ -340,7 +347,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
     };
   }, [item]);
 
-  const itemLabel = isTodoQueueItem(item) ? item.text : isCalendarQueueItem(item) ? item.title : isTransactionQueueItem(item) ? item.merchant || 'transaction' : 'item';
+  const itemLabel = isTodoQueueItem(item) ? item.text : isCalendarQueueItem(item) ? item.title : isTransactionQueueItem(item) ? displayNameFor(item) || 'transaction' : 'item';
 
   const drawerTitle = isCalendarQueueItem(item) || isTodoQueueItem(item)
     ? 'Actions'
@@ -440,7 +447,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
             <p className="font-semibold text-brand-800 dark:text-brand-100 text-sm">
               {isCalendarQueueItem(item) ? item.title :
                isTodoQueueItem(item) ? item.text :
-               isTransactionQueueItem(item) ? item.merchant : ''}
+               isTransactionQueueItem(item) ? displayNameFor(item) : ''}
             </p>
             <div className="text-xs text-brand-400 dark:text-brand-450 flex items-center gap-1">
                {isCalendarQueueItem(item) ? 'Due: ' : isTodoQueueItem(item) ? 'Due: ' : 'Tx: '}

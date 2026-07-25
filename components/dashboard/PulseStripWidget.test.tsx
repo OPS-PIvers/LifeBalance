@@ -12,6 +12,9 @@ import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useFinance: vi.fn(),
   useGamification: vi.fn(),
+  // Reached via useDashboardTransactionStats → useMerchantRules. No rules, so
+  // every merchant renders as its raw descriptor (the fail-open path).
+  useHouseholdCore: () => ({ householdSettings: undefined }),
 }));
 
 // Currency formatter — keep it deterministic and dependency-free.

@@ -3,6 +3,7 @@ import React, { useId, useState } from 'react';
 import { Trash2, Loader2, Copy, X } from 'lucide-react';
 import { Transaction, SplitParticipant, CREDIT_CARD_CATEGORY } from '@/types/schema';
 import { useFinance, useHouseholdCore, useShopping } from '@/contexts/FirebaseHouseholdContext';
+import { useMerchantRules } from '@/hooks/useMerchantRules';
 import { Drawer } from '@/components/ui/Drawer';
 import SplitExpenseEditor from '@/components/transactions/SplitExpenseEditor';
 import { validateSplit } from '@/utils/settlement';
@@ -26,6 +27,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
   const { updateTransaction, deleteTransaction, addTransaction, buckets, accounts } = useFinance();
   const { members, currentUser } = useHouseholdCore();
   const { stores } = useShopping();
+  const { ruleFor } = useMerchantRules();
 
   // Datalist id for the Merchant field's store-name autocomplete (see below).
   const storeListId = useId();
@@ -71,6 +73,16 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
 
   // The Charge/Payment toggle only applies to a credit account.
   const isSelectedAccountCredit = accounts.find(a => a.id === accountId)?.type === 'credit';
+
+  // The raw bank descriptor, surfaced below the Merchant field only when a
+  // household merchant rule is actually renaming this row. Keyed to the STORED
+  // descriptor + amount rather than the live field, so it can't flicker while
+  // the merchant is being typed; a rule contributing no `name` (category-only /
+  // bill-only) renames nothing and discloses nothing.
+  const renamedFromDescriptor =
+    transaction && ruleFor({ merchant: transaction.merchant, amount: transaction.amount })?.name?.trim()
+      ? transaction.merchant
+      : null;
 
   // Re-populate the form when the transaction prop changes. Done during render
   // (on the reference-change edge) rather than in an effect so it doesn't
@@ -328,6 +340,15 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
             <option key={s.id} value={s.name} />
           ))}
         </datalist>
+
+        {/* The bank's own words. Renaming is display-time only, so the field
+            above still holds the raw descriptor — this quiet caption is what
+            explains the friendlier name shown everywhere else. */}
+        {renamedFromDescriptor && (
+          <p className="-mt-2 text-xxs text-brand-450">
+            Your bank calls this <span className="font-mono">{renamedFromDescriptor}</span>
+          </p>
+        )}
 
         <Input
           id="edit-notes"

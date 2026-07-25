@@ -23,6 +23,11 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
 const transactions = [
   { id: 'tx-1', amount: 42, merchant: 'Target', category: 'Shopping', date: '2026-07-01', status: 'verified', isRecurring: false, source: 'manual', autoCategorized: false },
 ];
+// A row whose bank descriptor shares no words with the friendly name a
+// merchant rule gives it — the case merchant-rule-aware search exists for.
+const coffeeTransaction = {
+  id: 'tx-coffee', amount: 5.25, merchant: 'SQ *BLUE BOTTLE', category: 'Dining', date: '2026-07-01', status: 'verified', isRecurring: false, source: 'manual', autoCategorized: false,
+};
 const habits = [
   { id: 'habit-1', title: 'Read 30 mins', category: 'Wellness', type: 'positive', basePoints: 10, scoringType: 'threshold', period: 'daily', targetCount: 1, count: 0, totalCount: 0, completedDates: [], streakDays: 0, lastUpdated: '2026-07-01' },
 ];
@@ -137,6 +142,41 @@ describe('SearchOverlay', () => {
     expect(screen.getByTestId('location-probe').textContent).toBe(
       '/habits | {"tab":"track","highlightId":"habit-1"}'
     );
+  });
+
+  it('finds a transaction by the friendly name a merchant rule gives it', () => {
+    vi.mocked(useFinance).mockReturnValue({
+      transactions: [coffeeTransaction],
+    } as unknown as ReturnType<typeof useFinance>);
+    vi.mocked(useHouseholdCore).mockReturnValue({
+      householdSettings: {
+        merchantRules: [
+          { id: 'rule-1', pattern: 'SQ *BLUE BOTTLE', name: 'Coffee run', createdAt: '2026-07-01T00:00:00.000Z' },
+        ],
+      },
+    } as unknown as ReturnType<typeof useHouseholdCore>);
+    renderOverlay();
+
+    fireEvent.change(screen.getByLabelText('Search query'), { target: { value: 'coffee' } });
+    // Found by the friendly name, and presented under it.
+    expect(screen.getByText('Coffee run')).toBeInTheDocument();
+    expect(screen.queryByText('SQ *BLUE BOTTLE')).not.toBeInTheDocument();
+
+    // The raw descriptor still FINDS it — matching is wider than display — but
+    // the row is still labelled with the name the household chose.
+    fireEvent.change(screen.getByLabelText('Search query'), { target: { value: 'blue bottle' } });
+    expect(screen.getByText('Coffee run')).toBeInTheDocument();
+  });
+
+  it('does not match a friendly name when the household has no merchant rules', () => {
+    vi.mocked(useFinance).mockReturnValue({
+      transactions: [coffeeTransaction],
+    } as unknown as ReturnType<typeof useFinance>);
+    renderOverlay();
+
+    fireEvent.change(screen.getByLabelText('Search query'), { target: { value: 'coffee' } });
+    expect(screen.queryByText('SQ *BLUE BOTTLE')).not.toBeInTheDocument();
+    expect(screen.getByText('No matches')).toBeInTheDocument();
   });
 
   it('navigates to /lists and seeds the shopping tab on select', () => {

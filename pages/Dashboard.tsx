@@ -4,6 +4,7 @@ import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
 import { useFinance, useTodos, useHouseholdCore, useGamification, useShopping } from '@/contexts/FirebaseHouseholdContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
+import { useMerchantRules } from '@/hooks/useMerchantRules';
 import { AccountPicker } from '@/components/budget/AccountPicker';
 import { TrendingUp, Check, Clock, Eye, Trash2, X } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
@@ -109,6 +110,9 @@ const Dashboard: React.FC = () => {
   const { updateToDo, deleteToDo, completeToDo, todosAwaitingReview } = useTodos();
   const { shoppingAwaitingReview } = useShopping();
   const { isModuleEnabled, isPlanTabVisible } = useModuleVisibility();
+  // F-MONEY-14: the swipe-approve path must fire the same habits the review card
+  // showed, so keyword matching sees the friendly name as well as the descriptor.
+  const { rules: merchantRules } = useMerchantRules();
   const navigate = useNavigate();
 
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
@@ -312,7 +316,7 @@ const Dashboard: React.FC = () => {
       // Explicit prior tags are NOT suppressed — those were asked for by hand.
       const requestedHabitIds = Array.from(new Set([
         ...(item.relatedHabitIds ?? []),
-        ...suppressAlreadyLoggedHabitIds(habits, keywordMatchedHabitIds(habits, item), item.date),
+        ...suppressAlreadyLoggedHabitIds(habits, keywordMatchedHabitIds(habits, item, merchantRules), item.date),
       ]));
       const { toFire: firedHabitIds } = selectHabitsToFire(requestedHabitIds, item.firedHabitIds ?? []);
       await updateTransactionCategory(item.id, category, requestedHabitIds, accountId);
@@ -367,7 +371,7 @@ const Dashboard: React.FC = () => {
       console.error('[ActionQueue] Swipe approve failed:', error);
       toast.error('Failed to approve. Please try again.');
     }
-  }, [accounts, buckets, transactions, habits, completeToDo, payCalendarItem, updateTransactionCategory, reverseTransactionApproval, updateTransaction, openPaySheet, fmt]);
+  }, [accounts, buckets, transactions, habits, merchantRules, completeToDo, payCalendarItem, updateTransactionCategory, reverseTransactionApproval, updateTransaction, openPaySheet, fmt]);
 
   // Swipe left — instant defer: bills/to-dos move a day forward, pending
   // transactions snooze out of the queue until tomorrow.

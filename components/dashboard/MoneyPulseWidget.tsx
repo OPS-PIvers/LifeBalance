@@ -1,6 +1,7 @@
 import React from 'react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
+import { useMerchantRules } from '@/hooks/useMerchantRules';
 import { useDashboardTransactionStats } from '@/hooks/useDashboardTransactionStats';
 import { roundMoney } from '@/utils/money';
 import { TrendingUp, TrendingDown, Receipt } from 'lucide-react';
@@ -14,6 +15,9 @@ export const MoneyPulseWidget: React.FC = () => {
   const { transactions } = useFinance();
   const { thisWeekSpend, lastWeekSpend, recentTransactions } = useDashboardTransactionStats();
   const fmt = useFormatCurrency();
+  // Display-time descriptor cleanup (household merchant rules). Resolved at
+  // component level; the per-row call below is a plain function, not a hook.
+  const { displayNameFor } = useMerchantRules();
   const navigate = useNavigate();
 
   // Spending pulse — week deltas derived from the shared single-pass totals.
@@ -96,7 +100,7 @@ export const MoneyPulseWidget: React.FC = () => {
                 <Receipt size={16} />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-brand-800 dark:text-brand-100 truncate">{tx.merchant}</p>
+                <p className="text-sm font-semibold text-brand-800 dark:text-brand-100 truncate">{displayNameFor(tx)}</p>
                 {/* Optional "what was bought" note rides the timestamp line, kept quiet. */}
                 <p className="text-xxs text-brand-400 dark:text-brand-450 font-medium truncate">
                   {tx.relativeDate}

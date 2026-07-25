@@ -1,9 +1,9 @@
 
 import { render, screen, fireEvent } from '@testing-library/react';
 import { BudgetBucketCard } from './BudgetBucketCard';
-import { BudgetBucket, Transaction } from '@/types/schema';
+import { BudgetBucket, MerchantRule, Transaction } from '@/types/schema';
 import { formatCurrency } from '@/utils/formatCurrency';
-import { vi, describe, it, expect } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 // BudgetBucketCard formats amounts via useFormatCurrency (which reads the
 // household context). These tests render the card without a provider, so back the
@@ -11,6 +11,18 @@ import { vi, describe, it, expect } from 'vitest';
 vi.mock('@/hooks/useFormatCurrency', () => ({
   useFormatCurrency: () => (amount: number, options?: { decimals?: 0 | 2 }) =>
     formatCurrency(amount, options),
+}));
+
+// The inline transaction list resolves merchant names through `useMerchantRules`,
+// which reads `useHouseholdCore()`. These tests render without a provider, so
+// stand the core slice up here; `merchantRules` is mutable so a test can author a
+// rule and assert the displayed name changes.
+let merchantRules: MerchantRule[] | undefined;
+
+vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
+  useHouseholdCore: () => ({
+    householdSettings: merchantRules ? { merchantRules } : null,
+  }),
 }));
 
 describe('BudgetBucketCard', () => {
@@ -55,6 +67,10 @@ describe('BudgetBucketCard', () => {
     onEditTransaction: vi.fn(),
     onDeleteTransaction: vi.fn(),
   };
+
+  beforeEach(() => {
+    merchantRules = undefined;
+  });
 
   it('renders bucket information correctly', () => {
     render(<BudgetBucketCard {...defaultProps} />);
@@ -149,6 +165,21 @@ describe('BudgetBucketCard', () => {
 
     fireEvent.click(screen.getByLabelText('Delete transaction: Corner Market'));
     expect(defaultProps.onDeleteTransaction).toHaveBeenCalledWith('t2');
+  });
+
+  it('renames the inline transactions through the household merchant rules', () => {
+    merchantRules = [
+      { id: 'r1', pattern: 'Grocery Store', name: 'Safeway', createdAt: '2026-07-01T00:00:00.000Z' },
+    ];
+
+    render(<BudgetBucketCard {...defaultProps} transactions={mockTransactions} isExpanded={true} />);
+
+    expect(screen.getByText('Safeway')).toBeInTheDocument();
+    expect(screen.queryByText('Grocery Store')).not.toBeInTheDocument();
+    // The row's action labels follow the renamed merchant.
+    expect(screen.getByLabelText('Edit transaction: Safeway')).toBeInTheDocument();
+    // An unmatched row keeps its raw descriptor.
+    expect(screen.getByText('Corner Market')).toBeInTheDocument();
   });
 
   it('shows the overspend line and calls onReallocate when Fix is clicked', () => {

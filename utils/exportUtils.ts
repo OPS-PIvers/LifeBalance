@@ -15,8 +15,10 @@ import type {
   MealPlanItem,
   Challenge,
   RewardItem,
-  Store
+  Store,
+  MerchantRule
 } from '@/types/schema';
+import { displayMerchant } from '@/utils/merchantRules';
 
 /**
  * Triggers a browser download for a given content string
@@ -145,7 +147,12 @@ export const generateCsvExport = (data: Record<string, unknown>[], filenamePrefi
 /** One flattened, spreadsheet-friendly row of the transactions CSV export (F-MONEY-10). */
 export interface TransactionExportRow extends Record<string, unknown> {
   Date: string;
+  /** The RAW bank descriptor, exactly as stored — an export is a record of
+   *  what the bank sent, so a merchant rule never rewrites this column. */
   Merchant: string;
+  /** The friendly name a merchant rule resolves for the row; equal to
+   *  `Merchant` when no rule matches (or when no rules are supplied). */
+  Name: string;
   Category: string;
   Amount: number;
   Currency: string;
@@ -161,15 +168,22 @@ export interface TransactionExportRow extends Record<string, unknown> {
  * Amount stays a raw decimal-dollar number (not a `useFormatCurrency()` string)
  * so spreadsheets can sum/filter it directly; `Currency` is a separate column,
  * defaulting to 'USD' but overridable by the household's configured currency.
+ *
+ * `rules` (optional) is the household's merchant rules. They add the adjacent
+ * `Name` column (the friendly name) and never touch `Merchant`: both spellings
+ * ship, so the sheet is readable AND still reconcilable against the statement.
+ * With no rules — or none matching — `Name` simply repeats the raw descriptor.
  */
 export const buildTransactionExportRows = (
   transactions: Transaction[],
   accountsById: Map<string, string>,
-  currency: string = 'USD'
+  currency: string = 'USD',
+  rules?: readonly MerchantRule[]
 ): TransactionExportRow[] =>
   transactions.map(tx => ({
     Date: tx.date,
     Merchant: tx.merchant,
+    Name: displayMerchant(tx, rules),
     Category: tx.category,
     Amount: tx.amount,
     Currency: currency,

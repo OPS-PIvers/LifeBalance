@@ -67,7 +67,8 @@ import {
   NetWorthSnapshot,
   ActivityLogEntry,
   SavingsGoal,
-  TransactionComment
+  TransactionComment,
+  MerchantRule
 } from '@/types/schema';
 import toast from 'react-hot-toast';
 
@@ -84,12 +85,16 @@ const generateId = () => `mock-${Date.now()}-${Math.random().toString(36).substr
  *     default because a pending_review row changes the Money nav link's
  *     accessible name (", N pending review"), which the smoke spec matches
  *     exactly.
+ *   - 'merchant-rules' — additionally seed three rows carrying RAW bank
+ *     descriptors that the household's `merchantRules` rename on display, so
+ *     the descriptor → friendly-name layer is walkable. Not seeded by default
+ *     because several tests assert on the default seeds' merchant text.
  * Absent/unknown values leave the default seeds untouched.
  */
-const readTestSeedVariant = (): 'fresh' | 'stub' | null => {
+const readTestSeedVariant = (): 'fresh' | 'stub' | 'merchant-rules' | null => {
   try {
     const v = window.sessionStorage.getItem('LIFEBALANCE_TEST_SEED');
-    return v === 'fresh' || v === 'stub' ? v : null;
+    return v === 'fresh' || v === 'stub' || v === 'merchant-rules' ? v : null;
   } catch {
     return null;
   }
@@ -195,6 +200,69 @@ const STUB_TRANSACTION: Transaction = {
   status: 'pending_review', isRecurring: false, source: 'shortcut',
   autoCategorized: false, needsAmount: true, payPeriodId: MOCK_PAY_PERIOD_ID,
 };
+
+/**
+ * Merchant rules for Test Mode — the descriptor → friendly-name layer
+ * (`utils/merchantRules.ts`). Seeded in EVERY variant: rules are inert until a
+ * descriptor matches one, and none of these patterns match the default seeds'
+ * merchants, so they change nothing unless the 'merchant-rules' rows below are
+ * also seeded.
+ *
+ * Deliberately shaped to demonstrate the three behaviours that are easy to get
+ * wrong, so they're walkable rather than only unit-tested:
+ *  - most-specific-wins: the amount-qualified Apple rule beats the bare one on
+ *    a $2.99 charge, and ONLY on that amount;
+ *  - the catch-all fallback that keeps an exact-amount rule from degrading back
+ *    to a raw descriptor when the price changes;
+ *  - `exempt`, on a variable-amount card payment that must not break a no-spend
+ *    day (see functions/src/quickAdd/noSpendDay.ts).
+ */
+const MOCK_MERCHANT_RULES: MerchantRule[] = [
+  {
+    id: 'rule-icloud', pattern: 'APPLE.COM', amount: 2.99,
+    name: 'iCloud storage', category: 'Entertainment',
+    createdAt: new Date('2026-07-01T12:00:00Z').toISOString(),
+  },
+  {
+    id: 'rule-apple', pattern: 'APPLE.COM', name: 'Apple',
+    createdAt: new Date('2026-07-01T12:01:00Z').toISOString(),
+  },
+  {
+    id: 'rule-amex', pattern: 'AMERICAN EXPRESS', name: 'AmEx payment',
+    exempt: true,
+    createdAt: new Date('2026-07-01T12:02:00Z').toISOString(),
+  },
+];
+
+/**
+ * 'merchant-rules' seed variant: rows carrying the RAW descriptor text a bank
+ * actually sends, each renamed on display by one of MOCK_MERCHANT_RULES. All
+ * `verified` on purpose — a pending_review row would change the Money nav
+ * link's accessible name and break the e2e smoke spec.
+ */
+const BANK_DESCRIPTOR_TRANSACTIONS: Transaction[] = [
+  {
+    // Hits the amount-qualified rule → displays "iCloud storage".
+    id: 'tx_desc_icloud', amount: 2.99, merchant: 'APPLE.COM/BILL 866-712-7753 CA',
+    category: 'Entertainment', date: getLocalDateString(),
+    status: 'verified', isRecurring: true, source: 'bank-sync',
+    autoCategorized: false, payPeriodId: MOCK_PAY_PERIOD_ID,
+  },
+  {
+    // Same pattern, different amount → falls through to the bare rule → "Apple".
+    id: 'tx_desc_apple', amount: 39.99, merchant: 'APPLE.COM/US 866-712-7753 CA',
+    category: 'Entertainment', date: getLocalDateString(),
+    status: 'verified', isRecurring: false, source: 'bank-sync',
+    autoCategorized: false, payPeriodId: MOCK_PAY_PERIOD_ID,
+  },
+  {
+    // Variable-amount card payment → "AmEx payment", and `exempt`.
+    id: 'tx_desc_amex', amount: 912.44, merchant: 'AMERICAN EXPRESS ACH PMT 240725',
+    category: 'Utilities', date: getLocalDateString(),
+    status: 'verified', isRecurring: true, source: 'bank-sync',
+    autoCategorized: false, payPeriodId: MOCK_PAY_PERIOD_ID,
+  },
+];
 
 // Plan 23: seed thread for tx1 so the comment section renders content in
 // Test Mode without requiring any interaction first (visual verification).
@@ -350,7 +418,13 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [buckets, setBuckets] = useState<BudgetBucket[]>(isFresh ? [] : SEED_BUCKETS);
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>(isFresh ? [] : SEED_SAVINGS_GOALS);
   const [transactions, setTransactions] = useState<Transaction[]>(
-    isFresh ? [] : TEST_SEED_VARIANT === 'stub' ? [...SEED_TRANSACTIONS, STUB_TRANSACTION] : SEED_TRANSACTIONS
+    isFresh
+      ? []
+      : TEST_SEED_VARIANT === 'stub'
+        ? [...SEED_TRANSACTIONS, STUB_TRANSACTION]
+        : TEST_SEED_VARIANT === 'merchant-rules'
+          ? [...SEED_TRANSACTIONS, ...BANK_DESCRIPTOR_TRANSACTIONS]
+          : SEED_TRANSACTIONS
   );
   // Plan 23 — transaction comments, keyed by transaction id. Mirrors the real
   // context's on-demand fetch model (no listener); the "fetch" here is just a
@@ -2183,6 +2257,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     redemptionHistory,
     unlockedRewardIds,
     moduleVisibility,
+    merchantRules: MOCK_MERCHANT_RULES,
     captureReview,
     dietaryProfile,
     mealCookedHabitId,

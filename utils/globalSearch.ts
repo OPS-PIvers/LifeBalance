@@ -1,4 +1,5 @@
-import type { Habit, Meal, ShoppingItem, Transaction, ToDo } from '@/types/schema';
+import type { Habit, Meal, MerchantRule, ShoppingItem, Transaction, ToDo } from '@/types/schema';
+import { displayMerchant, merchantSearchTerms } from '@/utils/merchantRules';
 import { isModuleEnabled, isPlanTabVisible, type ModuleSettings } from '@/utils/moduleVisibility';
 
 export type GlobalSearchEntityType = 'transaction' | 'habit' | 'meal' | 'todo' | 'shopping';
@@ -98,15 +99,36 @@ interface RankedResult extends GlobalSearchResult {
   rank: number;
 }
 
-function searchTransactions(transactions: Transaction[], queryLower: string): RankedResult[] {
+/**
+ * `rules` (optional) widens merchant matching to BOTH spellings of the row —
+ * the raw bank descriptor and the household's friendly name — via
+ * `merchantSearchTerms`. A user must be able to find a purchase by whichever
+ * name they remember; renaming a merchant must never hide it from search.
+ * Omitting `rules` yields exactly the raw-descriptor-only behaviour, since
+ * `merchantSearchTerms` always includes the raw merchant and adds nothing else
+ * when no rule matches.
+ *
+ * The result `title` carries the FRIENDLY name (falling back to the raw
+ * descriptor when no rule renames it), even when the hit came from matching the
+ * raw text. A search result is a rendered label like any other, so showing
+ * `APPLE.COM/BILL 866-712-7753 CA` for a row the household named "iCloud
+ * storage" would contradict every other surface — and defeat the feature at the
+ * one moment the user is actively looking for that purchase. Matching stays
+ * wider than display on purpose: both spellings find it, one spelling shows.
+ */
+function searchTransactions(
+  transactions: Transaction[],
+  queryLower: string,
+  rules?: readonly MerchantRule[]
+): RankedResult[] {
   const results: RankedResult[] = [];
   for (const tx of transactions) {
-    const rank = bestRank(queryLower, tx.merchant, tx.category);
+    const rank = bestRank(queryLower, ...merchantSearchTerms(tx, rules), tx.category);
     if (rank === null) continue;
     results.push({
       type: 'transaction',
       id: tx.id,
-      title: tx.merchant,
+      title: displayMerchant(tx, rules),
       subtitle: tx.category || undefined,
       nav: { path: '/budget', tab: 'transactions' },
       rank,
@@ -189,17 +211,23 @@ function searchShoppingItems(items: ShoppingItem[], queryLower: string): RankedR
  * overall (`MAX_TOTAL`), ranked exact-prefix > word-boundary > substring
  * (see `matchRank`). A type is excluded entirely when its gating module is
  * disabled (`moduleVisibility`, fail-open like the rest of the app).
+ *
+ * `rules` is the household's merchant rules (optional): when supplied, a
+ * transaction matches on its raw bank descriptor OR its friendly name. Omit it
+ * (or pass an empty array) and search behaves exactly as it did before merchant
+ * rules existed.
  */
 export function searchAll(
   corpus: GlobalSearchCorpus,
   query: string,
-  moduleSettings: ModuleSettings
+  moduleSettings: ModuleSettings,
+  rules?: readonly MerchantRule[]
 ): GlobalSearchResult[] {
   const queryLower = query.trim().toLowerCase();
   if (!queryLower) return [];
 
   const byType: Partial<Record<GlobalSearchEntityType, RankedResult[]>> = {
-    transaction: searchTransactions(corpus.transactions, queryLower),
+    transaction: searchTransactions(corpus.transactions, queryLower, rules),
     habit: searchHabits(corpus.habits, queryLower),
     meal: searchMeals(corpus.meals, queryLower),
     todo: searchTodos(corpus.todos, queryLower),

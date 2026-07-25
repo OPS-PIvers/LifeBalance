@@ -4,6 +4,7 @@ import { formatDistanceToNow, parseISO } from 'date-fns';
 import { useFinance, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
+import { useMerchantRules } from '@/hooks/useMerchantRules';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
 import { getSessionBaseline } from '@/utils/lastVisit';
 import { selectPartnerActivity, partnerNames } from '@/utils/partnerActivity';
@@ -31,6 +32,10 @@ export const PartnerActivityWidget: React.FC = () => {
   const { transactions } = useFinance();
   const { isModuleEnabled } = useModuleVisibility();
   const fmt = useFormatCurrency();
+  // Friendly merchant name (household rules, display-time only). Applied when
+  // each row renders rather than inside the `items` memo below, so a rule saved
+  // on another device relabels this digest without re-selecting the activity.
+  const { displayNameFor } = useMerchantRules();
 
   // Capture the previous visit ONCE per app session and advance the marker.
   // getSessionBaseline is module-cached, so StrictMode's remount (and any later
@@ -96,7 +101,7 @@ export const PartnerActivityWidget: React.FC = () => {
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-brand-800 dark:text-brand-100 truncate max-w-[160px] md:max-w-[240px]">
-                    {item.merchant}
+                    {displayNameFor(item)}
                   </p>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <p className="text-xxs font-medium text-brand-400 dark:text-brand-450 truncate max-w-[110px]">

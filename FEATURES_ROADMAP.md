@@ -48,6 +48,7 @@ paragraph for the existing examples to mirror).
 | F-MONEY-11 | quickAddBillPay | Money | medium | medium | "Hey Siri, I paid rent" voice bill-pay | |
 | F-MONEY-12 | Duplicate a calendar item | Money | tweak | low | Pre-fill add-form from an existing bill/item | |
 | F-MONEY-13 | Shared expense splitting / IOU tracking | Money | large | high | Adult↔adult "who owes whom" Settle-Up view | Tie into email for users without accounts to get them to create an account (e.g. User enters an expense, taps split bill option, email goes to non-user letting them know the split amount and hten providing a one tap way to create an account |
+| F-MONEY-14 | Merchant rules (descriptor → friendly name) | Money | large | high | Rename `APPLE.COM/BILL 866-712-7753` to "iCloud storage", and auto-link/categorize/exempt it | |
 | F-HABITS-01 | Habit pause / vacation mode | Habits & Gamification | medium | high | Planned multi-day break without burning freeze tokens | |
 | F-HABITS-02 | Streak milestone celebrations | Habits & Gamification | medium | high | Distinct toast at 7/30/100/365-day streaks | Tie these into specific rewards (e.g. 30 day streak milestone = unlock reward, etc.) |
 | F-HABITS-03 | Per-habit timed reminder push | Habits & Gamification | medium | high | Own time + days per habit, coalesced per window | Off by default for habits, user an toggle on for specific habits |
@@ -516,6 +517,53 @@ multi-PR feature given schema + form UI + settlement math + new view + tests.
 - `utils/accountImpact.ts`, `contexts/household/mutations/transactionMutations.ts`, `contexts/household/types.ts`
 
 
+
+### F-MONEY-14 — Merchant rules (bank descriptor → friendly name)
+
+**Size:** large · **Value:** high · **Dependencies:** nightly bank-email sync (shipped, #1042-#1048); supersedes the exact-match `CalendarItem.bankDescriptorAliases` path
+
+Let a household author rules mapping a bank descriptor pattern to a friendly name, plus optionally
+a budget category, a calendar bill to auto-pay, and a no-spend exemption. `APPLE.COM/BILL
+866-712-7753 CA` reads as "iCloud storage"; `AMERICAN EXPRESS ACH PMT 240725` links to the
+"AmEx payment" bill.
+
+**Why:** Every automated ingest path (bank-email sync, Plaid, Shortcuts) writes the bank's raw
+descriptor, and the existing bill matcher can only connect it to a bill by *shared significant
+word* (`functions/src/quickAdd/bankSyncMatch.ts`). That provably fails on the two most common
+cases — the bank says `AMERICAN EXPRESS` where the user's bill says "AmEx Payment" (no shared
+token), and `APPLE.COM` shares nothing with "iCloud storage". Worse, an alias is only *learned*
+from a successful token match, so those cases can never self-heal: no first match, no alias, no
+second chance. And `matchesAlias` is exact-string equality, so even a manual link teaches nothing
+when next month's descriptor carries a different reference number.
+
+**Owner-settled rules (don't re-litigate):** renaming is **display-time only** — stored
+`Transaction.merchant` is never rewritten, which makes rules instantly retroactive, reversible,
+and free of any backfill. Patterns are case-insensitive **contains** matches (no wildcard syntax).
+An optional amount qualifier is **cent-exact**, paired with a bare catch-all rule so a price change
+degrades to a less specific name rather than back to raw text. **Most specific wins**:
+amount-qualified beats bare, then longer pattern. A rule's bill link **overrides the ±10%/±$25
+amount guard** — required for variable bills like card payments, which otherwise fall through to
+Uncategorized every month. Rules apply to deposits as well as withdrawals. Anything that *matches*
+merchant text (global search, habit keyword triggers) matches **both** the raw descriptor and the
+friendly name; anything that establishes *identity* (dedup, `utils/transactionIdentity.ts`) keeps
+using the raw text only — the bank's text is stable, a user-editable label is not.
+
+**Implementation notes:** `Household.merchantRules?: MerchantRule[]`, a bounded array on the
+household doc (the `redemptionHistory` precedent) so it needs no new listener and `bankEmailSync`
+gets it free from the household doc it already loads. Pure matcher in `utils/merchantRules.ts`
+(`pickMerchantRule`/`displayMerchant`/`merchantSearchTerms`/`findShadowingRule`), consumed via
+`hooks/useMerchantRules.ts`. Note that with contains-matching plus most-specific-wins, a broad rule
+can never *shadow* a narrow one — it loses to it — so `findShadowingRule` is effectively a
+duplicate-pattern detector and the editor should label it as such. Legacy `bankDescriptorAliases`
+stays honored as a fallback rather than being migrated. Three PRs: engine + display wiring; the
+Settings editor, inline authoring and repeat-descriptor suggestions; then the server side (rules
+consulted before the sync's own guessing, exemptions feeding `noSpendDay.ts`, and a nightly
+"N charges handled by your rules" receipt with per-rule undo).
+
+**Key files:**
+- `types/schema.ts`, `utils/merchantRules.ts`, `hooks/useMerchantRules.ts`
+- `utils/globalSearch.ts`, `utils/exportUtils.ts`, `utils/habitKeywordMatch.ts`
+- `functions/src/quickAdd/bankSyncMatch.ts`, `functions/src/quickAdd/bankEmailSync.ts`, `functions/src/quickAdd/noSpendDay.ts`
 
 ## Habits & Gamification
 

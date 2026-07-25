@@ -71,6 +71,7 @@ import { MODULE_PRESETS, type ModulePreset } from '@/utils/modulePresets';
 import type { ModuleKey } from '@/types/schema';
 import { requestNotificationPermission, setupForegroundNotificationListener } from '@/services/notificationService';
 import { generateJsonBackup, generateCsvExport, buildExportPayload } from '@/utils/exportUtils';
+import { useMerchantRules } from '@/hooks/useMerchantRules';
 import { getCaptureReviewMode } from '@/utils/captureReview';
 import { HouseholdMember, NotificationPreferences, Transaction, Meal, CaptureType, CaptureReviewMode } from '@/types/schema';
 import toast from 'react-hot-toast';
@@ -205,6 +206,9 @@ const Settings: React.FC = () => {
   const { mealPlan, loadAllMeals } = useMealPlan();
   const { shoppingList, stores } = useShopping();
   const { todos } = useTodos();
+  // Resolves each exported row's friendly name for the CSV's `Name` column;
+  // the raw descriptor still ships in `Merchant` (see doExportCsv).
+  const { displayNameFor } = useMerchantRules();
   const navigate = useNavigate();
 
   // ---- Index ↔ sub-screen drill-down --------------------------------------
@@ -593,9 +597,13 @@ const Settings: React.FC = () => {
       // Flatten transactions for CSV
       // Note: Only exporting core fields to keep CSV simple.
       // Power users can use JSON export for full data including isRecurring, autoCategorized, etc.
+      // `Merchant` stays the RAW bank descriptor (an export is a record of what
+      // the bank sent); `Name` is the additive friendly name a merchant rule
+      // resolves, and repeats the descriptor when no rule matches.
       const flatTransactions = txList.map(tx => ({
         Date: tx.date,
         Merchant: tx.merchant,
+        Name: displayNameFor(tx),
         Amount: tx.amount,
         Category: tx.category,
         Status: tx.status,

@@ -1,4 +1,5 @@
-import { Habit } from '@/types/schema';
+import { Habit, MerchantRule } from '@/types/schema';
+import { merchantSearchTerms } from '@/utils/merchantRules';
 
 /**
  * Habit Automations (PRD #1065) — transaction keyword matching.
@@ -13,16 +14,27 @@ import { Habit } from '@/types/schema';
  *   - Both the merchant/title AND the notes are searched.
  *   - EVERY matching habit is returned (one purchase can legitimately log
  *     several habits, e.g. "Went into Target" and "Impulse purchase").
+ *   - When the household's merchant rules are supplied, the merchant haystack
+ *     is BOTH spellings of the row — the raw bank descriptor and the friendly
+ *     name (`utils/merchantRules.ts`). A keyword must be able to target the
+ *     name the user actually chose: "coffee" fires on a row renamed
+ *     "Coffee run" even though the descriptor reads "SQ *BLUE BOTTLE".
  *
  * Pure functions only — no Firestore, no clock, no side effects.
  */
 
 /** The text fields of a transaction a keyword is matched against. */
 export interface KeywordMatchInput {
-  /** Merchant name / transaction title. */
+  /** Merchant name / transaction title — the RAW bank descriptor as stored. */
   merchant?: string;
   /** Free-text notes on the transaction. */
   notes?: string;
+  /**
+   * Decimal dollars. Consulted only by amount-qualified merchant rules when
+   * resolving the friendly name; absent means such a rule cannot match (its
+   * condition is unverifiable, not satisfied — see `ruleMatches`).
+   */
+  amount?: number;
 }
 
 /**
@@ -67,23 +79,47 @@ export function keywordMatchesText(keyword: string, text: string): boolean {
 }
 
 /**
+ * The merchant haystacks a keyword is tested against: the raw descriptor, plus
+ * the friendly name when a supplied rule renames it. Passing no `rules` yields
+ * just the raw merchant, so matching is unchanged from before merchant rules.
+ */
+function merchantHaystacks(
+  input: KeywordMatchInput,
+  rules?: readonly MerchantRule[],
+): string[] {
+  return merchantSearchTerms({ merchant: input.merchant ?? '', amount: input.amount }, rules);
+}
+
+/**
  * Does any of the habit's trigger keywords match either field of the input?
  * A habit with no keywords never matches.
+ *
+ * `rules` (optional) is the household's merchant rules: with them, a keyword
+ * matches the friendly name as well as the raw descriptor.
  */
-export function habitMatchesInput(habit: Habit, input: KeywordMatchInput): boolean {
+export function habitMatchesInput(
+  habit: Habit,
+  input: KeywordMatchInput,
+  rules?: readonly MerchantRule[],
+): boolean {
   const keywords = habit.triggers?.keywords;
   if (!keywords || keywords.length === 0) return false;
 
-  const haystacks = [input.merchant ?? '', input.notes ?? ''];
+  const haystacks = [...merchantHaystacks(input, rules), input.notes ?? ''];
   return keywords.some(keyword =>
     haystacks.some(text => keywordMatchesText(keyword, text)),
   );
 }
 
 /**
- * All habits whose keywords match the transaction's merchant/title or notes.
+ * All habits whose keywords match the transaction's merchant/title (raw
+ * descriptor, plus friendly name when `rules` is supplied) or notes.
  * Order is preserved from the input `habits` array. Returns a new array.
  */
-export function findMatchingHabits(habits: Habit[], input: KeywordMatchInput): Habit[] {
-  return habits.filter(habit => habitMatchesInput(habit, input));
+export function findMatchingHabits(
+  habits: Habit[],
+  input: KeywordMatchInput,
+  rules?: readonly MerchantRule[],
+): Habit[] {
+  return habits.filter(habit => habitMatchesInput(habit, input, rules));
 }
