@@ -51,7 +51,6 @@ export interface CategoryChipPickerProps {
   label?: string;
 }
 
-
 export const CategoryChipPicker: React.FC<CategoryChipPickerProps> = ({
   categories,
   value,
@@ -61,11 +60,10 @@ export const CategoryChipPicker: React.FC<CategoryChipPickerProps> = ({
   disabled = false,
   label,
 }) => {
-  // Stable per-instance id so the label and the chip group are associated even
-  // with several pickers on one screen.
-  // Unique per instance for the label/error `aria-*` wiring. useId() rather
-  // than a module-level counter: no shared mutable module state, and stable
-  // across concurrent rendering and any future server render.
+  // Stable per instance, so the label/error `aria-*` wiring still resolves with
+  // several pickers on one screen. `useId()` rather than a module-level
+  // counter: no shared mutable module state, and stable across concurrent
+  // rendering and any future server render.
   const groupId = useId();
   const [isAdding, setIsAdding] = useState(false);
   const [draft, setDraft] = useState('');
