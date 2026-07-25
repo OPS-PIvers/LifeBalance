@@ -27,6 +27,7 @@ const handlers = {
   onMore: vi.fn(),
   onToggleSelection: vi.fn(),
   onToggleSubtask: vi.fn(async () => ({ autoCompleted: false, toggledSubtaskId: 's2' })),
+  onCategoryClick: vi.fn(),
 };
 
 const baseProps = {
@@ -101,6 +102,68 @@ describe('TodoRow', () => {
       fireEvent.contextMenu(editButton);
       expect(handlers.onMore).toHaveBeenCalledTimes(1);
       expect(handlers.onEdit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('category chip (F-TODO-16)', () => {
+    const categorized: ToDo = { ...item, category: 'Home' };
+
+    it('renders no chip for an uncategorized to-do', () => {
+      render(<TodoRow {...baseProps} />);
+      expect(screen.queryByTestId('todo-category-chip')).toBeNull();
+    });
+
+    it('renders no chip when the category is blank/whitespace-only', () => {
+      render(<TodoRow {...baseProps} item={{ ...item, category: '   ' }} />);
+      expect(screen.queryByTestId('todo-category-chip')).toBeNull();
+    });
+
+    it('renders the category name as a chip', () => {
+      render(<TodoRow {...baseProps} item={categorized} />);
+      const chip = screen.getByTestId('todo-category-chip');
+      expect(chip.textContent).toContain('Home');
+    });
+
+    it('tapping the chip filters by that category without opening the edit drawer', () => {
+      render(<TodoRow {...baseProps} item={categorized} />);
+      fireEvent.click(screen.getByTestId('todo-category-chip'));
+      expect(handlers.onCategoryClick).toHaveBeenCalledWith('Home');
+      expect(handlers.onEdit).not.toHaveBeenCalled();
+    });
+
+    it('trims the category before reporting it to the filter', () => {
+      render(<TodoRow {...baseProps} item={{ ...item, category: '  Home  ' }} />);
+      fireEvent.click(screen.getByTestId('todo-category-chip'));
+      expect(handlers.onCategoryClick).toHaveBeenCalledWith('Home');
+    });
+
+    it('keyboard activation on the chip does not bubble to the body and open the edit drawer', () => {
+      render(<TodoRow {...baseProps} item={categorized} />);
+      const chip = screen.getByTestId('todo-category-chip');
+      fireEvent.keyDown(chip, { key: 'Enter' });
+      fireEvent.keyDown(chip, { key: ' ' });
+      expect(handlers.onEdit).not.toHaveBeenCalled();
+    });
+
+    it('renders the chip as a SIBLING of the edit button (no interactive descendant of role=button)', () => {
+      render(<TodoRow {...baseProps} item={categorized} />);
+      const editButton = screen.getByRole('button', { name: `Edit task: ${item.text}` });
+      expect(editButton.contains(screen.getByTestId('todo-category-chip'))).toBe(false);
+    });
+
+    it('falls back to an inert label when no click handler is supplied', () => {
+      const { onCategoryClick: _omitted, ...withoutHandler } = baseProps;
+      render(<TodoRow {...withoutHandler} item={categorized} />);
+      const chip = screen.getByTestId('todo-category-chip');
+      expect(chip.tagName).toBe('SPAN');
+    });
+
+    it('is an inert label in selection mode (the whole row toggles selection)', () => {
+      render(<TodoRow {...baseProps} item={categorized} isSelectionMode />);
+      const chip = screen.getByTestId('todo-category-chip');
+      expect(chip.tagName).toBe('SPAN');
+      fireEvent.click(chip);
+      expect(handlers.onCategoryClick).not.toHaveBeenCalled();
     });
   });
 

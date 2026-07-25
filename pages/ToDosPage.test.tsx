@@ -79,6 +79,7 @@ vi.mock('lucide-react', () => ({
   ListChecks: () => <div data-testid="list-checks-icon" />,
   Repeat: () => <div data-testid="repeat-icon" />,
   Filter: () => <div data-testid="filter-icon" />,
+  Tag: () => <div data-testid="tag-icon" />,
   ArrowUpDown: () => <div data-testid="arrow-up-down-icon" />,
   Info: () => <div data-testid="info-icon" />,
   // data/templateIcons.ts — pulled in transitively by TaskTemplateDrawer.
@@ -197,6 +198,10 @@ describe('ToDosPage', () => {
       updateTaskTemplate: vi.fn(),
       deleteTaskTemplate: vi.fn(),
       applyTaskTemplate: vi.fn(),
+      // F-TODO-16: category vocabulary. Empty by default so the category
+      // filter control stays hidden and existing expectations are unaffected.
+      todoCategories: [],
+      updateTodoCategories: vi.fn(),
     });
     render(<ToDosPage />);
   };
@@ -512,6 +517,8 @@ describe('ToDosPage', () => {
         updateTaskTemplate: vi.fn(),
         deleteTaskTemplate: vi.fn(),
         applyTaskTemplate: vi.fn(),
+        todoCategories: [],
+        updateTodoCategories: vi.fn(),
       });
       render(<ToDosPage />);
 
