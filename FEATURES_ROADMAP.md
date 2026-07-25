@@ -50,7 +50,7 @@ paragraph for the existing examples to mirror).
 | F-MONEY-13 | Shared expense splitting / IOU tracking | Money | large | high | Adult↔adult "who owes whom" Settle-Up view | Tie into email for users without accounts to get them to create an account (e.g. User enters an expense, taps split bill option, email goes to non-user letting them know the split amount and hten providing a one tap way to create an account |
 | F-HABITS-01 | Habit pause / vacation mode | Habits & Gamification | medium | high | Planned multi-day break without burning freeze tokens | |
 | F-HABITS-02 | Streak milestone celebrations | Habits & Gamification | medium | high | Distinct toast at 7/30/100/365-day streaks | Tie these into specific rewards (e.g. 30 day streak milestone = unlock reward, etc.) |
-| F-HABITS-03 | Content-aware per-habit reminder push | Habits & Gamification | medium | high | List actual incomplete habits + per-habit mute | Off by default for habits, user an toggle on for specific habits |
+| F-HABITS-03 | Per-habit timed reminder push | Habits & Gamification | medium | high | Own time + days per habit, coalesced per window | Off by default for habits, user an toggle on for specific habits |
 | F-HABITS-04 | Export habit history to CSV | Habits & Gamification | small | low | Same pattern as F-MONEY-10, habit data | |
 | F-HABITS-05 | Archive a habit | Habits & Gamification | small | medium | Retire a habit without losing streak/points history | |
 | F-HABITS-06 | Completion notes & mood | Habits & Gamification | small | medium | Lightweight journal on each habit submission | Add a toggle-able push notification, user-controlled flag in settings, and one tap open-reflection-drawer to save (tie these into insights, somehow) |
@@ -572,30 +572,53 @@ in the same writeBatch plus a decision on double-counting with challenges.
 - `utils/habitMilestones.ts` (new)
 - `hooks/useHabitActions.tsx`, `components/ui/toastIcon.tsx`, `services/analytics.ts`
 
-### F-HABITS-03 — Personalized, per-habit-mutable daily reminder push
+### F-HABITS-03 — Per-habit timed reminder push
 
-**Size:** medium · **Value:** high · **Dependencies:** `member.notificationPreferences.habitReminders` (existing)
+**Size:** medium · **Value:** high · **Dependencies:** `member.notificationPreferences` (existing),
+F-TODO-14's `sendtodoreminders` as the scheduling model
 
-Make `sendhabitreminders` content-aware — list the specific incomplete habits like the
-action-queue reminder already does for todos — and let a user mute an individual noisy/irrelevant
-habit from the daily nudge without disabling reminders entirely.
+Each habit can carry its own reminder — an arbitrary member-local `HH:MM` plus a day-of-week
+selection — instead of one household-wide daily nudge. Reminders due in the same window are
+coalesced into a single push naming the habits.
 
-**Why:** `sendactionqueuereminders` (`functions/src/index.ts`) already does exactly this pattern
-for todos (queries outstanding items, includes count/names, skips sending if nothing's
-outstanding) — `sendhabitreminders` is the odd one out still sending a static message regardless
-of actual state.
+This **supersedes** the original brief (a per-habit *mute* on the existing shared nudge). Scope
+decisions, taken with the owner 2026-07-24:
 
-**Implementation notes:** Add `Habit.reminderMuted?: boolean`, toggle in `HabitCard.tsx`'s Menu
-("Mute from daily reminder"). In `sendhabitreminders` (`functions/src/index.ts`), before sending,
-query habits not `reminderMuted` and not completed today per the period-aware completion check
-(`functions/src/quickAdd/streakLogic.ts`'s server twin), mirroring the todos-count query already
-done for `sendactionqueuereminders` (computes `todayString` via `formatInTimeZone`, filters,
-includes count/names in the body). Skip the push entirely if the incomplete list is empty
-(currently always fires as long as the time matches).
+- **Coalesce by fire window**, so N habits due together produce one push, not N.
+- **Tap behavior is asymmetric by design:** one habit in the window → the tap logs it, with the
+  Undo that `toggleHabit`'s points toast already raises. Two or more → the tap opens the habits
+  page filtered to what's due, since a single tap can't unambiguously log three habits.
+- **Config on the MEMBER doc**, keyed by habit id (`perHabitReminders`) — habits are shared
+  documents, so a per-uid map on the habit would put every member on one document's write path,
+  the shape behind the habit-history clobber incident.
+- **Arbitrary `HH:MM` fired by a 15-minute job**, i.e. at or just after the target. Precision is
+  free here: `sendtodoreminders` already runs 96×/day and gates on member eligibility before
+  querying items.
+- **Suppressed when** the habit is already complete for its period, the habit is paused or
+  archived, or the member has digest mode on. Quiet hours deliberately omitted — the member picked
+  the time.
+- **Location and API-signal triggers are out of scope.** PRD #1065 already shipped foreground
+  geo prompts (`HabitTriggers.locations`), and the app-closed case belongs to an iOS Shortcuts
+  automation calling `quickAddHabit` directly — no server round trip to push back to the same phone.
+- **No snooze.** A missed habit reminder fires again tomorrow.
+
+**Platform caveat:** OS-rendered action buttons are almost certainly unavailable on iOS — MDN's
+compat data marks `Notification.actions` unsupported in Safari/Safari iOS and Apple's Declarative
+Web Push material never mentions them. The design therefore treats body-tap as the primary
+interaction, with a `Log` button as a bonus where it renders (Android/desktop Chrome). A temporary
+capability probe rides on the "Send a test notification" control so a real device can settle it.
+
+**Status:** PR 1 landed — schema, the reminder editor in `HabitFormModal`, the `log-habit` /
+`nhabit` deep-link dispatch, and the probe. PR 2 remains: the sending job (extending
+`sendhabitreminders` to a 15-minute cadence), coalescing, the `?due=` filter on the habits page,
+and making the legacy household-wide nudge content-aware while skipping habits that now have their
+own reminder.
 
 **Key files:**
-- `types/schema.ts`, `components/habits/HabitCard.tsx`
-- `functions/src/index.ts`, `functions/src/quickAdd/streakLogic.ts`
+- `types/schema.ts` (`HabitReminderConfig`), `utils/habitReminders.ts`, `utils/notificationActions.ts`
+- `components/habits/HabitReminderEditor.tsx`, `components/habits/HabitLogIntent.tsx`,
+  `components/modals/HabitFormModal.tsx`
+- `functions/src/index.ts`, `functions/src/quickAdd/streakLogic.ts` (period-aware completion check)
 
 ### F-HABITS-04 — Export habit history to CSV
 

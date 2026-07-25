@@ -900,7 +900,13 @@ export const sendtestnotification = onCall(
       "Great! Your device is set up to receive notifications.",
       {
         type: "test_notification",
-        url: "/settings"
+        url: "/settings",
+        // Capability probe: see getNotificationActions("test_notification").
+        // Long-press the resulting notification to find out whether this device
+        // renders web-push action buttons at all.
+        ...(buildActionsDataField("test_notification")
+          ? { actions: buildActionsDataField("test_notification") as string }
+          : {}),
       },
       memberRef
     );

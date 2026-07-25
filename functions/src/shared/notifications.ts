@@ -69,6 +69,14 @@ export interface NotificationPreferences {
   bankEmailSync?: {
     enabled: boolean;
   };
+  // F-HABITS-03 (per-habit reminders): keyed by habit id, member-local. `time` is
+  // an arbitrary HH:MM fired by a 15-minute job (at or just after), and `days` are
+  // 0 (Sunday) … 6 (Saturday). Mirrors types/schema.ts HabitReminderConfig.
+  perHabitReminders?: Record<string, {
+    enabled: boolean;
+    time: string;
+    days: number[];
+  }>;
   timezone?: string;
 }
 
@@ -105,6 +113,11 @@ export interface HouseholdMember {
  *     per-type toggles off) must still match the collection-group query.
  *   - bankEmailSync: fail-open like weeklyRecap/todoReminders — absent means
  *     ON, only an explicit `enabled: false` opts out.
+ *   - perHabitReminders (F-HABITS-03): counted enabled when at least one habit
+ *     has an enabled reminder with at least one day selected. Today this can't
+ *     change the result on its own — the three fail-open categories above already
+ *     force `true` for any member with tokens — but it must be listed so the flag
+ *     stays correct if those are ever tightened to explicit opt-in.
  *
  * Kept in perfect parity with the client copy in utils/notificationFlags.ts —
  * mirror any change there.
@@ -123,6 +136,14 @@ export function computeAnyNotificationsEnabled(
   const todoRemindersEnabled = prefs.todoReminders?.enabled !== false;
   // bankEmailSync is fail-open like weeklyRecap/todoReminders — absent means ON.
   const bankEmailSyncEnabled = prefs.bankEmailSync?.enabled !== false;
+  // F-HABITS-03: a reminder with no days selected can never fire, so it doesn't
+  // make the member reachable. Mirrors hasEnabledHabitReminder on the client.
+  const anyHabitReminderEnabled = Object.values(prefs.perHabitReminders ?? {}).some(
+    (config) =>
+      config?.enabled === true &&
+      Array.isArray(config.days) &&
+      config.days.length > 0
+  );
 
   return (
     prefs.habitReminders?.enabled === true ||
@@ -131,6 +152,7 @@ export function computeAnyNotificationsEnabled(
     prefs.streakWarnings?.enabled === true ||
     prefs.billReminders?.enabled === true ||
     prefs.dailyBriefing?.enabled === true ||
+    anyHabitReminderEnabled ||
     weeklyRecapEnabled ||
     todoRemindersEnabled ||
     bankEmailSyncEnabled

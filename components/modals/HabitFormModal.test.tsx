@@ -16,6 +16,19 @@ vi.mock('@/hooks/useKidModeEnabled', () => ({
   useKidModeEnabled: () => false,
 }));
 
+// F-HABITS-03: the reminder is written straight to the member doc, so the
+// Firestore surface the modal touches is stubbed. `deleteField()` is replaced by
+// a recognizable sentinel so a "clear the reminder" write is assertable.
+const { updateDocMock } = vi.hoisted(() => ({
+  updateDocMock: vi.fn(() => Promise.resolve()),
+}));
+vi.mock('firebase/firestore', () => ({
+  doc: (_db: unknown, ...segments: string[]) => ({ path: segments.join('/') }),
+  deleteField: () => '__DELETE_FIELD__',
+  updateDoc: updateDocMock,
+}));
+vi.mock('@/firebase.config', () => ({ db: {} }));
+
 // Stub the Automations section with a controllable harness so this test targets
 // the save-payload CONTRACT (how HabitFormModal builds `triggers`) rather than
 // the section's own keyword/geolocation UI (covered by its own units). The stub
@@ -234,5 +247,104 @@ describe('HabitFormModal — category chip seeding', () => {
     expect(mockUpdateHabitCategories).toHaveBeenCalledTimes(1);
 
     resolveWrite();
+  });
+});
+
+describe('HabitFormModal — per-habit reminder save path (F-HABITS-03)', () => {
+  const mockUpdateHabit = vi.fn(() => Promise.resolve());
+  const mockOnClose = vi.fn();
+  const MEMBER_PATH = 'households/test-household/members/u1';
+
+  const mockCore = (notificationPreferences?: Record<string, unknown>) => {
+    (useHouseholdCore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      members: [],
+      householdId: 'test-household',
+      currentUser: { uid: 'u1', fcmTokens: ['tok'], notificationPreferences },
+    });
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (useGamification as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      addHabit: vi.fn(),
+      updateHabit: mockUpdateHabit,
+      setHabitPause: vi.fn(() => Promise.resolve()),
+      habitCategories: [],
+      updateHabitCategories: vi.fn(),
+    });
+    (useTodos as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ todos: [] });
+    mockCore();
+  });
+
+  const save = () => fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+  const memberWrite = () => {
+    const call = (updateDocMock.mock.calls as unknown[][])[0];
+    if (!call) throw new Error('expected a member-doc write');
+    return { ref: call[0] as { path: string }, data: call[1] as Record<string, unknown> };
+  };
+
+  it('writes only the one habit key, so a concurrent Settings save cannot be clobbered', async () => {
+    render(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={baseHabit()} />);
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Remind me' }));
+    save();
+
+    await waitFor(() => expect(updateDocMock).toHaveBeenCalledTimes(1));
+    const { ref, data } = memberWrite();
+    expect(ref.path).toBe(MEMBER_PATH);
+    expect(data['notificationPreferences.perHabitReminders.h1']).toEqual({
+      enabled: true,
+      time: '08:00',
+      days: [0, 1, 2, 3, 4, 5, 6],
+    });
+    // Never the whole preferences object.
+    expect(data).not.toHaveProperty('notificationPreferences');
+  });
+
+  it('recomputes the fan-out flag in the same write so it cannot drift', async () => {
+    render(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={baseHabit()} />);
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Remind me' }));
+    save();
+
+    await waitFor(() => expect(updateDocMock).toHaveBeenCalledTimes(1));
+    expect(memberWrite().data.anyNotificationsEnabled).toBe(true);
+  });
+
+  it('clears the key with deleteField when the reminder is switched off', async () => {
+    mockCore({ perHabitReminders: { h1: { enabled: true, time: '08:00', days: [1] } } });
+    render(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={baseHabit()} />);
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Remind me' }));
+    save();
+
+    await waitFor(() => expect(updateDocMock).toHaveBeenCalledTimes(1));
+    expect(memberWrite().data['notificationPreferences.perHabitReminders.h1']).toBe(
+      '__DELETE_FIELD__'
+    );
+  });
+
+  it('does not touch the member doc when the reminder was not edited', async () => {
+    mockCore({ perHabitReminders: { h1: { enabled: true, time: '08:00', days: [1] } } });
+    render(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={baseHabit()} />);
+
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Renamed' } });
+    save();
+
+    await waitFor(() => expect(mockUpdateHabit).toHaveBeenCalledTimes(1));
+    expect(updateDocMock).not.toHaveBeenCalled();
+  });
+
+  it('seeds the editor from the stored reminder rather than the default', () => {
+    mockCore({ perHabitReminders: { h1: { enabled: true, time: '19:30', days: [0, 6] } } });
+    render(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={baseHabit()} />);
+
+    expect(screen.getByLabelText('Time')).toHaveValue('19:30');
+    expect(screen.getByText('7:30 PM · Weekends')).toBeInTheDocument();
+  });
+
+  it('offers no reminder control when creating a habit, which has no id yet', () => {
+    render(<HabitFormModal isOpen onClose={mockOnClose} />);
+    expect(screen.queryByRole('checkbox', { name: 'Remind me' })).not.toBeInTheDocument();
   });
 });

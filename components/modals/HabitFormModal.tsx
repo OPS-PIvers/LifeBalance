@@ -1,5 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { Habit, HabitLocationTrigger } from '@/types/schema';
+import toast from 'react-hot-toast';
+import { doc, deleteField, updateDoc } from 'firebase/firestore';
+import { db } from '@/firebase.config';
+import { Habit, HabitLocationTrigger, HabitReminderConfig } from '@/types/schema';
 import { useGamification, useHouseholdCore, useTodos } from '@/contexts/FirebaseHouseholdContext';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { Drawer } from '@/components/ui/Drawer';
@@ -7,7 +10,10 @@ import { Button } from '@/components/ui/Button';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import Input from '@/components/ui/Input';
 import HabitAutomationsSection from '@/components/habits/HabitAutomationsSection';
+import HabitReminderEditor from '@/components/habits/HabitReminderEditor';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { getHabitReminder } from '@/utils/habitReminders';
+import { computeAnyNotificationsEnabled } from '@/utils/notificationFlags';
 
 interface HabitFormModalProps {
   isOpen: boolean;
@@ -19,7 +25,9 @@ const CATEGORIES = ['Health', 'Finance', 'Personal', 'Home', 'Work'];
 
 const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editingHabit }) => {
   const { addHabit, updateHabit, setHabitPause, habitCategories, updateHabitCategories } = useGamification();
-  const { members } = useHouseholdCore();
+  // F-HABITS-03: reminders are per-MEMBER, so they live on the current member's
+  // doc rather than on the (shared) habit — see NotificationPreferences.
+  const { members, householdId, currentUser } = useHouseholdCore();
   const { todos } = useTodos();
   const kidModeEnabled = useKidModeEnabled();
 
@@ -70,6 +78,12 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
   // spread-forward stored copy.
   const [keywords, setKeywords] = useState<string[]>(() => editingHabit?.triggers?.keywords ?? []);
   const [locations, setLocations] = useState<HabitLocationTrigger[]>(() => editingHabit?.triggers?.locations ?? []);
+  // F-HABITS-03: this member's reminder for the habit being edited. Persisted on
+  // save (below) via a field-path write to the member doc, NOT through
+  // updateHabit — the two documents are unrelated.
+  const [reminder, setReminder] = useState<HabitReminderConfig | null>(() =>
+    editingHabit ? getHabitReminder(currentUser?.notificationPreferences, editingHabit.id) : null,
+  );
 
   // Kid assignment selection. CREATE mode is a multi-select (one chore per kid);
   // EDIT mode is a single-select (0 or 1 kid). We keep both states and read only
@@ -126,6 +140,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       setPausedUntil(editingHabit.pausedUntil ?? '');
       setKeywords(editingHabit.triggers?.keywords ?? []);
       setLocations(editingHabit.triggers?.locations ?? []);
+      setReminder(getHabitReminder(currentUser?.notificationPreferences, editingHabit.id));
       setEditAssignedUid(seedEditAssignedUid(editingHabit));
       setAssignedKidUids([]);
     } else {
@@ -140,6 +155,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       setPausedUntil('');
       setKeywords([]);
       setLocations([]);
+      setReminder(null);
       setEditAssignedUid(undefined);
       setAssignedKidUids([]);
     }
@@ -228,6 +244,41 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
     setEditAssignedUid(prev => (prev === uid ? undefined : uid));
   };
 
+  /**
+   * F-HABITS-03: persist this member's reminder for `habitId`.
+   *
+   * A field-path write (not a whole-`notificationPreferences` set) so a
+   * concurrent Settings save can't be clobbered by this one — only the single
+   * habit's key is touched. `anyNotificationsEnabled` rides along in the SAME
+   * write so the denormalized fan-out flag can't drift, mirroring
+   * `handleSaveNotificationPreferences` in pages/Settings.
+   */
+  const persistReminder = async (habitId: string) => {
+    if (!householdId || !currentUser) return;
+    const prefs = currentUser.notificationPreferences;
+    const nextByHabitId = { ...(prefs?.perHabitReminders ?? {}) };
+    if (reminder) {
+      nextByHabitId[habitId] = reminder;
+    } else {
+      delete nextByHabitId[habitId];
+    }
+
+    try {
+      await updateDoc(doc(db, 'households', householdId, 'members', currentUser.uid), {
+        [`notificationPreferences.perHabitReminders.${habitId}`]: reminder ?? deleteField(),
+        anyNotificationsEnabled: computeAnyNotificationsEnabled(
+          prefs ? { ...prefs, perHabitReminders: nextByHabitId } : undefined,
+          currentUser.fcmTokens,
+        ),
+      });
+    } catch (error) {
+      // The habit itself already saved, so don't rethrow and strand the modal —
+      // report the partial outcome instead of implying the whole save failed.
+      console.error('[HabitFormModal] Reminder save failed:', error);
+      toast.error('Habit saved, but the reminder didn’t save');
+    }
+  };
+
   const handleSave = async () => {
     if (!title || !basePoints || !targetCount || isSaving) return;
 
@@ -301,6 +352,15 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
         const originalPause = editingHabit.pausedUntil ?? '';
         if (pausedUntil !== originalPause) {
           await setHabitPause(editingHabit.id, pausedUntil || null);
+        }
+        // F-HABITS-03: same "only write when it actually changed" rule. Days are
+        // kept sorted by the editor, so a structural compare is stable here.
+        const originalReminder = getHabitReminder(
+          currentUser?.notificationPreferences,
+          editingHabit.id,
+        );
+        if (JSON.stringify(originalReminder) !== JSON.stringify(reminder)) {
+          await persistReminder(editingHabit.id);
         }
       } else if (showAssignControl && assignedKidUids.length >= 1) {
         // CREATE + at least one kid selected: spawn one chore per kid. Each is a
@@ -600,6 +660,18 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
               )}
             </div>
           </div>
+        )}
+
+        {/* Per-habit reminder (F-HABITS-03) — edit mode only, since the config is
+            keyed by habit id and a habit being created doesn't have one yet.
+            Stored on the member doc, so it saves separately from the habit. */}
+        {editingHabit && (
+          <HabitReminderEditor
+            value={reminder}
+            onChange={setReminder}
+            period={period}
+            disabled={isSaving}
+          />
         )}
 
         {/* Habit Automations (PRD #1065) — edit mode only. Collapsed by default

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { addDays } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -9,6 +9,7 @@ import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import {
   consumeNotificationAction,
+  consumeNotificationHabitId,
   NOTIFICATION_ACTIONS,
   type NotificationActionId,
 } from '@/utils/notificationActions';
@@ -25,13 +26,25 @@ import {
  *   - `pay-bill`   : navigate to the budget page (the pay flow) + a nudge toast.
  *   - `snooze-bill`: write `billReminders.snoozedUntil = tomorrow` on the member
  *     doc so the scheduled sendbillreminders job skips the next day.
+ *   - `log-habit`  : F-HABITS-03 — logs the habit named by the `nhabit` param.
+ *     NOT performed here: that needs the gamification slice, and this hook runs
+ *     in `MainLayout`, which deliberately consumes only narrow slices so a habit
+ *     toggle can't re-render the whole shell. The habit id is returned instead
+ *     and MainLayout renders a short-lived child to do the write.
  *
  * Consumed once in `MainLayout` (authenticated shell). Reliable for the common
  * cold-open case where the SW `openWindow`s a fresh page load; an already-open,
  * focused window is a known limitation shared with the existing nsrc/recap deep
  * links (there is no client-side SW NAVIGATE handler today).
  */
-export function useNotificationActionIntent(): void {
+export interface NotificationActionIntent {
+  /** Habit to log from a `log-habit` tap, or null when there's nothing pending. */
+  logHabitId: string | null;
+  /** Called by the dispatching child once the log has been attempted. */
+  clearLogHabit: () => void;
+}
+
+export function useNotificationActionIntent(): NotificationActionIntent {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { householdId } = useHouseholdCore();
@@ -39,11 +52,18 @@ export function useNotificationActionIntent(): void {
   // Read + strip the param exactly once on mount. StrictMode double-invokes
   // effects in dev, so guard with a ref to avoid consuming twice.
   const [pendingAction, setPendingAction] = useState<NotificationActionId | null>(null);
+  // The habit target is read in the SAME pass as the action so the two params
+  // can't be consumed by racing readers — whoever strips `nact` first would
+  // otherwise leave a second reader with no action to match the target against.
+  const [pendingHabitId, setPendingHabitId] = useState<string | null>(null);
   const consumedRef = useRef(false);
   useEffect(() => {
     if (consumedRef.current) return;
     consumedRef.current = true;
-    setPendingAction(consumeNotificationAction());
+    const action = consumeNotificationAction();
+    const habitId = consumeNotificationHabitId();
+    setPendingAction(action);
+    setPendingHabitId(action === NOTIFICATION_ACTIONS.logHabit ? habitId : null);
   }, []);
 
   // Perform the action once the auth + household context is available. Guarded
@@ -60,6 +80,15 @@ export function useNotificationActionIntent(): void {
       return;
     }
 
+    // F-HABITS-03: land on the habits page so the logged habit (and its streak)
+    // is visible behind the points toast. The write itself is the child's job —
+    // see the interface doc above. Matters for the already-open-window case,
+    // where the SW focused an existing tab on some other route.
+    if (pendingAction === NOTIFICATION_ACTIONS.logHabit) {
+      navigate('/habits');
+      return;
+    }
+
     if (pendingAction === NOTIFICATION_ACTIONS.snoozeBill) {
       const snoozedUntil = getLocalDateString(addDays(new Date(), 1));
       const memberRef = doc(db, 'households', householdId, 'members', user.uid);
@@ -73,4 +102,8 @@ export function useNotificationActionIntent(): void {
         });
     }
   }, [pendingAction, householdId, user, navigate]);
+
+  const clearLogHabit = useCallback(() => setPendingHabitId(null), []);
+
+  return { logHabitId: pendingHabitId, clearLogHabit };
 }

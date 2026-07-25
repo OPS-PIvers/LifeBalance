@@ -16,6 +16,11 @@
 export const NOTIFICATION_ACTIONS = {
   payBill: "pay-bill",
   snoozeBill: "snooze-bill",
+  // F-HABITS-03. Declared here for id parity with the client; no notification
+  // type returns it yet because the button needs a per-notification habit id,
+  // which `getNotificationActions(type)` can't express — the habit-reminder job
+  // builds its own action list alongside the `nhabit` deep-link param.
+  logHabit: "log-habit",
 } as const;
 
 export interface NotificationActionButton {
@@ -33,6 +38,21 @@ export function getNotificationActions(type: string): NotificationActionButton[]
       return [
         { action: NOTIFICATION_ACTIONS.payBill, title: "Pay bill" },
         { action: NOTIFICATION_ACTIONS.snoozeBill, title: "Snooze 1 day" },
+      ];
+    // Capability probe (F-HABITS-03). MDN's compat data says Safari and Safari
+    // iOS don't implement Notification.actions, and Apple's Declarative Web Push
+    // material never mentions them — but the only way to be sure for THIS app on
+    // THIS device is to long-press a real notification. Attaching two buttons to
+    // the existing "Send a test notification" control makes that a one-tap check.
+    //
+    // The ids are deliberately NOT in NOTIFICATION_ACTIONS, so tapping one is
+    // inert: the client's consumeNotificationAction strips an unrecognized id and
+    // returns null, leaving just the normal deep link to /settings. Remove this
+    // case once the platform question is settled.
+    case "test_notification":
+      return [
+        { action: "probe-a", title: "Button A" },
+        { action: "probe-b", title: "Button B" },
       ];
     default:
       return [];

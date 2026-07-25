@@ -1,4 +1,5 @@
 import type { NotificationPreferences } from '@/types/schema';
+import { hasEnabledHabitReminder } from '@/utils/habitReminders';
 
 /**
  * Plan 06 (notification fan-out cost) — pure helper computing the denormalized
@@ -21,6 +22,11 @@ import type { NotificationPreferences } from '@/types/schema';
  *     per-type toggles off) must still match the collection-group query.
  *   - bankEmailSync: fail-open like weeklyRecap/todoReminders — absent means
  *     ON, only an explicit `enabled: false` opts out.
+ *   - perHabitReminders (F-HABITS-03): counted enabled when at least one habit
+ *     has an enabled reminder with at least one day selected. Today this can't
+ *     change the result on its own — the three fail-open categories above already
+ *     force `true` for any member with tokens — but it must be listed so the flag
+ *     stays correct if those are ever tightened to explicit opt-in.
  *
  * Kept in perfect parity with the server copy in
  * functions/src/shared/notifications.ts — mirror any change there.
@@ -47,6 +53,7 @@ export function computeAnyNotificationsEnabled(
     prefs.streakWarnings?.enabled === true ||
     prefs.billReminders?.enabled === true ||
     prefs.dailyBriefing?.enabled === true ||
+    hasEnabledHabitReminder(prefs) ||
     weeklyRecapEnabled ||
     todoRemindersEnabled ||
     bankEmailSyncEnabled

@@ -17,6 +17,20 @@ describe("getNotificationActions", () => {
   it("returns [] for an unknown type", () => {
     expect(getNotificationActions("habit_reminder")).toEqual([]);
   });
+
+  // Temporary capability probe: two buttons on the test notification so a real
+  // device can answer whether iOS renders web-push actions at all. The ids are
+  // intentionally NOT in NOTIFICATION_ACTIONS, which is what makes a tap inert
+  // (the client strips an unrecognized id and dispatches nothing).
+  it("attaches inert probe buttons to the test notification", () => {
+    const actions = getNotificationActions("test_notification");
+    expect(actions).toHaveLength(2);
+    const known = new Set<string>(Object.values(NOTIFICATION_ACTIONS));
+    for (const action of actions) {
+      expect(known.has(action.action)).toBe(false);
+      expect(action.title.length).toBeGreaterThan(0);
+    }
+  });
 });
 
 describe("buildActionsDataField", () => {
