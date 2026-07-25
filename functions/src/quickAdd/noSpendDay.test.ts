@@ -4,6 +4,7 @@ import {
   CREDIT_CARD_CATEGORY,
   INCOME_CATEGORY,
   isoDayOfWeek,
+  shouldDeclareToNoSpend,
   spendExemption,
   unplannedSpend,
   wasNoSpendDay,
@@ -98,6 +99,31 @@ describe("wasNoSpendDay", () => {
     ]);
     expect(blocked.map((b) => b.merchant)).toEqual(["LIFE CAFE #238", "MAVERIK #5267"]);
   });
+});
+
+describe("shouldDeclareToNoSpend", () => {
+  const TARGET = "2026-07-24";
+
+  it("declares a brand-new row landing on the judged day", () => {
+    expect(shouldDeclareToNoSpend("create", TARGET, TARGET)).toBe(true);
+  });
+
+  it("declares nothing dated to another day", () => {
+    expect(shouldDeclareToNoSpend("create", "2026-07-23", TARGET)).toBe(false);
+  });
+
+  // Review catch (#1098): every non-create decision resolves to a row that
+  // ALREADY carries its own category and `creditPayment` flag. A bare
+  // re-declaration can only guess `Uncategorized`, so the un-exempt duplicate
+  // would disqualify a day the real row is exempt from — a confirmed
+  // credit-card payment being the concrete case. Duplication is only harmless
+  // when both copies agree about exemption, which a re-declaration can't ensure.
+  it.each(["skip_bankref", "fill_stub", "confirm_pending", "pay_bill"] as const)(
+    "never re-declares a %s decision, whose existing row is authoritative",
+    (kind) => {
+      expect(shouldDeclareToNoSpend(kind, TARGET, TARGET)).toBe(false);
+    }
+  );
 });
 
 describe("weekend rule", () => {

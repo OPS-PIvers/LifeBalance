@@ -60,7 +60,11 @@ export interface NoSpendOutcome {
   blockedBy: string[];
   /** Habits credited. Empty when nothing is wired up, or already credited. */
   fired: NoSpendHabitFire[];
-  /** True when the Saturday+Sunday weekend rule was satisfied this run. */
+  /**
+   * True when the Saturday+Sunday weekend rule HELD — i.e. `targetDate` is a
+   * Sunday and its Saturday also has a no-spend verdict. Independent of whether
+   * this run credited a weekend habit (see the note at the return site).
+   */
   weekendCompleted: boolean;
 }
 
@@ -426,6 +430,15 @@ export async function applyNoSpendDay(deps: ApplyNoSpendDayDeps): Promise<NoSpen
     isNoSpendDay: true,
     blockedBy: [],
     fired,
-    weekendCompleted: weekendClean && fired.some((f) => f.scope === "weekend"),
+    // Reports whether the WEEKEND RULE held, not whether this particular run
+    // fired a weekend habit. Those differ when a second email arrives the same
+    // morning (another account, or a backfill): the habits were already credited
+    // by the first run and skipped by the idempotency check, so `fired` is empty
+    // — and keying off it would make the re-run announce "No spend day" and
+    // record a non-weekend in the ledger for a weekend that was in fact settled.
+    // `weekendClean` is only ever true when targetDate is a Sunday whose Saturday
+    // also has a verdict, so it states a fact about the weekend that holds
+    // regardless of which run observed it, or whether any habit is wired up.
+    weekendCompleted: weekendClean,
   };
 }

@@ -120,6 +120,49 @@ export function wasNoSpendDay(transactions: SpendCandidate[]): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Declaring an in-flight withdrawal to the judgement
+// ---------------------------------------------------------------------------
+
+/**
+ * The withdrawal decisions `bankSyncMatch.decideWithdrawal` can return. Declared
+ * here rather than imported so this module stays dependency-free; the call site
+ * passes `decision.kind`, so a rename over there fails to type-check.
+ */
+export type WithdrawalDecisionKind =
+  | "skip_bankref"
+  | "fill_stub"
+  | "confirm_pending"
+  | "pay_bill"
+  | "create";
+
+/**
+ * Should this in-flight withdrawal be declared to the no-spend judgement as
+ * spend the transactions query can't see?
+ *
+ * Only a CREATE. Every other decision resolves to a row that already exists, and
+ * that row is the authoritative record of the purchase — including the category
+ * and `creditPayment` flag that decide whether it counts against a no-spend day.
+ * Re-declaring one strips that metadata (a declaration can only guess
+ * `Uncategorized`), and the un-exempt duplicate then disqualifies a day the real
+ * row is exempt from: a confirmed credit-card payment, or a pending row already
+ * categorized as a bill, would each break a day they should not.
+ *
+ * So duplication is NOT harmless just because the verdict is a boolean — it is
+ * harmless only when both copies share the same exemption status, which is
+ * exactly what a bare re-declaration cannot guarantee.
+ */
+export function shouldDeclareToNoSpend(
+  kind: WithdrawalDecisionKind,
+  withdrawalDate: string,
+  targetDate: string
+): boolean {
+  if (withdrawalDate !== targetDate) return false;
+  // pay_bill also creates a row, but under the planned category — exempt either
+  // way, so declaring it would change nothing.
+  return kind === "create";
+}
+
+// ---------------------------------------------------------------------------
 // Weekend rule
 // ---------------------------------------------------------------------------
 

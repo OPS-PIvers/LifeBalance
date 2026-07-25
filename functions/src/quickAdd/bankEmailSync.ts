@@ -70,6 +70,7 @@ import {
 } from "../shared/notifications";
 import {
   BUDGETED_IN_CALENDAR as NO_SPEND_BILL_CATEGORY,
+  shouldDeclareToNoSpend,
   type SpendCandidate,
 } from "./noSpendDay";
 import { applyNoSpendDay, type NoSpendOutcome } from "./noSpendFire";
@@ -522,13 +523,28 @@ export const bankEmailSync = onRequest(
         subDays(parseISO(parsed.asOf ?? today), 1),
         "yyyy-MM-dd"
       );
-      // Spend this email is about to record for that day. The transactions query
-      // inside applyNoSpendDay cannot see rows this batch hasn't committed, and
-      // a withdrawal can also be dated to a day whose existing row is dated
-      // differently (an Apple Pay stub captured Wednesday for a charge the bank
-      // authorizes on Thursday), so every withdrawal landing on the target day is
-      // declared here. Double-counting one that IS already in the query is
-      // harmless — the verdict is a boolean, not a sum.
+      // Spend this email is about to record for that day that the transactions
+      // query inside applyNoSpendDay cannot possibly see: the CREATE branch, and
+      // only the CREATE branch.
+      //
+      // Every other decision resolves to a row that ALREADY EXISTS, and that row
+      // is the authoritative record of the purchase — including its category and
+      // its `creditPayment` flag, which is exactly what decides whether it counts
+      // against a no-spend day. Re-declaring one here would strip that metadata
+      // (this list can only guess `Uncategorized`) and the un-exempt copy would
+      // disqualify a day the real row is exempt from: a confirmed credit-card
+      // payment, or a pending row already categorized as a bill, would each break
+      // a day they should not. Declaring only new rows keeps ONE representation of
+      // every purchase, so the day's verdict always agrees with the transaction
+      // list the user can actually see for that date.
+      //
+      // The trade-off, deliberately taken: a fill/confirm does not re-date the row
+      // it targets, so a purchase the bank authorizes on the target day whose
+      // stored row is dated earlier (an Apple Pay stub captured Wednesday for a
+      // charge authorized Thursday) counts against the row's own date, not the
+      // authorization date. One purchase still breaks exactly one day, and it
+      // breaks the day the app shows it on — a day whose visible transaction list
+      // is empty is never reported as spent.
       const noSpendExtraSpend: SpendCandidate[] = [];
 
       for (const w of parsed.withdrawals) {
@@ -545,15 +561,13 @@ export const bankEmailSync = onRequest(
         // within this email (parser guarantees unique refs, but be defensive).
         existingBankRefs.add(w.bankRef);
 
-        // Declare this withdrawal to the no-spend judgement when it lands on the
-        // day being judged. A bill takes the planned category, so it is exempt
-        // for the same reason an already-stored bill row is; everything else is
-        // unplanned unless its descriptor reads as a transfer.
-        if (w.date === noSpendTargetDate) {
+        // Declare a BRAND-NEW row landing on the judged day to the no-spend
+        // judgement — see `shouldDeclareToNoSpend` for why only that branch.
+        if (shouldDeclareToNoSpend(decision.kind, w.date, noSpendTargetDate)) {
           noSpendExtraSpend.push({
             amount: w.amount,
             merchant: w.descriptor,
-            category: decision.kind === "pay_bill" ? BUDGETED_IN_CALENDAR : UNCATEGORIZED,
+            category: UNCATEGORIZED,
           });
         }
 
