@@ -249,8 +249,6 @@ self.addEventListener('notificationclick', (event) => {
   // Get the URL from the notification data, validate it, default to home
   const rawUrl = event.notification.data?.url || '/';
   const targetPath = sanitizeUrl(rawUrl);
-  // Build full URL for comparison and opening
-  const fullUrlToOpen = new URL(targetPath, self.location.origin).href;
 
   // Tag the URL we NAVIGATE/open with the notification type so the app can
   // attribute the open (`notification_opened`): a service worker cannot call
@@ -294,10 +292,9 @@ self.addEventListener('notificationclick', (event) => {
       // sitting on a clean `#/habits` never counted as showing `/habits`, and
       // this preference would silently never fire.
       const targetRoute = targetPath.split('?')[0];
-      const alreadyThere = focusable.find((client) => {
-        const clientHash = new URL(client.url).hash.split('?')[0];
-        return client.url === fullUrlToOpen || clientHash === '#' + targetRoute;
-      });
+      const alreadyThere = focusable.find(
+        (client) => new URL(client.url).hash.split('?')[0] === '#' + targetRoute
+      );
 
       // Whichever window we focus, it ALWAYS gets the tagged path. This branch
       // used to `return client.focus()` bare for a matching window, which

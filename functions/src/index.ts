@@ -244,7 +244,12 @@ export const sendperhabitreminders = onSchedule("every 15 minutes", async () => 
         return config && isReminderDue(config, clock) ? [habitId] : [];
       });
 
-      return dueHabitIds.length > 0 ? [{ member, ref: memberDoc.ref, clock, dueHabitIds }] : [];
+      // Carry the tokens explicitly: the guard above narrows them here, but that
+      // narrowing can't survive being stashed on `member`, and re-defaulting at
+      // the send site would read as though they might be missing.
+      return dueHabitIds.length > 0
+        ? [{ member, fcmTokens: member.fcmTokens, ref: memberDoc.ref, clock, dueHabitIds }]
+        : [];
     });
 
     if (candidates.length === 0) continue;
@@ -252,7 +257,7 @@ export const sendperhabitreminders = onSchedule("every 15 minutes", async () => 
     const habitsSnapshot = await group.householdRef.collection("habits").get();
     const habitsById = new Map(habitsSnapshot.docs.map((doc) => [doc.id, doc.data()]));
 
-    for (const { member, ref, clock, dueHabitIds } of candidates) {
+    for (const { member, fcmTokens, ref, clock, dueHabitIds } of candidates) {
       // Drop reminders whose habit is gone, archived, paused, already done for
       // its period, or personal to someone else.
       const remindable = dueHabitIds.flatMap((habitId) => {
@@ -307,7 +312,7 @@ export const sendperhabitreminders = onSchedule("every 15 minutes", async () => 
         `Household ${group.householdId}: sending per-habit reminder for ${claimed.length} habit(s) to ${member.uid}`
       );
       await sendNotificationToUser(
-        member.fcmTokens ?? [],
+        fcmTokens,
         message.title,
         message.body,
         {

@@ -243,6 +243,13 @@ describe("buildHabitReminderMessage", () => {
     });
   });
 
+  it("names exactly the cap with no dangling summary", () => {
+    expect(buildHabitReminderMessage(["A", "B", "C"])).toEqual({
+      title: "Habit Reminder",
+      body: "3 habits to log: A, B, C",
+    });
+  });
+
   it("summarizes the tail past the named cap", () => {
     expect(
       buildHabitReminderMessage(["A", "B", "C", "D", "E"])
