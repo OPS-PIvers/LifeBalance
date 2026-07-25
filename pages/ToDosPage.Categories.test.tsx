@@ -248,3 +248,56 @@ describe('ToDosPage — category sort mode sections', () => {
     expect(within(headers[0] as HTMLElement).getByText('Errands')).toBeInTheDocument();
   });
 });
+
+describe('ToDosPage — triage entry points', () => {
+  const openKebab = () =>
+    fireEvent.click(screen.getByRole('button', { name: /To-do list actions/i }));
+
+  it('nudges with the uncategorized count, and the count ignores the active filter', () => {
+    setup();
+    expect(screen.getByText('1 task needs a category')).toBeInTheDocument();
+
+    // Filtering to a category must not make the backlog look smaller.
+    openCategoryFilter();
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Home/ }));
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByText('1 task needs a category')).toBeInTheDocument();
+  });
+
+  it('pluralises the nudge', () => {
+    setup({ todos: [todo('1', 'Loose one'), todo('2', 'Loose two')] });
+    expect(screen.getByText('2 tasks need a category')).toBeInTheDocument();
+  });
+
+  it('hides the nudge once nothing is uncategorized', () => {
+    setup({ todos: [todo('1', 'Mow the lawn', 'Home')] });
+    expect(screen.queryByText(/needs? a category/)).toBeNull();
+  });
+
+  it('dismisses the nudge, leaving triage reachable from the kebab', () => {
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss the triage reminder' }));
+    expect(screen.queryByText('1 task needs a category')).toBeNull();
+
+    openKebab();
+    expect(
+      screen.getByRole('menuitem', { name: /Triage uncategorized tasks one at a time/ }),
+    ).toBeEnabled();
+  });
+
+  it('offers manage-categories always, and disables triage with an empty backlog', () => {
+    setup({ todos: [todo('1', 'Mow the lawn', 'Home')] });
+    openKebab();
+
+    expect(screen.getByRole('menuitem', { name: /Manage categories/ })).toBeEnabled();
+    expect(
+      screen.getByRole('menuitem', { name: /Triage uncategorized tasks one at a time/ }),
+    ).toBeDisabled();
+  });
+
+  it('opens the triage drawer from the banner', () => {
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Triage' }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+});

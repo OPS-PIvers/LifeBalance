@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback, useR
 import { useSearchParams } from 'react-router-dom';
 import { Reorder, useDragControls } from 'framer-motion';
 import { useTodos, useHouseholdCore, useGamification } from '@/contexts/FirebaseHouseholdContext';
-import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Camera, Sparkles, Plus, Repeat, Filter, ArrowUpDown, GripVertical, UserPlus, Tag } from 'lucide-react';
+import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Camera, Sparkles, Plus, Repeat, Filter, ArrowUpDown, GripVertical, UserPlus, Tag, Tags, ListChecks } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { quadrantForTodo, QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhower';
@@ -40,6 +40,8 @@ import { TodoRow } from '@/components/todos/TodoRow';
 import { type SectionColor } from '@/components/todos/todoDisplay';
 import { EisenhowerGridView } from '@/components/todos/EisenhowerGridView';
 import { TaskTemplateDrawer } from '@/components/todos/TaskTemplateDrawer';
+import { TodoCategoryManagerDrawer } from '@/components/todos/TodoCategoryManagerDrawer';
+import { TodoTriageDrawer } from '@/components/todos/TodoTriageDrawer';
 import { sortFlatTodos, groupTodosByCategory, TODO_SORT_MODES, TODO_SORT_LABELS, type TodoSortMode } from '@/utils/todoSort';
 import { getTodoCategoryColor, UNCATEGORIZED_LABEL } from '@/utils/todoCategoryColor';
 import {
@@ -393,6 +395,15 @@ const ToDosPage: React.FC = () => {
   // F-TODO-03 — Task templates ("Quick Task Lists") drawer.
   const [isTemplateDrawerOpen, setIsTemplateDrawerOpen] = useState(false);
 
+  // F-TODO-16 — manage-categories drawer (add/rename/delete the vocabulary)
+  // and the one-at-a-time triage pass over uncategorised tasks.
+  const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
+  const [isTriageOpen, setIsTriageOpen] = useState(false);
+  // Session-only, like the assignee filter and the section collapse state: the
+  // nudge is worth re-offering on a fresh visit, and persisting it would need a
+  // key that could outlive the backlog it refers to.
+  const [triageBannerDismissed, setTriageBannerDismissed] = useState(false);
+
   // Batch Mode State
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -557,6 +568,14 @@ const ToDosPage: React.FC = () => {
     () => (showCategorySections ? groupTodosByCategory(flatActive) : []),
     [showCategorySections, flatActive],
   );
+  // F-TODO-16: how many ACTIVE tasks still have no category — drives the triage
+  // banner and the kebab count. Counted off `todos` rather than `flatActive` so
+  // an active filter can't make the backlog look smaller than it is.
+  const uncategorizedActiveCount = useMemo(
+    () => todos.filter(t => !t.isCompleted && !(t.category ?? '').trim()).length,
+    [todos],
+  );
+
   // Session-only (deliberately NOT persisted): collapsing a section is a
   // momentary "get this out of my way", not a saved view.
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
@@ -1042,7 +1061,8 @@ const ToDosPage: React.FC = () => {
   const [gridDismissed, setGridDismissed] = useState(false);
   const blockingLayerOpen =
     isSelectionMode || drawerOpen || isPhotoImportOpen || isTemplateDrawerOpen ||
-    isBatchRescheduleOpen || showBatchDeleteConfirm;
+    isBatchRescheduleOpen || showBatchDeleteConfirm ||
+    isCategoryManagerOpen || isTriageOpen;
   if (!isLandscape) {
     if (gridActive) setGridActive(false);
     if (gridDismissed) setGridDismissed(false);
@@ -1480,6 +1500,26 @@ const ToDosPage: React.FC = () => {
       onSelect: () => setIsSelectionMode(true),
       disabled: viewMode === 'completed',
     },
+    // F-TODO-16 — always present, so triage stays reachable at zero (and after
+    // the banner is dismissed) rather than only when there's a backlog.
+    {
+      key: 'triage',
+      label: uncategorizedActiveCount > 0
+        ? `Triage uncategorized (${uncategorizedActiveCount})`
+        : 'Triage uncategorized',
+      icon: <ListChecks size={16} />,
+      ariaLabel: 'Triage uncategorized tasks one at a time',
+      group: 'Categories',
+      onSelect: () => setIsTriageOpen(true),
+      disabled: uncategorizedActiveCount === 0,
+    },
+    {
+      key: 'manage-categories',
+      label: 'Manage categories',
+      icon: <Tags size={16} />,
+      group: 'Categories',
+      onSelect: () => setIsCategoryManagerOpen(true),
+    },
   ];
 
   // Add row — row ONE of the list card, matching the Shopping list exactly:
@@ -1895,6 +1935,35 @@ const ToDosPage: React.FC = () => {
 
       {viewMode === 'active' ? (
           <>
+            {/* F-TODO-16 — the triage nudge. Only while there IS a backlog, and
+                only in the active view; it disappears on its own as the count
+                reaches zero, so it never becomes permanent furniture. The kebab
+                keeps triage reachable once this is dismissed. */}
+            {uncategorizedActiveCount > 0 && !triageBannerDismissed && !gridOverlayVisible && (
+              <div className="mb-3 flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 dark:border-brand-700 dark:bg-brand-800/40">
+                <Tag size={16} aria-hidden="true" className="shrink-0 text-brand-400 dark:text-brand-300" />
+                <p className="min-w-0 flex-1 text-xs text-brand-600 dark:text-brand-200">
+                  {uncategorizedActiveCount === 1
+                    ? '1 task needs a category'
+                    : `${uncategorizedActiveCount} tasks need a category`}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIsTriageOpen(true)}
+                  className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-accent-700 hover:bg-accent-50 dark:text-accent-300 dark:hover:bg-accent-900/30"
+                >
+                  Triage
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTriageBannerDismissed(true)}
+                  aria-label="Dismiss the triage reminder"
+                  className="shrink-0 rounded-lg p-1 text-brand-400 hover:bg-brand-100 dark:text-brand-300 dark:hover:bg-brand-700"
+                >
+                  <X size={14} aria-hidden="true" />
+                </button>
+              </div>
+            )}
             {/* One flat list card. Its first row is the sticky quick-add bar
                 (Shopping's split-card pattern — see stickyQuickAdd above); the
                 flush SurfaceList below completes the same rounded section.
@@ -2575,6 +2644,16 @@ const ToDosPage: React.FC = () => {
       <TaskTemplateDrawer
         isOpen={isTemplateDrawerOpen}
         onClose={() => setIsTemplateDrawerOpen(false)}
+      />
+
+      <TodoCategoryManagerDrawer
+        isOpen={isCategoryManagerOpen}
+        onClose={() => setIsCategoryManagerOpen(false)}
+      />
+
+      <TodoTriageDrawer
+        isOpen={isTriageOpen}
+        onClose={() => setIsTriageOpen(false)}
       />
 
     </div>

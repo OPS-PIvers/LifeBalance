@@ -77,6 +77,7 @@ vi.mock('lucide-react', () => ({
   Repeat: () => <div data-testid="repeat-icon" />,
   Filter: () => <div data-testid="filter-icon" />,
   Tag: () => <div data-testid="tag-icon" />,
+  Tags: () => <div data-testid="tags-icon" />,
   ArrowUpDown: () => <div data-testid="arrow-up-down-icon" />,
   Info: () => <div data-testid="info-icon" />,
   // data/templateIcons.ts — pulled in transitively by TaskTemplateDrawer.
