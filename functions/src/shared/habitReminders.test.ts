@@ -250,6 +250,14 @@ describe("buildHabitReminderMessage", () => {
     });
   });
 
+  // The only place the singular "1 more" appears.
+  it("singularizes a one-habit tail", () => {
+    expect(buildHabitReminderMessage(["A", "B", "C", "D"])).toEqual({
+      title: "Habit Reminder",
+      body: "4 habits to log: A, B, C and 1 more",
+    });
+  });
+
   it("summarizes the tail past the named cap", () => {
     expect(
       buildHabitReminderMessage(["A", "B", "C", "D", "E"])
