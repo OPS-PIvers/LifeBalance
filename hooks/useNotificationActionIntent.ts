@@ -74,7 +74,13 @@ export function useNotificationActionIntent(): NotificationActionIntent {
   const consume = useCallback(() => {
     const action = consumeNotificationAction();
     const habitId = consumeNotificationHabitId();
-    if (!action && !habitId) return;
+    // Both params are read (and stripped) unconditionally above, but only an
+    // ACTION is an intent: `nhabit` alone is what a body tap carries, and a body
+    // tap only navigates. Bailing here rather than on `!action && !habitId`
+    // matters because a body tap arriving while an earlier action-button tap is
+    // still waiting on the session would otherwise bump the nonce with an empty
+    // intent and silently displace the pending log.
+    if (!action) return;
     setIntent(prev => ({
       action,
       habitId: action === NOTIFICATION_ACTIONS.logHabit ? habitId : null,
