@@ -195,12 +195,11 @@ export const TaskTemplateDrawer: React.FC<TaskTemplateDrawerProps> = ({ isOpen, 
                       <span className="block text-xs text-brand-500 dark:text-brand-400 truncate">
                         {category && (
                           <span
-                            className={cn(
-                              'inline-flex items-center rounded-full border px-1.5 py-0.5 text-xxs mr-1.5 align-middle',
-                              categoryColor.bg,
-                              categoryColor.text,
-                              categoryColor.border
-                            )}
+                            // Not cn(): tailwind-merge reads the custom
+                            // `text-xxs` token as a text-COLOR utility, sees a
+                            // conflict with `text-*-800` and silently drops it,
+                            // so the chip would render at the default size.
+                            className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-xxs mr-1.5 align-middle ${categoryColor.bg} ${categoryColor.text} ${categoryColor.border}`}
                           >
                             {category}
                           </span>
