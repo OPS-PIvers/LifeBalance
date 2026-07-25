@@ -12,8 +12,10 @@
  *   b. FILL    — fill a prior Apple Pay $0 `needsAmount` stub (reconcile.ts rules)
  *   c. CONFIRM — mark an existing pending_review transaction verified
  *                (cent-exact amount + date within ±3 days + UNIQUE)
- *   d. PAY     — pay a matching unpaid calendar bill (descriptor token-overlap
- *                with the title OR a learned alias; amount within ±10% or ±$25)
+ *   d. PAY     — pay a matching unpaid calendar bill (a household-authored
+ *                merchant rule's `billId`, OR a learned alias, OR descriptor
+ *                token-overlap with the title; the latter two additionally
+ *                require the amount within ±10% or ±$25)
  *   e. CREATE  — otherwise a new verified, `needsCategory` transaction
  *
  * The account balance is NEVER moved from any of these decisions — the email's
@@ -26,6 +28,7 @@
 import type { BankEmailWithdrawal } from "./bankEmailParser";
 import { merchantSimilar } from "./transactionIdentity";
 import { pickFillTarget, type ReconcileCandidate } from "./reconcile";
+import { pickMerchantRule, type MerchantRule } from "./merchantRules";
 
 // ---------------------------------------------------------------------------
 // Candidate shapes (all pre-loaded by the endpoint; pure in, decision out)
@@ -222,22 +225,77 @@ export function billAmountWithinTolerance(billAmount: number, actual: number): b
   return diff <= Math.max(pct, abs);
 }
 
+/**
+ * WHICH tier matched, in descending order of authority:
+ *   - `rule`  — a household-authored `MerchantRule.billId` names this bill.
+ *   - `alias` — a descriptor previously learned onto the bill.
+ *   - `token` — significant-token overlap with the bill's title (a guess).
+ *
+ * Replaces the older boolean `matchedByAlias`: with three tiers a boolean can
+ * no longer say which one won, and a second boolean beside it would make
+ * "rule AND alias" representable when it never happens. The endpoint keys the
+ * alias-learning write on `token` — see {@link BillPayMatch}.
+ */
+export type BillMatchSource = "rule" | "alias" | "token";
+
 export interface BillPayMatch {
   bill: BillPayCandidate;
-  /** True when matched via a learned alias; false when via title token-overlap
-   *  (the endpoint then LEARNS the descriptor onto the bill's aliases). */
-  matchedByAlias: boolean;
+  /**
+   * How the bill was found. The endpoint LEARNS the descriptor onto the bill's
+   * aliases only for `token` — an alias match already knows the descriptor, and
+   * a `rule` match is already recorded by the rule the household wrote. Writing
+   * an alias for a rule match would create a second, redundant source of truth
+   * that outlives deleting the rule, so the link could not be undone by undoing
+   * the thing that made it.
+   */
+  matchedBy: BillMatchSource;
 }
 
 /**
- * Choose the single bill this withdrawal pays, or null. Alias matches take
- * precedence over title token-overlap; within each tier the amount must be
- * within tolerance and the match must be UNIQUE (ambiguity → null → CREATE).
+ * Every candidate a rule's `billId` names. A recurring rule points at the
+ * TEMPLATE id, while the candidate pool holds expanded occurrences whose own
+ * `id` is synthetic, so both are checked.
+ */
+function billsNamedByRule(
+  billId: string,
+  candidates: readonly BillPayCandidate[]
+): BillPayCandidate[] {
+  return candidates.filter((c) => c.id === billId || c.templateId === billId);
+}
+
+/**
+ * Choose the single bill this withdrawal pays, or null.
+ *
+ * Three tiers, most authoritative first — rule, then learned alias, then title
+ * token-overlap. Within every tier the match must be UNIQUE; ambiguity returns
+ * null rather than guessing, and (as with the alias tier) an ambiguous rule does
+ * NOT fall through to a weaker signal: if the strongest evidence available can't
+ * settle it, weaker evidence has no business doing so.
+ *
+ * The rule tier deliberately BYPASSES the amount tolerance. That guard exists to
+ * stop a *guess* from mis-paying a bill; `billId` is not a guess, it is an
+ * explicit statement by the household that this descriptor IS that bill. The
+ * variable-amount bill — a utility, a credit-card statement — is exactly the
+ * case the ±10%/±$25 window gets wrong, and making those payable is the point of
+ * the feature. The other two tiers keep the guard.
+ *
+ * A rule whose `billId` names nothing in the pool (already paid, or outside the
+ * expansion window) falls through to alias/token rather than forcing a match:
+ * the household said "this is that bill", not "pay something regardless".
  */
 export function pickBillToPay(
   withdrawal: BankEmailWithdrawal,
-  candidates: readonly BillPayCandidate[]
+  candidates: readonly BillPayCandidate[],
+  rules?: readonly MerchantRule[]
 ): BillPayMatch | null {
+  const rule = pickMerchantRule(withdrawal.descriptor, withdrawal.amount, rules);
+  if (rule?.billId) {
+    const named = billsNamedByRule(rule.billId, candidates);
+    if (named.length === 1) return { bill: named[0]!, matchedBy: "rule" };
+    if (named.length > 1) return null; // ambiguous rule → don't guess
+    // named.length === 0 → the bill isn't payable right now; fall through.
+  }
+
   const inTol = candidates.filter((c) =>
     billAmountWithinTolerance(c.amount, withdrawal.amount)
   );
@@ -246,13 +304,13 @@ export function pickBillToPay(
   const aliasMatches = inTol.filter((c) =>
     matchesAlias(withdrawal.descriptor, c.bankDescriptorAliases)
   );
-  if (aliasMatches.length === 1) return { bill: aliasMatches[0]!, matchedByAlias: true };
+  if (aliasMatches.length === 1) return { bill: aliasMatches[0]!, matchedBy: "alias" };
   if (aliasMatches.length > 1) return null; // ambiguous alias → don't guess
 
   const tokenMatches = inTol.filter((c) =>
     shareSignificantToken(withdrawal.descriptor, c.title)
   );
-  if (tokenMatches.length === 1) return { bill: tokenMatches[0]!, matchedByAlias: false };
+  if (tokenMatches.length === 1) return { bill: tokenMatches[0]!, matchedBy: "token" };
   return null;
 }
 
@@ -279,6 +337,16 @@ export interface DecideWithdrawalInput {
   billCandidates: readonly BillPayCandidate[];
   /** Account the email resolved to (used to gate stub-fill by account). */
   resolvedAccountId?: string;
+  /**
+   * The household's merchant rules. Only the PAY step reads them (a rule's
+   * `billId`); omitting them reproduces the pre-rules behaviour exactly.
+   *
+   * They deliberately do NOT reach the earlier steps: skip/fill/confirm are
+   * IDENTITY questions ("is this the same purchase?"), and identity is answered
+   * from the raw bank descriptor alone. A user-editable label must never decide
+   * whether two rows are the same charge.
+   */
+  merchantRules?: readonly MerchantRule[];
 }
 
 /**
@@ -312,8 +380,8 @@ export function decideWithdrawal(input: DecideWithdrawalInput): WithdrawalDecisi
   const pending = pickPendingToConfirm(withdrawal, pendingCandidates, input.resolvedAccountId);
   if (pending) return { kind: "confirm_pending", transactionId: pending.id };
 
-  // d. Pay a matching unpaid bill.
-  const bill = pickBillToPay(withdrawal, billCandidates);
+  // d. Pay a matching unpaid bill (rule > learned alias > title token-overlap).
+  const bill = pickBillToPay(withdrawal, billCandidates, input.merchantRules);
   if (bill) return { kind: "pay_bill", match: bill };
 
   // e. Otherwise create a new verified, needs-category transaction.

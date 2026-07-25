@@ -618,7 +618,7 @@ export const bankEmailSync = onRequest(
             break;
           }
           case "pay_bill": {
-            const { bill, matchedByAlias } = decision.match;
+            const { bill, matchedBy } = decision.match;
             const paidAmount = Math.round(w.amount * 100) / 100;
             // Retro-file under the bill's DUE-date pay period (mirrors the client
             // payCalendarItem convention), NOT the withdrawal clearing date — an
@@ -665,10 +665,14 @@ export const bankEmailSync = onRequest(
               bankRef: w.bankRef,
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
             });
-            // Learn the descriptor as an alias when matched by token-overlap
-            // (not when it already matched an alias). Write onto the template
-            // for a recurring occurrence, else the item itself.
-            if (!matchedByAlias) {
+            // Learn the descriptor as an alias ONLY for a token-overlap match —
+            // the guess we want to stop having to make again. An alias match
+            // already knows it, and a RULE match is already recorded by the rule
+            // the household wrote: learning an alias too would create a second,
+            // redundant source of truth that survives deleting the rule, so the
+            // link could not be undone by undoing the thing that made it.
+            // Write onto the template for a recurring occurrence, else the item.
+            if (matchedBy === "token") {
               const aliasTargetId = bill.templateId ?? bill.id;
               batch.update(db.doc(`${calendarPath}/${aliasTargetId}`), {
                 bankDescriptorAliases: admin.firestore.FieldValue.arrayUnion(w.descriptor),
