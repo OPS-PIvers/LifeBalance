@@ -79,7 +79,7 @@ describe('sortFlatTodos', () => {
     expect(ids(sorted)).toEqual(['starred', 'false-star']);
   });
 
-  // --- F-TODO-15: 'category' mode ---
+  // --- F-TODO-16: 'category' mode ---
 
   it("'category' orders by category name A→Z, case-insensitively", () => {
     const sorted = sortFlatTodos([

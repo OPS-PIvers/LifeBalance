@@ -886,7 +886,7 @@ export interface TaskTemplateItem {
   text: string; // The to-do text created for this item
   assignedTo?: string; // uid of household member; falls back to the applying user when absent
   points?: number; // Optional override for the created to-do's point value (kid-mode allowance-style credit)
-  category?: string; // F-TODO-15: to-dos spawned from this item inherit this category
+  category?: string; // F-TODO-16: to-dos spawned from this item inherit this category
 }
 
 export interface TaskTemplate {
@@ -913,7 +913,7 @@ export interface Household {
   inviteCode: string;
   groceryCategories?: string[]; // Custom categories
   habitCategories?: string[]; // Custom habit categories
-  todoCategories?: string[]; // Custom to-do categories (F-TODO-15)
+  todoCategories?: string[]; // Custom to-do categories (F-TODO-16)
   stores?: Store[]; // User-defined stores
   quickStockLists?: QuickStockList[]; // User-defined shopping templates
   taskTemplates?: TaskTemplate[]; // User-defined task-bundle templates ("Quick Task Lists", F-TODO-03)
@@ -1177,7 +1177,7 @@ export interface ToDo {
   // on every existing to-do — no migration; converter passes it through.
   linkedHabitId?: string;
 
-  // F-TODO-15: a single optional category ("Home", "Work"...) chosen from the
+  // F-TODO-16: a single optional category ("Home", "Work"...) chosen from the
   // household's `todoCategories` vocabulary. ABSENT means "Uncategorized" — that
   // is the invariant every consumer relies on (see utils/todoCategoryColor.ts and
   // the 'category' sort mode in utils/todoSort.ts), so clearing a category must

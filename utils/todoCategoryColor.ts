@@ -1,4 +1,4 @@
-// F-TODO-15 — stable, deterministic chip colors for to-do categories.
+// F-TODO-16 — stable, deterministic chip colors for to-do categories.
 //
 // Categories are free-text (the household mints its own vocabulary), so there is
 // nowhere to store a per-category color choice without a migration. Instead the

@@ -51,6 +51,7 @@ import {
   type BillCalendarItem,
 } from "./billMatch";
 import { fuzzyMatchMember, type MemberLike } from "./todoMatch";
+import { resolveTodoCategory } from "./todoCategoryMatch";
 import { parseTodoPhrase } from "./todoParser";
 import { isManualReview } from "./captureReview";
 
@@ -1929,7 +1930,7 @@ export const quickAddBillPay = onRequest(
  * Create a shared household to-do via iOS Shortcuts / Siri (F-TODO-07).
  *
  * Accepts `{ text, parse?, dueDate?, dueTime?, reminderMinutesBefore?,
- * assignedTo?, isImportant?, today? }`. When `parse === true` (F-TODO-15) the
+ * assignedTo?, isImportant?, category?, today? }`. When `parse === true` (F-TODO-15) the
  * server first runs the deterministic natural-language parser
  * (todoParser.ts) over `text` — "Call dentist tomorrow at 3pm, remind me 30
  * minutes before" — and any explicit structured field still overrides its
@@ -1945,6 +1946,13 @@ export const quickAddBillPay = onRequest(
  * schema/rules change is needed. When the household's `captureReview.todo`
  * setting is `'review'` the created to-do is stamped `needsReview: true`
  * (held out of the visible list until approved) — see captureReview.ts.
+ * `category` (F-TODO-16) is optional free text (max 50 chars); it is resolved
+ * case-insensitively against the household's `todoCategories` vocabulary via
+ * `resolveTodoCategory` (todoCategoryMatch.ts) — a match adopts the
+ * household's stored casing, a miss is stored as-is (the household's
+ * `todoCategories` list itself is never mutated by this endpoint, minting a
+ * new category is a UI action), and an absent/blank/whitespace-only value
+ * leaves the to-do Uncategorized (the field is omitted, never written as '').
  */
 export const quickAddTodo = onRequest(
   { cors: false, region: "us-central1" },
@@ -1999,6 +2007,7 @@ export const quickAddTodo = onRequest(
       reminderMinutesBefore: rawReminder,
       assignedTo: rawAssignedTo,
       isImportant: rawIsImportant,
+      category: rawCategory,
       today: rawToday,
     } = req.body || {};
 
@@ -2086,12 +2095,29 @@ export const quickAddTodo = onRequest(
       }
     }
 
+    // F-TODO-16: category, if supplied, must be a string — resolution
+    // (case-insensitive matching + the length cap) happens in
+    // resolveTodoCategory below, once the household's todoCategories are on hand.
+    if (rawCategory !== undefined && rawCategory !== null && typeof rawCategory !== "string") {
+      errorResponse(res, 400, "category must be a string", "BAD_REQUEST");
+      return;
+    }
+
     try {
       // 5. Determine the household's todo capture-review mode — a todo
       //    created while todos are in 'review' mode is held (needsReview:
       //    true) until approved. See captureReview.ts.
       const householdSnap = await db.doc(`households/${householdId}`).get();
-      const todoManualReview = isManualReview(householdSnap.data()?.captureReview, "todo");
+      const householdData = householdSnap.data();
+      const todoManualReview = isManualReview(householdData?.captureReview, "todo");
+
+      // F-TODO-16: resolve the optional category against the household's
+      // existing vocabulary (case-insensitive; adopts stored casing on match,
+      // stored as-is on miss). Absent/blank stays Uncategorized.
+      const category = resolveTodoCategory(
+        typeof rawCategory === "string" ? rawCategory : undefined,
+        householdData?.todoCategories
+      );
 
       // 6. Resolve assignedTo (uid or fuzzy display-name match) against the
       //    household's members. Absent when not provided — the client's
@@ -2155,6 +2181,7 @@ export const quickAddTodo = onRequest(
         ...(isImportant ? { isImportant: true } : {}),
         ...(dueTime !== undefined ? { dueTime } : {}),
         ...(reminderMinutesBefore !== undefined ? { reminderMinutesBefore } : {}),
+        ...(category !== undefined ? { category } : {}),
         ...(validation.keyCreatedBy ? { createdBy: validation.keyCreatedBy } : {}),
         ...(todoManualReview ? { needsReview: true } : {}),
       };
@@ -2178,6 +2205,7 @@ export const quickAddTodo = onRequest(
           isImportant,
           dueTime: dueTime ?? null,
           reminderMinutesBefore: reminderMinutesBefore ?? null,
+          category: category ?? null,
         },
       });
     } catch (error) {
