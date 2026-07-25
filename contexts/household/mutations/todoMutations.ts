@@ -777,6 +777,12 @@ function categoryKey(value: string | undefined): string {
  * the result set entirely, so a rename/delete never pages through them. The
  * case-insensitive match itself is done in memory because Firestore equality is
  * case-sensitive and the stored spelling is whatever the user typed.
+ *
+ * COST: O(N) reads where N is every categorised to-do in the household, not just
+ * the ones in `key`. Narrowing it server-side would need a denormalised
+ * case-folded field (e.g. `categoryLower`) to query by equality, the way
+ * `Habit.titleLower` exists for quickAddHabit. Fine at household scale — rename
+ * and delete are rare, deliberate actions — but revisit if to-do volume grows.
  */
 async function fetchTodosInCategory(db: Firestore, householdId: string, key: string) {
   const todosCol = collection(db, `households/${householdId}/todos`).withConverter(todoConverter);

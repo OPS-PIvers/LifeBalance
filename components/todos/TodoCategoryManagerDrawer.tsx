@@ -89,6 +89,15 @@ export const TodoCategoryManagerDrawer: React.FC<TodoCategoryManagerDrawerProps>
       setAddError(null);
       setEditing(null);
       setPendingDelete(null);
+      // Clear the in-flight guards too. Closing the sheet mid-write (a swipe
+      // down) and reopening otherwise left them set until the old promise
+      // resolved, and both gate EVERY row's controls — so the whole drawer
+      // read as broken rather than just the row being written. The stale
+      // promise's `finally` only re-clears what is already null, and the
+      // mutations converge on a retry, so a second action started in that
+      // window is safe.
+      setRenamingName(null);
+      setIsDeleting(false);
     }
   }
 
