@@ -307,11 +307,20 @@ per `getQuickAddBaseUrl()` in [services/apiKeyService.ts](../services/apiKeyServ
 
 ## §4 — Troubleshooting
 
+**"No spend day" push.** The email had no `Withdrawals` section at all, which is
+what Wells Fargo sends when nothing was withdrawn — a successful sync with zero
+withdrawals, not a failure. The balance is still overwritten as normal. This
+requires the email's `As of` footer to be present (proof the body wasn't
+truncated above the withdrawals) and no withdrawal-shaped line anywhere in it
+(proof the section wasn't merely renamed); failing either of those keeps the loud
+`PARSE_FAILED` below. See `parseBankEmail`'s zero-withdrawal acceptance rules.
+
 **"Bank sync failed" push (`PARSE_FAILED`).** `parseBankEmail()` couldn't find the
 expected shape — missing "for account …NNNN", missing the Ending/Available balance
-summary, missing a "Withdrawals" section header, or a line inside that section that
-doesn't match either the card-purchase or ACH/biller line shape. This almost always
-means **Wells Fargo changed the email's format**. No Firestore writes happen on a
+summary, a missing `Withdrawals` section that failed one of the two zero-withdrawal
+guards just above, or a line inside that section that doesn't match either the
+card-purchase or ACH/biller line shape. This almost always means **Wells Fargo
+changed the email's format**. No Firestore writes happen on a
 parse failure (the function returns before the account/ledger/batch steps) —
 nothing is corrupted, but nothing was synced either. The push body itself is
 sanitized (control characters/newlines stripped) and hard-truncated to 120

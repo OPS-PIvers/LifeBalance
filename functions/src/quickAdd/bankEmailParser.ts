@@ -19,6 +19,11 @@
  * HTML renderings put the amount in its own table cell, so tag-stripping can
  * land it on a following line rather than trailing the descriptor text — the
  * line-shape regexes below tolerate an optional newline before the amount.
+ *
+ * On a night with NO withdrawals the Withdrawals section is omitted entirely —
+ * the body is just the account line, the Balance summary and the footer. That
+ * is a successful parse with `withdrawals: []`, not a failure; see the
+ * zero-withdrawal acceptance rules in `parseBankEmail`.
  */
 
 /** One parsed withdrawal line. Amount is decimal dollars. */
@@ -285,6 +290,14 @@ const ACH_LINE_RE = /^([A-Z][^$]*?)\s*\$\s*([\d,]+\.\d{2})$/i;
 // it, never by a full line of unrelated text.
 const AMOUNT_ONLY_LINE_RE = /^\$\s*[\d,]+\.\d{2}$/;
 
+// Anywhere-in-the-body probe for a card-purchase line, used ONLY to decide
+// whether a MISSING/EMPTY Withdrawals section is believable (see
+// `acceptZeroWithdrawals`). Deliberately loose — it matches the lead verb
+// alone, without requiring the ref/CARD/amount tail — because its job is to
+// notice "this email clearly contains withdrawals" even when the exact line
+// shape has drifted, not to parse them.
+const WITHDRAWAL_SHAPED_LINE_RE = /^(?:PURCHASE|RECURRING PAYMENT) AUTHORIZED ON\b/im;
+
 /**
  * Split the Withdrawals section into logical line items: each item is one
  * withdrawal's full text, joining a wrapped descriptor line with a following
@@ -366,23 +379,57 @@ export function parseBankEmail(input: BankEmailParseInput): BankEmailParseResult
   // is mistaken for a withdrawal line. Drop the "Withdrawals" header line
   // itself so it isn't fed into the line-item splitter below.
   //
-  // Strict mode: the nightly email always has this section, so a missing
-  // header means a format change or the wrong email entirely — without this
-  // guard, falling back to scanning the WHOLE email lets ACH_LINE_RE match
-  // the Balance-summary lines ("Ending balance: $1,277.90" etc.) and
-  // fabricate withdrawals that were never withdrawals.
+  // Strict mode: falling back to scanning the WHOLE email would let
+  // ACH_LINE_RE match the Balance-summary lines ("Ending balance: $1,277.90"
+  // etc.) and fabricate withdrawals that were never withdrawals — so the
+  // section boundary is never relaxed. What IS tolerated is the section being
+  // genuinely absent; see `acceptZeroWithdrawals` below.
   const withdrawalsStart = text.search(/^withdrawals\s*$/im);
-  if (withdrawalsStart < 0) {
-    return { error: "Could not find a \"Withdrawals\" section in the email." };
-  }
-  const afterHeaderNewline = text.indexOf("\n", withdrawalsStart);
-  const sectionText = afterHeaderNewline >= 0 ? text.slice(afterHeaderNewline + 1) : "";
-  const sectionEnd = sectionText.search(/^(deposits|as of\s)/im);
-  const withdrawalsSection = sectionEnd >= 0 ? sectionText.slice(0, sectionEnd) : sectionText;
+  const sectionMissing = withdrawalsStart < 0;
 
-  const lineItems = splitLogicalLineItems(withdrawalsSection);
+  let lineItems: string[] = [];
+  if (!sectionMissing) {
+    const afterHeaderNewline = text.indexOf("\n", withdrawalsStart);
+    const sectionText = afterHeaderNewline >= 0 ? text.slice(afterHeaderNewline + 1) : "";
+    const sectionEnd = sectionText.search(/^(deposits|as of\s)/im);
+    const withdrawalsSection = sectionEnd >= 0 ? sectionText.slice(0, sectionEnd) : sectionText;
+    lineItems = splitLogicalLineItems(withdrawalsSection);
+  }
+
+  // A NO-SPEND night. Wells Fargo omits the Withdrawals section outright when
+  // nothing was withdrawn — the email is just the balance summary and the
+  // footer — and that is a perfectly good sync result, not a failure. Reporting
+  // it as one produced a "Bank sync failed" push on the user's best days.
+  //
+  // But "no Withdrawals section" has three possible causes and only one of them
+  // is a no-spend night, so zero withdrawals is accepted only against positive
+  // evidence of BOTH other causes being absent:
+  //
+  //  - TRUNCATION (Gmail clipping, a partial fetch): the "As of" footer is the
+  //    last thing in the body, AFTER the withdrawals section, so its presence
+  //    proves we are looking at a complete email rather than one cut off above
+  //    the withdrawals. Require it.
+  //  - A FORMAT CHANGE (the section renamed, e.g. "Withdrawals/Debits"): the
+  //    withdrawal LINES would still be in the body even though the header no
+  //    longer matches. Require that no withdrawal-shaped line appears anywhere.
+  //
+  // Anything else keeps the original loud failure, because silently reporting a
+  // no-spend day for an email we failed to read would lose real money data AND
+  // credit a habit that wasn't earned.
   if (lineItems.length === 0) {
-    return { error: "No withdrawal lines were found in the email body." };
+    if (!asOf) {
+      return {
+        error: sectionMissing
+          ? "Could not find a \"Withdrawals\" section or an \"As of\" footer in the email."
+          : "The \"Withdrawals\" section was empty and the email has no \"As of\" footer.",
+      };
+    }
+    if (WITHDRAWAL_SHAPED_LINE_RE.test(text)) {
+      return {
+        error: "Found withdrawal lines outside a \"Withdrawals\" section — the email format may have changed.",
+      };
+    }
+    return { accountLast4, endingBalance, availableBalance, asOf, withdrawals: [] };
   }
 
   const withdrawals: BankEmailWithdrawal[] = [];
@@ -446,9 +493,10 @@ export function parseBankEmail(input: BankEmailParseInput): BankEmailParseResult
     return { error: `Could not parse the withdrawal line: "${item}"` };
   }
 
-  if (withdrawals.length === 0) {
-    return { error: "No withdrawal lines were found in the email body." };
-  }
-
+  // No `withdrawals.length === 0` guard here: `lineItems` is non-empty by this
+  // point (the zero case returned above), and every item either pushes a
+  // withdrawal or returns an error, so an empty result is unreachable. A guard
+  // would also now contradict the semantics above, where zero withdrawals is a
+  // legitimate success rather than a failure.
   return { accountLast4, endingBalance, availableBalance, asOf, withdrawals };
 }
