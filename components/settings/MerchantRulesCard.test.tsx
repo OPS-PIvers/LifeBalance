@@ -22,6 +22,7 @@ let mockSaving = false;
 let mockBuckets: BudgetBucket[] = [];
 let mockCalendarItems: CalendarItem[] = [];
 let mockTransactions: Transaction[] = [];
+let mockHasMoreTransactions = false;
 
 vi.mock('@/hooks/useMerchantRules', () => ({
   useMerchantRules: () => ({
@@ -49,6 +50,9 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
     },
     get transactions() {
       return mockTransactions;
+    },
+    get hasMoreTransactions() {
+      return mockHasMoreTransactions;
     },
   }),
   useHouseholdCore: () => ({
@@ -106,6 +110,7 @@ describe('MerchantRulesCard', () => {
     ];
     mockCalendarItems = [makeBill('bill-1', 'Electric Bill')];
     mockTransactions = [];
+    mockHasMoreTransactions = false;
     window.localStorage.clear();
   });
 
@@ -126,8 +131,6 @@ describe('MerchantRulesCard', () => {
         category: 'Subscriptions',
         billId: 'bill-1',
         exempt: true,
-        matchCount: 14,
-        lastMatchedAt: '2026-07-22T12:00:00.000Z',
       }),
     ];
     render(<MerchantRulesCard />);
@@ -140,7 +143,6 @@ describe('MerchantRulesCard', () => {
     expect(within(row).getByText('Subscriptions')).toBeInTheDocument();
     expect(within(row).getByText('Electric Bill')).toBeInTheDocument();
     expect(within(row).getByText('No-spend exempt')).toBeInTheDocument();
-    expect(within(row).getByText('Matched 14 times · last on Jul 22')).toBeInTheDocument();
   });
 
   it('falls back to the pattern as the headline for a rule that only classifies', () => {
@@ -152,18 +154,88 @@ describe('MerchantRulesCard', () => {
     expect(within(row).getByText('Subscriptions')).toBeInTheDocument();
   });
 
-  it('flags a rule that has never matched anything', () => {
-    mockRules = [makeRule({ id: 'dead', pattern: 'NEVERMATCHES', name: 'Ghost' })];
-    render(<MerchantRulesCard />);
+  describe('match counts (derived from the household transactions)', () => {
+    it('reports how many of the household transactions a rule renames', () => {
+      mockTransactions = APPLE_HISTORY;
+      mockRules = [makeRule({ id: 'apple', pattern: 'APPLE.COM', name: 'Apple' })];
+      render(<MerchantRulesCard />);
 
-    expect(screen.getByText('Has not matched anything yet')).toBeInTheDocument();
-  });
+      expect(
+        screen.getByText('Applies to 3 of your transactions · latest Jul 22')
+      ).toBeInTheDocument();
+    });
 
-  it('singularises a single match', () => {
-    mockRules = [makeRule({ id: 'one', pattern: 'NETFLIX', name: 'Netflix', matchCount: 1 })];
-    render(<MerchantRulesCard />);
+    it('flags a rule that claims none of them', () => {
+      mockTransactions = APPLE_HISTORY;
+      mockRules = [makeRule({ id: 'dead', pattern: 'NEVERMATCHES', name: 'Ghost' })];
+      render(<MerchantRulesCard />);
 
-    expect(screen.getByText('Matched 1 time')).toBeInTheDocument();
+      expect(
+        screen.getByText('Matches none of your transactions')
+      ).toBeInTheDocument();
+    });
+
+    it('credits a transaction only to the rule that WINS it, never to one it outranks', () => {
+      // Every APPLE_HISTORY row is $2.99, and the amount-pinned rule outranks the
+      // bare one on all of them — so the bare rule must report zero, not three.
+      mockTransactions = APPLE_HISTORY;
+      mockRules = [
+        makeRule({ id: 'bare', pattern: 'APPLE.COM', name: 'Apple' }),
+        makeRule({ id: 'pinned', pattern: 'APPLE.COM', amount: 2.99, name: 'iCloud+' }),
+      ];
+      render(<MerchantRulesCard />);
+
+      const pinned = screen.getByRole('button', { name: 'Edit merchant rule iCloud+' });
+      expect(
+        within(pinned).getByText('Applies to 3 of your transactions · latest Jul 22')
+      ).toBeInTheDocument();
+
+      const bare = screen.getByRole('button', { name: 'Edit merchant rule Apple' });
+      expect(
+        within(bare).getByText('Matches none of your transactions')
+      ).toBeInTheDocument();
+    });
+
+    it('ignores the stored matchCount counters no client code writes', () => {
+      // PR 3's server pipeline owns `matchCount`/`lastMatchedAt`. Until it ships
+      // they are always absent, and mixing them in would blend two different
+      // quantities — so a stored counter must not move the displayed number.
+      mockTransactions = APPLE_HISTORY;
+      mockRules = [
+        makeRule({
+          id: 'apple',
+          pattern: 'APPLE.COM',
+          name: 'Apple',
+          matchCount: 99,
+          lastMatchedAt: '2020-01-01T12:00:00.000Z',
+        }),
+      ];
+      render(<MerchantRulesCard />);
+
+      expect(
+        screen.getByText('Applies to 3 of your transactions · latest Jul 22')
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/99/)).not.toBeInTheDocument();
+    });
+
+    it('says so when only part of the history is loaded', () => {
+      mockTransactions = APPLE_HISTORY;
+      mockHasMoreTransactions = true;
+      mockRules = [makeRule({ id: 'apple', pattern: 'APPLE.COM', name: 'Apple' })];
+      render(<MerchantRulesCard />);
+
+      expect(
+        screen.getByText('Counts cover the transactions loaded so far, not your full history.')
+      ).toBeInTheDocument();
+    });
+
+    it('stays quiet about the window when the whole history is loaded', () => {
+      mockTransactions = APPLE_HISTORY;
+      mockRules = [makeRule({ id: 'apple', pattern: 'APPLE.COM', name: 'Apple' })];
+      render(<MerchantRulesCard />);
+
+      expect(screen.queryByText(/Counts cover the transactions loaded so far/)).not.toBeInTheDocument();
+    });
   });
 
   it('calls out a rule that performs no action at all', () => {

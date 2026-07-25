@@ -19,8 +19,9 @@ import SectionHeading from '@/components/ui/SectionHeading';
 import { useFinance, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { useMerchantRules, type MerchantRuleDraft } from '@/hooks/useMerchantRules';
-import { MAX_MERCHANT_RULES, type MerchantRule } from '@/types/schema';
+import { MAX_MERCHANT_RULES, type MerchantRule, type Transaction } from '@/types/schema';
 import { buildTransactionCategoryOptions } from '@/utils/categories';
+import { pickMerchantRule } from '@/utils/merchantRules';
 import {
   suggestMerchantRules,
   SUGGESTION_MIN_OCCURRENCES,
@@ -73,6 +74,55 @@ const persistSuggestionDismiss = (householdId: string, pattern: string): void =>
   }
 };
 
+/** How much of the household's own history one rule actually claims. */
+interface RuleMatchStats {
+  count: number;
+  /** yyyy-MM-dd of the most recent claimed transaction. */
+  lastDate: string;
+}
+
+/**
+ * Per-rule match counts derived from the household's OWN transactions.
+ *
+ * WHY NOT `MerchantRule.matchCount` / `lastMatchedAt`: those stored counters are
+ * reserved for the server-side sync pipeline that stamps them where rules are
+ * APPLIED — which does not exist yet. Nothing in the client ever writes them, so
+ * reading them made every working rule report "never matched" and invited the
+ * user to delete a rule that was renaming charges in front of them. The stored
+ * fields are deliberately left untouched on the document (that pipeline still
+ * owns them) and deliberately ignored here. They are also a DIFFERENT quantity —
+ * "times a pipeline fired" vs. "charges this rule renames" — so summing them or
+ * falling back between them would produce a number that means nothing.
+ *
+ * Attribution goes through `pickMerchantRule`, so each transaction is credited
+ * to the ONE rule that actually wins it. Counting every rule whose pattern
+ * matches would double-count: a charge claimed by an amount-pinned rule would
+ * also inflate the bare rule it outranks, and the bare rule's count would then
+ * promise renames it never performs.
+ */
+function buildRuleMatchStats(
+  transactions: readonly Pick<Transaction, 'merchant' | 'amount' | 'date'>[],
+  rules: readonly MerchantRule[]
+): Map<string, RuleMatchStats> {
+  const stats = new Map<string, RuleMatchStats>();
+  if (rules.length === 0) return stats;
+
+  for (const transaction of transactions) {
+    const winner = pickMerchantRule(transaction.merchant, transaction.amount, rules);
+    if (winner === null) continue;
+
+    const existing = stats.get(winner.id);
+    if (existing === undefined) {
+      stats.set(winner.id, { count: 1, lastDate: transaction.date });
+      continue;
+    }
+    existing.count += 1;
+    // Dates are yyyy-MM-dd, which sorts lexicographically.
+    if (transaction.date > existing.lastDate) existing.lastDate = transaction.date;
+  }
+  return stats;
+}
+
 interface RuleActionChipProps {
   icon: LucideIcon;
   children: React.ReactNode;
@@ -108,6 +158,8 @@ const RuleActionChip: React.FC<RuleActionChipProps> = ({ icon: Icon, children, t
 
 interface MerchantRuleRowProps {
   rule: MerchantRule;
+  /** This rule's share of the loaded history, or undefined when it claims none. */
+  stats: RuleMatchStats | undefined;
   billTitle: string | undefined;
   formatMoney: (amount: number) => string;
   onEdit: () => void;
@@ -115,6 +167,7 @@ interface MerchantRuleRowProps {
 
 const MerchantRuleRow: React.FC<MerchantRuleRowProps> = ({
   rule,
+  stats,
   billTitle,
   formatMoney,
   onEdit,
@@ -124,12 +177,19 @@ const MerchantRuleRow: React.FC<MerchantRuleRowProps> = ({
   // rule in that case (it classifies rather than relabels).
   const primary = name || rule.pattern;
 
-  const matchCount = rule.matchCount ?? 0;
-  const lastMatched = formatMatchDate(rule.lastMatchedAt);
-  const hasMatched = matchCount > 0;
+  // Measured against the household's own transactions (see buildRuleMatchStats),
+  // so the copy says "your transactions" — this is not a pipeline fire count.
+  const count = stats?.count ?? 0;
+  const hasMatched = count > 0;
+  const lastMatched = formatMatchDate(stats?.lastDate);
+  // The zero case stays factual rather than prescriptive: a wrong pattern is the
+  // usual cause, but a correct rule outranked on every current charge (a bare
+  // rule under an amount-pinned one) also reads zero, and telling that user to
+  // "check the pattern" would send them after a fault that isn't there. The
+  // amber treatment is the flag; the row itself opens the editor.
   const matchLabel = hasMatched
-    ? `Matched ${matchCount} ${matchCount === 1 ? 'time' : 'times'}${lastMatched ? ` · last on ${lastMatched}` : ''}`
-    : 'Has not matched anything yet';
+    ? `Applies to ${count} of your transactions${lastMatched ? ` · latest ${lastMatched}` : ''}`
+    : 'Matches none of your transactions';
 
   const doesSomething = Boolean(name || rule.category || rule.billId || rule.exempt);
 
@@ -249,12 +309,14 @@ const SuggestionRow: React.FC<SuggestionRowProps> = ({ suggestion, onAccept, onD
  *
  * This card is the ONLY thing here that touches the mutation hook; the form
  * sheet takes `onSave`/`onDelete` as props so it stays independently testable.
- * A rule that never matches anything is the feature's main failure mode, so
- * each row reports its own match count rather than hiding it in the editor.
+ * A rule that matches nothing is the feature's main failure mode, so each row
+ * reports how much of the household's own history it claims — derived live (see
+ * `buildRuleMatchStats`), never from the stored `matchCount` counters that no
+ * client code writes.
  */
 const MerchantRulesCard: React.FC = () => {
   const { rules, addRule, updateRule, deleteRule, saving } = useMerchantRules();
-  const { buckets, calendarItems, transactions } = useFinance();
+  const { buckets, calendarItems, transactions, hasMoreTransactions } = useFinance();
   const { householdId } = useHouseholdCore();
   const formatMoney = useFormatCurrency();
 
@@ -292,10 +354,11 @@ const MerchantRulesCard: React.FC = () => {
   const showCapNotice = rules.length >= MAX_MERCHANT_RULES - CAP_NOTICE_HEADROOM;
 
   /**
-   * PERFORMANCE — `suggestMerchantRules` is an O(n) pass with clustering over
-   * the household's ENTIRE transaction history, and this card sits on a Settings
-   * screen that re-renders for reasons of its own. Both deps are stable against
-   * unrelated traffic:
+   * PERFORMANCE — both of these read the household's ENTIRE transaction history
+   * (`suggestMerchantRules` additionally clusters), and this card sits on a
+   * Settings screen that re-renders for reasons of its own. They share ONE memo
+   * so the two passes are triggered by one dependency set and can never fall out
+   * of step with each other. Both deps are stable against unrelated traffic:
    *  - `rules` comes from `useMerchantRules`, which memoizes on the rules'
    *    CONTENT (a JSON signature), not the array identity the household listener
    *    hands out fresh on every household-doc write. So a points update cannot
@@ -304,11 +367,14 @@ const MerchantRulesCard: React.FC = () => {
    *    olderTransactions), …)` in `FirebaseHouseholdContext`, so its identity
    *    changes only when the transactions listener fires or a "load older" page
    *    lands — never on a household-doc write.
-   * The dismissal filter is deliberately a SEPARATE memo: dismissing a
-   * suggestion must not re-run the clustering pass.
+   * The dismissal filter is deliberately a SEPARATE memo below: dismissing a
+   * suggestion must not re-run either pass.
    */
-  const suggestions = useMemo(
-    () => suggestMerchantRules(transactions, rules),
+  const { matchStats, suggestions } = useMemo(
+    () => ({
+      matchStats: buildRuleMatchStats(transactions, rules),
+      suggestions: suggestMerchantRules(transactions, rules),
+    }),
     [transactions, rules]
   );
 
@@ -410,6 +476,7 @@ const MerchantRulesCard: React.FC = () => {
                 <MerchantRuleRow
                   key={rule.id}
                   rule={rule}
+                  stats={matchStats.get(rule.id)}
                   billTitle={rule.billId ? billTitleById.get(rule.billId) : undefined}
                   formatMoney={formatMoney}
                   onEdit={() => openEdit(rule.id)}
@@ -421,6 +488,16 @@ const MerchantRulesCard: React.FC = () => {
               <p className="px-1 text-xs text-brand-500 dark:text-brand-400">
                 When more than one rule matches a charge, the most specific wins: an amount-pinned rule
                 first, then the longer pattern.
+              </p>
+            )}
+
+            {/* The transaction list is a bounded live window (see
+                utils/listenerWindows.ts), so the per-rule counts describe the
+                history that is loaded — say so rather than let "matches none"
+                read as a verdict on a rule that only fires on older charges. */}
+            {hasMoreTransactions && (
+              <p className="px-1 text-xs text-brand-500 dark:text-brand-400">
+                Counts cover the transactions loaded so far, not your full history.
               </p>
             )}
 
