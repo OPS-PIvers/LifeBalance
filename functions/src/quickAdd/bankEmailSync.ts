@@ -599,8 +599,13 @@ export const bankEmailSync = onRequest(
         // The one rule that wins this descriptor+amount, resolved ONCE per line
         // and reused by the create branch and the reporting counters below.
         const rule = pickMerchantRule(w.descriptor, w.amount, merchantRules);
-        // Reported for every line this email actually acted on. A skip means the
-        // row was already recorded on an earlier run, which already counted it.
+        // Counts CHARGES IN THIS EMAIL that a rule marks planned — a statement
+        // about the withdrawal lines, whose descriptors are the raw text the
+        // rule matched. It is not a count of rows the day's verdict exempted:
+        // that set also includes rows stored on earlier nights (the whole point
+        // of exemption reaching the loaded query), and a confirmed row keeps its
+        // own merchant rather than the descriptor. A skip is excluded because an
+        // earlier run already recorded — and counted — that charge.
         if (rule?.exempt === true && decision.kind !== "skip_bankref") {
           counts.ruleExempted++;
         }

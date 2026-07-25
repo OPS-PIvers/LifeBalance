@@ -86,7 +86,11 @@ export function ruleCreateCategory(
 export interface RuleEffectCounts {
   /** New rows a rule filed under a category instead of leaving for review. */
   ruleCategorized: number;
-  /** Charges a rule marks `exempt`, so they can't break the no-spend day. */
+  /**
+   * Charges IN THIS EMAIL that a rule marks `exempt`, so they can't break the
+   * no-spend day. Not the number of rows the day's verdict exempted — that set
+   * also covers rows stored on earlier nights.
+   */
   ruleExempted: number;
   /** Bills paid because a rule's `billId` named them. */
   ruleBilled: number;
