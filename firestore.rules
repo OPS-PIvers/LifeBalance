@@ -646,6 +646,7 @@ service cloud.firestore {
                                 'isImportant', 'points',
                                 'dueTime', 'reminderMinutesBefore', 'reminderSentAt',
                                 'recurrence', 'subtasks', 'linkedHabitId',
+                                'category',
                                 'createdBy', 'createdAt'
                               ]) &&
                               isValidString(request.resource.data.text, 500) &&
@@ -693,6 +694,10 @@ service cloud.firestore {
                                  request.resource.data.subtasks.size() <= 50)) &&
                               // Habit link (#1066) — optional habit doc id
                               isValidOptionalString(request.resource.data.get('linkedHabitId', null), 128) &&
+                              // Category (F-TODO-16) — optional free-text name drawn from the
+                              // household's todoCategories vocabulary. ABSENT means Uncategorized,
+                              // so clearing one deletes the field rather than writing ''.
+                              isValidOptionalString(request.resource.data.get('category', null), 50) &&
                               // Metadata
                               (request.resource.data.get('createdBy', null) == null || request.resource.data.createdBy is string);
         allow delete: if isMemberOf(householdId);

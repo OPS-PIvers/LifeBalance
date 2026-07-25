@@ -74,6 +74,11 @@ import toast from 'react-hot-toast';
 // Helper to generate unique IDs
 const generateId = () => `mock-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
+// F-TODO-16 — category comparison key ('' for absent/blank), matching the real
+// mutations' case-insensitive matching. Module-scope so the category callbacks
+// below don't need it as a dependency.
+const normalizeCategory = (value: string | undefined) => (value ?? '').trim().toLowerCase();
+
 /**
  * Optional Test-Mode seed variant, set by the e2e suite BEFORE the app boots
  * (via sessionStorage, same transport as the LIFEBALANCE_TEST_MODE flag):
@@ -399,6 +404,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       points: 5,
       createdBy: 'test-user-id',
       createdAt: new Date().toISOString(),
+      category: 'Home',
     },
     // Eisenhower matrix seeds: one per non-empty quadrant so the matrix
     // arrangement is walkable in Test Mode (todo_kid_1 above lands in
@@ -412,6 +418,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       isImportant: true,
       createdBy: 'test-user-id',
       createdAt: new Date().toISOString(),
+      // F-TODO-16: seeded categories on a few todos so the chips, the
+      // 'Category' sort mode, and the grouped headers all have something to
+      // show. `todo_later_1` deliberately stays uncategorized.
+      category: 'Errands',
     },
     {
       id: 'todo_schedule_1',
@@ -430,6 +440,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         { id: 'st_vac_2', text: 'Book flights', isDone: false },
         { id: 'st_vac_3', text: 'Reserve hotel', isDone: false },
       ],
+      category: 'Home',
     },
     {
       id: 'todo_later_1',
@@ -649,6 +660,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // Sample custom habit categories so Test Mode demonstrates the reusable-chip
   // behavior in the habit form (merged after the UI-only defaults).
   const [habitCategories, setHabitCategories] = useState<string[]>(['Fitness', 'Learning']);
+  // F-TODO-16: a small seeded to-do vocabulary so the category chips, the
+  // 'Category' sort mode, and the grouped headers are walkable in Test Mode.
+  const [todoCategories, setTodoCategories] = useState<string[]>(['Home', 'Errands']);
   const [quickStockLists, setQuickStockLists] = useState<QuickStockList[]>([]);
   const [taskTemplates, setTaskTemplates] = useState<TaskTemplate[]>([]);
   const [currency, setCurrency] = useState<string>('USD');
@@ -1863,6 +1877,60 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Categories updated');
   }, []);
 
+  // F-TODO-16 — to-do categories. In-memory equivalents of the real mutations
+  // (makeUpdateTodoCategories / makeTodoCategoryEditMutations): same
+  // case-insensitive matching, same merge-on-collision rule, and the same
+  // "clearing a category REMOVES the field" invariant, so Test Mode exercises
+  // the real semantics.
+  const updateTodoCategories = useCallback(async (categories: string[]) => {
+    setTodoCategories(categories);
+    toast.success('Mock: Categories updated');
+  }, []);
+
+  const renameTodoCategory = useCallback(async (oldName: string, newName: string) => {
+    const trimmedNew = newName.trim();
+    if (!trimmedNew || trimmedNew === oldName) return;
+    const oldKey = normalizeCategory(oldName);
+    if (!oldKey) return;
+
+    // Resolve the target OUTSIDE the state updaters (updaters must stay pure —
+    // React may invoke them twice in StrictMode) so both writes agree on it.
+    const mergeTarget = todoCategories.find(
+      c => normalizeCategory(c) === normalizeCategory(trimmedNew) && normalizeCategory(c) !== oldKey,
+    );
+    const targetName = mergeTarget ?? trimmedNew;
+
+    const next: string[] = [];
+    const seen = new Set<string>();
+    for (const category of todoCategories) {
+      const value = normalizeCategory(category) === oldKey ? targetName : category;
+      const key = normalizeCategory(value);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      next.push(value);
+    }
+    if (!seen.has(normalizeCategory(targetName))) next.push(targetName);
+
+    setTodos(prev => prev.map(t =>
+      normalizeCategory(t.category) === oldKey ? { ...t, category: targetName } : t,
+    ));
+    setTodoCategories(next);
+    toast.success('Mock: Category renamed');
+  }, [todoCategories]);
+
+  const deleteTodoCategory = useCallback(async (name: string) => {
+    const key = normalizeCategory(name);
+    if (!key) return;
+    setTodoCategories(prev => prev.filter(c => normalizeCategory(c) !== key));
+    setTodos(prev => prev.map(t => {
+      if (normalizeCategory(t.category) !== key) return t;
+      // Delete the field (not '') — "absent means Uncategorized" is the invariant.
+      const { category: _removed, ...rest } = t;
+      return rest as ToDo;
+    }));
+    toast.success('Mock: Category deleted');
+  }, []);
+
   // Quick Stock Lists
   const addQuickStockList = useCallback(async (list: Omit<QuickStockList, 'id'>) => {
     const newList = { ...list, id: generateId() } as QuickStockList;
@@ -2177,6 +2245,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     stores: stores,
     groceryCategories: groceryCategories,
     habitCategories: habitCategories,
+    todoCategories: todoCategories,
     currency,
     kidModePinHash,
     pendingRedemptions,
@@ -2261,6 +2330,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     mealPlan,
     todos: visibleTodos,
     todosAwaitingReview,
+    todoCategories,
     groceryCatalog,
     bucketHistory,
     recaps,
@@ -2376,6 +2446,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     addToDo,
     updateToDo,
     toggleTodoSubtask,
+    updateTodoCategories,
+    renameTodoCategory,
+    deleteTodoCategory,
     deleteToDo,
     approveTodo,
     completeToDo: completeToDoMock,

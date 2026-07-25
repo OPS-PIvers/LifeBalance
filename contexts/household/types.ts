@@ -102,6 +102,10 @@ export interface HouseholdContextType {
   todos: ToDo[];
   /** Held-for-review todo captures (`needsReview === true`), hidden from `todos`. */
   todosAwaitingReview: ToDo[];
+  /** F-TODO-16 — household-defined to-do categories (reusable chips on the
+   *  to-do surfaces). Mirrors `habitCategories`: only user-added values are
+   *  stored/persisted, and defaults to `[]` when the household doc has none. */
+  todoCategories: string[];
   /** F-TODO-03 — task-bundle templates ("Quick Task Lists"). */
   taskTemplates: TaskTemplate[];
   groceryCatalog: GroceryCatalogItem[];
@@ -533,6 +537,18 @@ export interface HouseholdContextType {
    *  single writeBatch (subtasks + completion + linked-habit fire + kid points);
    *  every other toggle is a plain subtasks-array update. */
   toggleTodoSubtask: (todoId: string, subtaskId: string) => Promise<TodoSubtaskToggleResult>;
+  /** F-TODO-16 — persists the household's to-do category vocabulary (mirrors
+   *  `updateHabitCategories`). Callers pass the WHOLE next list. */
+  updateTodoCategories: (categories: string[]) => Promise<void>;
+  /** F-TODO-16 — renames a category across every matching to-do (active AND
+   *  completed, case-insensitive match) and the household list, in chunked
+   *  batches. No-op for a blank or unchanged name; MERGES into an existing
+   *  category when the new name collides with one case-insensitively. */
+  renameTodoCategory: (oldName: string, newName: string) => Promise<void>;
+  /** F-TODO-16 — removes a category from the household list and CLEARS it from
+   *  every matching to-do (the field is deleted, so they fall back to
+   *  Uncategorized), in chunked batches. */
+  deleteTodoCategory: (name: string) => Promise<void>;
   /** F-TODO-03 — Task templates ("Quick Task Lists"). */
   addTaskTemplate: (template: Omit<TaskTemplate, 'id'>) => Promise<void>;
   updateTaskTemplate: (template: TaskTemplate) => Promise<void>;
@@ -604,6 +620,7 @@ export type MealsContextValue = MealPlanContextValue & ShoppingContextValue;
 
 export type TodosContextValue = Pick<HouseholdContextType,
   | 'todos' | 'todosAwaitingReview' | 'addToDo' | 'updateToDo' | 'deleteToDo' | 'approveTodo' | 'completeToDo' | 'uncompleteToDo' | 'toggleTodoSubtask'
+  | 'todoCategories' | 'updateTodoCategories' | 'renameTodoCategory' | 'deleteTodoCategory'
   | 'isLoadingOlderTodos' | 'hasMoreCompletedTodos' | 'loadOlderCompletedTodos'
   | 'taskTemplates' | 'addTaskTemplate' | 'updateTaskTemplate' | 'deleteTaskTemplate' | 'applyTaskTemplate'
 >;

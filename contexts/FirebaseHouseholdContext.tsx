@@ -141,6 +141,8 @@ import {
   makeUncompleteToDo,
   makeToggleTodoSubtask,
   makeLoadOlderCompletedTodos,
+  makeUpdateTodoCategories,
+  makeTodoCategoryEditMutations,
   type TodoCompletionOptions,
 } from '@/contexts/household/mutations/todoMutations';
 import {
@@ -689,6 +691,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const stores = useMemo(() => householdSettings?.stores || [], [householdSettings?.stores]);
   const groceryCategories = useMemo(() => householdSettings?.groceryCategories || [], [householdSettings?.groceryCategories]);
   const habitCategories = useMemo(() => householdSettings?.habitCategories || [], [householdSettings?.habitCategories]);
+  // F-TODO-16 — to-do category vocabulary (mirrors habitCategories above).
+  const todoCategories = useMemo(() => householdSettings?.todoCategories || [], [householdSettings?.todoCategories]);
   const quickStockLists = useMemo(() => householdSettings?.quickStockLists || [], [householdSettings?.quickStockLists]);
   const taskTemplates = useMemo(() => householdSettings?.taskTemplates || [], [householdSettings?.taskTemplates]);
 
@@ -2343,6 +2347,22 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     return makeToggleTodoSubtask({ db, householdId, membersRef, user }).toggleTodoSubtask(todoId, subtaskId);
   }, [householdId, user]);
 
+  // F-TODO-16 — to-do categories. `updateTodoCategories` mirrors
+  // `updateHabitCategories` (household-doc list write); rename/delete also
+  // rewrite every matching to-do in chunked batches, so they additionally need
+  // the current vocabulary — see makeTodoCategoryEditMutations.
+  const updateTodoCategories = useCallback(async (categories: string[]) => {
+    await makeUpdateTodoCategories({ db, householdId }).updateTodoCategories(categories);
+  }, [householdId]);
+
+  const renameTodoCategory = useCallback(async (oldName: string, newName: string) => {
+    await makeTodoCategoryEditMutations({ db, householdId, todoCategories }).renameTodoCategory(oldName, newName);
+  }, [householdId, todoCategories]);
+
+  const deleteTodoCategory = useCallback(async (name: string) => {
+    await makeTodoCategoryEditMutations({ db, householdId, todoCategories }).deleteTodoCategory(name);
+  }, [householdId, todoCategories]);
+
   // --- ACTIONS: UNIFIED TRASH (F-XCUT-03) ---
 
   const restoreTrashedItem = useCallback(async (item: TrashedItem) => {
@@ -2617,6 +2637,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     completeToDo,
     uncompleteToDo,
     toggleTodoSubtask,
+    todoCategories,
+    updateTodoCategories,
+    renameTodoCategory,
+    deleteTodoCategory,
     taskTemplates,
     addTaskTemplate,
     updateTaskTemplate,
@@ -2625,6 +2649,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }), [
     visibleTodos, todosAwaitingReview, isLoadingOlderTodos, hasMoreCompletedTodos, loadOlderCompletedTodos,
     addToDo, updateToDo, deleteToDo, approveTodo, completeToDo, uncompleteToDo, toggleTodoSubtask,
+    todoCategories, updateTodoCategories, renameTodoCategory, deleteTodoCategory,
     taskTemplates, addTaskTemplate, updateTaskTemplate, deleteTaskTemplate, applyTaskTemplate,
   ]);
 
