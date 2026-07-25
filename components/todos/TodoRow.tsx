@@ -471,11 +471,13 @@ export const TodoRow = React.memo(function TodoRow({
     onCategoryClick?.(categoryLabel);
   };
   // Canonical chip spec (DESIGN.md §6): pill, hairline border, xxs text.
-  // Composed with a template string rather than cn(): tailwind-merge treats the
-  // custom `text-xxs` token as a text-COLOR utility and would drop it in favour
-  // of the palette's `text-*-800`, silently resetting the chip's font size.
   const categoryChipClasses = categoryColor
-    ? `inline-flex items-center rounded-full border px-1.5 py-0.5 text-xxs font-semibold ${categoryColor.bg} ${categoryColor.text} ${categoryColor.border}`
+    ? cn(
+        'inline-flex items-center rounded-full border px-1.5 py-0.5 text-xxs font-semibold',
+        categoryColor.bg,
+        categoryColor.text,
+        categoryColor.border
+      )
     : '';
   const categoryChip = categoryLabel && categoryColor && (
     isSelectionMode || !onCategoryClick ? (

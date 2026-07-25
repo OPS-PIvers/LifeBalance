@@ -199,15 +199,11 @@ const DayHabitEditor: React.FC<DayHabitEditorProps> = ({
                     </span>
                   </span>
 
-                  {/* `text-xxs` outside cn(): tailwind-merge reads the custom
-                      @theme token as a text-COLOUR utility and would drop it in
-                      favour of the `text-<colour>` below. Same precedent as
-                      Badge / TodoRow — do not fold it back into cn(). */}
                   <span
-                    className={`text-xxs ${cn(
-                      'relative shrink-0 font-bold uppercase tracking-wide pointer-events-none',
+                    className={cn(
+                      'relative shrink-0 text-xxs font-bold uppercase tracking-wide pointer-events-none',
                       dayCount > 0 ? 'text-accent-600 dark:text-accent-400' : 'text-brand-400 dark:text-brand-450'
-                    )}`}
+                    )}
                     style={{ zIndex: 2 }}
                   >
                     {dayCount > 0 ? '+1 more' : 'Log'}

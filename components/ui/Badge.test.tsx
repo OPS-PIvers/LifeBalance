@@ -33,10 +33,10 @@ describe('Badge', () => {
     expect(screen.getByText('Medium')).toHaveClass('text-xs', 'px-2.5', 'py-0.5');
   });
 
-  // Regression: `text-xxs` is a custom @theme token that tailwind-merge
-  // misreads as a text-COLOUR utility, so routing it through cn() alongside the
-  // variant's `text-<colour>` silently dropped one of the two. Every
-  // size="sm" badge lost its semantic colour. Both must survive.
+  // Regression: `text-xxs` is a custom @theme token. Until it was registered as
+  // a font-size in utils/cn.ts, tailwind-merge read it as a text-COLOUR utility
+  // and treated it as conflicting with the variant's `text-<colour>`, silently
+  // dropping one of the two — every size="sm" badge lost its semantic colour.
   it('keeps the variant colour AND the custom font size at size="sm"', () => {
     const { rerender } = render(<Badge variant="danger" size="sm">Danger</Badge>);
     expect(screen.getByText('Danger')).toHaveClass('text-xxs', 'text-money-neg', 'bg-money-bgNeg');

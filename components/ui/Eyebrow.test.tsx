@@ -40,10 +40,10 @@ describe('Eyebrow', () => {
     expect(screen.getByText('X')).toHaveClass('mb-3');
   });
 
-  // Regression: `text-xxs` is a custom @theme token that tailwind-merge misreads
-  // as a text-COLOUR utility. Routed through cn() next to TONE_CLASSES it was
-  // dropped entirely, so size="xxs" silently fell back to the inherited 16px.
-  // The size and the tone colour must BOTH survive, for every tone.
+  // Regression: `text-xxs` is a custom @theme token. Until it was registered as
+  // a font-size in utils/cn.ts, tailwind-merge read it as a text-COLOUR utility
+  // and dropped it next to TONE_CLASSES, so size="xxs" silently fell back to
+  // the inherited 16px. Size and tone colour must BOTH survive, for every tone.
   it.each([
     ['default', 'text-brand-500'],
     ['warm', 'text-warm-600'],

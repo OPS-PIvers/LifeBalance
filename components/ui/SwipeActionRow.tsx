@@ -265,15 +265,11 @@ export const SwipeActionRow: React.FC<SwipeActionRowProps> = ({
           side === 'start' ? 'items-start pr-2 text-left' : 'items-end pl-2 text-right'
         )}
       >
-        {/* `text-xxs` is concatenated outside cn(): tailwind-merge reads the
-            custom @theme token as a text-COLOUR utility and would drop it in
-            favour of TONE_TEXT's `text-<colour>`. Different CSS properties, no
-            real conflict — same precedent as Badge / TodoRow. Keep it out. */}
         <span
-          className={`text-xxs ${cn(
-            'line-clamp-2 font-bold leading-tight break-words',
+          className={cn(
+            'line-clamp-2 text-xxs font-bold leading-tight break-words',
             TONE_TEXT[primary.tone]
-          )}`}
+          )}
         >
           {primary.detail}
         </span>
