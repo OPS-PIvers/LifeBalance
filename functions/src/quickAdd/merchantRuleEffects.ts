@@ -99,9 +99,21 @@ export function ruleCreateCategory(
  *    `billId` and `exempt: true` reports the same charge under two headings.
  *
  * `fill_stub` and `confirm_pending` DO count: those rows carry an ordinary
- * category, so the rule's `exempt` really is what spares the day. (A confirmed
- * row keeps its own merchant rather than the bank descriptor, so whether the
- * rule still matches it tomorrow is a separate question — see `RuleEffectCounts`.)
+ * category, so the rule's `exempt` really is what spares the day. They differ in
+ * whether it KEEPS sparing it, which is worth knowing before trusting the number:
+ *
+ *  - `fill_stub` overwrites the row's merchant with the bank descriptor
+ *    (`buildFillUpdates` sets it unconditionally), so the rule matches the stored
+ *    row on every later sync too. The exemption is permanent.
+ *  - `confirm_pending` writes only status/bankRef/accountId, leaving whatever
+ *    merchant the original Apple Pay capture or hand entry carried — text that
+ *    may not contain the rule's pattern at all. Tonight the count is right,
+ *    because the exemption is decided from the withdrawal line in front of us;
+ *    on a later sync the same charge may no longer match. A confirmed row's
+ *    exemption is therefore NOT guaranteed going forward.
+ *
+ * That is a property of where each decision stores its text, not something this
+ * predicate can repair — see `RuleEffectCounts`.
  */
 export function ruleExemptedCharge(
   rule: MerchantRule | null | undefined,
