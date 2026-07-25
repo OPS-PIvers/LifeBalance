@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import Eyebrow from '@/components/ui/Eyebrow';
 import { cn } from '@/utils/cn';
@@ -51,7 +51,6 @@ export interface CategoryChipPickerProps {
   label?: string;
 }
 
-let nextGroupId = 0;
 
 export const CategoryChipPicker: React.FC<CategoryChipPickerProps> = ({
   categories,
@@ -64,7 +63,10 @@ export const CategoryChipPicker: React.FC<CategoryChipPickerProps> = ({
 }) => {
   // Stable per-instance id so the label and the chip group are associated even
   // with several pickers on one screen.
-  const [groupId] = useState(() => `category-chip-picker-${nextGroupId++}`);
+  // Unique per instance for the label/error `aria-*` wiring. useId() rather
+  // than a module-level counter: no shared mutable module state, and stable
+  // across concurrent rendering and any future server render.
+  const groupId = useId();
   const [isAdding, setIsAdding] = useState(false);
   const [draft, setDraft] = useState('');
   // Own busy guard: `disabled` covers the surrounding form's save, not this
