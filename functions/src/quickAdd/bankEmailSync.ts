@@ -68,11 +68,19 @@ import {
   sendNotificationToUser,
   type NotificationPreferences,
 } from "../shared/notifications";
+import {
+  BUDGETED_IN_CALENDAR as NO_SPEND_BILL_CATEGORY,
+  shouldDeclareToNoSpend,
+  type SpendCandidate,
+} from "./noSpendDay";
+import { applyNoSpendDay, type NoSpendOutcome } from "./noSpendFire";
 
 const db = admin.firestore();
 
-/** The category new paid bills are filed under (mirrors quickAdd/index.ts). */
-const BUDGETED_IN_CALENDAR = "Budgeted in Calendar";
+/** The category new paid bills are filed under (mirrors quickAdd/index.ts).
+ *  Imported from noSpendDay rather than redeclared so the two files that must
+ *  agree about what a "planned" charge looks like cannot drift apart. */
+const BUDGETED_IN_CALENDAR = NO_SPEND_BILL_CATEGORY;
 /** The category a needs-category created row lands under until reviewed. */
 const UNCATEGORIZED = "Uncategorized";
 
@@ -85,9 +93,12 @@ const UNCATEGORIZED = "Uncategorized";
  * (the pay_bill branch: a paid-instance/calendar write + the transaction row +
  * the alias arrayUnion, three distinct docs). Every other branch stages 1 or 0.
  * The email also stages a fixed overhead of 2 writes (the account ending-balance
- * overwrite + the ledger record). Worst-case batch:
- *   MAX_WITHDRAWALS * 3 + 2 = 150 * 3 + 2 = 452 < 500 (Firestore's hard limit).
- * Keep this product under 500 if either factor changes. */
+ * overwrite + the ledger record), plus AT MOST 22 for the no-spend habit fire
+ * (`MAX_NO_SPEND_HABITS * 2` for the habit + submission docs, the verdict doc,
+ * and the merged household update — see noSpendFire.ts). Worst-case batch:
+ *   MAX_WITHDRAWALS * 3 + 2 + 22 = 150 * 3 + 2 + 22 = 474 < 500 (the hard limit).
+ * Each term is kept separate so any one factor can be changed independently:
+ * withdrawals, the fixed email overhead, and the no-spend fire. */
 const MAX_WITHDRAWALS = 150;
 
 /** Max length for bank-derived error text echoed into a push body (item 7). */
@@ -105,6 +116,30 @@ function sanitizeForPush(text: string): string {
   return cleaned.length > PUSH_ERROR_MAX_LEN
     ? cleaned.slice(0, PUSH_ERROR_MAX_LEN - 3) + "..."
     : cleaned;
+}
+
+/**
+ * The habit half of a no-spend push, as a sentence fragment ending in a space
+ * (or "" when nothing fired). Kept short deliberately: iOS truncates a push
+ * body, and the balance that follows must survive.
+ *
+ * The streak is described as "N in a row" rather than "N-day": a weekend habit
+ * is weekly-cadence, so its streak counts weeks, and one phrasing has to be
+ * right for both.
+ */
+function describeNoSpendFires(outcome: NoSpendOutcome): string {
+  const { fired } = outcome;
+  if (fired.length === 0) return "Nothing unplanned left your account. ";
+  if (fired.length === 1) {
+    const f = fired[0]!;
+    const pts =
+      f.pointsEarned !== 0 ? ` ${f.pointsEarned > 0 ? "+" : ""}${f.pointsEarned} pts` : "";
+    const streak = f.streak > 1 ? `, ${f.streak} in a row` : "";
+    return `${f.title} logged${pts}${streak}. `;
+  }
+  const total = fired.reduce((sum, f) => sum + f.pointsEarned, 0);
+  const pts = total !== 0 ? ` ${total > 0 ? "+" : ""}${total} pts` : "";
+  return `${fired.length} habits logged${pts}. `;
 }
 
 /** Minimal subset of the Express/Firebase response object used below. */
@@ -481,6 +516,38 @@ export const bankEmailSync = onRequest(
       let pendingPool: PendingConfirmCandidate[] = pendingCandidates;
       let billPool: BillPayCandidate[] = billCandidates;
 
+      // F-HABITS-14 — the day the no-spend habits are judged on: the last day
+      // that had fully ENDED when this email was cut. The email's own "As of"
+      // footer is the reference (it says exactly when the bank drew the line),
+      // falling back to the request's local `today` when the footer is absent.
+      const noSpendTargetDate = format(
+        subDays(parseISO(parsed.asOf ?? today), 1),
+        "yyyy-MM-dd"
+      );
+      // Spend this email is about to record for that day that the transactions
+      // query inside applyNoSpendDay cannot possibly see: the CREATE branch, and
+      // only the CREATE branch.
+      //
+      // Every other decision resolves to a row that ALREADY EXISTS, and that row
+      // is the authoritative record of the purchase — including its category and
+      // its `creditPayment` flag, which is exactly what decides whether it counts
+      // against a no-spend day. Re-declaring one here would strip that metadata
+      // (this list can only guess `Uncategorized`) and the un-exempt copy would
+      // disqualify a day the real row is exempt from: a confirmed credit-card
+      // payment, or a pending row already categorized as a bill, would each break
+      // a day they should not. Declaring only new rows keeps ONE representation of
+      // every purchase, so the day's verdict always agrees with the transaction
+      // list the user can actually see for that date.
+      //
+      // The trade-off, deliberately taken: a fill/confirm does not re-date the row
+      // it targets, so a purchase the bank authorizes on the target day whose
+      // stored row is dated earlier (an Apple Pay stub captured Wednesday for a
+      // charge authorized Thursday) counts against the row's own date, not the
+      // authorization date. One purchase still breaks exactly one day, and it
+      // breaks the day the app shows it on — a day whose visible transaction list
+      // is empty is never reported as spent.
+      const noSpendExtraSpend: SpendCandidate[] = [];
+
       for (const w of parsed.withdrawals) {
         const decision = decideWithdrawal({
           withdrawal: w,
@@ -494,6 +561,16 @@ export const bankEmailSync = onRequest(
         // Guard against two withdrawal lines racing onto the same target/ref
         // within this email (parser guarantees unique refs, but be defensive).
         existingBankRefs.add(w.bankRef);
+
+        // Declare a BRAND-NEW row landing on the judged day to the no-spend
+        // judgement — see `shouldDeclareToNoSpend` for why only that branch.
+        if (shouldDeclareToNoSpend(decision.kind, w.date, noSpendTargetDate)) {
+          noSpendExtraSpend.push({
+            amount: w.amount,
+            merchant: w.descriptor,
+            category: UNCATEGORIZED,
+          });
+        }
 
         const payPeriodId = getPayPeriodForTransaction(w.date, householdData?.lastPaycheckDate);
 
@@ -626,6 +703,21 @@ export const bankEmailSync = onRequest(
         }
       }
 
+      // 9b. F-HABITS-14 — judge the day that just ended and fire any habit wired
+      //     to the no-spend trigger, onto this same batch. Runs on EVERY sync,
+      //     not just a zero-withdrawal one: a day whose only withdrawals were
+      //     scheduled bills or transfers is still a no-spend day. Never throws —
+      //     a habit-side problem must not fail a money sync that succeeded.
+      const noSpend: NoSpendOutcome = await applyNoSpendDay({
+        db,
+        householdId,
+        batch,
+        targetDate: noSpendTargetDate,
+        today,
+        extraSpend: noSpendExtraSpend,
+        householdData,
+      });
+
       // 10. Overwrite the account balance with the email's AVAILABLE balance
       //     (posted ending balance minus authorized-but-unposted holds) —
       //     but ONLY if this email is not older than the last one we applied.
@@ -667,6 +759,14 @@ export const bankEmailSync = onRequest(
         endingBalance: parsed.endingBalance,
         availableBalance: parsed.availableBalance,
         counts,
+        // The no-spend verdict for this run, so "why did/didn't my habit fire?"
+        // is answerable from the ledger without replaying the email.
+        noSpend: {
+          date: noSpend.targetDate,
+          isNoSpendDay: noSpend.isNoSpendDay,
+          firedHabitIds: noSpend.fired.map((f) => f.habitId),
+          weekendCompleted: noSpend.weekendCompleted,
+        },
       });
 
       await batch.commit();
@@ -681,21 +781,24 @@ export const bankEmailSync = onRequest(
       const balanceSummary = balanceSkipped
         ? "Balance: unchanged (older email, out of order)"
         : `Balance: ${formatCurrency(parsed.availableBalance, { currency })}`;
-      // A no-withdrawal email is a no-spend night, and it deserves to read like
-      // the good news it is rather than "0 new, 0 confirmed, 0 filled, 0 bills
-      // paid" — let alone the "Bank sync failed" it used to produce before the
-      // parser learned that an omitted Withdrawals section is a legitimate
-      // result (see parseBankEmail's zero-withdrawal acceptance rules).
-      const summaryBody =
-        parsed.withdrawals.length === 0
-          ? `Nothing left your account. ${balanceSummary}`
-          : `${counts.created} new, ${counts.confirmed} confirmed, ${counts.filled} filled, ` +
-            `${counts.billsPaid} bills paid. ${balanceSummary}`;
-      await pushToBankSyncMembers(
-        householdId,
-        parsed.withdrawals.length === 0 ? "No spend day" : "Bank sync complete",
-        summaryBody
-      );
+      // A no-spend day deserves to read like the good news it is rather than
+      // "0 new, 0 confirmed, 0 filled, 0 bills paid" — let alone the "Bank sync
+      // failed" it used to produce before the parser learned that an omitted
+      // Withdrawals section is a legitimate result.
+      //
+      // Keyed on the VERDICT, not on `withdrawals.length === 0`: a day whose only
+      // withdrawals were scheduled bills or transfers is still a no-spend day
+      // (see noSpendDay.ts), and that day would otherwise get the counts line.
+      const summaryTitle = noSpend.weekendCompleted
+        ? "No spend weekend"
+        : noSpend.isNoSpendDay
+          ? "No spend day"
+          : "Bank sync complete";
+      const summaryBody = noSpend.isNoSpendDay
+        ? `${describeNoSpendFires(noSpend)}${balanceSummary}`
+        : `${counts.created} new, ${counts.confirmed} confirmed, ${counts.filled} filled, ` +
+          `${counts.billsPaid} bills paid. ${balanceSummary}`;
+      await pushToBankSyncMembers(householdId, summaryTitle, summaryBody);
       await logApiCall(householdId, apiKey.substring(0, 16), "bankSync", req.body, 200);
       jsonResponse(res, 200, {
         success: true,
@@ -707,6 +810,13 @@ export const bankEmailSync = onRequest(
           withdrawals: parsed.withdrawals.length,
           balanceSkipped,
           ...counts,
+          noSpend: {
+            date: noSpend.targetDate,
+            isNoSpendDay: noSpend.isNoSpendDay,
+            blockedBy: noSpend.blockedBy.length,
+            fired: noSpend.fired.length,
+            weekendCompleted: noSpend.weekendCompleted,
+          },
         },
       });
     } catch (error) {

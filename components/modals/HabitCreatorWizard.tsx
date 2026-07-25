@@ -55,6 +55,7 @@ const DEFAULT_FORM_DATA: CustomHabitFormData = {
   targetCount: '1',
   keywords: [],
   locations: [],
+  noSpend: undefined,
 };
 
 const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose }) => {
@@ -147,6 +148,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
       targetCount: habit.targetCount.toString(),
       keywords: habit.triggers?.keywords ?? [],
       locations: habit.triggers?.locations ?? [],
+      noSpend: habit.triggers?.noSpend,
     });
     setView('edit-custom');
   };
@@ -173,10 +175,13 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
     // absent, not an empty object).
     const cleanedKeywords = formData.keywords.map(k => k.trim()).filter(Boolean);
     const triggers: Habit['triggers'] =
-      cleanedKeywords.length > 0 || formData.locations.length > 0
+      cleanedKeywords.length > 0 ||
+      formData.locations.length > 0 ||
+      formData.noSpend !== undefined
         ? {
             ...(cleanedKeywords.length > 0 ? { keywords: cleanedKeywords } : {}),
             ...(formData.locations.length > 0 ? { locations: formData.locations } : {}),
+            ...(formData.noSpend !== undefined ? { noSpend: formData.noSpend } : {}),
           }
         : undefined;
 

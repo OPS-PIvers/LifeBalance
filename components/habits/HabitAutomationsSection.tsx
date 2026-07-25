@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { Sparkles, X, Plus, ListChecks } from 'lucide-react';
 import Input from '@/components/ui/Input';
-import { HabitLocationTrigger, ToDo } from '@/types/schema';
+import Switch from '@/components/ui/Switch';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { HabitLocationTrigger, NoSpendScope, ToDo } from '@/types/schema';
 import { normalizeKeyword } from '@/utils/habitKeywordMatch';
 import HabitLocationsEditor from '@/components/habits/HabitLocationsEditor';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
@@ -13,18 +15,22 @@ import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
  * edit surface (HabitFormModal) present the same controls for EVERY habit
  * (preset or custom).
  *
- * It edits two trigger types (transaction keywords, saved geolocations) and
- * lists linked to-dos read-only (the link is authored on the to-do's "Counts
- * toward habit" picker). It is a controlled component: the parent owns the
- * `keywords`/`locations` arrays and rebuilds `Habit.triggers` from them at save
- * time (always including the `triggers` key when editing so a full clear routes
- * through updateHabit's deleteField() presence semantics).
+ * It edits three trigger types (transaction keywords, saved geolocations, and
+ * the F-HABITS-14 no-spend day/weekend) and lists linked to-dos read-only (the
+ * link is authored on the to-do's "Counts toward habit" picker). It is a
+ * controlled component: the parent owns the `keywords`/`locations`/`noSpend`
+ * values and rebuilds `Habit.triggers` from them at save time (always including
+ * the `triggers` key when editing so a full clear routes through updateHabit's
+ * deleteField() presence semantics).
  */
 interface HabitAutomationsSectionProps {
   keywords: string[];
   onKeywordsChange: (keywords: string[]) => void;
   locations: HabitLocationTrigger[];
   onLocationsChange: (locations: HabitLocationTrigger[]) => void;
+  /** F-HABITS-14 no-spend scope, or undefined when the trigger is off. */
+  noSpend: NoSpendScope | undefined;
+  onNoSpendChange: (noSpend: NoSpendScope | undefined) => void;
   /** To-dos linked to this habit (read-only listing). */
   linkedTodos?: ToDo[];
   /**
@@ -40,10 +46,18 @@ const HabitAutomationsSection: React.FC<HabitAutomationsSectionProps> = ({
   onKeywordsChange,
   locations,
   onLocationsChange,
+  noSpend,
+  onNoSpendChange,
   linkedTodos = [],
   collapsible = false,
 }) => {
   const [keywordDraft, setKeywordDraft] = useState('');
+  // Generated rather than hardcoded so two mounted instances can't collide on the
+  // same DOM id and silently break each other's aria-labelledby association.
+  // (Both current consumers are modals that can't be open at once, but a
+  // duplicate id is invalid DOM and fails automated a11y audits regardless.)
+  const headingId = useId();
+  const noSpendLabelId = useId();
 
   const addKeyword = () => {
     const normalized = normalizeKeyword(keywordDraft);
@@ -62,7 +76,7 @@ const HabitAutomationsSection: React.FC<HabitAutomationsSectionProps> = ({
 
   const heading = (
     <h3
-      id="habit-automations-heading"
+      id={headingId}
       className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase flex items-center gap-1.5"
     >
       <Sparkles size={13} className="text-warm-500" aria-hidden="true" />
@@ -145,6 +159,51 @@ const HabitAutomationsSection: React.FC<HabitAutomationsSectionProps> = ({
         />
       </div>
 
+      <div className="rounded-card border border-brand-200 dark:border-brand-700 bg-brand-50/60 dark:bg-brand-700/30 p-4 space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p
+              id={noSpendLabelId}
+              className="text-sm font-semibold text-brand-700 dark:text-brand-200"
+            >
+              No-spend days
+            </p>
+            <p className="text-xs text-brand-400 dark:text-brand-450 mt-1">
+              Logs this habit on its own when the nightly bank sync finds a day you
+              didn’t spend. Scheduled bills and transfers between your own accounts
+              don’t count against the day — a card purchase does.
+            </p>
+          </div>
+          <Switch
+            checked={noSpend !== undefined}
+            onCheckedChange={on => onNoSpendChange(on ? 'day' : undefined)}
+            tone="warm"
+            aria-labelledby={noSpendLabelId}
+          />
+        </div>
+
+        {noSpend !== undefined && (
+          <>
+            <SegmentedControl<NoSpendScope>
+              value={noSpend}
+              onChange={onNoSpendChange}
+              name="What counts as a no-spend win"
+              tone="warm"
+              size="sm"
+              options={[
+                { value: 'day', label: 'Every clean day' },
+                { value: 'weekend', label: 'Clean weekend' },
+              ]}
+            />
+            <p className="text-xs text-brand-400 dark:text-brand-450">
+              {noSpend === 'weekend'
+                ? 'Fires only when Saturday and Sunday are both clean, credited to the Sunday. Pair it with a weekly habit so the streak counts weekends.'
+                : 'Fires for any clean day, credited to that day rather than to the morning the sync runs.'}
+            </p>
+          </>
+        )}
+      </div>
+
       {linkedTodos.length > 0 ? (
         <div className="rounded-card border border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800 overflow-hidden">
           <p className="px-4 pt-3 pb-1 text-xxs font-semibold uppercase tracking-wider text-brand-400 dark:text-brand-450">
@@ -211,7 +270,7 @@ const HabitAutomationsSection: React.FC<HabitAutomationsSectionProps> = ({
   }
 
   return (
-    <section aria-labelledby="habit-automations-heading" className="pt-1 space-y-3">
+    <section aria-labelledby={headingId} className="pt-1 space-y-3">
       {heading}
       {body}
     </section>

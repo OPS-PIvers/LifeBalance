@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { doc, deleteField, updateDoc } from 'firebase/firestore';
 import { db } from '@/firebase.config';
-import { Habit, HabitLocationTrigger, HabitReminderConfig } from '@/types/schema';
+import { Habit, HabitLocationTrigger, HabitReminderConfig, NoSpendScope } from '@/types/schema';
 import { useGamification, useHouseholdCore, useTodos } from '@/contexts/FirebaseHouseholdContext';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { Drawer } from '@/components/ui/Drawer';
@@ -78,6 +78,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
   // spread-forward stored copy.
   const [keywords, setKeywords] = useState<string[]>(() => editingHabit?.triggers?.keywords ?? []);
   const [locations, setLocations] = useState<HabitLocationTrigger[]>(() => editingHabit?.triggers?.locations ?? []);
+  const [noSpend, setNoSpend] = useState<NoSpendScope | undefined>(() => editingHabit?.triggers?.noSpend);
   // F-HABITS-03: this member's reminder for the habit being edited. Persisted on
   // save (below) via a field-path write to the member doc, NOT through
   // updateHabit — the two documents are unrelated.
@@ -140,6 +141,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       setPausedUntil(editingHabit.pausedUntil ?? '');
       setKeywords(editingHabit.triggers?.keywords ?? []);
       setLocations(editingHabit.triggers?.locations ?? []);
+      setNoSpend(editingHabit.triggers?.noSpend);
       setReminder(getHabitReminder(currentUser?.notificationPreferences, editingHabit.id));
       setEditAssignedUid(seedEditAssignedUid(editingHabit));
       setAssignedKidUids([]);
@@ -292,10 +294,11 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
     // routes through updateHabit's hasOwnProperty presence check → deleteField.
     const cleanedKeywords = keywords.map(k => k.trim()).filter(Boolean);
     const triggers: Habit['triggers'] =
-      cleanedKeywords.length > 0 || locations.length > 0
+      cleanedKeywords.length > 0 || locations.length > 0 || noSpend !== undefined
         ? {
             ...(cleanedKeywords.length > 0 ? { keywords: cleanedKeywords } : {}),
             ...(locations.length > 0 ? { locations } : {}),
+            ...(noSpend !== undefined ? { noSpend } : {}),
           }
         : undefined;
 
@@ -684,6 +687,8 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
             onKeywordsChange={setKeywords}
             locations={locations}
             onLocationsChange={setLocations}
+            noSpend={noSpend}
+            onNoSpendChange={setNoSpend}
             linkedTodos={linkedTodos}
             collapsible
           />

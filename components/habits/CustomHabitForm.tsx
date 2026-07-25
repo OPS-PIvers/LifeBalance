@@ -3,7 +3,7 @@ import { Trash2 } from 'lucide-react';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
-import { Habit, EffortLevel, HabitLocationTrigger, ToDo } from '@/types/schema';
+import { Habit, EffortLevel, HabitLocationTrigger, NoSpendScope, ToDo } from '@/types/schema';
 import {
   EFFORT_POINTS,
   EFFORT_LABELS,
@@ -33,6 +33,9 @@ export interface CustomHabitFormData {
   /** Habit Automations (PRD #1065) — saved geolocation triggers being edited
    *  in this form session (merged back with any other trigger type on save). */
   locations: HabitLocationTrigger[];
+  /** F-HABITS-14 — the no-spend scope this habit fires on, or undefined when the
+   *  trigger is off. */
+  noSpend: NoSpendScope | undefined;
 }
 
 interface CustomHabitFormProps {
@@ -182,6 +185,8 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
           onKeywordsChange={(keywords) => onFormChange({ keywords })}
           locations={formData.locations}
           onLocationsChange={(locations) => onFormChange({ locations })}
+          noSpend={formData.noSpend}
+          onNoSpendChange={(noSpend) => onFormChange({ noSpend })}
           linkedTodos={linkedTodos}
         />
       )}

@@ -918,6 +918,17 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // F-HABITS-14 no-spend day verdicts (doc id = yyyy-MM-dd) — written ONLY by
+      // the bankEmailSync Cloud Function (Admin SDK bypasses rules). Client writes
+      // must stay denied: the presence of a doc is what lets the weekend rule
+      // credit a habit, so a forged doc would mint habit points. Also added to the
+      // catch-all write-exclusion list below, which is the load-bearing half —
+      // Firestore grants access if ANY rule allows, so this deny alone is not enough.
+      match /noSpendDays/{date} {
+        allow read: if isMemberOf(householdId);
+        allow write: if false;
+      }
+
       // 🛡️ Plan 24: Explicit rules for Savings Goals (sinking funds).
       // Manual-contribution-only entity, deliberately decoupled from Account
       // balances and Transactions — see CLAUDE.md's Safe-to-Spend section for
@@ -1004,6 +1015,7 @@ service cloud.firestore {
                      subcollection != 'recaps' &&
                      subcollection != 'moneyRecaps' &&
                      subcollection != 'netWorthSnapshots' &&
+                     subcollection != 'noSpendDays' &&
                      subcollection != 'activityLog';
       }
     }

@@ -61,6 +61,7 @@ paragraph for the existing examples to mirror).
 | F-HABITS-11 | Custom color tags per habit category | Habits & Gamification | tweak | low | Bucket-color pattern reused for habit categories | |
 | F-HABITS-12 | Per-member attribution + leaderboard | Habits & Gamification | large | high | Who actually did the shared chore, adult version | |
 | F-HABITS-13 | Photo-verified habit completion (Gemini vision) | Habits & Gamification | suite | high | AI plausibility check on a chore photo | Hold off for now |
+| F-HABITS-14 | No-spend day / weekend habit trigger | Habits & Gamification | medium | high | Nightly bank sync fires a habit for a day you didn't spend | **SHIPPED** — see detail section |
 | F-MEALS-01 | Cost-per-meal tracking | Meals & Shopping | medium | high | "This week's dinners cost ~$87" | How do we do this without adding a ton of friction? |
 | F-MEALS-02 | Meal-plan gap reminder push | Meals & Shopping | medium | medium | Sunday nudge when dinners are unplanned | User-settings flag |
 | F-MEALS-03 | Dietary/allergy household profile | Meals & Shopping | medium | medium | Standing constraint auto-applied to AI meal calls | |
@@ -879,6 +880,59 @@ cost per household.
 
 Note: meals/grocery spend → Groceries bucket linkage and the AI Weekly Planner save-back-to-calendar
 item are already tracked in `TODO.md` §3 — not re-listed here.
+
+### F-HABITS-14 — No-spend day / weekend habit trigger
+
+**Status:** SHIPPED · **Size:** medium · **Value:** high · **Dependencies:** the nightly `bankEmailSync` Cloud Function (`docs/BANK_EMAIL_SYNC_RUNBOOK.md`)
+
+A third habit-automation trigger, alongside transaction keywords and saved locations: the nightly
+bank sync judges the day that just ended and, if nothing unplanned was spent, logs any habit wired
+to it — with the push notification as the reward.
+
+**Origin:** the sync was sending a "Bank sync failed — Could not find a 'Withdrawals' section"
+push on the user's *best* nights, because Wells Fargo omits that section entirely when nothing was
+withdrawn. Fixing the false failure (PR #1097) made the underlying signal available, and a
+no-spend day is worth celebrating rather than merely not-failing.
+
+**Owner decisions (settled 2026-07-25):**
+- **Bills and transfers don't break a day.** The habit measures spending you chose to do; autopay
+  set up months ago isn't a decision you made that day, and moving your own money between your own
+  accounts isn't spending. Without this, the ~8-10 nights a month carrying a recurring charge would
+  all be disqualified.
+- **Every account counts, not just checking.** A credit-card charge breaks the day even though
+  nothing left checking — otherwise the habit is trivially satisfied by reaching for another card.
+- **Fires server-side at sync time** (~3am) rather than on next app open, so the push can carry the
+  points and streak. The cost is a duplicated scoring path (see below).
+- **Configured on the habit**, with an explicit day/weekend scope, next to the other triggers.
+- **A weekend is Saturday AND Sunday**, credited to the Sunday — which also lands the completion in
+  the right Mon-Sun ISO week for a weekly habit's streak.
+
+**Implementation notes:** The verdict is computed from **transactions dated to the day**, not from
+whether the email was empty. Wells Fargo reports card *authorization* dates, so a Thursday charge
+can appear in Saturday's email — an empty Friday email is not evidence that Thursday was clean.
+The parser already resolves each withdrawal to its real date, and `noSpendDay.ts` reads those.
+
+`backdatedHabitFire.ts` is a server twin of `utils/habitTriggerFire.ts`'s
+`computeBackdatedHabitFire` (the same duplication the project already carries for
+`streakLogic.ts` ↔ `utils/habitLogic.ts`). Its test asserts **parity against the client function
+directly** rather than duplicating a table — `functions/tsconfig.json` excludes `*.test.ts` and the
+suite runs under the root vitest config, so the `@/` alias resolves. That parity test immediately
+surfaced one genuine divergence: `isHabitStale` is a *different function* in the two trees (the
+server's takes a caller-local `today` and anchors on `completedDates`; the client's does neither),
+which is documented and asserted-as-divergent rather than papered over. It is unreachable from this
+feature, which never fires into a current period.
+
+`applyNoSpendDay` is split into a read phase and a stage phase with no awaits in the latter,
+because it shares the sync's batch: a throw partway through staging would otherwise leave half a
+habit fire committed alongside the money writes.
+
+**Key files:**
+- `functions/src/quickAdd/noSpendDay.ts` (classifier + weekend rule), `noSpendFire.ts` (reads, verdict, staged fires)
+- `functions/src/quickAdd/backdatedHabitFire.ts` + `streakLogic.ts` (historical-streak/scoring primitives)
+- `functions/src/quickAdd/bankEmailSync.ts` (integration, push copy, ledger record)
+- `types/schema.ts` (`NoSpendScope`, `HabitTriggers.noSpend`, `HabitSubmission.sourceNoSpendDate`)
+- `components/habits/HabitAutomationsSection.tsx` + `CustomHabitForm.tsx` + `modals/HabitFormModal.tsx` + `modals/HabitCreatorWizard.tsx`
+- `firestore.rules` (`noSpendDays` server-owned), `docs/BANK_EMAIL_SYNC_RUNBOOK.md` §5
 
 ### F-MEALS-01 — Cost-per-meal tracking (link recipes to grocery spend)
 
