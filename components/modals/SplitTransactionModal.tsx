@@ -3,6 +3,7 @@ import { Plus, Trash2, AlertCircle, Scissors } from 'lucide-react';
 import { Transaction } from '@/types/schema';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
+import { useMerchantRules } from '@/hooks/useMerchantRules';
 import { sumMoney, subtractMoney } from '@/utils/money';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
@@ -28,6 +29,10 @@ interface SplitItem {
 const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, onClose, transaction }) => {
   const { splitTransaction, buckets } = useFinance();
   const fmt = useFormatCurrency();
+  // Friendly name for the read-only "Original Transaction" summary only. The
+  // seeded split rows below deliberately keep the RAW merchant: those values are
+  // written to new transactions, and a display label must never become stored data.
+  const { displayNameFor } = useMerchantRules();
   const [splits, setSplits] = useState<SplitItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -202,7 +207,7 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
           <span className="text-lg font-bold text-brand-800 dark:text-brand-100">{fmt(totalAmount)}</span>
         </div>
         <div className="text-xs text-brand-400 dark:text-brand-400">
-          {transaction.merchant} • {transaction.date}
+          {displayNameFor(transaction)} • {transaction.date}
         </div>
       </div>
 

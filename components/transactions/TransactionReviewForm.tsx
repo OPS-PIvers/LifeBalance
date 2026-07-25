@@ -18,6 +18,7 @@ import { getBillLinkCandidates } from '@/utils/billLinkCandidates';
 import { roundMoney } from '@/utils/money';
 import { pickKeeper } from '@/utils/transactionMerge';
 import { useFinance, useGamification, useExpandedCalendarItems } from '@/contexts/FirebaseHouseholdContext';
+import { useMerchantRules } from '@/hooks/useMerchantRules';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
@@ -52,6 +53,15 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
     mergeTransactions, keepBothTransactions, linkBankTransactionToBill,
   } = useFinance();
   const { habits } = useGamification();
+  const { displayNameFor, ruleFor, rules: merchantRules } = useMerchantRules();
+
+  // Is a household merchant rule relabelling this row? Keyed to the STORED
+  // descriptor + amount (not the live merchant field) so the disclosure below
+  // can't flicker in and out while the field is being typed. A rule that
+  // contributes no `name` (category-only / bill-only) renames nothing, so there
+  // is nothing to disclose.
+  const storedMerchantRule = ruleFor({ merchant: transaction.merchant, amount: transaction.amount });
+  const renamedFromDescriptor = storedMerchantRule?.name?.trim() ? transaction.merchant : null;
 
   // "Link to bill" (bank-sync reconcile) — only offered for a bank-synced row
   // still awaiting categorization (see needsReview in useActionQueue.ts). The
@@ -151,8 +161,16 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
   // already fired (dedup) so an undo→re-review doesn't re-suggest them.
   const keywordHabitIds = useMemo(() => {
     const alreadyFired = new Set(transaction.firedHabitIds ?? []);
-    return keywordMatchedHabitIds(habits, { merchant, notes }).filter(id => !alreadyFired.has(id));
-  }, [habits, merchant, notes, transaction.firedHabitIds]);
+    // F-MONEY-14: keyword matching sees the friendly name as well as the raw
+    // descriptor, so a habit keyed on a name the household chose ("Coffee run")
+    // still pre-selects for a row the bank called "SQ *BLUE BOTTLE". `amount` is
+    // passed so an amount-qualified rule can resolve; it comes from the live
+    // field, matching `merchant`, so a mid-edit row suggests against what the
+    // user is actually entering. This is the same set the Dashboard's
+    // swipe-approve path fires — they must not diverge.
+    return keywordMatchedHabitIds(habits, { merchant, notes, amount: parseFloat(amount) || undefined }, merchantRules)
+      .filter(id => !alreadyFired.has(id));
+  }, [habits, merchant, notes, amount, merchantRules, transaction.firedHabitIds]);
   // The habits a fire would credit are back-dated to the transaction's date, so
   // the dedup and window checks below are both keyed to that date, not to today.
   const fireDate = transaction.date;
@@ -378,7 +396,7 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
           <div className="flex items-start gap-2">
             <Copy size={14} className="mt-0.5 shrink-0 text-warm-600 dark:text-warm-400" />
             <p className="text-xs text-warm-700 dark:text-warm-300">
-              Possible duplicate of <span className="font-semibold">{possibleDuplicate.merchant}</span>
+              Possible duplicate of <span className="font-semibold">{displayNameFor(possibleDuplicate)}</span>
               {' — '}${possibleDuplicate.amount.toFixed(2)} on {possibleDuplicate.date}
             </p>
           </div>
@@ -475,6 +493,16 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
         onChange={e => setMerchant(e.target.value)}
         placeholder="e.g. Starbucks"
       />
+
+      {/* The bank's own words, always in reach. The field above holds the RAW
+          stored merchant (editing it edits the row, not the rule), so this
+          quiet caption is what ties the friendlier name shown everywhere else
+          back to what actually appeared on the statement. */}
+      {renamedFromDescriptor && (
+        <p className="-mt-2 text-xxs text-brand-450">
+          Your bank calls this <span className="font-mono">{renamedFromDescriptor}</span>
+        </p>
+      )}
 
       <Input
         label="What was it? (Optional)"

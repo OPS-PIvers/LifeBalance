@@ -1,8 +1,9 @@
 import { render as rtlRender, screen, within, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { ReactElement } from 'react';
+import type { MerchantRule } from '@/types/schema';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { ConfirmDialogHost } from '@/components/ui/ConfirmDialogHost';
 import { ActionQueueItemCard } from './ActionQueueItem';
@@ -13,10 +14,15 @@ import type {
   TransactionQueueItem,
 } from '@/hooks/useActionQueue';
 
-// The card reads the household currency for its amount column; stub the slice
-// so the test doesn't need the full Firebase provider tree.
+// Household-authored merchant rules, mutable per-test. Empty ⇒ every merchant
+// renders exactly as it did before display-time renaming existed.
+const { mockMerchantRules } = vi.hoisted(() => ({ mockMerchantRules: [] as MerchantRule[] }));
+
+// The card reads the household currency for its amount column and the merchant
+// rules for its transaction label; stub the slice so the test doesn't need the
+// full Firebase provider tree.
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
-  useHouseholdCore: () => ({ householdSettings: undefined }),
+  useHouseholdCore: () => ({ householdSettings: { merchantRules: mockMerchantRules } }),
 }));
 
 // The transaction review drawer is context-driven and has its own test suite
@@ -152,6 +158,44 @@ describe('ActionQueueItemCard approve pre-commit disclosure', () => {
       .find(b => b.getAttribute('aria-label') === 'Approve Coffee');
     expect(approveButton).toBeDefined();
     expect(screen.queryByText(/→/)).not.toBeInTheDocument();
+  });
+});
+
+describe('ActionQueueItemCard merchant rules', () => {
+  const rawDescriptor = 'APPLE.COM/BILL 866-712-7753 CA';
+  const appleTransaction: TransactionQueueItem = { ...transactionItem, merchant: rawDescriptor };
+
+  afterEach(() => {
+    mockMerchantRules.length = 0;
+  });
+
+  it('renders the rule’s friendly name instead of the raw bank descriptor', () => {
+    mockMerchantRules.push({
+      id: 'rule-apple',
+      pattern: 'APPLE.COM/BILL',
+      name: 'Apple',
+      createdAt: '2026-07-01T00:00:00.000Z',
+    });
+    renderCard(appleTransaction, makeHandlers());
+
+    expect(screen.getByText('Apple')).toBeInTheDocument();
+    expect(screen.queryByText(rawDescriptor)).not.toBeInTheDocument();
+    // The rename carries into the row's action labels too, so what a screen
+    // reader announces matches what is on screen.
+    expect(screen.getByRole('button', { name: 'Review Apple' })).toBeInTheDocument();
+  });
+
+  it('falls back to the raw descriptor when no rule matches', () => {
+    mockMerchantRules.push({
+      id: 'rule-netflix',
+      pattern: 'NETFLIX',
+      name: 'Netflix',
+      createdAt: '2026-07-01T00:00:00.000Z',
+    });
+    renderCard(appleTransaction, makeHandlers());
+
+    expect(screen.getByText(rawDescriptor)).toBeInTheDocument();
+    expect(screen.queryByText('Netflix')).not.toBeInTheDocument();
   });
 });
 

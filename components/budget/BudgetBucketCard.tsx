@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Row } from '@/components/ui/Section';
 import { Badge } from '@/components/ui/Badge';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
+import { useMerchantRules } from '@/hooks/useMerchantRules';
 import ProgressBar from '@/components/ui/ProgressBar';
 import { bucketColorClass } from '@/data/bucketColors';
 import { getBucketOverspend } from '@/utils/bucketOverspend';
@@ -76,6 +77,9 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
   onDeleteTransaction,
 }) => {
   const fmt = useFormatCurrency();
+  // One lookup helper for the whole expanded list — the inline transactions show
+  // the household's friendly merchant name, not the raw bank descriptor.
+  const { displayNameFor } = useMerchantRules();
   const { isOverspent, overage, percent } = getBucketOverspend(spent, bucket.limit);
   const transactionCount = transactions.length;
   const detailId = `bucket-transactions-${bucket.id}`;
@@ -176,10 +180,12 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                 {transactionCount} transaction{transactionCount === 1 ? '' : 's'}
               </p>
               <ul className="divide-y divide-brand-100 dark:divide-brand-700/60">
-                {transactions.map(tx => (
+                {transactions.map(tx => {
+                  const merchantName = displayNameFor({ merchant: tx.merchant, amount: tx.amount });
+                  return (
                   <li key={tx.id} className="flex items-center justify-between gap-2 py-2">
                     <div className="min-w-0">
-                      <p className="font-semibold text-brand-900 dark:text-brand-100 truncate text-sm">{tx.merchant}</p>
+                      <p className="font-semibold text-brand-900 dark:text-brand-100 truncate text-sm">{merchantName}</p>
                       <p className="text-xs text-brand-500 dark:text-brand-400 flex items-center gap-2 mt-0.5">
                         {format(parseISO(tx.date), 'MMM d')}
                         {tx.status === 'pending_review' && (
@@ -199,7 +205,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                         onClick={() => onEditTransaction(tx)}
                         className="text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300"
                         title="Edit transaction"
-                        aria-label={`Edit transaction: ${tx.merchant || 'Unnamed'}`}
+                        aria-label={`Edit transaction: ${merchantName || 'Unnamed'}`}
                       >
                         <Edit size={14} />
                       </Button>
@@ -209,13 +215,14 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                         onClick={() => onDeleteTransaction(tx.id)}
                         className="text-brand-400 dark:text-brand-450 hover:text-money-neg dark:hover:text-money-negDark"
                         title="Delete transaction"
-                        aria-label={`Delete transaction: ${tx.merchant || 'Unnamed'}`}
+                        aria-label={`Delete transaction: ${merchantName || 'Unnamed'}`}
                       >
                         <Trash2 size={14} />
                       </Button>
                     </div>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             </>
           )}

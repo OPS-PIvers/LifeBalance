@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { ChevronDown } from 'lucide-react';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
+import { useMerchantRules } from '@/hooks/useMerchantRules';
 import { useDashboardTransactionStats } from '@/hooks/useDashboardTransactionStats';
 import SectionActionLink from '@/components/ui/SectionActionLink';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
@@ -12,6 +13,8 @@ export const CategorySpendWidget: React.FC = () => {
   const { monthTotalSpent, monthCategoryItems, monthCategoryTransactions } =
     useDashboardTransactionStats();
   const fmt = useFormatCurrency();
+  // Display-time descriptor cleanup for the per-category transaction lists.
+  const { displayNameFor } = useMerchantRules();
   // Per-row disclosure: only one category's transaction list is open at a time
   // (mirrors CreditCardActivityWidget's expandedId pattern).
   const [expandedName, setExpandedName] = useState<string | null>(null);
@@ -77,7 +80,7 @@ export const CategorySpendWidget: React.FC = () => {
                   {txns.map(tx => (
                     <li key={tx.id} className="flex items-center justify-between gap-2 text-xs">
                       <span className="min-w-0 flex items-baseline gap-2">
-                        <span className="truncate font-medium text-brand-700 dark:text-brand-200">{tx.merchant}</span>
+                        <span className="truncate font-medium text-brand-700 dark:text-brand-200">{displayNameFor(tx)}</span>
                         <span className="shrink-0 text-brand-400 dark:text-brand-450">{format(parseISO(tx.date), 'MMM d')}</span>
                       </span>
                       <span className="shrink-0 font-mono tabular-nums font-semibold text-brand-900 dark:text-brand-50">

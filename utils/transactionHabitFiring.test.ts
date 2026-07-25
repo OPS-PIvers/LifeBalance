@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Habit } from '@/types/schema';
+import { Habit, MerchantRule } from '@/types/schema';
 import {
   HABIT_BACKDATE_MAX_DAYS,
   isWithinBackdateWindow,
@@ -64,6 +64,44 @@ describe('keywordMatchedHabitIds', () => {
 
   it('ignores habits with no keywords', () => {
     expect(keywordMatchedHabitIds([habit('none')], { merchant: 'anything' })).toEqual([]);
+  });
+
+  describe('with merchant rules', () => {
+    const rule = (overrides: Partial<MerchantRule> = {}): MerchantRule => ({
+      id: 'rule-1',
+      pattern: 'SQ *BLUE BOTTLE',
+      name: 'Coffee run',
+      createdAt: '2026-07-01T00:00:00.000Z',
+      ...overrides,
+    });
+
+    it('fires a habit whose keyword matches only the friendly name', () => {
+      expect(
+        keywordMatchedHabitIds(habits, { merchant: 'SQ *BLUE BOTTLE' }, [rule()]),
+      ).toEqual(['coffee']);
+    });
+
+    it('does not fire on the friendly name when rules are omitted or empty', () => {
+      expect(keywordMatchedHabitIds([habit('c', ['coffee'])], { merchant: 'SQ *BLUE' })).toEqual([]);
+      expect(keywordMatchedHabitIds([habit('c', ['coffee'])], { merchant: 'SQ *BLUE' }, [])).toEqual([]);
+    });
+
+    it('still excludes archived habits when a rule renames the row', () => {
+      const archived = [habit('coffee', ['coffee'], { archivedAt: '2026-01-01T00:00:00Z' })];
+      expect(keywordMatchedHabitIds(archived, { merchant: 'SQ *BLUE BOTTLE' }, [rule()])).toEqual([]);
+    });
+
+    it('passes the transaction amount through for amount-qualified rules', () => {
+      const rules = [rule({ pattern: 'APPLE.COM', name: 'iCloud storage', amount: 2.99 })];
+      const icloud = [habit('icloud', ['icloud'])];
+
+      expect(
+        keywordMatchedHabitIds(icloud, { merchant: 'APPLE.COM/BILL', amount: 2.99 }, rules),
+      ).toEqual(['icloud']);
+      expect(
+        keywordMatchedHabitIds(icloud, { merchant: 'APPLE.COM/BILL', amount: 79 }, rules),
+      ).toEqual([]);
+    });
   });
 });
 

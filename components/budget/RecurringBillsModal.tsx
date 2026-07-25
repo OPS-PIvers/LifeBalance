@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
+import { useMerchantRules } from '@/hooks/useMerchantRules';
 import { CalendarItem } from '@/types/schema';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -39,6 +40,16 @@ const persistDetectionDismiss = (merchant: string, cadence: DetectedSubscription
 const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClose }) => {
   const { calendarItems, transactions, updateCalendarItem, deleteCalendarItem, addCalendarItem } = useFinance();
   const fmt = useFormatCurrency();
+  // A detection's `merchant` is a raw bank descriptor — SHOW the household's
+  // friendly name for it, and NAME a created bill the same way, so the row and
+  // the bill it produces agree. `detectSubscriptions` takes `rules` for exactly
+  // that reason: its already-has-a-bill exclusion compares against user-authored
+  // bill titles, so it has to recognise the friendly name too or a bill added
+  // from a detection would be re-detected forever.
+  //
+  // The localStorage dismissal key stays on the RAW descriptor: it is identity,
+  // and a later rename must not resurrect a detection the user dismissed.
+  const { displayNameFor, rules } = useMerchantRules();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [dismissedKeys, setDismissedKeys] = useState<Set<string>>(new Set());
@@ -95,10 +106,10 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
 
   const detectedSubscriptions = useMemo(
     () =>
-      detectSubscriptions(transactions, billTitles).filter(
+      detectSubscriptions(transactions, billTitles, rules).filter(
         d => !dismissedKeys.has(detectionDismissKey(d.merchant, d.cadence)) && !isDetectionDismissed(d.merchant, d.cadence)
       ),
-    [transactions, billTitles, dismissedKeys]
+    [transactions, billTitles, dismissedKeys, rules]
   );
 
   const dismissDetection = useCallback((detection: DetectedSubscription) => {
@@ -122,7 +133,11 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
       try {
         await addCalendarItem({
           id: crypto.randomUUID(),
-          title: detection.merchant,
+          // F-MONEY-14: name the bill what the row SHOWED. Titling it with the
+          // raw descriptor after displaying "Apple" would be a bait-and-switch,
+          // and `detectSubscriptions` is now rule-aware, so a bill under the
+          // friendly name still suppresses the detection it came from.
+          title: displayNameFor({ merchant: detection.merchant }),
           amount: detection.averageAmount,
           date: detection.lastDate,
           type: 'expense',
@@ -141,7 +156,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
         });
       }
     },
-    [addCalendarItem, dismissDetection]
+    [addCalendarItem, dismissDetection, displayNameFor]
   );
 
   const startEditing = (item: CalendarItem) => {
@@ -359,13 +374,20 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
             }
           >
             <SurfaceList>
-              {detectedSubscriptions.map(detection => (
+              {detectedSubscriptions.map(detection => {
+                // No `amount` is offered to the matcher on purpose: a cluster's
+                // `averageAmount` is a derived aggregate, not any single row's
+                // amount, so letting an amount-qualified rule match against it
+                // would be a coincidence rather than a fact. Bare patterns (the
+                // common case) still rename the row.
+                const merchantName = displayNameFor({ merchant: detection.merchant });
+                return (
                 <Row
                   key={`${detection.merchant}-${detection.cadence}`}
                   className="flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4"
                 >
                   <div>
-                    <div className="font-semibold text-brand-900 dark:text-brand-100">{detection.merchant}</div>
+                    <div className="font-semibold text-brand-900 dark:text-brand-100">{merchantName}</div>
                     <div className="text-xs text-brand-500 dark:text-brand-400 capitalize flex items-center gap-1">
                       <Repeat size={10} /> {detection.cadence} · next ~{detection.nextExpectedDate}
                     </div>
@@ -386,7 +408,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
                         leftIcon={<Plus size={14} />}
                         onClick={() => addDetectionAsBill(detection)}
                         disabled={addingKeys.has(detectionDismissKey(detection.merchant, detection.cadence))}
-                        aria-label={`Add ${detection.merchant} as a bill`}
+                        aria-label={`Add ${merchantName} as a bill`}
                       >
                         Add as bill
                       </Button>
@@ -394,14 +416,15 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
                         variant="ghost"
                         size="icon-sm"
                         onClick={() => dismissDetection(detection)}
-                        aria-label={`Dismiss ${detection.merchant} detection`}
+                        aria-label={`Dismiss ${merchantName} detection`}
                       >
                         <X size={14} className="text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300" />
                       </Button>
                     </div>
                   </div>
                 </Row>
-              ))}
+                );
+              })}
             </SurfaceList>
           </Section>
         </div>

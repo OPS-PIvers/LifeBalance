@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { searchAll, type GlobalSearchCorpus } from '@/utils/globalSearch';
-import type { Habit, Meal, ShoppingItem, Transaction, ToDo } from '@/types/schema';
+import type { Habit, Meal, MerchantRule, ShoppingItem, Transaction, ToDo } from '@/types/schema';
 
 const makeTransaction = (overrides: Partial<Transaction> = {}): Transaction => ({
   id: 'tx-1',
@@ -187,5 +187,92 @@ describe('searchAll', () => {
   it('returns no results when nothing matches', () => {
     const corpus: GlobalSearchCorpus = { ...emptyCorpus, transactions: [makeTransaction({ merchant: 'Target' })] };
     expect(searchAll(corpus, 'nonexistentquery', undefined)).toEqual([]);
+  });
+
+  describe('merchant rules', () => {
+    const makeRule = (overrides: Partial<MerchantRule> = {}): MerchantRule => ({
+      id: 'rule-1',
+      pattern: 'SQ *BLUE BOTTLE',
+      name: 'Coffee run',
+      createdAt: '2026-07-01T00:00:00.000Z',
+      ...overrides,
+    });
+
+    const corpus: GlobalSearchCorpus = {
+      ...emptyCorpus,
+      transactions: [makeTransaction({ id: 'tx-coffee', merchant: 'SQ *BLUE BOTTLE', category: 'Dining' })],
+    };
+
+    it('finds a renamed row by its friendly name', () => {
+      const results = searchAll(corpus, 'coffee', undefined, [makeRule()]);
+      expect(results.map((r) => r.id)).toEqual(['tx-coffee']);
+    });
+
+    it('still finds the same row by its raw bank descriptor', () => {
+      const results = searchAll(corpus, 'blue bottle', undefined, [makeRule()]);
+      expect(results.map((r) => r.id)).toEqual(['tx-coffee']);
+    });
+
+    it('titles the result with the friendly name', () => {
+      const results = searchAll(corpus, 'coffee', undefined, [makeRule()]);
+      expect(results[0]?.title).toBe('Coffee run');
+    });
+
+    it('titles the result with the friendly name even when found by the raw descriptor', () => {
+      // Matching is deliberately wider than display: either spelling finds the
+      // row, but it always presents under the name the household chose.
+      const results = searchAll(corpus, 'blue bottle', undefined, [makeRule()]);
+      expect(results[0]?.title).toBe('Coffee run');
+    });
+
+    it('falls back to the raw descriptor when the matching rule sets no name', () => {
+      const results = searchAll(corpus, 'blue bottle', undefined, [
+        makeRule({ name: undefined, category: 'Dining' }),
+      ]);
+      expect(results[0]?.title).toBe('SQ *BLUE BOTTLE');
+    });
+
+    it('does not find the friendly name when rules are omitted or empty', () => {
+      expect(searchAll(corpus, 'coffee', undefined)).toEqual([]);
+      expect(searchAll(corpus, 'coffee', undefined, [])).toEqual([]);
+    });
+
+    it('is byte-identical to the no-rules result when no rule matches the row', () => {
+      // The regression gate: a household whose rules don't touch this merchant
+      // must get exactly the pre-feature result, title included.
+      const unrelated = makeRule({ id: 'r-other', pattern: 'APPLE.COM', name: 'Apple' });
+      expect(searchAll(corpus, 'blue', undefined, [unrelated]))
+        .toEqual(searchAll(corpus, 'blue', undefined));
+    });
+
+    it('is byte-identical to the no-rules result when rules are omitted or empty', () => {
+      const baseline = searchAll(corpus, 'blue', undefined);
+      expect(searchAll(corpus, 'blue', undefined, [])).toEqual(baseline);
+    });
+
+    it('reports one result, not two, when the query matches both spellings', () => {
+      // "bottle" is in the descriptor; the friendly name here repeats it, so a
+      // naive per-term push would emit the row twice.
+      const results = searchAll(corpus, 'bottle', undefined, [
+        makeRule({ name: 'Blue Bottle coffee' }),
+      ]);
+      expect(results).toHaveLength(1);
+    });
+
+    it('resolves an amount-qualified rule against the row amount', () => {
+      const subscription: GlobalSearchCorpus = {
+        ...emptyCorpus,
+        transactions: [makeTransaction({ id: 'tx-icloud', merchant: 'APPLE.COM/BILL', amount: 2.99 })],
+      };
+      const rules = [makeRule({ pattern: 'APPLE.COM', name: 'iCloud storage', amount: 2.99 })];
+
+      expect(searchAll(subscription, 'icloud', undefined, rules).map((r) => r.id)).toEqual(['tx-icloud']);
+      // Same rule, wrong amount → the friendly name does not apply.
+      const oneOff: GlobalSearchCorpus = {
+        ...emptyCorpus,
+        transactions: [makeTransaction({ merchant: 'APPLE.COM/BILL', amount: 79 })],
+      };
+      expect(searchAll(oneOff, 'icloud', undefined, rules)).toEqual([]);
+    });
   });
 });

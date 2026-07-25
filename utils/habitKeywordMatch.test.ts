@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Habit } from '@/types/schema';
+import { Habit, MerchantRule } from '@/types/schema';
 import {
   keywordMatchesText,
   habitMatchesInput,
@@ -113,5 +113,65 @@ describe('findMatchingHabits', () => {
   it('returns an empty array when nothing matches', () => {
     const habit = makeHabit('gym', ['gym']);
     expect(findMatchingHabits([habit], { merchant: 'Target' })).toEqual([]);
+  });
+});
+
+describe('merchant-rule-aware keyword matching', () => {
+  const makeRule = (overrides: Partial<MerchantRule> = {}): MerchantRule => ({
+    id: 'rule-1',
+    pattern: 'SQ *BLUE BOTTLE',
+    name: 'Coffee run',
+    createdAt: '2026-07-01T00:00:00.000Z',
+    ...overrides,
+  });
+
+  // The motivating case: the keyword targets the name the USER chose, which
+  // appears nowhere in the bank's descriptor.
+  const coffeeHabit = makeHabit('coffee', ['coffee']);
+  const rawRow = { merchant: 'SQ *BLUE BOTTLE' };
+
+  it('fires on a keyword that matches the friendly name but NOT the raw descriptor', () => {
+    expect(habitMatchesInput(coffeeHabit, rawRow, [makeRule()])).toBe(true);
+  });
+
+  it('still fires on a keyword that matches only the raw descriptor', () => {
+    const bottleHabit = makeHabit('bottle', ['blue bottle']);
+    expect(habitMatchesInput(bottleHabit, rawRow, [makeRule()])).toBe(true);
+  });
+
+  it('does not fire on the friendly name when rules are omitted or empty', () => {
+    expect(habitMatchesInput(coffeeHabit, rawRow)).toBe(false);
+    expect(habitMatchesInput(coffeeHabit, rawRow, [])).toBe(false);
+  });
+
+  it('leaves notes matching untouched', () => {
+    const impulse = makeHabit('impulse', ['impulse']);
+    expect(habitMatchesInput(impulse, { ...rawRow, notes: 'impulse buy' }, [makeRule()])).toBe(true);
+  });
+
+  it('applies whole-word semantics to the friendly name too', () => {
+    // "coffee" must not match inside "Coffeehouse" — the same boundary rule the
+    // raw descriptor gets.
+    const renamed = [makeRule({ name: 'Coffeehouse' })];
+    expect(habitMatchesInput(coffeeHabit, rawRow, renamed)).toBe(false);
+  });
+
+  it('resolves an amount-qualified rule from the input amount', () => {
+    const rules = [makeRule({ pattern: 'APPLE.COM', name: 'iCloud storage', amount: 2.99 })];
+    const icloud = makeHabit('icloud', ['icloud']);
+
+    expect(habitMatchesInput(icloud, { merchant: 'APPLE.COM/BILL', amount: 2.99 }, rules)).toBe(true);
+    expect(habitMatchesInput(icloud, { merchant: 'APPLE.COM/BILL', amount: 79 }, rules)).toBe(false);
+    // No amount to verify against ⇒ an amount-qualified rule cannot apply.
+    expect(habitMatchesInput(icloud, { merchant: 'APPLE.COM/BILL' }, rules)).toBe(false);
+  });
+
+  it('threads rules through findMatchingHabits, preserving input order', () => {
+    const habits = [coffeeHabit, makeHabit('gym', ['gym']), makeHabit('bottle', ['blue bottle'])];
+    expect(findMatchingHabits(habits, rawRow, [makeRule()]).map(h => h.id)).toEqual([
+      'coffee',
+      'bottle',
+    ]);
+    expect(findMatchingHabits(habits, rawRow).map(h => h.id)).toEqual(['bottle']);
   });
 });

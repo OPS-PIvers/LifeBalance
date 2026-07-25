@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { INCOME_CATEGORY, type Transaction } from '@/types/schema';
+import { INCOME_CATEGORY, type MerchantRule, type Transaction } from '@/types/schema';
 import { detectSubscriptions } from '@/utils/subscriptionDetection';
 
 type TestTxn = Pick<Transaction, 'id' | 'merchant' | 'amount' | 'date' | 'category'>;
@@ -187,5 +187,49 @@ describe('detectSubscriptions', () => {
     const result = detectSubscriptions(txns, []);
     expect(result).toHaveLength(2);
     expect(result.map(r => r.merchant).sort()).toEqual(['Netflix', 'Spotify']);
+  });
+});
+
+describe('detectSubscriptions — merchant-rule-aware bill exclusion (F-MONEY-14)', () => {
+  const APPLE_TXNS = [
+    txn('a1', 'APPLE.COM/BILL 866-712-7753 CA', 2.99, '2026-04-15'),
+    txn('a2', 'APPLE.COM/BILL 866-712-7753 CA', 2.99, '2026-05-15'),
+    txn('a3', 'APPLE.COM/BILL 866-712-7753 CA', 2.99, '2026-06-14'),
+  ];
+  const APPLE_RULE: MerchantRule = {
+    id: 'r-apple',
+    pattern: 'APPLE.COM',
+    name: 'iCloud storage',
+    createdAt: '2026-07-01T00:00:00.000Z',
+  };
+
+  it('detects the raw descriptor when no bill covers it', () => {
+    expect(detectSubscriptions(APPLE_TXNS, [], [APPLE_RULE])).toHaveLength(1);
+  });
+
+  it('suppresses the detection when a bill is named after the RULE, not the descriptor', () => {
+    // The regression this guards: adding the detection as a bill titled
+    // "iCloud storage" would otherwise leave the raw descriptor un-excluded, so
+    // the same subscription would be re-detected on every open, forever.
+    expect(detectSubscriptions(APPLE_TXNS, ['iCloud storage'], [APPLE_RULE])).toHaveLength(0);
+  });
+
+  it('does NOT suppress it on a rule-named bill when the rule is absent', () => {
+    // Without the rule there is no connection between the two strings, so the
+    // pre-feature behaviour must be preserved exactly.
+    expect(detectSubscriptions(APPLE_TXNS, ['iCloud storage'])).toHaveLength(1);
+    expect(detectSubscriptions(APPLE_TXNS, ['iCloud storage'], [])).toHaveLength(1);
+  });
+
+  it('still suppresses on a descriptor-matching bill title, rules or not', () => {
+    expect(detectSubscriptions(APPLE_TXNS, ['Apple.com'])).toHaveLength(0);
+    expect(detectSubscriptions(APPLE_TXNS, ['Apple.com'], [APPLE_RULE])).toHaveLength(0);
+  });
+
+  it('ignores an amount-qualified rule, whose amount cannot be resolved from a cluster', () => {
+    // A detection's amount is an average across the cluster, not any one row's,
+    // so an amount-qualified rule must not be applied here by coincidence.
+    const amountRule: MerchantRule = { ...APPLE_RULE, amount: 2.99 };
+    expect(detectSubscriptions(APPLE_TXNS, ['iCloud storage'], [amountRule])).toHaveLength(1);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { HouseholdMember, Transaction } from '@/types/schema';
+import type { HouseholdMember, MerchantRule, Transaction } from '@/types/schema';
 import { convertToCSV, buildExportPayload, buildTransactionExportRows, type ExportPayloadInput } from './exportUtils';
 
 describe('exportUtils', () => {
@@ -175,6 +175,7 @@ describe('exportUtils', () => {
       expect(rows).toEqual([{
         Date: '2026-07-01',
         Merchant: 'Coffee Shop',
+        Name: 'Coffee Shop',
         Category: 'Dining',
         Amount: 4.5,
         Currency: 'USD',
@@ -218,6 +219,77 @@ describe('exportUtils', () => {
 
       const [eurRow] = buildTransactionExportRows([makeTx()], new Map(), 'EUR');
       expect(eurRow?.Currency).toBe('EUR');
+    });
+
+    describe('merchant rules (the additive Name column)', () => {
+      const makeRule = (overrides: Partial<MerchantRule> = {}): MerchantRule => ({
+        id: 'rule-1',
+        pattern: 'APPLE.COM/BILL',
+        name: 'Apple',
+        createdAt: '2026-07-01T00:00:00.000Z',
+        ...overrides,
+      });
+
+      const rawTx = makeTx({ merchant: 'APPLE.COM/BILL 866-712-7753 CA' });
+
+      it('emits both columns: the raw descriptor in Merchant, the friendly name in Name', () => {
+        const [row] = buildTransactionExportRows([rawTx], new Map(), 'USD', [makeRule()]);
+
+        expect(row?.Merchant).toBe('APPLE.COM/BILL 866-712-7753 CA');
+        expect(row?.Name).toBe('Apple');
+      });
+
+      it('puts Name adjacent to Merchant in the CSV header', () => {
+        const rows = buildTransactionExportRows([rawTx], new Map(), 'USD', [makeRule()]);
+        const header = convertToCSV(rows).split('\n')[0];
+
+        expect(header).toBe('Date,Merchant,Name,Category,Amount,Currency,Status,Account,Source,Pay Period');
+      });
+
+      it('repeats the raw descriptor in Name when rules are omitted or empty', () => {
+        const [omitted] = buildTransactionExportRows([rawTx], new Map());
+        const [empty] = buildTransactionExportRows([rawTx], new Map(), 'USD', []);
+
+        expect(omitted?.Name).toBe('APPLE.COM/BILL 866-712-7753 CA');
+        expect(empty).toEqual(omitted);
+      });
+
+      it('repeats the raw descriptor in Name when no rule matches the row', () => {
+        const [row] = buildTransactionExportRows(
+          [makeTx({ merchant: 'SQ *BLUE BOTTLE' })],
+          new Map(),
+          'USD',
+          [makeRule()]
+        );
+        expect(row?.Name).toBe('SQ *BLUE BOTTLE');
+      });
+
+      it('leaves every non-merchant column byte-identical to the no-rules export', () => {
+        const [withRules] = buildTransactionExportRows([rawTx], new Map(), 'EUR', [makeRule()]);
+        const [withoutRules] = buildTransactionExportRows([rawTx], new Map(), 'EUR');
+
+        expect({ ...withRules, Name: undefined }).toEqual({ ...withoutRules, Name: undefined });
+      });
+
+      it('honours an amount-qualified rule only at the matching amount', () => {
+        const rule = makeRule({ pattern: 'APPLE.COM', name: 'Apple iCloud', amount: 2.99 });
+
+        const [matching] = buildTransactionExportRows(
+          [makeTx({ merchant: 'APPLE.COM/BILL', amount: 2.99 })],
+          new Map(),
+          'USD',
+          [rule]
+        );
+        const [nonMatching] = buildTransactionExportRows(
+          [makeTx({ merchant: 'APPLE.COM/BILL', amount: 79 })],
+          new Map(),
+          'USD',
+          [rule]
+        );
+
+        expect(matching?.Name).toBe('Apple iCloud');
+        expect(nonMatching?.Name).toBe('APPLE.COM/BILL');
+      });
     });
   });
 });

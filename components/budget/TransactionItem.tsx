@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Row } from '@/components/ui/Section';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
+import { useMerchantRules } from '@/hooks/useMerchantRules';
 
 // --- Helper Functions ---
 
@@ -43,9 +44,19 @@ export interface TransactionItemProps {
  * transactions read as one flat list, not 90 stacked cards. The virtualizer
  * measures the height of the ABSOLUTE-positioned wrapper `TransactionMasterList`
  * renders around this component, so row-height behavior stays unchanged.
+ *
+ * The merchant NAME shown here is resolved through the household's merchant
+ * rules (`useMerchantRules`), never read straight off `tx.merchant` — a rule
+ * relabels "APPLE.COM/BILL 866-712-7753 CA" as "Apple" at display time while the
+ * stored descriptor stays untouched. The hook is called here rather than passed
+ * down as a prop so the rules subscription rides the core-context subscription
+ * this row already has (via `useFormatCurrency`): a rules edit re-renders every
+ * mounted row directly, without widening the memo comparator below.
  */
 export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDuplicate, onSplit, onMore, isSelectionMode, isSelected, onToggleSelection }: TransactionItemProps) => {
   const fmt = useFormatCurrency();
+  const { displayNameFor } = useMerchantRules();
+  const merchantName = displayNameFor({ merchant: tx.merchant, amount: tx.amount });
   return (
     <Row
       interactive
@@ -83,7 +94,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
 
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <p className="font-semibold tracking-tight text-brand-900 dark:text-brand-100 truncate text-base">{tx.merchant}</p>
+            <p className="font-semibold tracking-tight text-brand-900 dark:text-brand-100 truncate text-base">{merchantName}</p>
             {getSourceIcon(tx.source, tx.isRecurring)}
           </div>
           {/* Optional "what was bought" note — a quiet one-line subtitle. The
@@ -164,7 +175,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
                 size="icon"
                 onClick={(e) => { e.stopPropagation(); onEdit(tx); }}
                 className="text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-700/50 rounded-btn"
-                aria-label={getSanitizedLabel(tx.merchant, 'Edit')}
+                aria-label={getSanitizedLabel(merchantName, 'Edit')}
               >
                 <Edit size={16} />
               </Button>
@@ -173,7 +184,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
                 size="icon"
                 onClick={(e) => { e.stopPropagation(); onDuplicate(tx); }}
                 className="text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-700/50 rounded-btn"
-                aria-label={getSanitizedLabel(tx.merchant, 'Duplicate')}
+                aria-label={getSanitizedLabel(merchantName, 'Duplicate')}
               >
                 <Copy size={16} />
               </Button>
@@ -182,7 +193,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
                 size="icon"
                 onClick={(e) => { e.stopPropagation(); onSplit(tx); }}
                 className="text-brand-400 dark:text-brand-450 hover:text-brand-600 dark:hover:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-700/50 rounded-btn"
-                aria-label={getSanitizedLabel(tx.merchant, 'Split')}
+                aria-label={getSanitizedLabel(merchantName, 'Split')}
               >
                 <Scissors size={16} />
               </Button>
@@ -191,7 +202,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
                 size="icon"
                 onClick={(e) => { e.stopPropagation(); onDelete(tx); }}
                 className="text-brand-400 dark:text-brand-450 hover:text-money-neg dark:hover:text-money-negDark hover:bg-money-bgNeg dark:hover:bg-money-neg/15 rounded-btn"
-                aria-label={getSanitizedLabel(tx.merchant, 'Delete')}
+                aria-label={getSanitizedLabel(merchantName, 'Delete')}
               >
                 <Trash2 size={16} />
               </Button>
@@ -205,7 +216,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
                   size="icon"
                   onClick={(e) => { e.stopPropagation(); onMore(tx); }}
                   className="text-brand-400 dark:text-brand-450 active:bg-brand-100 dark:active:bg-brand-700/50 rounded-btn"
-                  aria-label={getSanitizedLabel(tx.merchant, 'More options')}
+                  aria-label={getSanitizedLabel(merchantName, 'More options')}
                 >
                   <MoreVertical size={20} />
                 </Button>
@@ -217,7 +228,10 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
     </Row>
   );
 }, (prevProps, nextProps) => {
-  // Custom comparator to handle reference instability from Firestore
+  // Custom comparator to handle reference instability from Firestore.
+  // `merchant` + `amount` are both compared below, which covers every PROP input
+  // to the merchant-rule lookup; the rules themselves arrive via context, and a
+  // context change re-renders this component regardless of this comparator.
   const p = prevProps.transaction;
   const n = nextProps.transaction;
 

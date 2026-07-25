@@ -6,6 +6,7 @@ import Input from '@/components/ui/Input';
 import EmptyState from '@/components/ui/EmptyState';
 import { Section, SurfaceList, DisclosureRow } from '@/components/ui/Section';
 import { useFinance, useGamification, useMealPlan, useShopping, useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
+import { useMerchantRules } from '@/hooks/useMerchantRules';
 import { searchAll, type GlobalSearchEntityType, type GlobalSearchResult } from '@/utils/globalSearch';
 
 interface SearchOverlayProps {
@@ -80,15 +81,20 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ isOpen, onClose }) => {
   const { shoppingList } = useShopping();
   const { todos } = useTodos();
   const { householdSettings } = useHouseholdCore();
+  // Merchant rules widen transaction matching to the friendly name as well as
+  // the raw bank descriptor, so a renamed merchant is still findable by either
+  // spelling (`utils/merchantRules.ts`).
+  const { rules: merchantRules } = useMerchantRules();
 
   const results = useMemo(
     () =>
       searchAll(
         { transactions, habits, meals, todos, shoppingItems: shoppingList },
         query,
-        householdSettings
+        householdSettings,
+        merchantRules
       ),
-    [transactions, habits, meals, todos, shoppingList, householdSettings, query]
+    [transactions, habits, meals, todos, shoppingList, householdSettings, merchantRules, query]
   );
 
   const grouped = useMemo(() => {

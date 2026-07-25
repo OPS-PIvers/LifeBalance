@@ -12,6 +12,7 @@ import {
   formatDistanceToNow,
 } from 'date-fns';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
+import { useMerchantRules } from '@/hooks/useMerchantRules';
 import { INCOME_CATEGORY, type Transaction } from '@/types/schema';
 import { roundMoney, sumMoney } from '@/utils/money';
 
@@ -126,6 +127,10 @@ export interface DashboardTransactionStats {
  */
 export const useDashboardTransactionStats = (): DashboardTransactionStats => {
   const { transactions } = useFinance();
+  // F-MONEY-14: the ActivityFeed row's `title` is user-facing, so it carries the
+  // merchant-rule name rather than the raw bank descriptor. Resolved inside the
+  // shared pass (not by each consumer) so the single-pass contract holds.
+  const { displayNameFor } = useMerchantRules();
 
   return useMemo<DashboardTransactionStats>(() => {
     const now = new Date();
@@ -166,7 +171,7 @@ export const useDashboardTransactionStats = (): DashboardTransactionStats => {
       transactionActivityRows.push({
         id: t.id,
         type: 'transaction',
-        title: t.merchant,
+        title: displayNameFor(t),
         subtitle: t.category,
         timestamp: parseISO(t.createdAt || t.date),
         amount: t.amount,
@@ -268,5 +273,5 @@ export const useDashboardTransactionStats = (): DashboardTransactionStats => {
       recentTransactions,
       transactionActivityRows: topTransactionActivityRows,
     };
-  }, [transactions]);
+  }, [transactions, displayNameFor]);
 };

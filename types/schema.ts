@@ -518,6 +518,60 @@ export interface CalendarItem {
   bankDescriptorAliases?: string[];
 }
 
+/**
+ * MerchantRule — household-authored cleanup for ugly bank descriptors
+ * ("APPLE.COM/BILL 866-712-7753 CA" → "Apple"). A rule maps a descriptor
+ * PATTERN to a friendly name plus optional side-effects (budget category, an
+ * auto-pay bill link, a no-spend-day exemption).
+ *
+ * Renaming is DISPLAY-TIME ONLY: the stored `Transaction.merchant` keeps the
+ * bank's original text forever, and every surface resolves the label through
+ * `utils/merchantRules.ts` at render time. That is what makes a rule instantly
+ * retroactive (it relabels history the moment it is saved, with no backfill
+ * write) and instantly reversible (deleting the rule restores the raw text).
+ * It also keeps the bank's descriptor as the stable IDENTITY key for dedup —
+ * `utils/transactionIdentity.ts` deliberately does NOT consult rules, because a
+ * user-editable label must never decide whether two rows are the same purchase.
+ */
+export interface MerchantRule {
+  /** Client-generated stable key (also the React list key and the editor's
+   *  self-exclusion handle in `findShadowingRule`). */
+  id: string;
+  /** Case-insensitive CONTAINS match against the raw bank descriptor.
+   *  Punctuation is significant — "APPLE.COM" does not match "APPLECOM". An
+   *  empty/whitespace-only pattern never matches anything. */
+  pattern: string;
+  /** Optional cent-exact qualifier in decimal dollars (never cents — same
+   *  convention as `Transaction.amount`). Present ⇒ the rule fires only for a
+   *  descriptor match AT this amount, which is how one merchant's $2.99
+   *  subscription is told apart from a $79 one-off. `0` is a legitimate value
+   *  (the Apple Pay pre-auth stub), so presence is tested, never truthiness. */
+  amount?: number;
+  /** Friendly display name. Optional: a category/bill-only rule leaves the
+   *  merchant text alone and still applies its other effects. */
+  name?: string;
+  /** Budget category auto-assigned to matching transactions. */
+  category?: string;
+  /** Calendar item / recurring template id this descriptor should auto-pay. */
+  billId?: string;
+  /** Matching charges don't break a no-spend day (see `HabitTriggers.noSpend`)
+   *  — the escape hatch for a charge the household considers planned. */
+  exempt?: boolean;
+  /** ISO timestamp. Also the deterministic tie-breaker when two rules are
+   *  exactly as specific: the older rule wins. */
+  createdAt: string;
+  /** ISO timestamp of the most recent match, stamped where rules are APPLIED
+   *  (the nightly sync / review path), not at render time. Powers the editor's
+   *  "this rule hasn't fired in months — is it dead?" hint. */
+  lastMatchedAt?: string;
+  /** Cumulative match count, shown in the editor as a confidence signal. */
+  matchCount?: number;
+}
+
+/** Upper bound on `Household.merchantRules`, keeping the bounded array well
+ *  clear of Firestore's 1 MiB document ceiling. */
+export const MAX_MERCHANT_RULES = 200;
+
 export type EffortLevel = 'easy' | 'medium' | 'hard' | 'very_hard';
 
 // Habit Automations (PRD #1065): a single saved geolocation that can fire a
@@ -1012,6 +1066,17 @@ export interface Household {
   // Rides on the same field-permissive household-doc update rule as
   // pendingRedemptions/redemptionHistory — no rules change needed.
   unlockedRewardIds?: string[];
+
+  // Household-authored merchant rules (descriptor → friendly name / category /
+  // bill link / no-spend exemption). A BOUNDED array on the household doc —
+  // deliberately NOT a subcollection, matching the redemptionHistory /
+  // pendingRedemptions precedent — capped at MAX_MERCHANT_RULES. Two payoffs:
+  // the client needs no new listener (rules arrive with the household doc every
+  // surface already subscribes to, so display-time renaming costs zero reads),
+  // and the bankEmailSync Cloud Function gets them free from the household doc
+  // it already loads. Rides the field-permissive household-doc update rule, so
+  // no firestore.rules change. Absent on legacy households (treat as empty).
+  merchantRules?: MerchantRule[];
 
   // Billing / subscription (Plan 050). Absent on every legacy + free-tier
   // household — treat absent as the free plan everywhere (see utils/entitlements.ts).

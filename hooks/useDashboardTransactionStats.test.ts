@@ -1,12 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { startOfWeek, subWeeks, addDays, format } from 'date-fns';
-import type { Transaction } from '@/types/schema';
+import type { MerchantRule, Transaction } from '@/types/schema';
 import { useDashboardTransactionStats } from '@/hooks/useDashboardTransactionStats';
-import { useFinance } from '@/contexts/FirebaseHouseholdContext';
+import { useFinance, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useFinance: vi.fn(),
+  // Reached via useMerchantRules: the activity-feed row `title` is user-facing,
+  // so it resolves through the household's merchant rules.
+  useHouseholdCore: vi.fn(),
 }));
 
 // Frozen "now": Tue 2026-06-16T12:00:00Z.
@@ -37,10 +40,18 @@ const setTransactions = (transactions: Transaction[]) => {
 
 const render = () => renderHook(() => useDashboardTransactionStats()).result.current;
 
+/** Point the household at a set of merchant rules (none by default). */
+const setMerchantRules = (merchantRules?: MerchantRule[]) => {
+  vi.mocked(useHouseholdCore).mockReturnValue({
+    householdSettings: merchantRules ? { merchantRules } : undefined,
+  } as unknown as ReturnType<typeof useHouseholdCore>);
+};
+
 describe('useDashboardTransactionStats', () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(new Date(NOW_ISO));
+    setMerchantRules();
   });
 
   afterEach(() => {
@@ -354,6 +365,45 @@ describe('useDashboardTransactionStats', () => {
       const stats = render();
       expect(stats.lastWeekSpend).toBe(33);
       expect(stats.thisWeekSpend).toBe(0);
+    });
+  });
+
+  describe('activity-feed titles resolve through merchant rules (F-MONEY-14)', () => {
+    const DESCRIPTOR = 'APPLE.COM/BILL 866-712-7753 CA';
+    const rule = (overrides: Partial<MerchantRule> = {}): MerchantRule => ({
+      id: 'r1',
+      pattern: 'APPLE.COM',
+      name: 'iCloud storage',
+      createdAt: '2026-07-01T00:00:00.000Z',
+      ...overrides,
+    });
+
+    it('titles the row with the friendly name', () => {
+      setMerchantRules([rule()]);
+      setTransactions([makeTransaction({ id: 'a', merchant: DESCRIPTOR, amount: 2.99 })]);
+      expect(render().transactionActivityRows[0]?.title).toBe('iCloud storage');
+    });
+
+    it('honours an amount-qualified rule, and falls through when the amount differs', () => {
+      setMerchantRules([rule({ amount: 2.99 }), rule({ id: 'r2', name: 'Apple' })]);
+      setTransactions([
+        makeTransaction({ id: 'a', merchant: DESCRIPTOR, amount: 2.99, createdAt: '2026-06-16T10:00:00Z' }),
+        makeTransaction({ id: 'b', merchant: DESCRIPTOR, amount: 39.99, createdAt: '2026-06-16T09:00:00Z' }),
+      ]);
+      const titles = render().transactionActivityRows.map(r => r.title);
+      expect(titles).toContain('iCloud storage');
+      expect(titles).toContain('Apple');
+    });
+
+    it('leaves the raw descriptor when no rule matches', () => {
+      setMerchantRules([rule({ pattern: 'AMERICAN EXPRESS', name: 'AmEx payment' })]);
+      setTransactions([makeTransaction({ id: 'a', merchant: DESCRIPTOR })]);
+      expect(render().transactionActivityRows[0]?.title).toBe(DESCRIPTOR);
+    });
+
+    it('leaves the raw descriptor when the household has no rules at all', () => {
+      setTransactions([makeTransaction({ id: 'a', merchant: DESCRIPTOR })]);
+      expect(render().transactionActivityRows[0]?.title).toBe(DESCRIPTOR);
     });
   });
 });

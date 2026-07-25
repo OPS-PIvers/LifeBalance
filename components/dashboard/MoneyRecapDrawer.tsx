@@ -3,6 +3,7 @@ import { Lock, TrendingDown, TrendingUp, ArrowDownRight, ArrowUpRight } from 'lu
 import { Drawer } from '@/components/ui/Drawer';
 import Eyebrow from '@/components/ui/Eyebrow';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
+import { useMerchantRules } from '@/hooks/useMerchantRules';
 import { roundMoney } from '@/utils/money';
 import { cn } from '@/utils/cn';
 import { formatMonthLabel } from '@/utils/monthLabel';
@@ -36,6 +37,10 @@ const SectionBlock: React.FC<{ label: string; children: React.ReactNode }> = ({ 
 
 export const MoneyRecapDrawer: React.FC<MoneyRecapDrawerProps> = ({ recap, isOpen, onClose }) => {
   const fmt = useFormatCurrency();
+  // The server stores the top expense's RAW bank descriptor; the household's
+  // merchant rules relabel it here, at display time (before the early return so
+  // the hook order is unconditional).
+  const { displayNameFor } = useMerchantRules();
 
   if (!recap) return null;
 
@@ -133,7 +138,7 @@ export const MoneyRecapDrawer: React.FC<MoneyRecapDrawerProps> = ({ recap, isOpe
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-brand-900 dark:text-brand-100 truncate">
-                  {recap.topExpense.merchant}
+                  {displayNameFor(recap.topExpense)}
                 </p>
                 <p className="text-xs text-brand-500 dark:text-brand-400 truncate">
                   {recap.topExpense.category} · {recap.topExpense.date}

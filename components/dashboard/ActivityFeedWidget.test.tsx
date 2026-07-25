@@ -8,6 +8,9 @@ import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useFinance: vi.fn(),
   useTodos: vi.fn(),
+  // Reached via useDashboardTransactionStats → useMerchantRules. No rules, so
+  // every merchant renders as its raw descriptor (the fail-open path).
+  useHouseholdCore: () => ({ householdSettings: undefined }),
 }));
 
 vi.mock('@/hooks/useFormatCurrency', () => ({

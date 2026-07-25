@@ -9,7 +9,10 @@
  * Zero React/Firestore dependencies — pure functions, unit-tested.
  */
 import { addDays, differenceInCalendarDays, format, parseISO } from 'date-fns';
-import { INCOME_CATEGORY, type Transaction } from '@/types/schema';
+import { INCOME_CATEGORY, type MerchantRule, type Transaction } from '@/types/schema';
+// Aliased: this module has a local `displayMerchant` variable (a cluster's
+// most-common descriptor), which is a different notion from the rule-resolved name.
+import { displayMerchant as resolveMerchantName } from '@/utils/merchantRules';
 import { merchantSimilar } from '@/utils/transactionIdentity';
 
 /** Minimum consecutive-gap window (days) for a MONTHLY cadence. */
@@ -155,7 +158,8 @@ function classifyCadence(sortedDates: string[]): 'monthly' | 'weekly' | null {
  */
 export function detectSubscriptions(
   transactions: DetectableTransaction[],
-  existingBillTitles: string[]
+  existingBillTitles: string[],
+  rules?: readonly MerchantRule[]
 ): DetectedSubscription[] {
   const expenseTxns = transactions.filter(t => t.category !== INCOME_CATEGORY);
 
@@ -207,7 +211,16 @@ export function detectSubscriptions(
       }
     }
 
+    // F-MONEY-14: this exclusion compares a merchant against USER-AUTHORED bill
+    // titles, so it must also see the user's own name for that merchant — a bill
+    // named "Apple" has to suppress a detected "APPLE.COM/BILL …", otherwise
+    // adding the detection as a bill would re-detect it forever. Note no amount
+    // is offered: `displayMerchant` here is a cluster's most-common descriptor
+    // rather than any single row's, so an amount-qualified rule would only match
+    // by coincidence. Bare patterns — the common case — resolve normally.
+    const friendlyName = resolveMerchantName({ merchant: displayMerchant }, rules);
     if (matchesExistingBill(displayMerchant, existingBillTitles)) continue;
+    if (friendlyName !== displayMerchant && matchesExistingBill(friendlyName, existingBillTitles)) continue;
 
     const gaps: number[] = [];
     for (let i = 1; i < dates.length; i++) {

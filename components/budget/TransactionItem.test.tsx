@@ -1,9 +1,17 @@
 import { render, screen } from '@testing-library/react';
-import { vi, describe, it, expect } from 'vitest';
-import type { Transaction } from '@/types/schema';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+import type { MerchantRule, Transaction } from '@/types/schema';
+
+// The row reads the household's merchant rules through `useMerchantRules`, which
+// resolves them from `useHouseholdCore().householdSettings`. Drive that from a
+// mutable binding so a test can author rules before rendering. Read lazily inside
+// the hook (not captured at factory time), so the hoisted mock stays valid.
+let merchantRules: MerchantRule[] | undefined;
 
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
-  useHouseholdCore: () => ({ householdSettings: null }),
+  useHouseholdCore: () => ({
+    householdSettings: merchantRules ? { merchantRules } : null,
+  }),
 }));
 
 vi.mock('lucide-react', () => ({
@@ -35,6 +43,10 @@ const baseTx: Transaction = {
 };
 
 const noop = () => {};
+
+beforeEach(() => {
+  merchantRules = undefined;
+});
 
 describe('TransactionItem — Plan 23 comment count badge', () => {
   it('renders no comment indicator when commentCount is absent/0', () => {
@@ -69,5 +81,75 @@ describe('TransactionItem — Plan 23 comment count badge', () => {
       />
     );
     expect(screen.getByLabelText('1 comment')).toBeInTheDocument();
+  });
+});
+
+describe('TransactionItem — merchant rules (display-time rename)', () => {
+  const uglyTx: Transaction = { ...baseTx, merchant: 'APPLE.COM/BILL 866-712-7753 CA' };
+
+  const renderRow = (transaction: Transaction) =>
+    render(
+      <TransactionItem
+        transaction={transaction}
+        onEdit={noop} onDelete={noop} onDuplicate={noop} onSplit={noop} onMore={noop}
+        isSelectionMode={false} isSelected={false} onToggleSelection={noop}
+      />
+    );
+
+  it('renders the raw bank descriptor when the household has no rules', () => {
+    renderRow(uglyTx);
+    expect(screen.getByText('APPLE.COM/BILL 866-712-7753 CA')).toBeInTheDocument();
+  });
+
+  it('renders the rule name instead of the raw descriptor when a rule matches', () => {
+    merchantRules = [
+      { id: 'r1', pattern: 'APPLE.COM/BILL', name: 'Apple', createdAt: '2026-07-01T00:00:00.000Z' },
+    ];
+
+    renderRow(uglyTx);
+
+    expect(screen.getByText('Apple')).toBeInTheDocument();
+    expect(screen.queryByText('APPLE.COM/BILL 866-712-7753 CA')).not.toBeInTheDocument();
+  });
+
+  it('uses the renamed merchant in the row action labels', () => {
+    merchantRules = [
+      { id: 'r1', pattern: 'APPLE.COM/BILL', name: 'Apple', createdAt: '2026-07-01T00:00:00.000Z' },
+    ];
+
+    renderRow(uglyTx);
+
+    expect(screen.getByLabelText('Edit transaction from Apple')).toBeInTheDocument();
+    expect(screen.getByLabelText('Delete transaction from Apple')).toBeInTheDocument();
+    expect(screen.getByLabelText('More options transaction from Apple')).toBeInTheDocument();
+  });
+
+  it('leaves the descriptor alone for a category-only rule that carries no name', () => {
+    merchantRules = [
+      { id: 'r1', pattern: 'APPLE.COM/BILL', category: 'Subscriptions', createdAt: '2026-07-01T00:00:00.000Z' },
+    ];
+
+    renderRow(uglyTx);
+
+    expect(screen.getByText('APPLE.COM/BILL 866-712-7753 CA')).toBeInTheDocument();
+  });
+
+  it('honours an amount-qualified rule using the row amount', () => {
+    merchantRules = [
+      { id: 'r1', pattern: 'APPLE.COM/BILL', name: 'Apple One', amount: 45.5, createdAt: '2026-07-01T00:00:00.000Z' },
+    ];
+
+    // baseTx.amount is 45.5, so the cent-exact qualifier is satisfied.
+    renderRow(uglyTx);
+    expect(screen.getByText('Apple One')).toBeInTheDocument();
+  });
+
+  it('does not apply an amount-qualified rule at a different amount', () => {
+    merchantRules = [
+      { id: 'r1', pattern: 'APPLE.COM/BILL', name: 'Apple One', amount: 9.99, createdAt: '2026-07-01T00:00:00.000Z' },
+    ];
+
+    renderRow(uglyTx);
+    expect(screen.getByText('APPLE.COM/BILL 866-712-7753 CA')).toBeInTheDocument();
   });
 });
