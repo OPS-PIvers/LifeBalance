@@ -403,3 +403,47 @@ describe('suggestPatternFromDescriptor', () => {
     }
   });
 });
+
+describe('ruleMatches and pickMerchantRule never disagree', () => {
+  /**
+   * `pickMerchantRule` matches against a descriptor it normalized ONCE before
+   * looping, rather than calling `ruleMatches` per rule. That hoist is only safe
+   * while the two paths stay equivalent, so pin it: for every rule/input pair,
+   * a rule matching under `ruleMatches` must be selectable by the picker, and a
+   * non-matching one must never be selected.
+   */
+  const rules = [
+    makeRule({ id: 'bare', pattern: 'APPLE.COM' }),
+    makeRule({ id: 'amount', pattern: 'APPLE.COM', amount: 2.99 }),
+    makeRule({ id: 'long', pattern: 'APPLE.COM/BILL' }),
+    makeRule({ id: 'other', pattern: 'AMERICAN EXPRESS' }),
+    makeRule({ id: 'blank', pattern: '   ' }),
+    makeRule({ id: 'zero', pattern: 'SQ *STAND', amount: 0 }),
+  ];
+
+  const inputs: Array<[string, number | undefined]> = [
+    ['APPLE.COM/BILL 866-712-7753 CA', 2.99],
+    ['APPLE.COM/BILL 866-712-7753 CA', 39.99],
+    ['  apple.com/us   866 ', 2.99],
+    ['AMERICAN EXPRESS ACH PMT 240725', 912.44],
+    ['SQ *STAND 4021', 0],
+    ['SQ *STAND 4021', undefined],
+    ['SAFEWAY 1234', 45.5],
+    ['', 10],
+  ];
+
+  it.each(inputs)('agrees for %j at %j', (descriptor, amount) => {
+    const winner = pickMerchantRule(descriptor, amount, rules);
+    const matching = rules.filter((r) => ruleMatches(r, descriptor, amount));
+
+    if (matching.length === 0) {
+      expect(winner).toBeNull();
+      return;
+    }
+    // The winner must itself be a match, and must be one the per-rule predicate
+    // also accepts — i.e. the hoisted normalization changed nothing.
+    expect(winner).not.toBeNull();
+    expect(matching.map((r) => r.id)).toContain(winner!.id);
+    expect(ruleMatches(winner!, descriptor, amount)).toBe(true);
+  });
+});

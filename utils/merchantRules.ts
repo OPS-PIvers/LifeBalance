@@ -70,6 +70,25 @@ const AMOUNT_QUALIFIER_WEIGHT = 1000;
  *    tested, not truthiness, so an `amount: 0` qualifier works.
  */
 export function ruleMatches(rule: MerchantRule, descriptor: string, amount?: number): boolean {
+  return matchesNormalized(rule, normalizeForRuleMatch(descriptor), amount);
+}
+
+/**
+ * {@link ruleMatches} against an ALREADY-normalized descriptor.
+ *
+ * The descriptor is constant across a single {@link pickMerchantRule} lookup, so
+ * normalizing it inside the loop would repeat identical work once per rule. That
+ * is cheap on the client (bounded by `MAX_MERCHANT_RULES`, and a virtualizer
+ * keeps visible rows small), but the Cloud Functions duplicate of this module
+ * runs it for every transaction in a sync batch — so the hoist is worth having
+ * in both copies. Each rule's own `pattern` still normalizes per iteration;
+ * that one genuinely varies.
+ */
+function matchesNormalized(
+  rule: MerchantRule,
+  normalizedDescriptor: string,
+  amount?: number,
+): boolean {
   const pattern = normalizeForRuleMatch(rule.pattern);
   if (!pattern) return false;
 
@@ -78,7 +97,7 @@ export function ruleMatches(rule: MerchantRule, descriptor: string, amount?: num
     if (amountCents(rule.amount) !== amountCents(amount)) return false;
   }
 
-  return normalizeForRuleMatch(descriptor).includes(pattern);
+  return normalizedDescriptor.includes(pattern);
 }
 
 /**
@@ -138,9 +157,12 @@ export function pickMerchantRule(
 ): MerchantRule | null {
   if (!rules || rules.length === 0) return null;
 
+  // Normalized once, not once per rule — see matchesNormalized.
+  const normalizedDescriptor = normalizeForRuleMatch(descriptor);
+
   let winner: MerchantRule | null = null;
   for (const rule of rules) {
-    if (!ruleMatches(rule, descriptor, amount)) continue;
+    if (!matchesNormalized(rule, normalizedDescriptor, amount)) continue;
     if (winner === null || outranks(rule, winner)) winner = rule;
   }
   return winner;
