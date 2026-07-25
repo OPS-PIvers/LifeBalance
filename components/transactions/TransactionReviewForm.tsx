@@ -19,6 +19,7 @@ import { roundMoney } from '@/utils/money';
 import { pickKeeper } from '@/utils/transactionMerge';
 import { useFinance, useGamification, useExpandedCalendarItems } from '@/contexts/FirebaseHouseholdContext';
 import { useMerchantRules } from '@/hooks/useMerchantRules';
+import InlineMerchantRename from '@/components/transactions/InlineMerchantRename';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
@@ -512,6 +513,13 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
           Your bank calls this <span className="font-mono">{renamedFromDescriptor}</span>
         </p>
       )}
+
+      {/* Offered only while this row is still showing raw bank text — reviewing
+          a charge is where you actually notice the ugly descriptor, so it's
+          where renaming it should be one tap away. Keyed on the STORED
+          descriptor, not the edited field above: the rule matches what the bank
+          sends next month, not what this row is retitled to. */}
+      <InlineMerchantRename merchant={transaction.merchant} amount={transaction.amount} />
 
       <Input
         label="What was it? (Optional)"

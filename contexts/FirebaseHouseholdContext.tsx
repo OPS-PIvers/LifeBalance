@@ -194,6 +194,10 @@ import {
   makeRefreshHabitPatterns,
   makeRateInsight,
 } from '@/contexts/household/mutations/coreMutations';
+import {
+  makeMerchantRuleMutations,
+  type MerchantRuleDraft,
+} from '@/contexts/household/mutations/merchantRuleMutations';
 import { makeNotificationMutations } from '@/contexts/household/mutations/notificationMutations';
 import {
   makeAddMember,
@@ -2136,6 +2140,22 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await makeHouseholdSettingsMutations({ db, householdId }).setMealCookedHabitId(habitId);
   }, [householdId]);
 
+  // --- ACTIONS: MERCHANT RULES (F-MONEY-14) ---
+  // (contexts/household/mutations/merchantRuleMutations.ts — all three transact
+  // on the household doc so a concurrent edit from the partner is never lost.)
+
+  const addMerchantRule = useCallback(async (draft: MerchantRuleDraft): Promise<void> => {
+    await makeMerchantRuleMutations({ db, householdId }).addMerchantRule(draft);
+  }, [householdId]);
+
+  const updateMerchantRule = useCallback(async (id: string, draft: MerchantRuleDraft): Promise<void> => {
+    await makeMerchantRuleMutations({ db, householdId }).updateMerchantRule(id, draft);
+  }, [householdId]);
+
+  const deleteMerchantRule = useCallback(async (id: string): Promise<void> => {
+    await makeMerchantRuleMutations({ db, householdId }).deleteMerchantRule(id);
+  }, [householdId]);
+
   // --- ACTIONS: MEALS ---
 
   const addMeal = useCallback(async (meal: Omit<Meal, 'id'>, options?: { suppressToast?: boolean }): Promise<string> => {
@@ -2681,6 +2701,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setKidModePin,
     setDietaryProfile,
     setMealCookedHabitId,
+    addMerchantRule,
+    updateMerchantRule,
+    deleteMerchantRule,
     addKidProfile,
     updateKidProfile,
     removeKidProfile,
@@ -2702,6 +2725,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     pendingItemsCount, apiKeys,
     householdId, householdSettings, refreshInsight, rateInsight, addMember, updateMember, removeMember, deleteHousehold,
     completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setCaptureReviewMode, setKidModePin, setDietaryProfile, setMealCookedHabitId,
+    addMerchantRule, updateMerchantRule, deleteMerchantRule,
     addKidProfile, updateKidProfile, removeKidProfile, activeMemberId, actAs, exitToParent,
     recaps,
     moneyRecaps,

@@ -50,6 +50,7 @@ import ApiKeyManager from '@/components/settings/ApiKeyManager';
 import CalendarFeedCard from '@/components/settings/CalendarFeedCard';
 import ShortcutSetupGuide from '@/components/settings/ShortcutSetupGuide';
 import ActivityLogCard from '@/components/settings/ActivityLogCard';
+import MerchantRulesCard from '@/components/settings/MerchantRulesCard';
 import { ChangelogDrawer } from '@/components/settings/ChangelogDrawer';
 import { CHANGELOG } from '@/data/changelog';
 import { DashboardWidgetSettings } from '@/components/settings/DashboardWidgetSettings';
@@ -1046,6 +1047,11 @@ const Settings: React.FC = () => {
           </Row>
         </SurfaceList>
       </Section>
+
+      {/* Merchant rules (F-MONEY-14) — household-authored cleanup for ugly bank
+          descriptors. Sits with the other money-display settings; renaming is
+          display-time only, so nothing here rewrites stored transactions. */}
+      <MerchantRulesCard />
 
       <CalendarFeedCard />
 

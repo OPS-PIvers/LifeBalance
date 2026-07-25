@@ -25,6 +25,7 @@ import { accountImpactOf, effectiveAccountImpact, isBankSyncTransaction, resolve
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
 import { selectHabitsToFire } from '@/utils/transactionHabitFiring';
 import { MAX_COMMENT_LENGTH } from '@/contexts/household/mutations/commentMutations';
+import { buildMerchantRuleFields, type MerchantRuleDraft } from '@/contexts/household/mutations/merchantRuleMutations';
 import { roundMoney } from '@/utils/money';
 import { splitParticipantKey } from '@/utils/settlement';
 import { trashDocId, type TrashDomain, type TrashedItem } from '@/utils/trash';
@@ -68,7 +69,8 @@ import {
   ActivityLogEntry,
   SavingsGoal,
   TransactionComment,
-  MerchantRule
+  MerchantRule,
+  MAX_MERCHANT_RULES
 } from '@/types/schema';
 import toast from 'react-hot-toast';
 
@@ -755,6 +757,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [dietaryProfile, setDietaryProfileState] = useState<DietaryProfile | undefined>(undefined);
   // F-MEALS-04 — habit auto-credited when a meal-plan item is marked cooked.
   const [mealCookedHabitId, setMealCookedHabitIdState] = useState<string | undefined>(undefined);
+  // F-MONEY-14 — merchant rules are STATE (not the frozen MOCK_MERCHANT_RULES
+  // constant) so the Settings editor's add/edit/delete round-trip is walkable in
+  // Test Mode and the display-time renaming visibly follows it.
+  const [merchantRules, setMerchantRules] = useState<MerchantRule[]>(MOCK_MERCHANT_RULES);
 
   // Account operations
   const addAccount = useCallback(async (account: Omit<Account, 'id'>) => {
@@ -869,6 +875,59 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const setMealCookedHabitId = useCallback(async (habitId: string | null) => {
     setMealCookedHabitIdState(habitId ?? undefined);
     toast.success(habitId ? 'Mock: Cook habit linked' : 'Mock: Cook habit unlinked');
+  }, []);
+
+  // F-MONEY-14 merchant rules. In-memory twins of
+  // contexts/household/mutations/merchantRuleMutations.ts: same validation, same
+  // cap, the same rebuild-don't-merge semantics (so clearing a field in Test
+  // Mode really clears it), and the same "toast then THROW" contract on every
+  // failure so an editor form behaves identically here and in production.
+  const addMerchantRule = useCallback(async (draft: MerchantRuleDraft) => {
+    if (!draft.pattern.trim()) {
+      toast.error('Enter some descriptor text for this rule to match.');
+      throw new Error('blank-pattern');
+    }
+    if (merchantRules.length >= MAX_MERCHANT_RULES) {
+      toast.error(`You've reached the limit of ${MAX_MERCHANT_RULES} merchant rules. Delete one to add another.`);
+      throw new Error('rule-cap-reached');
+    }
+    const rule: MerchantRule = {
+      id: generateId(),
+      createdAt: new Date().toISOString(),
+      ...buildMerchantRuleFields(draft),
+    };
+    setMerchantRules(prev => [...prev, rule]);
+    toast.success('Mock: Merchant rule saved');
+  }, [merchantRules.length]);
+
+  const updateMerchantRule = useCallback(async (id: string, draft: MerchantRuleDraft) => {
+    if (!draft.pattern.trim()) {
+      toast.error('Enter some descriptor text for this rule to match.');
+      throw new Error('blank-pattern');
+    }
+    if (!merchantRules.some(rule => rule.id === id)) {
+      toast.error('That merchant rule no longer exists.');
+      throw new Error('missing-rule');
+    }
+    setMerchantRules(prev => prev.map(rule => (
+      rule.id === id
+        // Rebuilt from id/createdAt + the draft (bookkeeping carried across), so
+        // an emptied field is genuinely dropped rather than spread-merged back.
+        ? {
+            id: rule.id,
+            createdAt: rule.createdAt,
+            ...buildMerchantRuleFields(draft),
+            ...(rule.lastMatchedAt !== undefined ? { lastMatchedAt: rule.lastMatchedAt } : {}),
+            ...(rule.matchCount !== undefined ? { matchCount: rule.matchCount } : {}),
+          }
+        : rule
+    )));
+    toast.success('Mock: Merchant rule updated');
+  }, [merchantRules]);
+
+  const deleteMerchantRule = useCallback(async (id: string) => {
+    setMerchantRules(prev => prev.filter(rule => rule.id !== id));
+    toast.success('Mock: Merchant rule deleted');
   }, []);
 
   const updateAccountBalance = useCallback(async (id: string, newBalance: number) => {
@@ -2326,7 +2385,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     redemptionHistory,
     unlockedRewardIds,
     moduleVisibility,
-    merchantRules: MOCK_MERCHANT_RULES,
+    merchantRules,
     captureReview,
     dietaryProfile,
     mealCookedHabitId,
@@ -2679,6 +2738,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     setKidModePin,
     setDietaryProfile,
     setMealCookedHabitId,
+    addMerchantRule,
+    updateMerchantRule,
+    deleteMerchantRule,
     addKidProfile,
     updateKidProfile,
     removeKidProfile,

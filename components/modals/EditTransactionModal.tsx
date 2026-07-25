@@ -8,6 +8,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import SplitExpenseEditor from '@/components/transactions/SplitExpenseEditor';
 import { validateSplit } from '@/utils/settlement';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import InlineMerchantRename from '@/components/transactions/InlineMerchantRename';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
@@ -348,6 +349,17 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
           <p className="-mt-2 text-xxs text-brand-450">
             Your bank calls this <span className="font-mono">{renamedFromDescriptor}</span>
           </p>
+        )}
+
+        {/* Keyed on the STORED descriptor rather than the editable field above:
+            a rule has to match what the bank sends next month, not whatever
+            this one row gets retitled to. */}
+        {transaction && (
+          <InlineMerchantRename
+            merchant={transaction.merchant}
+            amount={transaction.amount}
+            disabled={isSaving}
+          />
         )}
 
         <Input
