@@ -14,6 +14,7 @@ import {
   increment,
   arrayUnion,
   arrayRemove,
+  deleteField,
   writeBatch,
   runTransaction,
   serverTimestamp,
@@ -736,6 +737,225 @@ export function makeToggleTodoSubtask(deps: {
   };
 
   return { toggleTodoSubtask };
+}
+
+// --- F-TODO-16: to-do categories ---------------------------------------------
+
+/** Firestore's hard cap on operations in a single `writeBatch`. */
+export const FIRESTORE_BATCH_LIMIT = 500;
+
+/**
+ * Splits a list of pending writes into batch-sized chunks so a rename/delete
+ * that touches more to-dos than Firestore allows in one `writeBatch` still
+ * commits (as a sequence of batches). Pure and exported so the 500-op boundary
+ * is unit-testable without a Firestore.
+ *
+ * Note the resulting commits are NOT one atomic unit — see the ordering comment
+ * on `makeTodoCategoryEditMutations` for why that is acceptable here.
+ */
+export function chunkForBatches<T>(
+  items: readonly T[],
+  size: number = FIRESTORE_BATCH_LIMIT,
+): T[][] {
+  if (size < 1) throw new Error('chunkForBatches: size must be at least 1');
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
+/** Category comparison key: trimmed + lowercased ('' for absent/blank). */
+function categoryKey(value: string | undefined): string {
+  return (value ?? '').trim().toLowerCase();
+}
+
+/**
+ * Every to-do (active AND completed) that currently carries a category, read
+ * through the converter. `orderBy('category')` is the cheap way to ask Firestore
+ * for "docs where this field EXISTS" — uncategorized to-dos are excluded from
+ * the result set entirely, so a rename/delete never pages through them. The
+ * case-insensitive match itself is done in memory because Firestore equality is
+ * case-sensitive and the stored spelling is whatever the user typed.
+ *
+ * COST: O(N) reads where N is every categorised to-do in the household, not just
+ * the ones in `key`. Narrowing it server-side would need a denormalised
+ * case-folded field (e.g. `categoryLower`) to query by equality, the way
+ * `Habit.titleLower` exists for quickAddHabit. Fine at household scale — rename
+ * and delete are rare, deliberate actions — but revisit if to-do volume grows.
+ */
+async function fetchTodosInCategory(db: Firestore, householdId: string, key: string) {
+  const todosCol = collection(db, `households/${householdId}/todos`).withConverter(todoConverter);
+  const snap = await getDocs(query(todosCol, orderBy('category')));
+  return snap.docs.filter(d => categoryKey(d.data().category) === key);
+}
+
+/**
+ * updateTodoCategories — original closure captures only `householdId`.
+ *
+ * Persists the household's to-do category vocabulary to the household doc with a
+ * single `updateDoc` — the chip pickers call it with
+ * `[...todoCategories, newName]`.
+ *
+ * Toast Behavior: none here, matching `updateToDo`/`deleteToDo` above — the
+ * callers (the chip picker's inline editor, the category manager drawer) own
+ * both the success and the failure message, and they can only do that honestly
+ * if a failed write actually REJECTS.
+ *
+ * @throws Re-throws any caught error so callers don't report success for a write
+ *         that never landed.
+ */
+export function makeUpdateTodoCategories(deps: {
+  db: Firestore;
+  householdId: string | null;
+}) {
+  const { db, householdId } = deps;
+
+  const updateTodoCategories = async (categories: string[]) => {
+    if (!householdId) return;
+    try {
+      await updateDoc(doc(db, `households/${householdId}`), {
+        todoCategories: categories,
+      });
+    } catch (error) {
+      console.error('[updateTodoCategories] Failed:', error);
+      throw error; // Re-throw so callers can handle the error with contextual messaging
+    }
+  };
+
+  return { updateTodoCategories };
+}
+
+/**
+ * renameTodoCategory / deleteTodoCategory — closures capture `householdId` and
+ * the household's current `todoCategories` list (the new list is derived from
+ * it, exactly as the habit chip picker derives its append).
+ *
+ * Both rewrite EVERY matching to-do — active and completed — in chunked
+ * `writeBatch`es (Firestore caps a batch at 500 ops, see `chunkForBatches`).
+ *
+ * Ordering matters because multiple batches are not one atomic unit: the to-do
+ * rewrites commit FIRST and the household vocabulary list LAST. A failure part
+ * way through therefore leaves the old name still listed rather than dropping a
+ * category whose tasks still point at it — and a retry CONVERGES, because the
+ * re-run re-queries by the old name and so only touches the to-dos the failed
+ * run hadn't rewritten yet (covered in todoCategoryMutations.test.ts).
+ *
+ * Toast Behavior: none here — both functions RE-THROW so their single caller
+ * (TodoCategoryManagerDrawer) owns the success/failure message and can keep its
+ * rename editor open when the write didn't land.
+ */
+export function makeTodoCategoryEditMutations(deps: {
+  db: Firestore;
+  householdId: string | null;
+  todoCategories: string[];
+}) {
+  const { db, householdId, todoCategories } = deps;
+
+  /**
+   * Renames a category across the whole household.
+   *
+   * - Matching is case-INSENSITIVE, so a pure typo fix ('home' → 'Home') really
+   *   does rewrite the tasks instead of silently matching nothing.
+   * - A no-op (resolves immediately, no writes) when the new name is blank or
+   *   identical to the old one.
+   * - If the new name collides case-insensitively with an ANOTHER existing
+   *   category, the rename MERGES into it: tasks are rewritten to that
+   *   category's stored spelling and the old entry is dropped from the list —
+   *   never producing two vocabulary entries that differ only by case.
+   *
+   * @throws Re-throws any caught error (see the toast note above).
+   */
+  const renameTodoCategory = async (oldName: string, newName: string) => {
+    if (!householdId) return;
+    const trimmedNew = newName.trim();
+    if (!trimmedNew || trimmedNew === oldName) return;
+
+    const oldKey = categoryKey(oldName);
+    if (!oldKey) return; // nothing identifiable to rename
+
+    // Merge target: an existing entry that collides with the new name (other
+    // than the entry being renamed). Its stored spelling wins.
+    const mergeTarget = todoCategories.find(
+      c => categoryKey(c) === categoryKey(trimmedNew) && categoryKey(c) !== oldKey,
+    );
+    const targetName = mergeTarget ?? trimmedNew;
+    const targetKey = categoryKey(targetName);
+
+    // Rebuild the vocabulary in place (order preserved), replacing the renamed
+    // entry and de-duping case-insensitively so a merge collapses to one entry.
+    const nextCategories: string[] = [];
+    const seen = new Set<string>();
+    for (const category of todoCategories) {
+      const value = categoryKey(category) === oldKey ? targetName : category;
+      const key = categoryKey(value);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      nextCategories.push(value);
+    }
+    // The old name may live only on to-dos (a legacy/imported value that was
+    // never added to the list) — make sure the target still ends up listed.
+    if (!seen.has(targetKey)) nextCategories.push(targetName);
+
+    try {
+      const matching = await fetchTodosInCategory(db, householdId, oldKey);
+      for (const chunk of chunkForBatches(matching)) {
+        const batch = writeBatch(db);
+        for (const todoDoc of chunk) {
+          batch.update(todoDoc.ref, { category: targetName });
+        }
+        await batch.commit();
+      }
+      await updateDoc(doc(db, `households/${householdId}`), {
+        todoCategories: nextCategories,
+      });
+    } catch (error) {
+      console.error('[renameTodoCategory] Failed:', error);
+      throw error; // Re-throw so callers can handle the error with contextual messaging
+    }
+  };
+
+  /**
+   * Removes a category from the household vocabulary AND clears it from every
+   * to-do that used it, so those tasks fall back to Uncategorized.
+   *
+   * The field is removed with `deleteField()` rather than set to `''`: the
+   * sort/group/color helpers treat an ABSENT (or null) category as
+   * Uncategorized, and leaving an empty string behind would put a blank chip in
+   * the vocabulary-derived UI. Note "absent" is not an invariant the whole app
+   * upholds — clearing the category from the to-do FORM passes `undefined`
+   * through `updateToDo`, and `sanitizeFirestoreData` turns both `undefined` and
+   * `''` into `null` — so consumers must handle absent AND null. This path just
+   * picks the cleaner of the two.
+   *
+   * @throws Re-throws any caught error (see the toast note above).
+   */
+  const deleteTodoCategory = async (name: string) => {
+    if (!householdId) return;
+    const key = categoryKey(name);
+    if (!key) return;
+
+    const nextCategories = todoCategories.filter(c => categoryKey(c) !== key);
+
+    try {
+      const matching = await fetchTodosInCategory(db, householdId, key);
+      for (const chunk of chunkForBatches(matching)) {
+        const batch = writeBatch(db);
+        for (const todoDoc of chunk) {
+          batch.update(todoDoc.ref, { category: deleteField() });
+        }
+        await batch.commit();
+      }
+      await updateDoc(doc(db, `households/${householdId}`), {
+        todoCategories: nextCategories,
+      });
+    } catch (error) {
+      console.error('[deleteTodoCategory] Failed:', error);
+      throw error; // Re-throw so callers can handle the error with contextual messaging
+    }
+  };
+
+  return { renameTodoCategory, deleteTodoCategory };
 }
 
 /**

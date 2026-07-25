@@ -8,6 +8,10 @@
 // today/future ones, so "overdue first, then ascending due date" is a single
 // lexicographic comparison. Within the same day, timed to-dos come first in
 // time order via compareDueTimes (untimed pairs compare equal → stable).
+//
+// F-TODO-16 adds a 'category' mode: category name A→Z (case-insensitive), with
+// UNCATEGORIZED to-dos (absent/blank `category`) always last regardless of how
+// the other names sort, then the same due-date comparator for ties.
 
 import type { ToDo } from '@/types/schema';
 import { compareDueTimes } from '@/utils/todoTime';
@@ -17,16 +21,38 @@ import { compareDueTimes } from '@/utils/todoTime';
  * - 'important' — starred first, then due date (the default, owner-locked)
  * - 'due'       — pure due-date order, stars ignored
  * - 'added'     — newest created first
+ * - 'category'  — category A→Z (case-insensitive), uncategorized last (F-TODO-16)
  */
-export type TodoSortMode = 'important' | 'due' | 'added';
+export type TodoSortMode = 'important' | 'due' | 'added' | 'category';
 
-export const TODO_SORT_MODES: readonly TodoSortMode[] = ['important', 'due', 'added'];
+export const TODO_SORT_MODES: readonly TodoSortMode[] = ['important', 'due', 'added', 'category'];
 
 export const TODO_SORT_LABELS: Record<TodoSortMode, string> = {
   important: 'Important first',
   due: 'Due date',
   added: 'Recently added',
+  category: 'Category',
 };
+
+/**
+ * The normalized category key a to-do sorts/groups under, or `null` when it is
+ * UNCATEGORIZED. Absent, empty, and whitespace-only all collapse to `null` —
+ * the "absent means Uncategorized" invariant (see types/schema.ts ToDo.category).
+ */
+function categoryKey(todo: ToDo): string | null {
+  const trimmed = (todo.category ?? '').trim();
+  return trimmed === '' ? null : trimmed.toLowerCase();
+}
+
+// Category name A→Z, case-insensitive, with uncategorized pinned last.
+function compareByCategory(a: ToDo, b: ToDo): number {
+  const aKey = categoryKey(a);
+  const bKey = categoryKey(b);
+  if (aKey === null && bKey === null) return 0;
+  if (aKey === null) return 1;
+  if (bKey === null) return -1;
+  return aKey.localeCompare(bKey);
+}
 
 // Undated last; otherwise overdue → ascending due date → same-day time order.
 function compareByDue(a: ToDo, b: ToDo): number {
@@ -48,6 +74,11 @@ export function sortFlatTodos(todos: readonly ToDo[], mode: TodoSortMode = 'impo
       // lexicographically in time order.
       return (b.createdAt || '').localeCompare(a.createdAt || '');
     }
+    if (mode === 'category') {
+      // Category group first (uncategorized last), then the shared due order.
+      const catDiff = compareByCategory(a, b);
+      if (catDiff !== 0) return catDiff;
+    }
     if (mode === 'important') {
       // Starred group first. `isImportant` is optional — only explicit true stars.
       const starDiff =
@@ -56,4 +87,40 @@ export function sortFlatTodos(todos: readonly ToDo[], mode: TodoSortMode = 'impo
     }
     return compareByDue(a, b);
   });
+}
+
+/** Groups already-sorted to-dos into display sections by category, uncategorized last. */
+export function groupTodosByCategory(
+  todos: readonly ToDo[],
+): Array<{ category: string | null; todos: ToDo[] }> {
+  // Keyed by the NORMALIZED name so 'Home' and 'home' share one section, but the
+  // section's display label is the first spelling encountered (callers pass an
+  // already-sorted array, so that is the first to-do in the group).
+  const sections = new Map<string | null, { category: string | null; todos: ToDo[] }>();
+
+  for (const todo of todos) {
+    const trimmed = (todo.category ?? '').trim();
+    // `null` keys the uncategorized section directly, so no category name can
+    // collide with it the way a sentinel string could.
+    const key = trimmed === '' ? null : trimmed.toLowerCase();
+    const existing = sections.get(key);
+    if (existing) {
+      existing.todos.push(todo);
+    } else {
+      sections.set(key, { category: trimmed === '' ? null : trimmed, todos: [todo] });
+    }
+  }
+
+  // Emit in the same order the 'category' sort mode produces: name A→Z
+  // (case-insensitive), uncategorized last. Insertion order already matches for
+  // a properly sorted input, but sorting here makes the helper correct for any
+  // input while PRESERVING the incoming order inside each group.
+  return [...sections.entries()]
+    .sort(([aKey], [bKey]) => {
+      if (aKey === null && bKey === null) return 0;
+      if (aKey === null) return 1;
+      if (bKey === null) return -1;
+      return aKey.localeCompare(bKey);
+    })
+    .map(([, section]) => section);
 }

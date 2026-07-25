@@ -8,6 +8,7 @@ import { HapticCheck } from '@/components/ui/HapticCheck';
 import { Button } from '@/components/ui/Button';
 import Eyebrow from '@/components/ui/Eyebrow';
 import { cn } from '@/utils/cn';
+import { getTodoCategoryColor } from '@/utils/todoCategoryColor';
 import { type SectionColor, dateColorMap, sectionDotColors, QUADRANT_SECTIONS } from './todoDisplay';
 
 // Extracted from pages/ToDosPage.tsx (Plan 27) — the grid/landscape render
@@ -199,6 +200,13 @@ const GridChip = React.memo(function GridChip({ item, color, onComplete, onEdit,
   const dueDate = parseISO(item.completeByDate);
   const isOverdue = isBefore(dueDate, startOfToday());
 
+  // F-TODO-16: the same category chip the list rows show, at chip-in-a-chip
+  // scale. Read-only here — the grid overlay has no filter control to toggle,
+  // and the landscape cells are too dense for another tap target. Absent /
+  // blank category renders nothing, exactly as in the list.
+  const categoryLabel = item.category?.trim() ?? '';
+  const categoryColor = categoryLabel ? getTodoCategoryColor(categoryLabel) : null;
+
   return (
     // min-h-11 (44px) row + generous complete-toggle hit area: the immersive
     // overlay gives the chips room to meet touch-target size without a redesign.
@@ -229,15 +237,28 @@ const GridChip = React.memo(function GridChip({ item, color, onComplete, onEdit,
         aria-label={`Edit task: ${item.text}`}
       >
         <span className="block text-sm font-medium leading-snug text-brand-900 dark:text-brand-50 truncate">{item.text}</span>
-        {isOverdue ? (
-          <span className="block text-xxs font-semibold text-money-neg dark:text-money-negDark">
-            Overdue ({format(dueDate, 'MMM d')})
-          </span>
-        ) : (
-          <span className={cn('block text-xxs font-semibold', dateColorMap[color])}>
-            {isToday(dueDate) ? 'Today' : isTomorrow(dueDate) ? 'Tomorrow' : format(dueDate, 'MMM d')}
-          </span>
-        )}
+        <span className="flex min-w-0 items-center gap-1.5">
+          {isOverdue ? (
+            <span className="block text-xxs font-semibold text-money-neg dark:text-money-negDark">
+              Overdue ({format(dueDate, 'MMM d')})
+            </span>
+          ) : (
+            <span className={cn('block text-xxs font-semibold', dateColorMap[color])}>
+              {isToday(dueDate) ? 'Today' : isTomorrow(dueDate) ? 'Tomorrow' : format(dueDate, 'MMM d')}
+            </span>
+          )}
+          {categoryLabel && categoryColor && (
+            <span
+              data-testid="grid-chip-category"
+              /* Template string, not cn(): tailwind-merge reads the custom
+                 `text-xxs` token as a text-COLOR class and would drop it in
+                 favour of the palette's `text-*-800`. */
+              className={`min-w-0 truncate rounded-full border px-1.5 text-xxs font-semibold ${categoryColor.bg} ${categoryColor.text} ${categoryColor.border}`}
+            >
+              {categoryLabel}
+            </span>
+          )}
+        </span>
       </button>
 
       <Button

@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Reorder, useDragControls } from 'framer-motion';
 import { useTodos, useHouseholdCore, useGamification } from '@/contexts/FirebaseHouseholdContext';
-import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Camera, Sparkles, Plus, Repeat, Filter, ArrowUpDown, GripVertical, UserPlus } from 'lucide-react';
+import { Calendar, Check, Trash2, Edit2, AlertCircle, X, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreHorizontal, ClipboardList, SlidersHorizontal, ChevronDown, Star, Camera, Sparkles, Plus, Repeat, Filter, ArrowUpDown, GripVertical, UserPlus, Tag, Tags, ListChecks } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { quadrantForTodo, QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhower';
@@ -22,6 +22,8 @@ import { Button } from '@/components/ui/Button';
 import { QuickAddBar } from '@/components/ui/QuickAddBar';
 import EmptyState from '@/components/ui/EmptyState';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
+import { Popover } from '@/components/ui/Popover';
+import { CategoryChipPicker } from '@/components/ui/CategoryChipPicker';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import SectionHeading from '@/components/ui/SectionHeading';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
@@ -38,7 +40,21 @@ import { TodoRow } from '@/components/todos/TodoRow';
 import { type SectionColor } from '@/components/todos/todoDisplay';
 import { EisenhowerGridView } from '@/components/todos/EisenhowerGridView';
 import { TaskTemplateDrawer } from '@/components/todos/TaskTemplateDrawer';
-import { sortFlatTodos, TODO_SORT_MODES, TODO_SORT_LABELS, type TodoSortMode } from '@/utils/todoSort';
+import { TodoCategoryManagerDrawer } from '@/components/todos/TodoCategoryManagerDrawer';
+import { TodoTriageDrawer } from '@/components/todos/TodoTriageDrawer';
+import { sortFlatTodos, groupTodosByCategory, TODO_SORT_MODES, TODO_SORT_LABELS, type TodoSortMode } from '@/utils/todoSort';
+import { getTodoCategoryColor, UNCATEGORIZED_LABEL } from '@/utils/todoCategoryColor';
+import {
+  categoryFilterVocabulary,
+  describeCategoryFilter,
+  isCategoryFilterEntrySelected,
+  matchesCategoryFilter,
+  parseStoredCategoryFilter,
+  pruneCategoryFilter,
+  serializeCategoryFilter,
+  toggleCategoryFilterEntry,
+  type TodoCategoryFilterEntry,
+} from '@/utils/todoCategoryFilter';
 import { isTodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
 import { useStackedStickyOffset } from '@/hooks/useStackedStickyOffset';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -47,6 +63,52 @@ import type { TodoCompletionOptions } from '@/contexts/household/mutations/todoM
 // Persisted like the Shopping list's sort mode — the derived view survives
 // a reload but never writes to Firestore.
 const TODO_SORT_STORAGE_KEY = 'todos-sort-mode';
+
+// F-TODO-16 — the category filter is PERSISTED (unlike the transient person
+// filter): a household that works in categories tends to stay in one, so
+// re-picking it after every reload would be busywork. Stored as a JSON array
+// where a string is a category name and `null` is the reserved Uncategorized
+// bucket, e.g. `["Home",null]` — see utils/todoCategoryFilter.ts.
+const TODO_CATEGORY_FILTER_STORAGE_KEY = 'todos-category-filter';
+
+// Last category chosen on ADD (never on edit), pre-selected for the next new
+// task. Plain string; absent = no default. Validated against the household's
+// current vocabulary on read, so a since-deleted category degrades to "none".
+const TODO_LAST_CATEGORY_STORAGE_KEY = 'todos-last-category';
+
+/** Reads the persisted last-used category, resolved (case-insensitively) to the
+ *  household's current spelling. Returns undefined when unset/unknown. */
+function readLastUsedCategory(categories: readonly string[]): string | undefined {
+  try {
+    const stored = typeof window !== 'undefined'
+      ? window.localStorage.getItem(TODO_LAST_CATEGORY_STORAGE_KEY)
+      : null;
+    const key = stored?.trim().toLowerCase();
+    if (!key) return undefined;
+    return categories.find(c => c.trim().toLowerCase() === key);
+  } catch (_error) {
+    // Ignore localStorage errors (private mode, quota, disabled storage)
+    return undefined;
+  }
+}
+
+/** Remembers (or forgets) the category used on the last ADD. */
+function writeLastUsedCategory(category: string | undefined): void {
+  try {
+    if (typeof window === 'undefined') return;
+    if (category) {
+      window.localStorage.setItem(TODO_LAST_CATEGORY_STORAGE_KEY, category);
+    } else {
+      window.localStorage.removeItem(TODO_LAST_CATEGORY_STORAGE_KEY);
+    }
+  } catch (_error) {
+    // Ignore persistence errors
+  }
+}
+
+/** Stable section key for a category group (null = the Uncategorized section). */
+const categorySectionKey = (category: string | null): string =>
+  category === null ? 'uncat:' : `cat:${category.trim().toLowerCase()}`;
 
 // Sentinel for the "Whole household" option in the Assign-to picker — no
 // member's uid ever collides with this. Selecting it stores `assignedTo:
@@ -205,8 +267,10 @@ const ToDosPage: React.FC = () => {
     hasMoreCompletedTodos,
     isLoadingOlderTodos,
     loadOlderCompletedTodos,
+    todoCategories,
+    updateTodoCategories,
   } = useTodos();
-  const { members, currentUser, householdId } = useHouseholdCore();
+  const { members, currentUser, householdId, isLoading } = useHouseholdCore();
   // Habit Automations (PRD #1065): the "Counts toward habit" picker links a
   // to-do to a habit so completing it fires the habit like one manual tap.
   const { habits } = useGamification();
@@ -231,6 +295,62 @@ const ToDosPage: React.FC = () => {
   // Assignee filter chips — session-only, transient (not persisted). `null`
   // means "All". Filters every visible section/quadrant to one member's tasks.
   const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null);
+
+  // F-TODO-16 category filter — MULTI-select and PERSISTED (see the storage-key
+  // comments above). An empty array is "All"; `null` inside it is the reserved
+  // Uncategorized bucket. ANDs with the person filter above.
+  const [categoryFilter, setCategoryFilter] = useState<TodoCategoryFilterEntry[]>(() => {
+    try {
+      return parseStoredCategoryFilter(
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem(TODO_CATEGORY_FILTER_STORAGE_KEY)
+          : null,
+      );
+    } catch (_error) {
+      // Ignore localStorage errors
+      return [];
+    }
+  });
+  const [categoryFilterOpen, setCategoryFilterOpen] = useState(false);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        TODO_CATEGORY_FILTER_STORAGE_KEY,
+        serializeCategoryFilter(categoryFilter),
+      );
+    } catch (_error) {
+      // Ignore persistence errors
+    }
+  }, [categoryFilter]);
+
+  // The vocabulary the filter menu offers and the prune validates against: the
+  // UNION of the household's `todoCategories` and the categories actually
+  // present on to-dos. `quickAddTodo` never mints a Shortcut-created category
+  // into the household list, so a vocabulary-only menu could neither offer it
+  // nor keep it in a saved filter — the prune below would drop it on every
+  // reload and the persistence effect would write the emptied filter back,
+  // silently resetting the selection to "All". See utils/todoCategoryFilter.ts
+  // for the stable ordering / canonical-spelling rules.
+  const categoryVocabulary = useMemo(
+    () => categoryFilterVocabulary(todoCategories, todos),
+    [todoCategories, todos],
+  );
+
+  // Drop persisted entries whose category no longer exists ANYWHERE — gone from
+  // the vocabulary AND unused by every to-do. The Uncategorized bucket always
+  // survives, since it isn't part of the vocabulary. Deliberately NOT done while
+  // reading storage: the initial render can happen before `todoCategories` /
+  // `todos` have loaded, which would nuke every saved entry on reload. Instead
+  // this runs on the vocabulary-changed EDGE during render (the same pattern as
+  // `wasSelectionMode` below) — no effect cascade — and `pruneCategoryFilter`
+  // returns the same array reference when nothing is dropped, so React bails out
+  // of the re-render in the common case.
+  const categoryVocabKey = isLoading ? null : `v:${categoryVocabulary.join('\u0000')}`;
+  const [lastCategoryVocabKey, setLastCategoryVocabKey] = useState<string | null>(null);
+  if (categoryVocabKey !== null && categoryVocabKey !== lastCategoryVocabKey) {
+    setLastCategoryVocabKey(categoryVocabKey);
+    setCategoryFilter(prev => pruneCategoryFilter(prev, categoryVocabulary));
+  }
 
   // Orientation drives the view (no persisted arrangement anymore): portrait
   // shows the flat list; rotating to landscape auto-shows the immersive 2×2
@@ -289,6 +409,15 @@ const ToDosPage: React.FC = () => {
 
   // F-TODO-03 — Task templates ("Quick Task Lists") drawer.
   const [isTemplateDrawerOpen, setIsTemplateDrawerOpen] = useState(false);
+
+  // F-TODO-16 — manage-categories drawer (add/rename/delete the vocabulary)
+  // and the one-at-a-time triage pass over uncategorised tasks.
+  const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
+  const [isTriageOpen, setIsTriageOpen] = useState(false);
+  // Session-only, like the assignee filter and the section collapse state: the
+  // nudge is worth re-offering on a fresh visit, and persisting it would need a
+  // key that could outlive the backlog it refers to.
+  const [triageBannerDismissed, setTriageBannerDismissed] = useState(false);
 
   // Batch Mode State
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -356,6 +485,9 @@ const ToDosPage: React.FC = () => {
   // Habit Automations (PRD #1065): the habit this to-do counts toward. '' = not
   // linked. Completing a linked to-do fires the habit like one manual tap.
   const [linkedHabitId, setLinkedHabitId] = useState('');
+  // F-TODO-16: the task's category. `undefined` = Uncategorized (the canonical
+  // representation — the field is REMOVED, never written as '').
+  const [category, setCategory] = useState<string | undefined>(undefined);
   // PRD #1065: when the editing to-do links a habit that has since been ARCHIVED,
   // that habit is filtered out of `linkableHabits`, so the Select would show
   // "None" while the link still exists. Surface it as a disabled "(archived)"
@@ -408,7 +540,11 @@ const ToDosPage: React.FC = () => {
   // survive only as each row's due-date COLOR (rose/amber/blue), computed here
   // once per todo so TodoRow keeps its urgency-tinted meta line.
   const { flatActive, rowColors, allActiveCount, allActiveIds } = useMemo(() => {
-    const active = todos.filter(t => !t.isCompleted && (assigneeFilter === null || t.assignedTo === assigneeFilter));
+    // Person AND category filters compose: a task must pass both to show.
+    const active = todos.filter(t =>
+      !t.isCompleted &&
+      (assigneeFilter === null || t.assignedTo === assigneeFilter) &&
+      matchesCategoryFilter(t, categoryFilter));
     const endOfCurrentWeek = addDays(endOfWeek(currentDate, { weekStartsOn: 1 }), 1); // Monday start
 
     const rowColors = new Map<string, SectionColor>();
@@ -436,7 +572,45 @@ const ToDosPage: React.FC = () => {
       allActiveCount: active.length,
       allActiveIds: active.map(t => t.id)
     };
-  }, [todos, currentDate, assigneeFilter, sortMode]);
+  }, [todos, currentDate, assigneeFilter, categoryFilter, sortMode]);
+
+  // F-TODO-16: in the 'category' sort mode the flat run becomes collapsible
+  // sections (uncategorized last — groupTodosByCategory preserves the incoming
+  // order inside each group, so rows keep their due-date order). Every other
+  // sort mode renders exactly as before.
+  const showCategorySections = sortMode === 'category';
+  const categorySections = useMemo(
+    () => (showCategorySections ? groupTodosByCategory(flatActive) : []),
+    [showCategorySections, flatActive],
+  );
+  // F-TODO-16: how many ACTIVE tasks still have no category — drives the triage
+  // banner and the kebab count. Counted off `todos` rather than `flatActive` so
+  // an active filter can't make the backlog look smaller than it is.
+  const uncategorizedActiveCount = useMemo(
+    () => todos.filter(t => !t.isCompleted && !(t.category ?? '').trim()).length,
+    [todos],
+  );
+
+  // Session-only (deliberately NOT persisted): collapsing a section is a
+  // momentary "get this out of my way", not a saved view.
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  const toggleCategorySection = useCallback((key: string) => {
+    setCollapsedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }, []);
+
+  // Tapping a row's category chip toggles that category in the filter (and
+  // opens nothing). `useCallback`-stable so it never breaks TodoRow's memo.
+  const handleCategoryChipClick = useCallback((category: string) => {
+    setCategoryFilter(prev => toggleCategoryFilterEntry(prev, category));
+  }, []);
 
   // Deep-link + highlight from the dashboard Action Queue: tapping "Review" on
   // a to-do navigates here with `?todo=<id>`. We scroll that row into view and
@@ -486,13 +660,15 @@ const ToDosPage: React.FC = () => {
     todos.forEach(todo => {
       if (todo.isCompleted) return;
       if (assigneeFilter !== null && todo.assignedTo !== assigneeFilter) return;
+      // The grid is scoped by the category filter exactly like the list.
+      if (!matchesCategoryFilter(todo, categoryFilter)) return;
       buckets[quadrantForTodo(todo, currentDate)].push(todo);
     });
     const byDueDate = (a: ToDo, b: ToDo) =>
       a.completeByDate.localeCompare(b.completeByDate) || compareDueTimes(a, b);
     QUADRANT_ORDER.forEach(q => buckets[q].sort(byDueDate));
     return buckets;
-  }, [todos, currentDate, assigneeFilter]);
+  }, [todos, currentDate, assigneeFilter, categoryFilter]);
 
   // Categorize To-Dos (Completed)
   const { completedToday, completedYesterday, completedWeek, completedOlder } = useMemo(() => {
@@ -555,6 +731,10 @@ const ToDosPage: React.FC = () => {
     setRecurrence('none');
     setNotes('');
     setLinkedHabitId('');
+    // Pre-select the category used on the last ADD (never on an edit), so a
+    // household working through one bucket doesn't re-pick it every task. A
+    // since-deleted category resolves to undefined — no stale default.
+    setCategory(readLastUsedCategory(todoCategories));
     setSubtasks([]);
     setSubtaskInput('');
     setEditingSubtaskId(null);
@@ -562,7 +742,7 @@ const ToDosPage: React.FC = () => {
     setMoreOpen(false);
     setEditingId(null);
     setIsAddModalOpen(true);
-  }, [quickText, currentUser, members]);
+  }, [quickText, currentUser, members, todoCategories]);
 
   // Quick-add (sticky bar): create a task with sensible defaults — due today,
   // assigned to the current user (falling back to the first member). For a
@@ -609,6 +789,10 @@ const ToDosPage: React.FC = () => {
     setRecurrence(todo.recurrence?.frequency ?? 'none');
     setNotes(todo.notes ?? '');
     setLinkedHabitId(todo.linkedHabitId ?? '');
+    // Editing NEVER inherits the last-used default — the stored value (or the
+    // absence of one) is the truth for an existing task. A cleared category is
+    // written through the sanitizer as null, so normalize it back to undefined.
+    setCategory(todo.category?.trim() || undefined);
     setSubtasks(todo.subtasks ?? []);
     setSubtaskInput('');
     setEditingSubtaskId(null);
@@ -682,6 +866,13 @@ const ToDosPage: React.FC = () => {
           toast.error('Failed to update importance');
       }
   }, [updateToDo]);
+
+  // F-TODO-16: mint a new category from the form's chip picker. Appends to the
+  // household vocabulary; CategoryChipPicker selects it on success and owns the
+  // duplicate/blank/in-flight guards.
+  const handleAddCategory = useCallback(async (name: string) => {
+    await updateTodoCategories([...todoCategories, name]);
+  }, [todoCategories, updateTodoCategories]);
 
   // --- Drawer subtask editor handlers (local state; persisted on save) ---
   const handleAddSubtaskInput = useCallback(() => {
@@ -845,6 +1036,29 @@ const ToDosPage: React.FC = () => {
   const { containerRef: stickyContainerRef, titleRowRef: stickyTitleRowRef } =
     useStackedStickyOffset<HTMLDivElement, HTMLDivElement>();
 
+  // F-TODO-16 — a THIRD sticky tier for the category-section headers, stacked
+  // below the quick-add row. useStackedStickyOffset publishes tiers 1–2 (strip,
+  // title row); this measures the quick-add row on top of tier 2 and publishes
+  // `--todos-sticky-top-3` on the same container, so a header pins flush under
+  // the add bar. Node captured via a state-setter ref (not useRef) so the
+  // measurement re-runs when the add row mounts/unmounts with selection mode.
+  const [quickAddNode, setQuickAddNode] = useState<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const container = stickyContainerRef.current;
+    if (!container) return;
+    const update = () => {
+      container.style.setProperty(
+        '--todos-sticky-top-3',
+        `calc(var(--lists-sticky-top-2, 0px) + ${quickAddNode ? quickAddNode.offsetHeight : 0}px)`
+      );
+    };
+    update();
+    if (!quickAddNode || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(update);
+    observer.observe(quickAddNode);
+    return () => observer.disconnect();
+  }, [quickAddNode, stickyContainerRef]);
+
   // Rotation-driven 2×2 Eisenhower grid (owner-locked spec): rotating to
   // landscape auto-shows the immersive grid overlay; rotating back to portrait
   // returns to the flat list. The grid never AUTO-shows over an active layer —
@@ -862,7 +1076,8 @@ const ToDosPage: React.FC = () => {
   const [gridDismissed, setGridDismissed] = useState(false);
   const blockingLayerOpen =
     isSelectionMode || drawerOpen || isPhotoImportOpen || isTemplateDrawerOpen ||
-    isBatchRescheduleOpen || showBatchDeleteConfirm;
+    isBatchRescheduleOpen || showBatchDeleteConfirm ||
+    isCategoryManagerOpen || isTriageOpen;
   if (!isLandscape) {
     if (gridActive) setGridActive(false);
     if (gridDismissed) setGridDismissed(false);
@@ -955,6 +1170,9 @@ const ToDosPage: React.FC = () => {
           'Task': todo.text,
           'Due Date': todo.completeByDate,
           'Assigned To': assignee?.displayName || 'Unassigned',
+          // F-TODO-16: an absent category exports as the Uncategorized label so
+          // the column is never blank/ambiguous in a spreadsheet.
+          'Category': todo.category?.trim() || UNCATEGORIZED_LABEL,
           'Status': status,
           'Created At': todo.createdAt ? format(parseISO(todo.createdAt), 'yyyy-MM-dd') : ''
         };
@@ -1024,6 +1242,9 @@ const ToDosPage: React.FC = () => {
       const trimmedNotes = notes.trim();
       // Habit Automations (PRD #1065): '' (no selection) means "not linked".
       const linkedHabitValue = linkedHabitId || undefined;
+      // F-TODO-16: blank/cleared means Uncategorized, which is the ABSENCE of
+      // the field — never ''.
+      const categoryValue = category?.trim() || undefined;
       // Only write the `subtasks` field when there's something to persist (or when
       // clearing a task that previously had them). This keeps ordinary edits off
       // the new field until the firestore.rules whitelist ships it — a plain task
@@ -1088,6 +1309,13 @@ const ToDosPage: React.FC = () => {
         if ((linkedHabitValue ?? null) !== (editingTodo?.linkedHabitId ?? null)) {
           updates.linkedHabitId = linkedHabitValue; // sanitizer writes null → cleared
         }
+        // F-TODO-16: same shape as linkedHabitId — only touch the field when it
+        // actually changed, so a plain (never-categorized) edit stays
+        // byte-identical to today's write, and CLEARING sends undefined (the
+        // sanitizer turns it into null, i.e. "no category") rather than ''.
+        if ((categoryValue ?? null) !== (editingTodo?.category?.trim() || null)) {
+          updates.category = categoryValue;
+        }
         await updateToDo(editingId, updates);
         toast.success('Task updated');
       } else {
@@ -1103,8 +1331,11 @@ const ToDosPage: React.FC = () => {
           ...(dueTimeValue !== undefined ? { dueTime: dueTimeValue } : {}),
           ...(reminderValue !== undefined ? { reminderMinutesBefore: reminderValue } : {}),
           ...(recurrenceValue ? { recurrence: recurrenceValue } : {}),
-          ...(linkedHabitValue ? { linkedHabitId: linkedHabitValue } : {})
+          ...(linkedHabitValue ? { linkedHabitId: linkedHabitValue } : {}),
+          ...(categoryValue ? { category: categoryValue } : {})
         });
+        // Remember (or forget) the category for the NEXT new task — add only.
+        writeLastUsedCategory(categoryValue);
         toast.success('Task added');
         setQuickText(''); // the detailed form consumed the carried-over text
       }
@@ -1284,6 +1515,26 @@ const ToDosPage: React.FC = () => {
       onSelect: () => setIsSelectionMode(true),
       disabled: viewMode === 'completed',
     },
+    // F-TODO-16 — always present, so triage stays reachable at zero (and after
+    // the banner is dismissed) rather than only when there's a backlog.
+    {
+      key: 'triage',
+      label: uncategorizedActiveCount > 0
+        ? `Triage uncategorized (${uncategorizedActiveCount})`
+        : 'Triage uncategorized',
+      icon: <ListChecks size={16} />,
+      ariaLabel: 'Triage uncategorized tasks one at a time',
+      group: 'Categories',
+      onSelect: () => setIsTriageOpen(true),
+      disabled: uncategorizedActiveCount === 0,
+    },
+    {
+      key: 'manage-categories',
+      label: 'Manage categories',
+      icon: <Tags size={16} />,
+      group: 'Categories',
+      onSelect: () => setIsCategoryManagerOpen(true),
+    },
   ];
 
   // Add row — row ONE of the list card, matching the Shopping list exactly:
@@ -1297,9 +1548,16 @@ const ToDosPage: React.FC = () => {
   // card's rounded top corners. z-20 keeps it under the tab strip's z-30,
   // matching the Shopping list. Hidden in selection mode (adding has no
   // context there).
+  //
+  // In the 'category' sort mode the list below is a stack of separately
+  // rounded section cards rather than one flush run, so the add card keeps its
+  // own bottom corners there instead of pretending to be attached.
   const stickyQuickAdd = !isSelectionMode ? (
-    <div className="sticky top-[var(--lists-sticky-top-2,0px)] z-20 bg-brand-50 dark:bg-brand-900">
-      <div className="surface-section rounded-b-none overflow-hidden">
+    <div
+      ref={setQuickAddNode}
+      className="sticky top-[var(--lists-sticky-top-2,0px)] z-20 bg-brand-50 dark:bg-brand-900"
+    >
+      <div className={cn('surface-section overflow-hidden', !showCategorySections && 'rounded-b-none')}>
         <div className="flex items-center gap-2">
           <QuickAddBar
             attached
@@ -1389,6 +1647,121 @@ const ToDosPage: React.FC = () => {
     </div>
   ) : null;
 
+  // F-TODO-16 category filter — same visual grammar as the person filter above
+  // (quiet icon at rest; accent pill + inline clear when active), but
+  // MULTI-select: the label shows the single category's name, or the count when
+  // several are picked. Hidden when the household has no vocabulary AND nothing
+  // is selected (a stale filter must always stay clearable).
+  //
+  // Built on Popover rather than Menu: Menu closes on every activation, which is
+  // wrong for a checkbox list you tick several times. Items are
+  // `menuitemcheckbox`es that toggle in place; Escape / click-away close.
+  const categoryFilterLabel = describeCategoryFilter(categoryFilter, UNCATEGORIZED_LABEL);
+  // Entries come from the UNION vocabulary (household list + categories present
+  // on tasks), so a Shortcut-created category is reachable here instead of only
+  // via a row chip — and the control stays available for it.
+  const categoryFilterEntries: TodoCategoryFilterEntry[] = [...categoryVocabulary, null];
+  const categoryFilterControl = (categoryVocabulary.length > 0 || categoryFilter.length > 0) ? (
+    <div className="relative flex-none">
+      {categoryFilterLabel !== null ? (
+        <div className="flex items-center bg-accent-50 text-accent-700 dark:bg-accent-900/30 dark:text-accent-200 rounded-full">
+          <button
+            type="button"
+            onClick={() => setCategoryFilterOpen((o) => !o)}
+            aria-label={`Filter by category: ${categoryFilter.length === 1 ? categoryFilterLabel : `${categoryFilter.length} selected`}`}
+            aria-expanded={categoryFilterOpen}
+            aria-haspopup="menu"
+            className="flex items-center gap-1.5 pl-3 pr-1.5 py-2 text-xs font-medium max-w-[38vw]"
+          >
+            <Tag className="w-4 h-4 shrink-0" />
+            <span className="truncate">{categoryFilterLabel}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setCategoryFilter([])}
+            aria-label="Clear category filter"
+            className="pr-2.5 py-2 hover:text-accent-900 dark:hover:text-accent-50 transition-colors"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setCategoryFilterOpen((o) => !o)}
+          aria-label="Filter by category"
+          aria-expanded={categoryFilterOpen}
+          aria-haspopup="menu"
+          className="relative before:absolute before:-inset-1 before:content-[''] p-2 text-brand-500 hover:text-accent-600 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-400 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
+        >
+          <Tag className="w-5 h-5" />
+        </button>
+      )}
+      {categoryFilterOpen && (
+        <Popover
+          isOpen
+          onClose={() => setCategoryFilterOpen(false)}
+          role="menu"
+          ariaLabel="Filter by category"
+          position="top-full right-0 mt-2"
+          className="w-56 overflow-hidden py-1"
+        >
+          {/* role="none": a scroll container between the `menu` and its
+              `menuitemcheckbox`es would otherwise break the required
+              menu → menuitem* ownership relation for assistive tech. */}
+          <div role="none" className="max-h-72 scroll-contain-y">
+            <button
+              type="button"
+              role="menuitemcheckbox"
+              aria-checked={categoryFilter.length === 0}
+              onClick={() => setCategoryFilter([])}
+              className={cn(
+                'w-full min-h-[44px] px-4 py-2 flex items-center justify-between gap-2 text-left text-sm transition-colors hover:bg-brand-50 dark:hover:bg-brand-700/50 focus:outline-hidden focus:bg-brand-50 dark:focus:bg-brand-700/50',
+                categoryFilter.length === 0
+                  ? 'text-accent-600 font-medium dark:text-accent-300'
+                  : 'text-brand-700 dark:text-brand-300'
+              )}
+            >
+              All categories
+              {categoryFilter.length === 0 && <Check size={14} aria-hidden="true" />}
+            </button>
+            {categoryFilterEntries.map((entry) => {
+              const label = entry ?? UNCATEGORIZED_LABEL;
+              const selected = isCategoryFilterEntrySelected(categoryFilter, entry);
+              const color = getTodoCategoryColor(entry ?? undefined);
+              return (
+                <button
+                  key={entry === null ? 'category-filter-uncategorized' : `category-filter-${entry}`}
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={selected}
+                  // Deliberately does NOT close: ticking several categories in
+                  // one visit is the whole point of a multi-select filter.
+                  onClick={() => setCategoryFilter(prev => toggleCategoryFilterEntry(prev, entry))}
+                  className={cn(
+                    'w-full min-h-[44px] px-4 py-2 flex items-center justify-between gap-2 text-left text-sm transition-colors hover:bg-brand-50 dark:hover:bg-brand-700/50 focus:outline-hidden focus:bg-brand-50 dark:focus:bg-brand-700/50',
+                    selected
+                      ? 'text-accent-600 font-medium dark:text-accent-300'
+                      : 'text-brand-700 dark:text-brand-300'
+                  )}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span
+                      aria-hidden="true"
+                      className={cn('w-2.5 h-2.5 rounded-full border shrink-0', color.bg, color.border)}
+                    />
+                    <span className="truncate">{label}</span>
+                  </span>
+                  {selected && <Check size={14} aria-hidden="true" className="shrink-0" />}
+                </button>
+              );
+            })}
+          </div>
+        </Popover>
+      )}
+    </div>
+  ) : null;
+
   // Sort, inline in the title row (mirrors the Shopping list's sort icon):
   // tinted when a non-default mode is active so the derived view is glanceable.
   const sortMenuItems: MenuItem[] = TODO_SORT_MODES.map((mode) => ({
@@ -1450,6 +1823,50 @@ const ToDosPage: React.FC = () => {
           position="top-full right-0 mt-2"
           className="min-w-[208px]"
           items={menuItems}
+        />
+      )}
+    </div>
+  );
+
+  // One active-list row + its deep-link scroll anchor/highlight. Extracted so
+  // the flat list and the category sections render IDENTICAL rows (a plain
+  // function, not a component, so the row's own state isn't remounted).
+  const renderTodoRow = (item: ToDo) => (
+    <div
+      key={item.id}
+      ref={(el) => {
+        if (el) todoRowRefs.current.set(item.id, el);
+        else todoRowRefs.current.delete(item.id);
+      }}
+      // scroll-mt clears the stacked sticky header when the row
+      // is scrolled into view; `relative` anchors the transient
+      // deep-link highlight overlay below (see the ?todo= effect).
+      className="relative scroll-mt-32"
+    >
+      <TodoRow
+        item={item}
+        color={rowColors.get(item.id) ?? 'blue'}
+        assignee={item.assignedTo ? memberMap.get(item.assignedTo) : undefined}
+        isSelected={selectedIds.has(item.id)}
+        isSelectionMode={isSelectionMode}
+        onComplete={completeToDo}
+        onUncomplete={handleUncomplete}
+        onEdit={openEditModal}
+        onDelete={deleteToDo}
+        onMore={setActionTodo}
+        onToggleSelection={toggleSelection}
+        onToggleSubtask={toggleTodoSubtask}
+        memberMap={memberMap}
+        onCategoryClick={handleCategoryChipClick}
+      />
+      {/* Transient deep-link highlight (~2s): an absolutely
+          positioned, non-interactive ring overlay painted OVER
+          the opaque row (an inset ring on the wrapper would sit
+          behind the row's own background and never show). */}
+      {highlightedTodoId === item.id && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-10 rounded-card ring-2 ring-inset ring-accent-500 dark:ring-accent-400"
         />
       )}
     </div>
@@ -1528,6 +1945,7 @@ const ToDosPage: React.FC = () => {
           actions={
             <div className="flex items-center gap-1">
               {filterControl}
+              {categoryFilterControl}
               {sortControl}
               {pageKebab}
             </div>
@@ -1538,6 +1956,35 @@ const ToDosPage: React.FC = () => {
 
       {viewMode === 'active' ? (
           <>
+            {/* F-TODO-16 — the triage nudge. Only while there IS a backlog, and
+                only in the active view; it disappears on its own as the count
+                reaches zero, so it never becomes permanent furniture. The kebab
+                keeps triage reachable once this is dismissed. */}
+            {uncategorizedActiveCount > 0 && !triageBannerDismissed && !gridOverlayVisible && (
+              <div className="mb-3 flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 dark:border-brand-700 dark:bg-brand-800/40">
+                <Tag size={16} aria-hidden="true" className="shrink-0 text-brand-400 dark:text-brand-300" />
+                <p className="min-w-0 flex-1 text-xs text-brand-600 dark:text-brand-200">
+                  {uncategorizedActiveCount === 1
+                    ? '1 task needs a category'
+                    : `${uncategorizedActiveCount} tasks need a category`}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIsTriageOpen(true)}
+                  className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-accent-700 hover:bg-accent-50 dark:text-accent-300 dark:hover:bg-accent-900/30"
+                >
+                  Triage
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTriageBannerDismissed(true)}
+                  aria-label="Dismiss the triage reminder"
+                  className="shrink-0 rounded-lg p-1 text-brand-400 hover:bg-brand-100 dark:text-brand-300 dark:hover:bg-brand-700"
+                >
+                  <X size={14} aria-hidden="true" />
+                </button>
+              </div>
+            )}
             {/* One flat list card. Its first row is the sticky quick-add bar
                 (Shopping's split-card pattern — see stickyQuickAdd above); the
                 flush SurfaceList below completes the same rounded section.
@@ -1547,7 +1994,74 @@ const ToDosPage: React.FC = () => {
             {!gridOverlayVisible && (
             <div>
               {stickyQuickAdd}
-              {flatActive.length > 0 && (
+              {/* F-TODO-16: the 'category' sort mode swaps the single flush run
+                  for one collapsible section per category (uncategorized last).
+                  Every other mode renders exactly as before. */}
+              {showCategorySections ? (
+                <div className="space-y-3">
+                  {categorySections.map((section, index) => {
+                    const key = categorySectionKey(section.category);
+                    const collapsed = collapsedCategories.has(key);
+                    const label = section.category ?? UNCATEGORIZED_LABEL;
+                    const color = getTodoCategoryColor(section.category ?? undefined);
+                    // Positional id, NOT the category name: names are free text
+                    // and may contain spaces/quotes, which are illegal in an
+                    // HTML id (and would break the aria-controls reference).
+                    const contentId = `todo-category-section-${index}`;
+                    return (
+                      <section key={key} aria-label={label}>
+                        {/* Sticky header, pinned below the quick-add row via the
+                            third sticky tier (--todos-sticky-top-3, measured
+                            above). Page-colored background so rows scroll
+                            beneath it, z-10 keeps it under the add row (z-20). */}
+                        <div className="sticky top-[var(--todos-sticky-top-3,0px)] z-10 bg-brand-50 dark:bg-brand-900 pt-1">
+                          <h3>
+                            <button
+                              type="button"
+                              onClick={() => toggleCategorySection(key)}
+                              aria-expanded={!collapsed}
+                              aria-controls={contentId}
+                              className="w-full min-h-11 flex items-center gap-2 px-1 py-1.5 text-left rounded-card focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+                            >
+                              {/* Template string, not cn(): tailwind-merge reads
+                                  the custom `text-xxs` token as a text-COLOR
+                                  class and would drop it for `text-*-800`. */}
+                              <span className={`inline-flex min-w-0 items-center rounded-full border px-2 py-0.5 text-xxs font-semibold ${color.bg} ${color.text} ${color.border}`}>
+                                <span className="truncate">{label}</span>
+                              </span>
+                              <span className="text-xs tabular-nums text-brand-500 dark:text-brand-400">
+                                {section.todos.length}
+                              </span>
+                              <ChevronDown
+                                size={16}
+                                aria-hidden="true"
+                                className={cn(
+                                  'ml-auto shrink-0 text-brand-400 dark:text-brand-450 transition-transform duration-(--duration-fast) ease-(--ease-standard)',
+                                  collapsed && '-rotate-90'
+                                )}
+                              />
+                            </button>
+                          </h3>
+                        </div>
+                        {/* Always mounted (hidden when collapsed) so the header
+                            button's aria-controls never references an absent id
+                            — exactly when aria-expanded="false" makes the
+                            reference matter most. `hidden` removes the rows from
+                            the a11y tree and from tab order, so collapsed
+                            content stays genuinely unreachable. Mirrors the
+                            "More options" disclosure in the drawer below. */}
+                        <SurfaceList
+                          id={contentId}
+                          hidden={collapsed}
+                          className="[&>*:first-child_.hairline-divider]:border-t-0"
+                        >
+                          {section.todos.map(renderTodoRow)}
+                        </SurfaceList>
+                      </section>
+                    );
+                  })}
+                </div>
+              ) : flatActive.length > 0 && (
                 <SurfaceList
                   className={cn(
                     // SwipeActionRow wraps each Row, so the inner hairline of
@@ -1558,45 +2072,7 @@ const ToDosPage: React.FC = () => {
                     !isSelectionMode && 'rounded-t-none border-t-0'
                   )}
                 >
-                  {flatActive.map(item => (
-                    <div
-                      key={item.id}
-                      ref={(el) => {
-                        if (el) todoRowRefs.current.set(item.id, el);
-                        else todoRowRefs.current.delete(item.id);
-                      }}
-                      // scroll-mt clears the stacked sticky header when the row
-                      // is scrolled into view; `relative` anchors the transient
-                      // deep-link highlight overlay below (see the ?todo= effect).
-                      className="relative scroll-mt-32"
-                    >
-                      <TodoRow
-                        item={item}
-                        color={rowColors.get(item.id) ?? 'blue'}
-                        assignee={item.assignedTo ? memberMap.get(item.assignedTo) : undefined}
-                        isSelected={selectedIds.has(item.id)}
-                        isSelectionMode={isSelectionMode}
-                        onComplete={completeToDo}
-                        onUncomplete={handleUncomplete}
-                        onEdit={openEditModal}
-                        onDelete={deleteToDo}
-                        onMore={setActionTodo}
-                        onToggleSelection={toggleSelection}
-                        onToggleSubtask={toggleTodoSubtask}
-                        memberMap={memberMap}
-                      />
-                      {/* Transient deep-link highlight (~2s): an absolutely
-                          positioned, non-interactive ring overlay painted OVER
-                          the opaque row (an inset ring on the wrapper would sit
-                          behind the row's own background and never show). */}
-                      {highlightedTodoId === item.id && (
-                        <span
-                          aria-hidden="true"
-                          className="pointer-events-none absolute inset-0 z-10 rounded-card ring-2 ring-inset ring-accent-500 dark:ring-accent-400"
-                        />
-                      )}
-                    </div>
-                  ))}
+                  {flatActive.map(renderTodoRow)}
                 </SurfaceList>
               )}
             </div>
@@ -1834,6 +2310,24 @@ const ToDosPage: React.FC = () => {
           <p className="mt-1 text-xs text-brand-400 dark:text-brand-450">
             Matters to the family — big consequences if skipped.
           </p>
+
+          {/* F-TODO-16 — category. A CORE field (not behind "More options"):
+              new tasks pre-select the last-used category, and a default the
+              user can't see is a default they can't correct. Multi-select chips
+              are the wrong control for a pick-one field per DESIGN.md §6, but
+              this shared picker is single-select with an inline "+ Add" — the
+              same control the capture tab uses, so the vocabulary is minted the
+              same way everywhere. `allowClear`: tapping the selected chip
+              clears it back to Uncategorized. */}
+          <CategoryChipPicker
+            label="Category"
+            categories={todoCategories}
+            value={category}
+            onChange={setCategory}
+            onAddCategory={handleAddCategory}
+            allowClear
+            disabled={isSaving}
+          />
 
           {/* Progressive disclosure: secondary fields live behind this expander.
               Opening a task that already uses any of them auto-expands (see
@@ -2177,6 +2671,16 @@ const ToDosPage: React.FC = () => {
       <TaskTemplateDrawer
         isOpen={isTemplateDrawerOpen}
         onClose={() => setIsTemplateDrawerOpen(false)}
+      />
+
+      <TodoCategoryManagerDrawer
+        isOpen={isCategoryManagerOpen}
+        onClose={() => setIsCategoryManagerOpen(false)}
+      />
+
+      <TodoTriageDrawer
+        isOpen={isTriageOpen}
+        onClose={() => setIsTriageOpen(false)}
       />
 
     </div>

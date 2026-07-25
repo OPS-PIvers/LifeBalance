@@ -940,6 +940,7 @@ export interface TaskTemplateItem {
   text: string; // The to-do text created for this item
   assignedTo?: string; // uid of household member; falls back to the applying user when absent
   points?: number; // Optional override for the created to-do's point value (kid-mode allowance-style credit)
+  category?: string; // F-TODO-16: to-dos spawned from this item inherit this category
 }
 
 export interface TaskTemplate {
@@ -966,6 +967,7 @@ export interface Household {
   inviteCode: string;
   groceryCategories?: string[]; // Custom categories
   habitCategories?: string[]; // Custom habit categories
+  todoCategories?: string[]; // Custom to-do categories (F-TODO-16)
   stores?: Store[]; // User-defined stores
   quickStockLists?: QuickStockList[]; // User-defined shopping templates
   taskTemplates?: TaskTemplate[]; // User-defined task-bundle templates ("Quick Task Lists", F-TODO-03)
@@ -1239,6 +1241,20 @@ export interface ToDo {
   // reverses it. Authored on the to-do form ("Counts toward habit" picker). Absent
   // on every existing to-do — no migration; converter passes it through.
   linkedHabitId?: string;
+
+  // F-TODO-16: a single optional category ("Home", "Work"...) chosen from the
+  // household's `todoCategories` vocabulary. ABSENT OR NULL both mean
+  // "Uncategorized" — that is the invariant every consumer relies on (see
+  // utils/todoCategoryColor.ts and the 'category' sort mode in utils/todoSort.ts),
+  // so every reader must treat the two representations identically (the
+  // standard guard is `(x ?? '')`). Both occur in practice: the dedicated
+  // "clear category" action (deleteTodoCategory) deletes the field, but the
+  // generic form-edit path writes `category: undefined`, which
+  // `utils/firestoreSanitizer.ts` converts to `null` before the write lands —
+  // the same pattern `linkedHabitId` follows. Absent on every existing to-do —
+  // no migration needed; `todoConverter` spreads the raw doc so it passes
+  // through.
+  category?: string;
 }
 
 export interface UpdateBucketPayload {

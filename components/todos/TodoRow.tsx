@@ -15,6 +15,7 @@ import { cn } from '@/utils/cn';
 import { type SectionColor, dateColorMap } from './todoDisplay';
 import { formatDueTime } from '@/utils/todoTime';
 import { subtaskProgress } from '@/utils/subtasks';
+import { getTodoCategoryColor } from '@/utils/todoCategoryColor';
 
 // Small per-subtask assignee chip — read-only here (assignment happens in the
 // edit drawer). Mirrors ActionQueueItem's renderAssigneeChip styling at a
@@ -72,6 +73,10 @@ export interface TodoRowProps {
    *  (read-only here — assignment happens in the edit drawer). Optional so
    *  existing callers/tests that don't pass it still render (no chips shown). */
   memberMap?: ReadonlyMap<string, HouseholdMember>;
+  /** F-TODO-16: tapping the row's category chip toggles that category in the
+   *  page's filter. Omit (or render in selection mode) and the chip stays an
+   *  inert label. MUST be `useCallback`-stable — this component is memoized. */
+  onCategoryClick?: (category: string) => void;
 }
 
 // Memoized row for a single active to-do.
@@ -92,6 +97,7 @@ export const TodoRow = React.memo(function TodoRow({
   onToggleSelection,
   onToggleSubtask,
   memberMap,
+  onCategoryClick,
 }: TodoRowProps) {
   // Parse the due date once per row render to avoid repeated parseISO calls
   const dueDate = parseISO(item.completeByDate);
@@ -439,6 +445,60 @@ export const TodoRow = React.memo(function TodoRow({
     </ul>
   );
 
+  // F-TODO-16 — category chip. An ABSENT (or blank) category is the
+  // "Uncategorized" state and renders NOTHING: the row keeps exactly today's
+  // density unless the household actually uses categories. Color is derived
+  // from the name (stable everywhere) via getTodoCategoryColor.
+  //
+  // When `onCategoryClick` is supplied (and we're not bulk-selecting) the chip
+  // is a real <button> that toggles that category in the page filter. Like the
+  // checklist pill it lives inside the row's gesture area, so it swallows its
+  // click (else the row would open the edit drawer), its pointerdown (else it
+  // arms the long-press timer / starts a swipe) and its Enter/Space (else the
+  // key would also reach an ancestor role="button").
+  const categoryLabel = item.category?.trim() ?? '';
+  const categoryColor = categoryLabel ? getTodoCategoryColor(categoryLabel) : null;
+  const handleCategoryPointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
+  };
+  const handleCategoryKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.stopPropagation();
+    }
+  };
+  const handleCategoryClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onCategoryClick?.(categoryLabel);
+  };
+  // Canonical chip spec (DESIGN.md §6): pill, hairline border, xxs text.
+  // Composed with a template string rather than cn(): tailwind-merge treats the
+  // custom `text-xxs` token as a text-COLOR utility and would drop it in favour
+  // of the palette's `text-*-800`, silently resetting the chip's font size.
+  const categoryChipClasses = categoryColor
+    ? `inline-flex items-center rounded-full border px-1.5 py-0.5 text-xxs font-semibold ${categoryColor.bg} ${categoryColor.text} ${categoryColor.border}`
+    : '';
+  const categoryChip = categoryLabel && categoryColor && (
+    isSelectionMode || !onCategoryClick ? (
+      <span data-testid="todo-category-chip" className={categoryChipClasses}>
+        {categoryLabel}
+      </span>
+    ) : (
+      /* Transparent vertical padding gives the small chip a ≥44px-tall touch
+         target without inflating the visible pill (same trick as the pill). */
+      <button
+        type="button"
+        data-testid="todo-category-chip"
+        onClick={handleCategoryClick}
+        onPointerDown={handleCategoryPointerDown}
+        onKeyDown={handleCategoryKeyDown}
+        aria-label={`Filter by category: ${categoryLabel}`}
+        className="inline-flex items-center py-2.5 -my-2.5 rounded-full focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+      >
+        <span className={categoryChipClasses}>{categoryLabel}</span>
+      </button>
+    )
+  );
+
   // Meta line (urgency date/time, reminder bell, details dot, assignee) —
   // rendered in BOTH selection and normal modes so bulk-select doesn't hide
   // the row's status; in normal mode it doubles as the button's
@@ -489,6 +549,11 @@ export const TodoRow = React.memo(function TodoRow({
           <span className="sr-only">Has details</span>
         </span>
       )}
+
+      {/* F-TODO-16 category chip — placed just before the assignee so the two
+          "which bucket does this belong to" signals read together, after the
+          time-critical due cluster. Nothing renders when uncategorized. */}
+      {categoryChip}
 
       {assignee && (
         assignee.photoURL ? (

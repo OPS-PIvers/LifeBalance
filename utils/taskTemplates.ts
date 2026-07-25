@@ -10,11 +10,14 @@ import { TaskTemplate, ToDo } from '@/types/schema';
  * user" note.
  *
  * NOTE: `points` is intentionally NOT copied onto the created to-do payload.
- * The `todos` Firestore security rule whitelist (`firestore.rules`) does not
- * currently include `points` among the writable fields on create/update —
- * writing it would be silently rejected by the rules, not by this function.
+ * This is a deliberate product decision, not a rules limitation — the `todos`
+ * Firestore rules whitelist (`firestore.rules`) already permits writing
+ * `points` (it drives kid-mode allowance-style completion credit, see
+ * `utils/todoPoints.ts`), so a copied value would persist fine if written.
  * `TaskTemplateItem.points` is kept on the template purely for a future display
- * affordance until the rules are updated (see PR description / roadmap notes).
+ * affordance; spawning to-dos with a template-authored, credit-bearing points
+ * value is a separate piece of work not yet designed (see PR description /
+ * roadmap notes).
  */
 export const buildToDosFromTemplate = (
   template: TaskTemplate,
@@ -29,5 +32,11 @@ export const buildToDosFromTemplate = (
       assignedTo: item.assignedTo || fallbackAssignee,
       isCompleted: false,
       source: 'manual' as const,
+      // F-TODO-16 — a template item's category carries onto the spawned to-do
+      // (unlike `points` above, which is withheld by product choice rather
+      // than a rules gap — both fields are equally writable). Omitted rather
+      // than written as '' when blank: absence is the canonical
+      // "Uncategorized" representation.
+      ...(item.category?.trim() ? { category: item.category.trim() } : {}),
     }));
 };
