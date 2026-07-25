@@ -307,11 +307,27 @@ per `getQuickAddBaseUrl()` in [services/apiKeyService.ts](../services/apiKeyServ
 
 ## §4 — Troubleshooting
 
+**"No spend day" push.** The email had no `Withdrawals` section at all, which is
+what Wells Fargo sends when nothing was withdrawn — a successful sync with zero
+withdrawals, not a failure. The balance is still overwritten as normal. This
+requires the email's `As of` footer to be present (proof the body wasn't
+truncated above the withdrawals) and every dollar amount in the body to be
+accounted for by the Balance summary (proof the section wasn't merely renamed —
+this catches an ACH-only night under a renamed header, which a
+withdrawal-line-shape probe would miss, since ACH lines carry no
+`PURCHASE AUTHORIZED ON` lead verb). Failing either keeps the loud
+`PARSE_FAILED` below. Note the second guard errs toward a loud failure: if Wells
+Fargo ever adds an unrelated trailing dollar figure to the layout, a genuine
+no-spend night starts reporting a parse failure — that is the recoverable
+direction, and the fix is to teach `hasUnexplainedAmountLine` about the new line.
+See `parseBankEmail`'s zero-withdrawal acceptance rules.
+
 **"Bank sync failed" push (`PARSE_FAILED`).** `parseBankEmail()` couldn't find the
 expected shape — missing "for account …NNNN", missing the Ending/Available balance
-summary, missing a "Withdrawals" section header, or a line inside that section that
-doesn't match either the card-purchase or ACH/biller line shape. This almost always
-means **Wells Fargo changed the email's format**. No Firestore writes happen on a
+summary, a missing `Withdrawals` section that failed one of the two zero-withdrawal
+guards just above, or a line inside that section that doesn't match either the
+card-purchase or ACH/biller line shape. This almost always means **Wells Fargo
+changed the email's format**. No Firestore writes happen on a
 parse failure (the function returns before the account/ledger/batch steps) —
 nothing is corrupted, but nothing was synced either. The push body itself is
 sanitized (control characters/newlines stripped) and hard-truncated to 120

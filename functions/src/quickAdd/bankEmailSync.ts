@@ -681,11 +681,20 @@ export const bankEmailSync = onRequest(
       const balanceSummary = balanceSkipped
         ? "Balance: unchanged (older email, out of order)"
         : `Balance: ${formatCurrency(parsed.availableBalance, { currency })}`;
+      // A no-withdrawal email is a no-spend night, and it deserves to read like
+      // the good news it is rather than "0 new, 0 confirmed, 0 filled, 0 bills
+      // paid" — let alone the "Bank sync failed" it used to produce before the
+      // parser learned that an omitted Withdrawals section is a legitimate
+      // result (see parseBankEmail's zero-withdrawal acceptance rules).
+      const summaryBody =
+        parsed.withdrawals.length === 0
+          ? `Nothing left your account. ${balanceSummary}`
+          : `${counts.created} new, ${counts.confirmed} confirmed, ${counts.filled} filled, ` +
+            `${counts.billsPaid} bills paid. ${balanceSummary}`;
       await pushToBankSyncMembers(
         householdId,
-        "Bank sync complete",
-        `${counts.created} new, ${counts.confirmed} confirmed, ${counts.filled} filled, ` +
-          `${counts.billsPaid} bills paid. ${balanceSummary}`
+        parsed.withdrawals.length === 0 ? "No spend day" : "Bank sync complete",
+        summaryBody
       );
       await logApiCall(householdId, apiKey.substring(0, 16), "bankSync", req.body, 200);
       jsonResponse(res, 200, {

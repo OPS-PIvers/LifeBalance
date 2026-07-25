@@ -252,7 +252,10 @@ As of 07/20/2026 at 09:00 p.m., Central Time
     expect("error" in result).toBe(true);
   });
 
-  it("returns a structured error when no withdrawal lines are found", () => {
+  it("errors on an empty Withdrawals section with no \"As of\" footer (truncated body)", () => {
+    // No footer ⇒ we cannot prove we saw the whole email, so an absent
+    // withdrawal list might be content that was clipped rather than a
+    // no-spend night. See the truncation rule in parseBankEmail.
     const result = parseBankEmail({
       subject: "x",
       rawBody: "for account ...5581\nEnding balance: $1.00\nAvailable balance1: $1.00\nWithdrawals\n",
@@ -260,14 +263,16 @@ As of 07/20/2026 at 09:00 p.m., Central Time
     expect("error" in result).toBe(true);
   });
 
-  it("reviewer repro: a missing Withdrawals section header errors instead of scanning the whole email for fake withdrawals", () => {
-    // With no "Withdrawals" header, the old code fell back to scanning the
-    // ENTIRE email body as the withdrawals section — so ACH_LINE_RE (any
-    // line starting with a capital letter and ending in $amount) could match
-    // the Balance-summary lines themselves and fabricate withdrawals out of
-    // "Ending balance: $1,277.90" / "Available balance: $1,165.82". The
-    // nightly email always has a Withdrawals section, so its absence must be
-    // a structured error, never a successful parse.
+  it("reviewer repro: a missing Withdrawals section never fabricates withdrawals from the balance lines", () => {
+    // With no "Withdrawals" header, the ORIGINAL code fell back to scanning the
+    // ENTIRE email body as the withdrawals section — so ACH_LINE_RE (any line
+    // starting with a capital letter and ending in $amount) could match the
+    // Balance-summary lines themselves and fabricate withdrawals out of
+    // "Ending balance: $1,277.90" / "Available balance: $1,165.82".
+    //
+    // This body is now recognized as a NO-SPEND night (see the test below), so
+    // the outcome flipped from error to success — but the fabrication this test
+    // exists to catch must still never happen, whichever way the parse goes.
     const body = `
 for account ...5581
 Balance summary
@@ -276,18 +281,185 @@ Available balance1: $1,165.82
 As of 07/21/2026 at 01:50 a.m., Central Time
 `;
     const result = parseBankEmail({ subject: "x", rawBody: body, today: TODAY });
-    expect("error" in result).toBe(true);
-    if ("error" in result) {
-      expect(result.error.toLowerCase()).toContain("withdrawals");
-    }
-    if (!("error" in result)) {
-      // Defensive: if this ever regresses to a "success", make sure at
-      // least it didn't fabricate a withdrawal from the balance lines.
-      const fabricated = (result as BankEmailParseSuccess).withdrawals.find((w) =>
-        w.descriptor.toLowerCase().includes("balance")
+    if ("error" in result) throw new Error(`expected a parse, got: ${result.error}`);
+    expect(result.withdrawals).toEqual([]);
+    const fabricated = result.withdrawals.find((w) =>
+      w.descriptor.toLowerCase().includes("balance")
+    );
+    expect(fabricated).toBeUndefined();
+  });
+
+  describe("a no-spend night (no Withdrawals section at all)", () => {
+    // The real thing, transcribed from the 2026-07-25 email that produced a
+    // spurious "Bank sync failed" push: balance summary, footer, nothing else.
+    const NO_SPEND_BODY = `
+WELLS FARGO
+Here's the rundown
+for account ...5581
+Go to accounts
+Balance summary
+Ending balance: $949.51
+Available balance1: $949.51
+As of 07/25/2026 at 03:19 a.m., Central Time
+WellsFargo.com
+Note about balances: Ending daily balance reflects transactions that have posted to your account and does not reflect pending deposits or withdrawals. The available balance is an indication of funds that are available to you today; however, it may not reflect all transactions that you may have initiated or authorized.
+`;
+
+    it("parses as a success with zero withdrawals", () => {
+      const result = parseBankEmail({
+        subject: "Your account update",
+        rawBody: NO_SPEND_BODY,
+        today: "2026-07-25",
+      });
+      if ("error" in result) throw new Error(`expected a parse, got: ${result.error}`);
+      expect(result.withdrawals).toEqual([]);
+      expect(result.accountLast4).toBe("5581");
+      expect(result.endingBalance).toBe(949.51);
+      expect(result.availableBalance).toBe(949.51);
+      expect(result.asOf).toBe("2026-07-25");
+    });
+
+    // The disclaimer paragraph contains the words "deposits or withdrawals" —
+    // it must not be mistaken for the section header (which is matched
+    // line-anchored) nor for a withdrawal line.
+    it("is not confused by the word \"withdrawals\" in the balance disclaimer", () => {
+      const result = parseBankEmail({
+        subject: "x",
+        rawBody: NO_SPEND_BODY,
+        today: "2026-07-25",
+      });
+      if ("error" in result) throw new Error(`expected a parse, got: ${result.error}`);
+      expect(result.withdrawals).toEqual([]);
+    });
+
+    it("parses the HTML rendering the same way", () => {
+      const html = `
+<html><body>
+<div>WELLS FARGO</div>
+<div>for account ...5581</div>
+<h2>Balance summary</h2>
+<table>
+<tr><td>Ending balance:</td><td>$949.51</td></tr>
+<tr><td>Available balance<sup>1</sup>:</td><td>$949.51</td></tr>
+</table>
+<div>As of 07/25/2026 at 03:19 a.m., Central Time</div>
+</body></html>
+`;
+      const result = parseBankEmail({ subject: "x", rawBody: html, today: "2026-07-25" });
+      if ("error" in result) throw new Error(`expected a parse, got: ${result.error}`);
+      expect(result.withdrawals).toEqual([]);
+      expect(result.availableBalance).toBe(949.51);
+    });
+
+    // The two guards that keep "zero withdrawals" from swallowing a real
+    // failure. Both of these must stay LOUD: reporting a no-spend day for an
+    // email we actually failed to read would lose money data and credit a
+    // habit that was never earned.
+    it("still errors when the body is truncated before the withdrawals (no footer)", () => {
+      const truncated = `
+for account ...5581
+Balance summary
+Ending balance: $1,277.90
+Available balance1: $1,165.82
+`;
+      const result = parseBankEmail({ subject: "x", rawBody: truncated, today: TODAY });
+      expect("error" in result).toBe(true);
+    });
+
+    it("still errors when withdrawal lines are present under a renamed section", () => {
+      const renamed = `
+for account ...5581
+Balance summary
+Ending balance: $1,277.90
+Available balance1: $1,165.82
+Withdrawals/Debits
+PURCHASE AUTHORIZED ON 07/20 TARGET T-2189 Minneapolis MN P000000551051569 CARD 2115 $18.86
+As of 07/21/2026 at 01:50 a.m., Central Time
+`;
+      const result = parseBankEmail({ subject: "x", rawBody: renamed, today: TODAY });
+      expect("error" in result).toBe(true);
+      if ("error" in result) {
+        expect(result.error.toLowerCase()).toContain("format");
+      }
+    });
+
+    it("still errors when a recurring-payment line hides under a renamed section", () => {
+      const renamed = `
+for account ...5581
+Balance summary
+Ending balance: $1,277.90
+Available balance1: $1,165.82
+Debits
+RECURRING PAYMENT AUTHORIZED ON 07/01 NETFLIX.COM P000000551051570 CARD 2115 $15.99
+As of 07/21/2026 at 01:50 a.m., Central Time
+`;
+      const result = parseBankEmail({ subject: "x", rawBody: renamed, today: TODAY });
+      expect("error" in result).toBe(true);
+    });
+
+    // Review catch: an ACH/biller line carries no "PURCHASE AUTHORIZED ON" lead
+    // verb, so probing for the card shape alone would let a renamed section on an
+    // ACH-ONLY night pass as a no-spend day — silently dropping real spend AND
+    // crediting a habit that was never earned. The guard tests for amounts the
+    // Balance summary doesn't account for, which covers both line shapes.
+    it("still errors when ONLY ACH lines hide under a renamed section", () => {
+      const renamed = `
+for account ...5581
+Balance summary
+Ending balance: $1,277.90
+Available balance1: $1,165.82
+Debits
+COMCAST-XFINITY CABLE SVCS 260718 0078881 JENNIFER *KING $153.95
+AMERICAN EXPRESS ACH PMT 260720 M6486 JENNIFER IVERS $372.00
+As of 07/21/2026 at 01:50 a.m., Central Time
+`;
+      const result = parseBankEmail({ subject: "x", rawBody: renamed, today: TODAY });
+      expect("error" in result).toBe(true);
+      if ("error" in result) {
+        expect(result.error.toLowerCase()).toContain("format");
+      }
+    });
+
+    it("still errors when a lone ACH line follows no section header at all", () => {
+      const body = `
+for account ...5581
+Balance summary
+Ending balance: $1,277.90
+Available balance1: $1,165.82
+COMCAST-XFINITY CABLE SVCS 260718 0078881 JENNIFER *KING $153.95
+As of 07/21/2026 at 01:50 a.m., Central Time
+`;
+      expect("error" in parseBankEmail({ subject: "x", rawBody: body, today: TODAY })).toBe(true);
+    });
+
+    // The documented cost of that guard: it errs toward a loud failure. If Wells
+    // Fargo ever adds an unrelated dollar figure to the layout, a genuine
+    // no-spend night reports a parse failure rather than fabricating a clean day.
+    // Pinned so the trade-off is a decision on record, not a surprise.
+    it("errs toward failing loudly on an unrelated dollar amount in the body", () => {
+      const promo = `
+for account ...5581
+Balance summary
+Ending balance: $949.51
+Available balance1: $949.51
+Earn a $200 bonus when you open a new account
+As of 07/25/2026 at 03:19 a.m., Central Time
+`;
+      // Note: "$200 bonus" does not END the line, so it is not amount-shaped and
+      // is correctly ignored — only a TRAILING amount reads as a money line.
+      const ignored = parseBankEmail({ subject: "x", rawBody: promo, today: "2026-07-25" });
+      if ("error" in ignored) throw new Error(`expected a parse, got: ${ignored.error}`);
+      expect(ignored.withdrawals).toEqual([]);
+
+      // But a trailing one does trip the guard.
+      const trailing = promo.replace(
+        "Earn a $200 bonus when you open a new account",
+        "New account bonus $200.00"
       );
-      expect(fabricated).toBeUndefined();
-    }
+      expect(
+        "error" in parseBankEmail({ subject: "x", rawBody: trailing, today: "2026-07-25" })
+      ).toBe(true);
+    });
   });
 
   it("parses a RECURRING PAYMENT AUTHORIZED ON line like a PURCHASE line", () => {
