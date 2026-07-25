@@ -50,6 +50,16 @@ function sanitizeUrl(url) {
   return isValidUrl(url) ? url : '/';
 }
 
+/**
+ * Convert an app path into the HashRouter form the SPA can actually route on.
+ * Already-hash paths are left alone apart from being anchored at the origin.
+ */
+function toHashRoute(path) {
+  if (path.startsWith('#')) return '/' + path;
+  if (path.startsWith('/')) return '/#' + path;
+  return path;
+}
+
 // F-NOTIF-05: inline notification action buttons.
 // The sending job serializes an array of {action, title} to the `actions` field
 // of the FCM data payload (JSON string, since data values must be strings). We
@@ -264,7 +274,13 @@ self.addEventListener('notificationclick', (event) => {
     taggedPath = taggedPath + (taggedPath.includes('?') ? '&' : '?') + 'nact=' + encodeURIComponent(actionId);
   }
 
-  const fullTaggedUrlToOpen = new URL(taggedPath, self.location.origin).href;
+  // The app is a HashRouter SPA (see App.tsx). A path sitting in the real
+  // pathname — `/habits` — is rewritten to index.html by hosting and then
+  // routed as `/`, so a cold-start deep link silently lands on the Dashboard.
+  // Opening the HASH form instead (`/#/habits?...`) is what actually reaches
+  // the target route, and every param consumer already parses a hash query
+  // (utils/notificationSource.ts, notificationActions.ts, recapParam.ts).
+  const fullTaggedUrlToOpen = new URL(toHashRoute(taggedPath), self.location.origin).href;
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {

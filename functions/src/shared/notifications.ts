@@ -91,6 +91,13 @@ export interface HouseholdMember {
   // hourly scheduled jobs can query via a collection-group index instead of
   // scanning every household/member. See computeAnyNotificationsEnabled below.
   anyNotificationsEnabled?: boolean;
+  // F-HABITS-03: SERVER-OWNED once-per-day claim for per-habit reminders —
+  // habit id → the member-local yyyy-MM-dd the reminder was last sent on.
+  // Written only by sendperhabitreminders (inside its claim transaction, which
+  // also prunes deleted habits); no client path reads or writes it. Kept beside
+  // notificationPreferences rather than inside it so a user editing a schedule
+  // can never clear the stamp and re-arm the same day's push.
+  habitReminderSentDates?: Record<string, string>;
 }
 
 /**
