@@ -40,17 +40,19 @@ bankEmailSync (Cloud Function, functions/src/quickAdd/bankEmailSync.ts)
    │       d. PAY     — a matching unpaid calendar bill, retro-filed to the
    │                    bill's OWN due-date pay period
    │       e. CREATE  — new verified, needsCategory transaction
-   │  7. OVERWRITE the account balance with the email's AVAILABLE balance
-   │  8. commit everything (including the ledger's final record) in ONE
+   │  7. judge the day that just ENDED for unplanned spending and fire any
+   │     habit wired to the no-spend trigger (noSpendFire.ts — see §5)
+   │  8. OVERWRITE the account balance with the email's AVAILABLE balance
+   │  9. commit everything (including the ledger's final record) in ONE
    │     atomic batch
    ▼
 Firestore (households/{id}/transactions, /accounts, /calendarItems,
-           /bankEmailSyncLedger)
+           /bankEmailSyncLedger, /noSpendDays, /habits + submissions)
    │
    ▼
 Push notification to every household member with bankEmailSync enabled
-   (success summary, PARSE_FAILED / TOO_MANY_WITHDRAWALS failure, or
-    UNKNOWN_ACCOUNT warning)
+   (success summary, "No spend day"/"No spend weekend", PARSE_FAILED /
+    TOO_MANY_WITHDRAWALS failure, or UNKNOWN_ACCOUNT warning)
 ```
 
 Key properties (all read directly from the merged `main` code, not assumed):
@@ -307,20 +309,27 @@ per `getQuickAddBaseUrl()` in [services/apiKeyService.ts](../services/apiKeyServ
 
 ## §4 — Troubleshooting
 
-**"No spend day" push.** The email had no `Withdrawals` section at all, which is
-what Wells Fargo sends when nothing was withdrawn — a successful sync with zero
-withdrawals, not a failure. The balance is still overwritten as normal. This
-requires the email's `As of` footer to be present (proof the body wasn't
-truncated above the withdrawals) and every dollar amount in the body to be
-accounted for by the Balance summary (proof the section wasn't merely renamed —
-this catches an ACH-only night under a renamed header, which a
+**"No spend day" / "No spend weekend" push.** The day that had just ended when
+this email was cut carried no *unplanned* spending, so any habit wired to the
+no-spend trigger was logged for it. See §5 for what counts. Note this is a
+verdict about a DAY, not about the email: an email with no `Withdrawals` section
+at all (what Wells Fargo sends when nothing was withdrawn) is likewise a
+successful sync with zero withdrawals rather than a failure, and the balance is
+still overwritten as normal — but a day whose only withdrawals were bills also
+earns this push.
+
+The zero-withdrawal parse requires the email's `As of` footer to be present
+(proof the body wasn't truncated above the withdrawals) and every dollar amount
+in the body to be accounted for by the Balance summary (proof the section wasn't
+merely renamed — this catches an ACH-only night under a renamed header, which a
 withdrawal-line-shape probe would miss, since ACH lines carry no
 `PURCHASE AUTHORIZED ON` lead verb). Failing either keeps the loud
 `PARSE_FAILED` below. Note the second guard errs toward a loud failure: if Wells
 Fargo ever adds an unrelated trailing dollar figure to the layout, a genuine
 no-spend night starts reporting a parse failure — that is the recoverable
-direction, and the fix is to teach `hasUnexplainedAmountLine` about the new line.
-See `parseBankEmail`'s zero-withdrawal acceptance rules.
+direction (the alternative would credit a habit that was never earned), and the
+fix is to teach `hasUnexplainedAmountLine` about the new line. See
+`parseBankEmail`'s zero-withdrawal acceptance rules.
 
 **"Bank sync failed" push (`PARSE_FAILED`).** `parseBankEmail()` couldn't find the
 expected shape — missing "for account …NNNN", missing the Ending/Available balance
@@ -399,3 +408,68 @@ succeeded before) or reprocess cleanly if the prior attempt failed before
 completing (any withdrawal lines from a prior *partial* run are additionally
 skipped via `bankRef`, so nothing is double-filed even in that edge case). There is
 no need to manually delete the ledger doc or any transactions before re-running.
+
+## §5 — No-spend days & the habits they fire (F-HABITS-14)
+
+Every successful sync also judges one day and, if it was clean, logs any habit
+wired to the no-spend trigger. This runs on **every** email, not only the ones
+with no withdrawals.
+
+**Which day.** The last day that had fully *ended* when the bank drew its line:
+the email's own `As of MM/DD/YYYY` footer date **minus one**, falling back to the
+request's local `today` minus one when the footer is absent. A first-time backfill
+processes at most two days of email (the Apps Script's `newer_than:2d` fence), so
+activation cannot retro-fire a month of habits.
+
+**What counts as spending.** The question is asked of every transaction *dated to
+that day*, across every account — not of whether the email was empty. Wells Fargo
+reports card **authorization** dates, so a Thursday charge can appear in
+Saturday's email; the parser already resolves each withdrawal to its real date and
+this reads those dates. A transaction is exempt when it is:
+
+| Exempt | Recognized by |
+| --- | --- |
+| Income | `category === 'Income'` |
+| A scheduled bill | `category === 'Budgeted in Calendar'` (what the `pay_bill` branch files) |
+| A credit-card payment | `creditPayment === true`, or `category === 'Credit Card'` |
+| A transfer between your own accounts | the word "transfer" in the merchant/descriptor |
+| A genuine `$0` row | no positive amount **and** not a `needsAmount` Apple Pay stub |
+
+Everything else — including a **credit-card charge** — breaks the day. That is
+deliberate: exempting card spend would make the habit satisfiable by reaching for
+a different card.
+
+**Known limits, by design.** Spending on an account LifeBalance can't see (a card
+that is neither Plaid-linked nor captured by the iOS Shortcut) is invisible and
+will produce a false no-spend day. A recurring charge that is *not* linked to a
+calendar bill reads as unplanned and breaks the day until you link it. A charge
+that arrives after the day was credited does not revoke the credit.
+
+**The weekend rule.** A `weekend`-scoped habit fires only when **both Saturday and
+Sunday** were clean, credited to the Sunday — which is also what puts the
+completion in the correct Mon–Sun ISO week for a weekly habit's streak. Saturday's
+verdict is read from its own `noSpendDays/{date}` doc rather than recomputed, so
+"we never synced that day" stays distinguishable from "that day was clean": with
+no record for Saturday, the weekend does not fire.
+
+**Where the verdict lives.** `households/{id}/noSpendDays/{yyyy-MM-dd}`, written
+only by this function (client writes are denied in `firestore.rules`, because the
+presence of a doc is what lets the weekend rule credit a habit). Each run also
+records its verdict on the `bankEmailSyncLedger` entry (`noSpend.date`,
+`isNoSpendDay`, `firedHabitIds`, `weekendCompleted`), so "why did/didn't my habit
+fire?" is answerable without replaying the email.
+
+**Idempotency.** Each fire writes a `HabitSubmission` carrying
+`sourceNoSpendDate`, and the function refuses to fire a habit for a date that
+already has one. The per-`messageId` ledger claim stops the same email being
+processed twice; this stops a *second* email the same morning (another account, a
+backfill) re-crediting the day.
+
+**Configuring it.** On the habit itself: Habits → edit a habit → Automations →
+**No-spend days**, then pick "Every clean day" or "Clean weekend". Nothing fires
+until at least one habit is wired up; the push still reports the clean day.
+
+**Troubleshooting.** "My habit didn't fire on a day I know was clean" — check the
+Cloud Functions log for a `noSpend:` line. It names either the transactions that
+disqualified the day, the missing Saturday record for a weekend, or the habit that
+was already credited.

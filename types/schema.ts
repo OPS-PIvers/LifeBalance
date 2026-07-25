@@ -532,6 +532,12 @@ export interface HabitLocationTrigger {
   radiusMeters: number;
 }
 
+// The no-spend automation scope (F-HABITS-14). `'day'` fires the habit for any
+// day with no unplanned spending; `'weekend'` fires it only when BOTH Saturday
+// and Sunday of the same weekend were clean (credited to the Sunday, which keeps
+// the completion in the right Mon-Sun ISO week for a weekly habit's streak).
+export type NoSpendScope = 'day' | 'weekend';
+
 // Habit Automations (PRD #1065): the optional trigger configuration on a habit.
 // Absent on every existing habit — no migration; the Firestore converter passes
 // it through untouched. `keywords` are matched against approved transactions
@@ -540,6 +546,12 @@ export interface HabitLocationTrigger {
 export interface HabitTriggers {
   keywords?: string[];
   locations?: HabitLocationTrigger[];
+  /** F-HABITS-14: fire this habit from the nightly bank sync's no-spend verdict.
+   *  Absent ⇒ not wired up. Unlike `keywords`/`locations`, this trigger is
+   *  evaluated and fired SERVER-side by the bankEmailSync Cloud Function (see
+   *  functions/src/quickAdd/noSpendDay.ts), so it works with the app closed —
+   *  which is the point, since the email arrives around 3am. */
+  noSpend?: NoSpendScope;
 }
 
 // Default geolocation trigger radius in meters (~150 m) — a comfortable
@@ -650,6 +662,13 @@ export interface HabitSubmission {
   // shifted; (2) it distinguishes automated from manual units on a date.
   // Absent on every hand-entered submission.
   sourceTransactionId?: string;
+  // F-HABITS-14: set when this submission was written by the nightly bank sync's
+  // no-spend verdict, to the yyyy-MM-dd date judged clean (which equals `date`).
+  // Doubles as the per-(habit, day) idempotency key: the sync refuses to fire a
+  // habit for a date that already has a submission carrying this field, so a
+  // second email on the same morning — or a second account's email — cannot
+  // double-credit the day. Absent on every other submission.
+  sourceNoSpendDate?: string;
 }
 
 export interface RewardItem {
