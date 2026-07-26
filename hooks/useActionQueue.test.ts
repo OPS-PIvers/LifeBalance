@@ -23,6 +23,7 @@ vi.mock('@/hooks/useModuleVisibility', () => ({
     isModuleEnabled: () => true,
     isPlanVisible: true,
     isPlanTabVisible: () => true,
+    isHomeVisible: true,
   }),
 }));
 

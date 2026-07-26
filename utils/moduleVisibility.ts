@@ -235,6 +235,17 @@ const leafDef = (key: NavLeafKey): NavLeafDef => {
 };
 
 /**
+ * Leaf key → the page that owns it (same registry as `LEAF_DEFS`). Used by
+ * `resolveLandingScreenKey` (2F.2) to map a stored `homeScreen` that names a
+ * LEAF rather than a page onto that leaf's owning page — a leaf isn't a
+ * standalone route, so the best a landing screen can do with one is open the
+ * page that contains it.
+ */
+const LEAF_PAGE_KEYS: ReadonlyMap<string, NavPageKey> = new Map(
+  NAV_PAGES.flatMap(p => p.groups.flatMap(g => g.leaves.map(l => [l.key, p.key] as const)))
+);
+
+/**
  * The leaf keys currently unreachable because a GLOBAL flag gate is off.
  *
  * The caller folds these into the member's hidden-key set (see
@@ -310,6 +321,19 @@ const asSet = (hidden: HiddenKeys): ReadonlySet<string> => {
   if (hidden == null) return EMPTY_HIDDEN;
   return hidden instanceof Set ? hidden : new Set(hidden);
 };
+
+// ---------------------------------------------------------------------------
+// Home — member-only toggle (2F.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether Home is enabled for this member. Unlike Habits/Money/Lists, Home has
+ * no HOUSEHOLD-level toggle — it isn't a `ModuleKey` and isn't in `NAV_PAGES` —
+ * so this takes only the member's hidden-key set, not `ModuleSettings`.
+ */
+export function isHomeVisible(hidden?: HiddenKeys): boolean {
+  return !asSet(hidden).has('home');
+}
 
 // ---------------------------------------------------------------------------
 // Household layer
@@ -492,4 +516,96 @@ export function isPlanTabVisible(
     isHouseholdModuleEnabled(settings, tab) &&
     !asSet(hidden).has(tab)
   );
+}
+
+// ---------------------------------------------------------------------------
+// Landing route (2F.2)
+// ---------------------------------------------------------------------------
+
+/** A destination `resolveLandingRoute` can land a member on: Home or a nav page. */
+export type LandingScreenKey = HomeKey | NavPageKey;
+
+/** The member slice `resolveLandingScreenKey`/`resolveLandingRoute` read. */
+export type LandingMember = Pick<HouseholdMember, 'homeScreen'> | null | undefined;
+
+/** Canonical landing candidates in resolution order: Home, then pages in registry order. */
+const LANDING_CANDIDATES: readonly { key: LandingScreenKey; path: string }[] = [
+  { key: 'home', path: '/' },
+  ...NAV_PAGES.map(p => ({ key: p.key, path: p.path })),
+];
+
+const isLandingKeyVisible = (
+  key: LandingScreenKey,
+  settings: ModuleSettings,
+  hidden: HiddenKeys
+): boolean => (key === 'home' ? isHomeVisible(hidden) : getPageNavigation(key, settings, hidden).isVisible);
+
+/**
+ * Maps an arbitrary stored `homeScreen` string onto a landing key that is
+ * CURRENTLY reachable, or `null` if it doesn't resolve to anything visible.
+ *
+ * `firestore.rules` validates `homeScreen` only as "a short string" (≤64
+ * chars), so it may name: `'home'`; a `NavPageKey` (`'habits'` / `'money'` /
+ * `'lists'`); a `NavLeafKey` (e.g. `'buckets'`) — not offered by `MyViewSettings`
+ * today, but defensively resolved to its OWNING page since a leaf isn't a
+ * standalone route; or an unknown/stale string, which resolves to `null`.
+ */
+const resolveHomeScreenKey = (
+  homeScreen: string,
+  settings: ModuleSettings,
+  hidden: HiddenKeys
+): LandingScreenKey | null => {
+  const direct = LANDING_CANDIDATES.find(c => c.key === homeScreen)?.key;
+  const key = direct ?? LEAF_PAGE_KEYS.get(homeScreen);
+  if (!key) return null;
+  return isLandingKeyVisible(key, settings, hidden) ? key : null;
+};
+
+/**
+ * Resolve a member's effective landing screen KEY (2F.2): their CHOSEN
+ * `homeScreen` → the FIRST enabled nav destination (Home, then Habits/Money/
+ * Lists in registry order) → `'settings'`. This chain guarantees a result even
+ * when every page is hidden — Settings is the terminal fallback precisely
+ * because it is structurally un-hideable (absent from `VisibilityKey` and from
+ * `NAV_PAGES`, the lockout guard).
+ *
+ * Handles, explicitly: `homeScreen` naming a page the member has since hidden,
+ * or one the HOUSEHOLD has since disabled (both fall through to the next link
+ * in the chain via `isLandingKeyVisible`); `homeScreen` naming a leaf rather
+ * than a page (resolved to its owning page by `resolveHomeScreenKey`);
+ * `homeScreen` absent entirely (skips straight to the fallback chain, so an
+ * un-customized member lands on Home exactly as before this field existed);
+ * and every page hidden at once (falls all the way through to `'settings'`).
+ *
+ * Exported for `MyViewSettings`, which needs the KEY (not a route path) to
+ * drive its landing-screen picker and to show the CURRENTLY effective choice.
+ * `resolveLandingRoute` below is the same resolution expressed as a path.
+ */
+export function resolveLandingScreenKey(
+  member: LandingMember,
+  settings: ModuleSettings,
+  hidden: HiddenKeys
+): LandingScreenKey | 'settings' {
+  const requested = member?.homeScreen;
+  const resolved = requested ? resolveHomeScreenKey(requested, settings, hidden) : null;
+  if (resolved) return resolved;
+  const fallback = LANDING_CANDIDATES.find(c => isLandingKeyVisible(c.key, settings, hidden));
+  return fallback?.key ?? 'settings';
+}
+
+/**
+ * Resolve a member's effective landing screen as a ROUTE PATH — the app-level
+ * answer to "where does this member land when they open the app": the `/`
+ * route guard (`HomeRoute`) redirects here whenever Home itself is hidden.
+ */
+export function resolveLandingRoute(
+  member: LandingMember,
+  settings: ModuleSettings,
+  hidden: HiddenKeys
+): string {
+  const key = resolveLandingScreenKey(member, settings, hidden);
+  if (key === 'settings') return '/settings';
+  // Total over `LANDING_CANDIDATES` by construction — `key` came from either a
+  // literal entry in that array or its `'settings'` sentinel, handled above.
+  return LANDING_CANDIDATES.find(c => c.key === key)?.path ?? '/settings';
 }

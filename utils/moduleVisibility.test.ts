@@ -7,6 +7,7 @@ import {
   NAV_PAGES,
   flagGatedHiddenKeys,
   getPageNavigation,
+  isHomeVisible,
   isModuleEnabled,
   isNavLeafKeyVisible,
   isPlanTabVisible,
@@ -14,6 +15,8 @@ import {
   resolveActiveLocation,
   resolveHiddenKeySet,
   resolveHiddenKeys,
+  resolveLandingRoute,
+  resolveLandingScreenKey,
   toggleHiddenKey,
   type HiddenKeys,
   type NavLeafKey,
@@ -504,5 +507,93 @@ describe('resolveActiveLocation', () => {
   it('returns null when the page has nothing to show', () => {
     const nav = getPageNavigation('money', settings({ money: false }), []);
     expect(resolveActiveLocation(nav, 'overview')).toBeNull();
+  });
+});
+
+describe('isHomeVisible (2F.2 — Home becomes toggleable)', () => {
+  it('is visible by default (no hidden set, empty hidden set)', () => {
+    for (const hidden of NO_HIDDEN_KEYS) {
+      expect(isHomeVisible(hidden)).toBe(true);
+    }
+  });
+
+  it('goes false once the member hides it, independent of any other key', () => {
+    expect(isHomeVisible(['home'])).toBe(false);
+    expect(isHomeVisible(['home', 'trends'])).toBe(false);
+    expect(isHomeVisible(['trends'])).toBe(true);
+  });
+});
+
+describe('resolveLandingScreenKey / resolveLandingRoute (2F.2)', () => {
+  const HABITS_LEAVES = ['track', 'history', 'insights', 'coach', 'rewards', 'challenges'];
+  const LISTS_LEAVES = ['todos', 'meals', 'shopping'];
+  const EVERYTHING_HIDDEN = ['home', ...HABITS_LEAVES, ...ALL_MONEY_LEAVES, ...LISTS_LEAVES];
+
+  it('an absent homeScreen behaves exactly as today: lands on Home', () => {
+    for (const hidden of NO_HIDDEN_KEYS) {
+      expect(resolveLandingScreenKey(undefined, settings(undefined), hidden)).toBe('home');
+      expect(resolveLandingScreenKey({}, settings(undefined), hidden)).toBe('home');
+      expect(resolveLandingRoute(undefined, settings(undefined), hidden)).toBe('/');
+    }
+  });
+
+  it('a chosen homeScreen naming a still-visible page wins', () => {
+    expect(resolveLandingScreenKey({ homeScreen: 'money' }, settings(undefined), [])).toBe('money');
+    expect(resolveLandingRoute({ homeScreen: 'money' }, settings(undefined), [])).toBe('/budget');
+  });
+
+  it('homeScreen naming a page the MEMBER has since hidden falls through to the next candidate', () => {
+    // Money hidden (every leaf off) for this member — the chosen 'money' no
+    // longer resolves, so the chain continues to Home (still visible).
+    expect(
+      resolveLandingScreenKey({ homeScreen: 'money' }, settings(undefined), ALL_MONEY_LEAVES)
+    ).toBe('home');
+  });
+
+  it('homeScreen naming a page the HOUSEHOLD has since disabled falls through the same way', () => {
+    expect(
+      resolveLandingScreenKey({ homeScreen: 'money' }, settings({ money: false }), [])
+    ).toBe('home');
+  });
+
+  it('homeScreen naming a LEAF rather than a page resolves to that leaf\'s owning page', () => {
+    expect(resolveLandingScreenKey({ homeScreen: 'buckets' }, settings(undefined), [])).toBe(
+      'money'
+    );
+    expect(resolveLandingRoute({ homeScreen: 'buckets' }, settings(undefined), [])).toBe(
+      '/budget'
+    );
+  });
+
+  it('a leaf-valued homeScreen still falls through when its owning page is unreachable', () => {
+    expect(
+      resolveLandingScreenKey({ homeScreen: 'buckets' }, settings(undefined), ALL_MONEY_LEAVES)
+    ).toBe('home');
+  });
+
+  it('an unknown/stale homeScreen string falls through to the first enabled destination', () => {
+    expect(resolveLandingScreenKey({ homeScreen: 'nonsense' }, settings(undefined), [])).toBe(
+      'home'
+    );
+  });
+
+  it('Home hidden skips straight to the first enabled nav destination', () => {
+    expect(resolveLandingScreenKey(undefined, settings(undefined), ['home'])).toBe('habits');
+    expect(resolveLandingRoute(undefined, settings(undefined), ['home'])).toBe('/habits');
+  });
+
+  it('every page hidden at once lands on Settings — the structurally un-hideable terminal fallback', () => {
+    expect(resolveLandingScreenKey(undefined, settings(undefined), EVERYTHING_HIDDEN)).toBe(
+      'settings'
+    );
+    expect(resolveLandingRoute(undefined, settings(undefined), EVERYTHING_HIDDEN)).toBe(
+      '/settings'
+    );
+  });
+
+  it('a homeScreen chosen when everything else is hidden still lands on Settings', () => {
+    expect(
+      resolveLandingScreenKey({ homeScreen: 'money' }, settings(undefined), EVERYTHING_HIDDEN)
+    ).toBe('settings');
   });
 });

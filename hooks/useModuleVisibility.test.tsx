@@ -108,6 +108,15 @@ describe('useModuleVisibility — member layer', () => {
     expect(result.current.isPlanVisible).toBe(false);
     expect(result.current.isModuleEnabled('lists')).toBe(false);
   });
+
+  // 2F.2 — Home has no household-level toggle, only the member's own choice.
+  it('Home is visible by default and goes false once the member hides it', () => {
+    setup(undefined, {});
+    expect(renderHook(() => useModuleVisibility()).result.current.isHomeVisible).toBe(true);
+
+    setup(undefined, { hiddenKeys: ['home'] });
+    expect(renderHook(() => useModuleVisibility()).result.current.isHomeVisible).toBe(false);
+  });
 });
 
 describe('usePageNavigation — the collapse rule', () => {

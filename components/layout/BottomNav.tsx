@@ -35,7 +35,7 @@ const BottomNav: React.FC = () => {
   );
 
   // Plan 090 — which top-level pages are enabled for this household.
-  const { isModuleEnabled, isPlanVisible, isPlanTabVisible } = useModuleVisibility();
+  const { isModuleEnabled, isPlanVisible, isPlanTabVisible, isHomeVisible } = useModuleVisibility();
 
   // The capture FAB opens the CaptureModal. Mirror the modal's tab gating exactly:
   // money follows its top-level flag, while todo/shop follow plan-tab visibility
@@ -46,12 +46,15 @@ const BottomNav: React.FC = () => {
 
   useEffect(() => preloadOnIdle(loadCaptureModal), []);
 
-  // Build the enabled nav items. Home is ALWAYS shown; the rest are gated by
-  // visibility. Order matters: it determines the balanced left/right split below.
+  // Build the enabled nav items. Home is gated the same way as every other
+  // page now (2F.2) — a member can hide it via `hiddenKeys`, unlike the other
+  // pages it has no household-level toggle. Order matters: it determines the
+  // balanced left/right split below.
   const navItems = useMemo<NavItem[]>(() => {
-    const items: NavItem[] = [
-      { key: 'home', to: '/', end: true, label: 'Home', icon: LayoutDashboard },
-    ];
+    const items: NavItem[] = [];
+    if (isHomeVisible) {
+      items.push({ key: 'home', to: '/', end: true, label: 'Home', icon: LayoutDashboard });
+    }
     if (isModuleEnabled('habits')) {
       items.push({ key: 'habits', to: '/habits', label: 'Habits', icon: Activity });
     }
@@ -62,7 +65,7 @@ const BottomNav: React.FC = () => {
       items.push({ key: 'lists', to: '/lists', label: 'Lists', icon: List });
     }
     return items;
-  }, [isModuleEnabled, isPlanVisible, pendingReviewCount]);
+  }, [isHomeVisible, isModuleEnabled, isPlanVisible, pendingReviewCount]);
 
   // Balanced split around the centered FAB (decision 7): Home always anchors the
   // left group; the remaining items fill left up to half (ceil), the rest right.

@@ -27,8 +27,12 @@ vi.mock('@/hooks/useModuleVisibility', () => ({
   useModuleVisibility: vi.fn(),
 }));
 
-/** Configure the mocked hook so only `enabled` modules are on. */
-const setEnabledModules = (enabled: ModuleKey[]) => {
+/**
+ * Configure the mocked hook so only `enabled` modules are on. Home defaults to
+ * visible (matching every existing test's assumption); pass `homeVisible:
+ * false` to cover the 2F.2 case where the member has hidden it.
+ */
+const setEnabledModules = (enabled: ModuleKey[], homeVisible = true) => {
   vi.mocked(useModuleVisibility).mockReturnValue({
     isModuleEnabled: (key: ModuleKey) => enabled.includes(key),
     // Plan footer needs the master toggle + at least one sub-tab; derive it.
@@ -37,6 +41,7 @@ const setEnabledModules = (enabled: ModuleKey[]) => {
       (enabled.includes('todos') || enabled.includes('meals') || enabled.includes('shopping')),
     // A sub-tab is only reachable when the Plan master AND the sub-tab are on.
     isPlanTabVisible: (tab) => enabled.includes('lists') && enabled.includes(tab),
+    isHomeVisible: homeVisible,
   });
 };
 
@@ -106,5 +111,15 @@ describe('BottomNav', () => {
     expect(screen.getByText('Money')).toBeInTheDocument();
     expect(screen.queryByText('Lists')).not.toBeInTheDocument();
     expect(screen.queryByText('Habits')).not.toBeInTheDocument();
+  });
+
+  // 2F.2: Home becomes toggleable — a member can hide it like any other page.
+  it('drops Home from the nav once the member hides it, leaving the other pages', () => {
+    setEnabledModules(['habits', 'money', 'lists', 'todos', 'meals', 'shopping'], false);
+    renderNav();
+    expect(screen.queryByText('Home')).not.toBeInTheDocument();
+    expect(screen.getByText('Habits')).toBeInTheDocument();
+    expect(screen.getByText('Money')).toBeInTheDocument();
+    expect(screen.getByText('Lists')).toBeInTheDocument();
   });
 });
