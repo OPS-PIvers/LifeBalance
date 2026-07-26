@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within, fireEvent } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import Settings from './Settings';
+import type { Role } from '@/types/schema';
 
 /** Exposes the router's current path + query so tests can assert URL state. */
 const LocationProbe: React.FC = () => {
@@ -19,11 +20,20 @@ vi.mock('@/contexts/AuthContext', () => ({
   }),
 }));
 
-const mockCurrentUser = {
+// Mutable so a test can render as a non-admin (e.g. the 2F.3 member visibility
+// matrix's admin-only gate) — `useHouseholdCore()` below reads this object at
+// call time, so mutating `.role` before `renderSettings()` is enough; reset to
+// 'admin' in `beforeEach` so every other test keeps its original default.
+const mockCurrentUser: {
+  uid: string;
+  displayName: string;
+  email: string;
+  role: Role;
+} = {
   uid: 'user-1',
   displayName: 'Test User',
   email: 'test@example.com',
-  role: 'admin' as const,
+  role: 'admin',
 };
 
 const mockSetCaptureReviewMode = vi.fn();
@@ -159,6 +169,7 @@ describe('Settings index + sub-screens', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     window.scrollTo = vi.fn();
+    mockCurrentUser.role = 'admin';
   });
 
   it('renders an index of at most 7 grouped navigation rows', () => {
@@ -217,6 +228,35 @@ describe('Settings index + sub-screens', () => {
     // A default-hidden widget starts off, so the widget-merge default still
     // reaches the UI (no migration ran).
     expect(screen.getByRole('checkbox', { name: 'Show AI Insight on Home' })).not.toBeChecked();
+  });
+
+  // 2F.3 — the admin-only member visibility matrix, gated in Settings.tsx by
+  // `currentUser?.role === 'admin'` (MemberVisibilityMatrix itself has no role
+  // gate — see its test file). Asserted by rendering as each role rather than
+  // by reading the gate, per the 2G.1 lesson: an admin-only surface whose
+  // exclusion is only verified by code inspection is invisible to whoever
+  // tests as the household admin.
+  it('renders the member visibility matrix for an admin', () => {
+    renderSettings();
+    fireEvent.click(screen.getByText('Modules & Dashboard'));
+
+    expect(screen.getByRole('heading', { name: 'Member visibility' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('checkbox', { name: 'Show Overview for Test User' })
+    ).toBeInTheDocument();
+  });
+
+  it('excludes the member visibility matrix for a non-admin member', () => {
+    mockCurrentUser.role = 'member';
+    renderSettings();
+    fireEvent.click(screen.getByText('Modules & Dashboard'));
+
+    expect(screen.queryByRole('heading', { name: 'Member visibility' })).not.toBeInTheDocument();
+    // Not just visually hidden — the matrix's switches must be genuinely
+    // absent from the DOM, not merely unreachable.
+    expect(
+      screen.queryByRole('checkbox', { name: 'Show Overview for Test User' })
+    ).not.toBeInTheDocument();
   });
 
   it('returns to the index via the back button', () => {
