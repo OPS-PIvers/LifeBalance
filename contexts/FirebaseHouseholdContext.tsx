@@ -68,7 +68,7 @@ import { calculateSafeToSpendBreakdownFromExpanded, calculateSafeToSpendExpansio
 import { calculatePointsForDate, calculatePointsForDateRange, computeManagedMemberPointsReset, isHabitStale, getHabitResetUpdate } from '@/utils/habitLogic';
 import { fetchSubmissionTotals } from '@/utils/habitSubmissionTotals';
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
-import { mergeQuantity } from '@/utils/grocerySmartDefaults';
+import { mergeQuantity, resolveNewQuantityField } from '@/utils/grocerySmartDefaults';
 import { migrateBucketsToPeriods, needsMigration, migrateToPaycheckPeriods, needsPaycheckMigration } from '@/utils/migrations/payPeriodMigration';
 import { migrateOrphanedHabits, needsHabitMigration } from '@/utils/migrations/habitMigration';
 import { backfillTitleLower, needsTitleLowerMigration } from '@/utils/migrations/titleLowerMigration';
@@ -1089,17 +1089,23 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         } else {
           // Add new item with a pre-allocated id so later parsed items with the
           // same name dedupe against it (preserves the original behavior).
+          // Gemini's shopping schema always supplies a quantity (defaulting to
+          // 1 when the user didn't say one), so collapse an implicit 1 back to
+          // "no field written at all" via resolveNewQuantityField — otherwise
+          // voice capture ("add milk") would show an explicit "1" while the
+          // same intent via iOS Shortcuts/manual add shows the "none" em-dash
+          // (see quickAdd/index.ts's identical resolveNewQuantityField use).
           const newDocRef = doc(shoppingRef);
-          const newQuantity = String(item.quantity);
+          const resolvedQuantity = resolveNewQuantityField(item.quantity);
           batch.set(newDocRef, {
             name: item.item,
-            quantity: newQuantity,
+            ...(resolvedQuantity !== undefined ? { quantity: resolvedQuantity } : {}),
             category: item.category,
             isPurchased: false,
             source: 'voice',
             createdAt: serverTimestamp()
           });
-          existingByName.set(key, { ref: newDocRef, quantity: newQuantity });
+          existingByName.set(key, { ref: newDocRef, quantity: resolvedQuantity });
         }
       }
       await batch.commit();

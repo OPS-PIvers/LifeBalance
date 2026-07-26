@@ -68,4 +68,15 @@ describe('ShoppingItemForm quantity stepper', () => {
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByLabelText('Quantity unit')).toHaveValue('lbs');
   });
+
+  it('renders without throwing when quantity is a legacy raw Firestore number (not the typed string)', () => {
+    // ShoppingItem.quantity is typed `string`, but rows written by the
+    // quickAdd Cloud Function before this fix (or approved via
+    // ShoppingReviewForm without editing the quantity) hold a raw number.
+    // The cast mirrors how that legacy shape actually arrives at runtime,
+    // bypassing the compile-time type.
+    const item: ShoppingItem = { ...baseItem, quantity: 2 as unknown as string };
+    render(<ShoppingItemForm item={item} onChange={vi.fn()} {...baseProps} />);
+    expect(screen.getByText('2')).toBeInTheDocument();
+  });
 });

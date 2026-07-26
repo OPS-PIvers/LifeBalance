@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatQuantity as serverFormat, mergeQuantity as serverMerge, resolveNewQuantityField } from "./quantityLogic";
+import { formatQuantity as serverFormat, mergeQuantity as serverMerge, resolveNewQuantityField as serverResolveNewQuantityField } from "./quantityLogic";
 // The CLIENT implementation this file is a twin of. Importing it here turns
 // "these must stay in lockstep" from a comment into a test: functions/tsconfig
 // excludes *.test.ts, and the suite runs under the root vitest config, so the
@@ -9,6 +9,7 @@ import { formatQuantity as serverFormat, mergeQuantity as serverMerge, resolveNe
 import {
   formatQuantity as clientFormat,
   mergeQuantity as clientMerge,
+  resolveNewQuantityField as clientResolveNewQuantityField,
 } from "@/utils/grocerySmartDefaults";
 
 interface FormatCase {
@@ -64,17 +65,21 @@ describe("mergeQuantity parity", () => {
   });
 });
 
-describe("resolveNewQuantityField", () => {
+describe("resolveNewQuantityField parity", () => {
   it("omits the field entirely when no quantity was supplied", () => {
-    expect(resolveNewQuantityField(undefined)).toBeUndefined();
+    expect(serverResolveNewQuantityField(undefined)).toBeUndefined();
+    expect(clientResolveNewQuantityField(undefined)).toBeUndefined();
   });
 
   it("omits the field for an explicit count of 1 (matches the app-wide '1 is implicit' convention)", () => {
-    expect(resolveNewQuantityField(1)).toBeUndefined();
+    expect(serverResolveNewQuantityField(1)).toBeUndefined();
+    expect(clientResolveNewQuantityField(1)).toBeUndefined();
   });
 
   it("writes the formatted string for any other explicit count", () => {
-    expect(resolveNewQuantityField(2)).toBe("2");
-    expect(resolveNewQuantityField(0.5)).toBe("0.5");
+    expect(serverResolveNewQuantityField(2)).toBe("2");
+    expect(clientResolveNewQuantityField(2)).toBe("2");
+    expect(serverResolveNewQuantityField(0.5)).toBe("0.5");
+    expect(clientResolveNewQuantityField(0.5)).toBe("0.5");
   });
 });

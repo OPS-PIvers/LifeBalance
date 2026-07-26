@@ -189,10 +189,18 @@ function matchLeadingNumber(trimmed: string): ParsedQuantity | null {
  * Parse a free-text quantity string into a numeric count + unit.
  * "2 lbs" -> {2, 'lbs'}; "3" -> {3, ''}; ""/undefined/non-numeric-leading
  * ("dozen") -> {1, original text (or '')}.
+ *
+ * Accepts `string | number` because `ShoppingItem.quantity` is typed `string`
+ * but some documents hold a raw Firestore number for this field (rows written
+ * by the quickAdd Cloud Function before this fix, or approved via
+ * ShoppingReviewForm without editing the quantity) — no migration; this reads
+ * that legacy shape correctly rather than throwing (`(2).trim is not a
+ * function`) when a caller like `ShoppingItemForm` passes `item.quantity`
+ * straight through.
  */
-export function parseQuantity(q: string | undefined): ParsedQuantity {
-  if (!q) return { count: 1, unit: '' };
-  const trimmed = q.trim();
+export function parseQuantity(q: string | number | undefined): ParsedQuantity {
+  if (q === undefined || q === null) return { count: 1, unit: '' };
+  const trimmed = String(q).trim();
   if (!trimmed) return { count: 1, unit: '' };
 
   return matchLeadingNumber(trimmed) ?? { count: 1, unit: trimmed };
@@ -203,6 +211,22 @@ export function formatQuantity({ count, unit }: ParsedQuantity): string {
   if (count === 1 && unit === '') return '';
   const trimmedUnit = unit.trim();
   return trimmedUnit ? `${count} ${trimmedUnit}` : `${count}`;
+}
+
+/**
+ * Resolve the quantity field to write on a brand-new shopping-list row:
+ * `undefined` (write NO field at all) when the caller supplied no quantity,
+ * otherwise the formatted string — which itself collapses a bare count of 1
+ * back to `undefined`, matching the "no explicit quantity means one"
+ * convention used everywhere else (a captured single item shouldn't display
+ * an invented "1"). Client twin of `functions/src/quickAdd/quantityLogic.ts`'s
+ * `resolveNewQuantityField`, kept in lockstep by the shared parity test in
+ * `functions/src/quickAdd/quantityLogic.test.ts`.
+ */
+export function resolveNewQuantityField(quantity: number | undefined): string | undefined {
+  if (quantity === undefined) return undefined;
+  const formatted = formatQuantity({ count: quantity, unit: '' });
+  return formatted === '' ? undefined : formatted;
 }
 
 /**
