@@ -81,4 +81,27 @@ describe('ShoppingItemRow', () => {
     await user.click(screen.getByLabelText('Mark Milk as purchased'));
     expect(handlers.onCheck).toHaveBeenCalledWith(item);
   });
+
+  it('never renders the quantity in the row, even when set', () => {
+    const itemWithQuantity: ShoppingItem = { ...item, quantity: '2 lbs' };
+    render(<ShoppingItemRow item={itemWithQuantity} {...handlers} isReorderable={false} />);
+    expect(screen.queryByText('2 lbs')).not.toBeInTheDocument();
+    expect(screen.queryByText('2', { exact: true })).not.toBeInTheDocument();
+  });
+
+  it('renders no metadata row at all when quantity is the only thing set', () => {
+    const itemWithQuantity: ShoppingItem = { ...item, quantity: '3' };
+    const { container } = render(
+      <ShoppingItemRow item={itemWithQuantity} {...handlers} isReorderable={false} />
+    );
+    // hasMeta must not fire on quantity alone now that the row never shows it.
+    expect(container.querySelector('.flex-wrap')).not.toBeInTheDocument();
+  });
+
+  it('still shows the store badge alongside a hidden quantity', () => {
+    const itemWithBoth: ShoppingItem = { ...item, quantity: '2 lbs', store: 'Costco' };
+    render(<ShoppingItemRow item={itemWithBoth} {...handlers} isReorderable={false} />);
+    expect(screen.getByText('Costco')).toBeInTheDocument();
+    expect(screen.queryByText('2 lbs')).not.toBeInTheDocument();
+  });
 });

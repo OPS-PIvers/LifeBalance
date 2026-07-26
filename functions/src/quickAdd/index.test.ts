@@ -1525,7 +1525,7 @@ describe("quickAddShoppingItem", () => {
       );
 
       expect(res.statusCode).toBe(200);
-      expect(res.body).toMatchObject({ data: { updated: true, quantity: 3 } });
+      expect(res.body).toMatchObject({ data: { updated: true, quantity: "3" } });
       expect(update).toHaveBeenCalledTimes(1);
       const updatePayload = update.mock.calls[0]?.[0] as Record<string, unknown>;
       expect("needsReview" in updatePayload).toBe(false);
@@ -1558,7 +1558,7 @@ describe("quickAddShoppingItem", () => {
       // ...and a new, visible row is created instead of merging.
       expect(add).toHaveBeenCalledTimes(1);
       const written = add.mock.calls[0]?.[0] as Record<string, unknown>;
-      expect(written).toMatchObject({ name: "Milk", quantity: 2 });
+      expect(written).toMatchObject({ name: "Milk", quantity: "2" });
       expect("needsReview" in written).toBe(false);
     });
 
@@ -1581,10 +1581,92 @@ describe("quickAddShoppingItem", () => {
       expect(res.statusCode).toBe(200);
       expect(add).not.toHaveBeenCalled();
       expect(heldUpdate).toHaveBeenCalledTimes(1);
-      expect(res.body).toMatchObject({ data: { updated: true, quantity: 3 } });
+      expect(res.body).toMatchObject({ data: { updated: true, quantity: "3" } });
       const updatePayload = heldUpdate.mock.calls[0]?.[0] as Record<string, unknown>;
       // The bump must not disturb the held row's needsReview flag.
       expect("needsReview" in updatePayload).toBe(false);
+    });
+
+    // -------------------------------------------------------------------------
+    // F-2G.2: stop inventing a quantity. A submission with no quantity must
+    // write no quantity field; a supplied non-positive value still 400s; a
+    // merge preserves the existing item's unit rather than mangling it.
+    // -------------------------------------------------------------------------
+
+    it("no quantity in the request writes NO quantity field on the new item", async () => {
+      const add = vi.fn(() => Promise.resolve({ id: "s1" }));
+      collectionOverrides[`households/${HOUSEHOLD_ID}/shoppingList`] = {
+        add,
+        whereGetDocs: [],
+      };
+      configureCollections();
+
+      const res = makeRes();
+      await asHandler(quickAddShoppingItem)(
+        makeReq({ body: { item: "Milk" } }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      const written = add.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect("quantity" in written).toBe(false);
+      expect(res.body).toMatchObject({ data: { name: "Milk" } });
+    });
+
+    it("a supplied non-positive quantity still returns 400", async () => {
+      const res = makeRes();
+      await asHandler(quickAddShoppingItem)(
+        makeReq({ body: { item: "Milk", quantity: 0 } }),
+        res
+      );
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+    });
+
+    it("a supplied non-numeric quantity still returns 400", async () => {
+      const res = makeRes();
+      await asHandler(quickAddShoppingItem)(
+        makeReq({ body: { item: "Milk", quantity: "two" } }),
+        res
+      );
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+    });
+
+    it("merging onto an existing item preserves its unit rather than mangling it", async () => {
+      const update = vi.fn(() => Promise.resolve());
+      collectionOverrides[`households/${HOUSEHOLD_ID}/shoppingList`] = {
+        whereGetDocs: [shoppingDoc("existing1", { name: "milk", quantity: "2 lbs" }, update)],
+      };
+      configureCollections();
+
+      const res = makeRes();
+      await asHandler(quickAddShoppingItem)(
+        makeReq({ body: { item: "Milk", quantity: 1 } }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toMatchObject({ data: { updated: true, quantity: "3 lbs" } });
+      const updatePayload = update.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(updatePayload).toMatchObject({ quantity: "3 lbs" });
+    });
+
+    it("a request with no quantity still merges into an existing item as 1 for accumulation", async () => {
+      const update = vi.fn(() => Promise.resolve());
+      collectionOverrides[`households/${HOUSEHOLD_ID}/shoppingList`] = {
+        whereGetDocs: [shoppingDoc("existing1", { name: "milk" }, update)],
+      };
+      configureCollections();
+
+      const res = makeRes();
+      await asHandler(quickAddShoppingItem)(
+        makeReq({ body: { item: "Milk" } }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toMatchObject({ data: { updated: true, quantity: "2" } });
     });
   });
 
@@ -1676,7 +1758,7 @@ describe("quickAddShoppingItem", () => {
       expect(lastBatch.update).not.toHaveBeenCalled();
       expect(lastBatch.set).toHaveBeenCalledTimes(1);
       const written = lastBatch.set.mock.calls[0]?.[1] as Record<string, unknown>;
-      expect(written).toMatchObject({ name: "Milk", quantity: 2 });
+      expect(written).toMatchObject({ name: "Milk", quantity: "2" });
       expect("needsReview" in written).toBe(false);
     });
 
@@ -1699,8 +1781,70 @@ describe("quickAddShoppingItem", () => {
       expect(lastBatch.set).not.toHaveBeenCalled();
       expect(lastBatch.update).toHaveBeenCalledTimes(1);
       const updatePayload = lastBatch.update.mock.calls[0]?.[1] as Record<string, unknown>;
-      expect(updatePayload).toMatchObject({ quantity: 3 });
+      expect(updatePayload).toMatchObject({ quantity: "3" });
       expect("needsReview" in updatePayload).toBe(false);
+    });
+
+    // -------------------------------------------------------------------------
+    // F-2G.2: absent quantity writes NO field; a merge preserves the unit.
+    // -------------------------------------------------------------------------
+
+    it("a batch item with no quantity writes NO quantity field on the new row", async () => {
+      collectionOverrides[`households/${HOUSEHOLD_ID}/shoppingList`] = {
+        whereGetDocs: [],
+      };
+      configureCollections();
+      configureBatch();
+
+      const res = makeRes();
+      await asHandler(quickAddShoppingItem)(
+        makeReq({ body: { items: [{ item: "Milk" }] } }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      const written = lastBatch.set.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect("quantity" in written).toBe(false);
+      expect(res.body).toMatchObject({ data: { items: [{ name: "Milk" }] } });
+    });
+
+    it("a batch merge preserves the existing item's unit", async () => {
+      const update = vi.fn(() => Promise.resolve());
+      collectionOverrides[`households/${HOUSEHOLD_ID}/shoppingList`] = {
+        whereGetDocs: [shoppingDoc("existing1", { name: "milk", quantity: "2 lbs" }, update)],
+      };
+      configureCollections();
+      configureBatch();
+
+      const res = makeRes();
+      await asHandler(quickAddShoppingItem)(
+        makeReq({ body: { items: [{ item: "Milk", quantity: 1 }] } }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(lastBatch.update).toHaveBeenCalledTimes(1);
+      const updatePayload = lastBatch.update.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(updatePayload).toMatchObject({ quantity: "3 lbs" });
+    });
+
+    it("a batch item with no quantity still merges into an existing item as 1 for accumulation", async () => {
+      const update = vi.fn(() => Promise.resolve());
+      collectionOverrides[`households/${HOUSEHOLD_ID}/shoppingList`] = {
+        whereGetDocs: [shoppingDoc("existing1", { name: "milk" }, update)],
+      };
+      configureCollections();
+      configureBatch();
+
+      const res = makeRes();
+      await asHandler(quickAddShoppingItem)(
+        makeReq({ body: { items: [{ item: "Milk" }] } }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      const updatePayload = lastBatch.update.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(updatePayload).toMatchObject({ quantity: "2" });
     });
   });
 });
