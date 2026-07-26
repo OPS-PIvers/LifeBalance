@@ -332,9 +332,7 @@ export function getPageNavigation(
 
   if (isHouseholdModuleEnabled(settings, def.module)) {
     for (const group of def.groups) {
-      const visible = group.leaves.filter(
-        leaf => isHouseholdModuleEnabled(settings, leaf.module) && !hiddenSet.has(leaf.key)
-      );
+      const visible = group.leaves.filter(leaf => isLeafVisible(settings, leaf, hiddenSet));
       if (visible.length > 0) {
         groups.push({ key: group.key, label: group.label, leaves: visible });
         leaves.push(...visible);
@@ -380,16 +378,6 @@ export function resolveActiveLocation(
   const leaf = fallback?.leaves[0];
   if (!fallback || !leaf) return null;
   return { group: fallback.key, leaf: leaf.key };
-}
-
-/** The nav page a leaf belongs to, or null for Home/widget keys. */
-export function pageOfLeaf(key: string): NavPageKey | null {
-  for (const page of NAV_PAGES) {
-    for (const group of page.groups) {
-      if (group.leaves.some(leaf => leaf.key === key)) return page.key;
-    }
-  }
-  return null;
 }
 
 /**
