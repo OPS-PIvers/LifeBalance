@@ -194,6 +194,7 @@ const Settings: React.FC = () => {
     setKidModePin,
     apiKeys,
     activityLog,
+    updateKidProfile,
   } = useHouseholdCore();
   const { habits, challenges, rewardsInventory } = useGamification();
   const {
@@ -454,6 +455,12 @@ const Settings: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  // Managed kid profiles have no login/email/role — the generic MemberModal
+  // itself renders only the displayName field for a member with
+  // `isManaged === true` (email is meaningless with no login; role is actively
+  // dangerous since changing it away from 'kid' would un-manage them), so
+  // opening the SAME modal is safe here. Routing to the right mutation happens
+  // in handleSaveMember below.
   const handleEditMember = (member: HouseholdMember) => {
     setSelectedMember(member);
     setIsModalOpen(true);
@@ -509,8 +516,17 @@ const Settings: React.FC = () => {
   const handleSaveMember = async (memberData: Partial<HouseholdMember>) => {
     try {
       if (selectedMember) {
-        // Update existing
-        await updateMember(selectedMember.uid, memberData);
+        if (selectedMember.isManaged) {
+          // MemberModal only ever sends `{ displayName }` for a managed kid —
+          // route it to the purpose-built kid-profile mutation, never
+          // updateMember (which firestore.rules' managed-kid branch restricts).
+          await updateKidProfile(selectedMember.uid, {
+            displayName: memberData.displayName ?? selectedMember.displayName,
+          });
+        } else {
+          // Update existing
+          await updateMember(selectedMember.uid, memberData);
+        }
       } else {
         // Add new
         await addMember(memberData);
@@ -961,8 +977,8 @@ const Settings: React.FC = () => {
                         onClick={() => handleEditMember(member)}
                         variant="ghost"
                         size="icon"
-                        title="Edit Member"
-                        aria-label="Edit Member"
+                        title={member.isManaged ? 'Edit Kid Profile' : 'Edit Member'}
+                        aria-label={member.isManaged ? 'Edit Kid Profile' : 'Edit Member'}
                       >
                         <Pencil size={16} />
                       </Button>
@@ -1614,7 +1630,13 @@ const Settings: React.FC = () => {
         onClose={() => setIsModalOpen(false)}
         onSave={handleSaveMember}
         initialMember={selectedMember}
-        title={selectedMember ? 'Edit Member' : 'Add Member'}
+        title={
+          selectedMember?.isManaged
+            ? 'Edit Kid Profile'
+            : selectedMember
+            ? 'Edit Member'
+            : 'Add Member'
+        }
       />
 
       {activePointsView && (
