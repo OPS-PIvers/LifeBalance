@@ -239,6 +239,22 @@ export interface HouseholdMember {
    * exactly as they were before 2F.1. No migration runs.
    */
   hiddenKeys?: string[];
+
+  /**
+   * 2F.2 (per-member landing screen): which screen this member lands on when
+   * opening the app — a `LandingScreenKey` ('home' or a `NavPageKey'), or (for
+   * a value written by a future/foreign caller) a `NavLeafKey`, resolved to
+   * its owning page. A short string, capped at 64 chars by `firestore.rules`.
+   *
+   * Absent means "never chosen": `resolveLandingRoute` (utils/moduleVisibility.ts)
+   * falls back to the first enabled nav destination, so an un-customized
+   * member keeps landing on Home exactly as before this field existed. The
+   * same resolver also covers a stored value that now names a page the
+   * member has since hidden, or one the household has since disabled — it
+   * never leaves the member on a dead route, worst case landing on Settings
+   * (structurally un-hideable) once every page is off.
+   */
+  homeScreen?: string;
 }
 
 export interface Account {

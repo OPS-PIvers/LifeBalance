@@ -1,0 +1,93 @@
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MyViewSettings } from '@/components/settings/MyViewSettings';
+import type { Household, HouseholdMember } from '@/types/schema';
+
+const baseMember = (overrides: Partial<HouseholdMember> = {}): HouseholdMember => ({
+  uid: 'member-1',
+  displayName: 'Test Member',
+  role: 'admin',
+  points: { daily: 0, weekly: 0, total: 0 },
+  ...overrides,
+});
+
+const settings: Household['moduleVisibility'] | undefined = undefined;
+
+/**
+ * 2F.2 — Home becomes toggleable, and the landing-screen picker only ever
+ * offers destinations actually reachable for this member.
+ */
+describe('MyViewSettings — Home + landing screen (2F.2)', () => {
+  it('Home is on by default and appears alongside every page as a landing option', () => {
+    render(<MyViewSettings member={baseMember()} settings={settings} onSave={vi.fn()} />);
+    expect(screen.getByRole('checkbox', { name: 'Show Home in your navigation' })).toBeChecked();
+
+    const landing = screen.getByRole('radiogroup', { name: 'Landing screen' });
+    expect(landing).toBeInTheDocument();
+    // An un-customized member's effective landing screen is Home.
+    expect(screen.getByRole('radio', { name: 'Home' })).toBeChecked();
+  });
+
+  it('toggling Home off calls onSave with "home" added to hiddenKeys', async () => {
+    const onSave = vi.fn();
+    render(<MyViewSettings member={baseMember()} settings={settings} onSave={onSave} />);
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Show Home in your navigation' }));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ hiddenKeys: expect.arrayContaining(['home']) })
+    );
+  });
+
+  it('hiding Home removes it from the landing-screen options and re-centers on the next destination', () => {
+    render(
+      <MyViewSettings
+        member={baseMember({ hiddenKeys: ['home'] })}
+        settings={settings}
+        onSave={vi.fn()}
+      />
+    );
+    expect(screen.queryByRole('radio', { name: 'Home' })).not.toBeInTheDocument();
+    // Habits is the first remaining nav destination in registry order.
+    expect(screen.getByRole('radio', { name: 'Habits' })).toBeChecked();
+  });
+
+  it('picking a landing screen calls onSave with that destination as homeScreen', async () => {
+    const onSave = vi.fn();
+    render(<MyViewSettings member={baseMember()} settings={settings} onSave={onSave} />);
+    await userEvent.click(screen.getByRole('radio', { name: 'Money' }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ homeScreen: 'money' }));
+  });
+
+  it('a chosen homeScreen for a page the member has since hidden shows the fallback as checked instead', () => {
+    render(
+      <MyViewSettings
+        member={baseMember({
+          homeScreen: 'money',
+          hiddenKeys: ['overview', 'transactions', 'trends', 'calendar', 'subscriptions', 'buckets', 'accounts'],
+        })}
+        settings={settings}
+        onSave={vi.fn()}
+      />
+    );
+    // Money itself dropped out of the page list entirely (no visible leaf) —
+    // the picker never offers a page that would silently do nothing.
+    expect(screen.queryByRole('radio', { name: 'Money' })).not.toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Home' })).toBeChecked();
+  });
+
+  it('hides the landing-screen picker entirely once only one destination remains', () => {
+    const allButHome = [
+      'track', 'history', 'insights', 'coach', 'rewards', 'challenges',
+      'overview', 'transactions', 'trends', 'calendar', 'subscriptions', 'buckets', 'accounts',
+      'todos', 'meals', 'shopping',
+    ];
+    render(
+      <MyViewSettings
+        member={baseMember({ hiddenKeys: allButHome })}
+        settings={settings}
+        onSave={vi.fn()}
+      />
+    );
+    expect(screen.queryByRole('radiogroup', { name: 'Landing screen' })).not.toBeInTheDocument();
+  });
+});

@@ -14,7 +14,7 @@ import { SubViewHint } from '@/components/ui/SubViewHint';
 import PageHeader from '@/components/ui/PageHeader';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Skeleton, SkeletonText } from '@/components/ui/Skeleton';
-import { useDeepLinkTab } from '@/hooks/useDeepLinkTab';
+import { useViewParam } from '@/hooks/useViewParam';
 import { useDeepLinkHighlight } from '@/hooks/useDeepLinkHighlight';
 import { usePageNavigation } from '@/hooks/usePageNavigation';
 import { resolveActiveLocation, type VisibleGroup } from '@/utils/moduleVisibility';
@@ -99,7 +99,11 @@ const Budget: React.FC = () => {
   // deep-link straight to a view. `activeView` may be a legacy view key
   // ('trends', 'buckets', …) or a view since hidden — `resolveActiveLocation`
   // maps whatever it holds onto a { group, leaf } pair that is still visible.
-  const [activeView, setActiveView] = useDeepLinkTab('overview', MONEY_TABS);
+  // 2F.2: backed by the URL's `?view=` param (not just React state), so the
+  // current view survives a refresh and is deep-linkable from a push
+  // notification or PWA shortcut — see `useViewParam`'s doc comment for how it
+  // still honors the pre-existing `state: { tab }` deep link unchanged.
+  const [activeView, setActiveView] = useViewParam('overview', MONEY_TABS);
   const location = resolveActiveLocation(nav, activeView);
   const activeTab = location?.group ?? '';
   const activeLeaf = location?.leaf ?? '';
