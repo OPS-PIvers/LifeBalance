@@ -219,6 +219,15 @@ const MatrixRowCells: React.FC<MatrixRowCellsProps> = ({
               checked={!locked && memberWantsIt}
               disabled={locked}
               onCheckedChange={() => {
+                // NOTE: this is the one place an admin can plant `hiddenKeys`
+                // on a MANAGED KID's member doc (kids have no login to set
+                // their own). firestore.rules' managed-kid branch (used by
+                // non-admin parents, e.g. via actAs) allowlists an exhaustive
+                // set of writable keys on that doc — every key an admin can
+                // write here (hiddenKeys, homeScreen, ...) MUST stay on that
+                // allowlist, or a non-admin parent's later write to the same
+                // kid (e.g. toggleHabit's points write) gets denied outright.
+                // See fix/rules-kid-profile-visibility-keys.
                 const nextHidden = toggleHiddenKey(hidden ? [...hidden] : [], row.key);
                 onUpdateMember(member.uid, { hiddenKeys: nextHidden });
               }}

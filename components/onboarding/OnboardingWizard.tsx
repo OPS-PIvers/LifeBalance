@@ -121,10 +121,14 @@ const OnboardingWizard: React.FC = () => {
     } finally {
       // This wizard's own "visibility" step (2F.3) already covered — or
       // offered and let the user skip — the exact ground the Dashboard's
-      // one-time discovery card exists to surface. Mark it seen so a
-      // brand-new household creator doesn't land on Home and immediately get
-      // nagged by that card too.
-      if (currentUser) dismissVisibilityDiscovery(currentUser.uid);
+      // one-time discovery card exists to surface, but ONLY once the user has
+      // actually reached that step (or later). The persistent "Skip setup"
+      // link renders on every earlier step too, so someone who bails from
+      // 'welcome'/'balance'/'habits' never saw the visibility step at all —
+      // marking the flag here for them would suppress the Dashboard's
+      // discovery card with no path left to the feature (defeats 2F.3 part 2).
+      const reachedVisibilityStep = STEPS.indexOf(step) >= STEPS.indexOf('visibility');
+      if (currentUser && reachedVisibilityStep) dismissVisibilityDiscovery(currentUser.uid);
       navigate('/', { replace: true });
     }
   }, [completeOnboarding, currentUser, isSubmitting, navigate, step]);
