@@ -17,12 +17,11 @@ import {
 import { getLocalDateString } from "@/utils/dateHelpers";
 import { getLimits, LEGACY_AI_DAILY_QUOTA } from "@/utils/entitlements";
 import { getBillingEnabled } from "./appConfig";
-import type { ReceiptData, ParsedTaskList, ParsedMealPlan, ReceiptLineItemsData } from './geminiService.types';
+import type { ParsedTaskList, ParsedMealPlan, ReceiptLineItemsData } from './geminiService.types';
 import {
   GeminiValidationError,
   InvalidImageError,
   validateBase64Image,
-  validateReceiptData,
   validateBankTransactions,
   validateMealSuggestion,
   validateSubtaskSuggestions,
@@ -788,68 +787,6 @@ async function generateJsonContent<T>(
     throw error;
   }
 }
-
-/**
- * Analyzes a receipt image and extracts transaction data
- * @param householdId - The household ID for quota tracking
- * @param base64Image - Base64 encoded image data
- * @param availableCategories - List of available budget categories for smart matching
- * @param availableHabits - List of available habits for smart matching
- * @param _aiClient - Optional injected AI client for testing purposes.
- */
-export const analyzeReceipt = async (
-  householdId: string,
-  base64Image: string,
-  availableCategories?: string[],
-  availableHabits?: string[],
-  availableStores?: string[],
-  _aiClient?: Pick<typeof ai, 'models'>
-): Promise<ReceiptData> => {
-  return withErrorHandling('OCR', 'Failed to analyze receipt. Please try manual entry.', async () => {
-    const resolvedCategories = availableCategories?.length ? availableCategories : DEFAULT_FINANCE_CATEGORIES;
-    const categoryList = sanitizeList(resolvedCategories);
-
-    const habitList = availableHabits?.length
-      ? sanitizeList(availableHabits)
-      : '';
-
-    const today = getLocalDateString();
-    const prompt = [
-      `Analyze this receipt image. Extract the merchant name, total amount, date (YYYY-MM-DD format), and suggest the most appropriate category.`,
-      `The amount is in US dollars — return it as a positive decimal number (e.g. 12.34); ignore currency symbols, treat "." as the decimal separator and "," as a thousands separator.`,
-      `For category, choose exactly one of these strings: ${categoryList}. If none fits, use "${FALLBACK_CATEGORY}". Do not invent a new category.`,
-      habitList ? `Also suggest any relevant habits from this list that might apply to this transaction: ${habitList}.` : '',
-      availableStores?.length
-        ? `Extract the store name if visible. Prefer one of these existing stores when it's the same place: ${sanitizeList(availableStores)}. Only return a different name if it is clearly a different store; otherwise leave it blank.`
-        : `Extract the store name if visible.`,
-      `Today's date is ${today}. If the year is missing, infer it.`,
-    ].filter(Boolean).join('\n');
-
-    const data = await generateJsonContent<ReceiptData>(
-      householdId,
-      prepareImageContent(base64Image, prompt),
-      {
-        type: Type.OBJECT,
-        properties: {
-          merchant: { type: Type.STRING },
-          amount: { type: Type.NUMBER },
-          category: { type: Type.STRING },
-          date: { type: Type.STRING },
-          suggestedHabits: { type: Type.ARRAY, items: { type: Type.STRING } },
-          store: { type: Type.STRING }
-        },
-        required: ["merchant", "amount", "category"]
-      },
-      _aiClient,
-      GEMINI_MODEL,
-      validateReceiptData
-    );
-    // Clamp to the household's real categories — the schema only constrains the
-    // type, so an off-list category would otherwise land on the transaction.
-    data.category = clampToAllowed(data.category, resolvedCategories);
-    return data;
-  });
-};
 
 /**
  * F-DASH-04 — Extracts INDIVIDUAL line items from an itemized receipt so a

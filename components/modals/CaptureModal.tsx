@@ -182,11 +182,22 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
     setPrefilledForOpen(false);
   }
 
+  // Cancellation guard for the async image-scan / bulk-submit flows
+  // (handleImageSelect, submitParsedTransactions). Both flows capture the
+  // current value at start and check it after every await; handleBack and
+  // handleClose bump it so a stale completion (the Gemini scan/submit
+  // resolving after the user already backed out or closed the drawer) can no
+  // longer call setState/addTransaction/handleClose and clobber whatever the
+  // user is doing now (e.g. a half-typed Manual Entry).
+  const captureRunIdRef = useRef(0);
+
   // Reset state when closing. CaptureModal renders inside LazyMount (mounts on
   // first open, stays mounted forever after — see CLAUDE.md Code-Splitting),
   // so this is the ENTIRE state-reset mechanism; anything back() clears must
   // be cleared here too.
   const handleClose = () => {
+    // Invalidate any in-flight async continuation (see captureRunIdRef above).
+    captureRunIdRef.current += 1;
     setView('menu');
     setActiveTab('transaction');
     setProcessingMessage('Processing...');
@@ -217,6 +228,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
   // unmounts when `view` stops being 'manual' — lifting its form state to
   // survive a back navigation is deliberately out of scope (paper cut 2G.3).
   const handleBack = () => {
+    // Invalidate any in-flight async continuation (see captureRunIdRef above).
+    captureRunIdRef.current += 1;
     setManualInitialData(undefined);
     setParsedTransactions([]);
     setView('menu');
@@ -258,6 +271,10 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
   // which tried the statement parser first and never got line items or
   // duplicate detection out of a receipt photo.
   const handleImageSelect = async (file: File) => {
+    // This flow's run id — see captureRunIdRef above. Checked after every
+    // await below; a mismatch means the user backed out or closed the drawer
+    // while this scan was in flight, so the continuation becomes a no-op.
+    const runId = ++captureRunIdRef.current;
     setView('processing');
     setProcessingMessage('Reading image...');
     let base64: string;
@@ -270,10 +287,12 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
       });
     } catch (error) {
       console.error('File read error:', error);
+      if (runId !== captureRunIdRef.current) return;
       toast.error('Failed to read image.');
       setView('menu');
       return;
     }
+    if (runId !== captureRunIdRef.current) return;
 
     setProcessingMessage('Scanning image...');
     try {
@@ -281,6 +300,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
       const { parseReceiptLineItems, parseBankStatement } = await import('@/services/geminiService');
 
       const data = await parseReceiptLineItems(householdId, base64, dynamicCategories, stores.map(s => s.name), habitTitles);
+      if (runId !== captureRunIdRef.current) return;
 
       // The itemized-receipt parser won: it found at least one product line.
       if (data.items.length > 0) {
@@ -347,6 +367,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
         }
 
         await addTransaction(newTransaction);
+        if (runId !== captureRunIdRef.current) return;
         toast.success("Receipt scanned! Check your Action Queue.");
         handleClose();
         return;
@@ -357,6 +378,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
       // list of transactions instead.
       setProcessingMessage('Extracting transactions...');
       const bankTransactions = await parseBankStatement(householdId, base64, dynamicCategories, habitTitles, stores.map(s => s.name));
+      if (runId !== captureRunIdRef.current) return;
       if (bankTransactions.length === 0) {
         toast.error("Couldn't find any transactions in that image. Try manual entry.");
         setView('manual');
@@ -377,6 +399,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
       toast.success(`Found ${bankTransactions.length} transaction(s)`);
     } catch (error) {
       console.error('AI processing error:', error);
+      if (runId !== captureRunIdRef.current) return;
       toast.error(describeError(error, 'analyze the image', 'read'));
       setView('manual');
     }
@@ -403,11 +426,16 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
       toast.error('Please select at least one transaction');
       return;
     }
+    // This flow's run id — see captureRunIdRef above. Checked after every
+    // await below; a mismatch means the user backed out or closed the drawer
+    // while this submission was in flight, so the continuation becomes a no-op.
+    const runId = ++captureRunIdRef.current;
     setView('processing');
     setProcessingMessage(`Adding ${selectedTx.length} transaction(s)...`);
     // Resolve AI store names to canonical stores (creating non-duplicates once)
     // before writing, so each transaction references a real household store.
     const storeMap = await ensureStores(selectedTx.map(tx => tx.store));
+    if (runId !== captureRunIdRef.current) return;
     // A receipt split carries a shared receiptGroupId on every row; a bank
     // statement scan does not. The split MUST commit atomically (owner note:
     // all resulting transactions in one writeBatch) so a partial receipt can
@@ -440,8 +468,10 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
     if (isReceiptSplit) {
       try {
         await addTransactions(selectedTx.map(buildPayload));
+        if (runId !== captureRunIdRef.current) return;
         toast.success(`${selectedTx.length} transaction(s) added to Action Queue!`);
       } catch (error) {
+        if (runId !== captureRunIdRef.current) return;
         toast.error(describeError(error, 'add the transactions'));
       }
       handleClose();
@@ -449,6 +479,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
     }
 
     const results = await Promise.allSettled(selectedTx.map(tx => addTransaction(buildPayload(tx))));
+    if (runId !== captureRunIdRef.current) return;
     const succeeded = results.filter(r => r.status === 'fulfilled').length;
     if (succeeded > 0) toast.success(`${succeeded} transaction(s) added to Action Queue!`);
     else {
@@ -611,8 +642,11 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
           {/* Back affordance — every sub-view (manual/processing/review) used
               to have no way out short of closing the whole drawer, wiping
               everything entered. Back always returns to the capture-type
-              menu (paper cut 2G.3). */}
-          {view !== 'menu' && (
+              menu (paper cut 2G.3). Hidden during 'processing' — an in-flight
+              scan/submit can't be meaningfully backed out of, mirroring the
+              Drawer's own `disableClose={view === 'processing'}` below; the
+              captureRunIdRef guard covers the still-reachable header X. */}
+          {view !== 'menu' && view !== 'processing' && (
             <Button
               variant="subtle"
               size="icon"

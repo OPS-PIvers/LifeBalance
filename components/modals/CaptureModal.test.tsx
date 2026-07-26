@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import CaptureModal from './CaptureModal';
@@ -11,6 +11,18 @@ vi.mock('react-hot-toast', () => ({
     success: vi.fn(),
     error: vi.fn(),
   }
+}));
+
+// Controllable mocks for the dynamically-imported Gemini scan functions, so
+// the cancellation-guard tests below can hold a scan "in flight" and resolve
+// it on demand after the user has backed out.
+const { parseReceiptLineItemsMock, parseBankStatementMock } = vi.hoisted(() => ({
+  parseReceiptLineItemsMock: vi.fn(),
+  parseBankStatementMock: vi.fn(),
+}));
+vi.mock('@/services/geminiService', () => ({
+  parseReceiptLineItems: parseReceiptLineItemsMock,
+  parseBankStatement: parseBankStatementMock,
 }));
 
 // Mock useHousehold
@@ -257,6 +269,74 @@ describe('CaptureModal', () => {
       expect(screen.queryByLabelText('Back')).not.toBeInTheDocument();
       // Back is a pure navigation — it must not close the whole drawer.
       expect(mockOnClose).not.toHaveBeenCalled();
+    });
+  });
+
+  // --- Processing-view cancellation guard (PR #1108 finding) ---
+
+  describe('processing view cancellation guard', () => {
+    beforeEach(() => {
+      parseReceiptLineItemsMock.mockReset();
+      parseBankStatementMock.mockReset();
+      mockUseHousehold.addTransaction.mockReset();
+    });
+
+    it('hides the Back button while a scan is processing', async () => {
+      // Never resolves — keeps the flow parked in 'processing'.
+      parseReceiptLineItemsMock.mockReturnValue(new Promise(() => {}));
+      render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
+
+      fireEvent.click(screen.getByTestId('add-from-image'));
+
+      await screen.findByText('Processing');
+      // Let the flow actually reach (and lock in) its call to the mocked
+      // scan function before the test ends — otherwise the FileReader's
+      // callback can fire LATE (after this test has finished and the next
+      // test has reconfigured the shared mock's return value), so this
+      // never-resolving promise would end up calling the NEXT test's mock
+      // return value instead of its own, contaminating that test.
+      await waitFor(() => expect(parseReceiptLineItemsMock).toHaveBeenCalledTimes(1));
+      expect(screen.queryByLabelText('Back')).not.toBeInTheDocument();
+      // The header X (unlike Back) intentionally remains — it's guarded by
+      // the cancellation ref instead, see the next test.
+      expect(screen.getByLabelText('Close drawer')).toBeInTheDocument();
+    });
+
+    it('a scan resolving after the flow was abandoned performs no state update and no addTransaction call', async () => {
+      let resolveScan: (data: { merchant: string; date: string; items: { description: string; amount: number; category: string }[] }) => void = () => {};
+      parseReceiptLineItemsMock.mockReturnValue(
+        new Promise((resolve) => { resolveScan = resolve; })
+      );
+      render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
+
+      fireEvent.click(screen.getByTestId('add-from-image'));
+      await screen.findByText('Processing');
+
+      // Back is hidden during processing (previous test), but the header X
+      // is still reachable — the user force-closes the in-flight scan.
+      fireEvent.click(screen.getByLabelText('Close drawer'));
+      expect(mockOnClose).toHaveBeenCalledTimes(1);
+
+      // ...and starts a fresh manual entry.
+      await screen.findByTestId('capture-menu');
+      fireEvent.click(screen.getByTestId('manual-entry'));
+      expect(screen.getByTestId('capture-transaction-manual')).toBeInTheDocument();
+
+      // The abandoned scan now resolves.
+      resolveScan({
+        merchant: 'Target',
+        date: '2026-07-01',
+        items: [{ description: 'Widget', amount: 10, category: 'Shopping' }],
+      });
+      // Flush the resolved scan's continuation (a couple of chained awaits)
+      // before asserting nothing happened.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      // It must be a total no-op: no transaction written, and the manual
+      // form the user is now typing into must not be clobbered.
+      expect(mockUseHousehold.addTransaction).not.toHaveBeenCalled();
+      expect(screen.getByTestId('capture-transaction-manual')).toBeInTheDocument();
+      expect(screen.queryByText('Review')).not.toBeInTheDocument();
     });
   });
 });

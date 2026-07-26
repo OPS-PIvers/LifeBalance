@@ -378,54 +378,6 @@ describe('geminiService', () => {
     }
   });
 
-  it('analyzeReceipt prompt includes correct date from local time', async () => {
-    const { analyzeReceipt } = await import('./geminiService');
-
-    // Mock date to 2026-02-15
-    const mockDate = new Date(2026, 1, 15); // Month is 0-indexed (1 = Feb)
-    vi.useFakeTimers();
-    vi.setSystemTime(mockDate);
-
-    const mockResponse = {
-        merchant: 'Target',
-        amount: 25.00,
-        category: 'Shopping'
-    };
-
-    generateContentMock.mockResolvedValue({
-        text: JSON.stringify(mockResponse)
-    });
-
-    await analyzeReceipt('test-id', VALID_TEST_IMAGE);
-
-    // Verify the prompt sent to Gemini contains the date
-    // We access the first argument of the first call, which is the model options/config object
-    const callArgs = generateContentMock.mock.calls[0]![0];
-    const promptText = callArgs.contents.parts[1].text; // The second part is text
-
-    expect(promptText).toContain("Today's date is 2026-02-15");
-
-    vi.useRealTimers();
-  });
-
-  it('analyzeReceipt clamps an off-list category to the fallback', async () => {
-    const { analyzeReceipt } = await import('./geminiService');
-    generateContentMock.mockResolvedValue({
-      text: JSON.stringify({ merchant: 'X', amount: 10, category: 'Crypto' }),
-    });
-    const result = await analyzeReceipt('test-id', VALID_TEST_IMAGE, ['Groceries', 'Dining']);
-    expect(result.category).toBe('Other');
-  });
-
-  it('analyzeReceipt keeps an in-list category (case-insensitive match)', async () => {
-    const { analyzeReceipt } = await import('./geminiService');
-    generateContentMock.mockResolvedValue({
-      text: JSON.stringify({ merchant: 'X', amount: 10, category: 'groceries' }),
-    });
-    const result = await analyzeReceipt('test-id', VALID_TEST_IMAGE, ['Groceries', 'Dining']);
-    expect(result.category).toBe('Groceries');
-  });
-
   it('parseTaskList returns the parsed task lines', async () => {
     const { parseTaskList } = await import('./geminiService');
     generateContentMock.mockResolvedValue({
