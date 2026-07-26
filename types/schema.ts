@@ -560,11 +560,27 @@ export interface MerchantRule {
   /** ISO timestamp. Also the deterministic tie-breaker when two rules are
    *  exactly as specific: the older rule wins. */
   createdAt: string;
-  /** ISO timestamp of the most recent match, stamped where rules are APPLIED
-   *  (the nightly sync / review path), not at render time. Powers the editor's
-   *  "this rule hasn't fired in months — is it dead?" hint. */
+  /**
+   * UNUSED bookkeeping fields, kept only so an already-stored value survives an
+   * edit (see `contexts/household/mutations/merchantRuleMutations.ts`). NOTHING
+   * writes them — not the client, not the nightly sync — and nothing should.
+   *
+   * They were specified as server-stamped counters. They are not, for two
+   * reasons. First, the editor's "is this rule dead?" signal is DERIVED
+   * client-side instead: `MerchantRulesCard` runs the household's own
+   * transactions through `pickMerchantRule`, which is retroactive (a rule saved
+   * today reports the history it renames), attributed to the ONE rule that
+   * actually wins each row, and structurally incapable of drifting from what the
+   * user sees. A stored counter is none of those things. Second, stamping them
+   * server-side would mean a read-modify-write of the whole `merchantRules`
+   * array inside a non-transactional batch — precisely the whole-array clobber
+   * that cost this repo real habit history on 2026-07-15.
+   *
+   * Prefer deriving. If a genuinely server-only statistic is ever needed, give
+   * it its own document rather than resurrecting these.
+   */
   lastMatchedAt?: string;
-  /** Cumulative match count, shown in the editor as a confidence signal. */
+  /** @see lastMatchedAt — unused; counts are derived client-side. */
   matchCount?: number;
 }
 

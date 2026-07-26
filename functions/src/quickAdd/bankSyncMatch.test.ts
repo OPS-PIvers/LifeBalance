@@ -23,6 +23,7 @@ import {
   type PaidIncomeLike,
   type WithdrawalDecision,
 } from "./bankSyncMatch";
+import type { MerchantRule } from "./merchantRules";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -217,14 +218,14 @@ describe("billAmountWithinTolerance", () => {
 });
 
 describe("pickBillToPay", () => {
-  it("pays via title token-overlap (matchedByAlias false)", () => {
+  it("pays via title token-overlap (matchedBy 'token')", () => {
     const w = withdrawal({ descriptor: "COMCAST-XFINITY CABLE SVCS 260718", amount: 153.95 });
     const got = pickBillToPay(w, [bill()]);
     expect(got?.bill.id).toBe("bill1");
-    expect(got?.matchedByAlias).toBe(false);
+    expect(got?.matchedBy).toBe("token");
   });
 
-  it("pays via a learned alias (matchedByAlias true), preferred over token-overlap", () => {
+  it("pays via a learned alias (matchedBy 'alias'), preferred over token-overlap", () => {
     const w = withdrawal({ descriptor: "XCEL ENERGY WEB PYMT 260718", amount: 90 });
     const aliasBill = bill({
       id: "electric",
@@ -234,7 +235,7 @@ describe("pickBillToPay", () => {
     });
     const got = pickBillToPay(w, [aliasBill]);
     expect(got?.bill.id).toBe("electric");
-    expect(got?.matchedByAlias).toBe(true);
+    expect(got?.matchedBy).toBe("alias");
   });
 
   it("returns null when amount is out of tolerance", () => {
@@ -247,6 +248,134 @@ describe("pickBillToPay", () => {
     const a = bill({ id: "a", title: "Comcast Internet", amount: 153.95 });
     const b = bill({ id: "b", title: "Comcast TV", amount: 153.95 });
     expect(pickBillToPay(w, [a, b])).toBeNull();
+  });
+
+  it("is unchanged by an empty or absent rule list", () => {
+    const w = withdrawal({ descriptor: "COMCAST-XFINITY CABLE SVCS", amount: 153.95 });
+    expect(pickBillToPay(w, [bill()], [])?.matchedBy).toBe("token");
+    expect(pickBillToPay(w, [bill()], undefined)?.matchedBy).toBe("token");
+  });
+});
+
+// A rule's `billId` is an explicit household declaration, so it is the strongest
+// signal available — stronger than a learned alias, and strong enough to ignore
+// the amount window that exists only to keep a GUESS from mis-paying a bill.
+describe("pickBillToPay — merchant-rule billId tier", () => {
+  const amexRule = (over: Partial<MerchantRule> = {}): MerchantRule => ({
+    id: "r-amex",
+    pattern: "AMERICAN EXPRESS ACH PMT",
+    billId: "amex",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    ...over,
+  });
+
+  const amexBill = (over: Partial<BillPayCandidate> = {}): BillPayCandidate =>
+    bill({ id: "amex", title: "AmEx Payment", amount: 200, ...over });
+
+  // The motivating case: token-overlap provably cannot match
+  // "AMERICAN EXPRESS ACH PMT" to a bill titled "AmEx Payment" (no shared
+  // significant token — "PMT"/"PAYMENT" are noise), and a statement balance
+  // never lands inside ±10%/±$25 of last month's.
+  it("pays a variable-amount bill token-overlap could never reach", () => {
+    const w = withdrawal({ descriptor: "AMERICAN EXPRESS ACH PMT 260720", amount: 1417.03 });
+    expect(shareSignificantToken(w.descriptor, "AmEx Payment")).toBe(false);
+    expect(billAmountWithinTolerance(200, 1417.03)).toBe(false);
+
+    const got = pickBillToPay(w, [amexBill()], [amexRule()]);
+    expect(got?.bill.id).toBe("amex");
+    expect(got?.matchedBy).toBe("rule");
+  });
+
+  it("outranks a learned alias on a different bill", () => {
+    const w = withdrawal({ descriptor: "AMERICAN EXPRESS ACH PMT", amount: 200 });
+    const decoy = bill({
+      id: "decoy",
+      title: "Something Else",
+      amount: 200,
+      bankDescriptorAliases: ["AMERICAN EXPRESS ACH PMT"],
+    });
+    const got = pickBillToPay(w, [decoy, amexBill()], [amexRule()]);
+    expect(got?.bill.id).toBe("amex");
+    expect(got?.matchedBy).toBe("rule");
+  });
+
+  it("matches a recurring occurrence through its template id", () => {
+    const w = withdrawal({ descriptor: "AMERICAN EXPRESS ACH PMT", amount: 999 });
+    const occurrence = bill({
+      id: "amex::2026-07-20",
+      templateId: "amex",
+      title: "AmEx Payment",
+      amount: 200,
+      isRecurringInstance: true,
+    });
+    const got = pickBillToPay(w, [occurrence], [amexRule()]);
+    expect(got?.bill.id).toBe("amex::2026-07-20");
+    expect(got?.matchedBy).toBe("rule");
+  });
+
+  // Two unpaid occurrences of the same template (an overdue one plus this
+  // month's) cannot be told apart, and the strongest signal being ambiguous is
+  // no licence for a weaker one to decide.
+  it("returns null when the rule names two payable occurrences", () => {
+    const w = withdrawal({ descriptor: "AMERICAN EXPRESS ACH PMT", amount: 200 });
+    const june = bill({
+      id: "amex::2026-06-20",
+      templateId: "amex",
+      title: "AmEx Payment",
+      amount: 200,
+      isRecurringInstance: true,
+    });
+    const july = bill({
+      id: "amex::2026-07-20",
+      templateId: "amex",
+      title: "AmEx Payment",
+      amount: 200,
+      isRecurringInstance: true,
+    });
+    expect(pickBillToPay(w, [june, july], [amexRule()])).toBeNull();
+  });
+
+  // "This descriptor IS that bill", not "pay something regardless".
+  it("falls through to alias/token when the named bill isn't payable", () => {
+    const w = withdrawal({ descriptor: "AMERICAN EXPRESS ACH PMT", amount: 153.95 });
+    const comcast = bill({ title: "Comcast Internet", amount: 153.95 });
+    // The AmEx bill is absent from the pool (already paid, or out of window).
+    const got = pickBillToPay(w, [comcast], [
+      amexRule({ pattern: "AMERICAN", billId: "amex" }),
+    ]);
+    expect(got).toBeNull(); // no token overlap with Comcast either
+
+    const withOverlap = withdrawal({ descriptor: "AMERICAN EXPRESS COMCAST", amount: 153.95 });
+    expect(pickBillToPay(withOverlap, [comcast], [amexRule({ pattern: "AMERICAN" })])?.matchedBy)
+      .toBe("token");
+  });
+
+  it("ignores a matching rule that carries no billId", () => {
+    const w = withdrawal({ descriptor: "COMCAST-XFINITY CABLE SVCS", amount: 153.95 });
+    const renameOnly: MerchantRule = {
+      id: "r-comcast",
+      pattern: "COMCAST",
+      name: "Comcast",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    };
+    expect(pickBillToPay(w, [bill()], [renameOnly])?.matchedBy).toBe("token");
+  });
+
+  // The rule engine's own precedence still applies: an amount-qualified rule
+  // wins, so one descriptor can route two different amounts to two bills.
+  it("honours the rule engine's specificity when two rules match", () => {
+    const w = withdrawal({ descriptor: "AMERICAN EXPRESS ACH PMT", amount: 45 });
+    const pinned = amexRule({
+      id: "r-pinned",
+      pattern: "AMERICAN EXPRESS",
+      amount: 45,
+      billId: "amex-fee",
+      createdAt: "2026-02-01T00:00:00.000Z",
+    });
+    const fee = bill({ id: "amex-fee", title: "AmEx annual fee", amount: 45 });
+    const got = pickBillToPay(w, [amexBill(), fee], [amexRule(), pinned]);
+    expect(got?.bill.id).toBe("amex-fee");
+    expect(got?.matchedBy).toBe("rule");
   });
 });
 
@@ -315,7 +444,65 @@ describe("decideWithdrawal order of operations", () => {
     expect(decision.kind).toBe("pay_bill");
     if (decision.kind === "pay_bill") {
       expect(decision.match.bill.id).toBe("bill1");
-      expect(decision.match.matchedByAlias).toBe(false);
+      expect(decision.match.matchedBy).toBe("token");
+    }
+  });
+
+  // Rules reach step (d) only. Steps a-c ask an IDENTITY question, and identity
+  // is answered from the raw bank descriptor alone — a user-editable label must
+  // never decide whether two rows are the same purchase.
+  it("d. a rule's billId does not pre-empt dedup, stub-fill or confirm", () => {
+    const w = withdrawal({ descriptor: "AMERICAN EXPRESS ACH PMT", amount: 18.86 });
+    const rules: MerchantRule[] = [
+      { id: "r", pattern: "AMERICAN EXPRESS", billId: "bill1", createdAt: "2026-01-01T00:00:00.000Z" },
+    ];
+    const billCandidates = [bill({ amount: 18.86 })];
+
+    expect(
+      decideWithdrawal({
+        ...emptyDecideBase,
+        withdrawal: w,
+        existingBankRefs: new Set([w.bankRef]),
+        billCandidates,
+        merchantRules: rules,
+      })
+    ).toEqual({ kind: "skip_bankref" });
+
+    expect(
+      decideWithdrawal({
+        ...emptyDecideBase,
+        withdrawal: w,
+        stubs: [stub()],
+        billCandidates,
+        merchantRules: rules,
+      })
+    ).toEqual({ kind: "fill_stub", stubId: "stub1" });
+
+    expect(
+      decideWithdrawal({
+        ...emptyDecideBase,
+        withdrawal: w,
+        pendingCandidates: [pending()],
+        billCandidates,
+        merchantRules: rules,
+      })
+    ).toEqual({ kind: "confirm_pending", transactionId: "txn1" });
+  });
+
+  it("d. pays the rule's bill when nothing earlier claims the withdrawal", () => {
+    const w = withdrawal({ descriptor: "AMERICAN EXPRESS ACH PMT", amount: 1417.03 });
+    const decision = decideWithdrawal({
+      ...emptyDecideBase,
+      withdrawal: w,
+      billCandidates: [bill({ id: "amex", title: "AmEx Payment", amount: 200 })],
+      merchantRules: [
+        { id: "r", pattern: "AMERICAN EXPRESS", billId: "amex", createdAt: "2026-01-01T00:00:00.000Z" },
+      ],
+    });
+    expect(decision.kind).toBe("pay_bill");
+    if (decision.kind === "pay_bill") {
+      expect(decision.match.bill.id).toBe("amex");
+      expect(decision.match.matchedBy).toBe("rule");
     }
   });
 

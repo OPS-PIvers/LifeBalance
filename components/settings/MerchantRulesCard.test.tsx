@@ -196,10 +196,11 @@ describe('MerchantRulesCard', () => {
       ).toBeInTheDocument();
     });
 
-    it('ignores the stored matchCount counters no client code writes', () => {
-      // PR 3's server pipeline owns `matchCount`/`lastMatchedAt`. Until it ships
-      // they are always absent, and mixing them in would blend two different
-      // quantities — so a stored counter must not move the displayed number.
+    it('ignores the stored matchCount counters nothing writes', () => {
+      // Nothing writes `matchCount`/`lastMatchedAt` — the server pipeline
+      // deliberately does not either (types/schema.ts explains why). A value can
+      // still exist on an old document, and mixing it in would blend two
+      // different quantities — so it must not move the displayed number.
       mockTransactions = APPLE_HISTORY;
       mockRules = [
         makeRule({
