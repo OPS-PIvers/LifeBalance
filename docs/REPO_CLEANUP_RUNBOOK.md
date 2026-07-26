@@ -111,19 +111,37 @@ linked ones — check for those first if agents may still be running.
 
 ## 4. Delete the branches
 
+Both commands below guard against an empty list, so re-running this on an
+already-clean repo prints a message instead of a confusing error. Neither tool
+handles "nothing to do" gracefully on its own:
+
+- `git push origin --delete` with no refs → `fatal: --delete doesn't make sense
+  without any refs` (exit 128).
+- **GNU `xargs` runs the command once with no arguments when input is empty** —
+  verified on findutils 4.10.0, which is what Git Bash ships — so a bare
+  `xargs git branch -D` would invoke `git branch -D` with nothing and error.
+  `-r` / `--no-run-if-empty` is what suppresses that. (BSD/macOS `xargs` is the
+  opposite: it already skips on empty input, and accepts `-r` as a no-op. `-r`
+  is correct on both.)
+
 Remote, in one round trip (`--delete` takes many refs):
 
 ```bash
-git push origin --delete $(git for-each-ref --format='%(refname:strip=3)' \
-  refs/remotes/origin/ | grep -vE '^(main|HEAD)$' | tr '\n' ' ')
-git fetch --prune
+REMOTES=$(git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin/ \
+  | grep -vE '^(main|HEAD)$')
+if [ -n "$REMOTES" ]; then
+  git push origin --delete $REMOTES
+  git fetch --prune
+else
+  echo "no remote branches to delete"
+fi
 ```
 
 Local:
 
 ```bash
 git for-each-ref --format='%(refname:short)' refs/heads/ | grep -vE '^main$' \
-  | xargs git branch -D
+  | xargs -r git branch -D
 ```
 
 ## 5. Verify

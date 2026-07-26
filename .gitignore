@@ -51,6 +51,7 @@ functions/package-lock.json
 /*.patch
 /*.png
 /*.jpg
+/*.jpeg
 
 # Playwright (e2e) artifacts
 /test-results/
