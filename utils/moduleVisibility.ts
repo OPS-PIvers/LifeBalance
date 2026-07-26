@@ -1,5 +1,6 @@
 import type { Household, HouseholdMember, ModuleKey } from '@/types/schema';
 import {
+  DASHBOARD_WIDGETS,
   DEFAULT_HIDDEN_DASHBOARD_WIDGETS,
   type DashboardWidgetId,
 } from '@/utils/dashboardLayout';
@@ -492,4 +493,85 @@ export function isPlanTabVisible(
     isHouseholdModuleEnabled(settings, tab) &&
     !asSet(hidden).has(tab)
   );
+}
+
+// ---------------------------------------------------------------------------
+// Admin matrix (2F.3) — the pure row/lock derivation behind
+// components/settings/MemberVisibilityMatrix.tsx.
+//
+// The matrix renders ONE row per `VisibilityKey`, grouped exactly like
+// `NAV_PAGES` (plus a Home-widgets group), with the household layer surfaced
+// as the group's own toggle (and, for Lists' three sub-tabs, an additional
+// per-row toggle — each of `todos`/`meals`/`shopping` is independently
+// household-gated, unlike Habits'/Money's leaves which all share their page's
+// single module). There is no separate household concept for Home widgets.
+// ---------------------------------------------------------------------------
+
+export interface VisibilityMatrixRow {
+  key: VisibilityKey;
+  label: string;
+  /**
+   * Set only when this SPECIFIC row has its OWN household `ModuleKey`,
+   * distinct from its section's — i.e. Lists' `todos`/`meals`/`shopping`.
+   * `null` for rows governed solely by the section's module (Habits/Money
+   * leaves) or not household-gated at all (Home widgets).
+   */
+  ownModule: ModuleKey | null;
+}
+
+export interface VisibilityMatrixSection {
+  key: NavPageKey | 'widgets';
+  label: string;
+  /** The household module this section's own toggle governs; `null` for Home widgets (no household concept). */
+  moduleKey: ModuleKey | null;
+  rows: readonly VisibilityMatrixRow[];
+}
+
+/**
+ * The full matrix, derived from `NAV_PAGES` (leaves) plus `DASHBOARD_WIDGETS`
+ * — no hand-authored row list to drift from the single nav registry.
+ */
+export function getVisibilityMatrixSections(): VisibilityMatrixSection[] {
+  const pageSections: VisibilityMatrixSection[] = NAV_PAGES.map(page => ({
+    key: page.key,
+    label: page.label,
+    moduleKey: page.module,
+    rows: page.groups.flatMap(group =>
+      group.leaves.map(leaf => ({
+        key: leaf.key,
+        label: leaf.label,
+        ownModule: leaf.module !== page.module ? leaf.module : null,
+      }))
+    ),
+  }));
+
+  const widgetSection: VisibilityMatrixSection = {
+    key: 'widgets',
+    label: 'Home widgets',
+    moduleKey: null,
+    rows: DASHBOARD_WIDGETS.map(widget => ({
+      key: widget.id,
+      label: widget.label,
+      ownModule: null,
+    })),
+  };
+
+  return [...pageSections, widgetSection];
+}
+
+/**
+ * Whether a matrix row is unreachable at the HOUSEHOLD level — i.e. no
+ * member's cell in this row can be made "on" regardless of their own
+ * `hiddenKeys`, because either the section's module or (for Lists' sub-tabs)
+ * the row's own module is off. This is what the admin matrix uses to grey a
+ * whole row and stop a per-member switch from reading as live.
+ */
+export function isMatrixRowLocked(
+  settings: ModuleSettings,
+  section: Pick<VisibilityMatrixSection, 'moduleKey'>,
+  row: Pick<VisibilityMatrixRow, 'ownModule'>
+): boolean {
+  if (section.moduleKey && !isHouseholdModuleEnabled(settings, section.moduleKey)) return true;
+  if (row.ownModule && !isHouseholdModuleEnabled(settings, row.ownModule)) return true;
+  return false;
 }

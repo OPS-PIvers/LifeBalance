@@ -1,20 +1,22 @@
 import React, { useCallback, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { Check, Home, Sparkles, Users, Wallet, PartyPopper, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Check, Home, Sparkles, Users, Wallet, Eye, PartyPopper, ArrowRight, ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFinance, useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { getPresetHabitsByCategory, type PresetHabit } from '@/data/presetHabits';
 import { buildCheckingAccount, presetToHabit } from '@/utils/onboardingSeed';
+import { dismissVisibilityDiscovery } from '@/utils/visibilityDiscovery';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Card from '@/components/ui/Card';
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
+import { MyViewSettings } from '@/components/settings/MyViewSettings';
 import { cn } from '@/utils/cn';
 import { hapticForNativeSwitch, markAsWebKitSwitch } from '@/utils/haptics';
 import { track } from '@/services/analytics';
 
 /** Wizard steps, in order. */
-const STEPS = ['welcome', 'balance', 'habits', 'invite', 'done'] as const;
+const STEPS = ['welcome', 'balance', 'habits', 'visibility', 'invite', 'done'] as const;
 type Step = (typeof STEPS)[number];
 
 /** Header title shown for each step. */
@@ -22,6 +24,7 @@ const STEP_TITLES: Record<Step, string> = {
   welcome: 'Welcome',
   balance: 'Starting balance',
   habits: 'Pick a few habits',
+  visibility: 'What I see',
   invite: 'Invite your partner',
   done: 'All set!',
 };
@@ -64,7 +67,7 @@ const OnboardingWizard: React.FC = () => {
   const { addHabit } = useGamification();
   // householdId guarding lives in ProtectedRoute (-> /setup) and in each context
   // method, so the wizard reads only what it renders.
-  const { householdSettings, completeOnboarding } = useHouseholdCore();
+  const { householdSettings, completeOnboarding, currentUser, updateMember } = useHouseholdCore();
 
   const titleId = useId();
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -116,9 +119,15 @@ const OnboardingWizard: React.FC = () => {
       console.error('[OnboardingWizard] Failed to mark onboarding complete:', error);
       toast.error("Couldn't save setup progress, but you're all set.");
     } finally {
+      // This wizard's own "visibility" step (2F.3) already covered — or
+      // offered and let the user skip — the exact ground the Dashboard's
+      // one-time discovery card exists to surface. Mark it seen so a
+      // brand-new household creator doesn't land on Home and immediately get
+      // nagged by that card too.
+      if (currentUser) dismissVisibilityDiscovery(currentUser.uid);
       navigate('/', { replace: true });
     }
-  }, [completeOnboarding, isSubmitting, navigate, step]);
+  }, [completeOnboarding, currentUser, isSubmitting, navigate, step]);
 
   /** Seed the checking account from the entered dollar amount, then advance. */
   const submitBalance = useCallback(async () => {
@@ -166,7 +175,7 @@ const OnboardingWizard: React.FC = () => {
       }
     } finally {
       setIsSubmitting(false);
-      goToStep('invite');
+      goToStep('visibility');
     }
   }, [addHabit, goToStep, isSubmitting, selectedPresetIds, starterPresets]);
 
@@ -347,7 +356,49 @@ const OnboardingWizard: React.FC = () => {
           </div>
         )}
 
-        {/* ===== STEP 4: INVITE PARTNER ===== */}
+        {/* ===== STEP 4: WHAT I SEE (2F.3) ===== */}
+        {step === 'visibility' && (
+          <div className="space-y-5">
+            <div className="flex flex-col items-center text-center gap-3">
+              <div className="inline-flex items-center justify-center w-14 h-14 bg-accent-100 dark:bg-accent-900/40 text-accent-700 dark:text-accent-300 rounded-2xl">
+                <Eye className="w-7 h-7" aria-hidden="true" />
+              </div>
+              <p className="text-brand-600 dark:text-brand-300 text-sm">
+                Hide anything you don&apos;t plan to use — you can change this anytime in Settings.
+              </p>
+            </div>
+
+            {/* Entirely optional: touching nothing here leaves this member on
+                the inherited household defaults, exactly today's pre-2F.3
+                behavior. Reuses the same Settings → "What I see" editor
+                (MyViewSettings) so there's only one implementation of this
+                list to keep in sync. */}
+            {currentUser ? (
+              <div className="max-h-72 overflow-y-auto -mx-1 px-1">
+                <MyViewSettings
+                  member={currentUser}
+                  settings={householdSettings}
+                  onSave={(updates) => void updateMember(currentUser.uid, updates)}
+                />
+              </div>
+            ) : (
+              <p className="text-center text-sm text-brand-400 dark:text-brand-450">
+                You can set this up anytime in Settings.
+              </p>
+            )}
+
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" leftIcon={<ArrowLeft size={18} />} onClick={() => goToStep('habits')} disabled={isSubmitting}>
+                Back
+              </Button>
+              <Button className="flex-1" rightIcon={<ArrowRight size={18} />} onClick={() => goToStep('invite')}>
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ===== STEP 5: INVITE PARTNER ===== */}
         {step === 'invite' && (
           <div className="space-y-6">
             <div className="flex flex-col items-center text-center gap-3">
@@ -368,7 +419,7 @@ const OnboardingWizard: React.FC = () => {
             )}
 
             <div className="flex items-center gap-2">
-              <Button variant="ghost" leftIcon={<ArrowLeft size={18} />} onClick={() => goToStep('habits')} disabled={isSubmitting}>
+              <Button variant="ghost" leftIcon={<ArrowLeft size={18} />} onClick={() => goToStep('visibility')} disabled={isSubmitting}>
                 Back
               </Button>
               <Button className="flex-1" rightIcon={<ArrowRight size={18} />} onClick={() => goToStep('done')}>
@@ -378,7 +429,7 @@ const OnboardingWizard: React.FC = () => {
           </div>
         )}
 
-        {/* ===== STEP 5: DONE ===== */}
+        {/* ===== STEP 6: DONE ===== */}
         {step === 'done' && (
           <div className="space-y-6">
             <div className="flex flex-col items-center text-center gap-4">

@@ -33,7 +33,12 @@ test.describe('Onboarding wizard (Test Mode, fresh seed)', () => {
     await page.getByText('Drink 1 bottle of water', { exact: true }).click();
     await page.getByRole('button', { name: 'Add 2 & continue' }).click();
 
-    // Step 4: invite (skip past) → Step 5: finish.
+    // Step 4 (2F.3): "What I see" — skip past without touching anything, which
+    // must leave this member on the inherited household defaults.
+    await expect(page.getByRole('heading', { name: 'What I see' })).toBeVisible();
+    await page.getByRole('button', { name: 'Next' }).click();
+
+    // Step 5: invite (skip past) → Step 6: finish.
     await expect(page.getByRole('heading', { name: 'Invite your partner' })).toBeVisible();
     await page.getByRole('button', { name: 'Next' }).click();
     await expect(page.getByRole('heading', { name: 'All set!' })).toBeVisible();
