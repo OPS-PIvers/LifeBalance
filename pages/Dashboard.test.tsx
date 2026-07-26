@@ -116,9 +116,9 @@ const setEnabledModules = (enabled: ModuleKey[]) => {
   vi.mocked(useModuleVisibility).mockReturnValue({
     isModuleEnabled: (key: ModuleKey) => enabled.includes(key),
     isPlanVisible:
-      enabled.includes('plan') &&
+      enabled.includes('lists') &&
       (enabled.includes('todos') || enabled.includes('meals') || enabled.includes('shopping')),
-    isPlanTabVisible: (tab) => enabled.includes('plan') && enabled.includes(tab),
+    isPlanTabVisible: (tab) => enabled.includes('lists') && enabled.includes(tab),
   });
 };
 
@@ -137,7 +137,7 @@ describe('Dashboard module visibility (Plan 090)', () => {
     queueItems = [];
     mockTodosAwaitingReview = [];
     mockShoppingAwaitingReview = [];
-    setEnabledModules(['habits', 'money', 'plan', 'todos', 'meals', 'shopping']);
+    setEnabledModules(['habits', 'money', 'lists', 'todos', 'meals', 'shopping']);
   });
 
   it('shows the trends button and DailyHabitsWidget when both domains are on', () => {
@@ -166,7 +166,7 @@ describe('Dashboard module visibility (Plan 090)', () => {
 describe('Dashboard action queue cap', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    setEnabledModules(['habits', 'money', 'plan', 'todos', 'meals', 'shopping']);
+    setEnabledModules(['habits', 'money', 'lists', 'todos', 'meals', 'shopping']);
     queueItems = Array.from({ length: 8 }, (_, i) => ({ id: `q-${i}` }));
     mockTodosAwaitingReview = [];
     mockShoppingAwaitingReview = [];
@@ -209,7 +209,7 @@ describe('Dashboard action queue cap', () => {
 describe('Dashboard hero slot (impeccable r6)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    setEnabledModules(['habits', 'money', 'plan', 'todos', 'meals', 'shopping']);
+    setEnabledModules(['habits', 'money', 'lists', 'todos', 'meals', 'shopping']);
     mockTodosAwaitingReview = [];
     mockShoppingAwaitingReview = [];
   });
@@ -275,7 +275,7 @@ describe('Dashboard aggregate review queue card (Layer 4)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    setEnabledModules(['habits', 'money', 'plan', 'todos', 'meals', 'shopping']);
+    setEnabledModules(['habits', 'money', 'lists', 'todos', 'meals', 'shopping']);
     queueItems = [];
     mockTodosAwaitingReview = [];
     mockShoppingAwaitingReview = [];
@@ -318,7 +318,7 @@ describe('Dashboard aggregate review queue card (Layer 4)', () => {
     mockTodosAwaitingReview = [makeTodo('t1')];
     mockShoppingAwaitingReview = [makeShoppingItem('s1')];
     // Plan stays on, but its To-Dos/Shopping sub-tabs are both off.
-    setEnabledModules(['habits', 'money', 'plan', 'meals']);
+    setEnabledModules(['habits', 'money', 'lists', 'meals']);
     renderDashboard();
     expect(screen.queryByText(/item.*to review/)).not.toBeInTheDocument();
   });
@@ -327,7 +327,7 @@ describe('Dashboard aggregate review queue card (Layer 4)', () => {
     mockTodosAwaitingReview = [makeTodo('t1')];
     mockShoppingAwaitingReview = [makeShoppingItem('s1')];
     // Shopping tab hidden — only the held to-do should count/appear.
-    setEnabledModules(['habits', 'money', 'plan', 'todos', 'meals']);
+    setEnabledModules(['habits', 'money', 'lists', 'todos', 'meals']);
     renderDashboard();
 
     expect(screen.getByText('1 item to review')).toBeInTheDocument();

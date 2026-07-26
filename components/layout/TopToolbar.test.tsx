@@ -70,9 +70,9 @@ const setEnabledModules = (enabled: ModuleKey[]) => {
   vi.mocked(useModuleVisibility).mockReturnValue({
     isModuleEnabled: (key: ModuleKey) => enabled.includes(key),
     isPlanVisible:
-      enabled.includes('plan') &&
+      enabled.includes('lists') &&
       (enabled.includes('todos') || enabled.includes('meals') || enabled.includes('shopping')),
-    isPlanTabVisible: (tab) => enabled.includes('plan') && enabled.includes(tab),
+    isPlanTabVisible: (tab) => enabled.includes('lists') && enabled.includes(tab),
   });
 };
 
@@ -91,7 +91,7 @@ const PROFILE_LABEL = 'Open Profile Menu';
 describe('TopToolbar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    setEnabledModules(['habits', 'money', 'plan', 'todos', 'meals', 'shopping']);
+    setEnabledModules(['habits', 'money', 'lists', 'todos', 'meals', 'shopping']);
   });
 
   it('shows Safe-to-Spend and the points/Rewards cluster when both domains are on', () => {

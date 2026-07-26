@@ -53,7 +53,7 @@ import ActivityLogCard from '@/components/settings/ActivityLogCard';
 import MerchantRulesCard from '@/components/settings/MerchantRulesCard';
 import { ChangelogDrawer } from '@/components/settings/ChangelogDrawer';
 import { CHANGELOG } from '@/data/changelog';
-import { DashboardWidgetSettings } from '@/components/settings/DashboardWidgetSettings';
+import { MyViewSettings } from '@/components/settings/MyViewSettings';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
@@ -389,8 +389,8 @@ const Settings: React.FC = () => {
   };
 
   const hasKidPin = Boolean(householdSettings?.kidModePinHash);
-  // Whether the 'Plan' module is on — gates the To-Dos/Meals/Shopping sub-toggles below.
-  const planEnabled = isModuleEnabled(householdSettings, 'plan');
+  // Whether the 'Lists' module is on — gates the To-Dos/Meals/Shopping sub-toggles below.
+  const listsEnabled = isModuleEnabled(householdSettings, 'lists');
 
   const handleSaveKidPin = async () => {
     if (!isValidPinFormat(pinDraft)) {
@@ -1159,46 +1159,46 @@ const Settings: React.FC = () => {
             </Row>
             <Row>
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">Plan</p>
+                <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">Lists</p>
                 <p className="text-xs text-brand-500 dark:text-brand-400">To-Dos, Meals, and Shopping</p>
               </div>
               <Switch
-                aria-label="Toggle Plan page"
-                checked={planEnabled}
-                onCheckedChange={(value) => handleModuleToggle('plan', value)}
+                aria-label="Toggle Lists page"
+                checked={listsEnabled}
+                onCheckedChange={(value) => handleModuleToggle('lists', value)}
               />
             </Row>
 
-            {/* Plan sub-tabs — indented under Plan */}
+            {/* Lists sub-tabs — indented under Lists */}
             <Row className="pl-10">
               <div className="flex-1 min-w-0">
-                <p className={`font-medium text-sm ${planEnabled ? 'text-brand-700 dark:text-brand-300' : 'text-brand-400 dark:text-brand-450'}`}>To-Dos</p>
+                <p className={`font-medium text-sm ${listsEnabled ? 'text-brand-700 dark:text-brand-300' : 'text-brand-400 dark:text-brand-450'}`}>To-Dos</p>
               </div>
               <Switch
                 aria-label="Toggle To-Dos tab"
-                disabled={!planEnabled}
+                disabled={!listsEnabled}
                 checked={isModuleEnabled(householdSettings, 'todos')}
                 onCheckedChange={(value) => handleModuleToggle('todos', value)}
               />
             </Row>
             <Row className="pl-10">
               <div className="flex-1 min-w-0">
-                <p className={`font-medium text-sm ${planEnabled ? 'text-brand-700 dark:text-brand-300' : 'text-brand-400 dark:text-brand-450'}`}>Meals</p>
+                <p className={`font-medium text-sm ${listsEnabled ? 'text-brand-700 dark:text-brand-300' : 'text-brand-400 dark:text-brand-450'}`}>Meals</p>
               </div>
               <Switch
                 aria-label="Toggle Meals tab"
-                disabled={!planEnabled}
+                disabled={!listsEnabled}
                 checked={isModuleEnabled(householdSettings, 'meals')}
                 onCheckedChange={(value) => handleModuleToggle('meals', value)}
               />
             </Row>
             <Row className="pl-10">
               <div className="flex-1 min-w-0">
-                <p className={`font-medium text-sm ${planEnabled ? 'text-brand-700 dark:text-brand-300' : 'text-brand-400 dark:text-brand-450'}`}>Shopping</p>
+                <p className={`font-medium text-sm ${listsEnabled ? 'text-brand-700 dark:text-brand-300' : 'text-brand-400 dark:text-brand-450'}`}>Shopping</p>
               </div>
               <Switch
                 aria-label="Toggle Shopping tab"
-                disabled={!planEnabled}
+                disabled={!listsEnabled}
                 checked={isModuleEnabled(householdSettings, 'shopping')}
                 onCheckedChange={(value) => handleModuleToggle('shopping', value)}
               />
@@ -1207,11 +1207,15 @@ const Settings: React.FC = () => {
         </div>
       </Section>
 
-      {/* Dashboard widgets (F-XCUT-02) — per-member reorder/hide, own view only. */}
+      {/* What I see (2F.1, extending F-XCUT-02) — per-member nav-leaf + Home
+          widget visibility, own view only. Sits under the household module
+          toggles above: the household decides what exists, this decides what
+          this member wants in their nav. */}
       {currentUser && (
-        <Section title="Dashboard Widgets">
-          <DashboardWidgetSettings
+        <Section title="What I see">
+          <MyViewSettings
             member={currentUser}
+            settings={householdSettings}
             onSave={(updates) => void updateMember(currentUser.uid, updates)}
           />
         </Section>

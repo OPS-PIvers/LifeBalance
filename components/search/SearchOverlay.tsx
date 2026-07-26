@@ -8,6 +8,7 @@ import { Section, SurfaceList, DisclosureRow } from '@/components/ui/Section';
 import { useFinance, useGamification, useMealPlan, useShopping, useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useMerchantRules } from '@/hooks/useMerchantRules';
 import { searchAll, type GlobalSearchEntityType, type GlobalSearchResult } from '@/utils/globalSearch';
+import { resolveHiddenKeySet } from '@/utils/moduleVisibility';
 
 interface SearchOverlayProps {
   isOpen: boolean;
@@ -80,7 +81,15 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ isOpen, onClose }) => {
   const { meals } = useMealPlan();
   const { shoppingList } = useShopping();
   const { todos } = useTodos();
-  const { householdSettings } = useHouseholdCore();
+  const { householdSettings, currentUser } = useHouseholdCore();
+  // 2F.1: a result must never deep-link to a page THIS member has hidden, so
+  // the member's own hidden-key list gates the corpus alongside the household's.
+  const memberHiddenKeys = currentUser?.hiddenKeys;
+  const legacyDashboardHidden = currentUser?.dashboardHidden;
+  const hiddenKeys = useMemo(
+    () => resolveHiddenKeySet({ hiddenKeys: memberHiddenKeys, dashboardHidden: legacyDashboardHidden }),
+    [memberHiddenKeys, legacyDashboardHidden]
+  );
   // Merchant rules widen transaction matching to the friendly name as well as
   // the raw bank descriptor, so a renamed merchant is still findable by either
   // spelling (`utils/merchantRules.ts`).
@@ -92,9 +101,10 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ isOpen, onClose }) => {
         { transactions, habits, meals, todos, shoppingItems: shoppingList },
         query,
         householdSettings,
-        merchantRules
+        merchantRules,
+        hiddenKeys
       ),
-    [transactions, habits, meals, todos, shoppingList, householdSettings, merchantRules, query]
+    [transactions, habits, meals, todos, shoppingList, householdSettings, merchantRules, hiddenKeys, query]
   );
 
   const grouped = useMemo(() => {

@@ -1,6 +1,11 @@
 import type { Habit, Meal, MerchantRule, ShoppingItem, Transaction, ToDo } from '@/types/schema';
 import { displayMerchant, merchantSearchTerms } from '@/utils/merchantRules';
-import { isModuleEnabled, isPlanTabVisible, type ModuleSettings } from '@/utils/moduleVisibility';
+import {
+  isModuleEnabled,
+  isPlanTabVisible,
+  type HiddenKeys,
+  type ModuleSettings,
+} from '@/utils/moduleVisibility';
 
 export type GlobalSearchEntityType = 'transaction' | 'habit' | 'meal' | 'todo' | 'shopping';
 
@@ -41,22 +46,27 @@ export interface GlobalSearchCorpus {
 /**
  * Whether a given entity type's results should be shown, matching
  * `ModuleRoute`'s actual page-visibility logic (`components/auth/ModuleRoute.tsx`):
- * meals/todos/shopping live on `/lists` sub-tabs gated by BOTH the `plan`
+ * meals/todos/shopping live on `/lists` sub-tabs gated by BOTH the `lists`
  * master toggle and their own tab flag (`isPlanTabVisible`), not just their
  * own flag — a search result must not outlive the page it deep-links to.
+ * `hidden` adds the member's own 2F.1 `hiddenKeys` layer on top.
  */
-function isEntityVisible(type: GlobalSearchEntityType, settings: ModuleSettings): boolean {
+function isEntityVisible(
+  type: GlobalSearchEntityType,
+  settings: ModuleSettings,
+  hidden?: HiddenKeys
+): boolean {
   switch (type) {
     case 'transaction':
-      return isModuleEnabled(settings, 'money');
+      return isModuleEnabled(settings, 'money', hidden);
     case 'habit':
-      return isModuleEnabled(settings, 'habits');
+      return isModuleEnabled(settings, 'habits', hidden);
     case 'meal':
-      return isPlanTabVisible(settings, 'meals');
+      return isPlanTabVisible(settings, 'meals', hidden);
     case 'todo':
-      return isPlanTabVisible(settings, 'todos');
+      return isPlanTabVisible(settings, 'todos', hidden);
     case 'shopping':
-      return isPlanTabVisible(settings, 'shopping');
+      return isPlanTabVisible(settings, 'shopping', hidden);
   }
 }
 
@@ -210,7 +220,8 @@ function searchShoppingItems(items: ShoppingItem[], queryLower: string): RankedR
  * query returns no results. Results are capped per type (`MAX_PER_TYPE`) and
  * overall (`MAX_TOTAL`), ranked exact-prefix > word-boundary > substring
  * (see `matchRank`). A type is excluded entirely when its gating module is
- * disabled (`moduleVisibility`, fail-open like the rest of the app).
+ * disabled — by the household (`moduleVisibility`) or by this member
+ * (`hiddenKeys`, 2F.1): a result must never outlive the page it deep-links to.
  *
  * `rules` is the household's merchant rules (optional): when supplied, a
  * transaction matches on its raw bank descriptor OR its friendly name. Omit it
@@ -221,7 +232,8 @@ export function searchAll(
   corpus: GlobalSearchCorpus,
   query: string,
   moduleSettings: ModuleSettings,
-  rules?: readonly MerchantRule[]
+  rules?: readonly MerchantRule[],
+  hidden?: HiddenKeys
 ): GlobalSearchResult[] {
   const queryLower = query.trim().toLowerCase();
   if (!queryLower) return [];
@@ -236,7 +248,7 @@ export function searchAll(
 
   const capped: RankedResult[] = [];
   for (const type of Object.keys(byType) as GlobalSearchEntityType[]) {
-    if (!isEntityVisible(type, moduleSettings)) continue;
+    if (!isEntityVisible(type, moduleSettings, hidden)) continue;
     const results = byType[type] ?? [];
     results.sort((a, b) => a.rank - b.rank || a.title.localeCompare(b.title));
     capped.push(...results.slice(0, MAX_PER_TYPE));

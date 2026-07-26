@@ -177,7 +177,7 @@ const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <MainLayout>
-                        <ModuleRoute module="plan">
+                        <ModuleRoute module="lists">
                           <ListsPage />
                         </ModuleRoute>
                       </MainLayout>

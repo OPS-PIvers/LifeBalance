@@ -17,9 +17,11 @@ const TAB_LABELS: Record<PlanTab, string> = {
 const ListsPage: React.FC = () => {
   const { isPlanTabVisible } = useModuleVisibility();
 
-  // The tabs this household has enabled, in canonical order. The ModuleRoute
-  // guard already redirects away when none are enabled (isPlanVisible false), so
-  // in practice this is never empty when the page renders.
+  // The tabs this household AND this member have enabled (2F.1), in canonical
+  // order. The ModuleRoute guard already redirects away when none are enabled
+  // (isPlanVisible false), so in practice this is never empty when the page
+  // renders. `showTabStrip` below is this page's COLLAPSE RULE: one tab left
+  // means nothing to switch between, so tapping Lists simply IS that tab.
   const enabledTabs = useMemo<PlanTab[]>(
     () => VALID_TABS.filter((tab) => isPlanTabVisible(tab)),
     [isPlanTabVisible]
@@ -88,11 +90,11 @@ const ListsPage: React.FC = () => {
 
   return (
     <div ref={containerRef} className="flex flex-col h-full">
-      {/* No visible masthead: the bottom nav's active "Plan" item + the tab
+      {/* No visible masthead: the bottom nav's active "Lists" item + the tab
           strip already say where you are, and the title row cost a full band
           of vertical space before any content. The h1 stays for the document
           outline / screen readers only. */}
-      <h1 className="sr-only">Plan</h1>
+      <h1 className="sr-only">Lists</h1>
       {/* Hide the tab strip when only one tab remains — there's nothing to switch. */}
       {showTabStrip && (
         <div ref={tabStripRef} className="flex-none px-4 pt-3 pb-2 sticky top-0 z-30 bg-brand-50 dark:bg-brand-900 border-b border-brand-200 dark:border-brand-800">

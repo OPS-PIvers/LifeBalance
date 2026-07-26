@@ -27,7 +27,7 @@ export const MODULE_PRESETS: ModulePreset[] = [
     visibility: {
       habits: true,
       money: true,
-      plan: true,
+      lists: true,
       todos: true,
       meals: true,
       shopping: true,
@@ -40,7 +40,7 @@ export const MODULE_PRESETS: ModulePreset[] = [
     visibility: {
       habits: false,
       money: true,
-      plan: false,
+      lists: false,
       todos: false,
       meals: false,
       shopping: false,
@@ -53,7 +53,7 @@ export const MODULE_PRESETS: ModulePreset[] = [
     visibility: {
       habits: true,
       money: false,
-      plan: false,
+      lists: false,
       todos: false,
       meals: false,
       shopping: false,
@@ -62,11 +62,11 @@ export const MODULE_PRESETS: ModulePreset[] = [
   {
     id: 'meals-lists',
     label: 'Meals & Lists',
-    description: 'Meals and Shopping under Plan — no Money, Habits, or To-Dos.',
+    description: 'Meals and Shopping under Lists — no Money, Habits, or To-Dos.',
     visibility: {
       habits: false,
       money: false,
-      plan: true,
+      lists: true,
       todos: false,
       meals: true,
       shopping: true,
@@ -75,11 +75,11 @@ export const MODULE_PRESETS: ModulePreset[] = [
   {
     id: 'productivity',
     label: 'Productivity',
-    description: 'To-Dos under Plan — no Money, Habits, Meals, or Shopping.',
+    description: 'To-Dos under Lists — no Money, Habits, Meals, or Shopping.',
     visibility: {
       habits: false,
       money: false,
-      plan: true,
+      lists: true,
       todos: true,
       meals: false,
       shopping: false,

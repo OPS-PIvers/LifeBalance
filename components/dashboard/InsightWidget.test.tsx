@@ -21,9 +21,9 @@ const setEnabledModules = (enabled: ModuleKey[]) => {
   vi.mocked(useModuleVisibility).mockReturnValue({
     isModuleEnabled: (key: ModuleKey) => enabled.includes(key),
     isPlanVisible:
-      enabled.includes('plan') &&
+      enabled.includes('lists') &&
       (enabled.includes('todos') || enabled.includes('meals') || enabled.includes('shopping')),
-    isPlanTabVisible: (tab) => enabled.includes('plan') && enabled.includes(tab),
+    isPlanTabVisible: (tab) => enabled.includes('lists') && enabled.includes(tab),
   });
 };
 
@@ -50,7 +50,7 @@ const noop = () => {};
 describe('InsightWidget (Plan 090 degradation)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    setEnabledModules(['money', 'habits', 'plan', 'todos', 'meals', 'shopping']);
+    setEnabledModules(['money', 'habits', 'lists', 'todos', 'meals', 'shopping']);
   });
 
   it('shows a spending insight when money is on', () => {
@@ -63,7 +63,7 @@ describe('InsightWidget (Plan 090 degradation)', () => {
   it('hides a spending insight when money is off', () => {
     const text = 'You spent a lot on dining.';
     setInsight(text, makeInsight({ text, type: 'spending' }));
-    setEnabledModules(['habits', 'plan', 'todos']);
+    setEnabledModules(['habits', 'lists', 'todos']);
     const { container } = render(<InsightWidget onOpenArchive={noop} />);
     expect(container).toBeEmptyDOMElement();
   });
@@ -71,7 +71,7 @@ describe('InsightWidget (Plan 090 degradation)', () => {
   it('hides a habits insight when habits is off', () => {
     const text = 'Your streak is on fire.';
     setInsight(text, makeInsight({ text, type: 'habits' }));
-    setEnabledModules(['money', 'plan', 'todos']);
+    setEnabledModules(['money', 'lists', 'todos']);
     const { container } = render(<InsightWidget onOpenArchive={noop} />);
     expect(container).toBeEmptyDOMElement();
   });
@@ -107,7 +107,7 @@ describe('InsightWidget (Plan 090 degradation)', () => {
         ],
       }),
     );
-    setEnabledModules(['habits', 'plan', 'todos']); // money off
+    setEnabledModules(['habits', 'lists', 'todos']); // money off
     render(<InsightWidget onOpenArchive={noop} />);
     expect(screen.getByText(`“${text}”`)).toBeInTheDocument();
     expect(screen.queryByText('Raise Groceries')).not.toBeInTheDocument();

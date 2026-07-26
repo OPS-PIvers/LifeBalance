@@ -59,6 +59,7 @@ import {
   Household,
   FreezeBank,
   ModuleKey,
+  ModuleVisibilityMap,
   CaptureType,
   CaptureReviewMode,
   DietaryProfile,
@@ -745,8 +746,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [kidModePinHash, setKidModePinHash] = useState<string | undefined>(undefined);
   // Plan 090 — module visibility starts empty (fail-open => all-on), mirroring a
   // legacy household. Toggling a module mutates this in-memory map so the dynamic
-  // footer / route guards / Plan-tab fallback are all walkable in Test Mode.
-  const [moduleVisibility, setModuleVisibilityState] = useState<Partial<Record<ModuleKey, boolean>>>({});
+  // footer / route guards / Lists-tab fallback are all walkable in Test Mode.
+  // Typed as ModuleVisibilityMap so the legacy 'plan' read-alias (2F.1) is
+  // representable here exactly as it is on a real household doc.
+  const [moduleVisibility, setModuleVisibilityState] = useState<ModuleVisibilityMap>({});
   // captureReview (F-CAPTURE-01 foundation) — starts empty, mirroring a legacy
   // household (absent map falls back to the per-type defaults in
   // utils/captureReview.ts). Overriding a type mutates this in-memory map so

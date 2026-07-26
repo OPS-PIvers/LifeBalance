@@ -12,7 +12,7 @@ const settings = (
   moduleVisibility?: Household['moduleVisibility'],
 ): Pick<Household, 'moduleVisibility'> => ({ moduleVisibility });
 
-const ALL_KEYS: ModuleKey[] = ['habits', 'money', 'plan', 'todos', 'meals', 'shopping'];
+const ALL_KEYS: ModuleKey[] = ['habits', 'money', 'lists', 'todos', 'meals', 'shopping'];
 const PLAN_TABS: PlanTab[] = ['todos', 'meals', 'shopping'];
 
 describe('isModuleEnabled (fail-open)', () => {
@@ -73,22 +73,22 @@ describe('isPlanVisible', () => {
     expect(isPlanVisible(settings(undefined))).toBe(true);
   });
 
-  it('is true when plan on and all tabs on', () => {
-    expect(isPlanVisible(settings({ plan: true, todos: true, meals: true, shopping: true }))).toBe(true);
+  it('is true when lists on and all tabs on', () => {
+    expect(isPlanVisible(settings({ lists: true, todos: true, meals: true, shopping: true }))).toBe(true);
   });
 
-  it('is false when plan is off, even if every tab is on', () => {
-    expect(isPlanVisible(settings({ plan: false, todos: true, meals: true, shopping: true }))).toBe(false);
+  it('is false when lists is off, even if every tab is on', () => {
+    expect(isPlanVisible(settings({ lists: false, todos: true, meals: true, shopping: true }))).toBe(false);
   });
 
-  it('is false when plan is on but ALL tabs are off (would be an empty page)', () => {
-    expect(isPlanVisible(settings({ plan: true, todos: false, meals: false, shopping: false }))).toBe(false);
+  it('is false when lists is on but ALL tabs are off (would be an empty page)', () => {
+    expect(isPlanVisible(settings({ lists: true, todos: false, meals: false, shopping: false }))).toBe(false);
   });
 
-  it('is true when plan is on and exactly one tab is on', () => {
-    expect(isPlanVisible(settings({ plan: true, todos: false, meals: false, shopping: true }))).toBe(true);
-    expect(isPlanVisible(settings({ plan: true, todos: true, meals: false, shopping: false }))).toBe(true);
-    expect(isPlanVisible(settings({ plan: true, todos: false, meals: true, shopping: false }))).toBe(true);
+  it('is true when lists is on and exactly one tab is on', () => {
+    expect(isPlanVisible(settings({ lists: true, todos: false, meals: false, shopping: true }))).toBe(true);
+    expect(isPlanVisible(settings({ lists: true, todos: true, meals: false, shopping: false }))).toBe(true);
+    expect(isPlanVisible(settings({ lists: true, todos: false, meals: true, shopping: false }))).toBe(true);
   });
 });
 
@@ -99,15 +99,15 @@ describe('isPlanTabVisible', () => {
     }
   });
 
-  it('is false for every tab when the plan master toggle is off, even if the tab is on', () => {
-    const s = settings({ plan: false, todos: true, meals: true, shopping: true });
+  it('is false for every tab when the lists master toggle is off, even if the tab is on', () => {
+    const s = settings({ lists: false, todos: true, meals: true, shopping: true });
     for (const tab of PLAN_TABS) {
       expect(isPlanTabVisible(s, tab)).toBe(false);
     }
   });
 
-  it('gates each tab independently when plan is on', () => {
-    const s = settings({ plan: true, todos: true, meals: false, shopping: true });
+  it('gates each tab independently when lists is on', () => {
+    const s = settings({ lists: true, todos: true, meals: false, shopping: true });
     expect(isPlanTabVisible(s, 'todos')).toBe(true);
     expect(isPlanTabVisible(s, 'meals')).toBe(false);
     expect(isPlanTabVisible(s, 'shopping')).toBe(true);

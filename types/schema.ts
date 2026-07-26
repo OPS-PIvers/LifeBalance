@@ -3,10 +3,21 @@
 // creates/manages, never added to the household memberUids array (no credential).
 export type Role = 'admin' | 'member' | 'kid';
 
-// Plan 090 (Modular pages): the toggleable surfaces. 'plan' is the footer page;
-// 'todos' | 'meals' | 'shopping' are its sub-tabs. 'habits' and 'money' are
-// top-level footer pages. Home and Settings are always-on and not in this set.
-export type ModuleKey = 'habits' | 'money' | 'plan' | 'todos' | 'meals' | 'shopping';
+// Plan 090 (Modular pages): the toggleable surfaces. 'lists' is the footer page
+// (route `/lists`); 'todos' | 'meals' | 'shopping' are its sub-tabs. 'habits'
+// and 'money' are top-level footer pages. Home and Settings are always-on and
+// not in this set — Settings is structurally un-hideable (lockout guard).
+export type ModuleKey = 'habits' | 'money' | 'lists' | 'todos' | 'meals' | 'shopping';
+
+// 2F.1 renamed the 'plan' module key to 'lists' (the route has been `/lists`
+// for a while; only the key and the nav label still said "Plan"). Existing
+// households have `moduleVisibility.plan` persisted, so 'plan' survives as a
+// READ-TIME alias for 'lists' — resolved in utils/moduleVisibility.ts. It is
+// never written; no data migration runs.
+export type LegacyModuleKey = 'plan';
+
+/** The persisted per-household module map, including the legacy read-only key. */
+export type ModuleVisibilityMap = Partial<Record<ModuleKey | LegacyModuleKey, boolean>>;
 
 // The quick-add-API / iOS Shortcut capture input types that can be routed to
 // either land automatically or be held for manual review (see CaptureReviewMode).
@@ -204,7 +215,30 @@ export interface HouseholdMember {
   // optional — an un-customized member renders every widget in the default
   // order.
   dashboardLayout?: string[];
+  /**
+   * @deprecated 2F.1 — superseded by `hiddenKeys`, which covers Home widgets
+   * AND nav leaves in one list. Still READ as a fallback so members who
+   * customized their widgets before 2F.1 keep those choices; never written
+   * again. See `resolveHiddenKeys` in utils/moduleVisibility.ts.
+   */
   dashboardHidden?: string[];
+
+  /**
+   * 2F.1 (per-member visibility): the visibility keys this member has turned
+   * off — Home widgets AND nav leaves (Money/Habits sub-views, Lists tabs) in
+   * one flat list. See `VISIBILITY_KEYS` in utils/moduleVisibility.ts.
+   *
+   * Composed with the HOUSEHOLD layer (`Household.moduleVisibility`) via `&&`:
+   * the household decides "does this household use it at all", the member
+   * decides "do I want it in my nav". An admin editing a member edits THIS
+   * same field — there is no third precedence layer.
+   *
+   * Absent means "never customized": resolution falls back to
+   * `dashboardHidden` and then to `MEMBER_DEFAULT_HIDDEN_KEYS` (the five
+   * default-hidden Home widgets), so PAGES fail open and WIDGETS stay hidden
+   * exactly as they were before 2F.1. No migration runs.
+   */
+  hiddenKeys?: string[];
 }
 
 export interface Account {
@@ -1021,7 +1055,7 @@ export interface Household {
   // that module is ENABLED, so every legacy household keeps all pages (no
   // migration needed). Only an explicit `false` hides a module. Read through
   // utils/moduleVisibility.ts — the single source of truth.
-  moduleVisibility?: Partial<Record<ModuleKey, boolean>>;
+  moduleVisibility?: ModuleVisibilityMap;
 
   // Per-household per-capture-type routing for quick-add-API / iOS Shortcut
   // captures: whether a capture of this type is added automatically ('auto')
