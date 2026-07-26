@@ -131,26 +131,6 @@ describe('geminiService hardening - image guard (finding 1.2)', () => {
   });
 });
 
-describe('geminiService hardening - graceful degradation', () => {
-  beforeAll(() => {
-    process.env.VITE_GEMINI_API_KEY = 'test-key';
-  });
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('parseMagicAction returns unknown on a malformed AI response (no throw)', async () => {
-    const { parseMagicAction } = await import('./geminiService');
-    // Missing required `data` object — validator throws, function degrades.
-    generateContentMock.mockResolvedValue({ text: JSON.stringify({ type: 'transaction', confidence: 1 }) });
-
-    const result = await parseMagicAction('hh', 'spent 5', {
-      categories: [], groceryCategories: [], todayDate: '2026-01-01',
-    });
-    expect(result).toEqual({ type: 'unknown', confidence: 0, data: {} });
-  });
-});
-
 describe('geminiService hardening - quota-error propagation', () => {
   beforeAll(() => {
     process.env.VITE_GEMINI_API_KEY = 'test-key';
@@ -176,16 +156,6 @@ describe('geminiService hardening - quota-error propagation', () => {
       return await fn(atCapTxn as unknown as Parameters<typeof fn>[0]);
     });
   };
-
-  it('parseMagicAction rethrows the quota-exceeded error instead of returning unknown', async () => {
-    const { parseMagicAction } = await import('./geminiService');
-    await mockQuotaAtCapOnce();
-
-    await expect(parseMagicAction('hh', 'spent 5 at Target', {
-      categories: [], groceryCategories: [], todayDate: '2026-01-01',
-    })).rejects.toThrow(/Daily AI quota exceeded/);
-    expect(generateContentMock).not.toHaveBeenCalled();
-  });
 
   it('analyzeHabitPatterns rethrows the quota-exceeded error instead of a generic failure', async () => {
     const { analyzeHabitPatterns } = await import('./geminiService');

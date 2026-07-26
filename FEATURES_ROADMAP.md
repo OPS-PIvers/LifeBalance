@@ -1651,31 +1651,35 @@ already round-trip through `addToDo`/`updateToDo` and `todoConverter` untouched.
 
 ### F-DASH-01 — Dashboard universal AI quick-capture bar
 
-**Size:** medium · **Value:** high · **Dependencies:** AI kill-switch (`aiEnabled`) must be on; reuses `parseMagicAction` (already shipped)
+**Size:** medium · **Value:** high · **Dependencies:** AI kill-switch (`aiEnabled`) must be on; needs a NEW natural-language classifier (see Why)
 
 A persistent free-text input pinned near the top of the Dashboard (built on `QuickAddBar`) that
 accepts natural language — "spent $12 at Target," "buy milk," "call the vet tomorrow" — and routes
-it through the already-built `parseMagicAction()` classifier to create a transaction, shopping
-item, or todo directly, without opening the full `CaptureModal`.
+it to create a transaction, shopping item, or todo directly, without opening the full
+`CaptureModal`.
 
-**Why:** `parseMagicAction` today is only reachable via `CaptureModal`'s "Magic" tab — an extra
-open-modal-then-switch-tab step. This reuses three already-shipped pieces (the `QuickAddBar`
-primitive, the `parseMagicAction` classifier, each domain's existing add mutations) to remove
-friction for the single most common capture action, right from the page users land on.
+**Why:** This previously proposed reusing `CaptureModal`'s "Magic Action" classifier
+(`parseMagicAction`/`CaptureMagicAction.tsx`), but that tab was removed (paper cut 2G.3, 2026-07)
+as dead weight — a low-usage, low-confidence fourth capture path duplicating the app's real quick-add
+routes (Manual Entry, "Add from image", and the iOS Shortcuts `quickAddNaturalLanguage` pipeline).
+This brief now needs its OWN lightweight classifier (or should route through the existing
+`quickAddNaturalLanguage` → `parseNaturalLanguageCommand` server pipeline instead of inventing a
+client-side one) rather than pointing at deleted code.
 
 **Implementation notes:** New `components/dashboard/QuickCaptureBar.tsx` wrapping
-`components/ui/QuickAddBar.tsx`. On submit, call `parseMagicAction(householdId, text,
-{categories, groceryCategories, stores, todayDate})` — extract the context-building logic out of
-`components/modals/CaptureMagicAction.tsx` into a shared helper both call, rather than duplicating
-it. Branch on `result.type` to call `useFinance().addTransaction`, `useTodos().addToDo`, or
-`useShopping().addShoppingItem`, matching `CaptureMagicAction`'s existing status/`needsAmount`
-conventions. Show a toast with an "Edit" action opening the relevant existing edit drawer so a
-misparse is one tap to correct. Mount above the Action Queue in `pages/Dashboard.tsx`, gated on
-`getAiEnabled()`.
+`components/ui/QuickAddBar.tsx`. Before building this, decide whether to (a) write a new, purpose-built
+classifier call in `services/geminiService.ts`, or (b) reuse the server-side
+`functions/src/quickAdd/parseNaturalLanguageCommand` pipeline that already backs the iOS Shortcuts
+`quickAddNaturalLanguage` endpoint (**do not** touch that pipeline in place — it must keep working
+unmodified; call it, don't fork it). Branch on the result's type to call
+`useFinance().addTransaction`, `useTodos().addToDo`, or `useShopping().addShoppingItem`. Show a toast
+with an "Edit" action opening the relevant existing edit drawer so a misparse is one tap to correct.
+Mount above the Action Queue in `pages/Dashboard.tsx`, gated on `getAiEnabled()`.
 
 **Key files:**
-- `components/dashboard/QuickCaptureBar.tsx` (new), `components/modals/CaptureMagicAction.tsx`
+- `components/dashboard/QuickCaptureBar.tsx` (new)
 - `services/geminiService.ts`, `pages/Dashboard.tsx`, `contexts/FirebaseHouseholdContext.tsx`
+- `functions/src/quickAdd/` (reference only, if reusing the server pipeline — do not modify)
 
 ### F-DASH-02 — AI Daily Briefing push notification
 

@@ -11,7 +11,6 @@ import {
   validateGroceryItems,
   validateOptimizableItems,
   validateInsight,
-  validateMagicAction,
   validateHabitPointSuggestions,
   validateHabitPatterns,
   validateHabitReorganization,
@@ -23,6 +22,7 @@ import {
   validateNaturalLanguageUnknown,
   validateRecipe,
   validateGeneratedWeeklyPlan,
+  validateReceiptLineItems,
 } from './geminiValidation';
 
 // A structurally-valid base64 image data URL (1x1 transparent PNG).
@@ -188,26 +188,28 @@ describe('geminiValidation - validateInsight', () => {
   });
 });
 
-describe('geminiValidation - validateMagicAction (discriminated union)', () => {
-  it('accepts transaction', () => {
-    const r = validateMagicAction({ type: 'transaction', confidence: 0.9, data: { merchant: 'T', amount: 5 } });
-    expect(r.type).toBe('transaction');
+describe('geminiValidation - validateReceiptLineItems', () => {
+  const validItem = { description: 'Milk', amount: 3.5, category: 'Groceries' };
+  it('accepts a well-formed receipt with no habit suggestions', () => {
+    const r = validateReceiptLineItems({ merchant: 'Target', items: [validItem] });
+    expect(r.merchant).toBe('Target');
+    expect(r.suggestedHabits).toBeUndefined();
   });
-  it('accepts unknown with empty data', () => {
-    expect(validateMagicAction({ type: 'unknown', confidence: 0, data: {} }).type).toBe('unknown');
+  it('accepts an empty items array (non-itemized image)', () => {
+    const r = validateReceiptLineItems({ merchant: 'Target', items: [] });
+    expect(r.items).toEqual([]);
   });
-  it('rejects an invalid type value', () => {
-    expect(() => validateMagicAction({ type: 'banana', confidence: 1, data: {} })).toThrow(/type must be one of/);
+  it('accepts a receipt-level suggestedHabits array', () => {
+    const r = validateReceiptLineItems({ merchant: 'Target', items: [validItem], suggestedHabits: ['No eating out'] });
+    expect(r.suggestedHabits).toEqual(['No eating out']);
   });
-  it('rejects a non-number confidence', () => {
-    expect(() => validateMagicAction({ type: 'todo', confidence: 'high', data: {} })).toThrow(/confidence/);
+  it('rejects a non-array suggestedHabits', () => {
+    expect(() => validateReceiptLineItems({ merchant: 'Target', items: [validItem], suggestedHabits: 'nope' }))
+      .toThrow(/suggestedHabits must be string\[\]/);
   });
-  it('rejects wrong-typed data field', () => {
-    expect(() => validateMagicAction({ type: 'transaction', confidence: 1, data: { amount: 'lots' } }))
-      .toThrow(/amount must be a number/);
-  });
-  it('rejects when data is missing', () => {
-    expect(() => validateMagicAction({ type: 'todo', confidence: 1 })).toThrow(/expected an object/);
+  it('rejects an item missing category', () => {
+    expect(() => validateReceiptLineItems({ merchant: 'Target', items: [{ description: 'Milk', amount: 3.5 }] }))
+      .toThrow(/category must be a string/);
   });
 });
 

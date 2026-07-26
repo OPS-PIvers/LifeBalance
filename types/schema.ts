@@ -318,7 +318,12 @@ export interface Transaction {
   date: string;
   status: 'verified' | 'pending_review';
   isRecurring: boolean;
-  source: 'manual' | 'camera-scan' | 'file-upload' | 'recurring' | 'shortcut' | 'plaid' | 'bank-sync';
+  // 'camera-scan'/'file-upload' are the historical values written by the two
+  // now-merged CaptureModal entry points (paper-cut 2G.3) — kept here so
+  // existing rows still type-check and filter correctly; 'file-upload' is
+  // also still written by CSV import (see CsvImportDrawer.tsx). New
+  // CaptureModal "Add from image" captures write 'image-capture'.
+  source: 'manual' | 'camera-scan' | 'file-upload' | 'image-capture' | 'recurring' | 'shortcut' | 'plaid' | 'bank-sync';
   autoCategorized: boolean;
   payPeriodId?: string; // Pay period ID (YYYY-MM-DD of period start), empty string if no period tracking
   relatedHabitIds?: string[];

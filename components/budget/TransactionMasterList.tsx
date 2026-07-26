@@ -136,6 +136,7 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
     const matchesSource = sourceFilter === 'all' ||
       (sourceFilter === 'recurring' && tx.isRecurring) ||
       (sourceFilter === 'manual' && tx.source === 'manual') ||
+      (sourceFilter === 'image-capture' && tx.source === 'image-capture') ||
       (sourceFilter === 'camera-scan' && tx.source === 'camera-scan') ||
       (sourceFilter === 'file-upload' && tx.source === 'file-upload') ||
       // Bank rows created before the dedicated 'bank-sync' source value (PR
