@@ -276,12 +276,63 @@ service cloud.firestore {
             )
           ) &&
 
+          // homeScreen holds a short route/nav key.
+          isValidOptionalString(request.resource.data.get('homeScreen', null), 64) &&
+
+          // anyNotificationsEnabled must be a bool when present.
+          (
+            !request.resource.data.keys().hasAny(['anyNotificationsEnabled']) ||
+            request.resource.data.anyNotificationsEnabled is bool
+          ) &&
+
+          // dashboardLayout/dashboardHidden/hiddenKeys must be lists when present, capped at
+          // 100 entries — comfortably above the real ceiling (~20 nav/widget keys today) while
+          // blocking a storage-exhaustion write. Firestore rules cannot iterate a list to bound
+          // each element's own string length, so this size cap plus Firestore's own 1MiB
+          // document limit is the enforcement boundary; not a gap that was overlooked.
+          (
+            !request.resource.data.keys().hasAny(['dashboardLayout']) ||
+            (request.resource.data.dashboardLayout is list && request.resource.data.dashboardLayout.size() <= 100)
+          ) &&
+          (
+            !request.resource.data.keys().hasAny(['dashboardHidden']) ||
+            (request.resource.data.dashboardHidden is list && request.resource.data.dashboardHidden.size() <= 100)
+          ) &&
+          (
+            !request.resource.data.keys().hasAny(['hiddenKeys']) ||
+            (request.resource.data.hiddenKeys is list && request.resource.data.hiddenKeys.size() <= 100)
+          ) &&
+
           (
             // Case 1: User updating their own profile (restricted fields)
             (
               request.auth.uid == memberId &&
-              request.resource.data.diff(resource.data).changedKeys().hasOnly(
-                ['displayName', 'email', 'photoURL', 'telegramChatId', 'notificationPreferences', 'fcmTokens', 'lastTokenRefresh']
+              // dashboardLayout/dashboardHidden (F-XCUT-02) and anyNotificationsEnabled are
+              // allowlisted alongside their sibling fields — see firestore.rules.test.ts for the
+              // add-then-change regression this covers (2G.1). hiddenKeys/homeScreen are a
+              // forward-add for the not-yet-shipped 2F.1/2F.2 member-visibility feature: no
+              // TypeScript field exists for either yet, but allowlisting them now means that
+              // feature's PR needs no rules change (and no human-watched rules review) later.
+              //
+              // 🛡️ SECURITY: this MUST be affectedKeys(), not changedKeys(). changedKeys()
+              // only reports keys whose value CHANGED between two already-existing values —
+              // a key that is ABSENT from the existing doc and is being added for the first
+              // time lands in addedKeys() instead, which changedKeys() ignores entirely. That
+              // made hasOnly(changedKeys()) pass VACUOUSLY for any first-time add of an
+              // unlisted field: a non-admin member could add 'points', 'allowanceCents',
+              // 'isManaged', 'managedByUid', or any arbitrary key to their OWN member doc
+              // (a real privilege-escalation/storage-abuse hole, not just a theoretical gap —
+              // proved by firestore.rules.test.ts's "still cannot write a genuinely forbidden
+              // key (points)" case). affectedKeys() is the union of added/changed/removed keys,
+              // so it governs adds and removals too. Do NOT "simplify" this back to
+              // changedKeys() — that reopens the hole. Because affectedKeys() is strictly
+              // stricter, this allowlist must stay exhaustive: every key a member legitimately
+              // writes about themselves (a client call-site sweep is required before adding a
+              // new field here) must be listed, and anything only an admin/server may set
+              // (role, points, joinedAt, uid, avatarColor/avatarEmoji, isManaged, managedByUid)
+              // must NOT be — those go through Case 2 (isAdminOf) or Case 3 (managed kid) below.
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+                ['displayName', 'email', 'photoURL', 'telegramChatId', 'notificationPreferences', 'fcmTokens', 'lastTokenRefresh', 'dashboardLayout', 'dashboardHidden', 'anyNotificationsEnabled', 'hiddenKeys', 'homeScreen']
               )
             ) ||
             // Case 2: Admin updating any member (including role)
