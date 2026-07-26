@@ -47,7 +47,8 @@ const ListsPage: React.FC = () => {
   });
 
   // Effective tab: the preference if it's enabled, else the first enabled tab.
-  // Defaults to 'todos' only as a guard for the never-rendered no-tabs case.
+  // The 'todos' fallback only satisfies the type — the no-tabs case returns
+  // early below rather than rendering a tab nobody enabled.
   const activeTab: PlanTab = enabledTabs.includes(selectedTab)
     ? selectedTab
     : enabledTabs[0] ?? 'todos';
@@ -87,6 +88,12 @@ const ListsPage: React.FC = () => {
     observer.observe(strip);
     return () => observer.disconnect();
   }, [showTabStrip]);
+
+  // DEFENCE IN DEPTH (matching pages/Budget.tsx and pages/Habits.tsx): no
+  // reachable tab means `ModuleRoute` is already redirecting `/lists` away, so
+  // this is only the frame between that decision and the redirect. Falling
+  // through would render the To-Dos tab nobody enabled.
+  if (enabledTabs.length === 0) return null;
 
   return (
     <div ref={containerRef} className="flex flex-col h-full">

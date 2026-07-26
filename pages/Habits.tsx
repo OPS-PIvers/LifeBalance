@@ -66,9 +66,11 @@ const HABIT_TABS = [
 // 2F.1: the group/leaf tree, the menu options and the group/leaf labels
 // (including "Store" for the load-bearing legacy 'rewards' key) all now come
 // from the shared registry in utils/moduleVisibility.ts, filtered to what this
-// household + member can see. Coach's power-tools gate rides the same path —
-// it is passed to `usePageNavigation` as an extra hidden key, so a flag-gated
-// leaf participates in the collapse rule exactly like a member-hidden one.
+// household + member can see. Coach's power-tools gate is declared ON that
+// registry (`gate: 'powerTools'`), so it is subtracted inside the one shared
+// hidden-key set — this page, BottomNav and ModuleRoute all see the identical
+// reachable-leaf set, and a flag-gated leaf participates in the collapse rule
+// exactly like a member-hidden one.
 
 // Lazy-loaded so the heavy modal/Drawer dependencies stay out of the Habits boot
 // bundle and only load when a tab's "manage" CTA is actually used (mirrors the
@@ -259,11 +261,10 @@ const Habits: React.FC = () => {
   // the specific view) and the panel renders that view's content (same
   // pattern as Money's 4-tab IA).
   const [activeView, setActiveView] = useDeepLinkTab('track', HABIT_TABS);
-  // 2F.1 — the group/leaf tree this household + member can reach. Coach rides
-  // in as an extra hidden key when power tools are off, so a stale
+  // 2F.1 — the group/leaf tree this household + member can reach. Coach is
+  // subtracted by its registry `gate` when power tools are off, so a stale
   // `?tab=coach` deep-link degrades to History exactly as it did before.
-  const coachHidden = useMemo(() => (powerToolsEnabled ? [] : ['coach']), [powerToolsEnabled]);
-  const nav = usePageNavigation('habits', coachHidden);
+  const nav = usePageNavigation('habits');
   const location = resolveActiveLocation(nav, activeView);
   const activeTab = location?.group ?? '';
   const activeLeaf = location?.leaf ?? '';
@@ -465,6 +466,13 @@ const Habits: React.FC = () => {
   if (isLoading) {
     return <HabitsSkeleton />;
   }
+
+  // DEFENCE IN DEPTH (matching pages/Budget.tsx): no reachable view means
+  // `ModuleRoute` is already redirecting this route away, so this is only the
+  // frame between that decision and the redirect. Rendering on would produce a
+  // header with an empty tab strip and no panel — degrade to the redirect
+  // instead, even if the nav and this page ever disagree again.
+  if (!location) return null;
 
   const handleExport = () => {
     try {

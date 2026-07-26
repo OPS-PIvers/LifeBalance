@@ -1,11 +1,7 @@
 import { useMemo } from 'react';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import {
-  getPageNavigation,
-  resolveHiddenKeys,
-  type NavPageKey,
-  type PageNavigation,
-} from '@/utils/moduleVisibility';
+import { useHiddenVisibilityKeys } from '@/hooks/useHiddenVisibilityKeys';
+import { getPageNavigation, type NavPageKey, type PageNavigation } from '@/utils/moduleVisibility';
 
 /**
  * 2F.1 — the visible group/leaf tree for one page, composed from the household
@@ -18,31 +14,20 @@ import {
  * opening its menu; a group with none disappears; a page with none is hidden
  * entirely (`isVisible === false`) and `ModuleRoute` redirects it away.
  *
+ * ⚠️ There is deliberately NO per-page escape hatch for "also hide this leaf".
+ * The hidden set is `useHiddenVisibilityKeys()`, the same one `ModuleRoute` and
+ * `BottomNav` see through `useModuleVisibility`, and global flag gates (Habits'
+ * power-tools Coach) are declared on the registry so they land in that one set.
+ * Subtracting a leaf here only would make the page's reachable-leaf set narrower
+ * than the nav's, which is exactly how a nav item can lead to a blank page.
+ *
  * Separate from `useModuleVisibility()` on purpose: this returns fresh arrays
  * for a single page, while that hook is consumed by many always-mounted
  * components whose only question is "is this module on".
- *
- * @param extraHidden leaf keys hidden for a reason OUTSIDE the two visibility
- *   layers — today only Habits' Coach, which is gated on the power-tools
- *   preference. Routing it through here means a flag-gated leaf takes part in
- *   the collapse rule exactly like a member-hidden one. Pass a STABLE reference
- *   (a `useMemo`'d array or a module constant); it is a memo dependency.
  */
-export const usePageNavigation = (
-  page: NavPageKey,
-  extraHidden?: readonly string[]
-): PageNavigation => {
-  const { householdSettings, currentUser } = useHouseholdCore();
-  // Resolution reads exactly these two member fields; depending on the whole
-  // member object would rebuild on every unrelated member write (points,
-  // fcmTokens, lastSeen…).
-  const hiddenKeys = currentUser?.hiddenKeys;
-  const dashboardHidden = currentUser?.dashboardHidden;
-  const hidden = useMemo(() => {
-    const set = new Set(resolveHiddenKeys({ hiddenKeys, dashboardHidden }));
-    for (const key of extraHidden ?? []) set.add(key);
-    return set;
-  }, [hiddenKeys, dashboardHidden, extraHidden]);
+export const usePageNavigation = (page: NavPageKey): PageNavigation => {
+  const { householdSettings } = useHouseholdCore();
+  const hidden = useHiddenVisibilityKeys();
   return useMemo(
     () => getPageNavigation(page, householdSettings, hidden),
     [page, householdSettings, hidden]

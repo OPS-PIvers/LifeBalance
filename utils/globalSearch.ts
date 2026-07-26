@@ -1,7 +1,7 @@
 import type { Habit, Meal, MerchantRule, ShoppingItem, Transaction, ToDo } from '@/types/schema';
 import { displayMerchant, merchantSearchTerms } from '@/utils/merchantRules';
 import {
-  isModuleEnabled,
+  isNavLeafKeyVisible,
   isPlanTabVisible,
   type HiddenKeys,
   type ModuleSettings,
@@ -44,12 +44,22 @@ export interface GlobalSearchCorpus {
 }
 
 /**
- * Whether a given entity type's results should be shown, matching
- * `ModuleRoute`'s actual page-visibility logic (`components/auth/ModuleRoute.tsx`):
- * meals/todos/shopping live on `/lists` sub-tabs gated by BOTH the `lists`
- * master toggle and their own tab flag (`isPlanTabVisible`), not just their
- * own flag — a search result must not outlive the page it deep-links to.
- * `hidden` adds the member's own 2F.1 `hiddenKeys` layer on top.
+ * Whether a given entity type's results should be shown.
+ *
+ * Every type is gated at the LEAF the result actually deep-links to, never at
+ * page level. A result must not outlive its destination, and "the page still has
+ * some reachable view" is not good enough: a member who hides only Money →
+ * Transactions would still be shown transaction results whose target
+ * (`{ path: '/budget', tab: 'transactions' }`) `resolveActiveLocation` then
+ * silently rewrites to a DIFFERENT Money view — selecting a search result would
+ * land somewhere other than what was searched for, with no explanation.
+ *
+ * So transactions gate on Money's `transactions` leaf and habits on Habits'
+ * `track` leaf (both via `isNavLeafKeyVisible`, which folds in the household's
+ * page-level module toggle), and meals/todos/shopping gate on their `/lists`
+ * sub-tab — which is both a leaf and its own household `ModuleKey`, so
+ * `isPlanTabVisible` additionally honours the `lists` master toggle. `hidden`
+ * carries the member's own 2F.1 layer in every case.
  */
 function isEntityVisible(
   type: GlobalSearchEntityType,
@@ -58,9 +68,9 @@ function isEntityVisible(
 ): boolean {
   switch (type) {
     case 'transaction':
-      return isModuleEnabled(settings, 'money', hidden);
+      return isNavLeafKeyVisible(settings, 'transactions', hidden);
     case 'habit':
-      return isModuleEnabled(settings, 'habits', hidden);
+      return isNavLeafKeyVisible(settings, 'track', hidden);
     case 'meal':
       return isPlanTabVisible(settings, 'meals', hidden);
     case 'todo':
@@ -219,9 +229,9 @@ function searchShoppingItems(items: ShoppingItem[], queryLower: string): RankedR
  * Pure client-side search over the in-memory household corpus. Empty/blank
  * query returns no results. Results are capped per type (`MAX_PER_TYPE`) and
  * overall (`MAX_TOTAL`), ranked exact-prefix > word-boundary > substring
- * (see `matchRank`). A type is excluded entirely when its gating module is
- * disabled — by the household (`moduleVisibility`) or by this member
- * (`hiddenKeys`, 2F.1): a result must never outlive the page it deep-links to.
+ * (see `matchRank`). A type is excluded entirely when the LEAF its results
+ * deep-link to is unreachable — hidden by the household (`moduleVisibility`) or
+ * by this member (`hiddenKeys`, 2F.1); see `isEntityVisible`.
  *
  * `rules` is the household's merchant rules (optional): when supplied, a
  * transaction matches on its raw bank descriptor OR its friendly name. Omit it

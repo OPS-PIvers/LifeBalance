@@ -184,6 +184,72 @@ describe('searchAll', () => {
     expect(byType.shopping).toEqual({ path: '/lists', listsTab: 'shopping' });
   });
 
+  /**
+   * 2F.1 — the member layer. Every entity type is gated on the SPECIFIC leaf its
+   * nav target deep-links to, not on its page merely still having some reachable
+   * view. Gating at page level let a member who hid only Money → Transactions
+   * keep seeing transaction results whose `{ tab: 'transactions' }` target
+   * `resolveActiveLocation` then rewrote to a different Money view — selecting a
+   * result landed somewhere else than what was searched for.
+   */
+  describe('member hiddenKeys (leaf-level gating)', () => {
+    const everyType: GlobalSearchCorpus = {
+      transactions: [makeTransaction({ merchant: 'Target' })],
+      habits: [makeHabit({ title: 'Target' })],
+      meals: [makeMeal({ name: 'Target' })],
+      todos: [makeTodo({ text: 'Target' })],
+      shoppingItems: [makeShoppingItem({ name: 'Target' })],
+    };
+    const types = (hidden?: string[]) =>
+      searchAll(everyType, 'target', undefined, undefined, hidden).map((r) => r.type).sort();
+
+    it('shows every type for a member who has hidden nothing', () => {
+      expect(types()).toEqual(['habit', 'meal', 'shopping', 'todo', 'transaction']);
+      expect(types([])).toEqual(['habit', 'meal', 'shopping', 'todo', 'transaction']);
+    });
+
+    it("excludes transactions when only Money's Transactions leaf is hidden", () => {
+      // Money itself is still reachable (six other leaves) — page-level gating
+      // would wrongly keep these results.
+      expect(types(['transactions'])).not.toContain('transaction');
+      expect(types(['transactions'])).toContain('habit');
+    });
+
+    it("excludes habits when only Habits' Track leaf is hidden", () => {
+      expect(types(['track'])).not.toContain('habit');
+      expect(types(['track'])).toContain('transaction');
+    });
+
+    it('leaves a type alone when a SIBLING leaf on its page is hidden', () => {
+      // Hiding Trends/History must not touch the transaction/habit results,
+      // whose targets are still reachable.
+      expect(types(['trends', 'history'])).toEqual([
+        'habit',
+        'meal',
+        'shopping',
+        'todo',
+        'transaction',
+      ]);
+    });
+
+    it('excludes each Lists type when its own sub-tab is hidden', () => {
+      expect(types(['meals'])).not.toContain('meal');
+      expect(types(['todos'])).not.toContain('todo');
+      expect(types(['shopping'])).not.toContain('shopping');
+    });
+
+    it('composes with the household layer (either one hides the type)', () => {
+      const hiddenByHousehold = searchAll(
+        everyType,
+        'target',
+        { moduleVisibility: { money: false } },
+        undefined,
+        [],
+      );
+      expect(hiddenByHousehold.every((r) => r.type !== 'transaction')).toBe(true);
+    });
+  });
+
   it('returns no results when nothing matches', () => {
     const corpus: GlobalSearchCorpus = { ...emptyCorpus, transactions: [makeTransaction({ merchant: 'Target' })] };
     expect(searchAll(corpus, 'nonexistentquery', undefined)).toEqual([]);

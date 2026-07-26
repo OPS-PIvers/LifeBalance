@@ -8,7 +8,7 @@ import { Section, SurfaceList, DisclosureRow } from '@/components/ui/Section';
 import { useFinance, useGamification, useMealPlan, useShopping, useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useMerchantRules } from '@/hooks/useMerchantRules';
 import { searchAll, type GlobalSearchEntityType, type GlobalSearchResult } from '@/utils/globalSearch';
-import { resolveHiddenKeySet } from '@/utils/moduleVisibility';
+import { useHiddenVisibilityKeys } from '@/hooks/useHiddenVisibilityKeys';
 
 interface SearchOverlayProps {
   isOpen: boolean;
@@ -81,15 +81,12 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ isOpen, onClose }) => {
   const { meals } = useMealPlan();
   const { shoppingList } = useShopping();
   const { todos } = useTodos();
-  const { householdSettings, currentUser } = useHouseholdCore();
-  // 2F.1: a result must never deep-link to a page THIS member has hidden, so
-  // the member's own hidden-key list gates the corpus alongside the household's.
-  const memberHiddenKeys = currentUser?.hiddenKeys;
-  const legacyDashboardHidden = currentUser?.dashboardHidden;
-  const hiddenKeys = useMemo(
-    () => resolveHiddenKeySet({ hiddenKeys: memberHiddenKeys, dashboardHidden: legacyDashboardHidden }),
-    [memberHiddenKeys, legacyDashboardHidden]
-  );
+  const { householdSettings } = useHouseholdCore();
+  // 2F.1: a result must never deep-link to a view THIS member has hidden, so the
+  // member's own hidden-key list gates the corpus alongside the household's —
+  // read from the one shared set the nav and the pages use, so search can't
+  // disagree with them about what is reachable.
+  const hiddenKeys = useHiddenVisibilityKeys();
   // Merchant rules widen transaction matching to the friendly name as well as
   // the raw bank descriptor, so a renamed merchant is still findable by either
   // spelling (`utils/merchantRules.ts`).

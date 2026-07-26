@@ -73,6 +73,23 @@ export type PlanTab = ListsLeafKey;
 /** The three toggleable footer pages (Home and Settings are not in this set). */
 export type NavPageKey = 'habits' | 'money' | 'lists';
 
+/**
+ * GLOBAL operator flags that gate individual leaves — a THIRD reason a leaf can
+ * be unreachable, outside both visibility layers.
+ *
+ * Declaring the gate on the registry (rather than letting each page subtract its
+ * own flag-gated leaves) is what keeps "which leaves are reachable" a single
+ * answer: `flagGatedHiddenKeys` folds these into the same hidden-key set the
+ * member layer produces, so a flag-gated leaf takes part in the page-level
+ * derivation and the collapse rule EXACTLY like a member-hidden one. Subtracting
+ * one page-side only would let `BottomNav`/`ModuleRoute` offer a page whose own
+ * reachable-leaf set is empty — i.e. a blank page.
+ */
+export interface NavFlagGates {
+  /** `powerToolsEnabled` (Plan 17) — gates Habits' Coach view. */
+  powerTools: boolean;
+}
+
 export interface NavLeafDef {
   key: NavLeafKey;
   label: string;
@@ -81,6 +98,8 @@ export interface NavLeafDef {
    * their page's module; Lists leaves each have their own household toggle.
    */
   module: ModuleKey;
+  /** A global flag gate this leaf additionally requires (see `NavFlagGates`). */
+  gate?: keyof NavFlagGates;
 }
 
 export interface NavGroupDef {
@@ -118,7 +137,9 @@ export const NAV_PAGES: readonly NavPageDef[] = [
         leaves: [
           { key: 'history', label: 'History', module: 'habits' },
           { key: 'insights', label: 'Insights', module: 'habits' },
-          { key: 'coach', label: 'Coach', module: 'habits' },
+          // Power-tools-gated (Plan 17): unreachable while the global flag is
+          // off, and it collapses the page the same way a member-hidden leaf does.
+          { key: 'coach', label: 'Coach', module: 'habits', gate: 'powerTools' },
         ],
       },
       {
@@ -200,6 +221,30 @@ const pageDef = (page: NavPageKey): NavPageDef => {
 export const NAV_LEAF_KEYS: readonly NavLeafKey[] = NAV_PAGES.flatMap(p =>
   p.groups.flatMap(g => g.leaves.map(l => l.key))
 );
+
+/** Leaf key → its registry entry. Total over `NavLeafKey` (pinned by a test). */
+const LEAF_DEFS: ReadonlyMap<string, NavLeafDef> = new Map(
+  NAV_PAGES.flatMap(p => p.groups.flatMap(g => g.leaves.map(l => [l.key, l] as const)))
+);
+
+const leafDef = (key: NavLeafKey): NavLeafDef => {
+  const found = LEAF_DEFS.get(key);
+  // Total over a closed union — every NavLeafKey has a registry entry above.
+  if (!found) throw new Error(`Unknown nav leaf: ${key}`);
+  return found;
+};
+
+/**
+ * The leaf keys currently unreachable because a GLOBAL flag gate is off.
+ *
+ * The caller folds these into the member's hidden-key set (see
+ * `hooks/useHiddenVisibilityKeys.ts`), which is what makes a flag gate ride the
+ * SAME single code path as a member's own choice — one reachable-leaf set shared
+ * by the pages, `BottomNav` and `ModuleRoute`.
+ */
+export function flagGatedHiddenKeys(gates: NavFlagGates): NavLeafKey[] {
+  return [...LEAF_DEFS.values()].filter(l => l.gate && !gates[l.gate]).map(l => l.key);
+}
 
 // ---------------------------------------------------------------------------
 // Member layer — resolution
@@ -319,6 +364,20 @@ export function isLeafVisible(
   return isHouseholdModuleEnabled(settings, leaf.module) && !asSet(hidden).has(leaf.key);
 }
 
+/**
+ * A single leaf's visibility looked up BY KEY, for callers that hold a leaf key
+ * rather than a registry entry — e.g. global search, which must gate a result on
+ * the SPECIFIC view it deep-links to, not merely on its page still having some
+ * reachable view (otherwise selecting the result silently lands elsewhere).
+ */
+export function isNavLeafKeyVisible(
+  settings: ModuleSettings,
+  key: NavLeafKey,
+  hidden?: HiddenKeys
+): boolean {
+  return isLeafVisible(settings, leafDef(key), hidden);
+}
+
 /** Resolve a page's visible group/leaf tree plus its collapse state. */
 export function getPageNavigation(
   page: NavPageKey,
@@ -384,6 +443,14 @@ export function resolveActiveLocation(
  * Whether a module is enabled for this member. Page keys (`habits`, `money`,
  * `lists`) are DERIVED — they report false once every one of their leaves is
  * gone — while the Lists sub-tab keys are leaves in their own right.
+ *
+ * ⚠️ The page keys route through `getPageNavigation` UNCONDITIONALLY, including
+ * for an absent or empty hidden set. An "empty set ⇒ enabled" shortcut would
+ * contradict the derivation for a household that has turned off every Lists
+ * sub-tab: `getPageNavigation('lists', …).isVisible` and `isPlanVisible` both
+ * (correctly) say false, and this must agree with them. An empty hidden set is
+ * not hypothetical — it is exactly what a member who un-hides all five default
+ * Home widgets ends up with.
  */
 export function isModuleEnabled(
   settings: ModuleSettings,
@@ -391,15 +458,13 @@ export function isModuleEnabled(
   hidden?: HiddenKeys
 ): boolean {
   if (!isHouseholdModuleEnabled(settings, key)) return false;
-  const hiddenSet = asSet(hidden);
-  if (hiddenSet.size === 0) return true;
   switch (key) {
     case 'habits':
     case 'money':
     case 'lists':
-      return getPageNavigation(key, settings, hiddenSet).isVisible;
+      return getPageNavigation(key, settings, hidden).isVisible;
     default:
-      return !hiddenSet.has(key);
+      return !asSet(hidden).has(key);
   }
 }
 

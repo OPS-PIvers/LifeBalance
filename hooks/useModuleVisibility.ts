@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
+import { useHiddenVisibilityKeys } from '@/hooks/useHiddenVisibilityKeys';
 import type { ModuleKey } from '@/types/schema';
 import {
   isModuleEnabled as isModuleEnabledPure,
   isPlanVisible as isPlanVisiblePure,
   isPlanTabVisible as isPlanTabVisiblePure,
-  resolveHiddenKeySet,
   type PlanTab,
 } from '@/utils/moduleVisibility';
 
@@ -22,30 +22,28 @@ export interface ModuleVisibility {
  * Live page/module visibility for the signed-in member — Plan 090's
  * per-household layer AND 2F.1's per-member `hiddenKeys` layer, composed.
  *
- * Reads `householdSettings` (the `moduleVisibility` map) and `currentUser` (the
- * member's `hiddenKeys`) from `useHouseholdCore()`, so a change to either layer
- * propagates in real time via the existing Firestore `onSnapshot` listeners —
- * no polling. Fail-open: during cold load (settings null) every module reports
- * enabled and no nav leaf is hidden, so children render unchanged.
+ * Reads `householdSettings` (the `moduleVisibility` map) from
+ * `useHouseholdCore()` and the hidden-key set from `useHiddenVisibilityKeys()`,
+ * so a change to either layer propagates in real time via the existing Firestore
+ * `onSnapshot` listeners — no polling. Fail-open: during cold load (settings
+ * null) every module reports enabled and no nav leaf is hidden, so children
+ * render unchanged.
  *
  * Page-level answers are DERIVED from leaves: `isModuleEnabled('money')` goes
  * false once the member has hidden every Money sub-view, the same way it does
  * when the household turns Money off.
  *
+ * ⚠️ The hidden set comes from `useHiddenVisibilityKeys()` — the SAME set
+ * `usePageNavigation` renders off, flag-gated leaves included. `BottomNav` and
+ * `ModuleRoute` therefore agree with the page about which leaves are reachable;
+ * if they didn't, a page could be offered in the nav and then render nothing.
+ *
  * The returned object is memoized on the two source identities, so consumers
  * only get a new reference when visibility actually changes.
  */
 export const useModuleVisibility = (): ModuleVisibility => {
-  const { householdSettings, currentUser } = useHouseholdCore();
-  const hiddenKeys = currentUser?.hiddenKeys;
-  const dashboardHidden = currentUser?.dashboardHidden;
-  // Resolution reads exactly these two fields; depending on the whole member
-  // object would rebuild the set on every unrelated member write (points,
-  // fcmTokens, lastSeen…).
-  const hidden = useMemo(
-    () => resolveHiddenKeySet({ hiddenKeys, dashboardHidden }),
-    [hiddenKeys, dashboardHidden],
-  );
+  const { householdSettings } = useHouseholdCore();
+  const hidden = useHiddenVisibilityKeys();
   return useMemo(
     () => ({
       isModuleEnabled: (key: ModuleKey) => isModuleEnabledPure(householdSettings, key, hidden),
