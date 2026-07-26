@@ -1004,6 +1004,81 @@ describe('managed kid profiles (Plan 080 — login-less child member docs)', () 
       updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), { junkField: 'nope' }),
     );
   });
+
+  // 2F.1/2F.3 whole-document-keys() lockout regression. Case 3's hasOnly() runs
+  // against keys() of the ENTIRE resulting document, not affectedKeys() — so once
+  // an admin (Case 2, a blanket bypass) adds a key Case 3's allowlist doesn't know
+  // about, the kid's doc PERMANENTLY carries that key and every later non-admin
+  // write (Case 3) fails, forever, because the whole-document check now sees an
+  // unrecognized key. This is the same failure shape as 2G.1's changedKeys() bug,
+  // one layer over: there it was a first-write vs. a later-write; here it's an
+  // admin's write vs. every later non-admin write. A single-step test (just
+  // asserting BOB can set hiddenKeys) would NOT catch this — the poisoning only
+  // shows up on the write AFTER the admin's write, which is why this is a two-step
+  // sequence.
+  describe('hiddenKeys/homeScreen do not lock a kid out of Case 3 (2F.1/2F.3 regression)', () => {
+    it('REGRESSION: after an admin sets hiddenKeys on a kid, a non-admin parent can still edit the kid afterward', async () => {
+      // Step 1: the admin sets hiddenKeys on the kid via Case 2 (isAdminOf), exactly
+      // as the admin per-member visibility matrix (MemberVisibilityMatrix) does.
+      await assertSucceeds(
+        updateDoc(doc(dbFor(ALICE), 'households', H1, 'members', KID), {
+          hiddenKeys: ['todos'],
+        }),
+      );
+
+      // Step 2: a non-admin parent then makes an ordinary edit to the SAME kid via
+      // Case 3 (e.g. updateKidProfile renaming the kid). On the OLD rules (Case 3's
+      // hasOnly() missing 'hiddenKeys') this step FAILS, because the kid's document
+      // now permanently contains a key Case 3 doesn't allowlist. On the fixed rules
+      // it succeeds.
+      await assertSucceeds(
+        updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), {
+          displayName: 'Leo Renamed',
+        }),
+      );
+    });
+
+    it('a non-admin parent can set hiddenKeys directly on a kid', async () => {
+      await assertSucceeds(
+        updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), {
+          hiddenKeys: ['money'],
+        }),
+      );
+    });
+
+    it('a non-admin parent can set homeScreen directly on a kid', async () => {
+      await assertSucceeds(
+        updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), {
+          homeScreen: 'habits',
+        }),
+      );
+    });
+
+    it('the allowlist stays tight: a non-admin parent still cannot write an arbitrary unknown key to a kid doc', async () => {
+      await assertFails(
+        updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), {
+          someUnknownField: 'nope',
+        }),
+      );
+    });
+
+    it('the allowlist stays tight: role still cannot be changed away from \'kid\' even alongside a valid hiddenKeys write', async () => {
+      await assertFails(
+        updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), {
+          hiddenKeys: ['todos'],
+          role: 'member',
+        }),
+      );
+    });
+
+    it('rejects an over-cap hiddenKeys list on a kid doc (Case 3 is still covered by the shared validation guards)', async () => {
+      await assertFails(
+        updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), {
+          hiddenKeys: Array(101).fill('x'),
+        }),
+      );
+    });
+  });
 });
 
 describe('server-only collections', () => {
