@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Wallet, Plus, Activity, List } from 'lucide-react';
+import { LayoutDashboard, Wallet, Plus, Activity, List, Settings } from 'lucide-react';
 import { LazyMount } from '@/components/ui/LazyMount';
 import CountBadge from '@/components/ui/CountBadge';
 import { preloadOnIdle } from '@/utils/preloadOnIdle';
@@ -64,12 +64,25 @@ const BottomNav: React.FC = () => {
     if (isPlanVisible) {
       items.push({ key: 'lists', to: '/lists', label: 'Lists', icon: List });
     }
+    // A member can now hide Home (2F.2) on top of every other page already
+    // being hideable at the household level, so all four can end up off
+    // simultaneously — an empty footer would read as broken rather than as
+    // "nothing to show here". Settings is the structurally un-hideable
+    // terminal fallback everywhere else in this feature (it's absent from the
+    // `VisibilityKey` set entirely, see `NAV_PAGES`), so fall back to a direct
+    // link there rather than render a bare bar.
+    if (items.length === 0) {
+      items.push({ key: 'settings', to: '/settings', label: 'Settings', icon: Settings });
+    }
     return items;
   }, [isHomeVisible, isModuleEnabled, isPlanVisible, pendingReviewCount]);
 
-  // Balanced split around the centered FAB (decision 7): Home always anchors the
-  // left group; the remaining items fill left up to half (ceil), the rest right.
-  // 4 -> 2|2, 3 -> 2|1, 2 -> 1|1, 1 -> Home|∅.
+  // Balanced split around the centered FAB (decision 7): the items fill left up
+  // to half (ceil), the rest right — Home used to always anchor the left group
+  // when it was unconditional, but it's now just whichever item (if any) sorts
+  // first among however many are currently enabled.
+  // 4 -> 2|2, 3 -> 2|1, 2 -> 1|1, 1 -> item|∅ (the Settings fallback above
+  // guarantees this is never 0|0).
   const { leftItems, rightItems } = useMemo(() => {
     const leftCount = Math.ceil(navItems.length / 2);
     return {

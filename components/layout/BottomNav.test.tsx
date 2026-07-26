@@ -122,4 +122,20 @@ describe('BottomNav', () => {
     expect(screen.getByText('Money')).toBeInTheDocument();
     expect(screen.getByText('Lists')).toBeInTheDocument();
   });
+
+  // Home being hideable (2F.2) means a member can now hide EVERY page at once
+  // (Home via `hiddenKeys`, the rest via household `moduleVisibility`) — the
+  // footer must not go empty; it falls back to a direct Settings link.
+  it('falls back to a Settings link when every other nav item is hidden', () => {
+    setEnabledModules([], false);
+    renderNav();
+    expect(screen.queryByText('Home')).not.toBeInTheDocument();
+    expect(screen.queryByText('Habits')).not.toBeInTheDocument();
+    expect(screen.queryByText('Money')).not.toBeInTheDocument();
+    expect(screen.queryByText('Lists')).not.toBeInTheDocument();
+    const settingsLink = screen.getByText('Settings').closest('a');
+    expect(settingsLink).toHaveAttribute('href', '/settings');
+    // No capture destination is reachable either, so the FAB stays hidden.
+    expect(screen.queryByRole('button', { name: FAB_LABEL })).not.toBeInTheDocument();
+  });
 });

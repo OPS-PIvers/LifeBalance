@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, useNavigationType, useSearchParams } from 'react-router-dom';
 import { useViewParam } from '@/hooks/useViewParam';
+import { useDeepLinkHighlight } from '@/hooks/useDeepLinkHighlight';
 
 const VALID_TABS = ['overview', 'transactions', 'trends'] as const;
 
@@ -78,5 +79,54 @@ describe('useViewParam', () => {
   it('ignores an unknown value riding in deep-link state', () => {
     renderAt([{ pathname: '/budget', state: { tab: 'nonsense' } }]);
     expect(screen.getByTestId('value').textContent).toBe('overview');
+  });
+});
+
+/**
+ * Regression coverage for the race described in the finding this fixes:
+ * `Budget.tsx` mounts `useViewParam` AND `useDeepLinkHighlight` side by side,
+ * both reading the SAME `location.state` object set by `SearchOverlay`
+ * (`{ tab, highlightId }`). `useViewParam` used to clear that state from a
+ * post-commit `useEffect`, which forced a second render that
+ * `useDeepLinkHighlight`'s own render-phase check reacted to — nulling out a
+ * `highlightId` that had just arrived. This harness mounts both hooks
+ * together, the same way `Budget.tsx` does, and asserts the highlight
+ * survives.
+ */
+const SiblingHarness: React.FC = () => {
+  const [value] = useViewParam('overview', VALID_TABS);
+  const highlightId = useDeepLinkHighlight();
+  return (
+    <div>
+      <span data-testid="value">{value}</span>
+      <span data-testid="highlight">{highlightId ?? ''}</span>
+    </div>
+  );
+};
+
+describe('useViewParam + useDeepLinkHighlight (sibling hooks on the same page)', () => {
+  it('a highlightId riding alongside a tab deep link survives the state clear', async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[
+          { pathname: '/budget', state: { tab: 'transactions', highlightId: 'txn-abc' } },
+        ]}
+      >
+        <SiblingHarness />
+      </MemoryRouter>
+    );
+
+    // Correct tab paints immediately (unchanged behavior).
+    expect(screen.getByTestId('value').textContent).toBe('transactions');
+    // The highlight must survive `useViewParam` mirroring the deep-link into
+    // `?view=` and clearing `location.state` out from under the sibling hook.
+    expect(screen.getByTestId('highlight').textContent).toBe('txn-abc');
+
+    // Give the state-clearing navigation a chance to fully settle and
+    // re-render — the highlight must still be there afterward, not just on
+    // the very first paint.
+    await waitFor(() => {
+      expect(screen.getByTestId('highlight').textContent).toBe('txn-abc');
+    });
   });
 });

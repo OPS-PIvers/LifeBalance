@@ -25,17 +25,24 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
  * none of those callers need to change: the render that detects a new
  * `location.key` (the exact `useDeepLinkTab` pattern) adopts the state value
  * into `value` immediately, so the correct tab paints on the very first
- * render. Mirroring that value into the `view` param and clearing `state` is
- * a SEPARATE effect keyed on `location.key`, deduped via a ref rather than
- * driven by more component state — React Router warns against (and this app's
- * own `react-hooks/set-state-in-effect` rule would flag) calling a state
- * setter synchronously from inside an effect, and `navigate()` during render
- * is unreliable (React Router logs a dev warning and, under test, never
- * actually lands). None of this weakens the read-before-clear contract
- * `useDeepLinkHighlight` depends on: every hook's render-phase read of
- * `location.state` completes before ANY effect for that render runs, so a
- * `highlightId` riding in the same `state` object is still readable there
- * regardless of when this hook's effect fires.
+ * render. Mirroring that value into the `view` param is a SEPARATE effect
+ * keyed on `location.key`, deduped via a ref rather than driven by more
+ * component state — React Router warns against (and, empirically, silently
+ * no-ops under test — confirmed while fixing this hook) calling `navigate()`
+ * synchronously during render, so the URL mirror has to stay in an effect to
+ * actually take effect.
+ *
+ * That effect used to clear `location.state` wholesale (`state: null`) once
+ * it had consumed `tab`. `Budget.tsx` also mounts `useDeepLinkHighlight`,
+ * which reads a `highlightId` riding in that SAME `state` object
+ * (`SearchOverlay` sets both `{ tab, highlightId }` in one `navigate` call).
+ * Nulling the whole object forces a second render (this effect's own
+ * `navigate` call) that `useDeepLinkHighlight`'s render-phase check reacts to
+ * — its `location.key` has changed again — reading the now-null state and
+ * wiping out a `highlightId` that arrived in the very same original
+ * navigation. So this effect strips out ONLY the `tab` key it consumed,
+ * preserving any other key (`highlightId` included) for that sibling hook to
+ * go on reading undisturbed.
  *
  * An incoming `view` naming an unknown value falls back to `defaultTab`; a
  * known-but-currently-HIDDEN leaf is deliberately NOT filtered here — callers
@@ -74,11 +81,12 @@ export function useViewParam(
     }
   }
 
-  // Mirrors a fresh `state.tab` deep link into the `view` param and clears the
-  // state, once per arrival (`appliedKeyRef`, mutated only here — never during
-  // render — dedupes against `location.key`). See the doc comment above for
-  // why this is a separate effect rather than folded into the render-time
-  // check above.
+  // Mirrors a fresh `state.tab` deep link into the `view` param and clears
+  // JUST the `tab` key from state, once per arrival (`appliedKeyRef`, mutated
+  // only here — never during render — dedupes against `location.key`). See
+  // the doc comment above for why this is a separate effect rather than
+  // folded into the render-time check above, and why it strips only `tab`
+  // rather than nulling the whole state object.
   const appliedKeyRef = useRef<string | null>(null);
   useEffect(() => {
     const requested = (location.state as { tab?: unknown } | null)?.tab;
@@ -87,9 +95,11 @@ export function useViewParam(
     appliedKeyRef.current = location.key;
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set('view', requested);
+    const { tab: _consumedTab, ...restState } = (location.state ?? {}) as Record<string, unknown>;
+    const nextState = Object.keys(restState).length > 0 ? restState : null;
     navigate(
       { pathname: location.pathname, search: `?${nextParams.toString()}` },
-      { replace: true, state: null }
+      { replace: true, state: nextState }
     );
   }, [location.key, location.pathname, location.state, searchParams, navigate, validTabs]);
 
