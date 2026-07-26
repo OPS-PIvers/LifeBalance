@@ -587,6 +587,27 @@ describe('geminiService', () => {
 
     vi.useRealTimers();
   });
+
+  it('optimizeGroceryList handles a legacy numeric quantity without throwing', async () => {
+    // OptimizableItem.quantity is typed `string`, but callers pass
+    // ShoppingItem.quantity straight through, and some Firestore docs hold a
+    // raw legacy number there (rows written by the quickAdd Cloud Function
+    // before the quantity-handling fix; shoppingItemConverter does a blind
+    // cast, no migration run). sanitizeForPrompt calls .replace() directly,
+    // so an uncoerced number would throw `input.replace is not a function`.
+    const { optimizeGroceryList } = await import('./geminiService');
+
+    const mockResponse = [{ id: '1', name: 'Milk', category: 'Dairy', quantity: '2', store: '' }];
+    generateContentMock.mockResolvedValue({ text: JSON.stringify(mockResponse) });
+
+    const legacyItem = { id: '1', name: 'Milk', category: 'Dairy', quantity: 2, store: '' } as unknown as Parameters<
+      typeof optimizeGroceryList
+    >[1][number];
+
+    const result = await optimizeGroceryList('test-household', [legacyItem]);
+
+    expect(result).toEqual(mockResponse);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -135,7 +135,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
     ? (STORE_COLORS[activeQuickList.color || DEFAULT_STORE_COLOR] ?? STORE_COLORS[DEFAULT_STORE_COLOR]!)
     : null;
 
-  const hasMeta = Boolean(item.quantity || item.store || activeQuickList);
+  const hasMeta = Boolean(item.store || activeQuickList);
 
   const Content = (
     // Gmail-style swipe: right = purchased (unchecked items only — a checked
@@ -244,14 +244,13 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                 {item.name}
             </div>
 
-            {/* Compact read-only metadata — only rendered when present */}
+            {/* Compact read-only metadata — only rendered when present.
+                Quantity is deliberately NOT shown here: it stays in the edit
+                drawer, the CSV export, and the shared text, but a row-level
+                count invented a false precision ("1") for the common case of
+                just wanting one of something (F-2G.2). */}
             {hasMeta && (
                 <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                    {item.quantity && (
-                        <span className="text-xxs font-medium text-brand-500 dark:text-brand-400">
-                            {item.quantity}
-                        </span>
-                    )}
                     {item.store && (
                         <span className={clsx(
                             "flex items-center gap-1 text-xxs px-1.5 py-0.5 rounded-full border whitespace-nowrap",
@@ -305,13 +304,15 @@ const arePropsEqual = (prev: ShoppingItemRowProps, next: ShoppingItemRowProps) =
   const prevItem = prev.item;
   const nextItem = next.item;
 
-  // Deep compare item fields to handle Firestore reference instability
+  // Deep compare item fields to handle Firestore reference instability.
+  // quantity is deliberately excluded — the row never renders it (it stays in
+  // the edit drawer/CSV export/shared text only), so a quantity-only change
+  // must not force a re-render here.
   const isItemEqual =
     prevItem.id === nextItem.id &&
     prevItem.name === nextItem.name &&
     prevItem.category === nextItem.category &&
     prevItem.store === nextItem.store &&
-    prevItem.quantity === nextItem.quantity &&
     prevItem.isPurchased === nextItem.isPurchased &&
     prevItem.notes === nextItem.notes &&
     prevItem.addedFromMealId === nextItem.addedFromMealId &&

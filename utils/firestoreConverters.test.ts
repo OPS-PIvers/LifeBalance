@@ -576,6 +576,26 @@ describe('shoppingItemConverter', () => {
     const result = shoppingItemConverter.fromFirestore(fakeSnap('si-6', wellFormed));
     expect(result.source).toBeUndefined();
   });
+
+  it('(b) legacy numeric quantity is normalized to the equivalent string', () => {
+    const result = shoppingItemConverter.fromFirestore(fakeSnap('si-7', { ...wellFormed, quantity: 2 }));
+    expect(result.quantity).toBe('2');
+  });
+
+  it('(a) a string quantity passes through unchanged', () => {
+    const result = shoppingItemConverter.fromFirestore(fakeSnap('si-8', { ...wellFormed, quantity: '3 lbs' }));
+    expect(result.quantity).toBe('3 lbs');
+  });
+
+  it('(b) an absent quantity stays absent', () => {
+    const result = shoppingItemConverter.fromFirestore(fakeSnap('si-9', wellFormed));
+    expect(result.quantity).toBeUndefined();
+  });
+
+  it('(b) a null quantity does not become the string "null"', () => {
+    const result = shoppingItemConverter.fromFirestore(fakeSnap('si-10', { ...wellFormed, quantity: null }));
+    expect(result.quantity).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------
