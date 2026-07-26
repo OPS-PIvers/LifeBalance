@@ -31,6 +31,7 @@ import { splitParticipantKey } from '@/utils/settlement';
 import { trashDocId, type TrashDomain, type TrashedItem } from '@/utils/trash';
 import { computeNetWorth } from '@/utils/netWorth';
 import { track } from '@/services/analytics';
+import { DEFAULT_HIDDEN_DASHBOARD_WIDGETS } from '@/utils/dashboardLayout';
 import {
   Account,
   BudgetBucket,
@@ -323,21 +324,29 @@ const SEED_MEMBERS: HouseholdMember[] = [
   },
   // Second adult so the F-MONEY-13 Settle-Up view is walkable in Test Mode
   // (who-owes-whom needs 2+ adults). The seed transaction 't1' is split with
-  // this member below.
+  // this member below. 2F.3: also gives the admin per-member visibility matrix
+  // a member whose `hiddenKeys` genuinely differs from the others — hides two
+  // Money leaves this partner doesn't use — so per-member independence is
+  // actually observable in Test Mode (previously all seeded members resolved
+  // to the identical `MEMBER_DEFAULT_HIDDEN_KEYS` default).
   {
     uid: 'test-partner-id', displayName: 'Jordan', email: 'jordan@example.com',
-    role: 'member', points: { daily: 0, weekly: 0, total: 0 }
+    role: 'member', points: { daily: 0, weekly: 0, total: 0 },
+    hiddenKeys: [...DEFAULT_HIDDEN_DASHBOARD_WIDGETS, 'trends', 'subscriptions']
   },
   // Plan 080 (Kid Mode) Test-Mode harness: one managed kid so the dormant kid
   // surfaces are walkable in Test Mode. Mirrors the EXACT object shape the mock's
   // own addKidProfile builds (login-less, isManaged, managedByUid, no email), so
   // the kid dashboard, the parent KidsChoresWidget, and the +pts todo badge all
-  // show live data without a real backend.
+  // show live data without a real backend. 2F.3: a second, DIFFERENT `hiddenKeys`
+  // (a kid has no budget-management reason to see Buckets/Accounts) so the matrix
+  // shows three genuinely distinct per-member states, not one shared default.
   {
     uid: 'kid_leo', displayName: 'Leo', role: 'kid',
     isManaged: true, managedByUid: 'test-user-id',
     avatarColor: '#9f5618', avatarEmoji: '🦊', // terracotta from utils/avatarColor AVATAR_COLORS
-    points: { daily: 15, weekly: 60, total: 220 }, allowanceCents: 0
+    points: { daily: 15, weekly: 60, total: 220 }, allowanceCents: 0,
+    hiddenKeys: [...DEFAULT_HIDDEN_DASHBOARD_WIDGETS, 'buckets', 'accounts']
   }
 ];
 

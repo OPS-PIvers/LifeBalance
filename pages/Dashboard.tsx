@@ -72,6 +72,7 @@ import { PulseStripWidget } from '@/components/dashboard/PulseStripWidget';
 import { PartnerActivityWidget } from '@/components/dashboard/PartnerActivityWidget';
 import { RecapSlot } from '@/components/dashboard/RecapSlot';
 import { SetupChecklistCard } from '@/components/dashboard/SetupChecklistCard';
+import { VisibilityDiscoveryCard } from '@/components/dashboard/VisibilityDiscoveryCard';
 import { PointRebalanceCard } from '@/components/dashboard/PointRebalanceCard';
 import { CreateChallengePayload, CREDIT_CARD_CATEGORY } from '@/types/schema';
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
@@ -889,6 +890,13 @@ const Dashboard: React.FC = () => {
             customizable widgetOrder (it's a self-clearing onboarding nudge,
             not a persistent widget a member would want to reorder/hide). */}
         <SetupChecklistCard />
+
+        {/* One-time "What I see" discovery nudge (2F.3) — points a member at
+            the per-member visibility editor they'd otherwise never find.
+            Dismissible, never reappears (see utils/visibilityDiscovery.ts).
+            Placed right after the setup checklist so it doesn't compete with
+            it for the same "first things to notice" slot. */}
+        <VisibilityDiscoveryCard />
 
         {/* Point-rebalance nudge (F-DASH-08) — wires up the already-shipped
             `analyzeHabitPoints` AI helper: a dismissible, cadence-gated

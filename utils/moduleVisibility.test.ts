@@ -1,13 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import type { Household, ModuleKey } from '@/types/schema';
 import { DEFAULT_HIDDEN_DASHBOARD_WIDGETS } from '@/utils/dashboardLayout';
+import { DASHBOARD_WIDGET_IDS } from '@/utils/dashboardLayout';
 import {
   MEMBER_DEFAULT_HIDDEN_KEYS,
   NAV_LEAF_KEYS,
   NAV_PAGES,
   flagGatedHiddenKeys,
   getPageNavigation,
+  getVisibilityMatrixSections,
   isHomeVisible,
+  isMatrixRowLocked,
   isModuleEnabled,
   isNavLeafKeyVisible,
   isPlanTabVisible,
@@ -507,6 +510,84 @@ describe('resolveActiveLocation', () => {
   it('returns null when the page has nothing to show', () => {
     const nav = getPageNavigation('money', settings({ money: false }), []);
     expect(resolveActiveLocation(nav, 'overview')).toBeNull();
+  });
+});
+
+describe('getVisibilityMatrixSections (2F.3 admin matrix)', () => {
+  const sections = getVisibilityMatrixSections();
+
+  it('has one section per NAV_PAGES page plus a Home-widgets section', () => {
+    expect(sections.map(s => s.key)).toEqual(['habits', 'money', 'lists', 'widgets']);
+  });
+
+  it('covers every NAV_LEAF_KEY exactly once, across the page sections', () => {
+    const leafKeys = sections
+      .filter(s => s.key !== 'widgets')
+      .flatMap(s => s.rows.map(r => r.key));
+    expect(leafKeys).toEqual(NAV_LEAF_KEYS);
+  });
+
+  it('covers every dashboard widget id exactly once, in the widgets section', () => {
+    const widgets = sections.find(s => s.key === 'widgets');
+    expect(widgets?.rows.map(r => r.key)).toEqual(DASHBOARD_WIDGET_IDS);
+  });
+
+  it("Habits'/Money's leaves have no own module (governed solely by the section)", () => {
+    for (const key of ['habits', 'money'] as const) {
+      const section = sections.find(s => s.key === key);
+      expect(section?.rows.every(r => r.ownModule === null)).toBe(true);
+    }
+  });
+
+  it("Lists' three sub-tabs each carry their own independent module", () => {
+    const lists = sections.find(s => s.key === 'lists');
+    expect(lists?.rows.map(r => ({ key: r.key, ownModule: r.ownModule }))).toEqual([
+      { key: 'todos', ownModule: 'todos' },
+      { key: 'meals', ownModule: 'meals' },
+      { key: 'shopping', ownModule: 'shopping' },
+    ]);
+  });
+
+  it('Home widgets have no module at the section OR row level', () => {
+    const widgets = sections.find(s => s.key === 'widgets');
+    expect(widgets?.moduleKey).toBeNull();
+    expect(widgets?.rows.every(r => r.ownModule === null)).toBe(true);
+  });
+});
+
+describe('isMatrixRowLocked', () => {
+  const habitsSection = getVisibilityMatrixSections().find(s => s.key === 'habits');
+  const listsSection = getVisibilityMatrixSections().find(s => s.key === 'lists');
+  const widgetsSection = getVisibilityMatrixSections().find(s => s.key === 'widgets');
+  if (!habitsSection || !listsSection || !widgetsSection) throw new Error('section missing');
+
+  const habitsRow = habitsSection.rows[0];
+  const todosRow = listsSection.rows.find(r => r.key === 'todos');
+  const widgetRow = widgetsSection.rows[0];
+  if (!habitsRow || !todosRow || !widgetRow) throw new Error('row missing');
+
+  it('unlocked by default (fail-open household)', () => {
+    expect(isMatrixRowLocked(null, habitsSection, habitsRow)).toBe(false);
+  });
+
+  it("locks every leaf under a household-disabled page (e.g. Habits off)", () => {
+    expect(isMatrixRowLocked(settings({ habits: false }), habitsSection, habitsRow)).toBe(true);
+  });
+
+  it("locks a Lists sub-tab whose OWN module is off, even with Lists itself on", () => {
+    expect(isMatrixRowLocked(settings({ todos: false }), listsSection, todosRow)).toBe(true);
+  });
+
+  it('a Lists sub-tab is unlocked when both Lists and its own module are on', () => {
+    expect(isMatrixRowLocked(settings({ lists: true, todos: true }), listsSection, todosRow)).toBe(false);
+  });
+
+  it('locks every Lists sub-tab when the Lists master module is off, regardless of its own flag', () => {
+    expect(isMatrixRowLocked(settings({ lists: false, todos: true }), listsSection, todosRow)).toBe(true);
+  });
+
+  it('Home widgets are never household-locked (no module governs them)', () => {
+    expect(isMatrixRowLocked(settings({ habits: false, money: false, lists: false }), widgetsSection, widgetRow)).toBe(false);
   });
 });
 

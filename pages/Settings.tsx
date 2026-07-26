@@ -54,6 +54,7 @@ import MerchantRulesCard from '@/components/settings/MerchantRulesCard';
 import { ChangelogDrawer } from '@/components/settings/ChangelogDrawer';
 import { CHANGELOG } from '@/data/changelog';
 import { MyViewSettings } from '@/components/settings/MyViewSettings';
+import { MemberVisibilityMatrix } from '@/components/settings/MemberVisibilityMatrix';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
@@ -1233,6 +1234,23 @@ const Settings: React.FC = () => {
             member={currentUser}
             settings={householdSettings}
             onSave={(updates) => void updateMember(currentUser.uid, updates)}
+          />
+        </Section>
+      )}
+
+      {/* Member visibility matrix (2F.3) — admin-only. Edits the SAME
+          `hiddenKeys` field every member edits for themselves above; there is
+          no lock/override, last write wins. Exists mainly so an admin can
+          manage a managed kid profile's nav (kids have no login to use "What
+          I see" themselves) and so a household with several adults can sanity
+          check everyone's setup from one screen. */}
+      {currentUser?.role === 'admin' && (
+        <Section title="Member visibility">
+          <MemberVisibilityMatrix
+            members={sortedMembers}
+            settings={householdSettings}
+            onToggleModule={(key, value) => void handleModuleToggle(key, value)}
+            onUpdateMember={(memberId, updates) => void updateMember(memberId, updates)}
           />
         </Section>
       )}
