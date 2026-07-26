@@ -90,6 +90,205 @@ human-watched PR (tagged **[rules]** / **[index]**).
 - [x] **ShoppingListTab** mirrored-state-in-effect → derived `useMemo` (lint no longer fires, so this is optional cleanup). **M / LOW.** ❌ 2026-07-11: won't-fix — the mirrored state is load-bearing for `Reorder.Group` drag gestures (local mutation gated by `isDraggingRef` before committing via `reorderShoppingItems`); a derived `useMemo` would break mid-drag reordering.
 - [x] **Finish the `useHousehold()` migration** — ~7 shim consumers remain; move them to narrow domain slices. **S each / LOW.** ❌ 2026-07-11: stale — zero production consumers remain; only test-file mocks reference the shim.
 
+### 2F. Per-member visibility & navigation (spec'd 2026-07-26 — design settled, executor-ready)
+
+**Why.** Plan 090 made pages toggleable **per household**, so two people in one household necessarily
+get the same app. Real-user feedback: one member finds the default surface overwhelming (density,
+red/"overdue" framing, loud optional-metadata chips) while the other depends on that density. The
+generalizable fix is not a "calm mode" — it is to finish Plan 090 by extending the existing toggle
+pattern to **every** page/sub-view and moving the "what I see" decision to the **member**.
+
+**Model (decided).** Two layers composed with `&&`:
+
+- **Household** — "does this household use it at all." Stays on `Household.moduleVisibility`, defaults
+  all-on, and is what a **new member inherits**.
+- **Member** — "do I want it in my nav." New `hiddenKeys` field on `HouseholdMember`, next to
+  `dashboardLayout`.
+
+An admin edits **the same member field** the member edits for themselves — no lock, no third layer,
+last write wins. Managed kid profiles are the only exception (no login to edit with). Both layers
+render as one matrix, household as the top row.
+
+**Key set.** Leaves only; groups are **derived**. A group disappears when all its leaves are off, a
+page when all its groups are gone — the cascade `isPlanVisible` already implements. ~20 keys: Home,
+Habits' segments, Money's seven leaves (`overview`, `transactions`, `trends`, `calendar`,
+`subscriptions`, `buckets`, `accounts` — see `pages/Budget.tsx:35`), Lists' three tabs, plus the
+Home widgets. **Settings is never toggleable** (lockout).
+
+**Collapse rule — this is the feature.** Exactly one enabled child ⇒ no `TabSubViewMenu`, no tab
+strip; the nav item becomes a **direct link**. Turning off Money's other six leaves makes tapping
+Money *be* the budget calendar. This is what turns "hide what I don't use" into "buttons to what I
+do use" without building a launcher screen.
+
+| Slice | Contents | Size |
+|-------|----------|------|
+| **2F.1** | Member `hiddenKeys` layer + full key set + widget merge + collapse rule + Plan→Lists rename | **L / MED** |
+| **2F.2** | Home becomes toggleable + per-member `homeScreen` + URL-addressable Money sub-views | **M / LOW** |
+| **2F.3** | Admin per-member matrix + one-time discovery prompt + onboarding step | **M / LOW** |
+
+**2F.1 notes.**
+- Widgets merge into the unified key set. Resolve as `member.hiddenKeys ?? DEFAULT_HIDDEN_KEYS`, where
+  the default set holds **only** the five widget keys from `DEFAULT_HIDDEN_DASHBOARD_WIDGETS`
+  (`utils/dashboardLayout.ts:47`). Pages therefore fail **open**, widgets stay hidden exactly as today,
+  and **no migration runs**. ⚠️ The two systems have *opposite* defaults today
+  (`moduleVisibility` fails open, `resolveHiddenWidgets` fails closed) — this rule is what reconciles
+  them; a naive merge would surface 5 extra widgets on every existing member's Home.
+- `dashboardLayout` is **ordering, not visibility** — untouched by the merge.
+- Rename: the route is *already* `/lists`; only the `'plan'` `ModuleKey` and the "Plan" nav label say
+  otherwise (`components/layout/BottomNav.tsx:62`). Needs a **read-time alias** from `'plan'` so
+  existing households don't lose saved toggles.
+- Free consequence: `useActionQueue` gates to-do items on `isPlanTabVisible`, so member-scoping it
+  stops surfacing to-do cards a member never took on — a chunk of the "everything is red and overdue"
+  complaint fixed without touching the queue.
+
+**2F.2 notes.** `resolveLandingRoute()` walks *chosen `homeScreen`* → *first enabled nav destination*
+→ *Settings*, so there is never a dead end and the case where `/` itself is disabled is covered.
+Money sub-views are React state only today (no URL param, no persistence) — make them addressable via
+a query param matching Habits' existing `?due=` pattern (`pages/Habits.tsx:373`). Byproduct:
+deep-linkable money screens for push notifications and PWA shortcuts.
+
+**Open / to verify.**
+- Whether `moduleVisibility.todos` is currently `false` for this household — it was turned off
+  believing it was per-member, which hid to-dos (and their Action Queue cards) for **both** members.
+- Confirm the `?view=` param shape vs. path segments before 2F.2.
+- The matrix is ~20 rows × N members — the one screen where this "reduce overwhelm" feature is itself
+  dense. Acceptable as an admin surface; revisit if it tests badly.
+
+**Prerequisite.** 2G.1 below fixes the `firestore.rules` member-self-update allowlist. 2F.1 adds
+`hiddenKeys` / `homeScreen` to that same allowlist — **it will hit the identical denial if 2G.1 hasn't
+shipped**, and it will look like a bug in the new feature rather than a pre-existing rules gap.
+
+### 2G. Member-permission bug + capture/shopping paper cuts (spec'd 2026-07-26 — decisions settled)
+
+Four items from real-device use, ordered by urgency. **Ship as three PRs, 2G.1 first.** Everything
+below is decided; an executor should not need to re-litigate any of it.
+
+#### 2G.1 [rules] Non-admin members cannot change their own dashboard widgets — **live bug, blocking a real user**
+
+**Symptom.** A non-admin member toggles a widget in Settings → Dashboard Widgets and gets
+*"You don't have permission to update the member. Try signing in again, or check that you're still a
+member of this household."*
+
+**Root cause.** `firestore.rules:282-285` gates a member's self-update with
+`changedKeys().hasOnly(['displayName','email','photoURL','telegramChatId','notificationPreferences','fcmTokens','lastTokenRefresh'])`.
+`dashboardLayout` / `dashboardHidden` were added to `HouseholdMember` by F-XCUT-02 (`types/schema.ts:200-207`)
+and **never added to that list** — `dashboard` appears zero times in `firestore.rules`.
+
+Two details explain why this survived to production:
+- **`changedKeys()` excludes newly-*added* keys** (those land in `addedKeys()`). So a member's *first*
+  toggle succeeds — both fields are absent, `changedKeys()` is empty, and `hasOnly` passes vacuously.
+  Every toggle *after* that is denied. Matches the report exactly ("toggled on/off").
+- **`isAdminOf(householdId)` at `firestore.rules:288` is a blanket bypass.** The feature works perfectly
+  for admins and is broken for every non-admin. Which is why it was never seen in dev.
+
+**Fix.** Add `dashboardLayout`, `dashboardHidden`, **and `anyNotificationsEnabled`** to the line-284
+allowlist. The third is the same bug in a different feature: `pages/Settings.tsx:553-556` writes
+`{notificationPreferences, anyNotificationsEnabled}` together, and `anyNotificationsEnabled`
+(`types/schema.ts:191`) is also missing — so a non-admin's *second* notification-preferences save fails
+identically. Same for `components/modals/HabitFormModal.tsx:271` and
+`services/notificationService.tsx:364-371, 486-494` (those also write `fcmTokens`/`lastTokenRefresh`,
+which *are* allowlisted — `anyNotificationsEnabled` is the key that breaks them).
+
+**Also do:** a sweep of every call site writing to `households/{id}/members/{uid}`, checking each
+payload's keys against the allowlist. This bug class is invisible to admins by construction, so the
+sweep is the only way to find the rest.
+
+**Tests.** `tests/rules/firestore.rules.test.ts` currently has **zero** `dashboard` references, and every
+existing member-self-update test writes an already-allowlisted key — so the `changedKeys()`/`addedKeys()`
+gap is untested in both directions. Add: non-admin *adds* the fields (must pass), non-admin *changes*
+them (must pass, was failing), non-admin writes a genuinely forbidden key such as `role` or `points`
+(must still fail). **S / LOW** — but `[rules]`, so its own human-watched PR.
+
+#### 2G.2 Shopping quantity: stop showing it, stop inventing it, let it be removed
+
+Four related changes; the last two are what make the first two safe.
+
+- **Never render quantity in the list row.** Drop the `{item.quantity && …}` span at
+  `components/meals/ShoppingItemRow.tsx:250-254` and remove `item.quantity` from the `hasMeta` gate
+  (`:138`). Quantity stays in the edit drawer, the CSV export (`ShoppingListTab.tsx:421`) and the shared
+  text (`utils/shoppingListFormatter.ts:77-78`) — it just leaves the row. Also drop it from the memo
+  comparator's concerns only if nothing else in the row reads it (`:314`).
+- **Stepper can reach "none."** `components/meals/ShoppingItemForm.tsx:91` clamps at
+  `Math.max(1, count - 1)`. Let decrementing from 1 land on an explicit none state — render an em-dash,
+  clear the unit input too, and persist `null`. Today clearing "2 lbs" takes two separate actions
+  (step down *and* blank the unit) because `formatQuantity` only returns `''` when count is 1 **and**
+  the unit is empty (`utils/grocerySmartDefaults.ts:193-197`).
+- **The Shortcut endpoint stops defaulting to 1.** `functions/src/quickAdd/index.ts:1165`
+  (`quantity = 1` at destructure) and the batch equivalent at `:1259` (`itemObj.quantity || 1`).
+  A submission with no quantity should write no quantity. Adjust the `:1387-1390` validation so absent
+  is valid while a supplied non-positive value still 400s. This is the actual cause of the stray "1"
+  on every shortcut-captured row: UI-created items normalize 1 → `''`, server-created ones stored a
+  literal `1`.
+- **Normalize quantity to string; parse on merge.** `ShoppingItem.quantity` is typed `string`
+  (`types/schema.ts:927`) but the server writes a **number** and the converter spreads it unchanged —
+  both shapes are in Firestore now. Server writes strings going forward. The duplicate-merge paths
+  (`index.ts:1426-1428` `currentQty + quantity`, `:1292-1306`, and
+  `contexts/FirebaseHouseholdContext.tsx:1076` `increment(item.quantity)`) must parse a leading number
+  and increment it while preserving the unit — `"2 lbs"` + 1 → `"3 lbs"`, and a non-numeric quantity is
+  left alone rather than mangled. Today those paths string-concatenate. No migration: legacy numeric
+  values read correctly through the parse. `utils/grocerySmartDefaults.ts` already has
+  `parseQuantity`/`formatQuantity` and tests — reuse them rather than writing a second parser, and
+  mirror them server-side.
+
+Duplicate merge still merges. Adding "milk" twice yields one row; a missing quantity counts as 1 for
+accumulation, so a visible quantity only appears once there genuinely is more than one.
+
+**Tests.** `ShoppingItemRow.test.tsx` and `ShoppingListTab.test.tsx` currently assert nothing about
+quantity, and `ShoppingItemForm.tsx` has **no test file at all** — add one for the new none state.
+Extend `functions/src/quickAdd/index.test.ts` for the absent-quantity default and the unit-preserving
+merge. **M / LOW.**
+
+#### 2G.3 Capture drawer: back button, and delete two things
+
+All in `components/modals/CaptureModal.tsx` + `CaptureMenu.tsx`.
+
+- **Add a back affordance.** There is currently **none** — confirmed exhaustively. From `manual`,
+  `camera`, or `review` the only exit is closing the whole drawer, which wipes everything entered. The
+  camera view has no cancel at all, and the two error paths (`:405`, `:468`) *dump you into the manual
+  form after a failed scan with no way back to retry the scan*. The tab switcher is also hidden outside
+  `menu` (`:732`), so sub-views are a dead end in every direction.
+  Add a `ChevronLeft` in the existing shared header block (`:694-743`, left of the `<h2>` at `:697`),
+  shown whenever `view !== 'menu'`. Back returns to the tab menu, stops the camera, and clears parsed
+  rows; in-progress manual entry is discarded (the sub-view unmounts — preserving it would mean lifting
+  the form's state, deliberately out of scope). Copy the pattern from
+  `components/modals/HabitCreatorWizard.tsx:283-300` or `GroceryCatalogModal.tsx:145-166` — both are the
+  same `Drawer` with a conditional back button composed into a custom header. Note `Drawer` has **no**
+  `onBack`/`headerLeft` prop (`components/ui/Drawer.tsx:22-55`); compose it in the caller, don't extend
+  the primitive.
+  While here: `'upload'` is a **dead `ModalView` value** — declared at `:40`, given a title at `:709`,
+  and `setView('upload')` is never called anywhere. Delete it.
+- **Delete the AI PII banner outright.** `CaptureMenu.tsx:89-104`, plus the dismiss button and the
+  `lifebalance_pii_notice_seen` localStorage key (`:13`, `:16-22`, `:52`, `:56`). It is the app's only
+  AI disclaimer — the other AI surfaces (`PhotoImportDrawer`, meal AI, receipt paths) never had one — so
+  removing it makes the app consistent, and it renders on the *menu* rather than on the screens where an
+  image is actually captured. The Privacy Policy carries the disclosure.
+- **Delete the Magic Action bar and its service function.** Remove
+  `components/modals/CaptureMagicAction.tsx`, its render at `CaptureMenu.tsx:106-110`, the
+  `handleMagicSuccess` handler (`CaptureModal.tsx:146-174`), `parseMagicAction`
+  (`services/geminiService.ts:1533+`), `validateMagicAction` (`services/geminiValidation.ts:310-327`),
+  the `MagicActionResponse` type, and their tests. `CaptureMagicAction.tsx:42` is its **only** production
+  caller in the repo. ⚠️ Do **not** touch the iOS-Shortcut natural-language pipeline — that is a
+  separate function chain (`quickAddNaturalLanguage` → `pendingItems` → `parseNaturalLanguageCommand`)
+  and must keep working. `FEATURES_ROADMAP.md:1661` proposes reusing `parseMagicAction` for a future
+  `QuickAddBar`; that idea is dropped with this — update the roadmap line rather than leaving it
+  pointing at deleted code.
+- **Merge Scan Receipt + Upload image into one entry.** ⚠️ They are **not** the same backend today.
+  Camera (`:336-341`) calls `parseReceiptLineItems` and gets the line-item split
+  (`shouldSplitReceipt`) plus duplicate detection (`findMatchingPendingTransaction`). Upload
+  (`:431-436`) calls `parseBankStatement` and *only if it returns an empty array* falls back to
+  `analyzeReceipt` — a blind two-call cascade, no split, no duplicate check. So an uploaded receipt
+  costs two Gemini round-trips and never gets line items.
+  Replace both with one "Add from image" entry that opens the OS sheet (camera or library), then run
+  `parseReceiptLineItems` first and fall back to `parseBankStatement` when it yields nothing — the
+  reverse of today's cascade. Keep line-item split and duplicate detection on **both** sources. Pass
+  `stores` and `habitTitles` consistently (camera passes no habits today, upload passes no stores on
+  the non-fallback path). Analytics: keep `receipt_scanned` / `receipt_line_split` / `statement_scanned`
+  firing off the parser that actually won, not off the input method, and pick a single `source` value to
+  replace `'camera-scan'` / `'file-upload'` (`:517`).
+
+**M / MED** — the image merge is the only part with real behavior risk; the other three are deletions
+and a header button.
+
 ---
 
 ## 3. Product backlog (needs a product decision before planning)
