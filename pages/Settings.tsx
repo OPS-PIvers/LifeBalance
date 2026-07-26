@@ -455,35 +455,13 @@ const Settings: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  // Managed kid profiles have no login/email/role — the generic MemberModal's
-  // fields are meaningless (email) or actively dangerous (role: changing it away
-  // from a kid would un-manage them) for a kid row. This mirrors ProfileMenu's
-  // existing `handleAddKidProfile` window.prompt pattern rather than opening a
-  // new modal, keeping kid edits on the purpose-built `updateKidProfile`
-  // mutation (displayName/avatar only) instead of the member CRUD path.
-  const handleEditManagedKid = async (member: HouseholdMember) => {
-    const name = window.prompt('Kid name', member.displayName);
-    if (name === null) return; // Cancelled
-    const trimmedName = name.trim();
-    if (!trimmedName || trimmedName === member.displayName) return;
-    // Match the firestore.rules displayName cap (isValidString ..., 50), same
-    // guard as the add-kid-profile flow.
-    if (trimmedName.length > 50) {
-      toast.error('Kid name must be 50 characters or less');
-      return;
-    }
-    try {
-      await updateKidProfile(member.uid, { displayName: trimmedName });
-    } catch {
-      // updateKidProfile surfaces its own error toast.
-    }
-  };
-
+  // Managed kid profiles have no login/email/role — the generic MemberModal
+  // itself renders only the displayName field for a member with
+  // `isManaged === true` (email is meaningless with no login; role is actively
+  // dangerous since changing it away from 'kid' would un-manage them), so
+  // opening the SAME modal is safe here. Routing to the right mutation happens
+  // in handleSaveMember below.
   const handleEditMember = (member: HouseholdMember) => {
-    if (member.isManaged) {
-      void handleEditManagedKid(member);
-      return;
-    }
     setSelectedMember(member);
     setIsModalOpen(true);
   };
@@ -538,8 +516,17 @@ const Settings: React.FC = () => {
   const handleSaveMember = async (memberData: Partial<HouseholdMember>) => {
     try {
       if (selectedMember) {
-        // Update existing
-        await updateMember(selectedMember.uid, memberData);
+        if (selectedMember.isManaged) {
+          // MemberModal only ever sends `{ displayName }` for a managed kid —
+          // route it to the purpose-built kid-profile mutation, never
+          // updateMember (which firestore.rules' managed-kid branch restricts).
+          await updateKidProfile(selectedMember.uid, {
+            displayName: memberData.displayName ?? selectedMember.displayName,
+          });
+        } else {
+          // Update existing
+          await updateMember(selectedMember.uid, memberData);
+        }
       } else {
         // Add new
         await addMember(memberData);
@@ -1643,7 +1630,13 @@ const Settings: React.FC = () => {
         onClose={() => setIsModalOpen(false)}
         onSave={handleSaveMember}
         initialMember={selectedMember}
-        title={selectedMember ? 'Edit Member' : 'Add Member'}
+        title={
+          selectedMember?.isManaged
+            ? 'Edit Kid Profile'
+            : selectedMember
+            ? 'Edit Member'
+            : 'Add Member'
+        }
       />
 
       {activePointsView && (

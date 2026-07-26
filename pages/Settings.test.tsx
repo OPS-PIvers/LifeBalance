@@ -28,6 +28,7 @@ const mockCurrentUser = {
 
 const mockSetCaptureReviewMode = vi.fn();
 const mockUpdateKidProfile = vi.fn();
+const mockUpdateMember = vi.fn();
 
 // A second admin so `canLeaveHousehold` is true (the last remaining admin is
 // blocked from the self-serve Leave Household path).
@@ -53,7 +54,7 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
     members: [mockCurrentUser, mockPartner, mockKid],
     currentUser: mockCurrentUser,
     addMember: vi.fn(),
-    updateMember: vi.fn(),
+    updateMember: mockUpdateMember,
     removeMember: vi.fn(),
     deleteHousehold: vi.fn(),
     household: { id: 'household-1', name: 'Test Household' },
@@ -139,8 +140,37 @@ vi.mock('@/components/settings/ChangelogDrawer', () => ({
 vi.mock('@/components/auth/HouseholdInviteCard', () => ({
   default: () => <div data-testid="household-invite-card" />,
 }));
+// Mimics MemberModal's real save-payload split (kid → displayName only; else
+// the full trio) so Settings-level tests can assert the ROUTING in
+// handleSaveMember (updateKidProfile vs. updateMember) without re-testing
+// MemberModal's own field rendering — that's covered by MemberModal.test.tsx.
 vi.mock('@/components/modals/MemberModal', () => ({
-  default: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div data-testid="member-modal" /> : null),
+  default: ({
+    isOpen,
+    onSave,
+    initialMember,
+    title,
+  }: {
+    isOpen: boolean;
+    onSave: (data: Record<string, unknown>) => void;
+    initialMember?: { isManaged?: boolean } | null;
+    title: string;
+  }) =>
+    isOpen ? (
+      <div data-testid="member-modal" data-title={title}>
+        <button
+          onClick={() =>
+            onSave(
+              initialMember?.isManaged
+                ? { displayName: 'New Kid Name' }
+                : { displayName: 'New Name', email: 'new@example.com', role: 'member' }
+            )
+          }
+        >
+          Save Member
+        </button>
+      </div>
+    ) : null,
 }));
 vi.mock('@/components/modals/PointsBreakdownModal', () => ({ default: () => null }));
 vi.mock('@/components/modals/DeveloperConsole', () => ({ default: () => null }));
@@ -365,13 +395,14 @@ describe('Settings index + sub-screens', () => {
     expect(mockSetCaptureReviewMode).toHaveBeenCalledWith('expense', 'auto');
   });
 
-  // Guard against opening the generic member editor on a managed kid's row
-  // (verified during a rules audit): MemberModal always submits an `email`
-  // key, including `email: ''` for a kid, which permanently breaks
-  // firestore.rules' member-update allowlist for that kid until PR #1112
-  // lands. Managed kids are edited through `updateKidProfile` instead.
-  describe('Members list — managed kid guard', () => {
-    it('opens the generic MemberModal when editing an ordinary member', () => {
+  // Managed kids are edited through the SAME MemberModal as ordinary members
+  // (it renders only the displayName field for them — see
+  // MemberModal.test.tsx), but a save must never reach `updateMember`:
+  // firestore.rules' managed-kid branch restricts that path, and a kid has no
+  // email/role for it to write anyway. `handleSaveMember` routes a managed
+  // kid's save to the purpose-built `updateKidProfile` mutation instead.
+  describe('Members list — managed kid routing', () => {
+    it('opens the generic MemberModal when editing an ordinary member, titled "Edit Member"', () => {
       renderSettings();
       fireEvent.click(screen.getByText('Household'));
 
@@ -380,32 +411,48 @@ describe('Settings index + sub-screens', () => {
       // Length just asserted above, so index 0 is provably present.
       fireEvent.click(editButtons[0]!);
 
-      expect(screen.getByTestId('member-modal')).toBeInTheDocument();
+      const modal = screen.getByTestId('member-modal');
+      expect(modal).toBeInTheDocument();
+      expect(modal).toHaveAttribute('data-title', 'Edit Member');
     });
 
-    it('does not open the generic MemberModal for a managed kid, and routes to updateKidProfile instead', () => {
-      const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('New Kid Name');
+    it('routes an ordinary member save to updateMember, not updateKidProfile', () => {
       renderSettings();
       fireEvent.click(screen.getByText('Household'));
 
-      fireEvent.click(screen.getByRole('button', { name: 'Edit Kid Profile' }));
+      const editButtons = screen.getAllByRole('button', { name: 'Edit Member' });
+      fireEvent.click(editButtons[0]!);
+      fireEvent.click(screen.getByRole('button', { name: 'Save Member' }));
 
-      expect(promptSpy).toHaveBeenCalled();
-      expect(screen.queryByTestId('member-modal')).not.toBeInTheDocument();
-      expect(mockUpdateKidProfile).toHaveBeenCalledWith('kid-1', { displayName: 'New Kid Name' });
-
-      promptSpy.mockRestore();
-    });
-
-    it('does nothing when the kid-name prompt is cancelled', () => {
-      const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue(null);
-      renderSettings();
-      fireEvent.click(screen.getByText('Household'));
-
-      fireEvent.click(screen.getByRole('button', { name: 'Edit Kid Profile' }));
-
+      // editButtons[0] is Partner User (admins sort first, alphabetically).
+      expect(mockUpdateMember).toHaveBeenCalledWith('user-2', {
+        displayName: 'New Name',
+        email: 'new@example.com',
+        role: 'member',
+      });
       expect(mockUpdateKidProfile).not.toHaveBeenCalled();
-      promptSpy.mockRestore();
+    });
+
+    it('opens the SAME MemberModal for a managed kid, titled "Edit Kid Profile"', () => {
+      renderSettings();
+      fireEvent.click(screen.getByText('Household'));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Kid Profile' }));
+
+      const modal = screen.getByTestId('member-modal');
+      expect(modal).toBeInTheDocument();
+      expect(modal).toHaveAttribute('data-title', 'Edit Kid Profile');
+    });
+
+    it('routes a managed kid save to updateKidProfile, not updateMember', () => {
+      renderSettings();
+      fireEvent.click(screen.getByText('Household'));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Kid Profile' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Save Member' }));
+
+      expect(mockUpdateKidProfile).toHaveBeenCalledWith('kid-1', { displayName: 'New Kid Name' });
+      expect(mockUpdateMember).not.toHaveBeenCalled();
     });
   });
 });

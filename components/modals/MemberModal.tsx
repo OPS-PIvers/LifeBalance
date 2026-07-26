@@ -1,9 +1,16 @@
 import React, { useState } from 'react';
 import { Save } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { HouseholdMember, Role } from '@/types/schema';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
+
+// Match the firestore.rules displayName cap (isValidString ..., 50) for a
+// managed kid profile — ProfileMenu's handleAddKidProfile enforces the same
+// cap client-side so the user gets a friendly message instead of a raw
+// permission error when firestore.rules' managed-kid branch rejects the write.
+const KID_DISPLAY_NAME_MAX_LENGTH = 50;
 
 interface MemberModalProps {
   isOpen: boolean;
@@ -20,6 +27,12 @@ const MemberModal: React.FC<MemberModalProps> = ({
   initialMember,
   title,
 }) => {
+  // Managed kid profiles (Plan 080) have no login, so no email — and no role,
+  // since changing a managed kid's role away from 'kid' would un-manage them
+  // and firestore.rules' managed-kid branch forbids it anyway; offering the
+  // control at all would be a lie. Only the display name is editable.
+  const isManagedKid = initialMember?.isManaged === true;
+
   // Initialize the form from the member being edited (lazy initializers, so the
   // first render is already populated for the edit case).
   const [displayName, setDisplayName] = useState(() => initialMember?.displayName ?? '');
@@ -50,17 +63,26 @@ const MemberModal: React.FC<MemberModalProps> = ({
     e.preventDefault();
     setLoading(true);
     try {
-      const trimmedEmail = email.trim();
-      await onSave({
-        displayName,
-        // Omit the key entirely when blank rather than writing email: '' — an
-        // empty-string value still updates the field on a partial `updateDoc`,
-        // which (a) is meaningless for a member who simply has no email and
-        // (b) permanently breaks firestore.rules' member-update allowlist for
-        // managed kid profiles until #1112 lands (see MemberModal usage note).
-        ...(trimmedEmail ? { email: trimmedEmail } : {}),
-        role,
-      });
+      if (isManagedKid) {
+        const trimmedName = displayName.trim();
+        if (trimmedName.length > KID_DISPLAY_NAME_MAX_LENGTH) {
+          toast.error(`Kid name must be ${KID_DISPLAY_NAME_MAX_LENGTH} characters or less`);
+          return;
+        }
+        // Only displayName — a kid has no email/role for the caller to route
+        // onto updateMember; the caller routes this payload to updateKidProfile.
+        await onSave({ displayName: trimmedName });
+      } else {
+        const trimmedEmail = email.trim();
+        await onSave({
+          displayName,
+          // Omit the key entirely when blank rather than writing email: '' — an
+          // empty-string value still updates the field on a partial `updateDoc`,
+          // which is meaningless for a member who simply has no email.
+          ...(trimmedEmail ? { email: trimmedEmail } : {}),
+          role,
+        });
+      }
       onClose();
     } catch (error) {
       console.error('Error saving member:', error);
@@ -73,57 +95,61 @@ const MemberModal: React.FC<MemberModalProps> = ({
     <Drawer isOpen={isOpen} onClose={onClose} title={title} disableClose={loading}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <Input
-          label="Display Name"
+          label={isManagedKid ? "Kid's Name" : 'Display Name'}
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
-          placeholder="e.g. John Doe"
+          placeholder={isManagedKid ? 'e.g. Jamie' : 'e.g. John Doe'}
           required
         />
 
-        <Input
-          label="Email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="e.g. john@example.com"
-        />
+        {!isManagedKid && (
+          <Input
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="e.g. john@example.com"
+          />
+        )}
 
-        <div>
-          <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase block mb-1">
-            Role
-          </label>
-          <div className="flex gap-4">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="role"
-                value="member"
-                checked={role === 'member'}
-                onChange={() => setRole('member')}
-                className="accent-accent-600 focus:ring-2 focus:ring-accent-500/40"
-              />
-              <span className="text-brand-700 dark:text-brand-200">Member</span>
+        {!isManagedKid && (
+          <div>
+            <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase block mb-1">
+              Role
             </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="role"
-                value="admin"
-                checked={role === 'admin'}
-                onChange={() => setRole('admin')}
-                className="accent-accent-600 focus:ring-2 focus:ring-accent-500/40"
-              />
-              <span className="text-brand-700 dark:text-brand-200">Admin</span>
-            </label>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="role"
+                  value="member"
+                  checked={role === 'member'}
+                  onChange={() => setRole('member')}
+                  className="accent-accent-600 focus:ring-2 focus:ring-accent-500/40"
+                />
+                <span className="text-brand-700 dark:text-brand-200">Member</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="role"
+                  value="admin"
+                  checked={role === 'admin'}
+                  onChange={() => setRole('admin')}
+                  className="accent-accent-600 focus:ring-2 focus:ring-accent-500/40"
+                />
+                <span className="text-brand-700 dark:text-brand-200">Admin</span>
+              </label>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="pt-4 flex justify-end gap-3">
           <Button type="button" variant="ghost" onClick={onClose} disabled={loading}>
             Cancel
           </Button>
           <Button type="submit" isLoading={loading} leftIcon={<Save size={18} />}>
-            Save Member
+            {isManagedKid ? 'Save Kid Profile' : 'Save Member'}
           </Button>
         </div>
       </form>

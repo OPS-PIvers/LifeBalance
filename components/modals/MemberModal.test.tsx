@@ -11,11 +11,25 @@ vi.mock('@/components/ui/Drawer', () => ({
     isOpen ? <div data-testid="drawer">{children}</div> : null,
 }));
 
+const toastErrorSpy = vi.hoisted(() => vi.fn());
+vi.mock('react-hot-toast', () => ({
+  default: { error: toastErrorSpy, success: vi.fn() },
+}));
+
 const baseMember: HouseholdMember = {
   uid: 'member-1',
   displayName: 'Jamie',
   email: '',
   role: 'member',
+  points: { daily: 0, weekly: 0, total: 0 },
+};
+
+const kidMember: HouseholdMember = {
+  uid: 'kid-1',
+  displayName: 'Kiddo',
+  email: '',
+  role: 'member',
+  isManaged: true,
   points: { daily: 0, weekly: 0, total: 0 },
 };
 
@@ -68,5 +82,67 @@ describe('MemberModal', () => {
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     const payload = onSave.mock.calls[0]![0];
     expect(payload).not.toHaveProperty('email');
+  });
+
+  it('renders all three fields for an ordinary member', () => {
+    render(
+      <MemberModal isOpen={true} onClose={vi.fn()} onSave={vi.fn()} initialMember={baseMember} title="Edit Member" />
+    );
+
+    expect(screen.getByLabelText('Display Name', { exact: false })).toBeInTheDocument();
+    expect(screen.getByLabelText('Email', { exact: false })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Member' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Admin' })).toBeInTheDocument();
+  });
+
+  describe('managed kid (isManaged === true)', () => {
+    it('renders only the display name field — no email, no role', () => {
+      render(
+        <MemberModal
+          isOpen={true}
+          onClose={vi.fn()}
+          onSave={vi.fn()}
+          initialMember={kidMember}
+          title="Edit Kid Profile"
+        />
+      );
+
+      expect(screen.getByLabelText("Kid's Name", { exact: false })).toBeInTheDocument();
+      expect(screen.queryByLabelText('Email', { exact: false })).not.toBeInTheDocument();
+      expect(screen.queryByRole('radio', { name: 'Member' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('radio', { name: 'Admin' })).not.toBeInTheDocument();
+    });
+
+    it('saves with only a trimmed displayName — no email or role keys', async () => {
+      const onSave = vi.fn().mockResolvedValue(undefined);
+      render(
+        <MemberModal isOpen={true} onClose={vi.fn()} onSave={onSave} initialMember={kidMember} title="Edit Kid Profile" />
+      );
+
+      fireEvent.change(screen.getByLabelText("Kid's Name", { exact: false }), {
+        target: { value: '  New Kid Name  ' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Save Kid Profile' }));
+
+      await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+      const payload = onSave.mock.calls[0]![0];
+      expect(payload).toEqual({ displayName: 'New Kid Name' });
+    });
+
+    it('rejects a display name over 50 characters with a friendly message, and does not save', async () => {
+      const onSave = vi.fn().mockResolvedValue(undefined);
+      render(
+        <MemberModal isOpen={true} onClose={vi.fn()} onSave={onSave} initialMember={kidMember} title="Edit Kid Profile" />
+      );
+
+      const tooLongName = 'x'.repeat(51);
+      fireEvent.change(screen.getByLabelText("Kid's Name", { exact: false }), {
+        target: { value: tooLongName },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Save Kid Profile' }));
+
+      await waitFor(() => expect(toastErrorSpy).toHaveBeenCalledWith('Kid name must be 50 characters or less'));
+      expect(onSave).not.toHaveBeenCalled();
+    });
   });
 });
