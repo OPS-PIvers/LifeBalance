@@ -1,5 +1,5 @@
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import CaptureModal from './CaptureModal';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
@@ -11,6 +11,18 @@ vi.mock('react-hot-toast', () => ({
     success: vi.fn(),
     error: vi.fn(),
   }
+}));
+
+// Controllable mocks for the dynamically-imported Gemini scan functions, so
+// the cancellation-guard tests below can hold a scan "in flight" and resolve
+// it on demand after the user has backed out.
+const { parseReceiptLineItemsMock, parseBankStatementMock } = vi.hoisted(() => ({
+  parseReceiptLineItemsMock: vi.fn(),
+  parseBankStatementMock: vi.fn(),
+}));
+vi.mock('@/services/geminiService', () => ({
+  parseReceiptLineItems: parseReceiptLineItemsMock,
+  parseBankStatement: parseBankStatementMock,
 }));
 
 // Mock useHousehold
@@ -66,12 +78,18 @@ vi.mock('@/components/ui/Drawer', () => ({
   ) : null,
 }));
 
-// Expose onScan so a test can trigger startCamera() (the camera path) the same
-// way the real Scan-Receipt control does, without rendering the full menu.
+// Expose onManual/onSelectImage so tests can drive the merged menu without
+// rendering the full CaptureMenu (its own tests cover its internals).
 vi.mock('./CaptureMenu', () => ({
-  CaptureMenu: ({ onScan }: { onScan: () => void }) => (
+  CaptureMenu: ({ onManual, onSelectImage }: { onManual: () => void; onSelectImage: (file: File) => void }) => (
     <div data-testid="capture-menu">
-      <button data-testid="scan-receipt" onClick={onScan}>Scan Receipt</button>
+      <button data-testid="manual-entry" onClick={onManual}>Manual Entry</button>
+      <button
+        data-testid="add-from-image"
+        onClick={() => onSelectImage(new File(['x'], 'receipt.png', { type: 'image/png' }))}
+      >
+        Add from Image
+      </button>
     </div>
   ),
 }));
@@ -94,6 +112,7 @@ vi.mock('lucide-react', () => ({
   CheckSquare: () => <span data-testid="icon-check-square" />,
   ShoppingBag: () => <span data-testid="icon-shopping-bag" />,
   X: () => <span data-testid="icon-x" />,
+  ChevronLeft: () => <span data-testid="icon-chevron-left" />,
   Loader2: () => <span data-testid="icon-loader" />,
   Store: () => <span data-testid="icon-store" />,
   ChevronDown: () => <span data-testid="icon-chevron-down" />,
@@ -230,128 +249,94 @@ describe('CaptureModal', () => {
     expect(screen.queryByTestId('capture-menu')).not.toBeInTheDocument();
   });
 
-  // --- Camera MediaStream lifecycle (resource leak) ---
+  // --- Back affordance (paper cut 2G.3) ---
 
-  describe('camera stream cleanup on unmount', () => {
-    let originalMediaDevices: MediaDevices | undefined;
+  describe('back navigation', () => {
+    it('shows no back button on the menu view', () => {
+      render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
+      expect(screen.queryByLabelText('Back')).not.toBeInTheDocument();
+    });
 
-    // Capture the original UNCONDITIONALLY so restoration is always correct,
-    // even for a test in this block that never installs the fake — otherwise a
-    // stale-undefined `originalMediaDevices` could `delete navigator.mediaDevices`
-    // globally and break other suites in the same process.
+    it('shows a Back button in the manual sub-view and returns to the menu', () => {
+      render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
+
+      fireEvent.click(screen.getByTestId('manual-entry'));
+      expect(screen.getByTestId('capture-transaction-manual')).toBeInTheDocument();
+      expect(screen.getByLabelText('Back')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByLabelText('Back'));
+      expect(screen.getByTestId('capture-menu')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Back')).not.toBeInTheDocument();
+      // Back is a pure navigation — it must not close the whole drawer.
+      expect(mockOnClose).not.toHaveBeenCalled();
+    });
+  });
+
+  // --- Processing-view cancellation guard (PR #1108 finding) ---
+
+  describe('processing view cancellation guard', () => {
     beforeEach(() => {
-      originalMediaDevices = navigator.mediaDevices;
+      parseReceiptLineItemsMock.mockReset();
+      parseBankStatementMock.mockReset();
+      mockUseHousehold.addTransaction.mockReset();
     });
 
-    afterEach(() => {
-      // Restore whatever was (or wasn't) on navigator.mediaDevices.
-      if (originalMediaDevices === undefined) {
-        delete (navigator as { mediaDevices?: MediaDevices }).mediaDevices;
-      } else {
-        Object.defineProperty(navigator, 'mediaDevices', {
-          configurable: true,
-          value: originalMediaDevices,
-        });
-      }
+    it('hides the Back button while a scan is processing', async () => {
+      // Never resolves — keeps the flow parked in 'processing'.
+      parseReceiptLineItemsMock.mockReturnValue(new Promise(() => {}));
+      render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
+
+      fireEvent.click(screen.getByTestId('add-from-image'));
+
+      await screen.findByText('Processing');
+      // Let the flow actually reach (and lock in) its call to the mocked
+      // scan function before the test ends — otherwise the FileReader's
+      // callback can fire LATE (after this test has finished and the next
+      // test has reconfigured the shared mock's return value), so this
+      // never-resolving promise would end up calling the NEXT test's mock
+      // return value instead of its own, contaminating that test.
+      await waitFor(() => expect(parseReceiptLineItemsMock).toHaveBeenCalledTimes(1));
+      expect(screen.queryByLabelText('Back')).not.toBeInTheDocument();
+      // The header X (unlike Back) intentionally remains — it's guarded by
+      // the cancellation ref instead, see the next test.
+      expect(screen.getByLabelText('Close drawer')).toBeInTheDocument();
     });
 
-    /** Build two fake tracks each carrying a `stop` spy. */
-    const makeTracks = () => [{ stop: vi.fn() }, { stop: vi.fn() }];
+    it('a scan resolving after the flow was abandoned performs no state update and no addTransaction call', async () => {
+      let resolveScan: (data: { merchant: string; date: string; items: { description: string; amount: number; category: string }[] }) => void = () => {};
+      parseReceiptLineItemsMock.mockReturnValue(
+        new Promise((resolve) => { resolveScan = resolve; })
+      );
+      render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
 
-    /**
-     * Install a fake getUserMedia that resolves a MediaStream whose tracks each
-     * carry a `stop` spy, so we can assert the tracks were released.
-     */
-    const mockGetUserMedia = () => {
-      const tracks = makeTracks();
-      const fakeStream = {
-        getTracks: () => tracks,
-      } as unknown as MediaStream;
-      const getUserMedia = vi.fn().mockResolvedValue(fakeStream);
+      fireEvent.click(screen.getByTestId('add-from-image'));
+      await screen.findByText('Processing');
 
-      Object.defineProperty(navigator, 'mediaDevices', {
-        configurable: true,
-        value: { getUserMedia },
+      // Back is hidden during processing (previous test), but the header X
+      // is still reachable — the user force-closes the in-flight scan.
+      fireEvent.click(screen.getByLabelText('Close drawer'));
+      expect(mockOnClose).toHaveBeenCalledTimes(1);
+
+      // ...and starts a fresh manual entry.
+      await screen.findByTestId('capture-menu');
+      fireEvent.click(screen.getByTestId('manual-entry'));
+      expect(screen.getByTestId('capture-transaction-manual')).toBeInTheDocument();
+
+      // The abandoned scan now resolves.
+      resolveScan({
+        merchant: 'Target',
+        date: '2026-07-01',
+        items: [{ description: 'Widget', amount: 10, category: 'Shopping' }],
       });
+      // Flush the resolved scan's continuation (a couple of chained awaits)
+      // before asserting nothing happened.
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
-      return { tracks, getUserMedia };
-    };
-
-    /**
-     * Install a fake getUserMedia whose promise we resolve manually, so a test
-     * can unmount WHILE the call is still in flight (the async-unmount race).
-     */
-    const mockDeferredGetUserMedia = () => {
-      const tracks = makeTracks();
-      const fakeStream = {
-        getTracks: () => tracks,
-      } as unknown as MediaStream;
-      let resolveStream!: () => void;
-      const pending = new Promise<MediaStream>((resolve) => {
-        resolveStream = () => resolve(fakeStream);
-      });
-      const getUserMedia = vi.fn().mockReturnValue(pending);
-
-      Object.defineProperty(navigator, 'mediaDevices', {
-        configurable: true,
-        value: { getUserMedia },
-      });
-
-      return { tracks, getUserMedia, resolveStream };
-    };
-
-    it("stops every camera track when the component unmounts while the camera is open (doesn't go through handleClose)", async () => {
-      const { tracks, getUserMedia } = mockGetUserMedia();
-
-      const { unmount } = render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
-
-      // Open the camera via the Scan-Receipt control (drives startCamera()).
-      fireEvent.click(screen.getByTestId('scan-receipt'));
-
-      // Wait for the stream to be acquired and stored in state.
-      await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(1));
-
-      // Tracks must still be live before unmount — proves we're testing the
-      // unmount cleanup, not something the normal flow already stopped.
-      expect(tracks[0]!.stop).not.toHaveBeenCalled();
-      expect(tracks[1]!.stop).not.toHaveBeenCalled();
-
-      // Unmount WITHOUT calling onClose/handleClose — mirrors ProtectedRoute
-      // dropping MainLayout (and the LazyMount-ed CaptureModal) on sign-out.
-      unmount();
-
-      // The cleanup effect must have released every track.
-      expect(tracks[0]!.stop).toHaveBeenCalledTimes(1);
-      expect(tracks[1]!.stop).toHaveBeenCalledTimes(1);
-      // It left for good, not via the close handler.
-      expect(mockOnClose).not.toHaveBeenCalled();
-    });
-
-    it('stops the stream acquired by a getUserMedia call that resolves AFTER the component unmounts (async-unmount race)', async () => {
-      const { tracks, getUserMedia, resolveStream } = mockDeferredGetUserMedia();
-
-      const { unmount } = render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
-
-      // Kick off startCamera(); getUserMedia is now in flight (unresolved).
-      fireEvent.click(screen.getByTestId('scan-receipt'));
-      await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(1));
-
-      // Unmount BEFORE the stream resolves. cameraStream is still null here, so
-      // the cleanup effect is a no-op and will never run again.
-      unmount();
-      expect(tracks[0]!.stop).not.toHaveBeenCalled();
-
-      // Now the camera finally becomes available — on an unmounted component.
-      // The isMounted guard must stop the orphaned stream instead of leaking it.
-      await act(async () => {
-        resolveStream();
-        // Flush the awaited continuation inside startCamera.
-        await Promise.resolve();
-      });
-
-      expect(tracks[0]!.stop).toHaveBeenCalledTimes(1);
-      expect(tracks[1]!.stop).toHaveBeenCalledTimes(1);
-      expect(mockOnClose).not.toHaveBeenCalled();
+      // It must be a total no-op: no transaction written, and the manual
+      // form the user is now typing into must not be clobbered.
+      expect(mockUseHousehold.addTransaction).not.toHaveBeenCalled();
+      expect(screen.getByTestId('capture-transaction-manual')).toBeInTheDocument();
+      expect(screen.queryByText('Review')).not.toBeInTheDocument();
     });
   });
 });

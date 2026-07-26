@@ -1,15 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  X, Loader2, Wallet, CheckSquare, ShoppingBag
+  X, ChevronLeft, Loader2, Wallet, CheckSquare, ShoppingBag
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { describeError } from '@/utils/errorMessages';
 import { useFinance, useGamification, useHouseholdCore, useShopping, useTodos } from '@/contexts/FirebaseHouseholdContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
-import type { ReceiptData, MagicActionResponse } from '@/services/geminiService.types';
+import type { ReceiptData } from '@/services/geminiService.types';
 import { Transaction, CREDIT_CARD_CATEGORY } from '@/types/schema';
 import { ParsedTransaction } from '@/types/ui';
-import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { useStoreResolver } from '@/hooks/useStoreResolver';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { normalizeStoreName } from '@/utils/storeMatch';
@@ -37,8 +36,18 @@ interface CaptureModalProps {
   initialManualData?: ManualInitialData;
 }
 
-type ModalView = 'menu' | 'camera' | 'upload' | 'manual' | 'processing' | 'review';
+type ModalView = 'menu' | 'manual' | 'processing' | 'review';
 type ModalTab = 'transaction' | 'todo' | 'shopping';
+
+// Paper cut 2G.3 — the two previously-separate "Scan Receipt" (embedded
+// getUserMedia camera) and "Upload image" (file input) entries are merged
+// into one "Add from image" entry that hands the browser a plain
+// `<input type="file" accept="image/*">`; on mobile this opens the native OS
+// sheet offering "Take Photo" or "Choose from Library", so a single code path
+// now covers both a fresh snap and an existing screenshot. Both historical
+// input methods are represented by this one source value going forward (see
+// `Transaction.source` for the retained legacy values).
+const IMAGE_CAPTURE_SOURCE = 'image-capture' as const;
 
 /**
  * Plan 090 (capture cascade) — the canonical capture-tab order plus the module
@@ -107,23 +116,15 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
 
   const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
 
-  // Receipt → pending-tx link prompt. When a camera scan looks like a duplicate
-  // of an existing pending_review transaction (e.g. an Apple Pay $0 stub already
-  // in the Action Queue), we HOLD the built receipt transaction here instead of
-  // writing it, until the user chooses Link vs Keep separate.
+  // Receipt → pending-tx link prompt. When a scanned image looks like a
+  // duplicate of an existing pending_review transaction (e.g. an Apple Pay $0
+  // stub already in the Action Queue), we HOLD the built receipt transaction
+  // here instead of writing it, until the user chooses Link vs Keep separate.
   const [pendingMatch, setPendingMatch] = useState<{
     receiptTx: Transaction;   // the transaction we WOULD have added
     candidate: Transaction;   // the existing pending tx to merge into (best match)
   } | null>(null);
   const [isResolvingMatch, setIsResolvingMatch] = useState(false);
-
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
-  // Tracks whether the component is still mounted, so an in-flight getUserMedia()
-  // that resolves AFTER unmount can release its stream instead of leaking (the
-  // cleanup effect can't catch it — cameraStream was still null at unmount).
-  const isMounted = useRef(true);
 
   // Dynamic Categories from buckets (Transaction)
   const dynamicCategories = buildTransactionCategoryOptions(buckets);
@@ -142,36 +143,6 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
   const [shoppingCategory, setShoppingCategory] = useState('Uncategorized');
   const [shoppingQuantity, setShoppingQuantity] = useState('');
   const [shoppingStore, setShoppingStore] = useState('');
-
-  const handleMagicSuccess = (result: MagicActionResponse) => {
-      if (result.type === 'transaction') {
-        setActiveTab('transaction');
-        setManualInitialData({
-          amount: result.data.amount?.toString(),
-          merchant: result.data.merchant,
-          category: result.data.category ? matchCategory(result.data.category) : undefined,
-          date: result.data.date
-        });
-        setView('manual');
-        toast.success("Transaction details found!");
-      } else if (result.type === 'todo') {
-        setActiveTab('todo');
-        if (result.data.text) setTodoText(result.data.text);
-        if (result.data.completeByDate) setTodoDate(result.data.completeByDate);
-        toast.success("Task details found!");
-      } else if (result.type === 'shopping') {
-        setActiveTab('shopping');
-        if (result.data.item) setShoppingName(result.data.item);
-        if (result.data.quantity) setShoppingQuantity(result.data.quantity);
-        if (result.data.category && (GROCERY_CATEGORIES as readonly string[]).includes(result.data.category)) {
-          setShoppingCategory(result.data.category);
-        }
-        if (result.data.store) setShoppingStore(result.data.store);
-        toast.success("Item details found!");
-      } else {
-        toast.error("Couldn't understand that. Try being more specific.");
-      }
-  };
 
   // Initialize Defaults when modal opens
   const hasInitialized = useRef(false);
@@ -211,11 +182,25 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
     setPrefilledForOpen(false);
   }
 
-  // Reset state when closing
+  // Cancellation guard for the async image-scan / bulk-submit flows
+  // (handleImageSelect, submitParsedTransactions). Both flows capture the
+  // current value at start and check it after every await; handleBack and
+  // handleClose bump it so a stale completion (the Gemini scan/submit
+  // resolving after the user already backed out or closed the drawer) can no
+  // longer call setState/addTransaction/handleClose and clobber whatever the
+  // user is doing now (e.g. a half-typed Manual Entry).
+  const captureRunIdRef = useRef(0);
+
+  // Reset state when closing. CaptureModal renders inside LazyMount (mounts on
+  // first open, stays mounted forever after — see CLAUDE.md Code-Splitting),
+  // so this is the ENTIRE state-reset mechanism; anything back() clears must
+  // be cleared here too.
   const handleClose = () => {
-    stopCamera();
+    // Invalidate any in-flight async continuation (see captureRunIdRef above).
+    captureRunIdRef.current += 1;
     setView('menu');
     setActiveTab('transaction');
+    setProcessingMessage('Processing...');
 
     // Reset Transaction State
     setManualInitialData(undefined);
@@ -229,7 +214,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
     setTodoAssignee(currentUser?.uid ?? '');
     setTodoCategory(undefined);
 
-    // Reset Shopping State
+    // Reset Shopping List State
     setShoppingName('');
     setShoppingCategory('Uncategorized');
     setShoppingQuantity('');
@@ -238,60 +223,19 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
     onClose();
   };
 
+  // Back to the capture-type menu from any sub-view (manual/processing/review).
+  // In-progress manual entry is discarded because CaptureTransactionManual
+  // unmounts when `view` stops being 'manual' — lifting its form state to
+  // survive a back navigation is deliberately out of scope (paper cut 2G.3).
+  const handleBack = () => {
+    // Invalidate any in-flight async continuation (see captureRunIdRef above).
+    captureRunIdRef.current += 1;
+    setManualInitialData(undefined);
+    setParsedTransactions([]);
+    setView('menu');
+  };
+
   // --- Transaction Logic ---
-  const startCamera = async () => {
-    try {
-      setView('camera');
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' }
-      });
-      // If we unmounted while getUserMedia was in flight, the cleanup effect
-      // already ran (with cameraStream still null) and won't run again — so this
-      // freshly-acquired stream would leak. Stop it and bail without setState.
-      if (!isMounted.current) {
-        stream.getTracks().forEach((t) => t.stop());
-        return;
-      }
-      setCameraStream(stream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-    } catch (err) {
-      toast.error("Could not access camera.");
-      console.error(err);
-      setView('menu');
-    }
-  };
-
-  const stopCamera = () => {
-    if (cameraStream) {
-      cameraStream.getTracks().forEach(track => track.stop());
-      setCameraStream(null);
-    }
-  };
-
-  // Release the live MediaStream regardless of how the component leaves the
-  // screen. stopCamera() only fires from handleClose()/capturePhoto(); if the
-  // component UNMOUNTS while the camera is open (e.g. sign-out → ProtectedRoute
-  // unmounts MainLayout and the LazyMount-ed CaptureModal without routing
-  // through handleClose), the device camera would otherwise stay active until a
-  // full page reload. Keying on `cameraStream` also stops a stream when it's
-  // replaced; stopping an already-stopped track is a harmless no-op, so this
-  // never fights stopCamera().
-  useEffect(() => {
-    return () => {
-      cameraStream?.getTracks().forEach((t) => t.stop());
-    };
-  }, [cameraStream]);
-
-  // Flip the mounted flag on teardown so a late-resolving startCamera() can
-  // detect it unmounted mid-await (see startCamera). Runs once for the lifetime.
-  useEffect(() => {
-    return () => {
-      isMounted.current = false;
-    };
-  }, []);
-
   const matchCategory = (suggestedCategory: string): string => {
     if (!suggestedCategory) return dynamicCategories[0] || '';
     if (dynamicCategories.includes(suggestedCategory)) return suggestedCategory;
@@ -318,36 +262,60 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
       .map(h => h.id);
   };
 
-  const capturePhoto = async () => {
-    if (!videoRef.current || !canvasRef.current) return;
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const base64Image = canvas.toDataURL('image/jpeg', 0.8);
-      stopCamera();
-      setView('processing');
-      setProcessingMessage('Scanning receipt...');
-      try {
-        if (!householdId) throw new Error("Household ID not found");
-        const { parseReceiptLineItems } = await import('@/services/geminiService');
+  // Paper cut 2G.3 — "Add from image" merges the old camera-scan and
+  // upload-image entries into one flow. It runs the itemized receipt parser
+  // FIRST (it handles both a mixed-category receipt split and a
+  // single-category receipt, with duplicate detection against existing
+  // pending rows) and only falls back to bank-statement parsing when the
+  // image has no itemized products — the reverse of the old upload cascade,
+  // which tried the statement parser first and never got line items or
+  // duplicate detection out of a receipt photo.
+  const handleImageSelect = async (file: File) => {
+    // This flow's run id — see captureRunIdRef above. Checked after every
+    // await below; a mismatch means the user backed out or closed the drawer
+    // while this scan was in flight, so the continuation becomes a no-op.
+    const runId = ++captureRunIdRef.current;
+    setView('processing');
+    setProcessingMessage('Reading image...');
+    let base64: string;
+    try {
+      base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+      });
+    } catch (error) {
+      console.error('File read error:', error);
+      if (runId !== captureRunIdRef.current) return;
+      toast.error('Failed to read image.');
+      setView('menu');
+      return;
+    }
+    if (runId !== captureRunIdRef.current) return;
 
-        // F-DASH-04: extract itemized line items so a mixed-category receipt can
-        // be split into several categorized transactions. One AI call handles
-        // both the split and the single-transaction case.
-        const data = await parseReceiptLineItems(householdId, base64Image, dynamicCategories, stores.map(s => s.name));
+    setProcessingMessage('Scanning image...');
+    try {
+      if (!householdId) throw new Error("Household ID not found");
+      const { parseReceiptLineItems, parseBankStatement } = await import('@/services/geminiService');
+
+      const data = await parseReceiptLineItems(householdId, base64, dynamicCategories, stores.map(s => s.name), habitTitles);
+      if (runId !== captureRunIdRef.current) return;
+
+      // The itemized-receipt parser won: it found at least one product line.
+      if (data.items.length > 0) {
         track('receipt_scanned');
 
-        // Multiple category groups → review-and-split flow (reuses the existing
-        // multi-transaction review UI). Each row shares one receiptGroupId.
+        // Multiple category groups → review-and-split flow (reuses the
+        // existing multi-transaction review UI). Each row shares one
+        // receiptGroupId and the receipt-level habit suggestions.
         if (shouldSplitReceipt(data)) {
           const groupId = crypto.randomUUID();
+          const relatedHabitIds = matchHabits(data.suggestedHabits);
           const rows = buildLineItemTransactions(data, groupId).map(r => ({
             ...r,
             category: matchCategory(r.category),
+            relatedHabitIds,
           }));
           setParsedTransactions(rows);
           track('receipt_line_split', { count: rows.length });
@@ -380,9 +348,10 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
           date: data.date || getLocalDateString(),
           status: 'pending_review',
           isRecurring: false,
-          source: 'camera-scan',
+          source: IMAGE_CAPTURE_SOURCE,
           autoCategorized: true,
-          store: data.store
+          store: data.store,
+          relatedHabitIds: matchHabits(data.suggestedHabits),
         };
         // Before writing, see if this receipt likely duplicates an existing
         // pending transaction (e.g. an Apple Pay $0 stub or another pending row
@@ -398,72 +367,39 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
         }
 
         await addTransaction(newTransaction);
+        if (runId !== captureRunIdRef.current) return;
         toast.success("Receipt scanned! Check your Action Queue.");
         handleClose();
-      } catch (error) {
-        toast.error(describeError(error, 'scan the receipt', 'read'));
+        return;
+      }
+
+      // No itemized products — this isn't a single receipt (e.g. it's a bank
+      // statement or transaction-list screenshot). Fall back to extracting a
+      // list of transactions instead.
+      setProcessingMessage('Extracting transactions...');
+      const bankTransactions = await parseBankStatement(householdId, base64, dynamicCategories, habitTitles, stores.map(s => s.name));
+      if (runId !== captureRunIdRef.current) return;
+      if (bankTransactions.length === 0) {
+        toast.error("Couldn't find any transactions in that image. Try manual entry.");
         setView('manual');
+        return;
       }
-    }
-  };
-
-  const handleFileSelect = async (file: File) => {
-    setView('processing');
-    setProcessingMessage('Reading image...');
-    let base64: string;
-    try {
-      base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = () => reject(new Error('Failed to read file'));
-        reader.readAsDataURL(file);
-      });
-    } catch (error) {
-      console.error('File read error:', error);
-      toast.error('Failed to read image.');
-      setView('menu');
-      return;
-    }
-
-    setProcessingMessage('Extracting transactions...');
-    try {
-      if (!householdId) throw new Error("Household ID not found");
-      const { parseBankStatement, analyzeReceipt } = await import('@/services/geminiService');
-
-      const transactions = await parseBankStatement(householdId, base64, dynamicCategories, habitTitles);
-      if (transactions.length === 0) {
-        setProcessingMessage('Trying receipt analysis...');
-        const receipt = await analyzeReceipt(householdId, base64, dynamicCategories, habitTitles, stores.map(s => s.name));
-        const category = matchCategory(receipt.category);
-        setParsedTransactions([{
-          id: crypto.randomUUID(),
-          merchant: receipt.merchant,
-          amount: receipt.amount,
-          category,
-          date: receipt.date || getLocalDateString(),
-          selected: true,
-          relatedHabitIds: matchHabits(receipt.suggestedHabits),
-          store: receipt.store
-        }]);
-      } else {
-        setParsedTransactions(transactions.map(tx => {
-          const category = matchCategory(tx.category);
-          return {
-            id: crypto.randomUUID(),
-            merchant: tx.merchant,
-            amount: tx.amount,
-            category,
-            date: tx.date || getLocalDateString(),
-            selected: true,
-            relatedHabitIds: matchHabits(tx.suggestedHabits),
-          };
-        }));
-      }
-      track('statement_scanned', { count: transactions.length || 1 });
+      setParsedTransactions(bankTransactions.map(tx => ({
+        id: crypto.randomUUID(),
+        merchant: tx.merchant,
+        amount: tx.amount,
+        category: matchCategory(tx.category),
+        date: tx.date || getLocalDateString(),
+        selected: true,
+        relatedHabitIds: matchHabits(tx.suggestedHabits),
+        store: tx.store,
+      })));
+      track('statement_scanned', { count: bankTransactions.length });
       setView('review');
-      toast.success(`Found ${transactions.length || 1} transaction(s)`);
+      toast.success(`Found ${bankTransactions.length} transaction(s)`);
     } catch (error) {
       console.error('AI processing error:', error);
+      if (runId !== captureRunIdRef.current) return;
       toast.error(describeError(error, 'analyze the image', 'read'));
       setView('manual');
     }
@@ -490,13 +426,18 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
       toast.error('Please select at least one transaction');
       return;
     }
+    // This flow's run id — see captureRunIdRef above. Checked after every
+    // await below; a mismatch means the user backed out or closed the drawer
+    // while this submission was in flight, so the continuation becomes a no-op.
+    const runId = ++captureRunIdRef.current;
     setView('processing');
     setProcessingMessage(`Adding ${selectedTx.length} transaction(s)...`);
     // Resolve AI store names to canonical stores (creating non-duplicates once)
     // before writing, so each transaction references a real household store.
     const storeMap = await ensureStores(selectedTx.map(tx => tx.store));
+    if (runId !== captureRunIdRef.current) return;
     // A receipt split carries a shared receiptGroupId on every row; a bank
-    // statement upload does not. The split MUST commit atomically (owner note:
+    // statement scan does not. The split MUST commit atomically (owner note:
     // all resulting transactions in one writeBatch) so a partial receipt can
     // never land, while statement rows stay independent (one bad row shouldn't
     // fail the rest).
@@ -514,7 +455,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
         date: tx.date,
         status: 'pending_review',
         isRecurring: false,
-        source: isReceiptSplit ? 'camera-scan' : 'file-upload',
+        source: IMAGE_CAPTURE_SOURCE,
         autoCategorized: true,
         relatedHabitIds: tx.relatedHabitIds,
         store: resolvedStore,
@@ -527,8 +468,10 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
     if (isReceiptSplit) {
       try {
         await addTransactions(selectedTx.map(buildPayload));
+        if (runId !== captureRunIdRef.current) return;
         toast.success(`${selectedTx.length} transaction(s) added to Action Queue!`);
       } catch (error) {
+        if (runId !== captureRunIdRef.current) return;
         toast.error(describeError(error, 'add the transactions'));
       }
       handleClose();
@@ -536,6 +479,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
     }
 
     const results = await Promise.allSettled(selectedTx.map(tx => addTransaction(buildPayload(tx))));
+    if (runId !== captureRunIdRef.current) return;
     const succeeded = results.filter(r => r.status === 'fulfilled').length;
     if (succeeded > 0) toast.success(`${succeeded} transaction(s) added to Action Queue!`);
     else {
@@ -694,32 +638,50 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
   const headerContent = (
     <div className="flex flex-col border-b border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
       <div className="flex items-center justify-between px-6 py-4">
-        <h2 id="capture-drawer-title" className="font-display text-xl font-semibold text-brand-800 dark:text-brand-100">
-          {view === 'menu' && tabOptions.length > 1 ? (
-            // While the type selector below offers every capture kind, a
-            // type-specific title ("Add Transaction") contradicted the FAB's
-            // "transaction, task, or item" promise (round-3 critique). The
-            // title specializes once a specific flow is entered.
-            'Capture'
-          ) : (
-            <>
-              {effectiveTab === 'transaction' && (
-                view === 'menu' ? 'Add Transaction' :
-                view === 'camera' ? 'Scan Receipt' :
-                view === 'upload' ? 'Upload Image' :
-                view === 'manual' ? 'Manual Entry' :
-                view === 'processing' ? 'Processing' : 'Review'
-              )}
-              {effectiveTab === 'todo' && 'New Task'}
-              {effectiveTab === 'shopping' && 'Add Item'}
-              {effectiveTab === null && 'Capture'}
-            </>
+        <div className="flex items-center gap-1 min-w-0">
+          {/* Back affordance — every sub-view (manual/processing/review) used
+              to have no way out short of closing the whole drawer, wiping
+              everything entered. Back always returns to the capture-type
+              menu (paper cut 2G.3). Hidden during 'processing' — an in-flight
+              scan/submit can't be meaningfully backed out of, mirroring the
+              Drawer's own `disableClose={view === 'processing'}` below; the
+              captureRunIdRef guard covers the still-reachable header X. */}
+          {view !== 'menu' && view !== 'processing' && (
+            <Button
+              variant="subtle"
+              size="icon"
+              className="rounded-full -ml-2 shrink-0"
+              onClick={handleBack}
+              aria-label="Back"
+            >
+              <ChevronLeft size={20} />
+            </Button>
           )}
-        </h2>
+          <h2 id="capture-drawer-title" className="font-display text-xl font-semibold text-brand-800 dark:text-brand-100 truncate">
+            {view === 'menu' && tabOptions.length > 1 ? (
+              // While the type selector below offers every capture kind, a
+              // type-specific title ("Add Transaction") contradicted the FAB's
+              // "transaction, task, or item" promise (round-3 critique). The
+              // title specializes once a specific flow is entered.
+              'Capture'
+            ) : (
+              <>
+                {effectiveTab === 'transaction' && (
+                  view === 'menu' ? 'Add Transaction' :
+                  view === 'manual' ? 'Manual Entry' :
+                  view === 'processing' ? 'Processing' : 'Review'
+                )}
+                {effectiveTab === 'todo' && 'New Task'}
+                {effectiveTab === 'shopping' && 'Add Item'}
+                {effectiveTab === null && 'Capture'}
+              </>
+            )}
+          </h2>
+        </div>
         <Button
           variant="subtle"
           size="icon"
-          className="rounded-full"
+          className="rounded-full shrink-0"
           onClick={handleClose}
           aria-label="Close drawer"
         >
@@ -778,35 +740,9 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
               {/* Menu View */}
               {view === 'menu' && (
                 <CaptureMenu
-                  onScan={startCamera}
-                  onFileSelect={handleFileSelect}
+                  onSelectImage={handleImageSelect}
                   onManual={() => setView('manual')}
-                  householdId={householdId || ''}
-                  dynamicCategories={dynamicCategories}
-                  onMagicSuccess={handleMagicSuccess}
                 />
-              )}
-
-              {/* Camera View */}
-              {view === 'camera' && (
-                <div className="relative bg-black rounded-xl overflow-hidden aspect-3/4">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    className="w-full h-full object-cover"
-                  />
-                  <canvas ref={canvasRef} className="hidden" />
-                  <div className="absolute bottom-6 left-0 right-0 flex justify-center">
-                    <button
-                      onClick={capturePhoto}
-                      aria-label="Capture photo"
-                      className="w-16 h-16 rounded-full border-4 border-white bg-white/20 flex items-center justify-center active:scale-90 transition-transform focus:outline-hidden focus:ring-2 focus:ring-white"
-                    >
-                      <div className="w-12 h-12 bg-white rounded-full" />
-                    </button>
-                  </div>
-                </div>
               )}
 
               {/* Review View */}

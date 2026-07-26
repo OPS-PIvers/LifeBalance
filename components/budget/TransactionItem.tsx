@@ -12,7 +12,7 @@ import { useMerchantRules } from '@/hooks/useMerchantRules';
 
 const getSourceIcon = (source: string, isRecurring: boolean) => {
   if (isRecurring) return <History size={12} className="text-warm-500" />;
-  if (source === 'camera-scan' || source === 'file-upload') return <FileText size={12} className="text-habit-blue" />;
+  if (source === 'camera-scan' || source === 'file-upload' || source === 'image-capture') return <FileText size={12} className="text-habit-blue" />;
   return null;
 };
 

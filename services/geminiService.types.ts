@@ -41,12 +41,14 @@ export interface ReceiptLineItem {
  * The full result of `parseReceiptLineItems`: the shared merchant/date/store for
  * the whole receipt plus every extracted line item. The caller splits these into
  * several categorized transactions (grouped by category) that share one
- * `receiptGroupId`.
+ * `receiptGroupId`. `suggestedHabits` is receipt-level (one shopping trip), not
+ * per-item, and is applied to every transaction the receipt is split into.
  */
 export interface ReceiptLineItemsData {
   merchant: string;
   date?: string;
   store?: string;
+  suggestedHabits?: string[];
   items: ReceiptLineItem[];
 }
 
@@ -150,31 +152,4 @@ export interface HabitPointAdjustmentSuggestion {
   currentPoints: number;
   suggestedPoints: number;
   reasoning: string;
-}
-
-// ---------------------------------------------------------------------------
-// Magic action (natural-language quick-add)
-// ---------------------------------------------------------------------------
-
-export type MagicActionType = 'transaction' | 'todo' | 'shopping' | 'unknown';
-
-export interface MagicActionResponse {
-  type: MagicActionType;
-  confidence: number;
-  data: {
-    // Transaction fields
-    merchant?: string;
-    amount?: number;
-    category?: string;
-    date?: string;
-
-    // Todo fields
-    text?: string;
-    completeByDate?: string;
-
-    // Shopping fields
-    item?: string;
-    quantity?: string;
-    store?: string;
-  };
 }

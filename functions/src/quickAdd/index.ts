@@ -54,6 +54,7 @@ import { fuzzyMatchMember, type MemberLike } from "./todoMatch";
 import { resolveTodoCategory } from "./todoCategoryMatch";
 import { parseTodoPhrase } from "./todoParser";
 import { isManualReview } from "./captureReview";
+import { mergeQuantity, resolveNewQuantityField } from "./quantityLogic";
 
 // Read/export GET endpoint (getTodos). Kept in its own module and re-exported
 // here so this barrel's deploy surface stays complete while the endpoint body
@@ -1161,8 +1162,11 @@ export const quickAddShoppingItem = onRequest(
     }
 
     // 4. Parse and validate request body
-    // Support both single item and batch items for flexibility
-    const { item, items, quantity = 1, category = "Other", store } = req.body || {};
+    // Support both single item and batch items for flexibility. `quantity` is
+    // intentionally left undefined (not defaulted to 1) when the caller omits
+    // it — a captured item with no explicit count must write NO quantity
+    // field at all, not an invented "1" (see resolveNewQuantityField below).
+    const { item, items, quantity, category = "Other", store } = req.body || {};
 
     // Batch mode: items array provided
     if (items && Array.isArray(items)) {
@@ -1236,7 +1240,7 @@ export const quickAddShoppingItem = onRequest(
         const results: Array<{
           itemId: string;
           name: string;
-          quantity: number;
+          quantity?: string;
           category?: string;
           store?: string | null;
           updated?: boolean;
@@ -1249,14 +1253,21 @@ export const quickAddShoppingItem = onRequest(
         //    contexts/FirebaseHouseholdContext.tsx handleShoppingItems).
         const batch = db.batch();
 
-        // Build a mutable map of normalized-name → resolved quantity so that
-        // within-batch duplicate detection works even when the same item name
-        // appears more than once in the request array.
-        const pendingQuantities = new Map<string, { ref: admin.firestore.DocumentReference; quantity: number }>();
+        // Build a mutable map of normalized-name → resolved quantity STRING so
+        // that within-batch duplicate detection works even when the same item
+        // name appears more than once in the request array. `undefined` means
+        // "no quantity written yet" (a brand-new row created without one) —
+        // distinct from an empty string, and mergeQuantity treats it the same
+        // as any other absent quantity (counts as 1 for accumulation).
+        const pendingQuantities = new Map<string, { ref: admin.firestore.DocumentReference; quantity: string | undefined }>();
 
         for (const itemObj of items) {
           const itemName = itemObj.item.trim();
-          const itemQuantity = itemObj.quantity || 1;
+          const hasExplicitQuantity = itemObj.quantity !== undefined && itemObj.quantity !== null;
+          // The count to ADD for merge/accumulation purposes — an absent
+          // per-item quantity still counts as 1, matching the app-wide
+          // "no explicit quantity means one" convention.
+          const mergeAddCount: number = hasExplicitQuantity ? itemObj.quantity : 1;
           const itemCategory = itemObj.category || category;
           const itemStore = itemObj.store || store || null;
 
@@ -1266,17 +1277,18 @@ export const quickAddShoppingItem = onRequest(
           // item (within-batch dedup before checking Firestore).
           const pending = pendingQuantities.get(normalizedItem);
           if (pending !== undefined) {
-            pending.quantity += itemQuantity;
+            const merged = mergeQuantity(pending.quantity, mergeAddCount);
+            pendingQuantities.set(normalizedItem, { ref: pending.ref, quantity: merged });
             // Update the already-queued batch operation in-place.
             batch.update(pending.ref, {
-              quantity: pending.quantity,
+              quantity: merged,
               lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
             });
             const result = results.find(
               (r) => r.name.toLowerCase() === normalizedItem
             );
             if (result !== undefined) {
-              result.quantity = pending.quantity;
+              result.quantity = merged;
             }
             continue;
           }
@@ -1290,27 +1302,35 @@ export const quickAddShoppingItem = onRequest(
           });
 
           if (duplicate) {
-            // Update quantity of existing item
-            const currentQty = duplicate.data().quantity || 1;
-            const newQty = currentQty + itemQuantity;
+            // Merge onto the existing item, preserving its unit (and reading
+            // a legacy raw-number quantity correctly — no migration needed).
+            const currentQty = duplicate.data().quantity as string | number | undefined;
+            const merged = mergeQuantity(currentQty, mergeAddCount);
             batch.update(duplicate.ref, {
-              quantity: newQty,
+              quantity: merged,
               lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
             });
-            pendingQuantities.set(normalizedItem, { ref: duplicate.ref, quantity: newQty });
+            pendingQuantities.set(normalizedItem, { ref: duplicate.ref, quantity: merged });
             results.push({
               itemId: duplicate.id,
               name: itemName,
-              quantity: newQty,
+              quantity: merged,
               updated: true,
             });
           } else {
             // Pre-allocate a new doc ref so we can return its id synchronously
             // and still commit everything in a single batch.
             const newRef = shoppingListRef.doc();
+            // No quantity was supplied -> write NO quantity field at all
+            // (never invent a "1"). resolveNewQuantityField also collapses an
+            // explicit count of 1 to `undefined`, matching that same
+            // convention for a single explicitly-requested unit.
+            const resolvedQuantity = hasExplicitQuantity
+              ? resolveNewQuantityField(itemObj.quantity)
+              : undefined;
             const shoppingItemData = {
               name: itemName,
-              quantity: itemQuantity,
+              ...(resolvedQuantity !== undefined ? { quantity: resolvedQuantity } : {}),
               category: itemCategory,
               store: itemStore,
               isPurchased: false,
@@ -1322,11 +1342,11 @@ export const quickAddShoppingItem = onRequest(
               ...(incomingHeld ? { needsReview: true } : {}),
             };
             batch.set(newRef, shoppingItemData);
-            pendingQuantities.set(normalizedItem, { ref: newRef, quantity: itemQuantity });
+            pendingQuantities.set(normalizedItem, { ref: newRef, quantity: resolvedQuantity });
             results.push({
               itemId: newRef.id,
               name: itemName,
-              quantity: itemQuantity,
+              quantity: resolvedQuantity,
               category: itemCategory,
               store: itemStore,
               created: true,
@@ -1384,10 +1404,18 @@ export const quickAddShoppingItem = onRequest(
       }
     }
 
-    if (typeof quantity !== "number" || quantity < 1) {
+    // Absent quantity is valid — the caller just didn't specify a count, and
+    // no field will be written for it below. A SUPPLIED value must still be a
+    // positive number, though.
+    const hasExplicitQuantity = quantity !== undefined && quantity !== null;
+    if (hasExplicitQuantity && (typeof quantity !== "number" || quantity < 1)) {
       errorResponse(res, 400, "quantity must be a positive number", "BAD_REQUEST");
       return;
     }
+    // The count to ADD for merge/accumulation purposes — an absent quantity
+    // still counts as 1, matching the app-wide "no explicit quantity means
+    // one" convention.
+    const mergeAddCount: number = hasExplicitQuantity ? quantity : 1;
 
     try {
       // 5. Determine the household's shopping capture-review mode (see the
@@ -1419,13 +1447,15 @@ export const quickAddShoppingItem = onRequest(
       });
 
       if (duplicate) {
-        // Update quantity instead of creating duplicate. needsReview is
-        // deliberately left untouched — a quantity bump onto an existing
-        // (visible or held) item must not retroactively toggle its review
-        // state.
-        const currentQty = duplicate.data().quantity || 1;
+        // Merge onto the existing item, preserving its unit (and reading a
+        // legacy raw-number quantity correctly — no migration needed).
+        // needsReview is deliberately left untouched — a quantity bump onto
+        // an existing (visible or held) item must not retroactively toggle
+        // its review state.
+        const currentQty = duplicate.data().quantity as string | number | undefined;
+        const merged = mergeQuantity(currentQty, mergeAddCount);
         await duplicate.ref.update({
-          quantity: currentQty + quantity,
+          quantity: merged,
           lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
         });
 
@@ -1433,21 +1463,25 @@ export const quickAddShoppingItem = onRequest(
 
         jsonResponse(res, 200, {
           success: true,
-          message: `Updated "${item}" quantity to ${currentQty + quantity}`,
+          message: `Updated "${item}" quantity to ${merged}`,
           data: {
             itemId: duplicate.id,
             name: item,
-            quantity: currentQty + quantity,
+            quantity: merged,
             updated: true,
           },
         });
         return;
       }
 
-      // 7. Create new shopping list item
+      // 7. Create new shopping list item. No quantity was supplied -> write
+      // NO quantity field at all (never invent a "1"). resolveNewQuantityField
+      // also collapses an explicit count of 1 back to `undefined`, matching
+      // that same convention for a single explicitly-requested unit.
+      const resolvedQuantity = hasExplicitQuantity ? resolveNewQuantityField(quantity) : undefined;
       const shoppingItemData = {
         name: item.trim(),
-        quantity,
+        ...(resolvedQuantity !== undefined ? { quantity: resolvedQuantity } : {}),
         category,
         store: store || null,
         isPurchased: false,
@@ -1470,7 +1504,7 @@ export const quickAddShoppingItem = onRequest(
         data: {
           itemId: itemRef.id,
           name: item,
-          quantity,
+          quantity: resolvedQuantity,
           category,
           store: store || null,
         },

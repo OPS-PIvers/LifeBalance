@@ -229,94 +229,6 @@ describe('geminiService', () => {
     expect(promptText).not.toContain('LIKED');
   });
 
-  it('parseMagicAction correctly parses transaction', async () => {
-    const { parseMagicAction } = await import('./geminiService');
-
-    const mockResponse = {
-      type: 'transaction',
-      confidence: 0.95,
-      data: {
-        merchant: 'Target',
-        amount: 45.20,
-        category: 'Shopping',
-        date: '2025-02-18'
-      }
-    };
-
-    generateContentMock.mockResolvedValue({
-      text: JSON.stringify(mockResponse)
-    });
-
-    const result = await parseMagicAction('test-household', 'Spent 45.20 at Target', {
-      categories: ['Shopping', 'Dining'],
-      groceryCategories: ['Food'],
-      todayDate: '2025-02-18'
-    });
-
-    expect(result.type).toBe('transaction');
-    expect(result.data.merchant).toBe('Target');
-    expect(result.data.amount).toBe(45.20);
-    expect(result.data.category).toBe('Shopping');
-  });
-
-  it('parseMagicAction correctly parses todo', async () => {
-    const { parseMagicAction } = await import('./geminiService');
-
-    const mockResponse = {
-      type: 'todo',
-      confidence: 0.9,
-      data: {
-        text: 'Pay electricity bill',
-        completeByDate: '2025-02-19'
-      }
-    };
-
-    generateContentMock.mockResolvedValue({
-      text: JSON.stringify(mockResponse)
-    });
-
-    const result = await parseMagicAction('test-household', 'Remind me to pay electricity bill tomorrow', {
-      categories: [],
-      groceryCategories: [],
-      todayDate: '2025-02-18'
-    });
-
-    expect(result.type).toBe('todo');
-    expect(result.data.text).toBe('Pay electricity bill');
-    expect(result.data.completeByDate).toBe('2025-02-19');
-  });
-
-  it('parseMagicAction correctly parses shopping item', async () => {
-    const { parseMagicAction } = await import('./geminiService');
-
-    const mockResponse = {
-      type: 'shopping',
-      confidence: 0.9,
-      data: {
-        item: 'Milk',
-        quantity: '2 gallons',
-        category: 'Dairy',
-        store: 'Walmart'
-      }
-    };
-
-    generateContentMock.mockResolvedValue({
-      text: JSON.stringify(mockResponse)
-    });
-
-    const result = await parseMagicAction('test-household', 'Buy 2 gallons of Milk from Walmart', {
-      categories: [],
-      groceryCategories: ['Dairy', 'Produce'],
-      todayDate: '2025-02-18'
-    });
-
-    expect(result.type).toBe('shopping');
-    expect(result.data.item).toBe('Milk');
-    expect(result.data.quantity).toBe('2 gallons');
-    expect(result.data.category).toBe('Dairy');
-    expect(result.data.store).toBe('Walmart');
-  });
-
   it('analyzeHabitPoints correctly parses suggestions', async () => {
     const { analyzeHabitPoints } = await import('./geminiService');
 
@@ -466,67 +378,6 @@ describe('geminiService', () => {
     }
   });
 
-  it('analyzeReceipt prompt includes correct date from local time', async () => {
-    const { analyzeReceipt } = await import('./geminiService');
-
-    // Mock date to 2026-02-15
-    const mockDate = new Date(2026, 1, 15); // Month is 0-indexed (1 = Feb)
-    vi.useFakeTimers();
-    vi.setSystemTime(mockDate);
-
-    const mockResponse = {
-        merchant: 'Target',
-        amount: 25.00,
-        category: 'Shopping'
-    };
-
-    generateContentMock.mockResolvedValue({
-        text: JSON.stringify(mockResponse)
-    });
-
-    await analyzeReceipt('test-id', VALID_TEST_IMAGE);
-
-    // Verify the prompt sent to Gemini contains the date
-    // We access the first argument of the first call, which is the model options/config object
-    const callArgs = generateContentMock.mock.calls[0]![0];
-    const promptText = callArgs.contents.parts[1].text; // The second part is text
-
-    expect(promptText).toContain("Today's date is 2026-02-15");
-
-    vi.useRealTimers();
-  });
-
-  it('analyzeReceipt clamps an off-list category to the fallback', async () => {
-    const { analyzeReceipt } = await import('./geminiService');
-    generateContentMock.mockResolvedValue({
-      text: JSON.stringify({ merchant: 'X', amount: 10, category: 'Crypto' }),
-    });
-    const result = await analyzeReceipt('test-id', VALID_TEST_IMAGE, ['Groceries', 'Dining']);
-    expect(result.category).toBe('Other');
-  });
-
-  it('analyzeReceipt keeps an in-list category (case-insensitive match)', async () => {
-    const { analyzeReceipt } = await import('./geminiService');
-    generateContentMock.mockResolvedValue({
-      text: JSON.stringify({ merchant: 'X', amount: 10, category: 'groceries' }),
-    });
-    const result = await analyzeReceipt('test-id', VALID_TEST_IMAGE, ['Groceries', 'Dining']);
-    expect(result.category).toBe('Groceries');
-  });
-
-  it('parseMagicAction clamps an off-list transaction category to the fallback', async () => {
-    const { parseMagicAction } = await import('./geminiService');
-    generateContentMock.mockResolvedValue({
-      text: JSON.stringify({ type: 'transaction', confidence: 0.9, data: { merchant: 'X', amount: 5, category: 'Crypto', date: '2025-01-01' } }),
-    });
-    const result = await parseMagicAction('test-household', 'x', {
-      categories: ['Shopping', 'Dining'],
-      groceryCategories: ['Food'],
-      todayDate: '2025-01-01',
-    });
-    expect(result.data.category).toBe('Other');
-  });
-
   it('parseTaskList returns the parsed task lines', async () => {
     const { parseTaskList } = await import('./geminiService');
     generateContentMock.mockResolvedValue({
@@ -586,6 +437,80 @@ describe('geminiService', () => {
     expect(promptText).toContain("Today's date is 2026-03-10");
 
     vi.useRealTimers();
+  });
+
+  it('parseReceiptLineItems prompt includes correct date from local time', async () => {
+    const { parseReceiptLineItems } = await import('./geminiService');
+
+    // Mock date to 2026-02-15
+    const mockDate = new Date(2026, 1, 15); // Month is 0-indexed (1 = Feb)
+    vi.useFakeTimers();
+    vi.setSystemTime(mockDate);
+
+    const mockResponse = {
+      merchant: 'Target',
+      items: [{ description: 'Milk', amount: 4.5, category: 'Groceries' }],
+    };
+
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify(mockResponse)
+    });
+
+    await parseReceiptLineItems('test-id', VALID_TEST_IMAGE);
+
+    // Verify the prompt sent to Gemini contains the date
+    // We access the first argument of the first call, which is the model options/config object
+    const callArgs = generateContentMock.mock.calls[0]![0];
+    const promptText = callArgs.contents.parts[1].text; // The second part is text
+
+    expect(promptText).toContain("Today's date is 2026-02-15");
+
+    vi.useRealTimers();
+  });
+
+  it('parseReceiptLineItems clamps an off-list item category to the fallback', async () => {
+    const { parseReceiptLineItems } = await import('./geminiService');
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify({
+        merchant: 'X',
+        items: [{ description: 'Widget', amount: 10, category: 'Crypto' }],
+      }),
+    });
+    const result = await parseReceiptLineItems('test-id', VALID_TEST_IMAGE, ['Groceries', 'Dining']);
+    expect(result.items[0]!.category).toBe('Other');
+  });
+
+  it('parseReceiptLineItems keeps an in-list item category (case-insensitive match)', async () => {
+    const { parseReceiptLineItems } = await import('./geminiService');
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify({
+        merchant: 'X',
+        items: [{ description: 'Bananas', amount: 3, category: 'groceries' }],
+      }),
+    });
+    const result = await parseReceiptLineItems('test-id', VALID_TEST_IMAGE, ['Groceries', 'Dining']);
+    expect(result.items[0]!.category).toBe('Groceries');
+  });
+
+  it('optimizeGroceryList handles a legacy numeric quantity without throwing', async () => {
+    // OptimizableItem.quantity is typed `string`, but callers pass
+    // ShoppingItem.quantity straight through, and some Firestore docs hold a
+    // raw legacy number there (rows written by the quickAdd Cloud Function
+    // before the quantity-handling fix; shoppingItemConverter does a blind
+    // cast, no migration run). sanitizeForPrompt calls .replace() directly,
+    // so an uncoerced number would throw `input.replace is not a function`.
+    const { optimizeGroceryList } = await import('./geminiService');
+
+    const mockResponse = [{ id: '1', name: 'Milk', category: 'Dairy', quantity: '2', store: '' }];
+    generateContentMock.mockResolvedValue({ text: JSON.stringify(mockResponse) });
+
+    const legacyItem = { id: '1', name: 'Milk', category: 'Dairy', quantity: 2, store: '' } as unknown as Parameters<
+      typeof optimizeGroceryList
+    >[1][number];
+
+    const result = await optimizeGroceryList('test-household', [legacyItem]);
+
+    expect(result).toEqual(mockResponse);
   });
 });
 

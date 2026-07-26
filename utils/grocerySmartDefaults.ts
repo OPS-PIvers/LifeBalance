@@ -165,28 +165,45 @@ export interface ParsedQuantity {
   unit: string;
 }
 
+/** Matches a leading numeric literal + trailing free text: "2 lbs" -> ["2", " lbs"]. */
+const LEADING_NUMBER_RE = /^(\d+(?:\.\d*)?|\.\d+)\s*(.*)$/;
+
+/**
+ * Match a leading numeric literal at the start of an already-trimmed string,
+ * returning the parsed count/unit, or `null` when the string doesn't start
+ * with a number (e.g. "dozen"). Shared by `parseQuantity` (which always needs
+ * a displayable count, defaulting non-numeric text to count 1) and
+ * `mergeQuantity` (which needs to tell "no leading number" apart from "an
+ * explicit 1" so it knows whether adding a count is even meaningful).
+ */
+function matchLeadingNumber(trimmed: string): ParsedQuantity | null {
+  const match = trimmed.match(LEADING_NUMBER_RE);
+  if (!match) return null;
+  const [, numStr, rest] = match;
+  const count = Number(numStr);
+  if (!Number.isFinite(count)) return null;
+  return { count, unit: (rest ?? '').trim() };
+}
+
 /**
  * Parse a free-text quantity string into a numeric count + unit.
  * "2 lbs" -> {2, 'lbs'}; "3" -> {3, ''}; ""/undefined/non-numeric-leading
  * ("dozen") -> {1, original text (or '')}.
+ *
+ * Accepts `string | number` because `ShoppingItem.quantity` is typed `string`
+ * but some documents hold a raw Firestore number for this field (rows written
+ * by the quickAdd Cloud Function before this fix, or approved via
+ * ShoppingReviewForm without editing the quantity) — no migration; this reads
+ * that legacy shape correctly rather than throwing (`(2).trim is not a
+ * function`) when a caller like `ShoppingItemForm` passes `item.quantity`
+ * straight through.
  */
-export function parseQuantity(q: string | undefined): ParsedQuantity {
-  if (!q) return { count: 1, unit: '' };
-  const trimmed = q.trim();
+export function parseQuantity(q: string | number | undefined): ParsedQuantity {
+  if (q === undefined || q === null) return { count: 1, unit: '' };
+  const trimmed = String(q).trim();
   if (!trimmed) return { count: 1, unit: '' };
 
-  const match = trimmed.match(/^(\d+(?:\.\d*)?|\.\d+)\s*(.*)$/);
-  if (!match) {
-    // Non-numeric-leading text (e.g. "dozen") — keep as the unit, count 1.
-    return { count: 1, unit: trimmed };
-  }
-
-  const [, numStr, rest] = match;
-  const count = Number(numStr);
-  if (!Number.isFinite(count)) {
-    return { count: 1, unit: trimmed };
-  }
-  return { count, unit: (rest ?? '').trim() };
+  return matchLeadingNumber(trimmed) ?? { count: 1, unit: trimmed };
 }
 
 /** Format a parsed quantity back to its display string. */
@@ -194,4 +211,58 @@ export function formatQuantity({ count, unit }: ParsedQuantity): string {
   if (count === 1 && unit === '') return '';
   const trimmedUnit = unit.trim();
   return trimmedUnit ? `${count} ${trimmedUnit}` : `${count}`;
+}
+
+/**
+ * Resolve the quantity field to write on a brand-new shopping-list row:
+ * `undefined` (write NO field at all) when the caller supplied no quantity,
+ * otherwise the formatted string — which itself collapses a bare count of 1
+ * back to `undefined`, matching the "no explicit quantity means one"
+ * convention used everywhere else (a captured single item shouldn't display
+ * an invented "1"). Client twin of `functions/src/quickAdd/quantityLogic.ts`'s
+ * `resolveNewQuantityField`, kept in lockstep by the shared parity test in
+ * `functions/src/quickAdd/quantityLogic.test.ts`.
+ */
+export function resolveNewQuantityField(quantity: number | undefined): string | undefined {
+  if (quantity === undefined) return undefined;
+  const formatted = formatQuantity({ count: quantity, unit: '' });
+  return formatted === '' ? undefined : formatted;
+}
+
+/**
+ * Merge an incoming count into an existing shopping-item quantity, preserving
+ * the unit: "2 lbs" + 1 -> "3 lbs". Used whenever a duplicate capture (voice
+ * command, iOS Shortcut) needs to bump a matched item instead of creating a
+ * second row.
+ *
+ * A missing/blank existing quantity counts as 1 for accumulation (mirroring
+ * the "no explicit quantity means one" convention baked into `formatQuantity`
+ * above), so two bare "milk" captures merge into "2" rather than the bump
+ * silently vanishing. A quantity with no leading numeric literal (e.g.
+ * "dozen") is left untouched — there's no unit-preserving way to add a count
+ * to free text, and mangling it (the historical bug: string concatenation via
+ * `+`/Firestore's `increment()`, e.g. "2 lbs" + 1 -> "2 lbs1") is worse than a
+ * no-op.
+ *
+ * Accepts `string | number` because some existing documents hold a raw
+ * Firestore number for this field despite the schema typing it as a string
+ * (server-written rows before this fix) — no migration; this reads that
+ * legacy shape correctly rather than requiring a backfill.
+ */
+export function mergeQuantity(
+  existing: string | number | null | undefined,
+  addCount: number
+): string {
+  if (existing === null || existing === undefined) {
+    return formatQuantity({ count: 1 + addCount, unit: '' });
+  }
+  const trimmed = String(existing).trim();
+  if (trimmed === '') {
+    return formatQuantity({ count: 1 + addCount, unit: '' });
+  }
+  const parsed = matchLeadingNumber(trimmed);
+  if (!parsed) {
+    return trimmed;
+  }
+  return formatQuantity({ count: parsed.count + addCount, unit: parsed.unit });
 }

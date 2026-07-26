@@ -376,8 +376,9 @@ explorations against this table.
 | `habit_patterns_generated` | Habit Coach patterns doc written (`refreshHabitPatterns`, F-DASH-03) | — |
 | `insight_action_executed` | An insight's suggested action runs successfully (`hooks/useInsightActions.ts`) | `type` — `update_bucket` \| `create_habit` \| `create_todo` |
 | `insight_rated` | Thumbs up/down tapped on an insight (`rateInsight`, `components/dashboard/InsightWidget.tsx`) | `feedback` — `up` \| `down` |
-| `receipt_scanned` | Camera receipt OCR succeeds (`CaptureModal`) | — |
-| `statement_scanned` | Bank-statement/receipt file parse succeeds (`CaptureModal`) | `count` — transactions extracted |
+| `receipt_scanned` | "Add from image" itemized receipt OCR succeeds (`CaptureModal`; fires regardless of whether the source photo came from the camera or the library) | — |
+| `receipt_line_split` | A scanned receipt has more than one category and is split into several transactions (`CaptureModal`) | `count` — categories/transactions produced |
+| `statement_scanned` | "Add from image" falls back to bank-statement parsing because the image had no itemized receipt lines (`CaptureModal`) | `count` — transactions extracted |
 | `photo_tasklist_scanned` | Handwritten/whiteboard to-do photo parsed (`TodoPhotoImportDrawer`, F-TODO-06) | `count` — tasks extracted |
 | `photo_mealplan_scanned` | Handwritten/whiteboard weekly menu photo parsed (`MealPlanPhotoImportDrawer`, F-TODO-06) | `count` — meals extracted |
 | `meal_planned` | Meal added to the weekly plan (`addMealPlanItem`) | — |

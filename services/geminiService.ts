@@ -17,19 +17,17 @@ import {
 import { getLocalDateString } from "@/utils/dateHelpers";
 import { getLimits, LEGACY_AI_DAILY_QUOTA } from "@/utils/entitlements";
 import { getBillingEnabled } from "./appConfig";
-import type { ReceiptData, ParsedTaskList, ParsedMealPlan, ReceiptLineItemsData } from './geminiService.types';
+import type { ParsedTaskList, ParsedMealPlan, ReceiptLineItemsData } from './geminiService.types';
 import {
   GeminiValidationError,
   InvalidImageError,
   validateBase64Image,
-  validateReceiptData,
   validateBankTransactions,
   validateMealSuggestion,
   validateSubtaskSuggestions,
   validateGroceryItems,
   validateOptimizableItems,
   validateInsight,
-  validateMagicAction,
   validateHabitPointSuggestions,
   validateHabitPatterns,
   validateHabitReorganization,
@@ -62,8 +60,6 @@ export type {
   OptimizableItem,
   HabitPatternInsight,
   HabitReorganizationPlan,
-  MagicActionType,
-  MagicActionResponse,
   HabitPointAdjustmentSuggestion,
 } from './geminiService.types';
 
@@ -451,6 +447,7 @@ export interface BankTransactionData {
   category: string;
   date: string;
   suggestedHabits?: string[];
+  store?: string;
 }
 
 export interface GroceryItem {
@@ -792,68 +789,6 @@ async function generateJsonContent<T>(
 }
 
 /**
- * Analyzes a receipt image and extracts transaction data
- * @param householdId - The household ID for quota tracking
- * @param base64Image - Base64 encoded image data
- * @param availableCategories - List of available budget categories for smart matching
- * @param availableHabits - List of available habits for smart matching
- * @param _aiClient - Optional injected AI client for testing purposes.
- */
-export const analyzeReceipt = async (
-  householdId: string,
-  base64Image: string,
-  availableCategories?: string[],
-  availableHabits?: string[],
-  availableStores?: string[],
-  _aiClient?: Pick<typeof ai, 'models'>
-): Promise<ReceiptData> => {
-  return withErrorHandling('OCR', 'Failed to analyze receipt. Please try manual entry.', async () => {
-    const resolvedCategories = availableCategories?.length ? availableCategories : DEFAULT_FINANCE_CATEGORIES;
-    const categoryList = sanitizeList(resolvedCategories);
-
-    const habitList = availableHabits?.length
-      ? sanitizeList(availableHabits)
-      : '';
-
-    const today = getLocalDateString();
-    const prompt = [
-      `Analyze this receipt image. Extract the merchant name, total amount, date (YYYY-MM-DD format), and suggest the most appropriate category.`,
-      `The amount is in US dollars — return it as a positive decimal number (e.g. 12.34); ignore currency symbols, treat "." as the decimal separator and "," as a thousands separator.`,
-      `For category, choose exactly one of these strings: ${categoryList}. If none fits, use "${FALLBACK_CATEGORY}". Do not invent a new category.`,
-      habitList ? `Also suggest any relevant habits from this list that might apply to this transaction: ${habitList}.` : '',
-      availableStores?.length
-        ? `Extract the store name if visible. Prefer one of these existing stores when it's the same place: ${sanitizeList(availableStores)}. Only return a different name if it is clearly a different store; otherwise leave it blank.`
-        : `Extract the store name if visible.`,
-      `Today's date is ${today}. If the year is missing, infer it.`,
-    ].filter(Boolean).join('\n');
-
-    const data = await generateJsonContent<ReceiptData>(
-      householdId,
-      prepareImageContent(base64Image, prompt),
-      {
-        type: Type.OBJECT,
-        properties: {
-          merchant: { type: Type.STRING },
-          amount: { type: Type.NUMBER },
-          category: { type: Type.STRING },
-          date: { type: Type.STRING },
-          suggestedHabits: { type: Type.ARRAY, items: { type: Type.STRING } },
-          store: { type: Type.STRING }
-        },
-        required: ["merchant", "amount", "category"]
-      },
-      _aiClient,
-      GEMINI_MODEL,
-      validateReceiptData
-    );
-    // Clamp to the household's real categories — the schema only constrains the
-    // type, so an off-list category would otherwise land on the transaction.
-    data.category = clampToAllowed(data.category, resolvedCategories);
-    return data;
-  });
-};
-
-/**
  * F-DASH-04 — Extracts INDIVIDUAL line items from an itemized receipt so a
  * single mixed-category purchase (e.g. a Target run) can be split into several
  * categorized transactions instead of one lump. Modeled on `parseGroceryReceipt`
@@ -865,6 +800,7 @@ export const analyzeReceipt = async (
  * @param base64Image - Base64 encoded receipt image
  * @param availableCategories - Household budget categories to choose from
  * @param availableStores - Existing store names to prefer for the receipt's store
+ * @param availableHabits - Existing habits to suggest for the whole receipt (one shopping trip)
  * @param _aiClient - Optional injected AI client for testing purposes.
  */
 export const parseReceiptLineItems = async (
@@ -872,11 +808,13 @@ export const parseReceiptLineItems = async (
   base64Image: string,
   availableCategories?: string[],
   availableStores?: string[],
+  availableHabits?: string[],
   _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<ReceiptLineItemsData> => {
   return withErrorHandling('Receipt Line-Item Parse', 'Failed to itemize receipt. Please try manual entry.', async () => {
     const resolvedCategories = availableCategories?.length ? availableCategories : DEFAULT_FINANCE_CATEGORIES;
     const categoryList = sanitizeList(resolvedCategories);
+    const habitList = availableHabits?.length ? sanitizeList(availableHabits) : '';
 
     const today = getLocalDateString();
     const prompt = [
@@ -889,6 +827,7 @@ export const parseReceiptLineItems = async (
       availableStores?.length
         ? `Extract the store name if visible. Prefer one of these existing stores when it's the same place: ${sanitizeList(availableStores)}. Only return a different name if it is clearly a different store; otherwise leave it blank.`
         : `Extract the store name if visible; otherwise leave it blank.`,
+      habitList ? `Also suggest any relevant habits from this list that might apply to this whole receipt (one shopping trip): ${habitList}.` : '',
       `Today's date is ${today}. If the year is missing, infer it.`,
     ].filter(Boolean).join('\n');
 
@@ -901,6 +840,7 @@ export const parseReceiptLineItems = async (
           merchant: { type: Type.STRING },
           date: { type: Type.STRING },
           store: { type: Type.STRING },
+          suggestedHabits: { type: Type.ARRAY, items: { type: Type.STRING } },
           items: {
             type: Type.ARRAY,
             items: {
@@ -938,6 +878,7 @@ export const parseReceiptLineItems = async (
  * @param base64Image - Base64 encoded image of bank statement/transaction list
  * @param availableCategories - List of available budget categories for smart matching
  * @param availableHabits - List of available habits for smart matching
+ * @param availableStores - Existing store names to prefer for each transaction's store
  * @param _aiClient - Optional injected AI client for testing purposes.
  */
 export const parseBankStatement = async (
@@ -945,6 +886,7 @@ export const parseBankStatement = async (
   base64Image: string,
   availableCategories?: string[],
   availableHabits?: string[],
+  availableStores?: string[],
   _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<BankTransactionData[]> => {
   return withErrorHandling('Bank Statement Parse', 'Failed to parse bank statement. Please try again or enter transactions manually.', async () => {
@@ -963,6 +905,9 @@ export const parseBankStatement = async (
       `- date: The transaction date in YYYY-MM-DD format. Today's date is ${today}. If the year is missing, infer it.`,
       `- category: choose exactly one of: ${categoryList}. Use these exact strings only; if none fits, use "${FALLBACK_CATEGORY}".`,
       habitList ? `- suggestedHabits: Suggest any relevant habits from this list: ${habitList}` : '',
+      availableStores?.length
+        ? `- store: the merchant's store name, if it maps to one of these existing stores: ${sanitizeList(availableStores)}. Only return a different name if it is clearly a different store; otherwise leave it blank.`
+        : `- store: the merchant's store name, if identifiable; otherwise leave it blank.`,
       `Treat money LEAVING the account (debits/withdrawals/purchases, often shown negative or in red) as expenses; exclude deposits, refunds, transfers in, and payments received. If the image shows no expense transactions, return an empty array [].`,
       `Return a JSON array of transactions.`
     ].filter(Boolean).join('\n');
@@ -979,7 +924,8 @@ export const parseBankStatement = async (
             amount: { type: Type.NUMBER },
             category: { type: Type.STRING },
             date: { type: Type.STRING },
-            suggestedHabits: { type: Type.ARRAY, items: { type: Type.STRING } }
+            suggestedHabits: { type: Type.ARRAY, items: { type: Type.STRING } },
+            store: { type: Type.STRING }
           },
           required: ["merchant", "amount", "category", "date"]
         }
@@ -1324,7 +1270,12 @@ export const optimizeGroceryList = async (
       id,
       name: sanitizeForPrompt(name),
       category: category ? sanitizeForPrompt(category) : 'Uncategorized',
-      quantity: quantity ? sanitizeForPrompt(quantity) : '',
+      // `quantity` is typed `string` (OptimizableItem), but callers can pass
+      // `ShoppingItem.quantity` straight through, and some Firestore docs hold
+      // a raw legacy number there (pre-dating the quantity-handling fix, no
+      // migration run) — String() here reads that shape correctly rather than
+      // throwing `input.replace is not a function` inside sanitizeForPrompt.
+      quantity: quantity ? sanitizeForPrompt(String(quantity)) : '',
       store: store ? sanitizeForPrompt(store) : ''
     }));
 
@@ -1522,98 +1473,6 @@ export const generateInsight = async (
       validateInsight
     );
   });
-};
-
-/**
- * Parses a natural language input to determine intent and extract data.
- * @param input - The user's natural language string (e.g., "Spent 50 at Shell")
- * @param context - Context for better matching (categories, date)
- * @param _aiClient - Optional injected AI client for testing purposes.
- */
-export const parseMagicAction = async (
-  householdId: string,
-  input: string,
-  context: {
-    categories: string[] | readonly string[];
-    groceryCategories: string[] | readonly string[];
-    stores?: string[] | readonly string[];
-    todayDate: string;
-  },
-  _aiClient?: Pick<typeof ai, 'models'>
-): Promise<import('./geminiService.types').MagicActionResponse> => {
-  try {
-    const sanitizedInput = sanitizeForPrompt(input);
-    const hasCategories = context.categories.length > 0;
-    const categoryList = hasCategories ? sanitizeList(context.categories) : '';
-    const groceryCategoryList = sanitizeList(context.groceryCategories);
-    const storeList = context.stores?.length ? sanitizeList(context.stores) : '';
-
-    const prompt = `
-      Analyze this user input: "${sanitizedInput}".
-      Determine the intent: 'transaction', 'todo', or 'shopping'.
-
-      Dates: resolve relative dates against today (${context.todayDate}) in the user's local timezone — "today" = ${context.todayDate}, "yesterday" = today - 1 day, "tomorrow" = today + 1 day, a weekday name = the nearest upcoming matching day. If no year is given, assume the current year. Always output dates as YYYY-MM-DD.
-
-      1. Transaction: User spent money or wants to log an expense.
-         Extract: merchant, amount (a positive number in US dollars), ${hasCategories ? `category (choose exactly one of: ${categoryList}; if none fits, use "${FALLBACK_CATEGORY}")` : `category (a short, sensible category name)`}, date.
-      2. Todo: User wants to remember a task.
-         Extract: text (task description), completeByDate. If no date is specified, set completeByDate to today's date.
-      3. Shopping: User wants to buy something later.
-         Extract: item (name), quantity (string), category (choose exactly one of: ${groceryCategoryList}; if none fits, use "Uncategorized"), store (optional${storeList ? `; prefer one of these existing stores when it's the same place: ${storeList}` : ''}).
-
-      If unsure, default to 'unknown'.
-    `;
-
-    const result = await generateJsonContent<import('./geminiService.types').MagicActionResponse>(
-      householdId,
-      prompt,
-      {
-        type: Type.OBJECT,
-        properties: {
-          type: { type: Type.STRING, enum: ['transaction', 'todo', 'shopping', 'unknown'] },
-          confidence: { type: Type.NUMBER },
-          data: {
-            type: Type.OBJECT,
-            properties: {
-              merchant: { type: Type.STRING },
-              amount: { type: Type.NUMBER },
-              category: { type: Type.STRING },
-              date: { type: Type.STRING },
-              text: { type: Type.STRING },
-              completeByDate: { type: Type.STRING },
-              item: { type: Type.STRING },
-              quantity: { type: Type.STRING },
-              store: { type: Type.STRING }
-            }
-          }
-        },
-        required: ["type", "confidence", "data"]
-      },
-      _aiClient,
-      GEMINI_MODEL,
-      validateMagicAction
-    );
-
-    // Clamp the category to the household's real set (the schema only constrains
-    // type). Transactions clamp to budget categories, shopping to grocery ones;
-    // skip transaction clamping when the household has no categories yet.
-    if (result.data?.category) {
-      if (result.type === 'transaction' && hasCategories) {
-        result.data.category = clampToAllowed(result.data.category, context.categories);
-      } else if (result.type === 'shopping') {
-        result.data.category = clampToAllowed(result.data.category, context.groceryCategories, 'Uncategorized');
-      }
-    }
-    return result;
-  } catch (error) {
-    console.error("Gemini Magic Action Parse Error:", error);
-    // Quota-exceeded must reach the UI unchanged (see withErrorHandling) —
-    // returning 'unknown' would mislabel a rate-limit as unclear input.
-    if (error instanceof Error && error.message.includes("quota")) throw error;
-    // Fallback or rethrow? Let's return unknown to be safe. A malformed AI
-    // response (GeminiValidationError) lands here too and degrades gracefully.
-    return { type: 'unknown', confidence: 0, data: {} };
-  }
 };
 
 /**

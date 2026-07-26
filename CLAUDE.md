@@ -147,10 +147,9 @@ Pages are `React.lazy`-loaded (see Routing). The always-mounted toolbar/nav moda
 - Calls go through a shared helper with timeout and bounded exponential-backoff retry on transient errors (429/503/network, including their callable equivalents `resource-exhausted`/`unavailable`); non-transient errors are not retried.
 - The daily AI quota check-and-increment runs in a single Firestore `runTransaction` to avoid a check-then-increment race. The `aiEnabled` flag on `app_config/global` is a kill-switch checked before calls (fail-open; see Feature Flags below), and when `billingEnabled` is on the daily cap becomes plan-aware via [utils/entitlements.ts](utils/entitlements.ts) (otherwise a flat legacy quota applies).
 - Plain TypeScript types are in [services/geminiService.types.ts](services/geminiService.types.ts) (re-exported from `geminiService`); import types from there in always-loaded modules so the `@google/genai` SDK stays out of the app boot path (the SDK functions are loaded via dynamic `import()`).
-- **Receipt Scanning**: `analyzeReceipt()` - OCR for expense receipts
-  - Returns: merchant, amount, category, date
-- **Bank Statement Parsing**: `parseBankStatement()` - Extracts transaction lists from screenshots
-  - Returns: array of transactions with dates, descriptions, amounts
+- **Receipt Scanning**: `CaptureModal`'s "Add from image" flow calls `parseReceiptLineItems()` first — itemized OCR that extracts merchant/date/store plus every line item (each with description, amount, category), enabling the multi-category receipt split. When the image has no itemized products (e.g. a bank statement or transaction-list screenshot), it falls back to `parseBankStatement()`.
+  - `parseReceiptLineItems()` returns: merchant, date, store, suggested habits, items[] (description, amount, category)
+  - `parseBankStatement()` returns: array of transactions with dates, descriptions, amounts
 - **Meal Suggestions**: `suggestMeal()` - AI-powered meal planning based on budget and time constraints
   - Returns: meal name, description, ingredients, tags, reasoning
 - **Grocery Receipt Parsing**: `parseGroceryReceipt()` - Extracts grocery items from receipt photos

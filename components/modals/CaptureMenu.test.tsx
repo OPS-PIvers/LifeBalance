@@ -1,61 +1,53 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { CaptureMenu } from './CaptureMenu';
 
-// The magic-action card reads household context; stub it so this test focuses
-// on the capture-method hierarchy (primary rows vs. the quieter secondary).
-vi.mock('./CaptureMagicAction', () => ({
-  CaptureMagicAction: () => <div data-testid="magic-action" />,
-}));
-
 const setup = () => {
-  const onScan = vi.fn();
-  const onFileSelect = vi.fn();
+  const onSelectImage = vi.fn();
   const onManual = vi.fn();
   render(
     <CaptureMenu
-      onScan={onScan}
-      onFileSelect={onFileSelect}
+      onSelectImage={onSelectImage}
       onManual={onManual}
-      householdId="h1"
-      dynamicCategories={['Groceries']}
-      onMagicSuccess={vi.fn()}
     />,
   );
-  return { onScan, onFileSelect, onManual };
+  return { onSelectImage, onManual };
 };
 
 describe('CaptureMenu hierarchy', () => {
-  beforeEach(() => {
-    localStorage.clear();
-    vi.clearAllMocks();
-  });
-
-  it('renders the two primary methods and the quieter secondary group', () => {
+  it('renders the two primary capture methods', () => {
     setup();
-    // Primary methods.
     expect(screen.getByText('Manual Entry')).toBeInTheDocument();
-    expect(screen.getByText('Scan Receipt')).toBeInTheDocument();
-    // Secondary method sits under a soft "More" label, not as an equal card.
-    expect(screen.getByText('More ways to add')).toBeInTheDocument();
-    expect(screen.getByText('Upload image')).toBeInTheDocument();
+    expect(screen.getByText('Add from Image')).toBeInTheDocument();
   });
 
-  it('orders Manual Entry and Scan Receipt ahead of the Upload secondary', () => {
+  it('orders Manual Entry ahead of Add from Image', () => {
     setup();
-    const order = ['Manual Entry', 'Scan Receipt', 'Upload image'].map(
+    const order = ['Manual Entry', 'Add from Image'].map(
       (label) => screen.getByText(label),
     );
-    // Document order: primary pair first, then the secondary upload row.
     expect(order[0]!.compareDocumentPosition(order[1]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(order[1]!.compareDocumentPosition(order[2]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('wires each capture method to its handler', () => {
-    const { onScan, onManual } = setup();
+  it('wires Manual Entry to its handler', () => {
+    const { onManual } = setup();
     fireEvent.click(screen.getByText('Manual Entry'));
     expect(onManual).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByText('Scan Receipt'));
-    expect(onScan).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the file picker when Add from Image is clicked', () => {
+    setup();
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const clickSpy = vi.spyOn(input, 'click');
+    fireEvent.click(screen.getByText('Add from Image'));
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onSelectImage with a valid image file', () => {
+    const { onSelectImage } = setup();
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(['data'], 'receipt.png', { type: 'image/png' });
+    fireEvent.change(input, { target: { files: [file] } });
+    expect(onSelectImage).toHaveBeenCalledWith(file);
   });
 });

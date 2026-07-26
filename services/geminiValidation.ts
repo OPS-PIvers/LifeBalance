@@ -22,7 +22,6 @@
 import type { Meal, InsightAction } from '@/types/schema';
 import type { WeeklyPlan } from '@/types/weeklyPlan';
 import type {
-  ReceiptData,
   ReceiptLineItemsData,
   ParsedShoppingList,
   ParsedTodoList,
@@ -33,7 +32,6 @@ import type {
   HabitPatternInsight,
   HabitReorganizationPlan,
   HabitPointAdjustmentSuggestion,
-  MagicActionResponse,
 } from './geminiService.types';
 
 // ---------------------------------------------------------------------------
@@ -99,21 +97,6 @@ const expectRecord = (raw: unknown, context: string): Record<string, unknown> =>
 };
 
 // ---------------------------------------------------------------------------
-// Receipt
-// ---------------------------------------------------------------------------
-
-export function validateReceiptData(raw: unknown): ReceiptData {
-  const o = expectRecord(raw, 'receipt');
-  if (!isString(o['merchant'])) fail('receipt', 'merchant must be a string');
-  if (!isFiniteNumber(o['amount'])) fail('receipt', 'amount must be a number');
-  if (!isString(o['category'])) fail('receipt', 'category must be a string');
-  if (!isOptString(o['date'])) fail('receipt', 'date must be a string');
-  if (!isOptStringArray(o['suggestedHabits'])) fail('receipt', 'suggestedHabits must be string[]');
-  if (!isOptString(o['store'])) fail('receipt', 'store must be a string');
-  return o as unknown as ReceiptData;
-}
-
-// ---------------------------------------------------------------------------
 // Bank statement transactions
 // ---------------------------------------------------------------------------
 
@@ -123,6 +106,7 @@ export interface BankTransactionLike {
   category: string;
   date: string;
   suggestedHabits?: string[];
+  store?: string;
 }
 
 export function validateBankTransactions(raw: unknown): BankTransactionLike[] {
@@ -134,6 +118,7 @@ export function validateBankTransactions(raw: unknown): BankTransactionLike[] {
     if (!isString(o['category'])) fail(`bankStatement[${i}]`, 'category must be a string');
     if (!isString(o['date'])) fail(`bankStatement[${i}]`, 'date must be a string');
     if (!isOptStringArray(o['suggestedHabits'])) fail(`bankStatement[${i}]`, 'suggestedHabits must be string[]');
+    if (!isOptString(o['store'])) fail(`bankStatement[${i}]`, 'store must be a string');
     return o as unknown as BankTransactionLike;
   });
 }
@@ -226,6 +211,7 @@ export function validateReceiptLineItems(raw: unknown): ReceiptLineItemsData {
   if (!isString(o['merchant'])) fail('receiptLineItems', 'merchant must be a string');
   if (!isOptString(o['date'])) fail('receiptLineItems', 'date must be a string');
   if (!isOptString(o['store'])) fail('receiptLineItems', 'store must be a string');
+  if (!isOptStringArray(o['suggestedHabits'])) fail('receiptLineItems', 'suggestedHabits must be string[]');
   const items = expectArray(o['items'], 'receiptLineItems.items');
   items.forEach((entry, i) => {
     const item = expectRecord(entry, `receiptLineItems.items[${i}]`);
@@ -299,32 +285,6 @@ export function validateInsight(raw: unknown): InsightResult {
     cleanedActions = arr.filter((entry) => isRecord(entry) && insightActionIsWellFormed(entry));
   }
   return { text: o['text'] as string, actions: cleanedActions as InsightResult['actions'] };
-}
-
-// ---------------------------------------------------------------------------
-// Magic action (discriminated union on `type`)
-// ---------------------------------------------------------------------------
-
-const MAGIC_ACTION_TYPES = ['transaction', 'todo', 'shopping', 'unknown'];
-
-export function validateMagicAction(raw: unknown): MagicActionResponse {
-  const o = expectRecord(raw, 'magicAction');
-  if (!isString(o['type']) || !MAGIC_ACTION_TYPES.includes(o['type'])) {
-    fail('magicAction', `type must be one of ${MAGIC_ACTION_TYPES.join(', ')}`);
-  }
-  if (!isFiniteNumber(o['confidence'])) fail('magicAction', 'confidence must be a number');
-  const data = expectRecord(o['data'], 'magicAction.data');
-  // All data fields are optional; validate types when present.
-  if (!isOptString(data['merchant'])) fail('magicAction.data', 'merchant must be a string');
-  if (!isOptNumber(data['amount'])) fail('magicAction.data', 'amount must be a number');
-  if (!isOptString(data['category'])) fail('magicAction.data', 'category must be a string');
-  if (!isOptString(data['date'])) fail('magicAction.data', 'date must be a string');
-  if (!isOptString(data['text'])) fail('magicAction.data', 'text must be a string');
-  if (!isOptString(data['completeByDate'])) fail('magicAction.data', 'completeByDate must be a string');
-  if (!isOptString(data['item'])) fail('magicAction.data', 'item must be a string');
-  if (!isOptString(data['quantity'])) fail('magicAction.data', 'quantity must be a string');
-  if (!isOptString(data['store'])) fail('magicAction.data', 'store must be a string');
-  return o as unknown as MagicActionResponse;
 }
 
 // ---------------------------------------------------------------------------
