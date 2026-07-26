@@ -24,6 +24,7 @@ const setEnabledModules = (enabled: ModuleKey[]) => {
       enabled.includes('lists') &&
       (enabled.includes('todos') || enabled.includes('meals') || enabled.includes('shopping')),
     isPlanTabVisible: (tab) => enabled.includes('lists') && enabled.includes(tab),
+    isHomeVisible: true,
   });
 };
 

@@ -7,6 +7,7 @@ import { FirebaseHouseholdProvider } from './contexts/FirebaseHouseholdContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import ModuleRoute from './components/auth/ModuleRoute';
+import HomeRoute from './components/auth/HomeRoute';
 import PlanTabRedirect from './components/auth/PlanTabRedirect';
 import MainLayout from './components/layout/MainLayout';
 import OfflineBanner from './components/layout/OfflineBanner';
@@ -167,7 +168,9 @@ const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <MainLayout>
-                        <Dashboard />
+                        <HomeRoute>
+                          <Dashboard />
+                        </HomeRoute>
                       </MainLayout>
                     </ProtectedRoute>
                   }

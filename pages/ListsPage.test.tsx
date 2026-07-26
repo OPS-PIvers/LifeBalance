@@ -27,6 +27,7 @@ const setEnabledTabs = (enabled: PlanTab[]) => {
     isModuleEnabled: () => true,
     isPlanVisible: enabled.length > 0,
     isPlanTabVisible: (tab: PlanTab) => enabled.includes(tab),
+    isHomeVisible: true,
   });
 };
 

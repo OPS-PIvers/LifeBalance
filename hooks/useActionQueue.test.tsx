@@ -36,6 +36,7 @@ const setEnabledModules = (enabled: ModuleKey[]) => {
       (enabled.includes('todos') || enabled.includes('meals') || enabled.includes('shopping')),
     // A to-do is only reachable when the Plan master AND the To-Dos tab are on.
     isPlanTabVisible: (tab) => enabled.includes('lists') && enabled.includes(tab),
+    isHomeVisible: true,
   });
 };
 

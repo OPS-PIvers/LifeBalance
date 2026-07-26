@@ -3,6 +3,7 @@ import { ChevronUp, ChevronDown } from 'lucide-react';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import { Switch } from '@/components/ui/Switch';
 import { Button } from '@/components/ui/Button';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import Eyebrow from '@/components/ui/Eyebrow';
 import {
   DASHBOARD_WIDGETS,
@@ -14,7 +15,9 @@ import {
   NAV_PAGES,
   isHouseholdModuleEnabled,
   resolveHiddenKeys,
+  resolveLandingScreenKey,
   toggleHiddenKey,
+  type LandingScreenKey,
   type ModuleSettings,
   type VisibilityKey,
 } from '@/utils/moduleVisibility';
@@ -24,7 +27,7 @@ interface MyViewSettingsProps {
   member: HouseholdMember;
   /** Household module map — leaves the household has turned off aren't listed. */
   settings: ModuleSettings;
-  onSave: (updates: Pick<HouseholdMember, 'dashboardLayout' | 'hiddenKeys'>) => void;
+  onSave: (updates: Pick<HouseholdMember, 'dashboardLayout' | 'hiddenKeys' | 'homeScreen'>) => void;
 }
 
 const WIDGET_DEFS = new Map<string, DashboardWidgetDef>(DASHBOARD_WIDGETS.map(w => [w.id, w]));
@@ -83,6 +86,48 @@ export const MyViewSettings: React.FC<MyViewSettingsProps> = ({ member, settings
     [order, hidden, onSave]
   );
 
+  // 2F.2 — Home becomes toggleable, same switch mechanics as every other leaf.
+  const homeHidden = hiddenSet.has('home');
+
+  // Landing-screen picker: ONLY destinations actually reachable right now —
+  // Home (unless the member just hid it above) plus any page that still has
+  // at least one visible leaf for this member. Offering a hidden destination
+  // would be a dead switch.
+  const landingOptions = useMemo(() => {
+    const options: { key: LandingScreenKey; label: string }[] = [];
+    if (!homeHidden) options.push({ key: 'home', label: 'Home' });
+    for (const page of pages) {
+      if (page.leaves.some(leaf => !hiddenSet.has(leaf.key))) {
+        options.push({ key: page.key, label: page.label });
+      }
+    }
+    return options;
+  }, [homeHidden, pages, hiddenSet]);
+
+  // The CURRENTLY effective landing screen — walks the member's chosen
+  // `homeScreen` → the first reachable destination, so the control always
+  // shows a real, selectable value even before the member ever picks one.
+  const effectiveLandingScreen = useMemo(
+    () => resolveLandingScreenKey({ homeScreen: member.homeScreen }, settings, hiddenSet),
+    [member.homeScreen, settings, hiddenSet]
+  );
+  // `resolveLandingScreenKey` can answer `'settings'` (every destination
+  // hidden), which isn't one of `landingOptions` — the control below only
+  // renders while at least one option exists, so this narrows back to a real
+  // `LandingScreenKey` for that render (falling back to the first option is
+  // unreachable in practice: it's non-empty exactly when this isn't 'settings').
+  const landingValue: LandingScreenKey =
+    effectiveLandingScreen === 'settings'
+      ? (landingOptions[0]?.key ?? 'home')
+      : effectiveLandingScreen;
+
+  const handleSetLandingScreen = useCallback(
+    (key: LandingScreenKey) => {
+      onSave({ dashboardLayout: order, hiddenKeys: hidden, homeScreen: key });
+    },
+    [order, hidden, onSave]
+  );
+
   return (
     <div className="space-y-6">
       <p className="text-xs text-brand-500 dark:text-brand-400 px-1">
@@ -90,6 +135,34 @@ export const MyViewSettings: React.FC<MyViewSettingsProps> = ({ member, settings
         view — other household members keep theirs. Turn off every view on a page and that page
         leaves your nav; leave one on and tapping it goes straight there.
       </p>
+
+      {/* 2F.2 — Home is toggleable like any other page. Hiding it doesn't lose
+          your Home widget choices below; it just takes Home out of your nav
+          and out of the landing-screen choices underneath. */}
+      <div className="space-y-2">
+        <div className="px-1">
+          <Eyebrow className="block">Home</Eyebrow>
+          {homeHidden && (
+            <p className="text-xs text-brand-500 dark:text-brand-400 mt-1">
+              Hidden from your navigation.
+            </p>
+          )}
+        </div>
+        <SurfaceList>
+          <Row>
+            <div className={`flex-1 min-w-0 ${homeHidden ? 'opacity-50' : ''}`}>
+              <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">
+                Home
+              </p>
+            </div>
+            <Switch
+              aria-label="Show Home in your navigation"
+              checked={!homeHidden}
+              onCheckedChange={() => handleToggle('home')}
+            />
+          </Row>
+        </SurfaceList>
+      </div>
 
       {pages.map(page => {
         const visibleCount = page.leaves.filter(leaf => !hiddenSet.has(leaf.key)).length;
@@ -125,6 +198,26 @@ export const MyViewSettings: React.FC<MyViewSettingsProps> = ({ member, settings
           </div>
         );
       })}
+
+      {/* 2F.2 — where you land when you open the app. Only reachable
+          destinations are offered; with one (or zero, forced to Settings)
+          there's no real choice, so the control doesn't render. */}
+      {landingOptions.length > 1 && (
+        <div className="space-y-2">
+          <div className="px-1">
+            <Eyebrow className="block">Landing screen</Eyebrow>
+            <p className="text-xs text-brand-500 dark:text-brand-400 mt-1">
+              Where you land when you open the app.
+            </p>
+          </div>
+          <SegmentedControl
+            name="Landing screen"
+            value={landingValue}
+            onChange={handleSetLandingScreen}
+            options={landingOptions.map(o => ({ value: o.key, label: o.label }))}
+          />
+        </div>
+      )}
 
       <div className="space-y-2">
         <div className="px-1">

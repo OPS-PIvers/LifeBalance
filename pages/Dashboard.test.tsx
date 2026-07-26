@@ -119,6 +119,9 @@ const setEnabledModules = (enabled: ModuleKey[]) => {
       enabled.includes('lists') &&
       (enabled.includes('todos') || enabled.includes('meals') || enabled.includes('shopping')),
     isPlanTabVisible: (tab) => enabled.includes('lists') && enabled.includes(tab),
+    // 2F.2: Home has no household-level toggle; these tests aren't exercising
+    // that member-only choice, so it's simply on.
+    isHomeVisible: true,
   });
 };
 

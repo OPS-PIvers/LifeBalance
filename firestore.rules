@@ -338,15 +338,47 @@ service cloud.firestore {
             // Case 2: Admin updating any member (including role)
             isAdminOf(householdId) ||
             // Case 3 (Plan 080): any parent may manage a login-less kid profile,
-            // but cannot un-manage it, change its role away from 'kid', alter the
-            // immutable uid/joinedAt, add stray keys, or write bad types.
+            // but cannot un-manage it, change its role away from 'kid', add
+            // stray keys of their own, or write bad types.
+            //
+            // 🛡️ SECURITY: this MUST be affectedKeys() (the keys THIS WRITE
+            // touches), never keys() of the whole resulting document — matching
+            // Case 1's self-update branch above. Case 2 (isAdminOf) is a blanket
+            // bypass with no field restriction: an admin's write to a kid can
+            // add any key, including ones this branch's allowlist doesn't know
+            // about. A whole-document keys().hasOnly() would then have to list
+            // literally every key any writer has EVER added to survive — and the
+            // moment an admin added one this list didn't know about, the kid's
+            // document would PERMANENTLY fail that check, locking every later
+            // non-admin parent write out FOREVER (not just the write that added
+            // the key). affectedKeys() sidesteps the whole problem: it only
+            // constrains the keys *this* write adds/changes/removes, so it
+            // doesn't care that an admin-planted field sits untouched elsewhere
+            // on the document. This introduces no new storage-abuse path —
+            // Case 2's blanket bypass already lets an admin write any key to any
+            // member, so a document carrying an extra field was already
+            // reachable; this only stops that pre-existing field from locking
+            // out unrelated non-admin writes.
+            //
+            // Because of this, adding a new HouseholdMember field to the schema
+            // no longer requires touching this list AT ALL unless a non-admin
+            // parent must be able to write that field directly on a kid (as
+            // opposed to it only ever being admin/server-written, which already
+            // goes through Case 2). 'hiddenKeys' and 'homeScreen' are listed
+            // because MyViewSettings lets a non-admin parent edit a kid's own
+            // visibility directly; 'email' is listed because MemberModal's
+            // generic admin "Edit Member" form (pages/Settings.tsx
+            // handleEditMember) is not filtered to exclude managed kids and
+            // always submits `email` alongside displayName/role, so a non-admin
+            // parent using that same screen needs it allowed too.
             (
               isManagedKidData(resource.data) &&
               isManagedKidData(request.resource.data) &&
               !request.resource.data.diff(resource.data).affectedKeys().hasAny(['uid', 'joinedAt']) &&
-              request.resource.data.keys().hasOnly([
-                'uid', 'displayName', 'role', 'isManaged', 'managedByUid',
-                'avatarColor', 'avatarEmoji', 'points', 'allowanceCents', 'joinedAt'
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                'displayName', 'role', 'isManaged', 'managedByUid',
+                'avatarColor', 'avatarEmoji', 'points', 'allowanceCents',
+                'hiddenKeys', 'homeScreen', 'email'
               ]) &&
               isValidOptionalString(request.resource.data.get('managedByUid', null), 128) &&
               isValidOptionalString(request.resource.data.get('avatarColor', null), 30) &&

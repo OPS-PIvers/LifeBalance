@@ -65,6 +65,7 @@ const setEnabledModules = (enabled: ModuleKey[]) => {
       (enabled.includes('todos') || enabled.includes('meals') || enabled.includes('shopping')),
     // To-Do/Shop capture require the Plan master AND the sub-tab to be on.
     isPlanTabVisible: (tab) => enabled.includes('lists') && enabled.includes(tab),
+    isHomeVisible: true,
   });
 };
 

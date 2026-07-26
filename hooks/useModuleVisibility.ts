@@ -3,6 +3,7 @@ import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useHiddenVisibilityKeys } from '@/hooks/useHiddenVisibilityKeys';
 import type { ModuleKey } from '@/types/schema';
 import {
+  isHomeVisible as isHomeVisiblePure,
   isModuleEnabled as isModuleEnabledPure,
   isPlanVisible as isPlanVisiblePure,
   isPlanTabVisible as isPlanTabVisiblePure,
@@ -16,6 +17,12 @@ export interface ModuleVisibility {
   isPlanVisible: boolean;
   /** Whether a given Lists sub-tab + its standalone route should be shown. */
   isPlanTabVisible: (tab: PlanTab) => boolean;
+  /**
+   * Whether Home (the `/` route + its `BottomNav` item) should be shown for
+   * THIS member (2F.2). Home has no household-level toggle, so — unlike
+   * `isModuleEnabled` — this reads only the member's hidden-key set.
+   */
+  isHomeVisible: boolean;
 }
 
 /**
@@ -49,6 +56,7 @@ export const useModuleVisibility = (): ModuleVisibility => {
       isModuleEnabled: (key: ModuleKey) => isModuleEnabledPure(householdSettings, key, hidden),
       isPlanVisible: isPlanVisiblePure(householdSettings, hidden),
       isPlanTabVisible: (tab: PlanTab) => isPlanTabVisiblePure(householdSettings, tab, hidden),
+      isHomeVisible: isHomeVisiblePure(hidden),
     }),
     [householdSettings, hidden],
   );
