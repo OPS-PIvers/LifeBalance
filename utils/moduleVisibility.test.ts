@@ -18,6 +18,7 @@ import {
   resolveActiveLocation,
   resolveHiddenKeySet,
   resolveHiddenKeys,
+  resolveLandingOptions,
   resolveLandingRoute,
   resolveLandingScreenKey,
   toggleHiddenKey,
@@ -513,16 +514,26 @@ describe('resolveActiveLocation', () => {
   });
 });
 
-describe('getVisibilityMatrixSections (2F.3 admin matrix)', () => {
+describe('getVisibilityMatrixSections (2F.3 admin matrix, + Home-row fix)', () => {
   const sections = getVisibilityMatrixSections();
 
-  it('has one section per NAV_PAGES page plus a Home-widgets section', () => {
-    expect(sections.map(s => s.key)).toEqual(['habits', 'money', 'lists', 'widgets']);
+  // The pinned shape below was ['habits', 'money', 'lists', 'widgets'] before
+  // this fix — Home had NO row at all, so nobody could hide a managed kid's
+  // Home or set their landing screen (kids have no login to use
+  // `MyViewSettings` themselves). This is a deliberate shape change, not a
+  // regression: update it here, not by reverting the source.
+  it('has a Home section, one section per NAV_PAGES page, and a Home-widgets section', () => {
+    expect(sections.map(s => s.key)).toEqual(['home', 'habits', 'money', 'lists', 'widgets']);
   });
 
-  it('covers every NAV_LEAF_KEY exactly once, across the page sections', () => {
+  it('the Home section has exactly one row: the Home leaf itself', () => {
+    const home = sections.find(s => s.key === 'home');
+    expect(home?.rows.map(r => r.key)).toEqual(['home']);
+  });
+
+  it('covers every NAV_LEAF_KEY exactly once, across the page sections (Home and widgets excluded)', () => {
     const leafKeys = sections
-      .filter(s => s.key !== 'widgets')
+      .filter(s => s.key !== 'widgets' && s.key !== 'home')
       .flatMap(s => s.rows.map(r => r.key));
     expect(leafKeys).toEqual(NAV_LEAF_KEYS);
   });
@@ -548,6 +559,12 @@ describe('getVisibilityMatrixSections (2F.3 admin matrix)', () => {
     ]);
   });
 
+  it('Home has no module at the section OR row level, like Home widgets', () => {
+    const home = sections.find(s => s.key === 'home');
+    expect(home?.moduleKey).toBeNull();
+    expect(home?.rows.every(r => r.ownModule === null)).toBe(true);
+  });
+
   it('Home widgets have no module at the section OR row level', () => {
     const widgets = sections.find(s => s.key === 'widgets');
     expect(widgets?.moduleKey).toBeNull();
@@ -559,12 +576,16 @@ describe('isMatrixRowLocked', () => {
   const habitsSection = getVisibilityMatrixSections().find(s => s.key === 'habits');
   const listsSection = getVisibilityMatrixSections().find(s => s.key === 'lists');
   const widgetsSection = getVisibilityMatrixSections().find(s => s.key === 'widgets');
-  if (!habitsSection || !listsSection || !widgetsSection) throw new Error('section missing');
+  const homeSection = getVisibilityMatrixSections().find(s => s.key === 'home');
+  if (!habitsSection || !listsSection || !widgetsSection || !homeSection) {
+    throw new Error('section missing');
+  }
 
   const habitsRow = habitsSection.rows[0];
   const todosRow = listsSection.rows.find(r => r.key === 'todos');
   const widgetRow = widgetsSection.rows[0];
-  if (!habitsRow || !todosRow || !widgetRow) throw new Error('row missing');
+  const homeRow = homeSection.rows[0];
+  if (!habitsRow || !todosRow || !widgetRow || !homeRow) throw new Error('row missing');
 
   it('unlocked by default (fail-open household)', () => {
     expect(isMatrixRowLocked(null, habitsSection, habitsRow)).toBe(false);
@@ -588,6 +609,11 @@ describe('isMatrixRowLocked', () => {
 
   it('Home widgets are never household-locked (no module governs them)', () => {
     expect(isMatrixRowLocked(settings({ habits: false, money: false, lists: false }), widgetsSection, widgetRow)).toBe(false);
+  });
+
+  it('Home is never household-locked either (no household layer at all — the fix for the missing row)', () => {
+    expect(isMatrixRowLocked(settings({ habits: false, money: false, lists: false }), homeSection, homeRow)).toBe(false);
+    expect(isMatrixRowLocked(null, homeSection, homeRow)).toBe(false);
   });
 });
 
@@ -676,5 +702,47 @@ describe('resolveLandingScreenKey / resolveLandingRoute (2F.2)', () => {
     expect(
       resolveLandingScreenKey({ homeScreen: 'money' }, settings(undefined), EVERYTHING_HIDDEN)
     ).toBe('settings');
+  });
+});
+
+describe('resolveLandingOptions (shared by MyViewSettings and the admin matrix)', () => {
+  it('lists Home first, then every reachable page, in registry order', () => {
+    expect(resolveLandingOptions(settings(undefined), [])).toEqual([
+      { key: 'home', label: 'Home' },
+      { key: 'habits', label: 'Habits' },
+      { key: 'money', label: 'Money' },
+      { key: 'lists', label: 'Lists' },
+    ]);
+  });
+
+  it('drops Home once the member has hidden it', () => {
+    expect(resolveLandingOptions(settings(undefined), ['home'])).toEqual([
+      { key: 'habits', label: 'Habits' },
+      { key: 'money', label: 'Money' },
+      { key: 'lists', label: 'Lists' },
+    ]);
+  });
+
+  it('drops a page once every one of its leaves is hidden for this member', () => {
+    expect(resolveLandingOptions(settings(undefined), ALL_MONEY_LEAVES)).toEqual([
+      { key: 'home', label: 'Home' },
+      { key: 'habits', label: 'Habits' },
+      { key: 'lists', label: 'Lists' },
+    ]);
+  });
+
+  it('drops a page the HOUSEHOLD has disabled, regardless of the member\'s own hiddenKeys', () => {
+    expect(resolveLandingOptions(settings({ money: false }), [])).toEqual([
+      { key: 'home', label: 'Home' },
+      { key: 'habits', label: 'Habits' },
+      { key: 'lists', label: 'Lists' },
+    ]);
+  });
+
+  it('returns an empty list when nothing is reachable at all', () => {
+    const HABITS_LEAVES = ['track', 'history', 'insights', 'coach', 'rewards', 'challenges'];
+    const LISTS_LEAVES = ['todos', 'meals', 'shopping'];
+    const everythingHidden = ['home', ...HABITS_LEAVES, ...ALL_MONEY_LEAVES, ...LISTS_LEAVES];
+    expect(resolveLandingOptions(settings(undefined), everythingHidden)).toEqual([]);
   });
 });

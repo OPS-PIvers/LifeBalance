@@ -520,15 +520,16 @@ export function isPlanTabVisible(
 }
 
 // ---------------------------------------------------------------------------
-// Admin matrix (2F.3) — the pure row/lock derivation behind
-// components/settings/MemberVisibilityMatrix.tsx.
+// Admin matrix (2F.3, extended for Home in this fix) — the pure row/lock
+// derivation behind components/settings/MemberVisibilityMatrix.tsx.
 //
 // The matrix renders ONE row per `VisibilityKey`, grouped exactly like
-// `NAV_PAGES` (plus a Home-widgets group), with the household layer surfaced
-// as the group's own toggle (and, for Lists' three sub-tabs, an additional
-// per-row toggle — each of `todos`/`meals`/`shopping` is independently
-// household-gated, unlike Habits'/Money's leaves which all share their page's
-// single module). There is no separate household concept for Home widgets.
+// `NAV_PAGES` (plus a Home section and a Home-widgets group), with the
+// household layer surfaced as the group's own toggle (and, for Lists' three
+// sub-tabs, an additional per-row toggle — each of `todos`/`meals`/`shopping`
+// is independently household-gated, unlike Habits'/Money's leaves which all
+// share their page's single module). There is no separate household concept
+// for Home or Home widgets — same reason neither is in `NAV_PAGES`.
 // ---------------------------------------------------------------------------
 
 export interface VisibilityMatrixRow {
@@ -538,24 +539,38 @@ export interface VisibilityMatrixRow {
    * Set only when this SPECIFIC row has its OWN household `ModuleKey`,
    * distinct from its section's — i.e. Lists' `todos`/`meals`/`shopping`.
    * `null` for rows governed solely by the section's module (Habits/Money
-   * leaves) or not household-gated at all (Home widgets).
+   * leaves) or not household-gated at all (Home, Home widgets).
    */
   ownModule: ModuleKey | null;
 }
 
 export interface VisibilityMatrixSection {
-  key: NavPageKey | 'widgets';
+  key: NavPageKey | 'widgets' | 'home';
   label: string;
-  /** The household module this section's own toggle governs; `null` for Home widgets (no household concept). */
+  /** The household module this section's own toggle governs; `null` for Home and Home widgets (no household concept). */
   moduleKey: ModuleKey | null;
   rows: readonly VisibilityMatrixRow[];
 }
 
 /**
  * The full matrix, derived from `NAV_PAGES` (leaves) plus `DASHBOARD_WIDGETS`
- * — no hand-authored row list to drift from the single nav registry.
+ * — no hand-authored row list to drift from the single nav registry — PLUS an
+ * explicit Home section, hand-authored the same way the widgets section
+ * already is (Home isn't in `NAV_PAGES` either, for the same "no household
+ * layer" reason widgets aren't). This is the fix for the gap where 2F.1
+ * reserved `'home'` as a `VisibilityKey`, 2F.2 exposed a toggle for it in
+ * `MyViewSettings`, but this matrix — driven purely off `NAV_PAGES` — had no
+ * way to surface it, so nobody could hide a managed kid's Home (kids have no
+ * login to use `MyViewSettings` themselves).
  */
 export function getVisibilityMatrixSections(): VisibilityMatrixSection[] {
+  const homeSection: VisibilityMatrixSection = {
+    key: 'home',
+    label: 'Home',
+    moduleKey: null,
+    rows: [{ key: 'home', label: 'Home', ownModule: null }],
+  };
+
   const pageSections: VisibilityMatrixSection[] = NAV_PAGES.map(page => ({
     key: page.key,
     label: page.label,
@@ -580,7 +595,7 @@ export function getVisibilityMatrixSections(): VisibilityMatrixSection[] {
     })),
   };
 
-  return [...pageSections, widgetSection];
+  return [homeSection, ...pageSections, widgetSection];
 }
 
 /**
@@ -611,9 +626,9 @@ export type LandingScreenKey = HomeKey | NavPageKey;
 export type LandingMember = Pick<HouseholdMember, 'homeScreen'> | null | undefined;
 
 /** Canonical landing candidates in resolution order: Home, then pages in registry order. */
-const LANDING_CANDIDATES: readonly { key: LandingScreenKey; path: string }[] = [
-  { key: 'home', path: '/' },
-  ...NAV_PAGES.map(p => ({ key: p.key, path: p.path })),
+const LANDING_CANDIDATES: readonly { key: LandingScreenKey; path: string; label: string }[] = [
+  { key: 'home', path: '/', label: 'Home' },
+  ...NAV_PAGES.map(p => ({ key: p.key, path: p.path, label: p.label })),
 ];
 
 const isLandingKeyVisible = (
@@ -690,4 +705,28 @@ export function resolveLandingRoute(
   // Total over `LANDING_CANDIDATES` by construction — `key` came from either a
   // literal entry in that array or its `'settings'` sentinel, handled above.
   return LANDING_CANDIDATES.find(c => c.key === key)?.path ?? '/settings';
+}
+
+/** One landing-screen picker option: a destination plus its display label. */
+export interface LandingOption {
+  key: LandingScreenKey;
+  label: string;
+}
+
+/**
+ * The landing-screen destinations CURRENTLY reachable for this member — Home
+ * (unless they've hidden it) plus any nav page that still has at least one
+ * visible leaf, in the same registry order `resolveLandingScreenKey` resolves
+ * against. Offering an unreachable destination would be a dead picker entry.
+ *
+ * Shared by `MyViewSettings` (a member picking their own landing screen) and
+ * the admin `MemberVisibilityMatrix` (2F.3's Home-row fix, below) — ONE
+ * derivation of "what can this member land on", not one hand-rolled per
+ * caller.
+ */
+export function resolveLandingOptions(settings: ModuleSettings, hidden: HiddenKeys): LandingOption[] {
+  return LANDING_CANDIDATES.filter(c => isLandingKeyVisible(c.key, settings, hidden)).map(c => ({
+    key: c.key,
+    label: c.label,
+  }));
 }

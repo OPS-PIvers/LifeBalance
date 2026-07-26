@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemberVisibilityMatrix } from './MemberVisibilityMatrix';
 import type { HouseholdMember } from '@/types/schema';
 
@@ -31,6 +31,17 @@ const bob: HouseholdMember = {
   uid: 'm-bob',
   displayName: 'Bob',
   role: 'member',
+  points,
+  hiddenKeys: [],
+};
+
+// A managed kid profile — no login, so this matrix is the ONLY place anyone
+// can hide their Home or set their landing screen.
+const kid: HouseholdMember = {
+  uid: 'm-kid',
+  displayName: 'Kiddo',
+  role: 'member',
+  isManaged: true,
   points,
   hiddenKeys: [],
 };
@@ -97,5 +108,108 @@ describe('MemberVisibilityMatrix', () => {
 
     expect(onUpdateMember).toHaveBeenCalledTimes(1);
     expect(onUpdateMember).toHaveBeenCalledWith('m-bob', { hiddenKeys: ['overview'] });
+  });
+
+  // The gap this file exists to close (found independently by two
+  // integration reviewers): 2F.1 reserved 'home' as a VisibilityKey, 2F.2
+  // exposed a toggle for it in MyViewSettings, but this matrix — derived
+  // purely from NAV_PAGES — structurally could not surface a Home row, so
+  // nobody could hide a managed kid's Home or set their landing screen.
+  describe('Home row + landing-screen picker (fix for the missing row)', () => {
+    it('exposes a Home toggle an admin can use to hide Home for another member', () => {
+      render(
+        <MemberVisibilityMatrix
+          members={[alice, bob]}
+          settings={{ moduleVisibility: undefined }}
+          onToggleModule={vi.fn()}
+          onUpdateMember={vi.fn()}
+        />
+      );
+
+      expect(screen.getByRole('checkbox', { name: 'Show Home for Alice' })).toBeChecked();
+      expect(screen.getByRole('checkbox', { name: 'Show Home for Bob' })).toBeChecked();
+    });
+
+    it('calls onUpdateMember with hiddenKeys including "home" when an admin hides Home for another member', () => {
+      const onUpdateMember = vi.fn();
+      render(
+        <MemberVisibilityMatrix
+          members={[alice, bob]}
+          settings={{ moduleVisibility: undefined }}
+          onToggleModule={vi.fn()}
+          onUpdateMember={onUpdateMember}
+        />
+      );
+
+      screen.getByRole('checkbox', { name: 'Show Home for Bob' }).click();
+
+      expect(onUpdateMember).toHaveBeenCalledWith('m-bob', { hiddenKeys: ['home'] });
+    });
+
+    it('the Home row exposes no household toggle — Home has no household layer', () => {
+      render(
+        <MemberVisibilityMatrix
+          members={[alice, bob]}
+          settings={{ moduleVisibility: undefined }}
+          onToggleModule={vi.fn()}
+          onUpdateMember={vi.fn()}
+        />
+      );
+
+      // Every OTHER section header carries a household switch (e.g. Habits,
+      // Money, Lists) — Home must not, since it isn't a `ModuleKey` and isn't
+      // in `NAV_PAGES`. Asserting there's no "Toggle Home for the household"
+      // switch anywhere pins that it's absent, not merely disabled.
+      expect(
+        screen.queryByRole('checkbox', { name: 'Toggle Home for the household' })
+      ).not.toBeInTheDocument();
+      // Sanity check the query itself would find a real section's household
+      // switch, so an absent-Home assertion isn't just a typo'd name.
+      expect(
+        screen.getByRole('checkbox', { name: 'Toggle Habits for the household' })
+      ).toBeInTheDocument();
+    });
+
+    it("lets an admin set another member's landing screen, offering only that member's reachable destinations", () => {
+      const onUpdateMember = vi.fn();
+      render(
+        <MemberVisibilityMatrix
+          // Alice hid Trends (a Money leaf), which doesn't remove Money
+          // entirely — the landing-screen picker should still offer Money.
+          members={[alice, bob]}
+          settings={{ moduleVisibility: undefined }}
+          onToggleModule={vi.fn()}
+          onUpdateMember={onUpdateMember}
+        />
+      );
+
+      const bobLanding = screen.getByRole('combobox', {
+        name: 'Landing screen for Bob',
+      }) as HTMLSelectElement;
+      fireEvent.change(bobLanding, { target: { value: 'money' } });
+
+      expect(onUpdateMember).toHaveBeenCalledWith('m-bob', { homeScreen: 'money' });
+    });
+
+    it("a managed kid's row supports both hiding Home and setting a landing screen — the only way, since kids have no login", () => {
+      const onUpdateMember = vi.fn();
+      render(
+        <MemberVisibilityMatrix
+          members={[alice, kid]}
+          settings={{ moduleVisibility: undefined }}
+          onToggleModule={vi.fn()}
+          onUpdateMember={onUpdateMember}
+        />
+      );
+
+      screen.getByRole('checkbox', { name: 'Show Home for Kiddo' }).click();
+      expect(onUpdateMember).toHaveBeenCalledWith('m-kid', { hiddenKeys: ['home'] });
+
+      const kidLanding = screen.getByRole('combobox', {
+        name: 'Landing screen for Kiddo',
+      }) as HTMLSelectElement;
+      fireEvent.change(kidLanding, { target: { value: 'habits' } });
+      expect(onUpdateMember).toHaveBeenCalledWith('m-kid', { homeScreen: 'habits' });
+    });
   });
 });
