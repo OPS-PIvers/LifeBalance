@@ -286,7 +286,25 @@ service cloud.firestore {
               // forward-add for the not-yet-shipped 2F.1/2F.2 member-visibility feature: no
               // TypeScript field exists for either yet, but allowlisting them now means that
               // feature's PR needs no rules change (and no human-watched rules review) later.
-              request.resource.data.diff(resource.data).changedKeys().hasOnly(
+              //
+              // 🛡️ SECURITY: this MUST be affectedKeys(), not changedKeys(). changedKeys()
+              // only reports keys whose value CHANGED between two already-existing values —
+              // a key that is ABSENT from the existing doc and is being added for the first
+              // time lands in addedKeys() instead, which changedKeys() ignores entirely. That
+              // made hasOnly(changedKeys()) pass VACUOUSLY for any first-time add of an
+              // unlisted field: a non-admin member could add 'points', 'allowanceCents',
+              // 'isManaged', 'managedByUid', or any arbitrary key to their OWN member doc
+              // (a real privilege-escalation/storage-abuse hole, not just a theoretical gap —
+              // proved by firestore.rules.test.ts's "still cannot write a genuinely forbidden
+              // key (points)" case). affectedKeys() is the union of added/changed/removed keys,
+              // so it governs adds and removals too. Do NOT "simplify" this back to
+              // changedKeys() — that reopens the hole. Because affectedKeys() is strictly
+              // stricter, this allowlist must stay exhaustive: every key a member legitimately
+              // writes about themselves (a client call-site sweep is required before adding a
+              // new field here) must be listed, and anything only an admin/server may set
+              // (role, points, joinedAt, uid, avatarColor/avatarEmoji, isManaged, managedByUid)
+              // must NOT be — those go through Case 2 (isAdminOf) or Case 3 (managed kid) below.
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(
                 ['displayName', 'email', 'photoURL', 'telegramChatId', 'notificationPreferences', 'fcmTokens', 'lastTokenRefresh', 'dashboardLayout', 'dashboardHidden', 'anyNotificationsEnabled', 'hiddenKeys', 'homeScreen']
               )
             ) ||

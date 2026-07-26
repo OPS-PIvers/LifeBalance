@@ -30,6 +30,7 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
   setLogLevel,
   type Firestore,
 } from 'firebase/firestore';
@@ -557,6 +558,55 @@ describe('member self-update allowlist (2G.1 — dashboard/notification fields)'
     await assertFails(
       updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
         points: { daily: 999, weekly: 999, total: 999 },
+      }),
+    );
+  });
+
+  // Escalation regressions: BOB's seeded doc is exactly { displayName, role } (see seed()
+  // above), so each of these keys is ABSENT — a first-time ADD. Under changedKeys(), an add
+  // of an absent key produces an EMPTY changed-keys set, so hasOnly() passed vacuously and the
+  // write was allowed regardless of the allowlist. affectedKeys() closes that hole: the add is
+  // now governed by the same allowlist as a change. These must all still fail post-fix.
+  it('a non-admin cannot ADD points for the first time (escalation regression)', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        points: { daily: 999, weekly: 999, total: 999 },
+      }),
+    );
+  });
+
+  it('a non-admin cannot ADD allowanceCents for the first time (escalation regression)', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        allowanceCents: 100000,
+      }),
+    );
+  });
+
+  it('a non-admin cannot ADD isManaged/managedByUid for the first time (escalation regression)', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        isManaged: true,
+        managedByUid: BOB,
+      }),
+    );
+  });
+
+  it('a non-admin cannot ADD an arbitrary junk key (storage-abuse regression)', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        someUnknownField: 'x'.repeat(1000),
+      }),
+    );
+  });
+
+  it('a non-admin cannot REMOVE an existing field via deleteField (escalation regression)', async () => {
+    // deleteField() puts the key in removedKeys(); affectedKeys() is the union of
+    // added/changed/removed, so a removal of 'role' must be denied exactly like a change to it
+    // would be — even though 'role' is never in the self-update allowlist.
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        role: deleteField(),
       }),
     );
   });
