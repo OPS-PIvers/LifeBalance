@@ -492,6 +492,76 @@ describe('privilege-escalation prevention', () => {
   });
 });
 
+// 2G.1: dashboardLayout/dashboardHidden (F-XCUT-02) and anyNotificationsEnabled were added to
+// HouseholdMember but never added to the self-update allowlist. changedKeys() excludes
+// newly-ADDED keys (they land in addedKeys()), so a member's FIRST write of a field succeeds
+// vacuously even when the field is missing from the allowlist — only a SECOND write (a change)
+// actually exercises the allowlist. Every pair below proves both halves: the add (which passed
+// even on the old, broken rules) and the change (which is the actual regression).
+describe('member self-update allowlist (2G.1 — dashboard/notification fields)', () => {
+  it('a non-admin can add dashboardLayout/dashboardHidden for the first time', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        dashboardLayout: ['streak', 'calendar'],
+        dashboardHidden: ['weather'],
+      }),
+    );
+  });
+
+  it('a non-admin can change an existing dashboardLayout/dashboardHidden', async () => {
+    const bobDb = dbFor(BOB);
+    const bobRef = doc(bobDb, 'households', H1, 'members', BOB);
+    await assertSucceeds(
+      updateDoc(bobRef, {
+        dashboardLayout: ['streak', 'calendar'],
+        dashboardHidden: ['weather'],
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(bobRef, {
+        dashboardLayout: ['calendar', 'streak'],
+        dashboardHidden: [],
+      }),
+    );
+  });
+
+  it('a non-admin can add then change anyNotificationsEnabled', async () => {
+    const bobDb = dbFor(BOB);
+    const bobRef = doc(bobDb, 'households', H1, 'members', BOB);
+    await assertSucceeds(updateDoc(bobRef, { anyNotificationsEnabled: true }));
+    await assertSucceeds(updateDoc(bobRef, { anyNotificationsEnabled: false }));
+  });
+
+  // Forward-add for the not-yet-shipped 2F.1/2F.2 member-visibility feature (no TypeScript
+  // field exists yet) — allowlisting now means that feature ships with no rules PR later.
+  it('a non-admin can add then change hiddenKeys and homeScreen', async () => {
+    const bobDb = dbFor(BOB);
+    const bobRef = doc(bobDb, 'households', H1, 'members', BOB);
+    await assertSucceeds(
+      updateDoc(bobRef, { hiddenKeys: ['todos'], homeScreen: 'money' }),
+    );
+    await assertSucceeds(
+      updateDoc(bobRef, { hiddenKeys: ['todos', 'meals'], homeScreen: 'habits' }),
+    );
+  });
+
+  it('a non-admin still cannot write a genuinely forbidden key (role)', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        role: 'admin',
+      }),
+    );
+  });
+
+  it('a non-admin still cannot write a genuinely forbidden key (points)', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        points: { daily: 999, weekly: 999, total: 999 },
+      }),
+    );
+  });
+});
+
 describe('immutable household fields', () => {
   it('a member cannot rewrite createdBy', async () => {
     await assertFails(

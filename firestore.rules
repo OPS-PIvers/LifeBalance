@@ -280,8 +280,14 @@ service cloud.firestore {
             // Case 1: User updating their own profile (restricted fields)
             (
               request.auth.uid == memberId &&
+              // dashboardLayout/dashboardHidden (F-XCUT-02) and anyNotificationsEnabled are
+              // allowlisted alongside their sibling fields — see firestore.rules.test.ts for the
+              // add-then-change regression this covers (2G.1). hiddenKeys/homeScreen are a
+              // forward-add for the not-yet-shipped 2F.1/2F.2 member-visibility feature: no
+              // TypeScript field exists for either yet, but allowlisting them now means that
+              // feature's PR needs no rules change (and no human-watched rules review) later.
               request.resource.data.diff(resource.data).changedKeys().hasOnly(
-                ['displayName', 'email', 'photoURL', 'telegramChatId', 'notificationPreferences', 'fcmTokens', 'lastTokenRefresh']
+                ['displayName', 'email', 'photoURL', 'telegramChatId', 'notificationPreferences', 'fcmTokens', 'lastTokenRefresh', 'dashboardLayout', 'dashboardHidden', 'anyNotificationsEnabled', 'hiddenKeys', 'homeScreen']
               )
             ) ||
             // Case 2: Admin updating any member (including role)
