@@ -1004,6 +1004,124 @@ describe('managed kid profiles (Plan 080 — login-less child member docs)', () 
       updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), { junkField: 'nope' }),
     );
   });
+
+  // 2F.1/2F.3 whole-document-keys() lockout regression, since fixed structurally.
+  // Case 3's guard used to run keys().hasOnly() against the ENTIRE resulting
+  // document, not affectedKeys() — so once an admin (Case 2, a blanket bypass)
+  // added a key Case 3's allowlist didn't know about, the kid's doc PERMANENTLY
+  // carried that key and every later non-admin write (Case 3) failed, forever,
+  // because the whole-document check saw an unrecognized key. Same failure shape
+  // as 2G.1's changedKeys() bug, one layer over: there it was a first-write vs. a
+  // later-write; here it was an admin's write vs. every later non-admin write.
+  //
+  // The rule now guards on `diff(resource.data).affectedKeys()` (what THIS write
+  // touches) instead, matching Case 1's self-update branch, so it no longer
+  // matters what untouched keys already sit on the document. The tests below
+  // still cover 'hiddenKeys'/'homeScreen' directly (they're on the allowlist
+  // because non-admin parents write them), but the load-bearing one is the
+  // 'someFutureFeatureField' test further down: it plants a key that is NOT on
+  // the allowlist and never will be, proving the fix is structural rather than
+  // "we happened to list the right keys this time."
+  describe('hiddenKeys/homeScreen do not lock a kid out of Case 3 (2F.1/2F.3 regression)', () => {
+    it('REGRESSION: after an admin sets hiddenKeys on a kid, a non-admin parent can still edit the kid afterward', async () => {
+      // Step 1: the admin sets hiddenKeys on the kid via Case 2 (isAdminOf), exactly
+      // as the admin per-member visibility matrix (MemberVisibilityMatrix) does.
+      await assertSucceeds(
+        updateDoc(doc(dbFor(ALICE), 'households', H1, 'members', KID), {
+          hiddenKeys: ['todos'],
+        }),
+      );
+
+      // Step 2: a non-admin parent then makes an ordinary edit to the SAME kid via
+      // Case 3 (e.g. updateKidProfile renaming the kid). On the OLD rules (Case 3's
+      // hasOnly() missing 'hiddenKeys') this step FAILS, because the kid's document
+      // now permanently contains a key Case 3 doesn't allowlist. On the fixed rules
+      // it succeeds.
+      await assertSucceeds(
+        updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), {
+          displayName: 'Leo Renamed',
+        }),
+      );
+    });
+
+    it('a non-admin parent can set hiddenKeys directly on a kid', async () => {
+      await assertSucceeds(
+        updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), {
+          hiddenKeys: ['money'],
+        }),
+      );
+    });
+
+    it('a non-admin parent can set homeScreen directly on a kid', async () => {
+      await assertSucceeds(
+        updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), {
+          homeScreen: 'habits',
+        }),
+      );
+    });
+
+    it('the allowlist stays tight: a non-admin parent still cannot write an arbitrary unknown key to a kid doc', async () => {
+      await assertFails(
+        updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), {
+          someUnknownField: 'nope',
+        }),
+      );
+    });
+
+    it('the allowlist stays tight: role still cannot be changed away from \'kid\' even alongside a valid hiddenKeys write', async () => {
+      await assertFails(
+        updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), {
+          hiddenKeys: ['todos'],
+          role: 'member',
+        }),
+      );
+    });
+
+    it('rejects an over-cap hiddenKeys list on a kid doc (Case 3 is still covered by the shared validation guards)', async () => {
+      await assertFails(
+        updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), {
+          hiddenKeys: Array(101).fill('x'),
+        }),
+      );
+    });
+
+    it('an admin-planted unknown field does not lock non-admin parents out of a managed kid', async () => {
+      // Step 1: the admin plants a field that is NOT on Case 3's allowlist and
+      // never will be — a stand-in for any future HouseholdMember field, not one
+      // of the specific keys this PR happens to allowlist. Succeeds via Case 2's
+      // blanket bypass, exactly like 'hiddenKeys' did before it was allowlisted.
+      await assertSucceeds(
+        updateDoc(doc(dbFor(ALICE), 'households', H1, 'members', KID), {
+          someFutureFeatureField: 'x',
+        }),
+      );
+
+      // Step 2: a non-admin parent's ordinary Case 3 operations must all still
+      // succeed afterward, despite the untracked field now sitting on the
+      // document, because the guard is affectedKeys() (what THIS write touches),
+      // not keys() of the whole document. On the old whole-document hasOnly(),
+      // every one of these would now fail.
+      await assertSucceeds(
+        updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), {
+          displayName: 'Leo Renamed Again',
+        }),
+      );
+
+      // This is the toggleHabit/actAs chore-crediting path — a parent acting as
+      // the kid to complete a chore updates the kid's points map.
+      await assertSucceeds(
+        updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), {
+          points: { daily: 10, weekly: 10, total: 10 },
+        }),
+      );
+
+      await assertSucceeds(
+        updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), {
+          allowanceCents: 500,
+        }),
+      );
+    });
+  });
 });
 
 describe('server-only collections', () => {
