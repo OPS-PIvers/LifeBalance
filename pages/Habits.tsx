@@ -329,9 +329,12 @@ const Habits: React.FC = () => {
   // active, the group name otherwise — always with the small caret that
   // signals "this tab opens a menu". The caret is aria-hidden, so the
   // inactive accessible name stays the plain group name (e2e contract).
-  // A single-leaf group renders its own label with no caret: there is no menu.
+  // A collapsed (single-leaf) group has no menu, so it drops the caret and is
+  // labeled with the LEAF it now goes to rather than the group name — "Progress"
+  // would be a promise of a choice that no longer exists. For an
+  // always-single-leaf group like Track the two labels are the same anyway.
   const groupTrigger = (group: VisibleGroup) => {
-    if (!isMultiView(group.key)) return group.label;
+    if (!isMultiView(group.key)) return group.leaves[0]?.label ?? group.label;
     const current = group.leaves.find((l) => l.key === segmentOf(group.key));
     return (
       <>
