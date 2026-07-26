@@ -50,9 +50,15 @@ const MemberModal: React.FC<MemberModalProps> = ({
     e.preventDefault();
     setLoading(true);
     try {
+      const trimmedEmail = email.trim();
       await onSave({
         displayName,
-        email,
+        // Omit the key entirely when blank rather than writing email: '' — an
+        // empty-string value still updates the field on a partial `updateDoc`,
+        // which (a) is meaningless for a member who simply has no email and
+        // (b) permanently breaks firestore.rules' member-update allowlist for
+        // managed kid profiles until #1112 lands (see MemberModal usage note).
+        ...(trimmedEmail ? { email: trimmedEmail } : {}),
         role,
       });
       onClose();

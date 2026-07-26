@@ -194,6 +194,7 @@ const Settings: React.FC = () => {
     setKidModePin,
     apiKeys,
     activityLog,
+    updateKidProfile,
   } = useHouseholdCore();
   const { habits, challenges, rewardsInventory } = useGamification();
   const {
@@ -454,7 +455,35 @@ const Settings: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  // Managed kid profiles have no login/email/role — the generic MemberModal's
+  // fields are meaningless (email) or actively dangerous (role: changing it away
+  // from a kid would un-manage them) for a kid row. This mirrors ProfileMenu's
+  // existing `handleAddKidProfile` window.prompt pattern rather than opening a
+  // new modal, keeping kid edits on the purpose-built `updateKidProfile`
+  // mutation (displayName/avatar only) instead of the member CRUD path.
+  const handleEditManagedKid = async (member: HouseholdMember) => {
+    const name = window.prompt('Kid name', member.displayName);
+    if (name === null) return; // Cancelled
+    const trimmedName = name.trim();
+    if (!trimmedName || trimmedName === member.displayName) return;
+    // Match the firestore.rules displayName cap (isValidString ..., 50), same
+    // guard as the add-kid-profile flow.
+    if (trimmedName.length > 50) {
+      toast.error('Kid name must be 50 characters or less');
+      return;
+    }
+    try {
+      await updateKidProfile(member.uid, { displayName: trimmedName });
+    } catch {
+      // updateKidProfile surfaces its own error toast.
+    }
+  };
+
   const handleEditMember = (member: HouseholdMember) => {
+    if (member.isManaged) {
+      void handleEditManagedKid(member);
+      return;
+    }
     setSelectedMember(member);
     setIsModalOpen(true);
   };
@@ -961,8 +990,8 @@ const Settings: React.FC = () => {
                         onClick={() => handleEditMember(member)}
                         variant="ghost"
                         size="icon"
-                        title="Edit Member"
-                        aria-label="Edit Member"
+                        title={member.isManaged ? 'Edit Kid Profile' : 'Edit Member'}
+                        aria-label={member.isManaged ? 'Edit Kid Profile' : 'Edit Member'}
                       >
                         <Pencil size={16} />
                       </Button>

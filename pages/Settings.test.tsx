@@ -27,6 +27,7 @@ const mockCurrentUser = {
 };
 
 const mockSetCaptureReviewMode = vi.fn();
+const mockUpdateKidProfile = vi.fn();
 
 // A second admin so `canLeaveHousehold` is true (the last remaining admin is
 // blocked from the self-serve Leave Household path).
@@ -37,9 +38,19 @@ const mockPartner = {
   role: 'admin' as const,
 };
 
+// A managed kid profile (Plan 080) — no login/email, edited through
+// `updateKidProfile` rather than the generic MemberModal.
+const mockKid = {
+  uid: 'kid-1',
+  displayName: 'Kiddo',
+  email: '',
+  role: 'member' as const,
+  isManaged: true,
+};
+
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useHouseholdCore: () => ({
-    members: [mockCurrentUser, mockPartner],
+    members: [mockCurrentUser, mockPartner, mockKid],
     currentUser: mockCurrentUser,
     addMember: vi.fn(),
     updateMember: vi.fn(),
@@ -54,6 +65,7 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
     setKidModePin: vi.fn(),
     apiKeys: [],
     activityLog: [],
+    updateKidProfile: mockUpdateKidProfile,
   }),
   useGamification: () => ({ habits: [], challenges: [], rewardsInventory: [] }),
   useFinance: () => ({
@@ -127,7 +139,9 @@ vi.mock('@/components/settings/ChangelogDrawer', () => ({
 vi.mock('@/components/auth/HouseholdInviteCard', () => ({
   default: () => <div data-testid="household-invite-card" />,
 }));
-vi.mock('@/components/modals/MemberModal', () => ({ default: () => null }));
+vi.mock('@/components/modals/MemberModal', () => ({
+  default: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div data-testid="member-modal" /> : null),
+}));
 vi.mock('@/components/modals/PointsBreakdownModal', () => ({ default: () => null }));
 vi.mock('@/components/modals/DeveloperConsole', () => ({ default: () => null }));
 vi.mock('@/components/modals/PaywallModal', () => ({ default: () => null }));
@@ -349,5 +363,49 @@ describe('Settings index + sub-screens', () => {
     const transactionsGroup = screen.getByRole('radiogroup', { name: 'Transactions review mode' });
     fireEvent.click(within(transactionsGroup).getByRole('radio', { name: 'Automatic' }));
     expect(mockSetCaptureReviewMode).toHaveBeenCalledWith('expense', 'auto');
+  });
+
+  // Guard against opening the generic member editor on a managed kid's row
+  // (verified during a rules audit): MemberModal always submits an `email`
+  // key, including `email: ''` for a kid, which permanently breaks
+  // firestore.rules' member-update allowlist for that kid until PR #1112
+  // lands. Managed kids are edited through `updateKidProfile` instead.
+  describe('Members list — managed kid guard', () => {
+    it('opens the generic MemberModal when editing an ordinary member', () => {
+      renderSettings();
+      fireEvent.click(screen.getByText('Household'));
+
+      const editButtons = screen.getAllByRole('button', { name: 'Edit Member' });
+      expect(editButtons.length).toBeGreaterThan(0);
+      // Length just asserted above, so index 0 is provably present.
+      fireEvent.click(editButtons[0]!);
+
+      expect(screen.getByTestId('member-modal')).toBeInTheDocument();
+    });
+
+    it('does not open the generic MemberModal for a managed kid, and routes to updateKidProfile instead', () => {
+      const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('New Kid Name');
+      renderSettings();
+      fireEvent.click(screen.getByText('Household'));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Kid Profile' }));
+
+      expect(promptSpy).toHaveBeenCalled();
+      expect(screen.queryByTestId('member-modal')).not.toBeInTheDocument();
+      expect(mockUpdateKidProfile).toHaveBeenCalledWith('kid-1', { displayName: 'New Kid Name' });
+
+      promptSpy.mockRestore();
+    });
+
+    it('does nothing when the kid-name prompt is cancelled', () => {
+      const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue(null);
+      renderSettings();
+      fireEvent.click(screen.getByText('Household'));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Kid Profile' }));
+
+      expect(mockUpdateKidProfile).not.toHaveBeenCalled();
+      promptSpy.mockRestore();
+    });
   });
 });
