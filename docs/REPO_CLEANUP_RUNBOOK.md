@@ -73,7 +73,7 @@ so not on GitHub either:
 ```bash
 for b in $(git for-each-ref --format='%(refname:short)' refs/heads/); do
   [ -z "$(git for-each-ref --format='%(upstream)' "refs/heads/$b")" ] \
-    && [ "$(git rev-list --count origin/main.."$b")" != "0" ] \
+    && [ "$(git rev-list --count "origin/main..$b")" != "0" ] \
     && echo "$b"
 done
 ```
