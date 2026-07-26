@@ -254,6 +254,10 @@ Configured in both [tsconfig.json](tsconfig.json) and [vite.config.ts](vite.conf
 
 Tests use **Vitest** with **@testing-library/react** and a `jsdom` environment (config in [vite.config.ts](vite.config.ts), setup in [vitest.setup.ts](vitest.setup.ts)). Test files live next to the code they cover as `*.test.ts(x)`. Business logic in `utils/` (safe-to-spend, habit scoring, money math, date helpers) is the most heavily covered — add/extend tests there when changing that logic. Run with `pnpm test`.
 
+## Repo Hygiene
+
+Multi-agent projects leave branches and worktrees behind. **[docs/REPO_CLEANUP_RUNBOOK.md](docs/REPO_CLEANUP_RUNBOOK.md)** is the procedure for clearing them — archive to a bundle first, check for open PRs (deleting a head branch closes its PR), then delete. Two things that trip up the obvious approach: this repo **squash-merges**, so `git branch -d` and `--merged main` can't recognise a merged branch and `-D` is required; and a worktree's branch is pinned by metadata in `.git/worktrees/`, not by the directory — clearing that metadata frees the branches instantly, which matters because `git worktree remove` fails outright on a populated `node_modules`.
+
 ## TypeScript
 
 The project compiles in **strict mode** — [tsconfig.json](tsconfig.json) enables `strict: true` plus `noUncheckedIndexedAccess`, `noUnusedLocals`, and `noUnusedParameters`. `noUncheckedIndexedAccess` types indexed/array/`Map.get()` access as `T | undefined`; narrow with a guard, `??` default, or optional chaining (a non-null assertion `!` is acceptable only when provably safe, with a justifying comment in production code). `pnpm lint` runs `tsc --noEmit` first, so type errors fail the build. Write fully-typed code (see the no-suppressions policy below); for an unused parameter required by a signature, prefix it with `_`.
