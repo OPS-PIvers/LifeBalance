@@ -30,6 +30,7 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
   setLogLevel,
   type Firestore,
 } from 'firebase/firestore';
@@ -487,6 +488,178 @@ describe('privilege-escalation prevention', () => {
     await assertSucceeds(
       updateDoc(doc(dbFor(ALICE), 'households', H1, 'members', BOB), {
         role: 'admin',
+      }),
+    );
+  });
+});
+
+// 2G.1: dashboardLayout/dashboardHidden (F-XCUT-02) and anyNotificationsEnabled were added to
+// HouseholdMember but never added to the self-update allowlist. changedKeys() excludes
+// newly-ADDED keys (they land in addedKeys()), so a member's FIRST write of a field succeeds
+// vacuously even when the field is missing from the allowlist — only a SECOND write (a change)
+// actually exercises the allowlist. Every pair below proves both halves: the add (which passed
+// even on the old, broken rules) and the change (which is the actual regression).
+describe('member self-update allowlist (2G.1 — dashboard/notification fields)', () => {
+  it('a non-admin can add dashboardLayout/dashboardHidden for the first time', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        dashboardLayout: ['streak', 'calendar'],
+        dashboardHidden: ['weather'],
+      }),
+    );
+  });
+
+  it('a non-admin can change an existing dashboardLayout/dashboardHidden', async () => {
+    const bobDb = dbFor(BOB);
+    const bobRef = doc(bobDb, 'households', H1, 'members', BOB);
+    await assertSucceeds(
+      updateDoc(bobRef, {
+        dashboardLayout: ['streak', 'calendar'],
+        dashboardHidden: ['weather'],
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(bobRef, {
+        dashboardLayout: ['calendar', 'streak'],
+        dashboardHidden: [],
+      }),
+    );
+  });
+
+  it('a non-admin can add then change anyNotificationsEnabled', async () => {
+    const bobDb = dbFor(BOB);
+    const bobRef = doc(bobDb, 'households', H1, 'members', BOB);
+    await assertSucceeds(updateDoc(bobRef, { anyNotificationsEnabled: true }));
+    await assertSucceeds(updateDoc(bobRef, { anyNotificationsEnabled: false }));
+  });
+
+  // Forward-add for the not-yet-shipped 2F.1/2F.2 member-visibility feature (no TypeScript
+  // field exists yet) — allowlisting now means that feature ships with no rules PR later.
+  it('a non-admin can add then change hiddenKeys and homeScreen', async () => {
+    const bobDb = dbFor(BOB);
+    const bobRef = doc(bobDb, 'households', H1, 'members', BOB);
+    await assertSucceeds(
+      updateDoc(bobRef, { hiddenKeys: ['todos'], homeScreen: 'money' }),
+    );
+    await assertSucceeds(
+      updateDoc(bobRef, { hiddenKeys: ['todos', 'meals'], homeScreen: 'habits' }),
+    );
+  });
+
+  it('a non-admin updating only displayName (none of the five fields present) still succeeds', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        displayName: 'Bobby',
+      }),
+    );
+  });
+
+  // Validation for the five newly-allowlisted fields: allowlisting a key is not the same as
+  // validating it. Without a type/size check, the allowlist alone would let a member bloat
+  // their own member doc toward Firestore's 1MiB cap — and because the members collection is
+  // synced to every device in the household via onSnapshot, that cost lands on everyone, not
+  // just the writer.
+  it('rejects an oversized homeScreen string', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        homeScreen: 'x'.repeat(65),
+      }),
+    );
+  });
+
+  it('rejects an over-cap dashboardLayout list', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        dashboardLayout: Array(101).fill('x'),
+      }),
+    );
+  });
+
+  it('rejects an over-cap hiddenKeys list', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        hiddenKeys: Array(101).fill('x'),
+      }),
+    );
+  });
+
+  it('rejects a non-list dashboardLayout', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        dashboardLayout: 'nope',
+      }),
+    );
+  });
+
+  it('rejects a non-bool anyNotificationsEnabled', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        anyNotificationsEnabled: 'yes',
+      }),
+    );
+  });
+
+  it('a non-admin still cannot write a genuinely forbidden key (role)', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        role: 'admin',
+      }),
+    );
+  });
+
+  it('a non-admin still cannot write a genuinely forbidden key (points)', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        points: { daily: 999, weekly: 999, total: 999 },
+      }),
+    );
+  });
+
+  // Escalation regressions: BOB's seeded doc is exactly { displayName, role } (see seed()
+  // above), so each of these keys is ABSENT — a first-time ADD. Under changedKeys(), an add
+  // of an absent key produces an EMPTY changed-keys set, so hasOnly() passed vacuously and the
+  // write was allowed regardless of the allowlist. affectedKeys() closes that hole: the add is
+  // now governed by the same allowlist as a change. These must all still fail post-fix.
+  it('a non-admin cannot ADD points for the first time (escalation regression)', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        points: { daily: 999, weekly: 999, total: 999 },
+      }),
+    );
+  });
+
+  it('a non-admin cannot ADD allowanceCents for the first time (escalation regression)', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        allowanceCents: 100000,
+      }),
+    );
+  });
+
+  it('a non-admin cannot ADD isManaged/managedByUid for the first time (escalation regression)', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        isManaged: true,
+        managedByUid: BOB,
+      }),
+    );
+  });
+
+  it('a non-admin cannot ADD an arbitrary junk key (storage-abuse regression)', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        someUnknownField: 'x'.repeat(1000),
+      }),
+    );
+  });
+
+  it('a non-admin cannot REMOVE an existing field via deleteField (escalation regression)', async () => {
+    // deleteField() puts the key in removedKeys(); affectedKeys() is the union of
+    // added/changed/removed, so a removal of 'role' must be denied exactly like a change to it
+    // would be — even though 'role' is never in the self-update allowlist.
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        role: deleteField(),
       }),
     );
   });
