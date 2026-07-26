@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { buildPrintWeekHtml } from './printWeekHtml';
 import { FormattedMealDay } from '@/utils/mealPlanFormatter';
 import { GroupedShoppingStore } from '@/utils/shoppingListFormatter';
+import { ShoppingItem } from '@/types/schema';
 
 describe('buildPrintWeekHtml', () => {
   it('renders meal days and shopping stores with escaped content', () => {
@@ -30,6 +31,37 @@ describe('buildPrintWeekHtml', () => {
     expect(html).toContain('Milk');
     expect(html).toContain('1 gal');
     expect(html).toContain('Jul 13 - Jul 19');
+  });
+
+  it('renders a legacy numeric quantity without throwing', () => {
+    // ShoppingItem.quantity is typed `string`, but some Firestore docs hold a
+    // raw number (written by the quickAdd Cloud Function before the
+    // quantity-handling fix; shoppingItemConverter does a blind cast with no
+    // coercion). A numeric quantity is truthy, so it reaches escapeHtml —
+    // this must not throw `value.replace is not a function`. The `unknown`
+    // round-trip cast (rather than `any`) simulates that legacy shape without
+    // a lint suppression.
+    const legacyItem = {
+      id: '1',
+      name: 'Milk',
+      category: 'Dairy',
+      isPurchased: false,
+      quantity: 2,
+    } as unknown as ShoppingItem;
+    const shoppingStores: GroupedShoppingStore[] = [
+      {
+        storeLabel: 'SAFEWAY',
+        categories: [{ display: 'Dairy', items: [legacyItem] }],
+      },
+    ];
+
+    let html = '';
+    expect(() => {
+      html = buildPrintWeekHtml('Jul 13 - Jul 19', [], shoppingStores);
+    }).not.toThrow();
+
+    expect(html).toContain('Milk');
+    expect(html).toContain('(2)');
   });
 
   it('shows empty-state copy when there are no meals or shopping items', () => {

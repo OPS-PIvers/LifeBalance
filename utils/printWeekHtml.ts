@@ -1,8 +1,16 @@
 import { GroupedShoppingStore } from '@/utils/shoppingListFormatter';
 import { FormattedMealDay } from '@/utils/mealPlanFormatter';
 
-const escapeHtml = (value: string): string =>
-  value
+// Accepts `string | number` because `ShoppingItem.quantity` is typed `string`
+// but some documents hold a raw Firestore number for this field (rows written
+// by the quickAdd Cloud Function before the quantity-handling fix landed;
+// shoppingItemConverter does a blind cast with no coercion, and no migration
+// was run) — String() coercion here reads that legacy shape correctly rather
+// than throwing (`value.replace is not a function`) when a caller passes a
+// numeric `item.quantity` straight through, matching the pattern established
+// by parseQuantity/mergeQuantity in utils/grocerySmartDefaults.ts.
+const escapeHtml = (value: string | number): string =>
+  String(value)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')

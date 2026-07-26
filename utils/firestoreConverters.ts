@@ -238,14 +238,23 @@ export const mealConverter: FirestoreDataConverter<Meal> = {
 };
 
 // ---------------------------------------------------------------------------
-// ShoppingItem
+// ShoppingItem — normalizes a legacy numeric `quantity` (written by the old
+// quickAddShoppingItem Cloud Function, before the field was typed `string`)
+// to a string on read. This is a CLIENT-side fix only: Cloud Functions read
+// raw Firestore docs via the Admin SDK and never pass through this
+// converter, so their own string|number handling must stay in place.
 // ---------------------------------------------------------------------------
 export const shoppingItemConverter: FirestoreDataConverter<ShoppingItem> = {
   toFirestore(item: ShoppingItem): DocumentData {
     return omitKey(item, 'id');
   },
   fromFirestore(snapshot: QueryDocumentSnapshot): ShoppingItem {
-    return { ...snapshot.data(), id: snapshot.id } as ShoppingItem;
+    const d = snapshot.data();
+    return {
+      ...d,
+      id: snapshot.id,
+      quantity: d['quantity'] != null ? String(d['quantity']) : undefined,
+    } as ShoppingItem;
   },
 };
 

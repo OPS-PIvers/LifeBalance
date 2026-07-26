@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { suggestItemDefaults, parseQuantity, formatQuantity } from '@/utils/grocerySmartDefaults';
+import { suggestItemDefaults, parseQuantity, formatQuantity, mergeQuantity, resolveNewQuantityField } from '@/utils/grocerySmartDefaults';
 import { GroceryCatalogItem } from '@/types/schema';
 
 const catalog: GroceryCatalogItem[] = [
@@ -105,6 +105,11 @@ describe('parseQuantity', () => {
   it('treats non-numeric-leading text as the unit with count 1', () => {
     expect(parseQuantity('dozen')).toEqual({ count: 1, unit: 'dozen' });
   });
+
+  it('coerces a raw legacy numeric quantity instead of throwing (item.quantity typed string, but some Firestore docs hold a number)', () => {
+    expect(parseQuantity(2)).toEqual({ count: 2, unit: '' });
+    expect(parseQuantity(1)).toEqual({ count: 1, unit: '' });
+  });
 });
 
 describe('formatQuantity', () => {
@@ -128,5 +133,52 @@ describe('formatQuantity', () => {
 
   it('formats a text-only unit with count 1', () => {
     expect(formatQuantity({ count: 1, unit: 'dozen' })).toBe('1 dozen');
+  });
+});
+
+describe('resolveNewQuantityField', () => {
+  it('omits the field entirely when no quantity was supplied', () => {
+    expect(resolveNewQuantityField(undefined)).toBeUndefined();
+  });
+
+  it('omits the field for an explicit count of 1 (matches the app-wide "1 is implicit" convention)', () => {
+    expect(resolveNewQuantityField(1)).toBeUndefined();
+  });
+
+  it('writes the formatted string for any other explicit count', () => {
+    expect(resolveNewQuantityField(2)).toBe('2');
+    expect(resolveNewQuantityField(0.5)).toBe('0.5');
+  });
+});
+
+describe('mergeQuantity', () => {
+  it('adds a count while preserving the unit', () => {
+    expect(mergeQuantity('2 lbs', 1)).toBe('3 lbs');
+  });
+
+  it('adds a count-only quantity', () => {
+    expect(mergeQuantity('2', 1)).toBe('3');
+  });
+
+  it('treats a missing existing quantity as 1 for accumulation', () => {
+    expect(mergeQuantity(undefined, 1)).toBe('2');
+    expect(mergeQuantity(null, 1)).toBe('2');
+    expect(mergeQuantity('', 1)).toBe('2');
+  });
+
+  it('reads a legacy raw-number quantity (no migration needed)', () => {
+    expect(mergeQuantity(2, 1)).toBe('3');
+  });
+
+  it('adds more than 1 at once', () => {
+    expect(mergeQuantity('1 lbs', 3)).toBe('4 lbs');
+  });
+
+  it('leaves a non-numeric-leading quantity untouched rather than mangling it', () => {
+    expect(mergeQuantity('dozen', 1)).toBe('dozen');
+  });
+
+  it('never string-concatenates (the historical bug)', () => {
+    expect(mergeQuantity('2 lbs', 1)).not.toBe('2 lbs1');
   });
 });

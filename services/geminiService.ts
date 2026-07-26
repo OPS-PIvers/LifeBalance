@@ -1270,7 +1270,12 @@ export const optimizeGroceryList = async (
       id,
       name: sanitizeForPrompt(name),
       category: category ? sanitizeForPrompt(category) : 'Uncategorized',
-      quantity: quantity ? sanitizeForPrompt(quantity) : '',
+      // `quantity` is typed `string` (OptimizableItem), but callers can pass
+      // `ShoppingItem.quantity` straight through, and some Firestore docs hold
+      // a raw legacy number there (pre-dating the quantity-handling fix, no
+      // migration run) — String() here reads that shape correctly rather than
+      // throwing `input.replace is not a function` inside sanitizeForPrompt.
+      quantity: quantity ? sanitizeForPrompt(String(quantity)) : '',
       store: store ? sanitizeForPrompt(store) : ''
     }));
 
