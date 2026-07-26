@@ -31,9 +31,9 @@ const setEnabledModules = (enabled: ModuleKey[]) => {
   vi.mocked(useModuleVisibility).mockReturnValue({
     isModuleEnabled: (key: ModuleKey) => enabled.includes(key),
     isPlanVisible:
-      enabled.includes('plan') &&
+      enabled.includes('lists') &&
       (enabled.includes('todos') || enabled.includes('meals') || enabled.includes('shopping')),
-    isPlanTabVisible: (tab) => enabled.includes('plan') && enabled.includes(tab),
+    isPlanTabVisible: (tab) => enabled.includes('lists') && enabled.includes(tab),
   });
 };
 
@@ -97,7 +97,7 @@ describe('PulseStripWidget', () => {
     // Pin "today" so date-based metrics are stable.
     vi.useFakeTimers({ now: new Date('2026-06-16T12:00:00') });
     setData();
-    setEnabledModules(['money', 'habits', 'plan', 'todos', 'meals', 'shopping']);
+    setEnabledModules(['money', 'habits', 'lists', 'todos', 'meals', 'shopping']);
   });
 
   it('renders both cells with grid-cols-2 when money + habits are on', () => {
@@ -109,7 +109,7 @@ describe('PulseStripWidget', () => {
   });
 
   it('renders only the Spent cell with grid-cols-1 when habits are off', () => {
-    setEnabledModules(['money', 'plan', 'todos']);
+    setEnabledModules(['money', 'lists', 'todos']);
     render(<PulseStripWidget />);
     expect(screen.getByText('Spent')).toBeInTheDocument();
     expect(screen.queryByText('Points')).not.toBeInTheDocument();
@@ -118,7 +118,7 @@ describe('PulseStripWidget', () => {
   });
 
   it('renders only Consistency with grid-cols-1 when money is off', () => {
-    setEnabledModules(['habits', 'plan', 'todos']);
+    setEnabledModules(['habits', 'lists', 'todos']);
     render(<PulseStripWidget />);
     expect(screen.queryByText('Points')).not.toBeInTheDocument();
     expect(screen.getByText('Consistency')).toBeInTheDocument();
@@ -127,7 +127,7 @@ describe('PulseStripWidget', () => {
   });
 
   it('renders nothing when both money and habits are off', () => {
-    setEnabledModules(['plan', 'todos']);
+    setEnabledModules(['lists', 'todos']);
     const { container } = render(<PulseStripWidget />);
     expect(container).toBeEmptyDOMElement();
   });
@@ -145,7 +145,7 @@ describe('PulseStripWidget', () => {
     vi.mocked(useGamification).mockReturnValue(
       value as unknown as ReturnType<typeof useGamification>,
     );
-    setEnabledModules(['habits', 'plan', 'todos']);
+    setEnabledModules(['habits', 'lists', 'todos']);
 
     render(<PulseStripWidget />);
     expect(screen.getByText('Consistency')).toBeInTheDocument();
@@ -244,7 +244,7 @@ describe('PulseStripWidget', () => {
     vi.mocked(useGamification).mockReturnValue(
       value as unknown as ReturnType<typeof useGamification>,
     );
-    setEnabledModules(['habits', 'plan', 'todos']);
+    setEnabledModules(['habits', 'lists', 'todos']);
 
     const { container } = render(<PulseStripWidget />);
     expect(container).toBeEmptyDOMElement();

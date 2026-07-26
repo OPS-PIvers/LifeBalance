@@ -43,7 +43,7 @@ describe('getVisibleOrderedWidgetIds', () => {
   it('applies the lean default-hidden set for never-customized members', () => {
     const result = getVisibleOrderedWidgetIds(undefined, undefined);
     expect(result).toEqual(
-      DEFAULT_DASHBOARD_WIDGET_ORDER.filter(id => !DEFAULT_HIDDEN_DASHBOARD_WIDGETS.includes(id))
+      DEFAULT_DASHBOARD_WIDGET_ORDER.filter(id => !(DEFAULT_HIDDEN_DASHBOARD_WIDGETS as readonly string[]).includes(id))
     );
     // The triage core survives the default trim.
     expect(result).toContain('pulseStrip');

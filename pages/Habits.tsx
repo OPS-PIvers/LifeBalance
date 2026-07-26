@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
 import Eyebrow from '@/components/ui/Eyebrow';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
-import { TabSubViewMenu, type TabSubViewOption } from '@/components/ui/TabSubViewMenu';
+import { TabSubViewMenu } from '@/components/ui/TabSubViewMenu';
 import { tabValueAtPoint } from '@/components/ui/tabValueAtPoint';
 import { SubViewHint } from '@/components/ui/SubViewHint';
 import HabitCreatorWizard from '@/components/modals/HabitCreatorWizard';
@@ -31,6 +31,8 @@ import { usePowerToolsEnabled } from '@/hooks/usePowerToolsEnabled';
 import { useDayCompleteCelebration } from '@/hooks/useDayCompleteCelebration';
 import { LazyMount } from '@/components/ui/LazyMount';
 import { useDeepLinkTab } from '@/hooks/useDeepLinkTab';
+import { usePageNavigation } from '@/hooks/usePageNavigation';
+import { resolveActiveLocation, type VisibleGroup } from '@/utils/moduleVisibility';
 import { useDeepLinkHighlight } from '@/hooks/useDeepLinkHighlight';
 import { useScrollToHighlight } from '@/hooks/useScrollToHighlight';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -61,39 +63,14 @@ const HABIT_TABS = [
   'rewards', 'challenges',
 ] as const;
 
-type HabitTabValue = (typeof HABIT_TABS)[number];
-
-/** Collapse any tab value (incl. legacy view keys) to its top-level tab. */
-const topTabOf = (value: string): 'track' | 'progress' | 'rewards' => {
-  switch (value) {
-    case 'history':
-    case 'insights':
-    case 'coach':
-    case 'progress':
-      return 'progress';
-    case 'rewards':
-    case 'challenges':
-      return 'rewards';
-    default:
-      return 'track';
-  }
-};
-
-/** The multi-view groups — tabs whose tap opens a sub-view menu. */
-type HabitGroup = 'progress' | 'rewards';
-
-const isHabitGroup = (value: string): value is HabitGroup =>
-  value === 'progress' || value === 'rewards';
-
-// Rewards' options are static; Progress' are built in-component (Coach is
-// gated on powerToolsEnabled). Labels double as the active trigger's text.
-const REWARDS_OPTIONS: TabSubViewOption<HabitTabValue>[] = [
-  // Label only — the legacy 'rewards' view key is load-bearing (deep links,
-  // topTabOf, persisted state) and must not change. "Store" avoids the
-  // Rewards > Rewards duplicate.
-  { value: 'rewards', label: 'Store' },
-  { value: 'challenges', label: 'Challenges' },
-];
+// 2F.1: the group/leaf tree, the menu options and the group/leaf labels
+// (including "Store" for the load-bearing legacy 'rewards' key) all now come
+// from the shared registry in utils/moduleVisibility.ts, filtered to what this
+// household + member can see. Coach's power-tools gate is declared ON that
+// registry (`gate: 'powerTools'`), so it is subtracted inside the one shared
+// hidden-key set — this page, BottomNav and ModuleRoute all see the identical
+// reachable-leaf set, and a flag-gated leaf participates in the collapse rule
+// exactly like a member-hidden one.
 
 // Lazy-loaded so the heavy modal/Drawer dependencies stay out of the Habits boot
 // bundle and only load when a tab's "manage" CTA is actually used (mirrors the
@@ -284,11 +261,28 @@ const Habits: React.FC = () => {
   // the specific view) and the panel renders that view's content (same
   // pattern as Money's 4-tab IA).
   const [activeView, setActiveView] = useDeepLinkTab('track', HABIT_TABS);
-  const activeTab = topTabOf(activeView);
+  // 2F.1 — the group/leaf tree this household + member can reach. Coach is
+  // subtracted by its registry `gate` when power tools are off, so a stale
+  // `?tab=coach` deep-link degrades to History exactly as it did before.
+  const nav = usePageNavigation('habits');
+  const location = resolveActiveLocation(nav, activeView);
+  const activeTab = location?.group ?? '';
+  const activeLeaf = location?.leaf ?? '';
   // Which multi-view tab's sub-view menu is open (null = none). Opened only by
   // taps on a group trigger — never by deep-links or keyboard arrow roving.
-  const [openMenu, setOpenMenu] = useState<HabitGroup | null>(null);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
   const tabBarRef = useRef<HTMLDivElement>(null);
+  const groupOf = (key: string) => nav.groups.find((g) => g.key === key);
+  // Guarded lookup: a group can vanish (member hides its last leaf) while its
+  // menu is open, so the menu renders only while its group still exists.
+  const openMenuGroup = openMenu ? groupOf(openMenu) : undefined;
+  const hasMultiViewGroup = nav.groups.some((g) => g.leaves.length > 1);
+  /**
+   * COLLAPSE RULE (2F.1): a group with exactly one visible leaf navigates
+   * straight there — no caret, no menu. Only a group that still pairs two or
+   * more views opens a `TabSubViewMenu`.
+   */
+  const isMultiView = (key: string) => (groupOf(key)?.leaves.length ?? 0) > 1;
   // Reached only by single-view taps (Track) and the tablist's arrow-key
   // activation (taps on multi-view triggers are intercepted in capture phase
   // below) — keyboard selection-follows-focus keeps its existing
@@ -298,8 +292,10 @@ const Habits: React.FC = () => {
     // or a future programmatic onValueChange) always dismisses any open menu,
     // so a stale group's menu can never float over the newly-active tab.
     setOpenMenu(null);
-    // Entering a group via its top trigger shows the group's default segment.
-    setActiveView(value === 'progress' ? 'history' : value);
+    // Entering a group via its top trigger shows the group's first visible
+    // leaf — the registry order is the default-segment order.
+    const first = groupOf(value)?.leaves[0]?.key;
+    if (first) setActiveView(first);
   };
   // Tapping (or Enter/Space-ing) a multi-view trigger toggles its sub-view
   // menu WITHOUT changing the selected tab; navigation happens only when a
@@ -315,56 +311,39 @@ const Habits: React.FC = () => {
       ?.getAttribute('data-tabs-value');
     if (!value && openMenu) {
       value = tabValueAtPoint(tabBarRef.current, e.clientX, e.clientY) ?? undefined;
-      if (value && !isHabitGroup(value)) {
-        // Single-view tab (Track) under the backdrop: dismiss + navigate.
+      if (value && !isMultiView(value)) {
+        // Single-view tab under the backdrop: dismiss + navigate.
         e.stopPropagation();
         selectTab(value);
         return;
       }
     }
-    if (value && isHabitGroup(value)) {
+    if (value && isMultiView(value)) {
       e.stopPropagation();
       setOpenMenu((prev) => (prev === value ? null : value));
     }
   };
-  // Coach is a Progress segment gated on powerToolsEnabled: a stale
-  // `?tab=coach` deep-link while the flag is off degrades to History instead
-  // of an empty view.
-  const progressSegment: HabitTabValue =
-    activeView === 'insights' ? 'insights'
-    : activeView === 'coach' && powerToolsEnabled ? 'coach'
-    : 'history';
-  const rewardsSegment: HabitTabValue = activeView === 'challenges' ? 'challenges' : 'rewards';
-  // Coach is flag-gated, so Progress' menu options are built here (the other
-  // groups' are static module constants).
-  const progressOptions = useMemo<TabSubViewOption<HabitTabValue>[]>(
-    () => [
-      { value: 'history', label: 'History' },
-      { value: 'insights', label: 'Insights' },
-      ...(powerToolsEnabled ? [{ value: 'coach' as const, label: 'Coach' }] : []),
-    ],
-    [powerToolsEnabled]
-  );
-  const groupOptions: Record<HabitGroup, TabSubViewOption<HabitTabValue>[]> = {
-    progress: progressOptions,
-    rewards: REWARDS_OPTIONS,
-  };
-  const groupSegment: Record<HabitGroup, HabitTabValue> = {
-    progress: progressSegment,
-    rewards: rewardsSegment,
-  };
+  /** The leaf a group's panel renders: the active one, else its first visible leaf. */
+  const segmentOf = (key: string): string =>
+    (activeTab === key ? activeLeaf : groupOf(key)?.leaves[0]?.key) ?? '';
   // Multi-view trigger content: the CURRENT sub-view name while its group is
   // active, the group name otherwise — always with the small caret that
   // signals "this tab opens a menu". The caret is aria-hidden, so the
   // inactive accessible name stays the plain group name (e2e contract).
-  const groupTrigger = (group: HabitGroup, groupName: string) => (
-    <>
-      {activeTab === group
-        ? (groupOptions[group].find((o) => o.value === groupSegment[group])?.label ?? groupName)
-        : groupName}
-      <ChevronDown size={12} aria-hidden="true" className="-ml-1.5" />
-    </>
-  );
+  // A collapsed (single-leaf) group has no menu, so it drops the caret and is
+  // labeled with the LEAF it now goes to rather than the group name — "Progress"
+  // would be a promise of a choice that no longer exists. For an
+  // always-single-leaf group like Track the two labels are the same anyway.
+  const groupTrigger = (group: VisibleGroup) => {
+    if (!isMultiView(group.key)) return group.leaves[0]?.label ?? group.label;
+    const current = group.leaves.find((l) => l.key === segmentOf(group.key));
+    return (
+      <>
+        {activeTab === group.key ? (current?.label ?? group.label) : group.label}
+        <ChevronDown size={12} aria-hidden="true" className="-ml-1.5" />
+      </>
+    );
+  };
   // F-HABITS-03: a per-habit reminder push deep-links to `?due=<id>,<id>` so
   // the page opens on exactly the habits it just nudged about, instead of the
   // full list the member then has to search. Read straight from the router (no
@@ -488,6 +467,13 @@ const Habits: React.FC = () => {
     return <HabitsSkeleton />;
   }
 
+  // DEFENCE IN DEPTH (matching pages/Budget.tsx): no reachable view means
+  // `ModuleRoute` is already redirecting this route away, so this is only the
+  // frame between that decision and the redirect. Rendering on would produce a
+  // header with an empty tab strip and no panel — degrade to the redirect
+  // instead, even if the nav and this page ever disagree again.
+  if (!location) return null;
+
   const handleExport = () => {
     try {
       if (habits.length === 0) {
@@ -602,64 +588,68 @@ const Habits: React.FC = () => {
             at the top of MainLayout's single page scroller while content
             passes beneath, with the page background + bottom hairline matching
             ListsPage's tab strip exactly. */}
-        <div className="px-4 pt-3 pb-2 sticky top-0 z-30 bg-brand-50 dark:bg-brand-900 border-b border-brand-200 dark:border-brand-800">
-          {/* Text-only triggers (matching Money's tab bar) — icons made the
-              consolidated bar overflow 375px, which is the exact problem this
-              consolidation removes. text-[13px] + px-2.5 buy the room the
-              sub-view labels + carets need at that width. The relative wrapper
-              is the anchor container for TabSubViewMenu; the capture handler
-              intercepts multi-view taps before Tabs sees them. */}
-          <div ref={tabBarRef} className="relative" onClickCapture={handleTabBarClickCapture}>
-            <TabsList equalWidth>
-              <TabsTrigger value="track" className="text-[13px] px-2.5">
-                Track
-              </TabsTrigger>
-              <TabsTrigger
-                value="progress"
-                className="text-[13px] px-2.5"
-                aria-haspopup="menu"
-                aria-expanded={openMenu === 'progress'}
-              >
-                {groupTrigger('progress', 'Progress')}
-              </TabsTrigger>
-              <TabsTrigger
-                value="rewards"
-                className="text-[13px] px-2.5"
-                aria-haspopup="menu"
-                aria-expanded={openMenu === 'rewards'}
-              >
-                {groupTrigger('rewards', 'Rewards')}
-              </TabsTrigger>
-            </TabsList>
-            {openMenu && (
-              <TabSubViewMenu
-                // Remount on group switch (tab-to-tab tap while open) so the
-                // focus trap re-initializes onto the NEW menu's checked item
-                // and the entrance animation replays under the new anchor.
-                key={openMenu}
-                isOpen
-                onClose={() => setOpenMenu(null)}
-                options={groupOptions[openMenu]}
-                // Checked = "you are here": only when this menu's group is the
-                // active tab. Previewing another group's menu (tab-to-tab tap)
-                // checks nothing — its default segment isn't the current page.
-                value={activeTab === openMenu ? groupSegment[openMenu] : undefined}
-                onSelect={setActiveView}
-                name={openMenu === 'progress' ? 'Progress view' : 'Rewards view'}
-                anchorValue={openMenu}
-                anchorRef={tabBarRef}
-                tone="warm"
-              />
-            )}
+        {/* COLLAPSE RULE (2F.1): with exactly one reachable view there is
+            nothing to switch between, so the whole strip goes and tapping
+            Habits in the footer simply IS that view. */}
+        {!nav.soleLeaf && (
+          <div className="px-4 pt-3 pb-2 sticky top-0 z-30 bg-brand-50 dark:bg-brand-900 border-b border-brand-200 dark:border-brand-800">
+            {/* Text-only triggers (matching Money's tab bar) — icons made the
+                consolidated bar overflow 375px, which is the exact problem this
+                consolidation removes. text-[13px] + px-2.5 buy the room the
+                sub-view labels + carets need at that width. The relative wrapper
+                is the anchor container for TabSubViewMenu; the capture handler
+                intercepts multi-view taps before Tabs sees them. */}
+            <div ref={tabBarRef} className="relative" onClickCapture={handleTabBarClickCapture}>
+              <TabsList equalWidth>
+                {nav.groups.map((group) => {
+                  const multi = isMultiView(group.key);
+                  return (
+                    <TabsTrigger
+                      key={group.key}
+                      value={group.key}
+                      className="text-[13px] px-2.5"
+                      {...(multi
+                        ? { 'aria-haspopup': 'menu' as const, 'aria-expanded': openMenu === group.key }
+                        : {})}
+                    >
+                      {groupTrigger(group)}
+                    </TabsTrigger>
+                  );
+                })}
+              </TabsList>
+              {openMenu && openMenuGroup && (
+                <TabSubViewMenu
+                  // Remount on group switch (tab-to-tab tap while open) so the
+                  // focus trap re-initializes onto the NEW menu's checked item
+                  // and the entrance animation replays under the new anchor.
+                  key={openMenu}
+                  isOpen
+                  onClose={() => setOpenMenu(null)}
+                  options={openMenuGroup.leaves.map((l) => ({ value: l.key, label: l.label }))}
+                  // Checked = "you are here": only when this menu's group is the
+                  // active tab. Previewing another group's menu (tab-to-tab tap)
+                  // checks nothing — its default segment isn't the current page.
+                  value={activeTab === openMenu ? segmentOf(openMenu) : undefined}
+                  onSelect={setActiveView}
+                  name={`${openMenuGroup.label} view`}
+                  anchorValue={openMenu}
+                  anchorRef={tabBarRef}
+                  tone="warm"
+                />
+              )}
+            </div>
           </div>
-        </div>
+        )}
         {/* One-time coach hint for the tab-popover nav — first visit only;
             opening any tab menu, the ×, or navigating away latches it off for
             good (shared with the Money page). Sibling of the tab-bar wrapper,
             not a child: inside the (now sticky) strip its dismissal would
             resize the pinned strip; out here it scrolls with the content and
-            only its own slot collapses. */}
-        <SubViewHint menuOpened={openMenu !== null} className="mx-4 mt-4" />
+            only its own slot collapses. Suppressed once every remaining group
+            is single-view: there is no menu left to coach about. */}
+        {!nav.soleLeaf && hasMultiViewGroup && (
+          <SubViewHint menuOpened={openMenu !== null} className="mx-4 mt-4" />
+        )}
 
         {/* Main Content */}
         <div className="px-4 pt-4 pb-6">
@@ -753,20 +743,20 @@ const Habits: React.FC = () => {
               (tap the tab → TabSubViewMenu popover), so each panel renders
               its current segment directly. */}
           <TabsContent value="progress">
-            {progressSegment === 'coach' ? (
+            {segmentOf('progress') === 'coach' ? (
               <HabitCoach />
-            ) : progressSegment === 'history' ? (
-              <HabitHistoryCalendar />
-            ) : (
+            ) : segmentOf('progress') === 'insights' ? (
               <HabitsInsightsTab />
+            ) : (
+              <HabitHistoryCalendar />
             )}
           </TabsContent>
 
           <TabsContent value="rewards">
-            {rewardsSegment === 'rewards' ? (
-              <HabitsRewardsTab />
-            ) : (
+            {segmentOf('rewards') === 'challenges' ? (
               <HabitsChallengesTab onOpenChallengeHub={() => setIsChallengeHubOpen(true)} />
+            ) : (
+              <HabitsRewardsTab />
             )}
           </TabsContent>
         </div>

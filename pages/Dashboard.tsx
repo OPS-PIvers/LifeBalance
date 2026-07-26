@@ -80,6 +80,7 @@ import { Section, SurfaceList, Stat, StatGroup } from '@/components/ui/Section';
 import { ShowMoreRow } from '@/components/ui/ShowMoreRow';
 import PageHeader from '@/components/ui/PageHeader';
 import { getVisibleOrderedWidgetIds } from '@/utils/dashboardLayout';
+import { resolveHiddenKeys } from '@/utils/moduleVisibility';
 import { getDayCompleteStatus } from '@/utils/dayComplete';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 
@@ -177,9 +178,19 @@ const Dashboard: React.FC = () => {
   // F-XCUT-02: per-member Dashboard widget order/visibility. The Action
   // Queue and voice-command banner stay structural (fixed position); only
   // the widgets below are reorderable/hideable — see utils/dashboardLayout.ts.
+  // 2F.1 folded widget visibility into the member's unified `hiddenKeys` list;
+  // `resolveHiddenKeys` still falls back to the legacy `dashboardHidden` and
+  // then to the lean defaults, so an existing member's Home is unchanged.
+  const dashboardLayout = currentUser?.dashboardLayout;
+  const memberHiddenKeys = currentUser?.hiddenKeys;
+  const legacyDashboardHidden = currentUser?.dashboardHidden;
   const widgetOrder = useMemo(
-    () => getVisibleOrderedWidgetIds(currentUser?.dashboardLayout, currentUser?.dashboardHidden),
-    [currentUser?.dashboardLayout, currentUser?.dashboardHidden]
+    () =>
+      getVisibleOrderedWidgetIds(
+        dashboardLayout,
+        resolveHiddenKeys({ hiddenKeys: memberHiddenKeys, dashboardHidden: legacyDashboardHidden })
+      ),
+    [dashboardLayout, memberHiddenKeys, legacyDashboardHidden]
   );
 
   // State for expansions/modals

@@ -16,6 +16,8 @@ import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Skeleton, SkeletonText } from '@/components/ui/Skeleton';
 import { useDeepLinkTab } from '@/hooks/useDeepLinkTab';
 import { useDeepLinkHighlight } from '@/hooks/useDeepLinkHighlight';
+import { usePageNavigation } from '@/hooks/usePageNavigation';
+import { resolveActiveLocation, type VisibleGroup } from '@/utils/moduleVisibility';
 import { preloadOnIdle } from '@/utils/preloadOnIdle';
 
 // recharts is heavy — lazy-load the Trends chart body so it only enters the
@@ -42,76 +44,13 @@ const MONEY_TABS = [
   'balances', 'buckets', 'accounts',
 ] as const;
 
-type MoneyTabValue = (typeof MONEY_TABS)[number];
-type TopTab = 'overview' | 'activity' | 'planned' | 'balances';
-
-/** Collapse any tab value (incl. legacy view keys) to its top-level tab. */
-const topTabOf = (value: string): TopTab => {
-  switch (value) {
-    case 'transactions':
-    case 'trends':
-    case 'activity':
-      return 'activity';
-    case 'calendar':
-    case 'subscriptions':
-    case 'planned':
-      return 'planned';
-    case 'buckets':
-    case 'accounts':
-    case 'balances':
-      return 'balances';
-    default:
-      return 'overview';
-  }
-};
-
-/** The segment each group shows when entered via its top-level trigger. */
-const DEFAULT_SEGMENT: Record<Exclude<TopTab, 'overview'>, MoneyTabValue> = {
-  activity: 'transactions',
-  planned: 'calendar',
-  balances: 'buckets',
-};
-
-type MoneyGroup = Exclude<TopTab, 'overview'>;
-
-const isMoneyGroup = (value: string): value is MoneyGroup =>
-  value === 'activity' || value === 'planned' || value === 'balances';
-
-// Sub-view menu options per multi-view group. The labels double as the active
-// trigger's text — the tab reads as the CURRENT sub-view ("Transactions ▾"),
-// not the group name, once its group is selected.
-const GROUP_OPTIONS: Record<MoneyGroup, { value: MoneyTabValue; label: string }[]> = {
-  activity: [
-    { value: 'transactions', label: 'Transactions' },
-    { value: 'trends', label: 'Trends' },
-  ],
-  planned: [
-    { value: 'calendar', label: 'Calendar' },
-    { value: 'subscriptions', label: 'Subscriptions' },
-  ],
-  balances: [
-    { value: 'buckets', label: 'Buckets' },
-    { value: 'accounts', label: 'Accounts' },
-  ],
-};
-
-/** Inactive-trigger label per group (also the caret-menu's fallback label). */
-const GROUP_LABELS: Record<MoneyGroup, string> = {
-  activity: 'Activity',
-  planned: 'Planned',
-  // Label only — the legacy 'balances' view/tab key is load-bearing
-  // (deep-links, topTabOf, DEFAULT_SEGMENT, persisted state) and must not
-  // change. "Budget" replaces the old "Balances" label, which promised literal
-  // account balances but actually opens on Buckets (2026-07 audit P3).
-  balances: 'Budget',
-};
-
-/** Accessible name for each group's sub-view menu. */
-const GROUP_MENU_NAMES: Record<MoneyGroup, string> = {
-  activity: 'Activity view',
-  planned: 'Planned view',
-  balances: 'Budget view',
-};
+// 2F.1: the group/leaf tree, the per-group menu options, the group labels
+// (incl. "Budget" for the load-bearing legacy 'balances' key) and each group's
+// default segment (= its FIRST leaf) all now come from the shared registry in
+// utils/moduleVisibility.ts, filtered to what this household + member can see.
+// Nothing about the IA changed — the constants simply stopped being duplicated
+// here, so hiding a leaf removes it from the tab, the menu, and the panel in
+// one place.
 
 const BudgetSkeleton: React.FC = () => (
   <div className="bg-brand-50 dark:bg-brand-900 pb-nav-safe" aria-busy="true" aria-live="polite">
@@ -154,28 +93,44 @@ const BudgetSkeleton: React.FC = () => (
 
 const Budget: React.FC = () => {
   const { isLoading } = useHouseholdCore();
+  // 2F.1 — the group/leaf tree this household + member can actually reach.
+  const nav = usePageNavigation('money');
   // Controlled so the toolbar Safe-to-Spend glance / Home Analytics button can
   // deep-link straight to a view. `activeView` may be a legacy view key
-  // ('trends', 'buckets', …) — the Tabs bar renders its top-level group (the
-  // active trigger's label showing the specific view) and the panel renders
-  // that view's content.
+  // ('trends', 'buckets', …) or a view since hidden — `resolveActiveLocation`
+  // maps whatever it holds onto a { group, leaf } pair that is still visible.
   const [activeView, setActiveView] = useDeepLinkTab('overview', MONEY_TABS);
-  const activeTab = topTabOf(activeView);
+  const location = resolveActiveLocation(nav, activeView);
+  const activeTab = location?.group ?? '';
+  const activeLeaf = location?.leaf ?? '';
   // Which multi-view tab's sub-view menu is open (null = none). Opened only by
   // taps on a group trigger — never by deep-links or keyboard arrow roving.
-  const [openMenu, setOpenMenu] = useState<MoneyGroup | null>(null);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
   const tabBarRef = useRef<HTMLDivElement>(null);
-  // Reached only by single-view taps (Overview) and the tablist's arrow-key
-  // activation (taps on multi-view triggers are intercepted in capture phase
-  // below, before the trigger's onClick can change the Tabs value) — keyboard
+  const groupOf = (key: string) => nav.groups.find((g) => g.key === key);
+  // Guarded lookup: a group can vanish (member hides its last leaf) while its
+  // menu is open, so the menu renders only while its group still exists.
+  const openMenuGroup = openMenu ? groupOf(openMenu) : undefined;
+  const hasMultiViewGroup = nav.groups.some((g) => g.leaves.length > 1);
+  /**
+   * COLLAPSE RULE (2F.1): a group with exactly one visible leaf navigates
+   * straight there — no caret, no menu. Only a group that still pairs two or
+   * more views opens a `TabSubViewMenu`.
+   */
+  const isMultiView = (key: string) => (groupOf(key)?.leaves.length ?? 0) > 1;
+  // Reached only by single-view taps and the tablist's arrow-key activation
+  // (taps on multi-view triggers are intercepted in capture phase below,
+  // before the trigger's onClick can change the Tabs value) — keyboard
   // selection-follows-focus keeps its existing land-on-default behavior.
   const selectTab = (value: string) => {
     // Defensive invariant: a tab change (however triggered — keyboard roving
     // or a future programmatic onValueChange) always dismisses any open menu,
     // so a stale group's menu can never float over the newly-active tab.
     setOpenMenu(null);
-    const tab = topTabOf(value);
-    setActiveView(tab === 'overview' ? 'overview' : DEFAULT_SEGMENT[tab]);
+    // Entering a group via its top trigger shows the group's first visible
+    // leaf — the registry order is the default-segment order.
+    const first = groupOf(value)?.leaves[0]?.key;
+    if (first) setActiveView(first);
   };
   // Tapping (or Enter/Space-ing — buttons synthesize click) a multi-view
   // trigger toggles its sub-view menu WITHOUT changing the selected tab;
@@ -192,32 +147,39 @@ const Budget: React.FC = () => {
       ?.getAttribute('data-tabs-value');
     if (!value && openMenu) {
       value = tabValueAtPoint(tabBarRef.current, e.clientX, e.clientY) ?? undefined;
-      if (value && !isMoneyGroup(value)) {
-        // Single-view tab (Overview) under the backdrop: dismiss + navigate.
+      if (value && !isMultiView(value)) {
+        // Single-view tab under the backdrop: dismiss + navigate.
         e.stopPropagation();
         selectTab(value);
         return;
       }
     }
-    if (value && isMoneyGroup(value)) {
+    if (value && isMultiView(value)) {
       e.stopPropagation();
       setOpenMenu((prev) => (prev === value ? null : value));
     }
   };
-  const segmentOf = (tab: Exclude<TopTab, 'overview'>): MoneyTabValue =>
-    topTabOf(activeView) === tab && activeView !== tab ? (activeView as MoneyTabValue) : DEFAULT_SEGMENT[tab];
+  /** The leaf a group's panel renders: the active one, else its first visible leaf. */
+  const segmentOf = (key: string): string =>
+    (activeTab === key ? activeLeaf : groupOf(key)?.leaves[0]?.key) ?? '';
   // Multi-view trigger content: the CURRENT sub-view name while its group is
   // active, the group name otherwise — always with the small caret that
   // signals "this tab opens a menu". The caret is aria-hidden, so the
   // inactive accessible name stays the plain group name (e2e contract).
-  const groupTrigger = (group: MoneyGroup) => (
-    <>
-      {activeTab === group
-        ? (GROUP_OPTIONS[group].find((o) => o.value === segmentOf(group))?.label ?? GROUP_LABELS[group])
-        : GROUP_LABELS[group]}
-      <ChevronDown size={12} aria-hidden="true" className="-ml-1.5" />
-    </>
-  );
+  // A collapsed (single-leaf) group has no menu, so it drops the caret and is
+  // labeled with the LEAF it now goes to rather than the group name — "Activity"
+  // would be a promise of a choice that no longer exists. For an
+  // always-single-leaf group like Overview the two labels are the same anyway.
+  const groupTrigger = (group: VisibleGroup) => {
+    if (!isMultiView(group.key)) return group.leaves[0]?.label ?? group.label;
+    const current = group.leaves.find((l) => l.key === segmentOf(group.key));
+    return (
+      <>
+        {activeTab === group.key ? (current?.label ?? group.label) : group.label}
+        <ChevronDown size={12} aria-hidden="true" className="-ml-1.5" />
+      </>
+    );
+  };
   // Global search deep-link (v1.1): scroll-to + briefly flash the specific
   // transaction row selected in SearchOverlay, on top of the tab-level jump.
   const highlightTransactionId = useDeepLinkHighlight();
@@ -227,8 +189,62 @@ const Budget: React.FC = () => {
   // with app boot (the chunk stays off the eager modulepreload path).
   useEffect(() => preloadOnIdle(loadBudgetTrends), []);
 
+  /** One leaf's content. The single place a Money view is mapped to its body. */
+  const renderLeaf = (leaf: string) => {
+    switch (leaf) {
+      case 'overview':
+        return <MoneyOverview />;
+      case 'transactions':
+        return <TransactionMasterList highlightId={highlightTransactionId} />;
+      case 'trends':
+        return (
+          <Suspense
+            fallback={
+              <div className="space-y-6" aria-busy="true">
+                <Skeleton className="h-80 w-full rounded-2xl" />
+                <Skeleton className="h-56 w-full rounded-2xl" />
+              </div>
+            }
+          >
+            <BudgetTrends />
+          </Suspense>
+        );
+      case 'calendar':
+        return <BudgetCalendar />;
+      case 'subscriptions':
+        return <SubscriptionsView />;
+      case 'buckets':
+        return <BudgetBuckets />;
+      case 'accounts':
+        return (
+          <div className="space-y-6">
+            <BudgetAccounts />
+            <SettleUpView />
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
   if (isLoading) {
     return <BudgetSkeleton />;
+  }
+
+  // No reachable view — `ModuleRoute` redirects this route away, so this is
+  // only the frame between that decision and the redirect.
+  if (!location) return null;
+
+  // COLLAPSE RULE (2F.1) at the page level: exactly one reachable view means
+  // there is nothing to switch between, so the tab strip and the coach hint
+  // both go and the footer's Money item simply IS this view.
+  if (nav.soleLeaf) {
+    return (
+      <div className="bg-brand-50 dark:bg-brand-900 pb-nav-safe">
+        <PageHeader title="Money" subtitle="Your accounts, bills, and spending." />
+        <div className="px-4 pt-4">{renderLeaf(nav.soleLeaf.key)}</div>
+      </div>
+    );
   }
 
   return (
@@ -250,35 +266,23 @@ const Budget: React.FC = () => {
         <div className="px-4 pt-3 pb-2 sticky top-0 z-30 bg-brand-50 dark:bg-brand-900 border-b border-brand-200 dark:border-brand-800">
           <div ref={tabBarRef} className="relative" onClickCapture={handleTabBarClickCapture}>
             <TabsList equalWidth>
-              <TabsTrigger value="overview" className="text-[13px] px-1.5">
-                Overview
-              </TabsTrigger>
-              <TabsTrigger
-                value="activity"
-                className="text-[13px] px-1.5"
-                aria-haspopup="menu"
-                aria-expanded={openMenu === 'activity'}
-              >
-                {groupTrigger('activity')}
-              </TabsTrigger>
-              <TabsTrigger
-                value="planned"
-                className="text-[13px] px-1.5"
-                aria-haspopup="menu"
-                aria-expanded={openMenu === 'planned'}
-              >
-                {groupTrigger('planned')}
-              </TabsTrigger>
-              <TabsTrigger
-                value="balances"
-                className="text-[13px] px-1.5"
-                aria-haspopup="menu"
-                aria-expanded={openMenu === 'balances'}
-              >
-                {groupTrigger('balances')}
-              </TabsTrigger>
+              {nav.groups.map((group) => {
+                const multi = isMultiView(group.key);
+                return (
+                  <TabsTrigger
+                    key={group.key}
+                    value={group.key}
+                    className="text-[13px] px-1.5"
+                    {...(multi
+                      ? { 'aria-haspopup': 'menu' as const, 'aria-expanded': openMenu === group.key }
+                      : {})}
+                  >
+                    {groupTrigger(group)}
+                  </TabsTrigger>
+                );
+              })}
             </TabsList>
-            {openMenu && (
+            {openMenu && openMenuGroup && (
               <TabSubViewMenu
                 // Remount on group switch (tab-to-tab tap while open) so the
                 // focus trap re-initializes onto the NEW menu's checked item
@@ -286,13 +290,13 @@ const Budget: React.FC = () => {
                 key={openMenu}
                 isOpen
                 onClose={() => setOpenMenu(null)}
-                options={GROUP_OPTIONS[openMenu]}
+                options={openMenuGroup.leaves.map((l) => ({ value: l.key, label: l.label }))}
                 // Checked = "you are here": only when this menu's group is the
                 // active tab. Previewing another group's menu (tab-to-tab tap)
                 // checks nothing — its default segment isn't the current page.
                 value={activeTab === openMenu ? segmentOf(openMenu) : undefined}
                 onSelect={setActiveView}
-                name={GROUP_MENU_NAMES[openMenu]}
+                name={`${openMenuGroup.label} view`}
                 anchorValue={openMenu}
                 anchorRef={tabBarRef}
               />
@@ -305,46 +309,21 @@ const Budget: React.FC = () => {
               opening any tab menu, the ×, or navigating away latches it off
               for good (shared with the Habits page). Lives in the scrolling
               content column (not the sticky strip) so its dismissal never
-              resizes the pinned strip. */}
-          <SubViewHint menuOpened={openMenu !== null} className="mb-6" />
+              resizes the pinned strip. Suppressed once every remaining group
+              is single-view: there is no menu left to coach about. */}
+          {hasMultiViewGroup && (
+            <SubViewHint menuOpened={openMenu !== null} className="mb-6" />
+          )}
 
-          {/* View container */}
+          {/* View container. No in-panel view chooser: the sub-view lives in
+              the tab itself (tap the tab → TabSubViewMenu popover), so each
+              panel renders its current segment directly. */}
           <div>
-            <TabsContent value="overview">
-              <MoneyOverview />
-            </TabsContent>
-            {/* No in-panel view chooser: the sub-view lives in the tab itself
-                (tap the tab → TabSubViewMenu popover), so each panel renders
-                its current segment directly. */}
-            <TabsContent value="activity">
-              {segmentOf('activity') === 'transactions' ? (
-                <TransactionMasterList highlightId={highlightTransactionId} />
-              ) : (
-                <Suspense
-                  fallback={
-                    <div className="space-y-6" aria-busy="true">
-                      <Skeleton className="h-80 w-full rounded-2xl" />
-                      <Skeleton className="h-56 w-full rounded-2xl" />
-                    </div>
-                  }
-                >
-                  <BudgetTrends />
-                </Suspense>
-              )}
-            </TabsContent>
-            <TabsContent value="planned">
-              {segmentOf('planned') === 'calendar' ? <BudgetCalendar /> : <SubscriptionsView />}
-            </TabsContent>
-            <TabsContent value="balances">
-              {segmentOf('balances') === 'buckets' ? (
-                <BudgetBuckets />
-              ) : (
-                <div className="space-y-6">
-                  <BudgetAccounts />
-                  <SettleUpView />
-                </div>
-              )}
-            </TabsContent>
+            {nav.groups.map((group) => (
+              <TabsContent key={group.key} value={group.key}>
+                {renderLeaf(segmentOf(group.key))}
+              </TabsContent>
+            ))}
           </div>
         </div>
       </Tabs>

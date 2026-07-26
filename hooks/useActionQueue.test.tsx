@@ -32,10 +32,10 @@ const setEnabledModules = (enabled: ModuleKey[]) => {
   vi.mocked(useModuleVisibility).mockReturnValue({
     isModuleEnabled: (key: ModuleKey) => enabled.includes(key),
     isPlanVisible:
-      enabled.includes('plan') &&
+      enabled.includes('lists') &&
       (enabled.includes('todos') || enabled.includes('meals') || enabled.includes('shopping')),
     // A to-do is only reachable when the Plan master AND the To-Dos tab are on.
-    isPlanTabVisible: (tab) => enabled.includes('plan') && enabled.includes(tab),
+    isPlanTabVisible: (tab) => enabled.includes('lists') && enabled.includes(tab),
   });
 };
 
@@ -96,7 +96,7 @@ describe('useActionQueue', () => {
     // Pin "today" to 2026-06-16 noon.
     vi.useFakeTimers({ now: new Date('2026-06-16T12:00:00') });
     // Default: every domain on (pre-090 behavior). Plan on so to-dos surface.
-    setEnabledModules(['habits', 'money', 'plan', 'todos', 'meals', 'shopping']);
+    setEnabledModules(['habits', 'money', 'lists', 'todos', 'meals', 'shopping']);
   });
 
   afterEach(() => {
@@ -279,7 +279,7 @@ describe('useActionQueue', () => {
   // --- Plan 090: graceful degradation (per-domain gating) ---
 
   it('drops bills + pending transactions when money is off, keeps to-dos', () => {
-    setEnabledModules(['habits', 'plan', 'todos']); // money OFF, todos reachable
+    setEnabledModules(['habits', 'lists', 'todos']); // money OFF, todos reachable
     setMocks({
       calendar: [makeCalendarItem({ id: 'cal-1', date: '2026-06-15', isPaid: false })],
       transactions: [

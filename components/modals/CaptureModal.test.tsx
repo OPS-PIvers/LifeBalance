@@ -61,10 +61,10 @@ const setEnabledModules = (enabled: ModuleKey[]) => {
   vi.mocked(useModuleVisibility).mockReturnValue({
     isModuleEnabled: (key: ModuleKey) => enabled.includes(key),
     isPlanVisible:
-      enabled.includes('plan') &&
+      enabled.includes('lists') &&
       (enabled.includes('todos') || enabled.includes('meals') || enabled.includes('shopping')),
     // To-Do/Shop capture require the Plan master AND the sub-tab to be on.
-    isPlanTabVisible: (tab) => enabled.includes('plan') && enabled.includes(tab),
+    isPlanTabVisible: (tab) => enabled.includes('lists') && enabled.includes(tab),
   });
 };
 
@@ -125,7 +125,7 @@ describe('CaptureModal', () => {
     vi.clearAllMocks();
     // Default: all capture modules enabled (pre-090 behavior). Plan is on so the
     // To-Do/Shop sub-tab destinations are reachable.
-    setEnabledModules(['money', 'plan', 'todos', 'shopping']);
+    setEnabledModules(['money', 'lists', 'todos', 'shopping']);
   });
 
   it('renders correctly when open', () => {
@@ -196,7 +196,7 @@ describe('CaptureModal', () => {
   // --- Plan 090: capture-tab cascade ---
 
   it('only renders tabs whose module is enabled', () => {
-    setEnabledModules(['plan', 'todos', 'shopping']);
+    setEnabledModules(['lists', 'todos', 'shopping']);
     render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
 
     expect(screen.queryByText('Expense')).not.toBeInTheDocument();
@@ -217,7 +217,7 @@ describe('CaptureModal', () => {
 
   it('defaults the active tab to the first enabled tab when the default (money) is off', () => {
     // Money disabled, so the Expense (transaction) default is unavailable.
-    setEnabledModules(['plan', 'todos', 'shopping']);
+    setEnabledModules(['lists', 'todos', 'shopping']);
     render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
 
     // First enabled tab is To-Do — its content is active (title stays the
@@ -228,7 +228,7 @@ describe('CaptureModal', () => {
   });
 
   it('hides the tab switcher when only one capture module is enabled', () => {
-    setEnabledModules(['plan', 'shopping']);
+    setEnabledModules(['lists', 'shopping']);
     render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
 
     // Single enabled tab renders its content with no switchable strip.

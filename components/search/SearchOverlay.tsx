@@ -8,6 +8,7 @@ import { Section, SurfaceList, DisclosureRow } from '@/components/ui/Section';
 import { useFinance, useGamification, useMealPlan, useShopping, useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useMerchantRules } from '@/hooks/useMerchantRules';
 import { searchAll, type GlobalSearchEntityType, type GlobalSearchResult } from '@/utils/globalSearch';
+import { useHiddenVisibilityKeys } from '@/hooks/useHiddenVisibilityKeys';
 
 interface SearchOverlayProps {
   isOpen: boolean;
@@ -81,6 +82,11 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ isOpen, onClose }) => {
   const { shoppingList } = useShopping();
   const { todos } = useTodos();
   const { householdSettings } = useHouseholdCore();
+  // 2F.1: a result must never deep-link to a view THIS member has hidden, so the
+  // member's own hidden-key list gates the corpus alongside the household's —
+  // read from the one shared set the nav and the pages use, so search can't
+  // disagree with them about what is reachable.
+  const hiddenKeys = useHiddenVisibilityKeys();
   // Merchant rules widen transaction matching to the friendly name as well as
   // the raw bank descriptor, so a renamed merchant is still findable by either
   // spelling (`utils/merchantRules.ts`).
@@ -92,9 +98,10 @@ const SearchOverlay: React.FC<SearchOverlayProps> = ({ isOpen, onClose }) => {
         { transactions, habits, meals, todos, shoppingItems: shoppingList },
         query,
         householdSettings,
-        merchantRules
+        merchantRules,
+        hiddenKeys
       ),
-    [transactions, habits, meals, todos, shoppingList, householdSettings, merchantRules, query]
+    [transactions, habits, meals, todos, shoppingList, householdSettings, merchantRules, hiddenKeys, query]
   );
 
   const grouped = useMemo(() => {

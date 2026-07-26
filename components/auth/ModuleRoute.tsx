@@ -22,7 +22,7 @@ interface ModuleRouteProps {
 const ModuleRoute: React.FC<ModuleRouteProps> = ({ module, children }) => {
   const v = useModuleVisibility();
   const ok =
-    module === 'plan'
+    module === 'lists'
       ? v.isPlanVisible
       : module === 'todos' || module === 'meals' || module === 'shopping'
         ? v.isPlanTabVisible(module)

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { ModuleKey } from '@/types/schema';
 import { MODULE_PRESETS } from './modulePresets';
 
-const ALL_KEYS: ModuleKey[] = ['habits', 'money', 'plan', 'todos', 'meals', 'shopping'];
+const ALL_KEYS: ModuleKey[] = ['habits', 'money', 'lists', 'todos', 'meals', 'shopping'];
 
 describe('MODULE_PRESETS', () => {
   it('has unique, non-empty ids', () => {
@@ -39,11 +39,11 @@ describe('MODULE_PRESETS', () => {
     }
   });
 
-  it('every plan sub-tab preset that enables todos/meals/shopping also enables plan', () => {
+  it('every Lists sub-tab preset that enables todos/meals/shopping also enables lists', () => {
     for (const preset of MODULE_PRESETS) {
       const subTabsOn = preset.visibility.todos || preset.visibility.meals || preset.visibility.shopping;
       if (subTabsOn) {
-        expect(preset.visibility.plan).toBe(true);
+        expect(preset.visibility.lists).toBe(true);
       }
     }
   });

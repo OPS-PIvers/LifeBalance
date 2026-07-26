@@ -121,9 +121,9 @@ vi.mock('@/components/settings/ActivityLogCard', () => ({
 vi.mock('@/components/settings/ChangelogDrawer', () => ({
   ChangelogDrawer: () => null,
 }));
-vi.mock('@/components/settings/DashboardWidgetSettings', () => ({
-  DashboardWidgetSettings: () => <div data-testid="dashboard-widget-settings" />,
-}));
+// NOTE: MyViewSettings (2F.1, which replaced DashboardWidgetSettings) is
+// deliberately NOT mocked — it renders for real so the "What I see" assertions
+// below are actual page-level coverage of that surface.
 vi.mock('@/components/auth/HouseholdInviteCard', () => ({
   default: () => <div data-testid="household-invite-card" />,
 }));
@@ -194,6 +194,29 @@ describe('Settings index + sub-screens', () => {
     const heading = screen.getByRole('heading', { level: 1 });
     expect(heading).toHaveTextContent('Modules & Dashboard');
     expect(heading.contains(document.activeElement)).toBe(true);
+  });
+
+  // 2F.1 — the per-member "What I see" editor (MyViewSettings) lives inside the
+  // Modules & Dashboard sub-screen, below the household module toggles. Rendered
+  // un-mocked so this is real coverage: a per-page leaf row, and the Home widget
+  // rows with their reorder controls.
+  it('renders the per-member "What I see" editor in Modules & Dashboard', () => {
+    renderSettings();
+    fireEvent.click(screen.getByText('Modules & Dashboard'));
+
+    expect(screen.getByText('What I see')).toBeInTheDocument();
+
+    // Per-page leaf rows, one switch per nav leaf the household has enabled.
+    expect(screen.getByRole('checkbox', { name: 'Show Transactions in Money' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Show Track in Habits' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Show To-Dos in Lists' })).toBeChecked();
+
+    // Home widget rows: a visibility switch plus the reorder controls.
+    expect(screen.getByRole('checkbox', { name: 'Show This Week Pulse on Home' })).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Move This Week Pulse down' })).toBeInTheDocument();
+    // A default-hidden widget starts off, so the widget-merge default still
+    // reaches the UI (no migration ran).
+    expect(screen.getByRole('checkbox', { name: 'Show AI Insight on Home' })).not.toBeChecked();
   });
 
   it('returns to the index via the back button', () => {

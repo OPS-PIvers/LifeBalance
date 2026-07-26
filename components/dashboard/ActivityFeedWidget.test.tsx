@@ -25,9 +25,9 @@ const setEnabledModules = (enabled: ModuleKey[]) => {
   vi.mocked(useModuleVisibility).mockReturnValue({
     isModuleEnabled: (key: ModuleKey) => enabled.includes(key),
     isPlanVisible:
-      enabled.includes('plan') &&
+      enabled.includes('lists') &&
       (enabled.includes('todos') || enabled.includes('meals') || enabled.includes('shopping')),
-    isPlanTabVisible: (tab) => enabled.includes('plan') && enabled.includes(tab),
+    isPlanTabVisible: (tab) => enabled.includes('lists') && enabled.includes(tab),
   });
 };
 
@@ -72,7 +72,7 @@ describe('ActivityFeedWidget', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setData();
-    setEnabledModules(['money', 'habits', 'plan', 'todos', 'meals', 'shopping']);
+    setEnabledModules(['money', 'habits', 'lists', 'todos', 'meals', 'shopping']);
   });
 
   it('shows both transaction and completed-todo rows when all on', () => {
@@ -82,7 +82,7 @@ describe('ActivityFeedWidget', () => {
   });
 
   it('drops transaction rows when money is off', () => {
-    setEnabledModules(['habits', 'plan', 'todos']);
+    setEnabledModules(['habits', 'lists', 'todos']);
     render(<ActivityFeedWidget />);
     expect(screen.queryByText('Coffee Shop')).not.toBeInTheDocument();
     expect(screen.getByText('Take out trash')).toBeInTheDocument();

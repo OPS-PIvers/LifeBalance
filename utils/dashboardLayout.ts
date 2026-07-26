@@ -11,8 +11,25 @@
  * customizable and always render in their fixed positions.
  */
 
+/**
+ * The canonical Home-widget ids. Spelled as a literal union (not `string`) so
+ * they can join the unified per-member visibility key set in
+ * utils/moduleVisibility.ts without a widening cast.
+ */
+export type DashboardWidgetId =
+  | 'pulseStrip'
+  | 'partnerActivity'
+  | 'dailyHabits'
+  | 'creditCardActivity'
+  | 'weeklyRecap'
+  | 'moneyRecap'
+  | 'kidsChores'
+  | 'insight'
+  | 'activityFeed'
+  | 'habitCoach';
+
 export interface DashboardWidgetDef {
-  id: string;
+  id: DashboardWidgetId;
   label: string;
   /** Short description shown under the label in the customization list. */
   description: string;
@@ -33,7 +50,7 @@ export const DASHBOARD_WIDGETS: readonly DashboardWidgetDef[] = [
   { id: 'habitCoach', label: 'Habit Coach', description: 'AI coaching on your habit patterns' },
 ] as const;
 
-export const DASHBOARD_WIDGET_IDS: readonly string[] = DASHBOARD_WIDGETS.map(w => w.id);
+export const DASHBOARD_WIDGET_IDS: readonly DashboardWidgetId[] = DASHBOARD_WIDGETS.map(w => w.id);
 
 export const DEFAULT_DASHBOARD_WIDGET_ORDER: readonly string[] = DASHBOARD_WIDGET_IDS;
 
@@ -44,7 +61,7 @@ export const DEFAULT_DASHBOARD_WIDGET_ORDER: readonly string[] = DASHBOARD_WIDGE
  * per the 2026-07 critique's information-overload P1; everything here remains
  * one Settings toggle away. A member's explicit list (even []) always wins.
  */
-export const DEFAULT_HIDDEN_DASHBOARD_WIDGETS: readonly string[] = [
+export const DEFAULT_HIDDEN_DASHBOARD_WIDGETS: readonly DashboardWidgetId[] = [
   'creditCardActivity',
   'kidsChores',
   'insight',
@@ -64,7 +81,7 @@ export function resolveHiddenWidgets(hidden: readonly string[] | undefined): rea
  * after the member last customized). Unknown/stale ids are dropped.
  */
 export function resolveDashboardOrder(layout: readonly string[] | undefined): string[] {
-  const known = new Set(DASHBOARD_WIDGET_IDS);
+  const known = new Set<string>(DASHBOARD_WIDGET_IDS);
   const ordered = (layout ?? []).filter((id): id is string => known.has(id));
   const seen = new Set(ordered);
   const rest = DASHBOARD_WIDGET_IDS.filter(id => !seen.has(id));

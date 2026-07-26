@@ -17,9 +17,11 @@ const TAB_LABELS: Record<PlanTab, string> = {
 const ListsPage: React.FC = () => {
   const { isPlanTabVisible } = useModuleVisibility();
 
-  // The tabs this household has enabled, in canonical order. The ModuleRoute
-  // guard already redirects away when none are enabled (isPlanVisible false), so
-  // in practice this is never empty when the page renders.
+  // The tabs this household AND this member have enabled (2F.1), in canonical
+  // order. The ModuleRoute guard already redirects away when none are enabled
+  // (isPlanVisible false), so in practice this is never empty when the page
+  // renders. `showTabStrip` below is this page's COLLAPSE RULE: one tab left
+  // means nothing to switch between, so tapping Lists simply IS that tab.
   const enabledTabs = useMemo<PlanTab[]>(
     () => VALID_TABS.filter((tab) => isPlanTabVisible(tab)),
     [isPlanTabVisible]
@@ -45,7 +47,8 @@ const ListsPage: React.FC = () => {
   });
 
   // Effective tab: the preference if it's enabled, else the first enabled tab.
-  // Defaults to 'todos' only as a guard for the never-rendered no-tabs case.
+  // The 'todos' fallback only satisfies the type — the no-tabs case returns
+  // early below rather than rendering a tab nobody enabled.
   const activeTab: PlanTab = enabledTabs.includes(selectedTab)
     ? selectedTab
     : enabledTabs[0] ?? 'todos';
@@ -86,13 +89,19 @@ const ListsPage: React.FC = () => {
     return () => observer.disconnect();
   }, [showTabStrip]);
 
+  // DEFENCE IN DEPTH (matching pages/Budget.tsx and pages/Habits.tsx): no
+  // reachable tab means `ModuleRoute` is already redirecting `/lists` away, so
+  // this is only the frame between that decision and the redirect. Falling
+  // through would render the To-Dos tab nobody enabled.
+  if (enabledTabs.length === 0) return null;
+
   return (
     <div ref={containerRef} className="flex flex-col h-full">
-      {/* No visible masthead: the bottom nav's active "Plan" item + the tab
+      {/* No visible masthead: the bottom nav's active "Lists" item + the tab
           strip already say where you are, and the title row cost a full band
           of vertical space before any content. The h1 stays for the document
           outline / screen readers only. */}
-      <h1 className="sr-only">Plan</h1>
+      <h1 className="sr-only">Lists</h1>
       {/* Hide the tab strip when only one tab remains — there's nothing to switch. */}
       {showTabStrip && (
         <div ref={tabStripRef} className="flex-none px-4 pt-3 pb-2 sticky top-0 z-30 bg-brand-50 dark:bg-brand-900 border-b border-brand-200 dark:border-brand-800">
