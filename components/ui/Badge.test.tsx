@@ -33,6 +33,34 @@ describe('Badge', () => {
     expect(screen.getByText('Medium')).toHaveClass('text-xs', 'px-2.5', 'py-0.5');
   });
 
+  // Regression: `text-xxs` is a custom @theme token. Until it was registered as
+  // a font-size in utils/cn.ts, tailwind-merge read it as a text-COLOUR utility
+  // and treated it as conflicting with the variant's `text-<colour>`, silently
+  // dropping one of the two — every size="sm" badge lost its semantic colour.
+  it('keeps the variant colour AND the custom font size at size="sm"', () => {
+    const { rerender } = render(<Badge variant="danger" size="sm">Danger</Badge>);
+    expect(screen.getByText('Danger')).toHaveClass('text-xxs', 'text-money-neg', 'bg-money-bgNeg');
+
+    rerender(<Badge variant="success" size="sm">Success</Badge>);
+    expect(screen.getByText('Success')).toHaveClass('text-xxs', 'text-money-pos');
+
+    rerender(<Badge variant="warning" size="sm">Warning</Badge>);
+    expect(screen.getByText('Warning')).toHaveClass('text-xxs', 'text-warm-700');
+
+    rerender(<Badge variant="neutral" size="sm">Neutral</Badge>);
+    expect(screen.getByText('Neutral')).toHaveClass('text-xxs', 'text-brand-600');
+
+    rerender(<Badge variant="outline" size="sm">Outline</Badge>);
+    expect(screen.getByText('Outline')).toHaveClass('text-xxs', 'text-brand-600');
+  });
+
+  it('lets className override the variant colour without eating the font size', () => {
+    render(<Badge variant="default" size="sm" className="text-habit-blue">Override</Badge>);
+    const badge = screen.getByText('Override');
+    expect(badge).toHaveClass('text-xxs', 'text-habit-blue');
+    expect(badge).not.toHaveClass('text-accent-700');
+  });
+
   it('merges custom className correctly', () => {
     render(<Badge className="custom-class">Custom</Badge>);
     const badge = screen.getByText('Custom');

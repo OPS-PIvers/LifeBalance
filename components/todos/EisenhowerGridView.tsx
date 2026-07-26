@@ -250,10 +250,12 @@ const GridChip = React.memo(function GridChip({ item, color, onComplete, onEdit,
           {categoryLabel && categoryColor && (
             <span
               data-testid="grid-chip-category"
-              /* Template string, not cn(): tailwind-merge reads the custom
-                 `text-xxs` token as a text-COLOR class and would drop it in
-                 favour of the palette's `text-*-800`. */
-              className={`min-w-0 truncate rounded-full border px-1.5 text-xxs font-semibold ${categoryColor.bg} ${categoryColor.text} ${categoryColor.border}`}
+              className={cn(
+                'min-w-0 truncate rounded-full border px-1.5 text-xxs font-semibold',
+                categoryColor.bg,
+                categoryColor.text,
+                categoryColor.border
+              )}
             >
               {categoryLabel}
             </span>

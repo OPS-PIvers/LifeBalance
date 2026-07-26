@@ -2023,10 +2023,7 @@ const ToDosPage: React.FC = () => {
                               aria-controls={contentId}
                               className="w-full min-h-11 flex items-center gap-2 px-1 py-1.5 text-left rounded-card focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
                             >
-                              {/* Template string, not cn(): tailwind-merge reads
-                                  the custom `text-xxs` token as a text-COLOR
-                                  class and would drop it for `text-*-800`. */}
-                              <span className={`inline-flex min-w-0 items-center rounded-full border px-2 py-0.5 text-xxs font-semibold ${color.bg} ${color.text} ${color.border}`}>
+                              <span className={cn('inline-flex min-w-0 items-center rounded-full border px-2 py-0.5 text-xxs font-semibold', color.bg, color.text, color.border)}>
                                 <span className="truncate">{label}</span>
                               </span>
                               <span className="text-xs tabular-nums text-brand-500 dark:text-brand-400">

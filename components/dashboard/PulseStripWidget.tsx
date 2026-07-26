@@ -222,7 +222,7 @@ const PulseCell: React.FC<{ label: string; children: React.ReactNode }> = ({
   children,
 }) => (
   <div className="flex flex-col items-center justify-center px-2 py-4 text-center">
-    <Eyebrow className="mb-1.5 text-xxs">
+    <Eyebrow size="xxs" className="mb-1.5">
       {label}
     </Eyebrow>
     {children}
