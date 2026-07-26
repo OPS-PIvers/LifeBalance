@@ -276,6 +276,33 @@ service cloud.firestore {
             )
           ) &&
 
+          // homeScreen holds a short route/nav key.
+          isValidOptionalString(request.resource.data.get('homeScreen', null), 64) &&
+
+          // anyNotificationsEnabled must be a bool when present.
+          (
+            !request.resource.data.keys().hasAny(['anyNotificationsEnabled']) ||
+            request.resource.data.anyNotificationsEnabled is bool
+          ) &&
+
+          // dashboardLayout/dashboardHidden/hiddenKeys must be lists when present, capped at
+          // 100 entries — comfortably above the real ceiling (~20 nav/widget keys today) while
+          // blocking a storage-exhaustion write. Firestore rules cannot iterate a list to bound
+          // each element's own string length, so this size cap plus Firestore's own 1MiB
+          // document limit is the enforcement boundary; not a gap that was overlooked.
+          (
+            !request.resource.data.keys().hasAny(['dashboardLayout']) ||
+            (request.resource.data.dashboardLayout is list && request.resource.data.dashboardLayout.size() <= 100)
+          ) &&
+          (
+            !request.resource.data.keys().hasAny(['dashboardHidden']) ||
+            (request.resource.data.dashboardHidden is list && request.resource.data.dashboardHidden.size() <= 100)
+          ) &&
+          (
+            !request.resource.data.keys().hasAny(['hiddenKeys']) ||
+            (request.resource.data.hiddenKeys is list && request.resource.data.hiddenKeys.size() <= 100)
+          ) &&
+
           (
             // Case 1: User updating their own profile (restricted fields)
             (

@@ -546,6 +546,59 @@ describe('member self-update allowlist (2G.1 — dashboard/notification fields)'
     );
   });
 
+  it('a non-admin updating only displayName (none of the five fields present) still succeeds', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        displayName: 'Bobby',
+      }),
+    );
+  });
+
+  // Validation for the five newly-allowlisted fields: allowlisting a key is not the same as
+  // validating it. Without a type/size check, the allowlist alone would let a member bloat
+  // their own member doc toward Firestore's 1MiB cap — and because the members collection is
+  // synced to every device in the household via onSnapshot, that cost lands on everyone, not
+  // just the writer.
+  it('rejects an oversized homeScreen string', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        homeScreen: 'x'.repeat(65),
+      }),
+    );
+  });
+
+  it('rejects an over-cap dashboardLayout list', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        dashboardLayout: Array(101).fill('x'),
+      }),
+    );
+  });
+
+  it('rejects an over-cap hiddenKeys list', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        hiddenKeys: Array(101).fill('x'),
+      }),
+    );
+  });
+
+  it('rejects a non-list dashboardLayout', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        dashboardLayout: 'nope',
+      }),
+    );
+  });
+
+  it('rejects a non-bool anyNotificationsEnabled', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        anyNotificationsEnabled: 'yes',
+      }),
+    );
+  });
+
   it('a non-admin still cannot write a genuinely forbidden key (role)', async () => {
     await assertFails(
       updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
