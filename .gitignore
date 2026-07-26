@@ -42,6 +42,17 @@ functions/package-lock.json
 # Claude Code harness scaffolding (agent worktrees are temporary + auto-cleaned)
 .claude/worktrees/
 
+# Agent-run debris at the repo ROOT only: PR diffs pulled down for review and
+# screenshots taken to verify UI. These are always scratch, never part of a
+# change. Scoped to `/` so real assets under public/, docs/ etc. are unaffected;
+# if a root-level image ever IS deliverable, `git add -f` it.
+# Cleanup guide: docs/REPO_CLEANUP_RUNBOOK.md
+/*.diff
+/*.patch
+/*.png
+/*.jpg
+/*.jpeg
+
 # Playwright (e2e) artifacts
 /test-results/
 /playwright-report/
