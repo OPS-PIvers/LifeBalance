@@ -438,6 +438,59 @@ describe('geminiService', () => {
 
     vi.useRealTimers();
   });
+
+  it('parseReceiptLineItems prompt includes correct date from local time', async () => {
+    const { parseReceiptLineItems } = await import('./geminiService');
+
+    // Mock date to 2026-02-15
+    const mockDate = new Date(2026, 1, 15); // Month is 0-indexed (1 = Feb)
+    vi.useFakeTimers();
+    vi.setSystemTime(mockDate);
+
+    const mockResponse = {
+      merchant: 'Target',
+      items: [{ description: 'Milk', amount: 4.5, category: 'Groceries' }],
+    };
+
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify(mockResponse)
+    });
+
+    await parseReceiptLineItems('test-id', VALID_TEST_IMAGE);
+
+    // Verify the prompt sent to Gemini contains the date
+    // We access the first argument of the first call, which is the model options/config object
+    const callArgs = generateContentMock.mock.calls[0]![0];
+    const promptText = callArgs.contents.parts[1].text; // The second part is text
+
+    expect(promptText).toContain("Today's date is 2026-02-15");
+
+    vi.useRealTimers();
+  });
+
+  it('parseReceiptLineItems clamps an off-list item category to the fallback', async () => {
+    const { parseReceiptLineItems } = await import('./geminiService');
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify({
+        merchant: 'X',
+        items: [{ description: 'Widget', amount: 10, category: 'Crypto' }],
+      }),
+    });
+    const result = await parseReceiptLineItems('test-id', VALID_TEST_IMAGE, ['Groceries', 'Dining']);
+    expect(result.items[0]!.category).toBe('Other');
+  });
+
+  it('parseReceiptLineItems keeps an in-list item category (case-insensitive match)', async () => {
+    const { parseReceiptLineItems } = await import('./geminiService');
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify({
+        merchant: 'X',
+        items: [{ description: 'Bananas', amount: 3, category: 'groceries' }],
+      }),
+    });
+    const result = await parseReceiptLineItems('test-id', VALID_TEST_IMAGE, ['Groceries', 'Dining']);
+    expect(result.items[0]!.category).toBe('Groceries');
+  });
 });
 
 // ---------------------------------------------------------------------------

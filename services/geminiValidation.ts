@@ -22,7 +22,6 @@
 import type { Meal, InsightAction } from '@/types/schema';
 import type { WeeklyPlan } from '@/types/weeklyPlan';
 import type {
-  ReceiptData,
   ReceiptLineItemsData,
   ParsedShoppingList,
   ParsedTodoList,
@@ -96,21 +95,6 @@ const expectRecord = (raw: unknown, context: string): Record<string, unknown> =>
   }
   return raw;
 };
-
-// ---------------------------------------------------------------------------
-// Receipt
-// ---------------------------------------------------------------------------
-
-export function validateReceiptData(raw: unknown): ReceiptData {
-  const o = expectRecord(raw, 'receipt');
-  if (!isString(o['merchant'])) fail('receipt', 'merchant must be a string');
-  if (!isFiniteNumber(o['amount'])) fail('receipt', 'amount must be a number');
-  if (!isString(o['category'])) fail('receipt', 'category must be a string');
-  if (!isOptString(o['date'])) fail('receipt', 'date must be a string');
-  if (!isOptStringArray(o['suggestedHabits'])) fail('receipt', 'suggestedHabits must be string[]');
-  if (!isOptString(o['store'])) fail('receipt', 'store must be a string');
-  return o as unknown as ReceiptData;
-}
 
 // ---------------------------------------------------------------------------
 // Bank statement transactions

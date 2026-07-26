@@ -4,7 +4,6 @@ import {
   InvalidImageError,
   MAX_IMAGE_BYTES,
   validateBase64Image,
-  validateReceiptData,
   validateBankTransactions,
   validateMealSuggestion,
   validateSubtaskSuggestions,
@@ -28,55 +27,6 @@ import {
 // A structurally-valid base64 image data URL (1x1 transparent PNG).
 const VALID_IMAGE =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
-
-describe('geminiValidation - validateReceiptData', () => {
-  it('accepts a well-formed receipt with only required fields', () => {
-    const result = validateReceiptData({ merchant: 'Target', amount: 25, category: 'Shopping' });
-    expect(result.merchant).toBe('Target');
-    expect(result.amount).toBe(25);
-  });
-
-  it('accepts optional fields when correctly typed', () => {
-    const result = validateReceiptData({
-      merchant: 'Target', amount: 25, category: 'Shopping',
-      date: '2026-01-01', suggestedHabits: ['a'], store: 'Target',
-    });
-    expect(result.date).toBe('2026-01-01');
-    expect(result.suggestedHabits).toEqual(['a']);
-  });
-
-  it('rejects a missing required field', () => {
-    expect(() => validateReceiptData({ amount: 25, category: 'Shopping' }))
-      .toThrow(GeminiValidationError);
-  });
-
-  it('rejects a wrong-typed amount (hallucinated string)', () => {
-    expect(() => validateReceiptData({ merchant: 'Target', amount: 'twenty', category: 'Shopping' }))
-      .toThrow(/amount must be a number/);
-  });
-
-  it('rejects a wrong-typed optional field', () => {
-    expect(() => validateReceiptData({ merchant: 'T', amount: 1, category: 'S', suggestedHabits: 'x' }))
-      .toThrow(/suggestedHabits/);
-  });
-
-  it('accepts null for optional fields (LLMs emit null instead of omitting)', () => {
-    const result = validateReceiptData({
-      merchant: 'Target',
-      amount: 25,
-      category: 'Shopping',
-      date: null,
-      suggestedHabits: null,
-      store: null,
-    });
-    expect(result.merchant).toBe('Target');
-  });
-
-  it('rejects a non-object', () => {
-    expect(() => validateReceiptData([])).toThrow(/expected an object/);
-    expect(() => validateReceiptData(null)).toThrow(GeminiValidationError);
-  });
-});
 
 describe('geminiValidation - validateBankTransactions', () => {
   it('accepts an array of well-formed transactions', () => {
