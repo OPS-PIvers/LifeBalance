@@ -1005,17 +1005,23 @@ describe('managed kid profiles (Plan 080 — login-less child member docs)', () 
     );
   });
 
-  // 2F.1/2F.3 whole-document-keys() lockout regression. Case 3's hasOnly() runs
-  // against keys() of the ENTIRE resulting document, not affectedKeys() — so once
-  // an admin (Case 2, a blanket bypass) adds a key Case 3's allowlist doesn't know
-  // about, the kid's doc PERMANENTLY carries that key and every later non-admin
-  // write (Case 3) fails, forever, because the whole-document check now sees an
-  // unrecognized key. This is the same failure shape as 2G.1's changedKeys() bug,
-  // one layer over: there it was a first-write vs. a later-write; here it's an
-  // admin's write vs. every later non-admin write. A single-step test (just
-  // asserting BOB can set hiddenKeys) would NOT catch this — the poisoning only
-  // shows up on the write AFTER the admin's write, which is why this is a two-step
-  // sequence.
+  // 2F.1/2F.3 whole-document-keys() lockout regression, since fixed structurally.
+  // Case 3's guard used to run keys().hasOnly() against the ENTIRE resulting
+  // document, not affectedKeys() — so once an admin (Case 2, a blanket bypass)
+  // added a key Case 3's allowlist didn't know about, the kid's doc PERMANENTLY
+  // carried that key and every later non-admin write (Case 3) failed, forever,
+  // because the whole-document check saw an unrecognized key. Same failure shape
+  // as 2G.1's changedKeys() bug, one layer over: there it was a first-write vs. a
+  // later-write; here it was an admin's write vs. every later non-admin write.
+  //
+  // The rule now guards on `diff(resource.data).affectedKeys()` (what THIS write
+  // touches) instead, matching Case 1's self-update branch, so it no longer
+  // matters what untouched keys already sit on the document. The tests below
+  // still cover 'hiddenKeys'/'homeScreen' directly (they're on the allowlist
+  // because non-admin parents write them), but the load-bearing one is the
+  // 'someFutureFeatureField' test further down: it plants a key that is NOT on
+  // the allowlist and never will be, proving the fix is structural rather than
+  // "we happened to list the right keys this time."
   describe('hiddenKeys/homeScreen do not lock a kid out of Case 3 (2F.1/2F.3 regression)', () => {
     it('REGRESSION: after an admin sets hiddenKeys on a kid, a non-admin parent can still edit the kid afterward', async () => {
       // Step 1: the admin sets hiddenKeys on the kid via Case 2 (isAdminOf), exactly
@@ -1075,6 +1081,43 @@ describe('managed kid profiles (Plan 080 — login-less child member docs)', () 
       await assertFails(
         updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), {
           hiddenKeys: Array(101).fill('x'),
+        }),
+      );
+    });
+
+    it('an admin-planted unknown field does not lock non-admin parents out of a managed kid', async () => {
+      // Step 1: the admin plants a field that is NOT on Case 3's allowlist and
+      // never will be — a stand-in for any future HouseholdMember field, not one
+      // of the specific keys this PR happens to allowlist. Succeeds via Case 2's
+      // blanket bypass, exactly like 'hiddenKeys' did before it was allowlisted.
+      await assertSucceeds(
+        updateDoc(doc(dbFor(ALICE), 'households', H1, 'members', KID), {
+          someFutureFeatureField: 'x',
+        }),
+      );
+
+      // Step 2: a non-admin parent's ordinary Case 3 operations must all still
+      // succeed afterward, despite the untracked field now sitting on the
+      // document, because the guard is affectedKeys() (what THIS write touches),
+      // not keys() of the whole document. On the old whole-document hasOnly(),
+      // every one of these would now fail.
+      await assertSucceeds(
+        updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), {
+          displayName: 'Leo Renamed Again',
+        }),
+      );
+
+      // This is the toggleHabit/actAs chore-crediting path — a parent acting as
+      // the kid to complete a chore updates the kid's points map.
+      await assertSucceeds(
+        updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), {
+          points: { daily: 10, weekly: 10, total: 10 },
+        }),
+      );
+
+      await assertSucceeds(
+        updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), {
+          allowanceCents: 500,
         }),
       );
     });
