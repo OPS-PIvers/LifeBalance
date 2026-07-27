@@ -151,6 +151,33 @@ describe('generatePointRebalanceSuggestions — guardrails', () => {
     expect(suggestions.every(s => Math.abs(s.suggestedPoints) <= 5)).toBe(true);
   });
 
+  it('does not let an ARCHIVED habit raise the scale ceiling', () => {
+    // A retired 20-pt habit must not re-open the very escape hatch this
+    // module exists to close: a struggling 4-pt habit should still be bounded
+    // by the live economy (max 4), not lifted toward the dead habit's 20.
+    const habits = [
+      habit({ id: 'dead', basePoints: 20, archivedAt: '2026-07-01T00:00:00.000Z' }),
+      habit({ id: 'live', basePoints: 4, completedDates: [daysBefore(59), daysBefore(20)] }),
+    ];
+    const suggestions = generatePointRebalanceSuggestions(habits, TODAY);
+
+    expect(suggestions.every(s => Math.abs(s.suggestedPoints) <= 4)).toBe(true);
+  });
+
+  it('lets a PAUSED habit still set the scale ceiling', () => {
+    // A planned break is temporary — the habit returns at its stored value,
+    // so it stays part of what this household treats as a big reward, even
+    // though it is not itself scored while paused.
+    const habits = [
+      habit({ id: 'onBreak', basePoints: 8, pausedUntil: '2026-08-10' }),
+      habit({ id: 'live', basePoints: 7, completedDates: [daysBefore(59), daysBefore(20)] }),
+    ];
+    const suggestions = generatePointRebalanceSuggestions(habits, TODAY);
+
+    expect(suggestions.map(s => s.habitId)).toEqual(['live']);
+    expect(suggestions[0]?.suggestedPoints).toBe(8);
+  });
+
   it('never moves a habit by more than the step cap', () => {
     const habits = [
       habit({ id: 'automatic', basePoints: 10, completedDates: lastDays(60) }),

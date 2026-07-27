@@ -216,7 +216,16 @@ export const generatePointRebalanceSuggestions = (
   const todayDate = parseISO(today);
   if (!DATE_RE.test(today) || !isValid(todayDate)) return [];
 
-  const maxMagnitude = householdMaxMagnitude(habits);
+  // The ceiling must describe the household's LIVE point economy. Archived
+  // habits are retired, so a long-dead 20-pt habit must not raise the bound
+  // and let suggestions escape the scale that's meant to contain them —
+  // which is the exact failure this module exists to prevent.
+  //
+  // Paused habits DO still count: a planned break is temporary, the habit
+  // returns at its stored value, and that value is still part of what this
+  // household treats as a big reward. They're excluded from being *scored*
+  // below (their recent rate describes the break) but not from the scale.
+  const maxMagnitude = householdMaxMagnitude(habits.filter(h => !h.archivedAt));
   const suggestions: HabitPointAdjustmentSuggestion[] = [];
 
   for (const habit of habits) {
