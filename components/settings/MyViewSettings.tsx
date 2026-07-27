@@ -3,7 +3,7 @@ import { SurfaceList, Row } from '@/components/ui/Section';
 import { Switch } from '@/components/ui/Switch';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import Eyebrow from '@/components/ui/Eyebrow';
-import HomeWidgetOrder from '@/components/settings/HomeWidgetOrder';
+import { HomeWidgetOrder } from '@/components/settings/HomeWidgetOrder';
 import { resolveDashboardOrder } from '@/utils/dashboardLayout';
 import {
   NAV_PAGES,
