@@ -182,7 +182,10 @@ Two things fell out that weren't in the original spec:
 **Known follow-ups (not blocking, not re-litigated here):**
 - `components/meals/MealPlanTab.test.tsx`'s "extends the day strip window…" test is a pre-existing,
   load-sensitive flake — not caused by 2F/2G, don't chase it as a regression.
-- `components/layout/ProfileMenu.tsx`'s add-kid flow still has one remaining `window.prompt` call.
+- ~~`components/layout/ProfileMenu.tsx`'s add-kid flow still uses a browser-native text prompt.~~
+  ✅ Done — the row now opens the kid-aware `MemberModal` in create mode (`createManagedKid`), so adding
+  and editing a kid profile share one on-design bottom sheet. No browser-native prompt dialog remains in
+  the app; grepping the source for one should return nothing.
 - `firestore.rules`' Case 3 kid-allowlist comment still describes stale reachability claims (that
   `MyViewSettings` can render a kid, and that `MemberModal` submits `email` for kids) — a sibling
   **[rules] PR #1114** (`fix/rules-case3-comment-accuracy`) rewrites that comment; as of this writing it
