@@ -142,6 +142,28 @@ describe("pickPendingToConfirm", () => {
     expect(got?.id).toBe("a");
   });
 
+  // The capture flow's statement scan cleans bank noise out of the merchant
+  // before storing it ("PURCHASE JIMMY JOHNS MINNEAPOLIS MN CARD7752" →
+  // "Jimmy Johns"), which raises the obvious worry that the nightly email will
+  // no longer recognize its own row and CREATE a duplicate. It doesn't — and the
+  // tie-break is actually MORE reliable on the clean name, because
+  // `merchantSimilar` wants one token set to be a SUBSET of the other and the
+  // raw pending descriptor carries tokens ("card7752") the later posted
+  // descriptor does not.
+  it("breaks a tie on a merchant cleaned of bank noise (raw descriptors would MISS)", () => {
+    const posted = "PURCHASE AUTHORIZED ON 07/19 JIMMY JOHNS 1234 MINNEAPOLIS MN S12345 CARD 7752";
+    const cleaned = pending({ id: "cleaned", merchant: "Jimmy Johns", date: "2026-07-20" });
+    const other = pending({ id: "other", merchant: "Pure Hockey", date: "2026-07-20" });
+    expect(pickPendingToConfirm(withdrawal({ descriptor: posted }), [cleaned, other])?.id)
+      .toBe("cleaned");
+
+    // Same tie, but the row kept the bank's raw pending text: no subset either
+    // way, so the tie cannot be broken and the withdrawal falls through to
+    // CREATE — i.e. a duplicate. Cleaning the merchant PREVENTS that.
+    const raw = pending({ id: "raw", merchant: "PURCHASE JIMMY JOHNS MINNEAPOLIS MN CARD7752", date: "2026-07-20" });
+    expect(pickPendingToConfirm(withdrawal({ descriptor: posted }), [raw, other])).toBeNull();
+  });
+
   it("returns null when the tie cannot be broken (ambiguous → falls through to CREATE)", () => {
     const a = pending({ id: "a", merchant: "Mystery", date: "2026-07-20" });
     const b = pending({ id: "b", merchant: "Enigma", date: "2026-07-20" });
