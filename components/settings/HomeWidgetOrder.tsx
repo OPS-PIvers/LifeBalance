@@ -69,9 +69,12 @@ export const HomeWidgetOrder: React.FC<HomeWidgetOrderProps> = ({ member, onSave
   }, []);
 
   const handleDragEnd = useCallback(() => {
-    // A press that never actually moved anything fires no `onReorder`, so
-    // there is no new order to write (and `dragOrder` would still be empty —
-    // writing it would wipe the member's layout).
+    // `isDragging` is the load-bearing guard, and it has to be: a press that
+    // never actually moved anything fires no `onReorder`, yet `dragOrder` is
+    // deliberately NOT cleared after a drag, so from the second press onward
+    // it holds the PREVIOUS drag's order. Writing that would persist a stale
+    // layout — so don't collapse this into a `dragOrder.length` check, which
+    // only catches the very first press (when the array is still empty).
     if (!isDragging) return;
     setIsDragging(false);
     if (dragOrder.length > 0) persistOrder(dragOrder);
