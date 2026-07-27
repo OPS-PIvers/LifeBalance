@@ -198,8 +198,9 @@ describe('restoreTrashedItem — transaction domain (balance re-apply)', () => {
   });
 
   it('rounds a float-drifted delta before incrementing the balance', async () => {
-    // A stored amount carrying sub-cent drift must not be incremented onto the
-    // account verbatim — that is how balances end up as 125.777777777779.
+    // `transactionRestoreImpact` already rounds the delta it returns, so this
+    // pins the write-site guard end-to-end: a drifted stored amount can never
+    // reach the account balance verbatim, whatever the caller hands over.
     await restoreTrashedItem(
       { db, householdId, accounts },
       txItem({ amount: 125.777777777779, merchant: 'Target', category: 'Shopping', status: 'verified' })
