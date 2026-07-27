@@ -74,6 +74,15 @@ const MemberModal: React.FC<MemberModalProps> = ({
     try {
       if (isManagedKid) {
         const trimmedName = displayName.trim();
+        // HTML `required` counts a whitespace-only value as filled, so "   "
+        // sails past the browser check and would reach addKidProfile /
+        // updateKidProfile as an empty displayName — which comes back as a raw
+        // firestore.rules permission error. Catch it here, where both the add
+        // and edit flows share one validation block.
+        if (!trimmedName) {
+          toast.error('Kid name is required');
+          return;
+        }
         if (trimmedName.length > KID_DISPLAY_NAME_MAX_LENGTH) {
           toast.error(`Kid name must be ${KID_DISPLAY_NAME_MAX_LENGTH} characters or less`);
           return;

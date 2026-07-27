@@ -144,6 +144,21 @@ describe('MemberModal', () => {
       await waitFor(() => expect(toastErrorSpy).toHaveBeenCalledWith('Kid name must be 50 characters or less'));
       expect(onSave).not.toHaveBeenCalled();
     });
+
+    it('rejects a whitespace-only name rather than saving an empty displayName', async () => {
+      const onSave = vi.fn().mockResolvedValue(undefined);
+      render(
+        <MemberModal isOpen={true} onClose={vi.fn()} onSave={onSave} initialMember={kidMember} title="Edit Kid Profile" />
+      );
+
+      fireEvent.change(screen.getByLabelText("Kid's Name", { exact: false }), {
+        target: { value: '   ' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Save Kid Profile' }));
+
+      await waitFor(() => expect(toastErrorSpy).toHaveBeenCalledWith('Kid name is required'));
+      expect(onSave).not.toHaveBeenCalled();
+    });
   });
 
   // Create mode: ProfileMenu's "Add kid profile" has no `initialMember` to read
@@ -194,6 +209,19 @@ describe('MemberModal', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Save Kid Profile' }));
 
       await waitFor(() => expect(toastErrorSpy).toHaveBeenCalledWith('Kid name must be 50 characters or less'));
+      expect(onSave).not.toHaveBeenCalled();
+    });
+
+    it('rejects a whitespace-only name rather than saving an empty displayName', async () => {
+      const onSave = renderCreateKid();
+
+      // HTML `required` treats "   " as filled, so this reaches handleSubmit.
+      fireEvent.change(screen.getByLabelText("Kid's Name", { exact: false }), {
+        target: { value: '   ' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Save Kid Profile' }));
+
+      await waitFor(() => expect(toastErrorSpy).toHaveBeenCalledWith('Kid name is required'));
       expect(onSave).not.toHaveBeenCalled();
     });
 
