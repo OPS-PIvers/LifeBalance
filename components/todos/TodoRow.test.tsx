@@ -156,6 +156,23 @@ describe('TodoRow', () => {
       expect(editButton.getAttribute('title')).toBe(longTitle);
     });
 
+    it('reserves two title lines even for a short title, so row height never varies', () => {
+      // Clamping alone bounds a LONG title but lets a one-line row sit shorter
+      // than a two-line one — the same height jitter the "Tomorrow" tag caused,
+      // arriving from a different direction. The reserved min-height is what
+      // makes every row genuinely uniform, so assert it on a SHORT title.
+      render(<TodoRow {...baseProps} item={{ ...item, text: 'Milk' }} />);
+      const editButton = screen.getByRole('button', { name: 'Edit task: Milk' });
+      const titleSpan = editButton.querySelector('span');
+      // No trailing \b — `]` and the space after it are both non-word chars,
+      // so there is no boundary between them for \b to match.
+      expect(titleSpan?.className).toContain('min-h-[2.75em]');
+      expect(titleSpan?.className).toMatch(/\bline-clamp-2\b/);
+      // `line-clamp-2` supplies display:-webkit-box; a competing `block` in the
+      // same layer can win on stylesheet order and render the clamp inert.
+      expect(titleSpan?.className).not.toMatch(/\bblock\b/);
+    });
+
     it('still renders the meta line (holding just the due date) when there are no subtasks and no assignee — the row never collapses to a single line', () => {
       render(<TodoRow {...baseProps} assignee={undefined} />);
       const metaEl = document.getElementById(`todo-row-meta-${item.id}`);

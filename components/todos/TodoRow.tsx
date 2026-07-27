@@ -633,8 +633,8 @@ export const TodoRow = React.memo(function TodoRow({
           {/* Same two-line title/meta treatment as normal mode (paper cut #4),
               so bulk-select doesn't look denser/different than the regular list. */}
           <div className="flex flex-col gap-y-1">
-            {/* Clamped to two lines — see the normal-mode title below for why. */}
-            <p className={cn(TITLE_COLUMN, 'line-clamp-2 font-medium leading-snug text-inherit')} title={item.text}>
+            {/* Two reserved lines — see the normal-mode title below for why. */}
+            <p className={cn(TITLE_COLUMN, 'line-clamp-2 min-h-[2.75em] font-medium leading-snug text-inherit')} title={item.text}>
               <span className={isSelected ? 'text-accent-800 dark:text-accent-200' : 'text-brand-900 dark:text-brand-50'}>{item.text}</span>
             </p>
             {metaLine}
@@ -676,17 +676,29 @@ export const TodoRow = React.memo(function TodoRow({
               title={item.text}
               className={cn(TITLE_COLUMN, 'text-left select-none [-webkit-touch-callout:none] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-card')}
             >
-              {/* Clamped to two lines, NOT truncated to one: the row height
-                  needs to be predictable, but a to-do list whose titles are
-                  cut off mid-word ("Connect with mom about worksho…") has
-                  traded away the one thing the row exists to show. Two lines
-                  fits the overwhelming majority of real titles in full and
-                  still bounds the row's growth to a single extra line; the
-                  rare longer one keeps its full text in this button's
+              {/* Two lines, RESERVED — not truncated to one, and not merely
+                  capped at two. The clamp bounds how far a long title can
+                  grow; `min-h-[2.75em]` reserves that same space when the
+                  title only needs one line, so EVERY row is the same height
+                  whatever its title. Capping alone would have left one-line
+                  and two-line rows different heights — the same jitter the
+                  "Tomorrow" tag caused, just from a different source.
+
+                  2.75em = 2 x `leading-snug` (1.375). In `em`, so it tracks
+                  this element's own font-size rather than pinning a px height
+                  that breaks if the row's type scale ever moves.
+
+                  A to-do list whose titles are cut off mid-word ("Connect with
+                  mom about worksho…") has traded away the one thing the row
+                  exists to show, so two lines it is; the rare title that
+                  overruns even that keeps its full text in this button's
                   aria-label, the native `title` tooltip above, and the edit
-                  drawer a tap opens. The meta line below is unaffected either
-                  way — it never reflows, which was the actual complaint. */}
-              <span className="block line-clamp-2 font-medium leading-snug text-brand-900 dark:text-brand-50">{item.text}</span>
+                  drawer a tap opens.
+
+                  No `block`: `line-clamp-2` supplies `display:-webkit-box`,
+                  and a competing `display:block` in the same layer can win by
+                  stylesheet order and silently render the clamp inert. */}
+              <span className="line-clamp-2 min-h-[2.75em] font-medium leading-snug text-brand-900 dark:text-brand-50">{item.text}</span>
             </div>
 
             {metaLine}
