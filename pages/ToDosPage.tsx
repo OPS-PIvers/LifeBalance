@@ -9,6 +9,7 @@ import { quadrantForTodo, QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhow
 import { toggleSubtask, appendSubtask, removeSubtask, subtasksFromTexts, subtaskLinesFromPaste, isPermissionDeniedError, subtaskProgress, MAX_SUBTASKS, updateSubtaskText, setSubtaskAssignee } from '@/utils/subtasks';
 import { TODO_FREQUENCIES, TODO_FREQUENCY_LABELS, type TodoFrequency } from '@/utils/todoRecurrence';
 import { REMINDER_OFFSET_OPTIONS, compareDueTimes } from '@/utils/todoTime';
+import { WHOLE_HOUSEHOLD_ASSIGNEE, resolveAssignedTo } from '@/utils/todoAssignee';
 import { ToDo, HouseholdMember, Subtask } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { haptic } from '@/utils/haptics';
@@ -112,8 +113,8 @@ const categorySectionKey = (category: string | null): string =>
 
 // Sentinel for the "Whole household" option in the Assign-to picker — no
 // member's uid ever collides with this. Selecting it stores `assignedTo:
-// undefined` (unassigned/shared), never a literal member id.
-const WHOLE_HOUSEHOLD_ASSIGNEE = '__whole_household__';
+// undefined` (unassigned/shared), never a literal member id. Shared with the
+// Capture drawer's To-Dos tab, which offers the same choice.
 
 // One subtask row in the drawer editor: tap-to-edit text (wraps instead of
 // truncating while read-only), a drag handle for Reorder, and a small
@@ -1224,7 +1225,7 @@ const ToDosPage: React.FC = () => {
     }
     // "Whole household" stores an absent assignedTo (unassigned/shared) — the
     // sentinel value never reaches Firestore.
-    const assignedToValue = assignedTo === WHOLE_HOUSEHOLD_ASSIGNEE ? undefined : assignedTo;
+    const assignedToValue = resolveAssignedTo(assignedTo);
 
     setIsSaving(true);
     try {

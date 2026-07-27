@@ -160,6 +160,44 @@ export function suggestItemDefaults(
   return null;
 }
 
+/**
+ * The category a shopping item falls back to when nothing can be inferred.
+ * Part of `GROCERY_CATEGORIES`; named here so the resolution helper below and
+ * its callers can't drift on the spelling.
+ */
+export const UNCATEGORIZED_CATEGORY = 'Uncategorized';
+
+/** A fully-resolved default set: `category` is always populated. */
+export interface ResolvedItemDefaults {
+  /** Never empty — falls back to `UNCATEGORIZED_CATEGORY`. */
+  category: string;
+  quantity?: string;
+  store?: string;
+}
+
+/**
+ * Resolve the category/quantity/store a ONE-FIELD "smart add" should write for
+ * a typed item name: `suggestItemDefaults` (exact history → partial history →
+ * preset keywords), with `UNCATEGORIZED_CATEGORY` when nothing matches.
+ *
+ * This is the single source of truth for the fast path, shared by the Shopping
+ * list page's quick-add bar (`ShoppingListTab.handleSmartAdd`) and the Capture
+ * drawer's Shopping tab, so the page and the drawer can never disagree about
+ * what "just type a name" produces.
+ */
+export function resolveItemDefaults(
+  name: string,
+  catalog: GroceryCatalogItem[]
+): ResolvedItemDefaults {
+  const suggestion = suggestItemDefaults(name, catalog);
+  if (!suggestion) return { category: UNCATEGORIZED_CATEGORY };
+  return {
+    category: suggestion.category || UNCATEGORIZED_CATEGORY,
+    quantity: suggestion.quantity,
+    store: suggestion.store,
+  };
+}
+
 export interface ParsedQuantity {
   count: number;
   unit: string;

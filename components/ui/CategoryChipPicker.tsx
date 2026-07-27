@@ -39,8 +39,17 @@ import { MAX_TODO_CATEGORY_LENGTH } from '@/utils/todoCategoryLimits';
 export interface CategoryChipPickerProps {
   /** The household's category vocabulary. */
   categories: string[];
-  /** Currently selected category, or undefined for none. */
-  value: string | undefined;
+  /**
+   * Currently selected category, or undefined/null for none. `null` is
+   * accepted (not just tolerated) because a to-do's `category` round-trips
+   * through Firestore as `null`, not `undefined`: the generic form-edit path
+   * writes `category: undefined`, which `utils/firestoreSanitizer.ts` converts
+   * to `null` before the write lands (see the schema comment on
+   * `ToDo.category` in types/schema.ts). Callers like `TodoTriageDrawer` pass
+   * `todo.category` straight through, so this prop must accept whatever a
+   * `ToDo` actually holds at runtime.
+   */
+  value: string | null | undefined;
   onChange: (category: string | undefined) => void;
   /** Persists a newly minted category; the picker selects it on success. */
   onAddCategory: (name: string) => Promise<void>;
@@ -74,13 +83,23 @@ export const CategoryChipPicker: React.FC<CategoryChipPickerProps> = ({
   // Inline rejection message for the editor (over-length name / failed write).
   const [error, setError] = useState<string | null>(null);
 
+  // Normalize the incoming value ONCE: `null` (a cleared-category to-do round
+  // -tripped through Firestore) and a blank/whitespace string both collapse to
+  // "no selection", matching the `(x ?? '').trim()` convention every other
+  // category consumer uses (see the prop doc comment above).
+  const selected = typeof value === 'string' && value.trim() ? value : undefined;
+
   // The selected value may be a legacy/custom category that is not (or no
   // longer) in the household vocabulary — render it as a chip anyway so the
   // current selection is always visible and de-selectable. De-duped
-  // case-insensitively, first spelling wins.
+  // case-insensitively, first spelling wins. Non-string/blank entries in the
+  // household vocabulary are skipped defensively — the array is unvalidated,
+  // so a stray null/non-string would otherwise crash the `.trim()` below the
+  // same way a null `value` used to.
   const chips: string[] = [];
   const seen = new Set<string>();
-  for (const candidate of [...categories, ...(value ? [value] : [])]) {
+  for (const candidate of [...categories, ...(selected ? [selected] : [])]) {
+    if (typeof candidate !== 'string') continue;
     const key = candidate.trim().toLowerCase();
     if (!key || seen.has(key)) continue;
     seen.add(key);
@@ -88,7 +107,7 @@ export const CategoryChipPicker: React.FC<CategoryChipPickerProps> = ({
   }
 
   const isSelected = (chip: string) =>
-    value !== undefined && chip.trim().toLowerCase() === value.trim().toLowerCase();
+    selected !== undefined && chip.trim().toLowerCase() === selected.trim().toLowerCase();
 
   const closeEditor = () => {
     setIsAdding(false);

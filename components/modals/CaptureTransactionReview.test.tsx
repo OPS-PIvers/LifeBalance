@@ -40,7 +40,6 @@ describe('CaptureTransactionReview', () => {
   const mockOnUpdate = vi.fn();
   const mockOnToggle = vi.fn();
   const mockOnToggleAll = vi.fn();
-  const mockOnSubmit = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -53,7 +52,6 @@ describe('CaptureTransactionReview', () => {
         onUpdateTransaction={mockOnUpdate}
         onToggleSelection={mockOnToggle}
         onToggleAll={mockOnToggleAll}
-        onSubmit={mockOnSubmit}
         dynamicCategories={['Food', 'Transport']}
         stores={[]}
         accounts={[]}
@@ -73,7 +71,6 @@ describe('CaptureTransactionReview', () => {
         onUpdateTransaction={mockOnUpdate}
         onToggleSelection={mockOnToggle}
         onToggleAll={mockOnToggleAll}
-        onSubmit={mockOnSubmit}
         dynamicCategories={['Food', 'Transport']}
         stores={[]}
         accounts={[]}
@@ -99,7 +96,6 @@ describe('CaptureTransactionReview', () => {
         onUpdateTransaction={mockOnUpdate}
         onToggleSelection={mockOnToggle}
         onToggleAll={mockOnToggleAll}
-        onSubmit={mockOnSubmit}
         dynamicCategories={['Food', 'Transport']}
         stores={[]}
         accounts={[]}
@@ -112,42 +108,24 @@ describe('CaptureTransactionReview', () => {
     expect(mockOnToggleAll).toHaveBeenCalled();
   });
 
-  it('calls onSubmit when clicking Add button', () => {
+  // The "Add N to Action Queue" button no longer lives in this component — it
+  // moved to the Drawer's fixed footer so it isn't a scroll away below a long
+  // list of scanned rows. Its click and disabled-at-zero behaviour is covered
+  // in CaptureModal.test.tsx ("puts the review bulk-add in the footer").
+  it('renders no submit action of its own', () => {
     render(
       <CaptureTransactionReview
         parsedTransactions={mockTransactions}
         onUpdateTransaction={mockOnUpdate}
         onToggleSelection={mockOnToggle}
         onToggleAll={mockOnToggleAll}
-        onSubmit={mockOnSubmit}
         dynamicCategories={['Food', 'Transport']}
         stores={[]}
         accounts={[]}
       />
     );
 
-    const submitBtn = screen.getByText('Add 1 to Action Queue');
-    fireEvent.click(submitBtn);
-    expect(mockOnSubmit).toHaveBeenCalled();
-  });
-
-  it('disables Add button when no transactions selected', () => {
-    const noneSelected = mockTransactions.map(t => ({ ...t, selected: false }));
-    render(
-      <CaptureTransactionReview
-        parsedTransactions={noneSelected}
-        onUpdateTransaction={mockOnUpdate}
-        onToggleSelection={mockOnToggle}
-        onToggleAll={mockOnToggleAll}
-        onSubmit={mockOnSubmit}
-        dynamicCategories={['Food', 'Transport']}
-        stores={[]}
-        accounts={[]}
-      />
-    );
-
-    const submitBtn = screen.getByText('Add 0 to Action Queue');
-    expect(submitBtn).toBeDisabled();
+    expect(screen.queryByText(/to Action Queue/i)).not.toBeInTheDocument();
   });
 
   it('calls onUpdateTransaction when changing category', () => {
@@ -157,7 +135,6 @@ describe('CaptureTransactionReview', () => {
         onUpdateTransaction={mockOnUpdate}
         onToggleSelection={mockOnToggle}
         onToggleAll={mockOnToggleAll}
-        onSubmit={mockOnSubmit}
         dynamicCategories={['Food', 'Transport']}
         stores={[]}
         accounts={[]}

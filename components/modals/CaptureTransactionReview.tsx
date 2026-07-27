@@ -4,14 +4,12 @@ import { ParsedTransaction } from '@/types/ui';
 import { Store, Account } from '@/types/schema';
 import { CompactSelect } from '@/components/ui/CompactSelect';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
-import { Button } from '@/components/ui/Button';
 
 interface CaptureTransactionReviewProps {
   parsedTransactions: ParsedTransaction[];
   onUpdateTransaction: (id: string, updates: Partial<ParsedTransaction>) => void;
   onToggleSelection: (id: string) => void;
   onToggleAll: () => void;
-  onSubmit: () => void;
   dynamicCategories: string[];
   stores: Store[];
   accounts: Account[];
@@ -22,7 +20,6 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
   onUpdateTransaction,
   onToggleSelection,
   onToggleAll,
-  onSubmit,
   dynamicCategories,
   stores,
   accounts
@@ -152,14 +149,11 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
         </p>
       </div>
 
-      <Button
-        onClick={onSubmit}
-        disabled={selectedCount === 0}
-        size="lg"
-        className="w-full"
-      >
-        Add {selectedCount} to Action Queue
-      </Button>
+      {/* The "Add N to Action Queue" button used to sit here, at the bottom of
+          a list that can run to a dozen scanned rows — so on a phone it was
+          always a scroll away. It now lives in the Drawer's fixed footer
+          (CaptureModal owns it, and reads the same selected count), matching
+          every other capture view. */}
     </div>
   );
 };

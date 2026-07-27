@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { suggestItemDefaults, parseQuantity, formatQuantity, mergeQuantity, resolveNewQuantityField } from '@/utils/grocerySmartDefaults';
+import {
+  suggestItemDefaults,
+  resolveItemDefaults,
+  UNCATEGORIZED_CATEGORY,
+  parseQuantity,
+  formatQuantity,
+  mergeQuantity,
+  resolveNewQuantityField,
+} from '@/utils/grocerySmartDefaults';
 import { GroceryCatalogItem } from '@/types/schema';
 
 const catalog: GroceryCatalogItem[] = [
@@ -71,6 +79,53 @@ describe('suggestItemDefaults', () => {
   it('returns null for empty/whitespace input', () => {
     expect(suggestItemDefaults('', catalog)).toBeNull();
     expect(suggestItemDefaults('   ', catalog)).toBeNull();
+  });
+});
+
+describe('resolveItemDefaults', () => {
+  it('carries history quantity and store through from an exact match', () => {
+    expect(resolveItemDefaults('cheddar cheese', catalog)).toEqual({
+      category: 'Dairy',
+      quantity: '1 block',
+      store: 'Costco',
+    });
+  });
+
+  it('resolves a preset keyword match to its category with no quantity/store', () => {
+    expect(resolveItemDefaults('bananas', catalog)).toEqual({
+      category: 'Produce',
+      quantity: undefined,
+      store: undefined,
+    });
+  });
+
+  it('falls back to Uncategorized when nothing matches', () => {
+    expect(resolveItemDefaults('gadget widget', catalog)).toEqual({
+      category: UNCATEGORIZED_CATEGORY,
+    });
+  });
+
+  it('falls back to Uncategorized for empty input', () => {
+    expect(resolveItemDefaults('', catalog)).toEqual({ category: UNCATEGORIZED_CATEGORY });
+    expect(resolveItemDefaults('   ', catalog)).toEqual({ category: UNCATEGORIZED_CATEGORY });
+  });
+
+  it('keeps an Uncategorized exact history match (with its stored quantity/store)', () => {
+    const withStoredSocks: GroceryCatalogItem[] = [
+      { id: 's', name: 'Athletic Socks', category: 'Uncategorized', defaultStore: 'Target', purchaseCount: 1 },
+    ];
+    expect(resolveItemDefaults('athletic socks', withStoredSocks)).toEqual({
+      category: 'Uncategorized',
+      quantity: undefined,
+      store: 'Target',
+    });
+  });
+
+  it('always returns a non-empty category', () => {
+    const blankCategory: GroceryCatalogItem[] = [
+      { id: 'b', name: 'Mystery Item', category: '', purchaseCount: 3 },
+    ];
+    expect(resolveItemDefaults('mystery item', blankCategory).category).toBe(UNCATEGORIZED_CATEGORY);
   });
 });
 

@@ -97,10 +97,9 @@ export const MemberVisibilityMatrix: React.FC<MemberVisibilityMatrixProps> = ({
           asked about: only Lists' tabs have a household field of their own,
           every other sub-view is a personal choice. */}
       <p className="text-xs text-brand-500 dark:text-brand-400 px-1">
-        The switch beside a section name — or beside one of Lists&apos; three tabs — is the
-        household&apos;s: turn it off and nobody sees it. Each column is one person&apos;s own
-        navigation. Most sub-views have no household switch because they&apos;re a personal choice
-        only.
+        Two layers: a switch turns a whole section off for everyone — To-Dos, Meals, and Shopping
+        each get their own, since they&apos;re independently toggleable. Each column is that
+        person&apos;s own choice within whatever the household allows.
         {hasManagedMember && ' Managed kid profiles get a column too — with no login of their own, this is the only place to set theirs.'}
       </p>
 
@@ -243,7 +242,17 @@ const MatrixRowCells: React.FC<MatrixRowCellsProps> = ({
   return (
     <tr className="border-t border-brand-100 dark:border-brand-700">
       <td className="sticky left-0 z-sticky bg-white dark:bg-brand-800 py-2 pl-4 pr-3 whitespace-nowrap">
-        <span className="inline-flex items-center gap-2">
+        {/* A flex row spanning the FULL cell width, label first and (when
+            present) the switch pinned to the trailing edge via
+            justify-between — same pattern as the section header row above.
+            Because every row in this table shares one sticky column, the
+            column's width is set by its widest row (in the Lists section,
+            "Shopping" + its switch); a shorter label like "To-Dos" still
+            stretches this wrapper to that same width, so its switch lands
+            at the identical trailing x position instead of drifting with
+            the label's own width. Rows with no `ownModule` just render the
+            label with nothing to push right. */}
+        <span className="flex w-full items-center justify-between gap-3">
           <span
             className={cn(
               'font-medium',

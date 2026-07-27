@@ -29,7 +29,7 @@ import { usePowerToolsEnabled } from '@/hooks/usePowerToolsEnabled';
 import { haptic } from '@/utils/haptics';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { formatShoppingListForShare } from '@/utils/shoppingListFormatter';
-import { suggestItemDefaults } from '@/utils/grocerySmartDefaults';
+import { resolveItemDefaults, suggestItemDefaults } from '@/utils/grocerySmartDefaults';
 import {
   ShoppingSortMode,
   SHOPPING_SORT_LABELS,
@@ -312,29 +312,11 @@ const ShoppingListTab: React.FC = () => {
     // Reset input immediately
     setNewItemText('');
 
-    // 1. Smart Lookup in History (Grocery Catalog)
-    // Find exact or close match (case-insensitive)
-    const match = groceryCatalog.find(
-        c => c.name.toLowerCase() === rawName.toLowerCase()
-    );
-
-    let category = 'Uncategorized';
-    let store = undefined;
-    let quantity = undefined;
-
-    if (match) {
-        category = match.category;
-        store = match.defaultStore;
-        quantity = match.defaultQuantity;
-    } else {
-        // No exact history hit — fall back to partial-history/preset smart defaults.
-        const suggestion = suggestItemDefaults(rawName, groceryCatalog);
-        if (suggestion) {
-            category = suggestion.category || 'Uncategorized';
-            store = suggestion.store;
-            quantity = suggestion.quantity;
-        }
-    }
+    // 1. Smart Lookup in History (Grocery Catalog), then partial-history /
+    // preset keywords. Extracted to `resolveItemDefaults` so the Capture
+    // drawer's one-field Shopping tab resolves defaults IDENTICALLY — the page
+    // and the drawer share this helper rather than each carrying a copy.
+    const { category, store, quantity } = resolveItemDefaults(rawName, groceryCatalog);
 
     // 2. Add Item
     // Calculate new order (last + 1)

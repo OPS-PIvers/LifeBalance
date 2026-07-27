@@ -1195,6 +1195,35 @@ describe('todoConverter', () => {
     const result = todoConverter.fromFirestore(fakeSnap('todo-9', wellFormed));
     expect(result.needsReview).toBeUndefined();
   });
+
+  it('(b) a null category (firestoreSanitizer round-trip of a cleared category) comes back as undefined', () => {
+    // The generic form-edit path writes `category: undefined`, which
+    // utils/firestoreSanitizer.ts converts to a literal `null` before the
+    // write lands. Without normalisation here, ToDo.category is `null` at
+    // runtime despite being typed `string | undefined`, which crashed
+    // CategoryChipPicker's `value.trim()` (the "Triage" banner bug).
+    const result = todoConverter.fromFirestore(fakeSnap('todo-10', { ...wellFormed, category: null }));
+    expect(result.category).toBeUndefined();
+  });
+
+  it('(a) a real category string passes through unchanged', () => {
+    const result = todoConverter.fromFirestore(fakeSnap('todo-11', { ...wellFormed, category: 'Home' }));
+    expect(result.category).toBe('Home');
+  });
+
+  it('(b) a null linkedHabitId (same sanitizer pattern) comes back as undefined', () => {
+    const result = todoConverter.fromFirestore(
+      fakeSnap('todo-12', { ...wellFormed, linkedHabitId: null }),
+    );
+    expect(result.linkedHabitId).toBeUndefined();
+  });
+
+  it('(a) a real linkedHabitId string passes through unchanged', () => {
+    const result = todoConverter.fromFirestore(
+      fakeSnap('todo-13', { ...wellFormed, linkedHabitId: 'habit-1' }),
+    );
+    expect(result.linkedHabitId).toBe('habit-1');
+  });
 });
 
 // ---------------------------------------------------------------------------
