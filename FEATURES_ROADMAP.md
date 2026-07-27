@@ -2382,6 +2382,11 @@ Settings copy referencing it.
 
 ### F-PLAT-07 — Module visibility presets
 
+**Status: SHIPPED**, with two later corrections to the brief below: the presets are a **Select
+dropdown** (five wrapping chips read as a messy one-of-many control), and "App Modules" no longer
+exists — Settings → Modules & Dashboard collapsed onto the single "Who sees what" matrix, so the
+dropdown sits above that. See `utils/modulePresets.ts` (the five presets, data-driven).
+
 **Size:** small · **Value:** medium · **Dependencies:** none
 
 Add 2-3 one-tap preset buttons above the per-module toggle list in Settings → App Modules (e.g.

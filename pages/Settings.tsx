@@ -53,7 +53,7 @@ import ActivityLogCard from '@/components/settings/ActivityLogCard';
 import MerchantRulesCard from '@/components/settings/MerchantRulesCard';
 import { ChangelogDrawer } from '@/components/settings/ChangelogDrawer';
 import { CHANGELOG } from '@/data/changelog';
-import { MyViewSettings } from '@/components/settings/MyViewSettings';
+import { HomeWidgetOrder } from '@/components/settings/HomeWidgetOrder';
 import { MemberVisibilityMatrix } from '@/components/settings/MemberVisibilityMatrix';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -68,7 +68,6 @@ import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { LazyMount } from '@/components/ui/LazyMount';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { isModuleEnabled } from '@/utils/moduleVisibility';
 import { MODULE_PRESETS, type ModulePreset } from '@/utils/modulePresets';
 import type { ModuleKey } from '@/types/schema';
 import { requestNotificationPermission, setupForegroundNotificationListener } from '@/services/notificationService';
@@ -365,15 +364,17 @@ const Settings: React.FC = () => {
     }
   };
 
-  // F-PLAT-07 — module presets. Tapping a preset chip expands it in place to
-  // show exactly what it will turn on/off before committing; a second tap
-  // (Apply) does the batched write. Manual per-module toggles below remain
-  // the escape hatch for anything a preset doesn't cover exactly.
+  // F-PLAT-07 — module presets. Picking a preset from the dropdown expands it
+  // in place to show exactly what it will turn on/off before committing;
+  // nothing is written until Apply. The matrix's manual household switches
+  // remain the escape hatch for anything a preset doesn't cover exactly.
   const [previewPresetId, setPreviewPresetId] = useState<string | null>(null);
   const [isApplyingPreset, setIsApplyingPreset] = useState(false);
 
-  const handlePresetChipClick = (presetId: string) => {
-    setPreviewPresetId(prev => (prev === presetId ? null : presetId));
+  // The placeholder option's empty value clears the preview, so Cancel and
+  // re-selecting the placeholder are the same state.
+  const handlePresetSelect = (presetId: string) => {
+    setPreviewPresetId(presetId || null);
   };
 
   const handleApplyPreset = async (preset: ModulePreset) => {
@@ -391,8 +392,6 @@ const Settings: React.FC = () => {
   };
 
   const hasKidPin = Boolean(householdSettings?.kidModePinHash);
-  // Whether the 'Lists' module is on — gates the To-Dos/Meals/Shopping sub-toggles below.
-  const listsEnabled = isModuleEnabled(householdSettings, 'lists');
 
   const handleSaveKidPin = async () => {
     if (!isValidPinFormat(pinDraft)) {
@@ -1084,34 +1083,44 @@ const Settings: React.FC = () => {
 
   const modulesBody = (
     <>
-      {/* App Modules (Plan 090) — per-household page/tab on-off toggles. Any
-          member can edit (like the currency picker). Default all-on. */}
-      <Section title="App Modules">
+      {/* ONE matrix, one place (PC#2). "App Modules" (household page/tab
+          toggles), "What I see" (this member's own leaves) and the old
+          admin-only "Member visibility" table all said the same thing three
+          times; the matrix already IS both layers — section headers are the
+          household switches, columns are each person's nav — so it's now the
+          single editor here. Rendered for EVERY member: an admin gets all
+          columns, a non-admin gets just their own, so nobody loses the ability
+          to edit their own nav. The household switches inside it stay
+          any-member-editable (they always were — `handleModuleToggle`, no
+          rules change). */}
+      <Section title="Who sees what">
         <div className="space-y-3">
+          {/* Only the promise the matrix's own legend below doesn't make.
+              The old copy here ("...for everyone in the household") described
+              the household layer as if it were the whole screen, which now
+              reads as wrong: most rows below are per-person. */}
           <p className="text-xs text-brand-500 dark:text-brand-400 px-1">
-            Turn off pages or tabs you don&apos;t use — they&apos;ll disappear from navigation for
-            everyone in the household. Your data is kept and comes back when you re-enable a module.
+            Turning something off never deletes anything — the data comes back when you switch it
+            back on.
           </p>
 
-          {/* Presets — one tap sets several modules at once. Manual toggles
-              below remain the escape hatch for anything a preset doesn't
-              cover exactly. */}
+          {/* Presets — one pick sets several modules at once. The manual
+              switches in the matrix below remain the escape hatch for anything
+              a preset doesn't cover exactly. */}
           <div className="px-1">
             <Eyebrow className="block mb-2">Quick presets</Eyebrow>
-            <div className="flex flex-wrap gap-2">
+            <Select
+              aria-label="Quick presets"
+              value={previewPresetId ?? ''}
+              onChange={(e) => handlePresetSelect(e.target.value)}
+            >
+              <option value="">Choose a preset…</option>
               {MODULE_PRESETS.map((preset) => (
-                <Button
-                  key={preset.id}
-                  type="button"
-                  variant={previewPresetId === preset.id ? 'primary' : 'outline'}
-                  size="sm"
-                  onClick={() => handlePresetChipClick(preset.id)}
-                  aria-pressed={previewPresetId === preset.id}
-                >
+                <option key={preset.id} value={preset.id}>
                   {preset.label}
-                </Button>
+                </option>
               ))}
-            </div>
+            </Select>
 
             {previewPresetId && (() => {
               const preset = MODULE_PRESETS.find(p => p.id === previewPresetId);
@@ -1152,105 +1161,30 @@ const Settings: React.FC = () => {
             })()}
           </div>
 
-          <SurfaceList>
-            {/* Top-level pages */}
-            <Row>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">Habits</p>
-              </div>
-              <Switch
-                aria-label="Toggle Habits page"
-                checked={isModuleEnabled(householdSettings, 'habits')}
-                onCheckedChange={(value) => handleModuleToggle('habits', value)}
-              />
-            </Row>
-            <Row>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">Money</p>
-              </div>
-              <Switch
-                aria-label="Toggle Money page"
-                checked={isModuleEnabled(householdSettings, 'money')}
-                onCheckedChange={(value) => handleModuleToggle('money', value)}
-              />
-            </Row>
-            <Row>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">Lists</p>
-                <p className="text-xs text-brand-500 dark:text-brand-400">To-Dos, Meals, and Shopping</p>
-              </div>
-              <Switch
-                aria-label="Toggle Lists page"
-                checked={listsEnabled}
-                onCheckedChange={(value) => handleModuleToggle('lists', value)}
-              />
-            </Row>
-
-            {/* Lists sub-tabs — indented under Lists */}
-            <Row className="pl-10">
-              <div className="flex-1 min-w-0">
-                <p className={`font-medium text-sm ${listsEnabled ? 'text-brand-700 dark:text-brand-300' : 'text-brand-400 dark:text-brand-450'}`}>To-Dos</p>
-              </div>
-              <Switch
-                aria-label="Toggle To-Dos tab"
-                disabled={!listsEnabled}
-                checked={isModuleEnabled(householdSettings, 'todos')}
-                onCheckedChange={(value) => handleModuleToggle('todos', value)}
-              />
-            </Row>
-            <Row className="pl-10">
-              <div className="flex-1 min-w-0">
-                <p className={`font-medium text-sm ${listsEnabled ? 'text-brand-700 dark:text-brand-300' : 'text-brand-400 dark:text-brand-450'}`}>Meals</p>
-              </div>
-              <Switch
-                aria-label="Toggle Meals tab"
-                disabled={!listsEnabled}
-                checked={isModuleEnabled(householdSettings, 'meals')}
-                onCheckedChange={(value) => handleModuleToggle('meals', value)}
-              />
-            </Row>
-            <Row className="pl-10">
-              <div className="flex-1 min-w-0">
-                <p className={`font-medium text-sm ${listsEnabled ? 'text-brand-700 dark:text-brand-300' : 'text-brand-400 dark:text-brand-450'}`}>Shopping</p>
-              </div>
-              <Switch
-                aria-label="Toggle Shopping tab"
-                disabled={!listsEnabled}
-                checked={isModuleEnabled(householdSettings, 'shopping')}
-                onCheckedChange={(value) => handleModuleToggle('shopping', value)}
-              />
-            </Row>
-          </SurfaceList>
+          {currentUser && (
+            <MemberVisibilityMatrix
+              // An admin sees every column; anyone else sees only their own,
+              // which is what keeps a non-admin's per-member editor alive now
+              // that the standalone "What I see" section is gone. This filters
+              // COLUMNS only — hidden-key derivation is untouched (still the
+              // one set, from `getVisibilityMatrixSections`).
+              members={currentUser.role === 'admin' ? sortedMembers : [currentUser]}
+              settings={householdSettings}
+              onToggleModule={(key, value) => void handleModuleToggle(key, value)}
+              onUpdateMember={(memberId, updates) => void updateMember(memberId, updates)}
+            />
+          )}
         </div>
       </Section>
 
-      {/* What I see (2F.1, extending F-XCUT-02) — per-member nav-leaf + Home
-          widget visibility, own view only. Sits under the household module
-          toggles above: the household decides what exists, this decides what
-          this member wants in their nav. */}
+      {/* The one thing the matrix can't express: the ORDER of this member's
+          Home widgets (their on/off switches are matrix rows). Shared
+          implementation with the onboarding wizard's "What I see" step. */}
       {currentUser && (
-        <Section title="What I see">
-          <MyViewSettings
+        <Section title="Home widget order">
+          <HomeWidgetOrder
             member={currentUser}
-            settings={householdSettings}
             onSave={(updates) => void updateMember(currentUser.uid, updates)}
-          />
-        </Section>
-      )}
-
-      {/* Member visibility matrix (2F.3) — admin-only. Edits the SAME
-          `hiddenKeys` field every member edits for themselves above; there is
-          no lock/override, last write wins. Exists mainly so an admin can
-          manage a managed kid profile's nav (kids have no login to use "What
-          I see" themselves) and so a household with several adults can sanity
-          check everyone's setup from one screen. */}
-      {currentUser?.role === 'admin' && (
-        <Section title="Member visibility">
-          <MemberVisibilityMatrix
-            members={sortedMembers}
-            settings={householdSettings}
-            onToggleModule={(key, value) => void handleModuleToggle(key, value)}
-            onUpdateMember={(memberId, updates) => void updateMember(memberId, updates)}
           />
         </Section>
       )}

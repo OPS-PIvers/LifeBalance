@@ -20,8 +20,9 @@ vi.mock('@/contexts/AuthContext', () => ({
   }),
 }));
 
-// Mutable so a test can render as a non-admin (e.g. the 2F.3 member visibility
-// matrix's admin-only gate) — `useHouseholdCore()` below reads this object at
+// Mutable so a test can render as a non-admin (e.g. the member visibility
+// matrix, which renders every column for an admin and only the member's own
+// column for anyone else) — `useHouseholdCore()` below reads this object at
 // call time, so mutating `.role` before `renderSettings()` is enough; reset to
 // 'admin' in `beforeEach` so every other test keeps its original default.
 const mockCurrentUser: {
@@ -144,9 +145,9 @@ vi.mock('@/components/settings/ActivityLogCard', () => ({
 vi.mock('@/components/settings/ChangelogDrawer', () => ({
   ChangelogDrawer: () => null,
 }));
-// NOTE: MyViewSettings (2F.1, which replaced DashboardWidgetSettings) is
-// deliberately NOT mocked — it renders for real so the "What I see" assertions
-// below are actual page-level coverage of that surface.
+// NOTE: MemberVisibilityMatrix and HomeWidgetOrder — the two surfaces the
+// Modules & Dashboard screen collapsed onto — are deliberately NOT mocked, so
+// the assertions below are actual page-level coverage of them.
 vi.mock('@/components/auth/HouseholdInviteCard', () => ({
   default: () => <div data-testid="household-invite-card" />,
 }));
@@ -251,55 +252,104 @@ describe('Settings index + sub-screens', () => {
     expect(heading.contains(document.activeElement)).toBe(true);
   });
 
-  // 2F.1 — the per-member "What I see" editor (MyViewSettings) lives inside the
-  // Modules & Dashboard sub-screen, below the household module toggles. Rendered
-  // un-mocked so this is real coverage: a per-page leaf row, and the Home widget
-  // rows with their reorder controls.
-  it('renders the per-member "What I see" editor in Modules & Dashboard', () => {
+  // PC#2 — Modules & Dashboard used to stack three overlapping editors ("App
+  // Modules", "What I see", "Member visibility"). It is now ONE matrix ("Who
+  // sees what") carrying both layers, plus a widget-ORDER section (the only
+  // thing the matrix can't express). Rendered un-mocked, so these are real
+  // assertions about that surface.
+  it('renders the single "Who sees what" matrix — both layers, no separate "What I see" section', () => {
     renderSettings();
     fireEvent.click(screen.getByText('Modules & Dashboard'));
 
-    expect(screen.getByText('What I see')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Who sees what' })).toBeInTheDocument();
+    // The household layer lives on the matrix's section headers now, so the
+    // old standalone "App Modules" switches are gone…
+    expect(
+      screen.getByRole('checkbox', { name: 'Toggle Habits for the household' })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Toggle Habits page' })).not.toBeInTheDocument();
+    // …and so is the duplicate per-member list.
+    expect(screen.queryByText('What I see')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('checkbox', { name: 'Show Transactions in Money' })
+    ).not.toBeInTheDocument();
+    // Per-member leaves are the matrix's columns instead.
+    expect(screen.getByRole('checkbox', { name: 'Show Overview for Test User' })).toBeChecked();
+  });
 
-    // Per-page leaf rows, one switch per nav leaf the household has enabled.
-    expect(screen.getByRole('checkbox', { name: 'Show Transactions in Money' })).toBeChecked();
-    expect(screen.getByRole('checkbox', { name: 'Show Track in Habits' })).toBeChecked();
-    expect(screen.getByRole('checkbox', { name: 'Show To-Dos in Lists' })).toBeChecked();
+  it('renders the Home widget order section with drag handles instead of chevrons', () => {
+    renderSettings();
+    fireEvent.click(screen.getByText('Modules & Dashboard'));
 
-    // Home widget rows: a visibility switch plus the reorder controls.
+    expect(screen.getByRole('heading', { name: 'Home widget order' })).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Show This Week Pulse on Home' })).toBeChecked();
-    expect(screen.getByRole('button', { name: 'Move This Week Pulse down' })).toBeInTheDocument();
+    // PC#4 — a keyboard-operable grip replaced the up/down chevron pair.
+    expect(screen.getByRole('button', { name: 'Reorder This Week Pulse' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Move This Week Pulse down' })
+    ).not.toBeInTheDocument();
     // A default-hidden widget starts off, so the widget-merge default still
     // reaches the UI (no migration ran).
     expect(screen.getByRole('checkbox', { name: 'Show AI Insight on Home' })).not.toBeChecked();
   });
 
-  // 2F.3 — the admin-only member visibility matrix, gated in Settings.tsx by
-  // `currentUser?.role === 'admin'` (MemberVisibilityMatrix itself has no role
-  // gate — see its test file). Asserted by rendering as each role rather than
-  // by reading the gate, per the 2G.1 lesson: an admin-only surface whose
-  // exclusion is only verified by code inspection is invisible to whoever
-  // tests as the household admin.
-  it('renders the member visibility matrix for an admin', () => {
+  // The matrix is no longer admin-gated — it is every member's own editor now
+  // that "What I see" is gone. What the role decides is how many COLUMNS
+  // render. Asserted by rendering as each role rather than by reading the
+  // gate, per the 2G.1 lesson: gating only verified by code inspection is
+  // invisible to whoever tests as the household admin.
+  it('gives an admin a column for every member, including the managed kid', () => {
     renderSettings();
     fireEvent.click(screen.getByText('Modules & Dashboard'));
 
-    expect(screen.getByRole('heading', { name: 'Member visibility' })).toBeInTheDocument();
-    expect(
-      screen.getByRole('checkbox', { name: 'Show Overview for Test User' })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Show Overview for Test User' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Show Overview for Partner User' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Show Overview for Kiddo' })).toBeInTheDocument();
   });
 
-  it('excludes the member visibility matrix for a non-admin member', () => {
+  // The regression risk of collapsing the sections: a non-admin must still be
+  // able to edit their OWN nav (they lost "What I see"), while other members'
+  // columns must be genuinely absent from the DOM, not merely unreachable.
+  it('gives a non-admin the matrix with only their own column', () => {
     mockCurrentUser.role = 'member';
     renderSettings();
     fireEvent.click(screen.getByText('Modules & Dashboard'));
 
-    expect(screen.queryByRole('heading', { name: 'Member visibility' })).not.toBeInTheDocument();
-    // Not just visually hidden — the matrix's switches must be genuinely
-    // absent from the DOM, not merely unreachable.
+    expect(screen.getByRole('heading', { name: 'Who sees what' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Show Overview for Test User' })).toBeInTheDocument();
     expect(
-      screen.queryByRole('checkbox', { name: 'Show Overview for Test User' })
+      screen.queryByRole('checkbox', { name: 'Show Overview for Partner User' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('checkbox', { name: 'Show Overview for Kiddo' })
+    ).not.toBeInTheDocument();
+    // The household layer was never admin-only and must not become so.
+    expect(
+      screen.getByRole('checkbox', { name: 'Toggle Habits for the household' })
+    ).toBeInTheDocument();
+  });
+
+  // PC#1 — five wrapping preset chips became one Select. Nothing is written
+  // until Apply, and the placeholder is the "no preview" state.
+  it('previews a module preset chosen from the dropdown and only applies on Apply', () => {
+    renderSettings();
+    fireEvent.click(screen.getByText('Modules & Dashboard'));
+
+    const presets = screen.getByRole('combobox', { name: 'Quick presets' });
+    expect(presets).toHaveValue('');
+    // The old chips are gone.
+    expect(screen.queryByRole('button', { name: 'Finance only' })).not.toBeInTheDocument();
+
+    fireEvent.change(presets, { target: { value: 'finance-only' } });
+    expect(
+      screen.getByText('Just Money — habits, to-dos, meals, and shopping stay hidden.')
+    ).toBeInTheDocument();
+
+    // Cancel returns the Select to the placeholder without writing anything.
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(presets).toHaveValue('');
+    expect(
+      screen.queryByText('Just Money — habits, to-dos, meals, and shopping stay hidden.')
     ).not.toBeInTheDocument();
   });
 

@@ -22,29 +22,39 @@ import type { HouseholdMember, ModuleKey } from '@/types/schema';
 type MatrixMemberUpdate = Partial<Pick<HouseholdMember, 'hiddenKeys' | 'homeScreen'>>;
 
 interface MemberVisibilityMatrixProps {
-  /** Every household member (including managed kid profiles), any order. */
+  /**
+   * The member columns to render. An admin passes every household member
+   * (including managed kid profiles); a non-admin passes just themselves, so
+   * they still have a per-member editor. Column filtering is purely which
+   * columns render — it never touches hidden-key derivation.
+   */
   members: readonly HouseholdMember[];
   settings: ModuleSettings;
-  /** Same handler Settings' "App Modules" toggles already use. */
+  /** Settings' `handleModuleToggle` — the household layer, editable by any member. */
   onToggleModule: (key: ModuleKey, value: boolean) => void;
   /** Same fields an admin or the member themselves would write via `updateMember`. */
   onUpdateMember: (memberId: string, updates: MatrixMemberUpdate) => void;
 }
 
 /**
- * Admin per-member visibility matrix (2F.3, plus the Home row/landing-screen
- * fix that closed this file's original gap — see `getVisibilityMatrixSections`
- * in utils/moduleVisibility.ts for why Home needed a hand-authored section).
+ * The per-member visibility matrix (2F.3, plus the Home row/landing-screen fix
+ * that closed this file's original gap — see `getVisibilityMatrixSections` in
+ * utils/moduleVisibility.ts for why Home needed a hand-authored section).
+ *
+ * Since Settings collapsed "App Modules" / "What I see" / "Member visibility"
+ * onto this one table, it is the ONLY visibility editor in Settings — an admin
+ * gets every member's column, a non-admin gets just their own (the caller
+ * decides via `members`). Widget ORDER is the one thing it doesn't cover; that
+ * lives in `HomeWidgetOrder`.
  *
  * ONE matrix, both layers: each section's header IS the household layer for
- * that group (`Household.moduleVisibility`, editable right here — the exact
- * same switch as Settings' "App Modules"); Lists' three sub-tabs additionally
- * carry their OWN household toggle inline (each is independently gated). Home
- * and Home widgets have no household layer at all, so their section headers
- * carry no switch. Below that, one member-editable switch per leaf — writing
- * the SAME `HouseholdMember.hiddenKeys` field a member edits for themselves in
- * "What I see" (`MyViewSettings`). There is no lock/override flag: last write
- * wins.
+ * that group (`Household.moduleVisibility`, editable right here by any member
+ * — it was never admin-only); Lists' three sub-tabs additionally carry their
+ * OWN household toggle inline (each is independently gated). Home and Home
+ * widgets have no household layer at all, so their section headers carry no
+ * switch. Below that, one member-editable switch per leaf — writing the SAME
+ * `HouseholdMember.hiddenKeys` field the onboarding wizard's "What I see" step
+ * (`MyViewSettings`) writes. There is no lock/override flag: last write wins.
  *
  * A row whose household layer is off is LOCKED — every member's switch in it
  * renders visually off and non-interactive, because no member can re-enable
@@ -78,12 +88,20 @@ export const MemberVisibilityMatrix: React.FC<MemberVisibilityMatrixProps> = ({
     return map;
   }, [members]);
 
+  const hasManagedMember = useMemo(() => members.some(m => m.isManaged), [members]);
+
   return (
     <div className="space-y-4">
+      {/* The legend. Two layers meet in this one table, and without saying so
+          the switches look duplicated — including the asymmetry the owner
+          asked about: only Lists' tabs have a household field of their own,
+          every other sub-view is a personal choice. */}
       <p className="text-xs text-brand-500 dark:text-brand-400 px-1">
-        Edit anyone&apos;s nav and Home screen — including managed kid profiles, which have no login
-        to set their own. Each row&apos;s household switch is the same &quot;App Modules&quot; toggle
-        as above: turn it off and no member below can re-enable it.
+        The switch beside a section name — or beside one of Lists&apos; three tabs — is the
+        household&apos;s: turn it off and nobody sees it. Each column is one person&apos;s own
+        navigation. Most sub-views have no household switch because they&apos;re a personal choice
+        only.
+        {hasManagedMember && ' Managed kid profiles get a column too — with no login of their own, this is the only place to set theirs.'}
       </p>
 
       {sections.map(section => (
@@ -123,9 +141,10 @@ const MatrixSectionTable: React.FC<MatrixSectionTableProps> = ({
 
   return (
     <div className="surface-section overflow-hidden">
-      {/* The household layer's "top row" for this group — the same toggle as
-          Settings' "App Modules" (Home widgets have no household concept, so
-          this header carries no switch for that section). */}
+      {/* The household layer's "top row" for this group — writing
+          `Household.moduleVisibility`, which is what the deleted "App Modules"
+          section used to own (Home and Home widgets have no household concept,
+          so those headers carry no switch). */}
       <div className="flex items-center justify-between gap-3 px-4 py-3 hairline-divider bg-brand-50/60 dark:bg-brand-700/30">
         <Eyebrow>{section.label}</Eyebrow>
         {moduleKey && (
@@ -137,11 +156,18 @@ const MatrixSectionTable: React.FC<MatrixSectionTableProps> = ({
         )}
       </div>
 
-      <div className="overflow-x-auto -mx-4 px-4">
-        <table className="w-full text-xs border-collapse">
+      {/* The scroller carries NO horizontal padding: a `sticky left-0` cell
+          pins to the scrollport's PADDING edge, so a `-mx-4 px-4` juggle here
+          left the row labels flush against the surface edge while the section
+          header above kept its px-4. Padding inside the sticky cell travels
+          with it instead, so the labels line up with the header's Eyebrow —
+          and `[&_tr>*:last-child]:pr-4` gives the far member column the
+          matching gutter on the right. */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs border-collapse [&_tr>*:last-child]:pr-4">
           <thead>
             <tr>
-              <th className="sticky left-0 z-sticky bg-white dark:bg-brand-800 text-left py-2 pr-3 font-semibold text-brand-500 dark:text-brand-400 whitespace-nowrap">
+              <th className="sticky left-0 z-sticky bg-white dark:bg-brand-800 text-left py-2 pl-4 pr-3 font-semibold text-brand-500 dark:text-brand-400 whitespace-nowrap">
                 View
               </th>
               {members.map(member => (
@@ -216,7 +242,7 @@ const MatrixRowCells: React.FC<MatrixRowCellsProps> = ({
 
   return (
     <tr className="border-t border-brand-100 dark:border-brand-700">
-      <td className="sticky left-0 z-sticky bg-white dark:bg-brand-800 py-2 pr-3 whitespace-nowrap">
+      <td className="sticky left-0 z-sticky bg-white dark:bg-brand-800 py-2 pl-4 pr-3 whitespace-nowrap">
         <span className="inline-flex items-center gap-2">
           <span
             className={cn(
@@ -297,7 +323,7 @@ const LandingScreenRow: React.FC<LandingScreenRowProps> = ({
   onUpdateMember,
 }) => (
   <tr className="border-t border-brand-100 dark:border-brand-700">
-    <td className="sticky left-0 z-sticky bg-white dark:bg-brand-800 py-2 pr-3 whitespace-nowrap">
+    <td className="sticky left-0 z-sticky bg-white dark:bg-brand-800 py-2 pl-4 pr-3 whitespace-nowrap">
       <span className="font-medium text-brand-800 dark:text-brand-100">Landing screen</span>
     </td>
     {members.map(member => {

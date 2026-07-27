@@ -75,6 +75,52 @@ describe('MyViewSettings — Home + landing screen (2F.2)', () => {
     expect(screen.getByRole('radio', { name: 'Home' })).toBeChecked();
   });
 
+  // PC#4 — the widget list moved into the shared `HomeWidgetOrder` component
+  // (Settings mounts the same one) and swapped its chevron pair for a
+  // framer-motion drag list. The grip is deliberately a REAL button with
+  // arrow-key support, unlike this app's other pointer-only grips, because it
+  // replaced keyboard-operable controls.
+  describe('Home widgets (shared HomeWidgetOrder)', () => {
+    it('renders a keyboard-operable grip per widget instead of up/down chevrons', () => {
+      render(<MyViewSettings member={baseMember()} settings={settings} onSave={vi.fn()} />);
+
+      expect(screen.getByRole('button', { name: 'Reorder This Week Pulse' })).toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Move This Week Pulse down' })
+      ).not.toBeInTheDocument();
+    });
+
+    it('moves a widget with the arrow keys, persisting the whole reordered layout', async () => {
+      const onSave = vi.fn();
+      render(<MyViewSettings member={baseMember()} settings={settings} onSave={onSave} />);
+
+      // "Since You Were Here" is second in the default order; ArrowUp swaps it
+      // with the pulse strip ahead of it.
+      await userEvent.type(
+        screen.getByRole('button', { name: 'Reorder Since You Were Here' }),
+        '{arrowup}'
+      );
+
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          dashboardLayout: expect.arrayContaining(['partnerActivity', 'pulseStrip']),
+        })
+      );
+      const layout = onSave.mock.calls[0]?.[0]?.dashboardLayout as string[];
+      expect(layout.slice(0, 2)).toEqual(['partnerActivity', 'pulseStrip']);
+    });
+
+    it('still toggles a widget off through the same hiddenKeys list', async () => {
+      const onSave = vi.fn();
+      render(<MyViewSettings member={baseMember()} settings={settings} onSave={onSave} />);
+
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Show This Week Pulse on Home' }));
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ hiddenKeys: expect.arrayContaining(['pulseStrip']) })
+      );
+    });
+  });
+
   it('hides the landing-screen picker entirely once only one destination remains', () => {
     const allButHome = [
       'track', 'history', 'insights', 'coach', 'rewards', 'challenges',
