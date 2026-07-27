@@ -208,6 +208,9 @@ export function validateSubtaskSuggestions(raw: unknown): string[] {
 
 export function validateReceiptLineItems(raw: unknown): ReceiptLineItemsData {
   const o = expectRecord(raw, 'receiptLineItems');
+  const documentType = o['documentType'];
+  // Optional, so a response predating the field still validates.
+  if (!isOptString(documentType)) fail('receiptLineItems', 'documentType must be a string');
   if (!isString(o['merchant'])) fail('receiptLineItems', 'merchant must be a string');
   if (!isOptString(o['date'])) fail('receiptLineItems', 'date must be a string');
   if (!isOptString(o['store'])) fail('receiptLineItems', 'store must be a string');
@@ -219,7 +222,13 @@ export function validateReceiptLineItems(raw: unknown): ReceiptLineItemsData {
     if (!isFiniteNumber(item['amount'])) fail(`receiptLineItems.items[${i}]`, 'amount must be a number');
     if (!isString(item['category'])) fail(`receiptLineItems.items[${i}]`, 'category must be a string');
   });
-  return o as unknown as ReceiptLineItemsData;
+  const data = o as unknown as ReceiptLineItemsData;
+  // Normalize here so every caller reads a definite value. An unrecognized
+  // string is NOT a hard failure — anything but the exact 'transaction_list'
+  // becomes 'receipt', the safe default: the items are still usable, and the
+  // caller's empty-items fallback still catches a genuinely misread statement.
+  data.documentType = documentType === 'transaction_list' ? 'transaction_list' : 'receipt';
+  return data;
 }
 
 // ---------------------------------------------------------------------------

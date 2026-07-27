@@ -351,8 +351,16 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
       const data = await parseReceiptLineItems(householdId, base64, dynamicCategories, stores.map(s => s.name), habitTitles);
       if (runId !== captureRunIdRef.current) return;
 
-      // The itemized-receipt parser won: it found at least one product line.
-      if (data.items.length > 0) {
+      // Route on the parser's OWN verdict, not on whether it produced items: a
+      // bank/card transaction list looks exactly like an itemized receipt (rows
+      // of text + amount), so "it found items" used to send every statement
+      // screenshot down the receipt path, where 20 separate purchases were
+      // grouped by category into a couple of lump transactions sharing one
+      // merchant and one date. `items.length` stays in the condition as a second
+      // independent signal — the prompt also asks for an empty items array on a
+      // transaction list, so either signal alone is enough to route correctly.
+      const isReceipt = data.documentType !== 'transaction_list' && data.items.length > 0;
+      if (isReceipt) {
         track('receipt_scanned');
 
         // Multiple category groups → review-and-split flow (reuses the
@@ -423,10 +431,14 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
         return;
       }
 
-      // No itemized products — this isn't a single receipt (e.g. it's a bank
-      // statement or transaction-list screenshot). Fall back to extracting a
-      // list of transactions instead.
-      setProcessingMessage('Extracting transactions...');
+      // Not a single receipt: either the parser said "transaction_list" (a bank
+      // or card activity screenshot) or it found no products at all. Re-parse
+      // for a LIST of transactions, one row per purchase.
+      setProcessingMessage(
+        data.documentType === 'transaction_list'
+          ? 'Reading each transaction...'
+          : 'Extracting transactions...'
+      );
       const bankTransactions = await parseBankStatement(householdId, base64, dynamicCategories, habitTitles, stores.map(s => s.name));
       if (runId !== captureRunIdRef.current) return;
       if (bankTransactions.length === 0) {

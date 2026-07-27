@@ -149,6 +149,19 @@ describe('geminiValidation - validateReceiptLineItems', () => {
     const r = validateReceiptLineItems({ merchant: 'Target', items: [] });
     expect(r.items).toEqual([]);
   });
+  it('normalizes documentType so callers always read a definite verdict', () => {
+    expect(validateReceiptLineItems({ documentType: 'transaction_list', merchant: '', items: [] }).documentType)
+      .toBe('transaction_list');
+    // Absent (a response predating the field) and unrecognized both fall back to
+    // 'receipt' rather than failing — the items are still usable.
+    expect(validateReceiptLineItems({ merchant: 'Target', items: [validItem] }).documentType).toBe('receipt');
+    expect(validateReceiptLineItems({ documentType: 'statement', merchant: 'Target', items: [validItem] }).documentType)
+      .toBe('receipt');
+  });
+  it('rejects a non-string documentType', () => {
+    expect(() => validateReceiptLineItems({ documentType: 7, merchant: 'Target', items: [validItem] }))
+      .toThrow(/documentType must be a string/);
+  });
   it('accepts a receipt-level suggestedHabits array', () => {
     const r = validateReceiptLineItems({ merchant: 'Target', items: [validItem], suggestedHabits: ['No eating out'] });
     expect(r.suggestedHabits).toEqual(['No eating out']);
