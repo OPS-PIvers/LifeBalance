@@ -4,6 +4,37 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { configDefaults } from 'vitest/config';
 
+// Shared by both test projects below, so a file can never be claimed by both or
+// by neither.
+//
+// Firestore Security Rules tests (tests/rules/**) run against the Firestore
+// emulator via a dedicated config (vitest.rules.config.ts, invoked by
+// `pnpm test:rules`). Exclude them from the default run, which has no emulator.
+// e2e/** holds Playwright specs (*.spec.ts) — exclude them too, or vitest's
+// default glob would try to run them (they are driven by `pnpm test:e2e`
+// against the dev server instead).
+// .claude/** holds the Claude Code harness's temporary, git-ignored agent
+// worktrees (.claude/worktrees/**), each a full repo copy WITH its own
+// node_modules. Without this exclude, vitest globs their *.test.tsx too and
+// they fail en masse with "Invalid hook call" (a second, duplicate React
+// copy). They are scratch space, never part of this package's test suite.
+const TEST_EXCLUDE = [...configDefaults.exclude, 'tests/rules/**', 'e2e/**', '.claude/**'];
+
+// Directories whose tests render React or call renderHook, so they need a DOM
+// wholesale. Matched on directory rather than on the .tsx extension because
+// several .ts suites in hooks/ (useActionQueue, useMidnightScheduler, …) drive
+// renderHook from a plain .ts file.
+const JSDOM_INCLUDE = [
+  'components/**/*.test.{ts,tsx}',
+  'pages/**/*.test.{ts,tsx}',
+  'hooks/**/*.test.{ts,tsx}',
+  'App.test.tsx',
+  // contexts/** is mostly pure mutation/listener logic (node), but the
+  // top-level provider suites mount real components.
+  'contexts/*.test.tsx',
+  'services/notificationService.test.tsx',
+];
+
 export default defineConfig(({ command }) => {
     return {
       server: {
@@ -12,22 +43,71 @@ export default defineConfig(({ command }) => {
       },
       plugins: [react()],
       test: {
-        globals: true,
-        environment: 'jsdom',
-        setupFiles: './vitest.setup.ts',
-        // Firestore Security Rules tests (tests/rules/**) run against the
-        // Firestore emulator via a dedicated config (vitest.rules.config.ts,
-        // invoked by `pnpm test:rules`). Exclude them from the default jsdom
-        // run, which has no emulator.
-        // e2e/** holds Playwright specs (*.spec.ts) — exclude them too, or
-        // vitest's default glob would try to run them under jsdom (they are
-        // driven by `pnpm test:e2e` against the dev server instead).
-        // .claude/** holds the Claude Code harness's temporary, git-ignored agent
-        // worktrees (.claude/worktrees/**), each a full repo copy WITH its own
-        // node_modules. Without this exclude, vitest globs their *.test.tsx too and
-        // they fail en masse with "Invalid hook call" (a second, duplicate React
-        // copy). They are scratch space, never part of this package's test suite.
-        exclude: [...configDefaults.exclude, 'tests/rules/**', 'e2e/**', '.claude/**'],
+        // Two projects split by environment. Booting a jsdom dominated this
+        // suite's cost: with `environment: 'jsdom'` set globally, a full run
+        // spent 301s of worker time in `environment` against only 85s actually
+        // running `tests` — and the large majority of the suite (utils/**,
+        // functions/**, contexts/household/**) is pure logic that never touches
+        // the DOM. Per file it is ~0.9s to boot a jsdom vs ~0.06s for node. So
+        // node is the default now and jsdom is opt-in.
+        //
+        // Two ways a file gets jsdom:
+        //   1. It lives in a UI directory (see JSDOM_INCLUDE below) — anything
+        //      that renders components or calls renderHook.
+        //   2. It carries a `// @vitest-environment jsdom` docblock. That is how
+        //      the ~16 pure-logic suites that drive window/document/localStorage
+        //      opt back in. The docblock is deliberately preferred over listing
+        //      their paths here: it survives file renames and documents itself at
+        //      the point of use.
+        //
+        // A test that needs the DOM and has neither fails loudly with
+        // "ReferenceError: window is not defined" — it never silently degrades.
+        //
+        // `pool` is left at its default (forks). threads was measured against
+        // this suite and came out within noise of forks (166.6s vs 170.6s on a
+        // 4-core box), so it does not buy anything worth giving up process
+        // isolation for.
+        projects: [
+          {
+            extends: true,
+            test: {
+              name: 'jsdom',
+              environment: 'jsdom',
+              include: JSDOM_INCLUDE,
+              exclude: TEST_EXCLUDE,
+              globals: true,
+              setupFiles: './vitest.setup.ts',
+            },
+          },
+          {
+            extends: true,
+            test: {
+              name: 'node',
+              environment: 'node',
+              // NOTE: `isolate: false` was measured here and deliberately NOT
+              // kept. It is a real win (170s -> 132s on a 4-core box, mostly by
+              // collapsing the `import` phase as the module registry is reused),
+              // but it is not green: sharing one module registry across files
+              // breaks services/geminiService.test.ts,
+              // services/geminiService_Hardening.test.ts and
+              // functions/src/quickAdd/getTodos.test.ts (49 tests). Those files
+              // pass alone and pass together — they only fail once co-resident
+              // with the rest of the suite, i.e. latent order-dependent
+              // pollution. Turning it on for the jsdom project is far worse
+              // (152 failures, tests timing out at 100s+ on leaked DOM and
+              // Firestore listeners). Re-evaluate only with the pollution fixed
+              // at the source, never by skipping the affected tests.
+              include: ['**/*.test.{ts,tsx}'],
+              exclude: [...TEST_EXCLUDE, ...JSDOM_INCLUDE],
+              globals: true,
+              // Deliberately the *shared* setup, not vitest.setup.ts: this
+              // project does not need @testing-library/jest-dom, and skipping
+              // that import cuts the setup phase for these 200+ files from
+              // ~17s to ~2.6s of worker time. See vitest.setup.ts.
+              setupFiles: './vitest.setup.shared.ts',
+            },
+          },
+        ],
         coverage: {
           provider: 'v8',
           include: ['**/*.{ts,tsx}'],
@@ -37,7 +117,7 @@ export default defineConfig(({ command }) => {
             'functions/**',
             'dist/**',
             '**/*.config.*',
-            'vitest.setup.ts',
+            'vitest.setup*.ts',
           ],
           // Coverage ratchet for the critical business logic in utils/.
           // These modules are the single source of truth for money math,

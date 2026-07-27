@@ -262,7 +262,14 @@ Configured in both [tsconfig.json](tsconfig.json) and [vite.config.ts](vite.conf
 
 ## Testing
 
-Tests use **Vitest** with **@testing-library/react** and a `jsdom` environment (config in [vite.config.ts](vite.config.ts), setup in [vitest.setup.ts](vitest.setup.ts)). Test files live next to the code they cover as `*.test.ts(x)`. Business logic in `utils/` (safe-to-spend, habit scoring, money math, date helpers) is the most heavily covered — add/extend tests there when changing that logic. Run with `pnpm test`.
+Tests use **Vitest** with **@testing-library/react** (config in [vite.config.ts](vite.config.ts)). Test files live next to the code they cover as `*.test.ts(x)`. Business logic in `utils/` (safe-to-spend, habit scoring, money math, date helpers) is the most heavily covered — add/extend tests there when changing that logic. Run with `pnpm test`.
+
+**Two environments, node by default.** `test.projects` splits the suite into a `node` project and a `jsdom` project. Booting a jsdom is what this suite actually spent its time on — globally-`jsdom` runs burned 301s of worker time in `environment` against 85s of real `tests` — and most of the suite (`utils/**`, `functions/**`, `contexts/household/**`) is pure logic. A file gets jsdom in one of two ways:
+
+1. It sits in a UI directory — `components/**`, `pages/**`, `hooks/**`, `App.test.tsx`, `contexts/*.test.tsx`, `services/notificationService.test.tsx` (the `JSDOM_INCLUDE` list). Matched by directory, not by `.tsx`, because several `.ts` suites in `hooks/` drive `renderHook`.
+2. It carries a `// @vitest-environment jsdom` docblock. That is how the ~16 pure-logic suites that drive `window`/`document`/`localStorage` (e.g. `utils/firstTimeFlags.test.ts`, `utils/swNavigation.test.ts`, `services/analytics.test.ts`) opt back in. **Prefer the docblock over adding a path to `JSDOM_INCLUDE`** — it survives renames and documents itself where it applies.
+
+A test needing the DOM with neither fails loudly (`ReferenceError: window is not defined`); it never silently degrades to a fallback branch. Setup is split to match: [vitest.setup.shared.ts](vitest.setup.shared.ts) is environment-agnostic and loaded by both, while [vitest.setup.ts](vitest.setup.ts) adds `@testing-library/jest-dom` for the jsdom project only — so don't reach for jest-dom matchers in a node-project test (a test that needs them renders something, and belongs in the jsdom project). `isolate: false` and `pool: 'threads'` were both measured and deliberately not adopted; see the notes in [vite.config.ts](vite.config.ts) before revisiting either.
 
 ## Repo Hygiene
 

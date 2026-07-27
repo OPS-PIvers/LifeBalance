@@ -1,3 +1,7 @@
+// @vitest-environment jsdom
+// The default test environment is node (see vite.config.ts `projects`). This
+// suite drives real browser APIs — window/document/localStorage — so it opts
+// back into jsdom. Without this it fails outright rather than degrading.
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   appendNotificationAction,
