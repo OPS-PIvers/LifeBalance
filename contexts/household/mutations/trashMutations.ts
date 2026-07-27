@@ -19,6 +19,7 @@ import {
 import toast from 'react-hot-toast';
 import type { Account } from '@/types/schema';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
+import { roundMoney } from '@/utils/money';
 import {
   TRASH_DOMAIN_META,
   trashDocId,
@@ -136,7 +137,12 @@ export async function restoreTrashedItem(
     const impact = transactionRestoreImpact(item.data, accounts ?? []);
     if (impact.outcome === 'apply') {
       batch.update(doc(db, `households/${householdId}/accounts`, impact.accountId), {
-        balance: increment(impact.delta),
+        // Rounded at the write, matching every other balance-mutating path
+        // (transaction/calendar/ceremony mutations). `transactionRestoreImpact`
+        // already rounds the delta it returns; keeping the guard here too means
+        // no balance write in the app can introduce sub-cent drift, whatever
+        // the caller hands us.
+        balance: increment(roundMoney(impact.delta)),
         lastUpdated: serverTimestamp(),
       });
     } else if (impact.outcome === 'missing-account') {

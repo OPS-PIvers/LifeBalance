@@ -197,6 +197,18 @@ describe('restoreTrashedItem — transaction domain (balance re-apply)', () => {
     expect(updateOp?.data?.balance).toEqual({ __increment: 30 });
   });
 
+  it('rounds a float-drifted delta before incrementing the balance', async () => {
+    // A stored amount carrying sub-cent drift must not be incremented onto the
+    // account verbatim — that is how balances end up as 125.777777777779.
+    await restoreTrashedItem(
+      { db, householdId, accounts },
+      txItem({ amount: 125.777777777779, merchant: 'Target', category: 'Shopping', status: 'verified' })
+    );
+    const updateOp = batchOps.find((o) => o.op === 'update');
+    expect(updateOp?.ref.__path).toBe('households/household-1/accounts/acc-check');
+    expect(updateOp?.data?.balance).toEqual({ __increment: -125.78 });
+  });
+
   it('does NOT touch a balance for a pending_review row', async () => {
     await restoreTrashedItem(
       { db, householdId, accounts },
