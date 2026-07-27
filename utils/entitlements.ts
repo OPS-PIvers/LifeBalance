@@ -34,9 +34,22 @@ export interface PlanLimits {
 
 /**
  * Limit tables — the one place these numbers live. The values are sensible defaults
- * and a tunable PRODUCT decision; they are NOT enforced yet (gating lands in Plans
- * 050b/051/052). To change a limit, edit it here, then add/adjust the server-side
- * gate that reads it.
+ * and a tunable PRODUCT decision.
+ *
+ * Enforcement status (Plan 051 landed; do NOT re-implement these gates):
+ * - `maxMembers` — enforced SERVER-SIDE in `firestore.rules` (`planMaxMembers()` /
+ *   `withinMemberCap`, ~line 106). KEEP THE NUMBERS IN SYNC with that rule.
+ * - `maxKidProfiles` — enforced SERVER-SIDE by the `createkidprofile` callable
+ *   (`functions/src/kid/createKidProfile.ts`), which mirrors these values in
+ *   `functions/src/entitlements.ts`. A managed kid is never in `memberUids`, so
+ *   rules cannot count them — only the server can.
+ * - `aiDailyCap` — enforced in `geminiService.checkAndIncrementAiUsage` (the proxy
+ *   path holds the key server-side); the legacy flat cap applies while billing is off.
+ * - `historyMonths` / `recapEnabled` — NOT gated yet.
+ *
+ * All of the above are INERT until the `billingEnabled` flag flips, which is why
+ * nothing is capped in prod today. That is a dormant gate, not a missing one.
+ * To change a limit, edit it here AND in the mirroring server gate named above.
  */
 export const FREE_LIMITS: PlanLimits = {
   maxMembers: 2,

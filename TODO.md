@@ -1,9 +1,23 @@
 # LifeBalance — Backlog (single source of truth)
 
-**This is the one remaining-work doc.** It replaces the scattered `plans/`, `advisor-plans/`,
-and `todo/` trees, which were consolidated and removed on **2026-07-10**. Every item below was
-**verified against the actual code + git history** (a 51-document audit sweep), not copied from a
-stale status line — many of those old status lines over-claimed or had gone out of date.
+**This is the single backlog for bugs, ops gates, perf/security hardening, and product-scope
+questions.** It replaces the scattered `plans/`, `advisor-plans/`, and `todo/` trees, which were
+consolidated and removed on **2026-07-10**. Every item below was **verified against the actual
+code + git history** (a 51-document audit sweep), not copied from a stale status line — many of
+those old status lines over-claimed or had gone out of date.
+
+**Two other live work docs exist; this file is not the whole picture.** Check them before
+concluding something isn't tracked:
+
+- **`FEATURES_ROADMAP.md`** (repo root) — **features only**: 96 candidate feature briefs from the
+  2026-07-13 discovery pipeline. The division is deliberate and enforced in both directions —
+  that doc drops any item overlapping this one and cross-references instead (e.g. its F-MEALS-14
+  points at §3's G9). Nothing there is greenlit; it is the same "needs a product decision" tier
+  as §3 below.
+- **`docs/plans/phase-2b-deterministic-nl-quickadd.md`** — one surviving execution-detail plan,
+  status *planned / not started*: replace the client-side Gemini drain of `pendingItems` with
+  deterministic server-side NL parsing, making Gemini opt-in. Real un-started work; indexed from
+  §2A below so it isn't invisible from here.
 
 Deleted planning docs are fully preserved in git history (`git log --diff-filter=D --name-only`)
 if you ever need the fine-grained execution steps behind an item here.
@@ -27,7 +41,7 @@ procedures live in the kept runbooks; this is the index.
 | # | Item | Risk | Runbook |
 |---|------|------|---------|
 | 1.1 | **Admin custom claim → retire the hardcoded super-admin UID.** Provision `admin:true` on the super-admin UID via the Admin SDK (one-off script/callable — nothing in the repo sets a claim today), then remove the UID fallback `nmYdn3QPsNQEvniJEXW9M3lmV5e2` from `firestore.rules` `isSuperAdmin()` (~line 31), demote client checks in `contexts/AuthContext.tsx:79` + `pages/Settings.tsx:150` to `getIdTokenResult()`, and drop `VITE_ADMIN_UID` from `.github/workflows/deploy.yml`, `.env.local.example`, `vite-env.d.ts`. **Blocks open-signup and paid launch.** | HIGH (admin lockout if mis-ordered) | `docs/DEPLOY_CHECKLIST.md` §1 |
-| 1.2 | **Open public signup (legal-gated).** Fill the 7 `[PLACEHOLDER]`s in `pages/PrivacyPolicy.tsx` + `pages/TermsOfService.tsx`, counsel review, then a code PR to remove the DRAFT banner (+ bump `CONSENT_VERSION` in `utils/legal.ts` if copy changed materially). Then add the prod origin to Firebase Auth authorized domains and flip `app_config/global.openSignup=true`. No re-consent flow exists for existing users yet. | LOW | `docs/PRELAUNCH_CHECKLIST.md` |
+| 1.2 | **Open public signup (legal-gated).** Fill the 8 distinct `[PLACEHOLDER]`s (19 occurrences) in `pages/PrivacyPolicy.tsx` + `pages/TermsOfService.tsx`, counsel review, then a code PR to remove the DRAFT banner (+ bump `CONSENT_VERSION` in `utils/legal.ts` if copy changed materially — note it is written only at signup by `services/householdService.ts:98,158` and nothing compares a stored `consentVersion`, so a bump affects **new signups only**). Then add the prod origin to Firebase Auth authorized domains and flip `app_config/global.openSignup=true`. No re-consent flow exists for existing users yet. **⚠️ Sub-gate — the AI/Gemini disclosure is load-bearing, not just one placeholder among eight:** `[PLACEHOLDER: link to Google AI / Gemini terms]` is the app's *only* remaining AI data-handling disclosure, because §2G.3 deleted the in-app PII banner on the explicit grounds that "the Privacy Policy carries the disclosure." Until that placeholder is filled and counsel-reviewed, the app discloses AI image/text handling **nowhere**. Do not flip `openSignup` before it lands. | LOW | `docs/PRELAUNCH_CHECKLIST.md` |
 | 1.3 | **Activate Stripe billing.** Code step first: export `createcheckoutsession` + `stripewebhook` from `functions/src/index.ts` (deliberately unexported today), add an emulator subscription-write test, verify the entitlement flow in Test Mode. Gated: the `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` secrets must exist **before** CI can deploy the secret-bound functions. Then Stripe account/entity/bank/product (Phase 0) + secrets/webhook (Phase 1) → flip `billingEnabled`. Entitlement enforcement (member/kid caps) is already live. ⚠️ Flipping `billingEnabled` drops the free AI cap for alpha users — sequence with comms. | MED | `docs/STRIPE_SETUP_RUNBOOK.md` |
 | 1.4 | **Reveal Kid Mode.** Test-Mode kid-loop walkthrough (add kid → switch → dashboard → chore → points → reward → approval → exit PIN), fix any breakage, then flip `app_config/global.kidModeEnabled=true`. Feature is code-complete + deployed dormant. | LOW | — |
 | 1.5 | **Populate the `VITE_SENTRY_DSN` GitHub Actions secret.** Code + `deploy.yml` wiring already shipped; error tracking stays dark until the real DSN is set. | LOW | — |
@@ -51,6 +65,14 @@ human-watched PR (tagged **[rules]** / **[index]**).
 - [x] **BudgetCalendar: dedupe `expandCalendarItems`** (`components/budget/BudgetCalendar.tsx:120`). Window-keyed memo cache so the month window isn't re-expanded independently of the Safe-to-Spend memo. Pure perf hygiene, identical output. **S / LOW.** ✅ 2026-07-11: now uses the shared `useExpandedCalendarItems(start, end)` hook.
 - [x] **`sendbudgetalerts` N+1**: parallelize/reduce the members+accounts reads fired on every account write. **S / LOW.** ✅ 2026-07-11: reads now issued via `Promise.all`.
 - [ ] **Merge the 4 hourly notification crons into one dispatcher** (`functions/src/index.ts` `sendhabitreminders`/`sendactionqueuereminders`/`sendstreakwarnings`/`sendbillreminders`). The full-collection-*scan* cost is already fixed (plan-06 collection-group query); this is the remaining invocation-count reduction. **M / LOW-MED.**
+- [ ] **Phase 2b — deterministic NL quick-add (cut Gemini off the common path).** Today
+  `quickAddNaturalLanguage` parks raw text in `pendingItems` and the **client** drains it through
+  Gemini (`parseNaturalLanguageCommand`) on next app open. Replace with deterministic server-side
+  parsing, demoting Gemini to an opt-in "✨ Clean up with AI" for genuinely ambiguous input; the
+  Phase-1 capture-review drawer (#1062) is the safety net that makes heuristic parsing acceptable.
+  Full executable spec — including the "what already exists, REUSE don't rebuild" inventory — is in
+  **`docs/plans/phase-2b-deterministic-nl-quickadd.md`**; that doc is the execution reference, this
+  line is the backlog entry that makes it findable. **L / MED.**
 
 ### 2B. Security hardening (2026-06 audit, re-verified 2026-07-10 — still open)
 
@@ -85,7 +107,13 @@ human-watched PR (tagged **[rules]** / **[index]**).
 ### 2E. UX / product polish (small, code-only)
 
 - [x] **Empty-state CTAs:** `DailyHabitsWidget` (and similar dashboard widgets) `return null` when empty — show an add-first CTA instead. **S / LOW.** ✅ 2026-07-11: `DailyHabitsWidget` + `MoneyPulseWidget` (the two true first-run cases) now show a compact `EmptyState` + CTA; the other null-returning widgets are period-scoped or intentionally dormant, left as-is.
-- [x] **Global search v1.1:** deep-link/highlight to the specific result item instead of just its containing tab; add a `SearchOverlay` component test. **M+S / LOW.** ✅ 2026-07-11: scroll-to + transient flash-highlight wired for transactions (Budget → Transactions) and habits (Track tab), reduced-motion-safe; meals/todos/shopping still deep-link to their tab only (their sectioned/paginated layouts need a follow-up). SearchOverlay tests extended.
+- [x] **Global search v1.1:** deep-link/highlight to the specific result item instead of just its containing tab; add a `SearchOverlay` component test. **M+S / LOW.** ✅ 2026-07-11: scroll-to + transient flash-highlight wired for transactions (Budget → Transactions) and habits (Track tab), reduced-motion-safe; meals/todos/shopping still deep-link to their tab only (their sectioned/paginated layouts need a follow-up — now carried as the open v1.2 item below). SearchOverlay tests extended.
+- [ ] **Global search v1.2 — deep-link highlight for meals / todos / shopping.** The three surfaces
+  v1.1 deliberately skipped: they still land on the containing tab with no scroll-to or flash-highlight,
+  because their sectioned/paginated layouts mean the target row may not be mounted when the deep link
+  resolves. Extend the existing `hooks/useDeepLinkHighlight.ts` path used by transactions and habits;
+  expanding/paginating to the target section is the actual work, not the highlight itself. Gate each
+  result on the specific leaf key as `isNavLeafKeyVisible` already does — never at page level. **M / LOW.**
 - [x] **HabitSubmission history/stats view** — the data is already captured (`schema.ts:180`: `pointsEarned`/`streakDaysAtTime`/`multiplierApplied`); no reader UI exists. **S / LOW.** ❌ 2026-07-11: stale — `HabitSubmissionLogModal` (Log/Stats/Calendar tabs) already exists and is wired from `HabitCard`.
 - [x] **ShoppingListTab** mirrored-state-in-effect → derived `useMemo` (lint no longer fires, so this is optional cleanup). **M / LOW.** ❌ 2026-07-11: won't-fix — the mirrored state is load-bearing for `Reorder.Group` drag gestures (local mutation gated by `isDraggingRef` before committing via `reorderShoppingItems`); a derived `useMemo` would break mid-drag reordering.
 - [x] **Finish the `useHousehold()` migration** — ~7 shim consumers remain; move them to narrow domain slices. **S each / LOW.** ❌ 2026-07-11: stale — zero production consumers remain; only test-file mocks reference the shim.
@@ -150,7 +178,9 @@ deep-linkable money screens for push notifications and PWA shortcuts.
 **Open / to verify.**
 - Whether `moduleVisibility.todos` is currently `false` for this household — it was turned off
   believing it was per-member, which hid to-dos (and their Action Queue cards) for **both** members.
-- Confirm the `?view=` param shape vs. path segments before 2F.2.
+- ~~Confirm the `?view=` param shape vs. path segments before 2F.2.~~ ✅ Resolved — 2F.2 shipped the
+  query-param form; `hooks/useViewParam.ts` (+ its test) is consumed by `pages/Budget.tsx`, matching
+  Habits' `?due=` convention as planned.
 - The matrix is ~20 rows × N members — the one screen where this "reduce overwhelm" feature is itself
   dense. Acceptable as an admin surface; revisit if it tests badly.
 
@@ -186,10 +216,10 @@ Two things fell out that weren't in the original spec:
   ✅ Done — the row now opens the kid-aware `MemberModal` in create mode (`createManagedKid`), so adding
   and editing a kid profile share one on-design bottom sheet. No browser-native prompt dialog remains in
   the app; grepping the source for one should return nothing.
-- `firestore.rules`' Case 3 kid-allowlist comment still describes stale reachability claims (that
-  `MyViewSettings` can render a kid, and that `MemberModal` submits `email` for kids) — a sibling
-  **[rules] PR #1114** (`fix/rules-case3-comment-accuracy`) rewrites that comment; as of this writing it
-  is still **open**, so it remains an outstanding follow-up, not something already handled.
+- ~~`firestore.rules`' Case 3 kid-allowlist comment still describes stale reachability claims (that
+  `MyViewSettings` can render a kid, and that `MemberModal` submits `email` for kids).~~
+  ✅ Done — **[rules] PR #1114** (`fix/rules-case3-comment-accuracy`) rewrote that comment and **merged
+  2026-07-27**. No longer an outstanding follow-up.
 
 ### 2G. Member-permission bug + capture/shopping paper cuts — ✅ SHIPPED 2026-07-26
 
@@ -314,7 +344,10 @@ All in `components/modals/CaptureModal.tsx` + `CaptureMenu.tsx`.
   `lifebalance_pii_notice_seen` localStorage key (`:13`, `:16-22`, `:52`, `:56`). It is the app's only
   AI disclaimer — the other AI surfaces (`PhotoImportDrawer`, meal AI, receipt paths) never had one — so
   removing it makes the app consistent, and it renders on the *menu* rather than on the screens where an
-  image is actually captured. The Privacy Policy carries the disclosure.
+  image is actually captured. The Privacy Policy carries the disclosure. ⚠️ **That justification is a
+  dependency, and it is not satisfied yet** — the policy's AI clause is still `[PLACEHOLDER: link to
+  Google AI / Gemini terms]` behind the DRAFT banner, so today the disclosure exists in neither place.
+  Tracked as the sub-gate on §1.2; do not treat this deletion as closed until that placeholder ships.
 - **Delete the Magic Action bar and its service function.** Remove
   `components/modals/CaptureMagicAction.tsx`, its render at `CaptureMenu.tsx:106-110`, the
   `handleMagicSuccess` handler (`CaptureModal.tsx:146-174`), `parseMagicAction`
@@ -416,6 +449,12 @@ From the 2026-07-09 product-scope audit — grounded findings, not yet greenlit:
 
 Kept in place — these are living reference, not backlog:
 
+- `FEATURES_ROADMAP.md` — **the sibling backlog**, features only (96 candidate briefs, 2026-07-13).
+  Not "reference" in the same sense as the rest of this list: it holds real un-built work. The split
+  is bugs/ops/hardening here, features there, **no duplication in either direction** — where an idea
+  overlapped this file it was dropped there with a cross-reference. Nothing in it is greenlit.
+- `docs/plans/phase-2b-deterministic-nl-quickadd.md` — execution detail for the Phase 2b item in §2A
+  (the only surviving doc from the old `plans/` tree; status *planned / not started*)
 - `docs/PRODUCT_ROADMAP.md` — product strategy + the analytics event dictionary (Part 7)
 - `docs/PRELAUNCH_CHECKLIST.md` — the ordered public-launch gate (legal → open signup)
 - `docs/DEPLOY_CHECKLIST.md` — gated ops/security actions requiring console/Admin-SDK access
