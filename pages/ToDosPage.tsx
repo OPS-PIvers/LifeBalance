@@ -9,7 +9,7 @@ import { quadrantForTodo, QUADRANT_ORDER, type Quadrant } from '@/utils/eisenhow
 import { toggleSubtask, appendSubtask, removeSubtask, subtasksFromTexts, subtaskLinesFromPaste, isPermissionDeniedError, subtaskProgress, MAX_SUBTASKS, updateSubtaskText, setSubtaskAssignee } from '@/utils/subtasks';
 import { TODO_FREQUENCIES, TODO_FREQUENCY_LABELS, type TodoFrequency } from '@/utils/todoRecurrence';
 import { REMINDER_OFFSET_OPTIONS, compareDueTimes } from '@/utils/todoTime';
-import { WHOLE_HOUSEHOLD_ASSIGNEE } from '@/utils/todoAssignee';
+import { WHOLE_HOUSEHOLD_ASSIGNEE, resolveAssignedTo } from '@/utils/todoAssignee';
 import { ToDo, HouseholdMember, Subtask } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { haptic } from '@/utils/haptics';
@@ -1225,7 +1225,7 @@ const ToDosPage: React.FC = () => {
     }
     // "Whole household" stores an absent assignedTo (unassigned/shared) — the
     // sentinel value never reaches Firestore.
-    const assignedToValue = assignedTo === WHOLE_HOUSEHOLD_ASSIGNEE ? undefined : assignedTo;
+    const assignedToValue = resolveAssignedTo(assignedTo);
 
     setIsSaving(true);
     try {

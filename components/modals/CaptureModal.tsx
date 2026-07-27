@@ -14,7 +14,7 @@ import { getLocalDateString } from '@/utils/dateHelpers';
 import { haptic } from '@/utils/haptics';
 import { resolveItemDefaults } from '@/utils/grocerySmartDefaults';
 import { normalizeStoreName } from '@/utils/storeMatch';
-import { WHOLE_HOUSEHOLD_ASSIGNEE } from '@/utils/todoAssignee';
+import { resolveAssignedTo } from '@/utils/todoAssignee';
 import { track } from '@/services/analytics';
 import { Drawer } from '@/components/ui/Drawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -608,13 +608,15 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
     // Paper cut: "Whole household" is a real choice here now. It is a UI-only
     // sentinel — an ABSENT assignedTo is the canonical whole-household value,
     // so the field is omitted rather than written as '' or as the sentinel.
-    const isWholeHousehold = todoAssignee === WHOLE_HOUSEHOLD_ASSIGNEE;
-    if (!isWholeHousehold) {
-      if (!todoAssignee) {
+    // `undefined` ONLY for the whole-household sentinel, which needs no
+    // validation; anything else must name a real member.
+    const assignedTo = resolveAssignedTo(todoAssignee);
+    if (assignedTo !== undefined) {
+      if (!assignedTo) {
         toast.error('Please select an assignee');
         return;
       }
-      if (!members.some(m => m.uid === todoAssignee)) {
+      if (!members.some(m => m.uid === assignedTo)) {
         toast.error('Invalid assignee selected');
         return;
       }
@@ -630,7 +632,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
         text: trimmedText,
         completeByDate: dueDate,
         isCompleted: false,
-        ...(isWholeHousehold ? {} : { assignedTo: todoAssignee }),
+        ...(assignedTo === undefined ? {} : { assignedTo }),
         // Absent (not '') is the canonical "Uncategorized" value — see ToDo.category.
         ...(trimmedCategory ? { category: trimmedCategory } : {})
       });
