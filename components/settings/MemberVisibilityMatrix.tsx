@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Baby } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { Switch } from '@/components/ui/Switch';
+import Select from '@/components/ui/Select';
 import Eyebrow from '@/components/ui/Eyebrow';
 import {
   getVisibilityMatrixSections,
@@ -317,18 +318,23 @@ const LandingScreenRow: React.FC<LandingScreenRowProps> = ({
       const value = effective === 'settings' ? firstOption.key : effective;
       return (
         <td key={member.uid} className="text-center py-1 px-2">
-          <select
+          {/* The Select primitive (DESIGN.md's picker rule, r6) rather than a
+              hand-rolled <select> — a min-h-11 keeps the 44px touch target
+              this dense matrix's Switch cells already carry, while the
+              compact py/px/text-xxs override keeps it from blowing out the
+              row height or the table's own overflow-x-auto scroller. */}
+          <Select
             aria-label={`Landing screen for ${member.displayName}`}
             value={value}
             onChange={(e) => onUpdateMember(member.uid, { homeScreen: e.target.value })}
-            className="w-full max-w-28 rounded-sm border border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800 px-1.5 py-1 text-xxs font-medium text-brand-700 dark:text-brand-300 outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+            className="min-h-11 w-full max-w-28 py-1.5 pl-2 pr-8 text-xxs font-medium"
           >
             {options.map(o => (
               <option key={o.key} value={o.key}>
                 {o.label}
               </option>
             ))}
-          </select>
+          </Select>
         </td>
       );
     })}

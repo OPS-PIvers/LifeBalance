@@ -191,6 +191,28 @@ describe('MemberVisibilityMatrix', () => {
       expect(onUpdateMember).toHaveBeenCalledWith('m-bob', { homeScreen: 'money' });
     });
 
+    it('renders the landing-screen picker as the Select primitive with a >=44px touch target', () => {
+      render(
+        <MemberVisibilityMatrix
+          members={[alice, bob]}
+          settings={{ moduleVisibility: undefined }}
+          onToggleModule={vi.fn()}
+          onUpdateMember={vi.fn()}
+        />
+      );
+
+      const bobLanding = screen.getByRole('combobox', { name: 'Landing screen for Bob' });
+      // `rounded-btn` + `focus:ring-2 focus:ring-accent-500/40` come from the
+      // Select primitive's shared FIELD_BASE recipe (components/ui/fieldStyles.ts)
+      // — a hand-rolled <select> wouldn't carry them. `min-h-11` is this call
+      // site's override that keeps the touch target >=44px (DESIGN.md's
+      // Accessibility section) to match the Switch cells beside it, which get
+      // their 44px target from a `h-11 w-11` wrapping label instead.
+      expect(bobLanding.className).toContain('rounded-btn');
+      expect(bobLanding.className).toContain('focus:ring-2');
+      expect(bobLanding.className).toContain('min-h-11');
+    });
+
     it("a managed kid's row supports both hiding Home and setting a landing screen — the only way, since kids have no login", () => {
       const onUpdateMember = vi.fn();
       render(
