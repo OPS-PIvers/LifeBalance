@@ -18,6 +18,7 @@ import Input from '@/components/ui/Input';
 import ProgressBar from '@/components/ui/ProgressBar';
 import Select from '@/components/ui/Select';
 import EmptyState from '@/components/ui/EmptyState';
+import { Popover } from '@/components/ui/Popover';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import SavingsGoals from '@/components/budget/SavingsGoals';
 
@@ -54,6 +55,9 @@ const BudgetAccounts: React.FC = () => {
 
   // Mobile Actions
   const [actionAccount, setActionAccount] = useState<Account | null>(null);
+
+  // Id of the account whose last-4 popover is open (only one at a time).
+  const [last4PopoverId, setLast4PopoverId] = useState<string | null>(null);
 
   // Drag state
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -342,6 +346,14 @@ const BudgetAccounts: React.FC = () => {
     const allCardLast4s = Array.from(
       new Set([...(account.cardLast4 ? [account.cardLast4] : []), ...(account.cardLast4s ?? [])])
     );
+    // Every last-4 the account carries, cards first then the account number.
+    const last4Entries = [
+      ...allCardLast4s.map(d => ({ key: `card-${d}`, digits: d, label: 'Card', isAccount: false })),
+      ...(account.accountLast4
+        ? [{ key: 'account', digits: account.accountLast4, label: 'Account no.', isAccount: true }]
+        : []),
+    ];
+    const soleLast4 = last4Entries.length === 1 ? last4Entries[0] : undefined;
     const progress = account.monthlyGoal ? Math.min(100, (account.balance / account.monthlyGoal) * 100) : 0;
     const hitGoal = account.monthlyGoal && account.balance >= account.monthlyGoal;
     const isDragging = draggedId === account.id;
@@ -372,34 +384,48 @@ const BudgetAccounts: React.FC = () => {
                 <Badge variant={isLiability ? 'danger' : 'success'} size="sm" className="uppercase shrink-0">
                   {account.type}
                 </Badge>
-                {/* Each identifier is its own whitespace-nowrap unit so a wrap
-                    break falls between chips, never mid "···NNNN". Beyond 2
-                    cards, collapse the rest into a "+N more" chip that opens
-                    the same edit drawer used to manage them. */}
-                {allCardLast4s.slice(0, 2).map(d => (
-                  <span
-                    key={d}
-                    className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-mono text-brand-500 dark:text-brand-400 shrink-0"
-                  >
-                    <CreditCard size={11} aria-hidden />
-                    ···{d}
-                  </span>
-                ))}
-                {allCardLast4s.length > 2 && (
-                  <button
-                    type="button"
-                    onClick={() => setActionAccount(account)}
-                    aria-label={`View all ${allCardLast4s.length} cards on ${account.name}`}
-                    className="inline-flex items-center whitespace-nowrap text-[11px] font-mono text-brand-500 dark:text-brand-400 shrink-0 underline decoration-dotted underline-offset-2 hover:text-brand-700 dark:hover:text-brand-200"
-                  >
-                    +{allCardLast4s.length - 2} more
-                  </button>
-                )}
-                {account.accountLast4 && (
+                {/* All last-4s collapse into ONE inline control so the row
+                    never wraps to a second line. A lone value reads inline;
+                    two or more become a card glyph + count that opens a
+                    popover listing each identifier. */}
+                {soleLast4 && (
                   <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-mono text-brand-500 dark:text-brand-400 shrink-0">
-                    <Landmark size={11} aria-hidden />
-                    ···{account.accountLast4}
+                    {soleLast4.isAccount ? <Landmark size={11} aria-hidden /> : <CreditCard size={11} aria-hidden />}
+                    ···{soleLast4.digits}
                   </span>
+                )}
+                {last4Entries.length > 1 && (
+                  <div className="relative shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setLast4PopoverId(id => (id === account.id ? null : account.id))}
+                      aria-haspopup="dialog"
+                      aria-expanded={last4PopoverId === account.id}
+                      aria-label={`Show ${last4Entries.length} card and account numbers for ${account.name}`}
+                      className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[11px] font-mono text-brand-500 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-700/50 hover:text-brand-700 dark:hover:text-brand-200 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+                    >
+                      <CreditCard size={11} aria-hidden />
+                      {last4Entries.length}
+                    </button>
+                    <Popover
+                      isOpen={last4PopoverId === account.id}
+                      onClose={() => setLast4PopoverId(null)}
+                      role="dialog"
+                      ariaLabel={`Card and account numbers for ${account.name}`}
+                      position="top-full left-0 mt-1"
+                      className="w-52 py-1"
+                    >
+                      {last4Entries.map(e => (
+                        <span key={e.key} className="flex items-center gap-2 px-3 py-1.5 text-xs font-mono text-brand-700 dark:text-brand-200">
+                          {e.isAccount
+                            ? <Landmark size={12} aria-hidden className="shrink-0 text-brand-400 dark:text-brand-450" />
+                            : <CreditCard size={12} aria-hidden className="shrink-0 text-brand-400 dark:text-brand-450" />}
+                          <span>···{e.digits}</span>
+                          <span className="ml-auto font-sans text-xxs text-brand-400 dark:text-brand-450">{e.label}</span>
+                        </span>
+                      ))}
+                    </Popover>
+                  </div>
                 )}
               </div>
             </div>
@@ -543,7 +569,9 @@ const BudgetAccounts: React.FC = () => {
             <div className="flex-1 h-px bg-brand-200 dark:bg-brand-700"></div>
             <span className="text-sm font-mono tabular-nums text-money-pos dark:text-money-posDark">{fmt(assets)}</span>
           </div>
-          <SurfaceList>
+          {/* overflow-visible so the last row's last-4 popover isn't clipped
+              by the grouped surface. */}
+          <SurfaceList className="overflow-visible">
             {assetAccounts.map(account => renderAccountRow(account, false))}
           </SurfaceList>
         </div>
@@ -557,7 +585,7 @@ const BudgetAccounts: React.FC = () => {
             <div className="flex-1 h-px bg-brand-200 dark:bg-brand-700"></div>
             <span className="text-sm font-mono tabular-nums text-money-neg dark:text-money-negDark">{fmt(debts)}</span>
           </div>
-          <SurfaceList>
+          <SurfaceList className="overflow-visible">
             {liabilityAccounts.map(account => renderAccountRow(account, true))}
           </SurfaceList>
         </div>

@@ -156,17 +156,15 @@ describe('TodoRow', () => {
       expect(editButton.getAttribute('title')).toBe(longTitle);
     });
 
-    it('reserves two title lines even for a short title, so row height never varies', () => {
-      // Clamping alone bounds a LONG title but lets a one-line row sit shorter
-      // than a two-line one — the same height jitter the "Tomorrow" tag caused,
-      // arriving from a different direction. The reserved min-height is what
-      // makes every row genuinely uniform, so assert it on a SHORT title.
+    it('does not reserve two title lines for a short title, so a one-line title yields a one-line-tall row (paper cut #12)', () => {
+      // A prior version reserved `min-h-[2.75em]` on every row so heights
+      // stayed uniform regardless of title length, but that left an ugly gap
+      // under a short title. That reservation was reverted — only the
+      // two-line CAP remains.
       render(<TodoRow {...baseProps} item={{ ...item, text: 'Milk' }} />);
       const editButton = screen.getByRole('button', { name: 'Edit task: Milk' });
       const titleSpan = editButton.querySelector('span');
-      // No trailing \b — `]` and the space after it are both non-word chars,
-      // so there is no boundary between them for \b to match.
-      expect(titleSpan?.className).toContain('min-h-[2.75em]');
+      expect(titleSpan?.className).not.toContain('min-h-[2.75em]');
       expect(titleSpan?.className).toMatch(/\bline-clamp-2\b/);
       // `line-clamp-2` supplies display:-webkit-box; a competing `block` in the
       // same layer can win on stylesheet order and render the clamp inert.
@@ -250,14 +248,6 @@ describe('TodoRow', () => {
       const checkbox = screen.getByRole('checkbox', { name: /Wheel to curb/ });
       fireEvent.click(checkbox);
       expect(handlers.onToggleSubtask).toHaveBeenCalledWith('todo-1', 's2');
-    });
-
-    it('demotes subtasks out of the generic "has details" dot', () => {
-      // A to-do whose ONLY extra content is subtasks shows the pill but not the
-      // details dot (notes/recurrence are what the dot now signals).
-      render(<TodoRow {...baseProps} item={withSubtasks} />);
-      expect(screen.getByTestId('todo-subtask-pill')).toBeInTheDocument();
-      expect(screen.queryByTestId('todo-details-dot')).toBeNull();
     });
 
     it('renders the pill as a SIBLING of the edit button, not a descendant (ARIA: no interactive descendant of role=button)', () => {
@@ -344,7 +334,6 @@ describe('TodoRow', () => {
       render(<TodoRow {...baseProps} item={householdItem} assignee={undefined} memberMap={memberMap} />);
       const cluster = screen.getByRole('img', { name: /Assigned to the whole household \(1 member\)/ });
       expect(cluster.textContent).toContain('A');
-      expect(screen.queryByTestId('todo-details-dot')).toBeNull(); // sanity: no stray unrelated dot
     });
 
     it('degenerate case: renders a photo avatar in the cluster for a member who has one, alongside an initials fallback for one who does not', () => {

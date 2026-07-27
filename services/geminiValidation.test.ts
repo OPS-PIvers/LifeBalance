@@ -10,7 +10,6 @@ import {
   validateGroceryItems,
   validateOptimizableItems,
   validateInsight,
-  validateHabitPointSuggestions,
   validateHabitPatterns,
   validateHabitReorganization,
   validateParsedShoppingList,
@@ -173,17 +172,6 @@ describe('geminiValidation - validateReceiptLineItems', () => {
   it('rejects an item missing category', () => {
     expect(() => validateReceiptLineItems({ merchant: 'Target', items: [{ description: 'Milk', amount: 3.5 }] }))
       .toThrow(/category must be a string/);
-  });
-});
-
-describe('geminiValidation - validateHabitPointSuggestions', () => {
-  const valid = { habitId: '1', habitTitle: 'Run', currentPoints: 10, suggestedPoints: 15, reasoning: 'r' };
-  it('accepts well-formed', () => {
-    expect(validateHabitPointSuggestions([valid])).toHaveLength(1);
-  });
-  it('rejects non-number points', () => {
-    expect(() => validateHabitPointSuggestions([{ ...valid, suggestedPoints: 'x' }]))
-      .toThrow(/suggestedPoints/);
   });
 });
 

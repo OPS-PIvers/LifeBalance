@@ -898,10 +898,13 @@ const Dashboard: React.FC = () => {
             it for the same "first things to notice" slot. */}
         <VisibilityDiscoveryCard />
 
-        {/* Point-rebalance nudge (F-DASH-08) — wires up the already-shipped
-            `analyzeHabitPoints` AI helper: a dismissible, cadence-gated
-            suggestion to raise/lower one habit's basePoints. Self-nulls when
-            powerToolsEnabled is off or there's nothing to suggest. */}
+        {/* Point-rebalance nudge (F-DASH-08) — a dismissible, cadence-gated
+            suggestion to raise/lower one habit's basePoints, computed
+            deterministically from completion frequency by
+            `utils/pointRebalance.ts` (no AI call; paper cut #8 replaced the
+            Gemini helper, which had no sense of scale and read consistency
+            backwards). Self-nulls when powerToolsEnabled is off or there's
+            nothing to suggest. */}
         {isModuleEnabled('habits') && <PointRebalanceCard />}
 
         {/* Pending Voice Commands Banner — on the shared Section wrapper so it

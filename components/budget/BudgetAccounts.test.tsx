@@ -440,7 +440,7 @@ describe('BudgetAccounts', () => {
     }));
   });
 
-  it('collapses 3+ card last-4s into an accessible "+N more" that opens the actions drawer', async () => {
+  it('collapses multiple last-4s into one control that opens a popover listing them', async () => {
     const acc = mockAccounts[0];
     if (!acc) throw new Error('missing mock account');
     acc.cardLast4s = ['2115', '7752', '9034'];
@@ -448,12 +448,16 @@ describe('BudgetAccounts', () => {
       const user = userEvent.setup();
       render(<BudgetAccounts />);
 
+      // Nothing renders inline — the row must not wrap to a second line.
+      expect(screen.queryByText('···2115')).not.toBeInTheDocument();
+
+      await user.click(
+        screen.getByRole('button', { name: 'Show 3 card and account numbers for Main Checking' })
+      );
+
       expect(screen.getByText('···2115')).toBeInTheDocument();
       expect(screen.getByText('···7752')).toBeInTheDocument();
-      expect(screen.queryByText('···9034')).not.toBeInTheDocument();
-
-      await user.click(screen.getByRole('button', { name: 'View all 3 cards on Main Checking' }));
-      expect(screen.getByTestId('drawer')).toBeInTheDocument();
+      expect(screen.getByText('···9034')).toBeInTheDocument();
     } finally {
       delete acc.cardLast4s;
     }

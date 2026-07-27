@@ -767,6 +767,27 @@ const BudgetCalendar: React.FC = () => {
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         title={editingItem ? 'Edit Event' : 'Add Calendar Item'}
+        footer={
+          <div className="flex gap-2 border-t border-brand-200 dark:border-brand-700 p-4">
+            {editingItem && (
+              <Button
+                variant="secondary"
+                onClick={handleDuplicate}
+                className="flex-1 py-3 h-auto"
+              >
+                <Copy size={18} />
+                Duplicate
+              </Button>
+            )}
+            <Button
+              variant="primary"
+              onClick={handleSave}
+              className="flex-1 py-3 h-auto"
+            >
+              {editingItem ? 'Save Changes' : 'Add Event'}
+            </Button>
+          </div>
+        }
       >
           <div className="space-y-4">
              {/* Type Toggle */}
@@ -854,26 +875,6 @@ const BudgetCalendar: React.FC = () => {
                  />
                </div>
              )}
-
-             <div className="flex gap-2 mt-2">
-               {editingItem && (
-                 <Button
-                   variant="secondary"
-                   onClick={handleDuplicate}
-                   className="flex-1 py-3 h-auto"
-                 >
-                   <Copy size={18} />
-                   Duplicate
-                 </Button>
-               )}
-               <Button
-                 variant="primary"
-                 onClick={handleSave}
-                 className="flex-1 py-3 h-auto"
-               >
-                 {editingItem ? 'Save Changes' : 'Add Event'}
-               </Button>
-             </div>
           </div>
       </Drawer>
 

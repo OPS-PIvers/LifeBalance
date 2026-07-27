@@ -21,14 +21,16 @@ interface QuickAddBarProps {
   /** aria-label for the submit button. */
   submitLabel?: string;
   /**
-   * When true, renders as a flush first ROW INSIDE a `SurfaceList` — no own
-   * radius, no own border, no background layer of its own (the surrounding
-   * `SurfaceList` supplies the solid surface + outer radius + border). The
-   * host is responsible for drawing the hairline divider between this row and
-   * the first list item (e.g. wrap in a `Row`-like container, or rely on
-   * `SurfaceList`'s `[&>*:first-child]:border-t-0` + a `hairline-divider` on
-   * the next sibling). Defaults to `false` (standalone rounded/bordered look
-   * for hosts that render the bar outside any list surface).
+   * When true, renders as a flush first ROW INSIDE a `SurfaceList` — the
+   * `<form>` itself has no own radius, outer border, or background layer
+   * (the surrounding `SurfaceList` supplies the solid surface + outer radius
+   * + border), but the row is TINTED (paper cut #11) so it reads as an entry
+   * band rather than as another list row. The host is responsible for drawing the hairline divider
+   * between this row and the first list item (e.g. wrap in a `Row`-like
+   * container, or rely on `SurfaceList`'s `[&>*:first-child]:border-t-0` + a
+   * `hairline-divider` on the next sibling). Defaults to `false` (standalone
+   * rounded/bordered look for hosts that render the bar outside any list
+   * surface).
    */
   attached?: boolean;
 }
@@ -42,10 +44,11 @@ interface QuickAddBarProps {
  * stays in lockstep.
  *
  * Default (`attached=false`) is a standalone rounded/bordered input, unchanged
- * from before. Pass `attached` to flatten the input into a flush, borderless
- * row (no radius, no border of its own, transparent background) meant to live
- * INSIDE the same `SurfaceList` as the items it feeds — as their first row,
- * not a separate band above the list.
+ * from before. Pass `attached` to flatten the row's own outer shell (no
+ * radius, no outer border of its own) so it can live INSIDE the same
+ * `SurfaceList` as the items it feeds — as their first row, not a separate
+ * band above the list — while a background tint keeps it reading as an entry
+ * area rather than as another list item.
  */
 export const QuickAddBar: React.FC<QuickAddBarProps> = ({
   value,
@@ -65,10 +68,26 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
     // In-card row: plain flex — the input and submit button are SIBLINGS, so
     // the placeholder can never run underneath the button (the old absolute
     // overlay clipped long placeholders against the button edge). The submit
-    // is a quiet accent icon, not a filled square, so the row reads as a list
-    // row rather than a widget pasted into the card.
+    // is a quiet accent icon, not a filled square.
+    //
+    // Paper cut #11: the row carries a TINTED BAND on the <form> so it reads as
+    // "the entry area" rather than as the first item of the list below it. The
+    // tint lives on the form, NOT on the input, because this row fills its
+    // `surface-section` parent's content box edge-to-edge and that parent is
+    // `rounded-t-card overflow-hidden` — a border/radius on the inner element
+    // traces the card's own perimeter and gets its top corners sliced off by
+    // the parent's clip. A background tint clips cleanly against that radius;
+    // a border does not. Focus shows as an inset ring on the band.
     return (
-      <form onSubmit={onSubmit} className={cn('flex flex-1 items-center min-w-0', className)}>
+      <form
+        onSubmit={onSubmit}
+        className={cn(
+          'flex flex-1 items-center min-w-0 bg-brand-100 dark:bg-brand-700',
+          'focus-within:ring-2 focus-within:ring-inset focus-within:ring-accent-500/40',
+          'transition-colors duration-(--duration-fast) ease-(--ease-standard)',
+          className,
+        )}
+      >
         <input
           ref={inputRef}
           type="text"
@@ -77,7 +96,7 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
           placeholder={placeholder}
           aria-label={ariaLabel || placeholder}
           aria-labelledby={ariaLabelledBy}
-          className="min-w-0 flex-1 pl-4 pr-2 py-3.5 bg-transparent border-0 outline-hidden focus:ring-0 placeholder:truncate placeholder:text-brand-400 dark:text-brand-50 dark:placeholder:text-brand-450 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
+          className="min-w-0 flex-1 pl-4 pr-2 py-3.5 bg-transparent border-0 outline-hidden focus:ring-0 placeholder:truncate placeholder:text-brand-400 dark:text-brand-50 dark:placeholder:text-brand-450"
         />
         <button
           type="submit"

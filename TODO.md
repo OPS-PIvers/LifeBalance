@@ -114,6 +114,32 @@ human-watched PR (tagged **[rules]** / **[index]**).
   resolves. Extend the existing `hooks/useDeepLinkHighlight.ts` path used by transactions and habits;
   expanding/paginating to the target section is the actual work, not the highlight itself. Gate each
   result on the specific leaf key as `isNavLeafKeyVisible` already does — never at page level. **M / LOW.**
+- [ ] **Link a calendar event to an existing transaction from the Edit Event drawer** (paper cut #9,
+  deferred 2026-07-27). Today the bill↔transaction link is **one-directional**: `linkBankTransactionToBill`
+  ([contexts/household/mutations/calendarMutations.ts:537](contexts/household/mutations/calendarMutations.ts:537))
+  is reachable only from the *transaction* side, via `TransactionReviewForm`'s "Link to bill" picker
+  ([components/transactions/TransactionReviewForm.tsx:93](components/transactions/TransactionReviewForm.tsx:93)).
+  From `BudgetCalendar`'s Edit Event drawer there is no way to say "this bill is that transaction."
+  Add a **searchable combobox** in the Edit Event drawer listing recent transactions — **both
+  `pending_review` and confirmed** — that calls the same mutation, so the link persists forward via
+  the `CalendarItem.bankDescriptorAliases` mechanism it already teaches ([types/schema.ts:568](types/schema.ts:568)).
+  Reuse the existing picker's search/matching rather than writing a second one. Note there is no
+  `billId`/`calendarItemId` field on `Transaction` — the association is descriptor-based, so decide
+  deliberately whether this needs a real foreign key or whether teaching the alias is sufficient.
+  **M / MED.**
+- [ ] **Sticky save footer for the remaining 21 drawers** (paper cut #10 follow-up, 2026-07-27).
+  `components/ui/Drawer.tsx` already supports a fixed footer via its `footer` prop (L34/L62, rendered
+  as a `shrink-0` bar at L213-218). `BudgetCalendar`'s Edit Event drawer was moved onto it; **21 other
+  drawers still render their primary action inside the scrollable body**, so you must scroll to save.
+  Owner's standard: *"There shouldn't be a single drawer in the entire app where I have to scroll down
+  to find the save button."* Mechanical but ~19 files, each needing a visual check. Copy the wrapper
+  pattern from `components/settings/MerchantRuleFormDrawer.tsx:300`. The list:
+  `BudgetBuckets` (Fix Overspending), `SavingsGoals` (Add/Edit + Contribute), `AISuggestModal`,
+  `AddMealModal`, `IngredientSelectorModal`, `PasteImportDrawer`, `RecipeImportModal`, `RecipeModal`,
+  `ShoppingItemForm`, `BucketFormModal`, `FeedbackModal`, `MemberModal`, `SmartHabitAdjustModal`,
+  `SmartHabitReorderModal`, `PaywallModal`, `PhotoImportDrawer`, `ChallengeHubModal`,
+  `HabitSubmissionLogModal`, `ActionQueueItem`, `RewardManagerPanel`, `CsvImportDrawer`,
+  `TaskTemplateDrawer`. **M / MED.**
 - [x] **HabitSubmission history/stats view** — the data is already captured (`schema.ts:180`: `pointsEarned`/`streakDaysAtTime`/`multiplierApplied`); no reader UI exists. **S / LOW.** ❌ 2026-07-11: stale — `HabitSubmissionLogModal` (Log/Stats/Calendar tabs) already exists and is wired from `HabitCard`.
 - [x] **ShoppingListTab** mirrored-state-in-effect → derived `useMemo` (lint no longer fires, so this is optional cleanup). **M / LOW.** ❌ 2026-07-11: won't-fix — the mirrored state is load-bearing for `Reorder.Group` drag gestures (local mutation gated by `isDraggingRef` before committing via `reorderShoppingItems`); a derived `useMemo` would break mid-drag reordering.
 - [x] **Finish the `useHousehold()` migration** — ~7 shim consumers remain; move them to narrow domain slices. **S each / LOW.** ❌ 2026-07-11: stale — zero production consumers remain; only test-file mocks reference the shim.

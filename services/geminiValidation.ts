@@ -31,7 +31,6 @@ import type {
   OptimizableItem,
   HabitPatternInsight,
   HabitReorganizationPlan,
-  HabitPointAdjustmentSuggestion,
 } from './geminiService.types';
 
 // ---------------------------------------------------------------------------
@@ -294,23 +293,6 @@ export function validateInsight(raw: unknown): InsightResult {
     cleanedActions = arr.filter((entry) => isRecord(entry) && insightActionIsWellFormed(entry));
   }
   return { text: o['text'] as string, actions: cleanedActions as InsightResult['actions'] };
-}
-
-// ---------------------------------------------------------------------------
-// Habit point adjustment suggestions
-// ---------------------------------------------------------------------------
-
-export function validateHabitPointSuggestions(raw: unknown): HabitPointAdjustmentSuggestion[] {
-  const arr = expectArray(raw, 'habitPoints');
-  return arr.map((entry, i): HabitPointAdjustmentSuggestion => {
-    const o = expectRecord(entry, `habitPoints[${i}]`);
-    if (!isString(o['habitId'])) fail(`habitPoints[${i}]`, 'habitId must be a string');
-    if (!isString(o['habitTitle'])) fail(`habitPoints[${i}]`, 'habitTitle must be a string');
-    if (!isFiniteNumber(o['currentPoints'])) fail(`habitPoints[${i}]`, 'currentPoints must be a number');
-    if (!isFiniteNumber(o['suggestedPoints'])) fail(`habitPoints[${i}]`, 'suggestedPoints must be a number');
-    if (!isString(o['reasoning'])) fail(`habitPoints[${i}]`, 'reasoning must be a string');
-    return o as unknown as HabitPointAdjustmentSuggestion;
-  });
 }
 
 // ---------------------------------------------------------------------------

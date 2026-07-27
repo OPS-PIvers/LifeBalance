@@ -1845,7 +1845,15 @@ toggle for today's date when not yet completed; hide/disable once done.
 - `types/schema.ts`, `functions/src/recap/dataAssembly.ts`, `functions/src/recap/dataAssembly.test.ts`
 - `components/dashboard/WeeklyRecapDrawer.tsx`, `hooks/useHabitActions.tsx`
 
-### F-DASH-08 — Point-rebalance nudge (wire up `analyzeHabitPoints`)
+### F-DASH-08 — Point-rebalance nudge — ✅ SHIPPED
+
+> **Status 2026-07-27: shipped, and the AI dependency below is GONE.** `PointRebalanceCard` exists,
+> and paper cut #8 **deleted `analyzeHabitPoints()`** outright — it had no sense of scale (suggested
+> 15 pts where nothing exceeded 5) and read consistency backwards (more completions → *more* reward).
+> Suggestions now come from the deterministic, unit-tested `utils/pointRebalance.ts`, which lowers a
+> positive habit's points as it becomes routine and shrinks a negative habit's penalty as it stops
+> being triggered. `SmartHabitAdjustModal` uses the same util. **Do not try to call
+> `analyzeHabitPoints` — it no longer exists.** The original brief is kept below for history only.
 
 **Size:** medium · **Value:** medium · **Dependencies:** none (`analyzeHabitPoints` already shipped and tested)
 

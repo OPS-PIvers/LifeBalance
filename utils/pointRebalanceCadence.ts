@@ -59,11 +59,13 @@ export function persistRebalanceReviewed(habitId: string, now: Date = new Date()
 }
 
 // ---------------------------------------------------------------------------
-// Analysis result cache — avoids calling `analyzeHabitPoints` (an AI/quota
-// call) on every Dashboard mount. One cached result per household, reused for
-// ANALYSIS_CACHE_TTL_MS before a fresh call is made.
+// Analysis result cache. `generatePointRebalanceSuggestions` is a cheap pure
+// calculation, so this is not about cost — it keeps the offered suggestion
+// STABLE across a day rather than letting it shift under the user as today's
+// completions land. One cached result per household, reused for
+// ANALYSIS_CACHE_TTL_MS before it is recomputed.
 
-/** How long a cached `analyzeHabitPoints` result stays valid. */
+/** How long a cached suggestion set stays valid. */
 export const ANALYSIS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 interface CachedAnalysis<T> {
@@ -88,7 +90,7 @@ export function readAnalysisCache<T>(householdId: string, now: Date = new Date()
   }
 }
 
-/** Cache an `analyzeHabitPoints` result for the household. */
+/** Cache a computed suggestion set for the household. */
 export function writeAnalysisCache<T>(householdId: string, suggestions: T[], now: Date = new Date()): void {
   try {
     const payload: CachedAnalysis<T> = { generatedAt: now.toISOString(), suggestions };

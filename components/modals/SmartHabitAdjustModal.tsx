@@ -1,10 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Sparkles, X, Check, ArrowRight, Loader, AlertTriangle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Sparkles, X, Check, ArrowRight } from 'lucide-react';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
 import type { HabitPointAdjustmentSuggestion } from '@/services/geminiService.types';
+import { generatePointRebalanceSuggestions } from '@/utils/pointRebalance';
 import toast from 'react-hot-toast';
 
 interface SmartHabitAdjustModalProps {
@@ -12,59 +13,32 @@ interface SmartHabitAdjustModalProps {
   onClose: () => void;
 }
 
+/**
+ * SmartHabitAdjustModal — the Habits page surface for point rebalancing, the
+ * sibling of the Dashboard's `PointRebalanceCard`.
+ *
+ * Suggestions come from `generatePointRebalanceSuggestions()`
+ * (`utils/pointRebalance.ts`): a pure, synchronous calculation over the habits
+ * already in memory. No AI call, no quota, and therefore no loading or failure
+ * state to model — an empty result is the normal outcome and renders the
+ * "nothing to change" empty state.
+ */
 const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, onClose }) => {
   const { habits, updateHabit } = useGamification();
   const { householdId } = useHouseholdCore();
   const [suggestions, setSuggestions] = useState<HabitPointAdjustmentSuggestion[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  // Keep the latest habits in a ref so the open-effect can read the current
-  // value at fetch time without re-running every time `habits` changes.
-  // Written in an effect (not during render) per the latest-ref pattern.
-  const habitsRef = useRef(habits);
-  useEffect(() => {
-    habitsRef.current = habits;
-  });
-
-  // Reset state when analysis is no longer active (modal closed or no household).
-  // Done during render on the active→inactive edge rather than in an effect so
-  // it doesn't trigger a cascading render. Mirrors the previous effect's `else`
-  // branch, which cleared these whenever `isOpen && householdId` was false.
+  // Snapshot the calculation on the inactive→active edge (and clear it on the
+  // way back) rather than deriving it every render, so accepting or ignoring a
+  // suggestion can drop it from the list without the next render recomputing
+  // it straight back in. Done during render, not in an effect, so it doesn't
+  // cost a cascading render.
   const isActive = isOpen && !!householdId;
-  const [wasActive, setWasActive] = useState(isActive);
+  const [wasActive, setWasActive] = useState(false);
   if (wasActive !== isActive) {
     setWasActive(isActive);
-    if (!isActive) {
-      setSuggestions([]);
-      setIsLoading(false);
-      setError(null);
-    }
+    setSuggestions(isActive ? generatePointRebalanceSuggestions(habits) : []);
   }
-
-  // Analyze habits when modal opens
-  useEffect(() => {
-    if (isOpen && householdId) {
-      const fetchSuggestions = async () => {
-        setIsLoading(true);
-        setError(null);
-        try {
-          const { analyzeHabitPoints } = await import('@/services/geminiService');
-          const results = await analyzeHabitPoints(householdId, habitsRef.current);
-          setSuggestions(results);
-        } catch (err) {
-          console.error("Failed to analyze habits:", err);
-          // Show the actual error message to help with debugging
-          const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
-          setError(`Failed to generate suggestions: ${errorMessage}`);
-        } finally {
-          setIsLoading(false);
-        }
-      };
-
-      fetchSuggestions();
-    }
-  }, [isOpen, householdId]);
 
   const handleAccept = async (suggestion: HabitPointAdjustmentSuggestion) => {
     const habit = habits.find(h => h.id === suggestion.habitId);
@@ -103,27 +77,11 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
     >
       {/* Content */}
       <div className="p-6">
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <Loader size={32} className="text-warm-700 dark:text-warm-300 animate-spin mb-4" />
-            <p className="text-brand-800 dark:text-brand-100 font-bold">Analyzing your habits...</p>
-            <p className="text-sm text-warm-600 dark:text-warm-300 mt-1 max-w-xs">
-              Gemini is reviewing your streaks and completion rates to optimize your point system.
-            </p>
-          </div>
-        ) : error ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center text-money-neg dark:text-money-negDark">
-            <AlertTriangle size={32} className="mb-3 opacity-50" />
-            <p className="font-bold">{error}</p>
-            <Button variant="ghost" onClick={onClose} className="mt-4">
-              Close
-            </Button>
-          </div>
-        ) : suggestions.length === 0 ? (
+        {suggestions.length === 0 ? (
           <EmptyState
             icon={<Sparkles size={32} />}
             title="No adjustments needed!"
-            description="Your habit point values look balanced based on your current performance. Keep it up!"
+            description="Your habit point values look balanced against how often you're actually completing them. Keep it up!"
           />
         ) : (
           <div className="space-y-4">
@@ -184,7 +142,7 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
       </div>
 
       {/* Footer */}
-      {suggestions.length > 0 && !isLoading && (
+      {suggestions.length > 0 && (
         <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-700/50">
           <Button variant="ghost" size="lg" onClick={onClose} className="w-full">
             Done Reviewing
