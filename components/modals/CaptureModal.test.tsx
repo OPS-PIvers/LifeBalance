@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
+import toast from 'react-hot-toast';
 import CaptureModal from './CaptureModal';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import type { ModuleKey } from '@/types/schema';
@@ -253,6 +254,85 @@ describe('CaptureModal', () => {
       expect(addButton).not.toBeDisabled();
       // Not form-associated — the review body has no <form> to submit.
       expect(addButton).not.toHaveAttribute('form');
+    });
+  });
+
+  // --- Receipt vs. bank-transaction-list routing ---
+  //
+  // A bank/card activity screenshot is structurally identical to an itemized
+  // receipt — rows of text + amount — so the itemizer happily "finds items" in
+  // one. Routing on `items.length` therefore sent every statement down the
+  // receipt path, where groupLineItemsByCategory summed a dozen separate
+  // purchases into a couple of lump transactions sharing ONE merchant and ONE
+  // date. The parser's explicit `documentType` verdict is the discriminator.
+  describe('image classification routing', () => {
+    beforeEach(() => {
+      parseReceiptLineItemsMock.mockReset();
+      parseBankStatementMock.mockReset();
+    });
+
+    it('re-parses as a statement when the verdict is transaction_list, even though items came back', async () => {
+      parseReceiptLineItemsMock.mockResolvedValue({
+        documentType: 'transaction_list',
+        merchant: 'Wells Fargo',
+        // A misbehaving model can return BOTH the verdict and items; the verdict
+        // wins, and these rows must never be grouped into a receipt.
+        items: [
+          { description: 'PURCHASE JIMMY JOHNS', amount: 35.95, category: 'Dining' },
+          { description: 'PURCHASE PRIME VIDEO', amount: 5.42, category: 'Dining' },
+        ],
+      });
+      parseBankStatementMock.mockResolvedValue([
+        { merchant: 'Jimmy Johns', amount: 35.95, category: 'Dining', date: '2026-07-23' },
+        { merchant: 'Prime Video', amount: 5.42, category: 'Entertainment', date: '2026-07-23' },
+        { merchant: 'Pure Hockey', amount: 33.32, category: 'Shopping', date: '2026-07-23' },
+      ]);
+      render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
+
+      fireEvent.click(screen.getByTestId('add-from-image'));
+      await screen.findByTestId('capture-transaction-review');
+
+      expect(parseBankStatementMock).toHaveBeenCalledTimes(1);
+      // One row per purchase — NOT a category-grouped receipt split.
+      expect(toast.success).toHaveBeenCalledWith('Found 3 transaction(s)');
+      expect(toast.success).not.toHaveBeenCalledWith(expect.stringContaining('Split into'));
+    });
+
+    it('still splits a genuine multi-category receipt', async () => {
+      parseReceiptLineItemsMock.mockResolvedValue({
+        documentType: 'receipt',
+        merchant: 'Target',
+        date: '2026-07-23',
+        items: [
+          { description: 'Milk', amount: 4.29, category: 'Groceries' },
+          { description: 'Socks', amount: 12, category: 'Shopping' },
+        ],
+      });
+      render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
+
+      fireEvent.click(screen.getByTestId('add-from-image'));
+      await screen.findByTestId('capture-transaction-review');
+
+      expect(parseBankStatementMock).not.toHaveBeenCalled();
+      expect(toast.success).toHaveBeenCalledWith('Split into 2 categories — review below');
+    });
+
+    it('treats a response with no documentType as a receipt (back-compat)', async () => {
+      parseReceiptLineItemsMock.mockResolvedValue({
+        merchant: 'Target',
+        date: '2026-07-23',
+        items: [
+          { description: 'Milk', amount: 4.29, category: 'Groceries' },
+          { description: 'Socks', amount: 12, category: 'Shopping' },
+        ],
+      });
+      render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
+
+      fireEvent.click(screen.getByTestId('add-from-image'));
+      await screen.findByTestId('capture-transaction-review');
+
+      expect(parseBankStatementMock).not.toHaveBeenCalled();
+      expect(toast.success).toHaveBeenCalledWith('Split into 2 categories — review below');
     });
   });
 

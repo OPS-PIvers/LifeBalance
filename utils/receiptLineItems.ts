@@ -91,3 +91,45 @@ export function buildLineItemTransactions(
 export function shouldSplitReceipt(data: ReceiptLineItemsData): boolean {
   return groupLineItemsByCategory(data.items).length > 1;
 }
+
+/**
+ * Text that appears in a BANK's description of a transaction and essentially
+ * never in a product name on a receipt. Bank rows are machine-generated and
+ * carry the payment rail, an authorization phrase, or the card/account used.
+ */
+const TRANSACTION_ROW_PATTERNS: RegExp[] = [
+  /\bAUTHORIZED ON\b/i,
+  /\bRECURRING PAYMENT\b/i,
+  /\b(?:ACH|POS|EFT)\b.*\b(?:PMT|PAYMENT|DEBIT|CREDIT|DR|CR|PURCHASE|WITHDRAWAL)\b/i,
+  /\bCARD\s*\d{4}\b/i,
+  /\bX{4,}\d{3,}\b/i,
+  /\b(?:PENDING|POSTED)\b/i,
+  /\bTRANSFER (?:DEBIT )?TO\b/i,
+  /\bDIRECT (?:DEP|DEPOSIT)\b/i,
+];
+
+/** Whether one line-item description reads like a row from a bank statement. */
+function looksLikeTransactionRow(description: string): boolean {
+  return TRANSACTION_ROW_PATTERNS.some(pattern => pattern.test(description));
+}
+
+/**
+ * Structural fallback for the receipt-vs-statement classification.
+ *
+ * `parseReceiptLineItems` normally reports which kind of image it saw, but that
+ * verdict comes from a model and can be wrong. A misclassified statement is
+ * expensive — the caller would sum a dozen unrelated purchases into one
+ * "receipt" — so this second, deterministic check inspects the descriptions the
+ * parser actually returned. Real receipt lines are product names ("Bananas",
+ * "2% Milk"); bank rows carry authorization phrases, payment rails, and card
+ * numbers (see TRANSACTION_ROW_PATTERNS).
+ *
+ * Deliberately conservative — it must never flip a genuine receipt. Requires at
+ * least two matching descriptions AND that they are at least half of the items,
+ * so one oddly-named product can't trigger it.
+ */
+export function looksLikeTransactionList(items: ReceiptLineItem[]): boolean {
+  if (items.length < 2) return false;
+  const matches = items.filter(item => looksLikeTransactionRow(item.description ?? '')).length;
+  return matches >= 2 && matches * 2 >= items.length;
+}

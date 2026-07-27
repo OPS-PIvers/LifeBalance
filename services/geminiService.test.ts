@@ -492,6 +492,106 @@ describe('geminiService', () => {
     expect(result.items[0]!.category).toBe('Groceries');
   });
 
+  // The itemizer doubles as the CLASSIFIER for the image-capture flow: a bank
+  // transaction list looks just like an itemized receipt, so it has to say which
+  // one it saw. See CaptureModal's routing for the consequence of getting it wrong.
+  it('parseReceiptLineItems asks Gemini to classify the image before itemizing it', async () => {
+    const { parseReceiptLineItems } = await import('./geminiService');
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify({ documentType: 'receipt', merchant: 'X', items: [] }),
+    });
+
+    await parseReceiptLineItems('test-id', VALID_TEST_IMAGE);
+
+    const callArgs = generateContentMock.mock.calls[0]![0];
+    expect(callArgs.contents.parts[1].text).toContain('transaction_list');
+    // The verdict is a required, enum-constrained field of the response schema —
+    // that constraint is what makes it safe to route on.
+    expect(callArgs.config.responseSchema.required).toContain('documentType');
+    expect(callArgs.config.responseSchema.properties.documentType.enum).toEqual([
+      'receipt',
+      'transaction_list',
+    ]);
+  });
+
+  it('parseReceiptLineItems discards items when the verdict is transaction_list', async () => {
+    const { parseReceiptLineItems } = await import('./geminiService');
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify({
+        documentType: 'transaction_list',
+        merchant: 'Wells Fargo',
+        date: '2026-07-23',
+        // Separate purchases at separate merchants — summing these into one
+        // "receipt" is the exact bug this guards.
+        items: [
+          { description: 'PURCHASE JIMMY JOHNS', amount: 35.95, category: 'Dining' },
+          { description: 'PURCHASE PURE HOCKEY', amount: 33.32, category: 'Shopping' },
+        ],
+      }),
+    });
+
+    const result = await parseReceiptLineItems('test-id', VALID_TEST_IMAGE, ['Dining', 'Shopping']);
+
+    expect(result.documentType).toBe('transaction_list');
+    expect(result.items).toEqual([]);
+    // No single merchant/date applies to a list of many purchases.
+    expect(result.merchant).toBe('');
+    expect(result.date).toBeUndefined();
+  });
+
+  // Second line of defence: the verdict comes from a model and can be wrong, and
+  // a misread statement is the expensive direction. Bank row text gives it away.
+  it('parseReceiptLineItems overrides a wrong "receipt" verdict when the items read like bank rows', async () => {
+    const { parseReceiptLineItems } = await import('./geminiService');
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify({
+        documentType: 'receipt',
+        merchant: 'Wells Fargo',
+        items: [
+          { description: 'PURCHASE JIMMY JOHNS MINNEAPOLIS MN CARD7752', amount: 35.95, category: 'Dining' },
+          { description: 'RECURRING PAYMENT AUTHORIZED ON 07/22 GOOGLE ONE', amount: 19.99, category: 'Other' },
+        ],
+      }),
+    });
+
+    const result = await parseReceiptLineItems('test-id', VALID_TEST_IMAGE, ['Dining', 'Other']);
+
+    expect(result.documentType).toBe('transaction_list');
+    expect(result.items).toEqual([]);
+  });
+
+  it('parseReceiptLineItems defaults a missing or unrecognized verdict to receipt', async () => {
+    const { parseReceiptLineItems } = await import('./geminiService');
+
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify({ merchant: 'Target', items: [{ description: 'Milk', amount: 4.5, category: 'Groceries' }] }),
+    });
+    const missing = await parseReceiptLineItems('test-id', VALID_TEST_IMAGE, ['Groceries']);
+    expect(missing.documentType).toBe('receipt');
+    expect(missing.items).toHaveLength(1);
+
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify({ documentType: 'statement', merchant: 'Target', items: [{ description: 'Milk', amount: 4.5, category: 'Groceries' }] }),
+    });
+    const unknown = await parseReceiptLineItems('test-id', VALID_TEST_IMAGE, ['Groceries']);
+    expect(unknown.documentType).toBe('receipt');
+    expect(unknown.items).toHaveLength(1);
+  });
+
+  it('parseBankStatement tells Gemini not to merge rows and how to date undated ones', async () => {
+    const { parseBankStatement } = await import('./geminiService');
+    generateContentMock.mockResolvedValue({ text: JSON.stringify([]) });
+
+    await parseBankStatement('test-id', VALID_TEST_IMAGE);
+
+    const promptText = generateContentMock.mock.calls[0]![0].contents.parts[1].text;
+    expect(promptText).toContain('ONE transaction per row');
+    // Wells Fargo groups posted rows under a "Posting Date" separator and leaves
+    // pending rows undated entirely.
+    expect(promptText).toContain('Posting Date');
+    expect(promptText).toContain('Pending');
+  });
+
   it('optimizeGroceryList handles a legacy numeric quantity without throwing', async () => {
     // OptimizableItem.quantity is typed `string`, but callers pass
     // ShoppingItem.quantity straight through, and some Firestore docs hold a

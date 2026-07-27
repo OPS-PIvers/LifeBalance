@@ -15,6 +15,7 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 import { getLocalDateString } from "@/utils/dateHelpers";
+import { looksLikeTransactionList } from "@/utils/receiptLineItems";
 import { getLimits, LEGACY_AI_DAILY_QUOTA } from "@/utils/entitlements";
 import { getBillingEnabled } from "./appConfig";
 import type { ParsedTaskList, ParsedMealPlan, ReceiptLineItemsData } from './geminiService.types';
@@ -796,6 +797,11 @@ async function generateJsonContent<T>(
  * each item's `{description, amount, category}`, where category is clamped to the
  * household's actual budget categories.
  *
+ * It is also the CLASSIFIER for the whole image-capture flow: a bank/card
+ * transaction list is shaped just like an itemized receipt, so the returned
+ * `documentType` is what tells the caller to re-parse with `parseBankStatement`
+ * instead. A `'transaction_list'` verdict comes back with no items.
+ *
  * @param householdId - The household ID for quota tracking
  * @param base64Image - Base64 encoded receipt image
  * @param availableCategories - Household budget categories to choose from
@@ -818,7 +824,20 @@ export const parseReceiptLineItems = async (
 
     const today = getLocalDateString();
     const prompt = [
-      `Analyze this itemized receipt. Extract the merchant name, the purchase date (YYYY-MM-DD), and EVERY individual purchased line item.`,
+      // FIRST decide what the image even is. A bank/card transaction list has the
+      // same shape as an itemized receipt (rows of text + amount), so without an
+      // explicit verdict this parser happily "itemizes" a statement and the
+      // caller collapses 20 separate purchases into one merchant's receipt.
+      `First classify this image, then extract from it.`,
+      `Set documentType to "transaction_list" if the image is a bank or credit-card account-activity list, transaction history, or statement — MANY separate purchases at DIFFERENT merchants. Tell-tale signs, any ONE of which is enough:`,
+      `- rows naming different merchants/payees rather than products (e.g. "PURCHASE AMAZON RETAIL", "JIMMY JOHNS")`,
+      `- per-row dates, or a date/"Posting Date" header separating groups of rows`,
+      `- per-row status words like Pending, Posted, or Processing`,
+      `- card/account numbers on the rows (e.g. "CARD 7752", "XXXXXXXX9294")`,
+      `- a running, daily, or ending balance column`,
+      `Set documentType to "receipt" ONLY for a single purchase at ONE merchant: a store receipt or an order confirmation listing the products bought in that one transaction.`,
+      `If documentType is "transaction_list", return an EMPTY items array and leave merchant blank — a different tool handles those images. Do not itemize it.`,
+      `Otherwise (a receipt), extract the merchant name, the purchase date (YYYY-MM-DD), and EVERY individual purchased line item.`,
       `For each item, provide:`,
       `- description: the product name, normalized to be readable (fix typos, expand abbreviations).`,
       `- amount: the item's price in US dollars as a POSITIVE decimal number (e.g. 12.34). Parse "1,234.56" as 1234.56 ("." = decimal, "," = thousands separator). Multiply unit price by quantity if the receipt lists them separately.`,
@@ -837,6 +856,7 @@ export const parseReceiptLineItems = async (
       {
         type: Type.OBJECT,
         properties: {
+          documentType: { type: Type.STRING, enum: ['receipt', 'transaction_list'] },
           merchant: { type: Type.STRING },
           date: { type: Type.STRING },
           store: { type: Type.STRING },
@@ -854,12 +874,24 @@ export const parseReceiptLineItems = async (
             },
           },
         },
-        required: ["merchant", "items"],
+        required: ["documentType", "merchant", "items"],
       },
       _aiClient,
       GEMINI_MODEL,
       validateReceiptLineItems
     );
+
+    // A transaction list has no single merchant/date/store to report, and its
+    // "items" are separate purchases that must NOT be summed into one receipt.
+    // Drop them so the caller can only take the statement path.
+    //
+    // `looksLikeTransactionList` second-guesses the model's verdict from the
+    // descriptions themselves — a misread statement is the expensive direction
+    // (a dozen unrelated purchases collapsed into one lump), so a deterministic
+    // check backs up the model's own answer.
+    if (data.documentType === 'transaction_list' || looksLikeTransactionList(data.items)) {
+      return { documentType: 'transaction_list', merchant: '', items: [] };
+    }
 
     // Force positive amounts and clamp each item's category to the household's
     // real set (the schema only constrains the type, not membership).
@@ -899,16 +931,19 @@ export const parseBankStatement = async (
 
     const today = getLocalDateString();
     const prompt = [
-      `Analyze this bank statement or transaction list screenshot. Extract ALL visible expense transactions. For each transaction, provide:`,
-      `- merchant: The merchant or payee name`,
+      `Analyze this bank statement or transaction list screenshot. Extract ALL visible expense transactions.`,
+      `Return ONE transaction per row. Never merge or sum rows, not even when two rows share a merchant, an amount, or a date — repeated rows are genuinely separate purchases.`,
+      `For each transaction, provide:`,
+      `- merchant: The merchant or payee name, cleaned up for a person to read: drop bank prefixes ("PURCHASE", "PURCHASE AUTHORIZED ON 07/22", "RECURRING PAYMENT AUTHORIZED ON"), phone numbers, city/state, card and reference numbers, and website suffixes. "PURCHASE JIMMY JOHNS MINNEAPOLIS MN CARD7752" becomes "Jimmy Johns".`,
       `- amount: The transaction amount in US dollars as a POSITIVE decimal number (even if shown as negative/debit). Parse "1,234.56" as 1234.56 ("." = decimal, "," = thousands separator).`,
-      `- date: The transaction date in YYYY-MM-DD format. Today's date is ${today}. If the year is missing, infer it.`,
+      `- date: The transaction date in YYYY-MM-DD format. Today's date is ${today}. If the year is missing, infer it. A row with no date of its own inherits the nearest date header ABOVE it (e.g. a "Posting Date 07/23/2026" separator). Use ${today} only for a row that is marked Pending or Processing and has no date anywhere above it.`,
       `- category: choose exactly one of: ${categoryList}. Use these exact strings only; if none fits, use "${FALLBACK_CATEGORY}".`,
       habitList ? `- suggestedHabits: Suggest any relevant habits from this list: ${habitList}` : '',
       availableStores?.length
         ? `- store: the merchant's store name, if it maps to one of these existing stores: ${sanitizeList(availableStores)}. Only return a different name if it is clearly a different store; otherwise leave it blank.`
         : `- store: the merchant's store name, if identifiable; otherwise leave it blank.`,
-      `Treat money LEAVING the account (debits/withdrawals/purchases, often shown negative or in red) as expenses; exclude deposits, refunds, transfers in, and payments received. If the image shows no expense transactions, return an empty array [].`,
+      `Treat money LEAVING the account (debits/withdrawals/purchases, often shown negative or in red) as expenses; exclude deposits, refunds, transfers in, and payments received. Also exclude transfers BETWEEN the account holder's own accounts (rows reading "TRANSFER TO", "TRANSFER DEBIT TO", or naming a masked account number like XXXXXXXX9294 as the destination) — moving money is not spending. If the image shows no expense transactions, return an empty array [].`,
+      `Include every row that IS an expense even if it is still Pending — a pending purchase is a real one.`,
       `Return a JSON array of transactions.`
     ].filter(Boolean).join('\n');
 

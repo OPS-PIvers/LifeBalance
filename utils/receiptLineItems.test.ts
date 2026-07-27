@@ -3,6 +3,7 @@ import {
   groupLineItemsByCategory,
   buildLineItemTransactions,
   shouldSplitReceipt,
+  looksLikeTransactionList,
 } from '@/utils/receiptLineItems';
 import type { ReceiptLineItemsData } from '@/services/geminiService.types';
 
@@ -126,5 +127,51 @@ describe('buildLineItemTransactions', () => {
       () => 'id',
     );
     expect(txns[0]?.store).toBeUndefined();
+  });
+});
+
+describe('looksLikeTransactionList', () => {
+  // Verbatim rows from a Wells Fargo account-activity screenshot — the image
+  // that was being itemized as a receipt and summed into two lump transactions.
+  const wellsFargoRows = [
+    { description: 'AMERICAN EXPRESS ACH PMT 260727 M6896', amount: 100, category: 'Other' },
+    { description: 'PURCHASE PRIME VIDEO 888-802-3080 WA CARD7752', amount: 5.42, category: 'Entertainment' },
+    { description: 'PURCHASE JIMMY JOHNS MINNEAPOLIS MN CARD7752', amount: 35.95, category: 'Dining' },
+    { description: 'PURCHASE AUTHORIZED ON 07/22 AMAZON RETA* GM1MH CARD 7752', amount: 9.97, category: 'Shopping' },
+    { description: 'RECURRING PAYMENT AUTHORIZED ON 07/22 GOOGLE *GOOGLE ONE', amount: 19.99, category: 'Other' },
+    { description: 'SAVE AS YOU GO TRANSFER DEBIT TO XXXXXXXXXX9294', amount: 1, category: 'Other' },
+  ];
+
+  it('flags a bank transaction list the model mislabeled as a receipt', () => {
+    expect(looksLikeTransactionList(wellsFargoRows)).toBe(true);
+  });
+
+  it('leaves a real grocery receipt alone', () => {
+    expect(looksLikeTransactionList([
+      { description: 'Bananas', amount: 1.29, category: 'Groceries' },
+      { description: '2% Milk Gallon', amount: 4.29, category: 'Groceries' },
+      { description: 'Dish Sponge 3pk', amount: 2.25, category: 'Household' },
+      { description: 'Cheddar Cheese Block', amount: 5.49, category: 'Groceries' },
+    ])).toBe(false);
+  });
+
+  it('needs two matches AND half the items, so one odd product name cannot flip a receipt', () => {
+    // "Gift Card 4 pack" trips the card pattern; everything else is a product.
+    expect(looksLikeTransactionList([
+      { description: 'Visa Gift Card 4000', amount: 40, category: 'Shopping' },
+      { description: 'Bananas', amount: 1.29, category: 'Groceries' },
+      { description: '2% Milk Gallon', amount: 4.29, category: 'Groceries' },
+      { description: 'Bread', amount: 3.49, category: 'Groceries' },
+    ])).toBe(false);
+  });
+
+  it('never flips on a single item (a one-line receipt is common)', () => {
+    expect(looksLikeTransactionList([
+      { description: 'PURCHASE AUTHORIZED ON 07/22 TARGET CARD 7752', amount: 40, category: 'Shopping' },
+    ])).toBe(false);
+  });
+
+  it('handles an empty list', () => {
+    expect(looksLikeTransactionList([])).toBe(false);
   });
 });

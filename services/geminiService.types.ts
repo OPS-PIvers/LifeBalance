@@ -38,13 +38,31 @@ export interface ReceiptLineItem {
 }
 
 /**
+ * What kind of image the itemized-receipt parser was actually given.
+ *
+ * `'transaction_list'` means a bank/credit-card account-activity screenshot or
+ * statement — MANY separate purchases at MANY merchants, each of which must
+ * become its own transaction. Those images look structurally identical to an
+ * itemized receipt (rows of description + amount), so the parser has to say
+ * which one it saw; the caller cannot tell them apart from the items alone.
+ */
+export type CaptureDocumentType = 'receipt' | 'transaction_list';
+
+/**
  * The full result of `parseReceiptLineItems`: the shared merchant/date/store for
  * the whole receipt plus every extracted line item. The caller splits these into
  * several categorized transactions (grouped by category) that share one
  * `receiptGroupId`. `suggestedHabits` is receipt-level (one shopping trip), not
  * per-item, and is applied to every transaction the receipt is split into.
+ *
+ * Every field except `documentType` describes ONE purchase. When
+ * `documentType === 'transaction_list'` none of them apply (there is no single
+ * merchant or date) and `items` is empty — the caller re-parses the image with
+ * `parseBankStatement` instead.
  */
 export interface ReceiptLineItemsData {
+  /** Absent on legacy/partial responses; the service normalizes it to `'receipt'`. */
+  documentType?: CaptureDocumentType;
   merchant: string;
   date?: string;
   store?: string;
