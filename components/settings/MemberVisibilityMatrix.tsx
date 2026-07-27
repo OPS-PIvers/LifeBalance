@@ -2,12 +2,15 @@ import React, { useMemo } from 'react';
 import { Baby } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { Switch } from '@/components/ui/Switch';
+import Select from '@/components/ui/Select';
 import Eyebrow from '@/components/ui/Eyebrow';
 import {
   getVisibilityMatrixSections,
   isHouseholdModuleEnabled,
   isMatrixRowLocked,
   resolveHiddenKeySet,
+  resolveLandingOptions,
+  resolveLandingScreenKey,
   toggleHiddenKey,
   type ModuleSettings,
   type VisibilityMatrixRow,
@@ -15,31 +18,43 @@ import {
 } from '@/utils/moduleVisibility';
 import type { HouseholdMember, ModuleKey } from '@/types/schema';
 
+/** Everything an admin write through this matrix can touch on a member doc. */
+type MatrixMemberUpdate = Partial<Pick<HouseholdMember, 'hiddenKeys' | 'homeScreen'>>;
+
 interface MemberVisibilityMatrixProps {
   /** Every household member (including managed kid profiles), any order. */
   members: readonly HouseholdMember[];
   settings: ModuleSettings;
   /** Same handler Settings' "App Modules" toggles already use. */
   onToggleModule: (key: ModuleKey, value: boolean) => void;
-  /** Same field an admin or the member themselves would write via `updateMember`. */
-  onUpdateMember: (memberId: string, updates: Pick<HouseholdMember, 'hiddenKeys'>) => void;
+  /** Same fields an admin or the member themselves would write via `updateMember`. */
+  onUpdateMember: (memberId: string, updates: MatrixMemberUpdate) => void;
 }
 
 /**
- * Admin per-member visibility matrix (2F.3).
+ * Admin per-member visibility matrix (2F.3, plus the Home row/landing-screen
+ * fix that closed this file's original gap — see `getVisibilityMatrixSections`
+ * in utils/moduleVisibility.ts for why Home needed a hand-authored section).
  *
  * ONE matrix, both layers: each section's header IS the household layer for
  * that group (`Household.moduleVisibility`, editable right here — the exact
  * same switch as Settings' "App Modules"); Lists' three sub-tabs additionally
- * carry their OWN household toggle inline (each is independently gated).
- * Below that, one member-editable switch per leaf — writing the SAME
- * `HouseholdMember.hiddenKeys` field a member edits for themselves in "What I
- * see" (`MyViewSettings`). There is no lock/override flag: last write wins.
+ * carry their OWN household toggle inline (each is independently gated). Home
+ * and Home widgets have no household layer at all, so their section headers
+ * carry no switch. Below that, one member-editable switch per leaf — writing
+ * the SAME `HouseholdMember.hiddenKeys` field a member edits for themselves in
+ * "What I see" (`MyViewSettings`). There is no lock/override flag: last write
+ * wins.
  *
  * A row whose household layer is off is LOCKED — every member's switch in it
  * renders visually off and non-interactive, because no member can re-enable
  * what the household has disabled; toggling only the household switch back on
  * reveals each member's actual stored preference again.
+ *
+ * The Home section additionally carries a per-member landing-screen picker
+ * (`LandingScreenRow` below) writing `HouseholdMember.homeScreen` — this is
+ * the ONLY place a managed kid's landing screen can ever be set, since kids
+ * have no login to use `MyViewSettings` themselves.
  */
 export const MemberVisibilityMatrix: React.FC<MemberVisibilityMatrixProps> = ({
   members,
@@ -92,7 +107,7 @@ interface MatrixSectionTableProps {
   settings: ModuleSettings;
   hiddenByMember: ReadonlyMap<string, ReadonlySet<string>>;
   onToggleModule: (key: ModuleKey, value: boolean) => void;
-  onUpdateMember: (memberId: string, updates: Pick<HouseholdMember, 'hiddenKeys'>) => void;
+  onUpdateMember: (memberId: string, updates: MatrixMemberUpdate) => void;
 }
 
 const MatrixSectionTable: React.FC<MatrixSectionTableProps> = ({
@@ -157,6 +172,19 @@ const MatrixSectionTable: React.FC<MatrixSectionTableProps> = ({
                 onUpdateMember={onUpdateMember}
               />
             ))}
+            {/* The Home section additionally carries the landing-screen picker
+                (this fix's other half): where a member lands can only be
+                decided once Home (and every other destination) has a row to
+                read visibility from, so it lives right under Home's own
+                toggle rather than as a separate section. */}
+            {section.key === 'home' && (
+              <LandingScreenRow
+                members={members}
+                settings={settings}
+                hiddenByMember={hiddenByMember}
+                onUpdateMember={onUpdateMember}
+              />
+            )}
           </tbody>
         </table>
       </div>
@@ -171,7 +199,7 @@ interface MatrixRowCellsProps {
   settings: ModuleSettings;
   hiddenByMember: ReadonlyMap<string, ReadonlySet<string>>;
   onToggleModule: (key: ModuleKey, value: boolean) => void;
-  onUpdateMember: (memberId: string, updates: Pick<HouseholdMember, 'hiddenKeys'>) => void;
+  onUpdateMember: (memberId: string, updates: MatrixMemberUpdate) => void;
 }
 
 const MatrixRowCells: React.FC<MatrixRowCellsProps> = ({
@@ -238,5 +266,79 @@ const MatrixRowCells: React.FC<MatrixRowCellsProps> = ({
     </tr>
   );
 };
+
+const EMPTY_HIDDEN_SET: ReadonlySet<string> = new Set<string>();
+
+interface LandingScreenRowProps {
+  members: readonly HouseholdMember[];
+  settings: ModuleSettings;
+  hiddenByMember: ReadonlyMap<string, ReadonlySet<string>>;
+  onUpdateMember: (memberId: string, updates: MatrixMemberUpdate) => void;
+}
+
+/**
+ * The Home section's second row — the other half of this fix. A per-member
+ * landing-screen picker, reusing the exact `resolveLandingOptions`/
+ * `resolveLandingScreenKey` derivation `MyViewSettings` uses for a member's
+ * own choice, so an option only appears here if it's genuinely reachable for
+ * THAT member. This is the ONLY place a managed kid's `homeScreen` can ever
+ * be set — kids have no login to use `MyViewSettings` themselves.
+ *
+ * Rendered as a row rather than a `MatrixRowCells` instance because it writes
+ * a different field (`homeScreen`, single-valued) with a different control
+ * (a select, not a boolean `Switch`) — folding it into the generic
+ * toggle-row renderer would mean branching inside that renderer instead of
+ * here, once, at the one section that needs it.
+ */
+const LandingScreenRow: React.FC<LandingScreenRowProps> = ({
+  members,
+  settings,
+  hiddenByMember,
+  onUpdateMember,
+}) => (
+  <tr className="border-t border-brand-100 dark:border-brand-700">
+    <td className="sticky left-0 z-sticky bg-white dark:bg-brand-800 py-2 pr-3 whitespace-nowrap">
+      <span className="font-medium text-brand-800 dark:text-brand-100">Landing screen</span>
+    </td>
+    {members.map(member => {
+      const hidden = hiddenByMember.get(member.uid) ?? EMPTY_HIDDEN_SET;
+      const options = resolveLandingOptions(settings, hidden);
+      const firstOption = options[0];
+      if (!firstOption) {
+        // Nothing reachable at all — Settings is the structurally
+        // un-hideable terminal fallback, not a real choice, so there's
+        // nothing to offer a picker over.
+        return (
+          <td key={member.uid} className="text-center py-1 px-2 text-brand-400 dark:text-brand-450">
+            Settings
+          </td>
+        );
+      }
+      const effective = resolveLandingScreenKey({ homeScreen: member.homeScreen }, settings, hidden);
+      const value = effective === 'settings' ? firstOption.key : effective;
+      return (
+        <td key={member.uid} className="text-center py-1 px-2">
+          {/* The Select primitive (DESIGN.md's picker rule, r6) rather than a
+              hand-rolled <select> — a min-h-11 keeps the 44px touch target
+              this dense matrix's Switch cells already carry, while the
+              compact py/px/text-xxs override keeps it from blowing out the
+              row height or the table's own overflow-x-auto scroller. */}
+          <Select
+            aria-label={`Landing screen for ${member.displayName}`}
+            value={value}
+            onChange={(e) => onUpdateMember(member.uid, { homeScreen: e.target.value })}
+            className="min-h-11 w-full max-w-28 py-1.5 pl-2 pr-8 text-xxs font-medium"
+          >
+            {options.map(o => (
+              <option key={o.key} value={o.key}>
+                {o.label}
+              </option>
+            ))}
+          </Select>
+        </td>
+      );
+    })}
+  </tr>
+);
 
 export default MemberVisibilityMatrix;

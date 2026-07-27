@@ -15,6 +15,7 @@ import {
   NAV_PAGES,
   isHouseholdModuleEnabled,
   resolveHiddenKeys,
+  resolveLandingOptions,
   resolveLandingScreenKey,
   toggleHiddenKey,
   type LandingScreenKey,
@@ -92,17 +93,12 @@ export const MyViewSettings: React.FC<MyViewSettingsProps> = ({ member, settings
   // Landing-screen picker: ONLY destinations actually reachable right now —
   // Home (unless the member just hid it above) plus any page that still has
   // at least one visible leaf for this member. Offering a hidden destination
-  // would be a dead switch.
-  const landingOptions = useMemo(() => {
-    const options: { key: LandingScreenKey; label: string }[] = [];
-    if (!homeHidden) options.push({ key: 'home', label: 'Home' });
-    for (const page of pages) {
-      if (page.leaves.some(leaf => !hiddenSet.has(leaf.key))) {
-        options.push({ key: page.key, label: page.label });
-      }
-    }
-    return options;
-  }, [homeHidden, pages, hiddenSet]);
+  // would be a dead switch. Shared with the admin matrix (MemberVisibilityMatrix)
+  // via `resolveLandingOptions` so there's one derivation, not two.
+  const landingOptions = useMemo(
+    () => resolveLandingOptions(settings, hiddenSet),
+    [settings, hiddenSet]
+  );
 
   // The CURRENTLY effective landing screen — walks the member's chosen
   // `homeScreen` → the first reachable destination, so the control always

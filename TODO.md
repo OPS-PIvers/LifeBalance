@@ -90,7 +90,7 @@ human-watched PR (tagged **[rules]** / **[index]**).
 - [x] **ShoppingListTab** mirrored-state-in-effect → derived `useMemo` (lint no longer fires, so this is optional cleanup). **M / LOW.** ❌ 2026-07-11: won't-fix — the mirrored state is load-bearing for `Reorder.Group` drag gestures (local mutation gated by `isDraggingRef` before committing via `reorderShoppingItems`); a derived `useMemo` would break mid-drag reordering.
 - [x] **Finish the `useHousehold()` migration** — ~7 shim consumers remain; move them to narrow domain slices. **S each / LOW.** ❌ 2026-07-11: stale — zero production consumers remain; only test-file mocks reference the shim.
 
-### 2F. Per-member visibility & navigation (spec'd 2026-07-26 — design settled, executor-ready)
+### 2F. Per-member visibility & navigation — ✅ SHIPPED 2026-07-26
 
 **Why.** Plan 090 made pages toggleable **per household**, so two people in one household necessarily
 get the same app. Real-user feedback: one member finds the default surface overwhelming (density,
@@ -120,11 +120,11 @@ strip; the nav item becomes a **direct link**. Turning off Money's other six lea
 Money *be* the budget calendar. This is what turns "hide what I don't use" into "buttons to what I
 do use" without building a launcher screen.
 
-| Slice | Contents | Size |
-|-------|----------|------|
-| **2F.1** | Member `hiddenKeys` layer + full key set + widget merge + collapse rule + Plan→Lists rename | **L / MED** |
-| **2F.2** | Home becomes toggleable + per-member `homeScreen` + URL-addressable Money sub-views | **M / LOW** |
-| **2F.3** | Admin per-member matrix + one-time discovery prompt + onboarding step | **M / LOW** |
+| Slice | Contents | Size | Status |
+|-------|----------|------|--------|
+| **2F.1** | Member `hiddenKeys` layer + full key set + widget merge + collapse rule + Plan→Lists rename | **L / MED** | ✅ 2026-07-26 (#1109) |
+| **2F.2** | Home becomes toggleable + per-member `homeScreen` + URL-addressable Money sub-views | **M / LOW** | ✅ 2026-07-26 (#1111) |
+| **2F.3** | Admin per-member matrix + one-time discovery prompt + onboarding step | **M / LOW** | ✅ 2026-07-26 (#1110) |
 
 **2F.1 notes.**
 - Widgets merge into the unified key set. Resolve as `member.hiddenKeys ?? DEFAULT_HIDDEN_KEYS`, where
@@ -158,12 +158,42 @@ deep-linkable money screens for push notifications and PWA shortcuts.
 `hiddenKeys` / `homeScreen` to that same allowlist — **it will hit the identical denial if 2G.1 hasn't
 shipped**, and it will look like a bug in the new feature rather than a pre-existing rules gap.
 
-### 2G. Member-permission bug + capture/shopping paper cuts (spec'd 2026-07-26 — decisions settled)
+**Shipped (2026-07-26).** 2F.1/2F.2/2F.3 landed as #1109/#1111/#1110, depending on the two 2G.1-family
+rules PRs (#1106 member self-update allowlist, #1112 managed-kid Case 3 allowlist) exactly as the
+Prerequisite note above predicted. Case 3's managed-kid guard was also switched from whole-document
+`keys()` to `affectedKeys()` while adding `hiddenKeys`/`homeScreen` to it — the same privilege-escalation
+class 2G.1 fixed for Case 1 (see 2G.1's shipped note below), so an admin-planted key on a kid's doc can no
+longer permanently lock a non-admin parent out of writing to that kid.
+
+Two things fell out that weren't in the original spec:
+- A **kid-aware `MemberModal`** — editing a managed kid was submitting a blank `email: ''`, which was
+  clobbering *stored* emails for ordinary (non-kid) members too, not just kids. Fixed alongside 2F.
+- **The gap two independent integration reviewers found post-merge, closed in this same PR
+  (`fix/2f-matrix-home-row-and-docs`):** 2F.1 reserved `'home'` as a `VisibilityKey` but exposed no
+  toggle; 2F.2 built a Home toggle as a hand-coded switch **outside** `MemberVisibilityMatrix`'s
+  `NAV_PAGES`-driven rows (in `MyViewSettings`, self-only); 2F.3's admin matrix derives its rows purely
+  from `NAV_PAGES`, which structurally excludes Home — so **nobody** had a way to hide a managed kid's
+  Home or set a kid's landing screen, even though the matrix's own on-screen copy already promised that
+  capability. Fixed by hand-authoring a Home section in `getVisibilityMatrixSections()` (the same way the
+  Home-widgets section already was) plus a shared `resolveLandingOptions()` helper feeding a per-member
+  landing-screen picker in the matrix. `utils/moduleVisibility.test.ts`'s section-shape pinning test was
+  updated deliberately (not just made to pass) to include the new `'home'` section.
+
+**Known follow-ups (not blocking, not re-litigated here):**
+- `components/meals/MealPlanTab.test.tsx`'s "extends the day strip window…" test is a pre-existing,
+  load-sensitive flake — not caused by 2F/2G, don't chase it as a regression.
+- `components/layout/ProfileMenu.tsx`'s add-kid flow still has one remaining `window.prompt` call.
+- `firestore.rules`' Case 3 kid-allowlist comment still describes stale reachability claims (that
+  `MyViewSettings` can render a kid, and that `MemberModal` submits `email` for kids) — a sibling
+  **[rules] PR #1114** (`fix/rules-case3-comment-accuracy`) rewrites that comment; as of this writing it
+  is still **open**, so it remains an outstanding follow-up, not something already handled.
+
+### 2G. Member-permission bug + capture/shopping paper cuts — ✅ SHIPPED 2026-07-26
 
 Four items from real-device use, ordered by urgency. **Ship as three PRs, 2G.1 first.** Everything
 below is decided; an executor should not need to re-litigate any of it.
 
-#### 2G.1 [rules] Non-admin members cannot change their own dashboard widgets — **live bug, blocking a real user**
+#### 2G.1 [rules] Non-admin members cannot change their own dashboard widgets — **live bug, blocking a real user** — ✅ SHIPPED 2026-07-26 (#1106)
 
 **Symptom.** A non-admin member toggles a widget in Settings → Dashboard Widgets and gets
 *"You don't have permission to update the member. Try signing in again, or check that you're still a
@@ -199,7 +229,17 @@ gap is untested in both directions. Add: non-admin *adds* the fields (must pass)
 them (must pass, was failing), non-admin writes a genuinely forbidden key such as `role` or `points`
 (must still fail). **S / LOW** — but `[rules]`, so its own human-watched PR.
 
-#### 2G.2 Shopping quantity: stop showing it, stop inventing it, let it be removed
+**Shipped.** Landed as #1106, plus more than the spec asked for: fixing the `changedKeys()` gap also
+surfaced that the SAME `changedKeys()` predicate was a **live privilege-escalation path** in Case 1 — it
+ignores newly-*added* keys, so any member could *add* `points`/`allowanceCents`/`isManaged` to their own
+doc on their first write to those fields (the identical "first write passes vacuously" mechanism as the
+dashboard-widgets bug, just pointed at security-sensitive fields instead of a settings toggle). Switched
+Case 1 to `affectedKeys()` (added ∪ changed ∪ removed) to close it. Lesson for future member-doc field
+additions: `isAdminOf` bypassing the whole check means this class of bug is invisible from an admin
+account, so always test as a non-admin member, and test *add-then-change* — not just change — since
+`changedKeys()` only breaks on the field's first write.
+
+#### 2G.2 Shopping quantity: stop showing it, stop inventing it, let it be removed — ✅ SHIPPED 2026-07-26
 
 Four related changes; the last two are what make the first two safe.
 
@@ -238,7 +278,17 @@ quantity, and `ShoppingItemForm.tsx` has **no test file at all** — add one for
 Extend `functions/src/quickAdd/index.test.ts` for the absent-quantity default and the unit-preserving
 merge. **M / LOW.**
 
-#### 2G.3 Capture drawer: back button, and delete two things
+**Shipped as #1107 — grew beyond the spec.** The legacy-numeric-quantity problem was worse than "the
+duplicate-merge paths string-concatenate": a legacy **numeric** `quantity` crashed four separate
+consumers expecting a string — `parseQuantity`, `printWeekHtml`'s `escapeHtml`, `geminiService`'s
+`sanitizeForPrompt`, and the voice-capture path. Root-caused at the boundary instead of patched at each
+call site: `shoppingItemConverter.fromFirestore` now normalizes `quantity` to a string on read, so every
+client consumer sees the type the schema already promised. `functions/` is **not** covered by that
+converter — the Admin SDK bypasses client Firestore converters entirely — so the server intentionally
+keeps its own `string | number` handling rather than assuming the client-side normalization applies
+there too.
+
+#### 2G.3 Capture drawer: back button, and delete two things — ✅ SHIPPED 2026-07-26
 
 All in `components/modals/CaptureModal.tsx` + `CaptureMenu.tsx`.
 
@@ -288,6 +338,12 @@ All in `components/modals/CaptureModal.tsx` + `CaptureMenu.tsx`.
 
 **M / MED** — the image merge is the only part with real behavior risk; the other three are deletions
 and a header button.
+
+**Shipped as #1108** — as specified, plus one fix that fell out of review: a `captureRunIdRef`
+stale-scan cancellation guard. Review found that the new Back button could let an in-flight scan
+resolve *after* the user had already backed out and started manual entry, force-closing the drawer and
+destroying the in-progress manual entry out from under them; the ref lets a scan's resolution check
+whether it's still the current run before acting on it.
 
 ---
 
