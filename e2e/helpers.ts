@@ -70,7 +70,13 @@ export function safeToSpendButton(page: Page) {
 }
 
 /**
- * Add a manual expense through the capture FAB → Manual Entry form.
+ * Add a manual expense through the capture FAB.
+ *
+ * The Money tab opens STRAIGHT onto the manual form — there is no longer a
+ * "Manual Entry vs Add from Image" menu card to click through first, and the
+ * drawer keeps its generic "Capture" title while the type selector is visible.
+ * Save lives in the drawer's fixed footer (still inside the dialog), so one
+ * `captureDrawer` scope covers the whole flow.
  *
  * A `date` in the future creates the transaction `pending_review` (no balance
  * move; Safe-to-Spend drops via pendingSpend); today or earlier creates it
@@ -83,22 +89,14 @@ export async function addManualExpense(
 ): Promise<void> {
   await page.getByRole('button', { name: 'Capture transaction, task, or item' }).click();
 
-  // The capture drawer opens on the multi-type menu view, titled "Capture"
-  // while the type selector is visible (it specializes per flow after that).
   const captureDrawer = page.getByRole('dialog', { name: /Capture/i });
-  // The card's accessible name is its explicit punctuated aria-label
-  // ("Manual entry: type in an expense. …", sentence case) — impeccable r6.
-  await captureDrawer.getByRole('button', { name: /Manual entry/i }).click();
-
-  // Same drawer, title flips to "Manual Entry".
-  const manualDrawer = page.getByRole('dialog', { name: /Manual Entry/i });
-  await manualDrawer.getByLabel('Amount').fill(tx.amount);
-  await manualDrawer.getByLabel('Merchant').fill(tx.merchant);
+  await captureDrawer.getByLabel('Amount').fill(tx.amount);
+  await captureDrawer.getByLabel('Merchant').fill(tx.merchant);
   if (tx.date) {
-    await manualDrawer.getByLabel('Date').fill(tx.date);
+    await captureDrawer.getByLabel('Date').fill(tx.date);
   }
-  await manualDrawer.getByLabel('Category').selectOption({ label: tx.category });
-  await manualDrawer.getByRole('button', { name: 'Save Transaction' }).click();
+  await captureDrawer.getByLabel('Category').selectOption({ label: tx.category });
+  await captureDrawer.getByRole('button', { name: /Save transaction/i }).click();
 }
 
 /** The auto-opening pending-review drawer ("Review (n of m)"). */
