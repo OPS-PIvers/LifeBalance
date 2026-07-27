@@ -18,6 +18,18 @@
  *                require the amount within ±10% or ±$25)
  *   e. CREATE  — otherwise a new verified, `needsCategory` transaction
  *
+ * KEEP THE BILL-MATCHING SLICE IN LOCKSTEP with its client twin
+ * `utils/billDescriptorMatch.ts` — `significantTokens`, `shareSignificantToken`,
+ * `matchesAlias`, `billAmountWithinTolerance`, `pickBillToPay`, the
+ * `NOISE_TOKENS` set and the two amount-tolerance constants are duplicated
+ * verbatim there so the Action Queue can recognise a screenshot-imported charge
+ * as an existing bill (the bank-email road is not the only road in). The app and
+ * this package are separate builds with no shared runtime (the root tsconfig
+ * excludes `functions/`, and this package pins `rootDir: "src"`), so the
+ * duplication follows the established precedent of
+ * `utils/habitLogic.ts` ↔ `streakLogic.ts` and
+ * `utils/merchantRules.ts` ↔ `merchantRules.ts`. Change both copies together.
+ *
  * The account balance is NEVER moved from any of these decisions — the email's
  * available balance already reflects every withdrawal (posted or held), and the
  * endpoint overwrites the account balance with it once (see

@@ -64,7 +64,7 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
                   <p className="font-bold text-brand-700 dark:text-brand-200 truncate">{tx.merchant}</p>
-                  <span className="font-mono font-bold text-brand-800 dark:text-brand-100 shrink-0">
+                  <span className="font-mono font-bold text-lg text-brand-800 dark:text-brand-100 shrink-0">
                     {fmt(tx.amount)}
                   </span>
                 </div>

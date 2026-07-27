@@ -227,6 +227,71 @@ describe('BudgetAccounts', () => {
     expect(updateAccountBalanceMock).toHaveBeenCalledWith('acc1', 6000);
   });
 
+  it('seeds the edit input with a float-drift balance rounded to 2 decimals', async () => {
+    // Regression test for Paper Cut #6: summed sub-balances can accumulate
+    // binary float error (e.g. 125.777777777779). The seeded edit value must
+    // be rounded to the cent, not the raw float, so the user isn't stuck
+    // manually trimming decimals before every edit.
+    const acc = mockAccounts[0];
+    if (!acc) throw new Error('missing mock account');
+    const original = acc.balance;
+    acc.balance = 125.777777777779;
+    try {
+      const user = userEvent.setup();
+      render(<BudgetAccounts />);
+
+      await user.click(screen.getByRole('button', { name: /Edit balance for Main Checking/i }));
+
+      const input = screen.getByRole('spinbutton') as HTMLInputElement;
+      expect(input.value).toBe('125.78');
+    } finally {
+      acc.balance = original;
+    }
+  });
+
+  it('seeds a whole-number balance with two trailing decimals', async () => {
+    const acc = mockAccounts[0];
+    if (!acc) throw new Error('missing mock account');
+    const original = acc.balance;
+    acc.balance = 50;
+    try {
+      const user = userEvent.setup();
+      render(<BudgetAccounts />);
+
+      await user.click(screen.getByRole('button', { name: /Edit balance for Main Checking/i }));
+
+      const input = screen.getByRole('spinbutton') as HTMLInputElement;
+      expect(input.value).toBe('50.00');
+    } finally {
+      acc.balance = original;
+    }
+  });
+
+  it('seeds and saves a negative balance correctly', async () => {
+    const acc = mockAccounts[2];
+    if (!acc) throw new Error('missing mock account');
+    const original = acc.balance;
+    // Also exercises round-half-up on a negative value: -42.005 -> -42.01.
+    acc.balance = -42.005;
+    try {
+      const user = userEvent.setup();
+      render(<BudgetAccounts />);
+
+      await user.click(screen.getByRole('button', { name: /Edit balance for Visa Card/i }));
+
+      const input = screen.getByRole('spinbutton') as HTMLInputElement;
+      expect(input.value).toBe('-42.01');
+
+      await user.clear(input);
+      await user.type(input, '-30');
+      await user.click(screen.getByLabelText('Save balance'));
+
+      expect(updateAccountBalanceMock).toHaveBeenCalledWith('acc3', -30);
+    } finally {
+      acc.balance = original;
+    }
+  });
+
   it('opens goal modal and sets goal', async () => {
     const user = userEvent.setup();
     render(<BudgetAccounts />);

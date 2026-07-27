@@ -347,6 +347,51 @@ whether it's still the current run before acting on it.
 
 ---
 
+### 2H. Recurring bill vs. automated transaction — duplicate resolution
+
+**Why.** Deferred out of the 2026-07-27 paper-cut batch (it was cut #3 there) because both halves are
+features, not paper cuts. Reported from real use: a bank-screenshot scan parsed correctly into
+individual transactions, but one of them was a **recurring bill that already exists as a manually
+created calendar item** — at a different amount, since the bill varies. The action queue then showed
+both: `Centerpoint Energy (Natural Gas)` $142.00 (the planned bill, "Due") and `Cpenergy Mngco` $37.91
+(the scanned transaction, "Tx"). Two rows, one real expense, and no way to tell the app they are the
+same thing.
+
+- [x] **(b) Wire bill matching into the action queue.** — **shipped in the 2026-07-27 paper-cut
+      batch.** `utils/billDescriptorMatch.ts` is a lockstep client twin of the bill-matching slice of
+      `functions/src/quickAdd/bankSyncMatch.ts`, copied at existing strictness; `useActionQueue`
+      runs `pickBillToPay` over its own unpaid expense rows and suppresses the bill's row on a
+      match, with `ActionQueueItem` rendering a "Pays ⟨bill⟩" sub-line so the collapse is never
+      silent. The collapse is derived, never persisted, so approving or deleting the transaction
+      restores the bill's row.
+- [ ] **(a) Merge an automated transaction into a planned recurring bill from the action queue.**
+      The user needs a "this IS that bill" action on the transaction row that pays/settles the
+      calendar item using the *scanned* amount rather than the budgeted one, and leaves exactly one
+      record. Note the existing money-path atomicity requirement: `payCalendarItem` already commits
+      the calendar item + its transaction in a single `writeBatch` and retro-files under the prior
+      period's `payPeriodId` — a merge must go through that same batched path, never two writes.
+      **M / MED.**
+
+**Why (b) did not make (a) unnecessary, contrary to the original guess.** Only the **rule** tier
+bypasses the ±10%/±$25 amount guard. The **alias** tier is gated by that same tolerance, so on a
+variable-amount utility a learned alias still will not match — `Cpenergy Mngco` at $37.91 against a
+$142.00 scheduled Centerpoint bill stays two rows even after the alias is learned. Two tests pin
+this so nobody "fixes" it by loosening the window; a false positive here silently marks the wrong
+bill paid, which is worse than a visible duplicate.
+
+That leaves a real affordance gap, and it is the argument for (a). The alias-learning path —
+`linkBankTransactionToBill` (`calendarMutations.ts:547`), surfaced as "Is this a bill payment?" in
+`TransactionReviewForm.tsx` — is gated on `bankRef && status === 'verified'`, and `CaptureModal`
+writes screenshot rows as `pending_review` with no `bankRef`. Both the UI gate and the mutation
+refuse, correctly: that mutation marks a bill paid with **no balance delta**, which is only sound
+because a bank-synced row's balance is already authoritative — a `pending_review` row's is not.
+So on the screenshot-import road there is no in-drawer way to teach the link at all; today the only
+route is authoring a merchant rule by hand in Settings → Merchant Rules with its bill field pointed
+at the recurring template. **(a) is that missing entry point, and it needs its own
+pay-with-balance-delta mutation — not a widening of the existing gates.**
+
+---
+
 ## 3. Product backlog (needs a product decision before planning)
 
 From the 2026-07-09 product-scope audit — grounded findings, not yet greenlit:
