@@ -338,7 +338,9 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
     if (isTodoQueueItem(item)) {
       return {
         iconComponent: <ListTodo size={18} />,
-        iconClasses: 'bg-money-bgNeg border-money-neg/20 text-money-neg dark:bg-money-neg/15 dark:border-money-neg/30 dark:text-money-negDark',
+        // Neutral brand tint, not the money-neg red used for overspend alerts —
+        // icons shouldn't read as alarms (owner paper cut PC#4).
+        iconClasses: 'bg-brand-100 border-brand-200 text-brand-600 dark:bg-brand-700/40 dark:border-brand-600 dark:text-brand-300',
       };
     }
     return {
@@ -424,13 +426,16 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
         )}
       >
       <div className="p-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {/* Selection checkbox replaces the type icon in multi-select mode */}
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          {/* Selection checkbox replaces the type icon in multi-select mode.
+              shrink-0 keeps this a fixed 36x36 square — without it, a long
+              title (e.g. a to-do) steals width and squashes it into a
+              rectangle (owner paper cut PC#5). */}
           {selectionMode ? (
             <span
               aria-hidden="true"
               className={cn(
-                'w-9 h-9 rounded-card border-2 flex items-center justify-center transition-colors',
+                'w-9 h-9 rounded-card border-2 flex items-center justify-center transition-colors shrink-0',
                 isSelected
                   ? 'bg-accent-600 border-accent-600 text-white'
                   : 'border-brand-300 dark:border-brand-600 text-transparent'
@@ -439,11 +444,11 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
               <Check size={16} strokeWidth={3} />
             </span>
           ) : (
-            <div className={`w-9 h-9 rounded-card border flex items-center justify-center ${iconClasses}`}>
+            <div className={`w-9 h-9 rounded-card border flex items-center justify-center shrink-0 ${iconClasses}`}>
                {iconComponent}
             </div>
           )}
-          <div>
+          <div className="min-w-0">
             <p className="font-semibold text-brand-800 dark:text-brand-100 text-sm">
               {isCalendarQueueItem(item) ? item.title :
                isTodoQueueItem(item) ? item.text :
@@ -458,16 +463,19 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                  </div>
                )}
                {isTodoQueueItem(item) && isBefore(parseISO(item.date), startOfToday()) && (
-                 <span className="flex items-center gap-0.5 text-money-neg dark:text-money-negDark font-bold ml-1">
-                   <AlertCircle size={10} />
-                   Overdue
+                 <span
+                   className="flex items-center ml-1 text-warm-600 dark:text-warm-300"
+                   title="Overdue"
+                 >
+                   <AlertCircle size={12} />
+                   <span className="sr-only">Overdue</span>
                  </span>
                )}
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           {isTransactionQueueItem(item) && item.needsAmount ? (
             <span className="text-xxs font-bold text-warm-700 dark:text-warm-300 bg-warm-100 dark:bg-warm-900/30 px-2 py-0.5 rounded-full whitespace-nowrap">
               Add amount

@@ -1450,6 +1450,66 @@ describe('todos (Eisenhower importance + shared notes — additive optional fiel
     );
   });
 
+  // Regression guard, same shape as `isImportant` above: a field missing from
+  // the todos hasOnly() allowlist makes EVERY write carrying it fail.
+  it('a member can create a repeating to-do that auto-reschedules', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'todos', 'todo-auto-reschedule'), {
+        text: 'Kitchen reset',
+        completeByDate: '2026-07-28',
+        isCompleted: false,
+        assignedTo: BOB,
+        recurrence: { frequency: 'weekly' },
+        resetWhenExpired: true,
+        createdBy: BOB,
+      }),
+    );
+  });
+
+  it('a member can toggle resetWhenExpired on an existing to-do', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'todos', TODO), {
+        resetWhenExpired: true,
+      }),
+    );
+  });
+
+  it('a member can clear resetWhenExpired back to false', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'todos', TODO), {
+        resetWhenExpired: false,
+      }),
+    );
+  });
+
+  it('rejects a non-boolean resetWhenExpired', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'todos', TODO), {
+        resetWhenExpired: 'yes',
+      }),
+    );
+  });
+
+  // The same allowlist trap, but pre-existing: `approveTodo` clears
+  // needsReview from the CLIENT, and request.resource.data is the merged
+  // post-write doc, so every client write to a held-for-review capture was
+  // denied until the key joined the allowlist.
+  it('a member can approve a held-for-review capture (clears needsReview)', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'todos', TODO), {
+        needsReview: false,
+      }),
+    );
+  });
+
+  it('rejects a non-boolean needsReview', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'todos', TODO), {
+        needsReview: 'later',
+      }),
+    );
+  });
+
   it('rejects an update carrying an unknown field (storage abuse)', async () => {
     await assertFails(
       updateDoc(doc(dbFor(BOB), 'households', H1, 'todos', TODO), {

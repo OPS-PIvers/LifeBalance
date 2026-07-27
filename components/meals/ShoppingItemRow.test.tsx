@@ -98,10 +98,14 @@ describe('ShoppingItemRow', () => {
     expect(container.querySelector('.flex-wrap')).not.toBeInTheDocument();
   });
 
-  it('still shows the store badge alongside a hidden quantity', () => {
+  // Paper cut PC#2 (owner decision): store and quick-list chips are filter/
+  // metrics info, not needed at a glance — both are gone from the row now,
+  // even with a store set. The full detail (store, quick lists) still lives
+  // in the edit drawer.
+  it('never renders a store chip in the row, even when store and quantity are both set', () => {
     const itemWithBoth: ShoppingItem = { ...item, quantity: '2 lbs', store: 'Costco' };
     render(<ShoppingItemRow item={itemWithBoth} {...handlers} isReorderable={false} />);
-    expect(screen.getByText('Costco')).toBeInTheDocument();
+    expect(screen.queryByText('Costco')).not.toBeInTheDocument();
     expect(screen.queryByText('2 lbs')).not.toBeInTheDocument();
   });
 });

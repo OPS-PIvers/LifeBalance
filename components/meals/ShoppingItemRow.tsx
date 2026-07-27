@@ -1,9 +1,7 @@
 import React, { memo, useRef } from 'react';
-import { ShoppingItem, Store as StoreType, QuickStockList } from '@/types/schema';
+import { ShoppingItem } from '@/types/schema';
 import { Reorder, useDragControls } from 'framer-motion';
-import { Check, Trash2, Store, ShoppingBag } from 'lucide-react';
-import { STORE_COLORS, DEFAULT_STORE_COLOR } from '@/data/storeColors';
-import { TEMPLATE_ICONS } from '@/data/templateIcons';
+import { Check, Trash2 } from 'lucide-react';
 import { haptic } from '@/utils/haptics';
 import { HapticCheck } from '@/components/ui/HapticCheck';
 import { SwipeActionRow } from '@/components/ui/SwipeActionRow';
@@ -14,8 +12,6 @@ const LONG_PRESS_MS = 500;
 
 interface ShoppingItemRowProps {
   item: ShoppingItem;
-  stores?: StoreType[];
-  activeQuickList?: QuickStockList;
   onCheck: (item: ShoppingItem) => void;
   onDelete: (item: ShoppingItem) => void;
   onEdit: (item: ShoppingItem) => void;
@@ -24,7 +20,7 @@ interface ShoppingItemRowProps {
   onReorderDragEnd?: () => void;
 }
 
-const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores, activeQuickList, onCheck, onDelete, onEdit, isReorderable = true, onReorderDragStart, onReorderDragEnd }) => {
+const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, onCheck, onDelete, onEdit, isReorderable = true, onReorderDragStart, onReorderDragEnd }) => {
   const dragControls = useDragControls();
 
   // --- Gesture model: TAP anywhere on the row (checkbox or content) toggles
@@ -121,21 +117,6 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
     cancelLongPress();
     onEdit(item);
   };
-
-  const ActiveIcon = activeQuickList
-    ? (TEMPLATE_ICONS.find(i => i.id === activeQuickList.icon)?.icon || ShoppingBag)
-    : ShoppingBag;
-
-  // Resolve store/quick-list tint once (read-only display; editing lives in the drawer).
-  // Match case-insensitively so the tint resolves even with casing drift (e.g. "Costco" vs "costco").
-  const storeName = item.store?.toLowerCase();
-  const storeObj = storeName && stores ? stores.find(s => s.name.toLowerCase() === storeName) : undefined;
-  const storeColor = STORE_COLORS[storeObj?.color || DEFAULT_STORE_COLOR] ?? STORE_COLORS[DEFAULT_STORE_COLOR]!;
-  const listColor = activeQuickList
-    ? (STORE_COLORS[activeQuickList.color || DEFAULT_STORE_COLOR] ?? STORE_COLORS[DEFAULT_STORE_COLOR]!)
-    : null;
-
-  const hasMeta = Boolean(item.store || activeQuickList);
 
   const Content = (
     // Gmail-style swipe: right = purchased (unchecked items only — a checked
@@ -244,33 +225,10 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                 {item.name}
             </div>
 
-            {/* Compact read-only metadata — only rendered when present.
-                Quantity is deliberately NOT shown here: it stays in the edit
-                drawer, the CSV export, and the shared text, but a row-level
-                count invented a false precision ("1") for the common case of
-                just wanting one of something (F-2G.2). */}
-            {hasMeta && (
-                <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                    {item.store && (
-                        <span className={clsx(
-                            "flex items-center gap-1 text-xxs px-1.5 py-0.5 rounded-full border whitespace-nowrap",
-                            storeColor.bg, storeColor.text, storeColor.border
-                        )}>
-                            <Store size={9} />
-                            {item.store}
-                        </span>
-                    )}
-                    {activeQuickList && listColor && (
-                        <span className={clsx(
-                            "flex items-center gap-1 text-xxs px-1.5 py-0.5 rounded-full border whitespace-nowrap",
-                            listColor.bg, listColor.text, listColor.border
-                        )}>
-                            <ActiveIcon size={9} />
-                            {activeQuickList.name}
-                        </span>
-                    )}
-                </div>
-            )}
+            {/* Store / quick-list chips and quantity are deliberately NOT shown
+                here (owner decision, F-2G paper cuts): they're filter/metrics
+                info, not needed at a glance, and stay in the edit drawer, the
+                CSV export, and the shared text. */}
         </div>
       </ListRow>
     </SwipeActionRow>
@@ -322,8 +280,6 @@ const arePropsEqual = (prev: ShoppingItemRowProps, next: ShoppingItemRowProps) =
          prev.onCheck === next.onCheck &&
          prev.onDelete === next.onDelete &&
          prev.onEdit === next.onEdit &&
-         prev.stores === next.stores &&
-         prev.activeQuickList === next.activeQuickList &&
          prev.isReorderable === next.isReorderable &&
          prev.onReorderDragStart === next.onReorderDragStart &&
          prev.onReorderDragEnd === next.onReorderDragEnd;

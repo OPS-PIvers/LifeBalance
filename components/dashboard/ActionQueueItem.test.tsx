@@ -199,6 +199,34 @@ describe('ActionQueueItemCard merchant rules', () => {
   });
 });
 
+// Owner paper cut (PC#1/PC#4): the overdue mark must never be an alarming red
+// "Overdue" text badge — it's a small circled-! (AlertCircle), warm/amber, with
+// the word "Overdue" only for screen readers (sr-only) plus a title tooltip.
+describe('ActionQueueItemCard overdue mark', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('shows a titled circled-! mark (no visible "Overdue" text) for a past-due to-do', () => {
+    vi.useFakeTimers({ now: new Date('2026-07-20T12:00:00') });
+    const handlers = makeHandlers();
+    renderCard({ ...todoItem, date: '2026-07-15' }, handlers);
+
+    const mark = screen.getByTitle('Overdue');
+    expect(mark).toBeInTheDocument();
+    // The word is present for assistive tech only, not as visible red text.
+    expect(within(mark).getByText('Overdue')).toHaveClass('sr-only');
+  });
+
+  it('does not show the mark for a to-do due today or later', () => {
+    vi.useFakeTimers({ now: new Date('2026-07-10T12:00:00') });
+    const handlers = makeHandlers();
+    renderCard({ ...todoItem, date: '2026-07-15' }, handlers);
+
+    expect(screen.queryByTitle('Overdue')).not.toBeInTheDocument();
+  });
+});
+
 describe('ActionQueueItemCard delete confirmation', () => {
   describe('swipe-rail Delete', () => {
     it('opens the confirm dialog without deleting the to-do', async () => {

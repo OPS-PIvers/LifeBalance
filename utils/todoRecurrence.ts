@@ -1,5 +1,5 @@
-import { addWeeks, addMonths, parseISO, format, isBefore, startOfDay } from 'date-fns';
-import type { ToDo } from '@/types/schema';
+import { addWeeks, addMonths, parseISO, format, isBefore, isValid, startOfDay } from 'date-fns';
+import type { Subtask, ToDo } from '@/types/schema';
 
 // F-TODO-01 — date math for recurring to-dos. Kept as a tiny, pure,
 // unit-tested module (like utils/calendarRecurrence.ts) so the atomic
@@ -102,5 +102,62 @@ export function buildNextRecurringTodo(
   // link on every spawned instance, so the automation persists without
   // re-linking each occurrence.
   if (completed.linkedHabitId !== undefined) next.linkedHabitId = completed.linkedHabitId;
+  // F-TODO-16: the category defines the chore as much as its text does — a
+  // spawned instance that dropped it landed straight in the "needs a category"
+  // triage banner every week.
+  if (completed.category !== undefined) next.category = completed.category;
+  // F-TODO-08: a repeating chore SET keeps its checklist, freshly unchecked —
+  // without this the next instance spawned with no steps at all.
+  if (completed.subtasks !== undefined) next.subtasks = resetSubtasks(completed.subtasks);
+  // The auto-reschedule preference belongs to the chore, not to one occurrence.
+  if (completed.resetWhenExpired !== undefined) next.resetWhenExpired = completed.resetWhenExpired;
   return next;
+}
+
+/** Returns a copy of `subtasks` with every step unchecked. */
+function resetSubtasks(subtasks: Subtask[]): Subtask[] {
+  return subtasks.map(sub => (sub.isDone ? { ...sub, isDone: false } : sub));
+}
+
+/**
+ * "Auto-reschedule" (`ToDo.resetWhenExpired`): a repeating chore whose due date
+ * has passed unfinished is not really *overdue* — it should roll forward to the
+ * next occurrence of its cadence, with the checklist reset so a fresh period
+ * starts clean.
+ *
+ * Returns the patch to apply (`{ completeByDate, subtasks? }`), or `null` when
+ * the to-do isn't eligible. The `subtasks` key is included ONLY when at least
+ * one step was actually done, so an already-clean checklist produces no
+ * pointless write.
+ *
+ * Both dates are local `yyyy-MM-dd`, so the lexical `<` compare is
+ * chronological (the convention used across this repo — see
+ * hooks/useActionQueue.ts).
+ *
+ * @param todo  the candidate to-do
+ * @param today caller-local "today" (yyyy-MM-dd) — pass getLocalDateString()
+ */
+export function computeExpiredTodoRoll(
+  todo: ToDo,
+  today: string,
+): { completeByDate: string; subtasks?: Subtask[] } | null {
+  if (todo.resetWhenExpired !== true) return null;
+  const frequency = todo.recurrence?.frequency;
+  if (!isTodoFrequency(frequency)) return null;
+  if (todo.isCompleted) return null;
+  // A held-for-review capture isn't on anyone's list yet — don't move it.
+  if (todo.needsReview === true) return null;
+  // Never write garbage from a malformed stored date — validate before the
+  // lexical compare, which is only chronological for well-formed yyyy-MM-dd.
+  if (!todo.completeByDate || !isValid(parseISO(todo.completeByDate))) return null;
+  if (!isValid(parseISO(today))) return null;
+  if (todo.completeByDate >= today) return null;
+
+  const roll: { completeByDate: string; subtasks?: Subtask[] } = {
+    completeByDate: computeNextTodoDueDate(todo.completeByDate, frequency, today),
+  };
+  if (todo.subtasks?.some(sub => sub.isDone)) {
+    roll.subtasks = resetSubtasks(todo.subtasks);
+  }
+  return roll;
 }

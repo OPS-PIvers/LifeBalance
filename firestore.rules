@@ -744,7 +744,7 @@ service cloud.firestore {
                                 'isImportant', 'points',
                                 'dueTime', 'reminderMinutesBefore', 'reminderSentAt',
                                 'recurrence', 'subtasks', 'linkedHabitId',
-                                'category',
+                                'category', 'resetWhenExpired', 'needsReview',
                                 'createdBy', 'createdAt'
                               ]) &&
                               isValidString(request.resource.data.text, 500) &&
@@ -757,6 +757,16 @@ service cloud.firestore {
                               isValidOptionalString(request.resource.data.get('source', null), 20) &&
                               // Eisenhower importance flag (star toggle) — optional boolean
                               (request.resource.data.get('isImportant', null) == null || isValidBoolean(request.resource.data.isImportant)) &&
+                              // Auto-reschedule flag: an expired repeating chore rolls to its
+                              // next occurrence instead of going overdue — optional boolean
+                              (request.resource.data.get('resetWhenExpired', null) == null || isValidBoolean(request.resource.data.resetWhenExpired)) &&
+                              // Held-for-review capture flag (Plan L1). The server writes it
+                              // true via the Admin SDK (which bypasses rules), but the CLIENT
+                              // approve path clears it to false — and because
+                              // request.resource.data is the MERGED post-write doc, leaving
+                              // this key off the allowlist above made EVERY client write to a
+                              // held to-do fail, approval included. Optional boolean.
+                              (request.resource.data.get('needsReview', null) == null || isValidBoolean(request.resource.data.needsReview)) &&
                               // Managed-kid completion credit (Plan 080c) — optional number
                               isValidOptionalNumber(request.resource.data.get('points', null)) &&
                               // Timed reminders (F-TODO-14) — optional HH:mm due time,

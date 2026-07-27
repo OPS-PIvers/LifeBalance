@@ -4,7 +4,7 @@ import {
   startOfDay, addDays, differenceInMilliseconds, isToday, isTomorrow, isValid
 } from 'date-fns';
 import { Transaction, CalendarItem, ToDo } from '@/types/schema';
-import { useFinance, useTodos, useExpandedCalendarItems } from '@/contexts/FirebaseHouseholdContext';
+import { useFinance, useTodos, useExpandedCalendarItems, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { getLocalDateString } from '@/utils/dateHelpers';
 
@@ -68,6 +68,7 @@ export const needsReview = (
 export const useActionQueue = () => {
   const { transactions } = useFinance();
   const { todos } = useTodos();
+  const { currentUser } = useHouseholdCore();
   const { isModuleEnabled, isPlanTabVisible } = useModuleVisibility();
 
   // Plan 090 (graceful degradation): gate each queue source by its domain so a
@@ -139,6 +140,14 @@ export const useActionQueue = () => {
     // excludes these upstream (the context splits visible vs. awaiting-review),
     // so this is defense-in-depth rather than the primary guarantee.
     if (t.needsReview === true) return false;
+    // Owner-reported paper cut: a member's queue should show only items
+    // assigned to THEM or to the whole household (assignedTo absent/undefined
+    // is the "whole household" sentinel — see ToDosPage's write of
+    // __whole_household__ as `undefined`), not every household member's
+    // personal to-dos. If `currentUser` hasn't loaded yet, `currentUser?.uid`
+    // is undefined and only household-wide items pass — the safe transient
+    // (never over-shows someone else's personal item during load).
+    if (t.assignedTo && t.assignedTo !== currentUser?.uid) return false;
     const date = parseISO(t.completeByDate);
     // Validate the parsed date before using it
     if (!isValid(date)) {
@@ -149,7 +158,7 @@ export const useActionQueue = () => {
     }
     // Use consistent date-only comparisons: Overdue (before today), Today, or Tomorrow
     return isBefore(date, today) || isToday(date) || isTomorrow(date);
-  }).map(t => ({ ...t, queueType: 'todo' as const, date: t.completeByDate })), [showTodos, todos, today]);
+  }).map(t => ({ ...t, queueType: 'todo' as const, date: t.completeByDate })), [showTodos, todos, today, currentUser?.uid]);
 
   // 4. Combined & Sorted (Chronological: Oldest First)
   const actionQueue = useMemo(() => {

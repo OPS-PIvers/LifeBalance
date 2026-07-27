@@ -12,6 +12,7 @@ import {
   useFinance,
   useTodos,
   useExpandedCalendarItems,
+  useHouseholdCore,
 } from '@/contexts/FirebaseHouseholdContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 
@@ -19,6 +20,7 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useFinance: vi.fn(),
   useTodos: vi.fn(),
   useExpandedCalendarItems: vi.fn(),
+  useHouseholdCore: vi.fn(),
 }));
 
 // Module visibility (Plan 090): mocked so each test can choose which domains
@@ -82,6 +84,9 @@ const setMocks = (opts: {
   transactions?: Transaction[];
   todos?: ToDo[];
   calendar?: CalendarItem[];
+  /** Defaults to 'uid-1' to match the makeTodo() default assignedTo, so
+      existing fixtures keep passing under the new assignee filter. */
+  currentUserUid?: string | null;
 }) => {
   vi.mocked(useFinance).mockReturnValue({
     transactions: opts.transactions ?? [],
@@ -90,6 +95,10 @@ const setMocks = (opts: {
     todos: opts.todos ?? [],
   } as unknown as ReturnType<typeof useTodos>);
   vi.mocked(useExpandedCalendarItems).mockReturnValue(opts.calendar ?? []);
+  const uid = opts.currentUserUid === undefined ? 'uid-1' : opts.currentUserUid;
+  vi.mocked(useHouseholdCore).mockReturnValue({
+    currentUser: uid ? { uid } : null,
+  } as unknown as ReturnType<typeof useHouseholdCore>);
 };
 
 describe('useActionQueue', () => {
@@ -202,6 +211,37 @@ describe('useActionQueue', () => {
     });
     const { result } = renderHook(() => useActionQueue());
     expect(result.current.actionQueue.map((i) => i.id)).toEqual(['visible']);
+  });
+
+  // Owner paper cut (PC#1): a member's queue must show only to-dos assigned
+  // to THEM or to the whole household (assignedTo absent === household-wide),
+  // never another member's personal to-do.
+  it('filters to-dos by assignee: keeps mine and household-wide, drops another member\'s', () => {
+    setMocks({
+      currentUserUid: 'uid-1',
+      todos: [
+        makeTodo({ id: 'mine', completeByDate: '2026-06-16', assignedTo: 'uid-1' }),
+        makeTodo({ id: 'household', completeByDate: '2026-06-16', assignedTo: undefined }),
+        makeTodo({ id: 'jens', completeByDate: '2026-06-16', assignedTo: 'uid-2' }),
+      ],
+    });
+    const { result } = renderHook(() => useActionQueue());
+    const ids = result.current.actionQueue.map((i) => i.id).sort();
+    expect(ids).toEqual(['household', 'mine']);
+  });
+
+  // Safe transient: while currentUser hasn't loaded yet, only household-wide
+  // (unassigned) items should show — never someone else's personal to-do.
+  it('shows only household-wide to-dos while currentUser is still loading', () => {
+    setMocks({
+      currentUserUid: null,
+      todos: [
+        makeTodo({ id: 'household', completeByDate: '2026-06-16', assignedTo: undefined }),
+        makeTodo({ id: 'someones', completeByDate: '2026-06-16', assignedTo: 'uid-2' }),
+      ],
+    });
+    const { result } = renderHook(() => useActionQueue());
+    expect(result.current.actionQueue.map((i) => i.id)).toEqual(['household']);
   });
 
   it('includes pending_review transactions but excludes verified ones', () => {

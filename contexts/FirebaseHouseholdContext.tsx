@@ -76,6 +76,7 @@ import { migrateDuplicateMeals, needsMealDedup } from '@/utils/migrations/mealDe
 import { repairNegativePointsCorruption, needsNegativePointsRepair } from '@/utils/migrations/negativePointsRepair';
 import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
 import { usePointsSync, type PointsSyncUpdate } from '@/hooks/usePointsSync';
+import { useTodoAutoReschedule } from '@/hooks/useTodoAutoReschedule';
 import { useHabitActions } from '@/hooks/useHabitActions';
 import { expandCalendarItems } from '@/utils/calendarRecurrence';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -2329,6 +2330,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const updateToDo = useCallback(async (id: string, updates: Partial<ToDo>) => {
     await makeTodoCrudMutations({ db, householdId }).updateToDo(id, updates);
   }, [householdId]);
+
+  // "Auto-reschedule" (ToDo.resetWhenExpired): rolls an expired repeating chore
+  // forward to its next occurrence (clearing any checked steps) instead of
+  // letting it go overdue. Runs on load and on the midnight/periodic scheduler;
+  // the eligibility rule is the pure `computeExpiredTodoRoll`. Mounted here
+  // rather than beside usePointsSync above because it needs `updateToDo`, which
+  // is declared on this line. See hooks/useTodoAutoReschedule.ts.
+  useTodoAutoReschedule({ householdId, todos: visibleTodos, updateToDo });
 
   /**
    * Deletes a to-do item.
