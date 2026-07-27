@@ -29,7 +29,19 @@ const HabitCategoryList: React.FC<HabitCategoryListProps> = ({ category, habits 
   };
 
   const handleSave = () => {
+    // `isDragging` is the load-bearing guard, and it has to be: a press on the
+    // grip that never actually moved anything fires no `onReorder`, only
+    // `onDragEnd`. Without this, that tap ran the whole save path — on the
+    // first press with an empty `dragItems` (an empty batch, but still a
+    // "Habits reordered" toast for a gesture that reordered nothing), and from
+    // the second press onward with the PREVIOUS drag's `dragItems`, which is
+    // deliberately never cleared. That stale array is the dangerous case: if a
+    // habit has since been deleted elsewhere, the batch updates a missing doc
+    // and the whole commit fails. So don't collapse this into a
+    // `dragItems.length` check — that only catches the very first press.
+    if (!isDragging) return;
     setIsDragging(false);
+    if (dragItems.length === 0) return;
 
     // Calculate new orders and save.
     // To preserve global ordering structure:
