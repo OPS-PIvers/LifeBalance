@@ -133,7 +133,7 @@ describe('MealPlanTab', () => {
     expect(screen.queryByLabelText(/^Monday, August 28/)).not.toBeInTheDocument();
   });
 
-  it('extends the day strip window as keyboard navigation walks back to its start, still anchored to Monday', () => {
+  it('extends the day strip window when keyboard navigation reaches its edge', () => {
     // Set date to Wednesday, Oct 25, 2023
     const testDate = new Date(2023, 9, 25); // Month is 0-indexed: 9 = Oct
     vi.setSystemTime(testDate);
@@ -141,18 +141,62 @@ describe('MealPlanTab', () => {
     render(<MealPlanTab />);
 
     const stripGroup = screen.getByRole('group', { name: /Pick a day/i });
-    // Walk all the way back to the very first day of the strip's range (58
-    // ArrowLeft presses from Oct 25 reaches Aug 28; a few extra presses just
-    // no-op once the range's start boundary is hit). This both exercises the
-    // window-extension logic (each chip must be materialized and focusable
-    // as navigation reaches it) and confirms the range still begins on a
-    // Monday, not a Sunday — a Sunday start would begin Aug 27 instead.
-    for (let i = 0; i < 65; i++) {
-      fireEvent.keyDown(stripGroup, { key: 'ArrowLeft' });
+    const pressLeft = (times: number) => {
+      for (let i = 0; i < times; i++) {
+        fireEvent.keyDown(stripGroup, { key: 'ArrowLeft' });
+      }
+    };
+
+    // What matters here is the extension *boundary*, not how far the strip can
+    // be walked: the initial window is STRIP_WINDOW_SIZE (28) chips centered on
+    // today (Oct 11 - Nov 7), and it only grows once the selection comes within
+    // STRIP_WINDOW_EDGE_THRESHOLD (7) days of an edge, then pads by
+    // STRIP_WINDOW_PAD (14). So the 8th ArrowLeft is the interesting press, and
+    // asserting either side of it covers the wiring in 8 renders. (The window
+    // arithmetic itself is exhaustively covered in utils/dateStripWindow.test.ts.)
+    expect(screen.getByLabelText('Wednesday, October 11')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Tuesday, October 3')).not.toBeInTheDocument();
+
+    // Oct 18 — exactly at the threshold, so the window must NOT have grown yet.
+    // The aria-pressed assertion also proves all 7 presses each moved a day,
+    // i.e. every keydown got its own render rather than reusing a stale one.
+    pressLeft(7);
+    expect(screen.getByLabelText('Wednesday, October 18')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByLabelText('Tuesday, October 3')).not.toBeInTheDocument();
+
+    // Oct 17 — crosses the threshold, extending the window back to Oct 3.
+    pressLeft(1);
+    expect(screen.getByLabelText('Tuesday, October 17')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Tuesday, October 3')).toBeInTheDocument();
+  });
+
+  it('anchors the start of the day strip range to Monday, not Sunday', () => {
+    // Set date to Wednesday, Oct 25, 2023
+    vi.setSystemTime(new Date(2023, 9, 25)); // Month is 0-indexed: 9 = Oct
+
+    render(<MealPlanTab />);
+
+    const stripGroup = screen.getByRole('group', { name: /Pick a day/i });
+    const firstChip = () => stripGroup.querySelector<HTMLElement>('[data-date]');
+
+    // Walk to the very first day of the strip's range. Selecting the earliest
+    // materialized chip extends the window another STRIP_WINDOW_PAD (14) days
+    // back, so clicking it repeatedly reaches the range start in ~5 renders
+    // where day-at-a-time ArrowLeft presses would take 58.
+    for (let i = 0; i < 10; i++) {
+      const chip = firstChip();
+      if (!chip) break;
+      const before = chip.dataset.date;
+      fireEvent.click(chip);
+      // The window only ever grows; when it can't grow further we're at the
+      // range's start boundary.
+      if (firstChip()?.dataset.date === before) break;
     }
 
-    expect(screen.getByLabelText(/^Monday, August 28/)).toBeInTheDocument();
-    expect(screen.queryByLabelText(/^Sunday, August 27/)).not.toBeInTheDocument();
+    // 8 weeks back from the week of Oct 25 is Aug 28. A Sunday-anchored range
+    // would begin Aug 27 instead.
+    expect(screen.getByLabelText('Monday, August 28')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Sunday, August 27')).not.toBeInTheDocument();
   });
 
   it('orders ingredient-selector items after the highest existing order, not list length', () => {
