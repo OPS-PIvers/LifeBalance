@@ -1,8 +1,11 @@
 
 import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { subDays } from 'date-fns';
 import SmartHabitAdjustModal from './SmartHabitAdjustModal';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
+import { getLocalDateString } from '@/utils/dateHelpers';
+import type { Habit } from '@/types/schema';
 
 // Mock dependencies
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
@@ -10,26 +13,42 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useHouseholdCore: vi.fn(),
 }));
 
-vi.mock('@/services/geminiService', () => ({
-  analyzeHabitPoints: vi.fn(),
-}));
+/** The last `count` calendar days, today first — relative to the real clock the modal reads. */
+const recentDates = (count: number): string[] =>
+  Array.from({ length: count }, (_, i) => getLocalDateString(subDays(new Date(), i)));
 
-// Import mocked modules to set implementations
-import { analyzeHabitPoints } from '@/services/geminiService';
+const makeHabit = (overrides: Partial<Habit>): Habit =>
+  ({
+    id: '1',
+    title: 'Run',
+    category: 'health',
+    type: 'positive',
+    basePoints: 10,
+    scoringType: 'threshold',
+    period: 'daily',
+    targetCount: 1,
+    count: 0,
+    totalCount: 60,
+    completedDates: [],
+    streakDays: 0,
+    lastUpdated: getLocalDateString(),
+    ...overrides,
+  }) as Habit;
+
+/** Done every day for two months — built in, so the deterministic rule lowers its reward. */
+const builtInHabit = (): Habit => makeHabit({ completedDates: recentDates(60) });
 
 describe('SmartHabitAdjustModal', () => {
   const mockOnClose = vi.fn();
   const mockUpdateHabit = vi.fn();
-  const mockHabits = [
-    { id: '1', title: 'Run', basePoints: 10 }
-  ];
+
+  const setHabits = (habits: Habit[]) => {
+    (useGamification as Mock).mockReturnValue({ habits, updateHabit: mockUpdateHabit });
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (useGamification as Mock).mockReturnValue({
-      habits: mockHabits,
-      updateHabit: mockUpdateHabit,
-    });
+    setHabits([builtInHabit()]);
     (useHouseholdCore as Mock).mockReturnValue({
       householdId: 'test-household',
     });
@@ -40,24 +59,7 @@ describe('SmartHabitAdjustModal', () => {
     expect(screen.queryByText('Smart Adjustments')).not.toBeInTheDocument();
   });
 
-  it('renders loading state initially', async () => {
-    (analyzeHabitPoints as Mock).mockReturnValue(new Promise(() => {})); // Never resolves
-    render(<SmartHabitAdjustModal isOpen={true} onClose={mockOnClose} />);
-    expect(screen.getByText('Analyzing your habits...')).toBeInTheDocument();
-  });
-
-  it('renders suggestions when loaded', async () => {
-    const mockSuggestions = [
-      {
-        habitId: '1',
-        habitTitle: 'Run',
-        currentPoints: 10,
-        suggestedPoints: 15,
-        reasoning: 'Motivation boost',
-      },
-    ];
-    (analyzeHabitPoints as Mock).mockResolvedValue(mockSuggestions);
-
+  it('renders the deterministic suggestion for a built-in habit', async () => {
     render(<SmartHabitAdjustModal isOpen={true} onClose={mockOnClose} />);
 
     await waitFor(() => {
@@ -65,12 +67,12 @@ describe('SmartHabitAdjustModal', () => {
     });
 
     expect(screen.getByText('Run')).toBeInTheDocument();
-    expect(screen.getByText('Motivation boost')).toBeInTheDocument();
-    expect(screen.getByText('15 pts')).toBeInTheDocument();
+    expect(screen.getByText('8 pts')).toBeInTheDocument();
+    expect(screen.getByText(/become routine/)).toBeInTheDocument();
   });
 
-  it('renders empty state when no suggestions returned', async () => {
-    (analyzeHabitPoints as Mock).mockResolvedValue([]);
+  it('renders the empty state when no habit has enough history to judge', async () => {
+    setHabits([makeHabit({ completedDates: recentDates(5), totalCount: 5 })]);
 
     render(<SmartHabitAdjustModal isOpen={true} onClose={mockOnClose} />);
 
@@ -79,32 +81,9 @@ describe('SmartHabitAdjustModal', () => {
     });
   });
 
-  it('renders error state on failure', async () => {
-    // Suppress console.error for expected error
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    (analyzeHabitPoints as Mock).mockRejectedValue(new Error('API Error'));
-
-    render(<SmartHabitAdjustModal isOpen={true} onClose={mockOnClose} />);
-
-    await waitFor(() => {
-      expect(screen.getByText('Failed to generate suggestions: API Error')).toBeInTheDocument();
-    });
-
-    consoleSpy.mockRestore();
-  });
-
   it('calls updateHabit when accepting suggestion', async () => {
-    const mockSuggestions = [
-      {
-        habitId: '1',
-        habitTitle: 'Run',
-        currentPoints: 10,
-        suggestedPoints: 15,
-        reasoning: 'Motivation boost',
-      },
-    ];
-    (analyzeHabitPoints as Mock).mockResolvedValue(mockSuggestions);
+    const habit = builtInHabit();
+    setHabits([habit]);
 
     render(<SmartHabitAdjustModal isOpen={true} onClose={mockOnClose} />);
 
@@ -116,24 +95,13 @@ describe('SmartHabitAdjustModal', () => {
 
     await waitFor(() => {
       expect(mockUpdateHabit).toHaveBeenCalledWith({
-        ...mockHabits[0],
-        basePoints: 15,
+        ...habit,
+        basePoints: 8,
       });
     });
   });
 
   it('removes suggestion when ignored', async () => {
-    const mockSuggestions = [
-      {
-        habitId: '1',
-        habitTitle: 'Run',
-        currentPoints: 10,
-        suggestedPoints: 15,
-        reasoning: 'Motivation boost',
-      },
-    ];
-    (analyzeHabitPoints as Mock).mockResolvedValue(mockSuggestions);
-
     render(<SmartHabitAdjustModal isOpen={true} onClose={mockOnClose} />);
 
     await waitFor(() => {

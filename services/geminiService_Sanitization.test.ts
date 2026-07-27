@@ -107,32 +107,6 @@ describe('geminiService Sanitization', () => {
     expect(promptText).toContain('Habit  Injection');
   });
 
-  it('analyzeHabitPoints sanitizes habit titles', async () => {
-    const { analyzeHabitPoints } = await import('./geminiService');
-
-    generateContentMock.mockResolvedValue({
-      text: JSON.stringify([])
-    });
-
-    const maliciousHabit = {
-      id: '1',
-      title: 'Habit " Injection',
-      basePoints: 10,
-      period: 'daily',
-      streakDays: 0,
-      totalCount: 0,
-      type: 'positive'
-    } as unknown as Habit;
-
-    await analyzeHabitPoints('id', [maliciousHabit]);
-
-    const callArgs = generateContentMock.mock.calls[0]![0];
-    const promptText = callArgs.contents.parts[0].text;
-
-    expect(promptText).not.toContain('Habit " Injection');
-    expect(promptText).toContain('Habit  Injection');
-  });
-
   it('analyzeHabitPatterns sanitizes habit titles', async () => {
     const { analyzeHabitPatterns } = await import('./geminiService');
 

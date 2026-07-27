@@ -75,17 +75,18 @@ function HouseholdAssigneeCluster({ members }: { members: HouseholdMember[] }) {
 // which renders `TodoRow`.
 //
 // Row-diet redesign (owner-approved): the row shows ONLY the complete circle,
-// title, urgency-colored due cluster, a quiet "has details" dot, and the
-// assignee avatar image. All per-row action buttons are gone — the interaction
+// title, urgency-colored due cluster, and the assignee avatar image (the
+// "has details" dot was removed — paper cut #13, it signaled nothing
+// actionable). All per-row action buttons are gone — the interaction
 // model is: TAP the row body = edit drawer, SWIPE = complete/delete,
 // LONG-PRESS (or right-click / keyboard context-menu key) = Task-options
 // drawer (star / move to tomorrow / duplicate / edit / delete, in ToDosPage).
 
 const LONG_PRESS_MS = 500;
 
-// Title line of the two-line row (paper cut #4): title always gets the full
-// row width to itself, with the meta line stacked underneath — deterministic
-// for every row regardless of due-pill text length, unlike the old
+// Title line (paper cut #4): title always gets the full row width to itself,
+// with the meta line stacked underneath — deterministic for every row
+// regardless of due-pill text length, unlike the old
 // same-line-until-it-doesn't-fit layout.
 const TITLE_COLUMN = 'w-full';
 
@@ -161,13 +162,6 @@ export const TodoRow = React.memo(function TodoRow({
   // "right swipe = done" gesture is only for tasks that are actually finishable
   // in one motion. Swipe-to-delete stays available either way.
   const swipeCompleteAllowed = subtaskCount === 0 || stepsLeft === 0;
-
-  // Subtasks now surface through the checklist pill + inline expansion below, so
-  // they no longer feed the generic "has details" dot — that dot is reserved for
-  // notes and recurrence, which have no other row affordance.
-  const hasDetails =
-    Boolean(item.notes && item.notes.trim().length > 0) ||
-    Boolean(item.recurrence?.frequency);
 
   // `assignee` is undefined both for a household-wide todo AND for a stale
   // reference to a since-removed member — key off `item.assignedTo` itself.
@@ -552,15 +546,6 @@ export const TodoRow = React.memo(function TodoRow({
           habit-linked to-do. Replaces the old standalone "n steps left" text. */}
       {subtaskPill}
 
-      {/* Quiet "has details" indicator — notes or recurrence live in the edit
-          drawer; the dot just signals there's more (subtasks have the pill). */}
-      {hasDetails && (
-        <span className="text-brand-300 dark:text-brand-500" data-testid="todo-details-dot">
-          <span aria-hidden="true">•</span>
-          <span className="sr-only">Has details</span>
-        </span>
-      )}
-
       {assignee ? (
         // Reuse the exact same chip as the household cluster and the subtask
         // list below (paper cut #5) — a specific assignee and "everyone"
@@ -633,8 +618,9 @@ export const TodoRow = React.memo(function TodoRow({
           {/* Same two-line title/meta treatment as normal mode (paper cut #4),
               so bulk-select doesn't look denser/different than the regular list. */}
           <div className="flex flex-col gap-y-1">
-            {/* Two reserved lines — see the normal-mode title below for why. */}
-            <p className={cn(TITLE_COLUMN, 'line-clamp-2 min-h-[2.75em] font-medium leading-snug text-inherit')} title={item.text}>
+            {/* Up to two lines — see the normal-mode title below for why the
+                reserved-height version of this was reverted. */}
+            <p className={cn(TITLE_COLUMN, 'line-clamp-2 font-medium leading-snug text-inherit')} title={item.text}>
               <span className={isSelected ? 'text-accent-800 dark:text-accent-200' : 'text-brand-900 dark:text-brand-50'}>{item.text}</span>
             </p>
             {metaLine}
@@ -656,8 +642,8 @@ export const TodoRow = React.memo(function TodoRow({
           onContextMenu={handleContextMenu}
         >
           {/* Title on its own line, meta line stacked beneath it (paper cut
-              #4) — deterministic two-line row regardless of due-pill text
-              length. The edit affordance is a role="button" wrapping ONLY the
+              #4) — deterministic layout regardless of due-pill text length.
+              The edit affordance is a role="button" wrapping ONLY the
               title, so it has NO interactive descendant — ARIA forbids
               interactive descendants of role=button, which would swallow the
               checklist pill for VoiceOver/TalkBack. The meta line (which HOSTS
@@ -676,17 +662,13 @@ export const TodoRow = React.memo(function TodoRow({
               title={item.text}
               className={cn(TITLE_COLUMN, 'text-left select-none [-webkit-touch-callout:none] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-card')}
             >
-              {/* Two lines, RESERVED — not truncated to one, and not merely
-                  capped at two. The clamp bounds how far a long title can
-                  grow; `min-h-[2.75em]` reserves that same space when the
-                  title only needs one line, so EVERY row is the same height
-                  whatever its title. Capping alone would have left one-line
-                  and two-line rows different heights — the same jitter the
-                  "Tomorrow" tag caused, just from a different source.
-
-                  2.75em = 2 x `leading-snug` (1.375). In `em`, so it tracks
-                  this element's own font-size rather than pinning a px height
-                  that breaks if the row's type scale ever moves.
+              {/* Capped at two lines, NOT reserved to two — a one-line title
+                  yields a one-line-tall row. This used to also carry
+                  `min-h-[2.75em]` to reserve two lines' worth of height on
+                  every row so heights stayed uniform regardless of title
+                  length, but that left an ugly gap between the title and the
+                  meta row whenever the title fit on one line (paper cut #12);
+                  reverted in favor of a tighter, variable-height row.
 
                   A to-do list whose titles are cut off mid-word ("Connect with
                   mom about worksho…") has traded away the one thing the row
@@ -698,7 +680,7 @@ export const TodoRow = React.memo(function TodoRow({
                   No `block`: `line-clamp-2` supplies `display:-webkit-box`,
                   and a competing `display:block` in the same layer can win by
                   stylesheet order and silently render the clamp inert. */}
-              <span className="line-clamp-2 min-h-[2.75em] font-medium leading-snug text-brand-900 dark:text-brand-50">{item.text}</span>
+              <span className="line-clamp-2 font-medium leading-snug text-brand-900 dark:text-brand-50">{item.text}</span>
             </div>
 
             {metaLine}

@@ -6,6 +6,7 @@ import { usePowerToolsEnabled } from '@/hooks/usePowerToolsEnabled';
 import type { HabitPointAdjustmentSuggestion } from '@/services/geminiService.types';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { Section } from '@/components/ui/Section';
+import { generatePointRebalanceSuggestions } from '@/utils/pointRebalance';
 import {
   isRebalanceEligible,
   readRebalanceCooldowns,
@@ -15,18 +16,20 @@ import {
 } from '@/utils/pointRebalanceCadence';
 
 /**
- * PointRebalanceCard — F-DASH-08. Dashboard surface for the already-shipped
- * `analyzeHabitPoints()` AI helper: suggests raising/lowering a habit's
- * `basePoints` when it looks clearly over- or under-rewarding, with one-tap
- * Apply/Dismiss.
+ * PointRebalanceCard — F-DASH-08. Dashboard surface for
+ * `generatePointRebalanceSuggestions()`: suggests raising/lowering a habit's
+ * `basePoints` when its recent completion rate says the reward no longer fits,
+ * with one-tap Apply/Dismiss.
  *
- * Cadence: gated behind `powerToolsEnabled` (same AI-surface flag as
- * HabitCoach/BudgetHistory/etc.). The AI call itself is cached per household
- * for `ANALYSIS_CACHE_TTL_MS` (24h) in localStorage so a Dashboard re-mount
- * doesn't re-spend AI quota; suggestions are further filtered to habits not
- * reviewed (applied/dismissed) within `REBALANCE_COOLDOWN_DAYS` (30 days),
- * also tracked in localStorage. Only the single top-eligible suggestion is
- * shown at a time to keep this a light nudge, not a queue.
+ * The suggestions are a deterministic, pure calculation over the habits already
+ * in memory (`utils/pointRebalance.ts`) — no AI call, no quota. Cadence: gated
+ * behind `powerToolsEnabled` (same surface flag as HabitCoach/BudgetHistory);
+ * the computed result is still cached per household for `ANALYSIS_CACHE_TTL_MS`
+ * (24h) in localStorage so the offered suggestion is stable across a day rather
+ * than shifting on every Dashboard mount; suggestions are further filtered to
+ * habits not reviewed (applied/dismissed) within `REBALANCE_COOLDOWN_DAYS`
+ * (30 days), also tracked in localStorage. Only the single top-eligible
+ * suggestion is shown at a time to keep this a light nudge, not a queue.
  */
 export const PointRebalanceCard: React.FC = () => {
   const { habits, updateHabit } = useGamification();
@@ -43,30 +46,22 @@ export const PointRebalanceCard: React.FC = () => {
 
     fetchedForHousehold.current = householdId;
 
-    // Reads (localStorage + AI call) are deferred a macrotask so this effect
-    // never calls setState synchronously in its own body (matches the
+    // Reads (localStorage + the analysis) are deferred a macrotask so this
+    // effect never calls setState synchronously in its own body (matches the
     // WeeklyRecapCard external-input-subscription pattern) — StrictMode's
     // double-invoke just re-schedules a no-op second read.
-    const timer = window.setTimeout(async () => {
+    const timer = window.setTimeout(() => {
       const cached = readAnalysisCache<HabitPointAdjustmentSuggestion>(householdId);
       if (cached) {
         setSuggestions(cached);
         return;
       }
 
-      const cooldowns = readRebalanceCooldowns(habits.map(h => h.id));
-      const eligibleHabits = habits.filter(h => isRebalanceEligible(h.id, cooldowns));
-      if (eligibleHabits.length === 0) return;
-
-      try {
-        const { analyzeHabitPoints } = await import('@/services/geminiService');
-        const results = await analyzeHabitPoints(householdId, eligibleHabits);
-        writeAnalysisCache(householdId, results);
-        setSuggestions(results);
-      } catch {
-        // Silent — this is a background nudge, not a user-initiated action.
-        // A failed/quota-exceeded analysis just means no card shows.
-      }
+      // Analyse EVERY habit — the household's full point range is what bounds a
+      // suggestion's scale. Per-habit cooldowns are applied at render below.
+      const results = generatePointRebalanceSuggestions(habits);
+      writeAnalysisCache(householdId, results);
+      setSuggestions(results);
     }, 0);
 
     return () => window.clearTimeout(timer);
