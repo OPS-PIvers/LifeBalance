@@ -1,7 +1,34 @@
+import React, { useState } from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { CaptureTransactionManual } from './CaptureTransactionManual';
+import { CaptureTransactionManual as ManualForm } from './CaptureTransactionManual';
+import { Button } from '@/components/ui/Button';
 import { Transaction, Habit, Store, Account } from '@/types/schema';
+
+const TEST_FORM_ID = 'capture-transaction-form';
+
+type HarnessProps = Omit<
+  React.ComponentProps<typeof ManualForm>,
+  'formId' | 'onSubmittingChange'
+>;
+
+/**
+ * The real drawer renders the Save button in the Drawer's fixed FOOTER —
+ * outside the form, associated back to it by `form={formId}` — and owns the
+ * submitting flag. This harness reproduces exactly that wiring so the tests
+ * below keep driving submission through a real submit button.
+ */
+const CaptureTransactionManual: React.FC<HarnessProps> = (props) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  return (
+    <>
+      <ManualForm {...props} formId={TEST_FORM_ID} onSubmittingChange={setIsSubmitting} />
+      <Button type="submit" form={TEST_FORM_ID} isLoading={isSubmitting} className="w-full">
+        Save Transaction
+      </Button>
+    </>
+  );
+};
 
 // Mock dependencies
 vi.mock('react-hot-toast', () => ({

@@ -38,6 +38,9 @@ const mockUseHousehold = {
   householdId: 'test-household',
   stores: [] as unknown[],
   accounts: [] as unknown[],
+  shoppingList: [] as unknown[],
+  groceryCatalog: [] as unknown[],
+  loadFullGroceryCatalog: vi.fn().mockResolvedValue(undefined),
 };
 
 // Each slice hook returns the shared superset object; destructuring in the
@@ -69,34 +72,39 @@ const setEnabledModules = (enabled: ModuleKey[]) => {
   });
 };
 
-// Mock child components to simplify testing
+// Mock child components to simplify testing. The footer slot matters now —
+// every tab's Save button lives there (associated back to its form by id).
 vi.mock('@/components/ui/Drawer', () => ({
-  Drawer: ({ children, isOpen, header }: { children: React.ReactNode; isOpen: boolean; header: React.ReactNode }) => isOpen ? (
+  Drawer: ({ children, isOpen, header, footer }: { children: React.ReactNode; isOpen: boolean; header: React.ReactNode; footer?: React.ReactNode }) => isOpen ? (
     <div data-testid="drawer">
       <div data-testid="drawer-header">{header}</div>
       {children}
+      {footer && <div data-testid="drawer-footer">{footer}</div>}
     </div>
   ) : null,
 }));
 
-// Expose onManual/onSelectImage so tests can drive the merged menu without
-// rendering the full CaptureMenu (its own tests cover its internals).
-vi.mock('./CaptureMenu', () => ({
-  CaptureMenu: ({ onManual, onSelectImage }: { onManual: () => void; onSelectImage: (file: File) => void }) => (
-    <div data-testid="capture-menu">
-      <button data-testid="manual-entry" onClick={onManual}>Manual Entry</button>
-      <button
-        data-testid="add-from-image"
-        onClick={() => onSelectImage(new File(['x'], 'receipt.png', { type: 'image/png' }))}
-      >
-        Add from Image
-      </button>
-    </div>
+// Expose onSelectImage so tests can drive the scan path without rendering the
+// real file input (CaptureImageButton's own tests cover its internals).
+vi.mock('./CaptureImageButton', () => ({
+  CaptureImageButton: ({ onSelectImage }: { onSelectImage: (file: File) => void }) => (
+    <button
+      data-testid="add-from-image"
+      onClick={() => onSelectImage(new File(['x'], 'receipt.png', { type: 'image/png' }))}
+    >
+      Scan a receipt or screenshot
+    </button>
   ),
 }));
 
 vi.mock('./CaptureTransactionManual', () => ({
-  CaptureTransactionManual: () => <div data-testid="capture-transaction-manual">Manual Entry</div>,
+  CaptureTransactionManual: ({ formId }: { formId: string }) => (
+    <form id={formId} data-testid="capture-transaction-manual">Manual Entry</form>
+  ),
+}));
+
+vi.mock('./CaptureTransactionReview', () => ({
+  CaptureTransactionReview: () => <div data-testid="capture-transaction-review">Review</div>,
 }));
 
 vi.mock('./CaptureTodoTab', () => ({
@@ -109,6 +117,7 @@ vi.mock('./CaptureShoppingTab', () => ({
 
 // Mock lucide-react icons
 vi.mock('lucide-react', () => ({
+  Camera: () => <span data-testid="icon-camera" />,
   Wallet: () => <span data-testid="icon-wallet" />,
   CheckSquare: () => <span data-testid="icon-check-square" />,
   ShoppingBag: () => <span data-testid="icon-shopping-bag" />,
@@ -132,7 +141,7 @@ describe('CaptureModal', () => {
   it('renders correctly when open', () => {
     render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
     expect(screen.getByTestId('drawer')).toBeInTheDocument();
-    // Menu view with multiple capture types keeps the generic title — the
+    // Entry view with multiple capture types keeps the generic title — the
     // type selector below carries the specifics (round-3 critique).
     expect(screen.getByText('Capture')).toBeInTheDocument();
   });
@@ -142,22 +151,30 @@ describe('CaptureModal', () => {
     expect(screen.queryByTestId('drawer')).not.toBeInTheDocument();
   });
 
-  it('renders tab switcher', () => {
+  it('renders tab switcher labelled with the destination pages', () => {
     render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
-    expect(screen.getByText('Expense')).toBeInTheDocument();
-    expect(screen.getByText('To-Do')).toBeInTheDocument();
-    expect(screen.getByText('Shop')).toBeInTheDocument();
+    expect(screen.getByText('Money')).toBeInTheDocument();
+    expect(screen.getByText('To-Dos')).toBeInTheDocument();
+    expect(screen.getByText('Shopping')).toBeInTheDocument();
+  });
+
+  it('opens the Money tab straight onto the manual form, with a scan button above it', () => {
+    render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
+
+    // No two-card chooser any more: the form IS the landing state.
+    expect(screen.getByTestId('capture-transaction-manual')).toBeInTheDocument();
+    expect(screen.getByTestId('add-from-image')).toBeInTheDocument();
   });
 
   it('switches to To-Do tab', () => {
     render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
 
-    // Initial state: Transaction tab (CaptureMenu)
-    expect(screen.getByTestId('capture-menu')).toBeInTheDocument();
+    // Initial state: Money tab (manual form)
+    expect(screen.getByTestId('capture-transaction-manual')).toBeInTheDocument();
     expect(screen.queryByTestId('capture-todo-tab')).not.toBeInTheDocument();
 
-    // Click To-Do tab
-    fireEvent.click(screen.getByText('To-Do'));
+    // Click To-Dos tab
+    fireEvent.click(screen.getByText('To-Dos'));
 
     // Title stays the generic 'Capture' while the multi-type selector is
     // visible; the selected segment communicates the type.
@@ -165,14 +182,13 @@ describe('CaptureModal', () => {
 
     // Check content update
     expect(screen.getByTestId('capture-todo-tab')).toBeInTheDocument();
-    expect(screen.queryByTestId('capture-menu')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('capture-transaction-manual')).not.toBeInTheDocument();
   });
 
   it('switches to Shopping tab', () => {
     render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
 
-    // Click Shop tab
-    fireEvent.click(screen.getByText('Shop'));
+    fireEvent.click(screen.getByText('Shopping'));
 
     // Generic title while the multi-type selector is visible (see above).
     expect(screen.getByText('Capture')).toBeInTheDocument();
@@ -181,17 +197,63 @@ describe('CaptureModal', () => {
     expect(screen.getByTestId('capture-shopping-tab')).toBeInTheDocument();
   });
 
-  it('switches back to Expense tab', () => {
+  it('switches back to the Money tab', () => {
     render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
 
-    // Go to Shop first
-    fireEvent.click(screen.getByText('Shop'));
+    // Go to Shopping first
+    fireEvent.click(screen.getByText('Shopping'));
     expect(screen.getByTestId('capture-shopping-tab')).toBeInTheDocument();
 
-    // Go back to Expense
-    fireEvent.click(screen.getByText('Expense'));
-    expect(screen.getByTestId('capture-menu')).toBeInTheDocument();
+    // Go back to Money
+    fireEvent.click(screen.getByText('Money'));
+    expect(screen.getByTestId('capture-transaction-manual')).toBeInTheDocument();
     expect(screen.getByText('Capture')).toBeInTheDocument();
+  });
+
+  // --- Footer save button (owner rule: never a scroll away) ---
+
+  describe('footer save button', () => {
+    it('renders a Save button in the Drawer footer targeting the active tab form', () => {
+      render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
+
+      const footer = screen.getByTestId('drawer-footer');
+      const saveButton = screen.getByRole('button', { name: 'Save transaction' });
+      expect(footer).toContainElement(saveButton);
+      expect(saveButton).toHaveAttribute('form', 'capture-transaction-form');
+      expect(saveButton).toHaveAttribute('type', 'submit');
+    });
+
+    it('swaps the footer action with the tab', () => {
+      render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
+
+      fireEvent.click(screen.getByText('To-Dos'));
+      expect(screen.getByRole('button', { name: 'Create task' })).toHaveAttribute('form', 'capture-todo-form');
+
+      fireEvent.click(screen.getByText('Shopping'));
+      expect(screen.getByRole('button', { name: 'Add to list' })).toHaveAttribute('form', 'capture-shopping-form');
+    });
+
+    // The review view is a LIST, not a form, so its bulk-add is the one footer
+    // action wired by onClick rather than `form=`. It used to sit inline below
+    // a list of every scanned row, i.e. always a scroll away on a phone.
+    it('puts the review bulk-add in the footer, disabled when nothing is selected', async () => {
+      parseReceiptLineItemsMock.mockResolvedValue({ merchant: 'Target', date: '2026-07-01', items: [] });
+      parseBankStatementMock.mockResolvedValue([
+        { merchant: 'Target', amount: 12, category: 'Shopping', date: '2026-07-01' },
+        { merchant: 'Cub', amount: 8, category: 'Groceries', date: '2026-07-01' },
+      ]);
+      render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
+
+      fireEvent.click(screen.getByTestId('add-from-image'));
+      await screen.findByTestId('capture-transaction-review');
+
+      // Both parsed rows arrive selected.
+      const addButton = screen.getByRole('button', { name: 'Add 2 to Action Queue' });
+      expect(screen.getByTestId('drawer-footer')).toContainElement(addButton);
+      expect(addButton).not.toBeDisabled();
+      // Not form-associated — the review body has no <form> to submit.
+      expect(addButton).not.toHaveAttribute('form');
+    });
   });
 
   // --- Plan 090: capture-tab cascade ---
@@ -200,32 +262,32 @@ describe('CaptureModal', () => {
     setEnabledModules(['lists', 'todos', 'shopping']);
     render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
 
-    expect(screen.queryByText('Expense')).not.toBeInTheDocument();
-    expect(screen.getByText('To-Do')).toBeInTheDocument();
-    expect(screen.getByText('Shop')).toBeInTheDocument();
+    expect(screen.queryByText('Money')).not.toBeInTheDocument();
+    expect(screen.getByText('To-Dos')).toBeInTheDocument();
+    expect(screen.getByText('Shopping')).toBeInTheDocument();
   });
 
-  it('gates To-Do/Shop tabs behind the Plan master (only Expense when Plan is off)', () => {
+  it('gates To-Do/Shopping tabs behind the Plan master (only Money when Plan is off)', () => {
     // todos + shopping flags on, but Plan off → their destinations are hidden,
-    // so only the Expense (money) capture tab remains.
+    // so only the Money capture tab remains.
     setEnabledModules(['money', 'todos', 'shopping']);
     render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
 
-    expect(screen.getByText('Add Transaction')).toBeInTheDocument(); // Expense active
-    expect(screen.queryByText('To-Do')).not.toBeInTheDocument();
-    expect(screen.queryByText('Shop')).not.toBeInTheDocument();
+    expect(screen.getByText('Add Transaction')).toBeInTheDocument(); // Money active
+    expect(screen.queryByText('To-Dos')).not.toBeInTheDocument();
+    expect(screen.queryByText('Shopping')).not.toBeInTheDocument();
   });
 
   it('defaults the active tab to the first enabled tab when the default (money) is off', () => {
-    // Money disabled, so the Expense (transaction) default is unavailable.
+    // Money disabled, so the transaction default is unavailable.
     setEnabledModules(['lists', 'todos', 'shopping']);
     render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
 
-    // First enabled tab is To-Do — its content is active (title stays the
-    // generic 'Capture' since To-Do + Shop are both selectable).
+    // First enabled tab is To-Dos — its content is active (title stays the
+    // generic 'Capture' since To-Dos + Shopping are both selectable).
     expect(screen.getByText('Capture')).toBeInTheDocument();
     expect(screen.getByTestId('capture-todo-tab')).toBeInTheDocument();
-    expect(screen.queryByTestId('capture-menu')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('capture-transaction-manual')).not.toBeInTheDocument();
   });
 
   it('hides the tab switcher when only one capture module is enabled', () => {
@@ -235,38 +297,49 @@ describe('CaptureModal', () => {
     // Single enabled tab renders its content with no switchable strip.
     expect(screen.getByTestId('capture-shopping-tab')).toBeInTheDocument();
     expect(screen.getByText('Add Item')).toBeInTheDocument();
-    expect(screen.queryByText('Expense')).not.toBeInTheDocument();
-    expect(screen.queryByText('To-Do')).not.toBeInTheDocument();
+    expect(screen.queryByText('Money')).not.toBeInTheDocument();
+    expect(screen.queryByText('To-Dos')).not.toBeInTheDocument();
     // Sole tab's own label is not rendered as a switcher option.
-    expect(screen.queryByText('Shop')).not.toBeInTheDocument();
+    expect(screen.queryByText('Shopping')).not.toBeInTheDocument();
   });
 
   it('renders a graceful empty state when no capture module is enabled', () => {
     setEnabledModules([]);
     render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
 
-    // No crash on tabOptions[0]; a guidance message is shown instead.
+    // No crash on tabOptions[0]; a guidance message is shown instead, and no
+    // footer save action for a tab that doesn't exist.
     expect(screen.getByText(/No capture types are enabled/i)).toBeInTheDocument();
-    expect(screen.queryByTestId('capture-menu')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('capture-transaction-manual')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('drawer-footer')).not.toBeInTheDocument();
   });
 
   // --- Back affordance (paper cut 2G.3) ---
 
   describe('back navigation', () => {
-    it('shows no back button on the menu view', () => {
+    it('shows no back button on the entry view (there is nothing above the form)', () => {
       render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
       expect(screen.queryByLabelText('Back')).not.toBeInTheDocument();
     });
 
-    it('shows a Back button in the manual sub-view and returns to the menu', () => {
+    it('shows a Back button in the review sub-view and returns to the form', async () => {
+      parseReceiptLineItemsMock.mockResolvedValue({ merchant: 'Target', date: '2026-07-01', items: [] });
+      parseBankStatementMock.mockResolvedValue([
+        { merchant: 'Target', amount: 12, category: 'Shopping', date: '2026-07-01' },
+      ]);
       render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
 
-      fireEvent.click(screen.getByTestId('manual-entry'));
-      expect(screen.getByTestId('capture-transaction-manual')).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('add-from-image'));
+      await screen.findByTestId('capture-transaction-review');
       expect(screen.getByLabelText('Back')).toBeInTheDocument();
+      // The tab strip steps aside for the review (the body is no longer a
+      // capture form) — but the footer does NOT: its action becomes the
+      // bulk-add, so Save is still never a scroll away.
+      expect(screen.queryByText('To-Dos')).not.toBeInTheDocument();
+      expect(screen.getByTestId('drawer-footer')).toBeInTheDocument();
 
       fireEvent.click(screen.getByLabelText('Back'));
-      expect(screen.getByTestId('capture-menu')).toBeInTheDocument();
+      expect(screen.getByTestId('capture-transaction-manual')).toBeInTheDocument();
       expect(screen.queryByLabelText('Back')).not.toBeInTheDocument();
       // Back is a pure navigation — it must not close the whole drawer.
       expect(mockOnClose).not.toHaveBeenCalled();
@@ -318,10 +391,8 @@ describe('CaptureModal', () => {
       fireEvent.click(screen.getByLabelText('Close drawer'));
       expect(mockOnClose).toHaveBeenCalledTimes(1);
 
-      // ...and starts a fresh manual entry.
-      await screen.findByTestId('capture-menu');
-      fireEvent.click(screen.getByTestId('manual-entry'));
-      expect(screen.getByTestId('capture-transaction-manual')).toBeInTheDocument();
+      // ...and is returned to a fresh manual entry form.
+      await screen.findByTestId('capture-transaction-manual');
 
       // The abandoned scan now resolves.
       resolveScan({

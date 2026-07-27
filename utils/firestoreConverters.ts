@@ -503,6 +503,14 @@ export const transactionCommentConverter: FirestoreDataConverter<TransactionComm
 
 // ---------------------------------------------------------------------------
 // ToDo — preserves Timestamp→ISO normalisation for createdAt/completedAt.
+// Also normalizes `category`/`linkedHabitId` from `null` to `undefined`: both
+// are typed as optional strings, but the generic form-edit path writes
+// `category: undefined` / `linkedHabitId: undefined`, which
+// utils/firestoreSanitizer.ts converts to a literal `null` before the write
+// lands (see the schema comment on ToDo.category in types/schema.ts). Without
+// this, `ToDo.category` is `string | undefined` by type but `null` at
+// runtime, and a consumer that trusts the type (e.g. CategoryChipPicker's
+// `value.trim()`) crashes on the lie. Every other field keeps the raw spread.
 // ---------------------------------------------------------------------------
 export const todoConverter: FirestoreDataConverter<ToDo> = {
   toFirestore(todo: ToDo): DocumentData {
@@ -522,6 +530,8 @@ export const todoConverter: FirestoreDataConverter<ToDo> = {
           ? d['completedAt'].toDate().toISOString()
           : d['completedAt']
         : undefined,
+      category: d['category'] === null ? undefined : d['category'],
+      linkedHabitId: d['linkedHabitId'] === null ? undefined : d['linkedHabitId'],
     } as ToDo;
   },
 };

@@ -36,6 +36,9 @@ interface TransactionMasterListProps {
   highlightId?: string | null;
 }
 
+/** Form id linking the "add your first transaction" form to its footer Save. */
+const ADD_FIRST_FORM_ID = 'add-first-transaction-form';
+
 // --- Main Component ---
 
 const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlightId = null }) => {
@@ -76,6 +79,9 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
 
   // Add-first-transaction drawer state
   const [isAddingFirst, setIsAddingFirst] = useState(false);
+  // Save-in-flight for the "add your first transaction" drawer; its Save
+  // button lives in the Drawer footer, outside CaptureTransactionManual.
+  const [isAddingFirstSubmitting, setIsAddingFirstSubmitting] = useState(false);
 
   // Edit Modal State
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -1002,13 +1008,31 @@ const TransactionMasterList: React.FC<TransactionMasterListProps> = ({ highlight
         </div>
       </Drawer>
 
-      {/* Add First Transaction Drawer (opened from zero-data empty state) */}
+      {/* Add First Transaction Drawer (opened from zero-data empty state).
+          Save lives in the Drawer's fixed footer (never a scroll away) and is
+          associated back to the form by `form={ADD_FIRST_FORM_ID}` — the same
+          pattern the Capture drawer and ToDosPage use. */}
       <Drawer
         isOpen={isAddingFirst}
         onClose={() => setIsAddingFirst(false)}
         title="Add Transaction"
+        footer={
+          <div className="bg-white dark:bg-brand-800 border-t border-brand-200 dark:border-brand-700 p-4">
+            <Button
+              type="submit"
+              form={ADD_FIRST_FORM_ID}
+              variant="primary"
+              isLoading={isAddingFirstSubmitting}
+              className="w-full py-3.5"
+            >
+              Save transaction
+            </Button>
+          </div>
+        }
       >
         <CaptureTransactionManual
+          formId={ADD_FIRST_FORM_ID}
+          onSubmittingChange={setIsAddingFirstSubmitting}
           onAddTransaction={addTransaction}
           onClose={() => setIsAddingFirst(false)}
           dynamicCategories={financeBuckets.map(b => b.name)}

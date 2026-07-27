@@ -7,7 +7,6 @@ import { Transaction, Habit, Store, Account, CalendarItem, CREDIT_CARD_CATEGORY 
 import { suggestHabitsForTransaction } from '@/utils/habitSuggestions';
 import { resolveStoreName } from '@/utils/stores';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
-import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
@@ -24,6 +23,19 @@ interface FieldErrors {
 }
 
 interface CaptureTransactionManualProps {
+  /**
+   * Id put on the `<form>` element. The Save button lives in the Drawer's
+   * fixed footer (owner rule: the save action is never a scroll away), OUTSIDE
+   * this form, and is associated back to it via `form={formId}` — the same
+   * pattern the To-Dos page uses for its task drawer.
+   */
+  formId: string;
+  /**
+   * Reports save-in-flight to the parent, which owns the footer Save button
+   * and therefore its loading/disabled state. Lifted rather than kept local
+   * because the button no longer lives inside this component.
+   */
+  onSubmittingChange: (isSubmitting: boolean) => void;
   initialData?: {
     amount?: string;
     merchant?: string;
@@ -47,6 +59,8 @@ interface CaptureTransactionManualProps {
 }
 
 export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> = ({
+  formId,
+  onSubmittingChange,
   initialData,
   onAddTransaction,
   onAddCalendarItem,
@@ -106,7 +120,6 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
   const isCreditPaymentMode = isSelectedAccountCredit && creditPayment;
   const [transactionDate, setTransactionDate] = useState(() => initialData?.date || getLocalDateString());
   const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
@@ -233,7 +246,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
     }
 
     setFormError('');
-    setIsSubmitting(true);
+    onSubmittingChange(true);
     const newTransaction: Transaction = {
       id: crypto.randomUUID(),
       amount: parsedAmount,
@@ -294,7 +307,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
       console.error("Failed to save transaction:", error, newTransaction);
       toast.error(describeError(error, 'save the transaction'));
     } finally {
-      setIsSubmitting(false);
+      onSubmittingChange(false);
     }
   };
 
@@ -303,6 +316,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
     // keyboard users had to reach for the Save button). Every non-submit
     // button inside is explicitly type="button".
     <form
+      id={formId}
       className="space-y-6"
       onSubmit={(e) => {
         e.preventDefault();
@@ -526,13 +540,8 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
         </p>
       )}
 
-      <Button
-        type="submit"
-        isLoading={isSubmitting}
-        className="w-full py-4"
-      >
-        Save Transaction
-      </Button>
+      {/* No submit button here — it lives in the Drawer's fixed footer and is
+          wired back to this form by `form={formId}` (see the prop docs). */}
     </form>
   );
 };

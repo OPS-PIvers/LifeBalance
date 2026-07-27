@@ -1332,8 +1332,10 @@ export interface ToDo {
   // generic form-edit path writes `category: undefined`, which
   // `utils/firestoreSanitizer.ts` converts to `null` before the write lands —
   // the same pattern `linkedHabitId` follows. Absent on every existing to-do —
-  // no migration needed; `todoConverter` spreads the raw doc so it passes
-  // through.
+  // no migration needed. `todoConverter` now normalizes that stored `null` back
+  // to `undefined` on read, so the runtime value matches this declared type;
+  // the `(x ?? '')` guard is still the rule, because a doc read outside the
+  // converter (or written by the server) can still carry the raw `null`.
   category?: string;
 }
 

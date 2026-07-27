@@ -287,6 +287,48 @@ describe('CategoryChipPicker', () => {
     await waitFor(() => expect(onAddCategory).toHaveBeenCalledWith(exactly));
   });
 
+  it('renders with a null value (Firestore round-trip of a cleared category) without throwing, and selects nothing', () => {
+    // ToDo.category is typed `string | undefined` but a to-do whose category
+    // was cleared via the generic form-edit path comes back from Firestore as
+    // a literal `null` (firestoreSanitizer converts `undefined` to `null` on
+    // write). This is exactly the crash from the "Triage" banner: previously
+    // `value.trim()` threw `TypeError: null is not an object`.
+    expect(() =>
+      render(
+        <CategoryChipPicker
+          categories={CATEGORIES}
+          value={null}
+          onChange={() => {}}
+          onAddCategory={async () => {}}
+        />,
+      ),
+    ).not.toThrow();
+    expect(screen.getByRole('button', { name: 'Home' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Errands' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
+  it('does not crash when the household vocabulary contains a non-string entry', () => {
+    // The `categories` array is unvalidated in Firestore; a stray null in the
+    // vocabulary should be skipped rather than crashing the same `.trim()`
+    // path a null `value` used to.
+    const withNullEntry = ['Home', null, 'Errands'] as unknown as string[];
+    expect(() =>
+      render(
+        <CategoryChipPicker
+          categories={withNullEntry}
+          value={null}
+          onChange={() => {}}
+          onAddCategory={async () => {}}
+        />,
+      ),
+    ).not.toThrow();
+    expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Errands' })).toBeInTheDocument();
+  });
+
   it('disables every control when disabled', () => {
     render(
       <CategoryChipPicker
