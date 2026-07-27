@@ -4,8 +4,9 @@
 // pure-logic suites pay for. DOM-only setup belongs in vitest.setup.ts.
 import { vi } from 'vitest';
 
-// Suppress Firebase Messaging "unsupported-browser" errors in test environment
-// This error occurs because jsdom doesn't have the window.navigator.serviceWorker API
+// Suppress Firebase Messaging "unsupported-browser" errors in test environment.
+// Neither test environment provides window.navigator.serviceWorker: jsdom has no
+// implementation of it, and the node project has no window at all.
 process.on('unhandledRejection', (reason: Error) => {
   if (reason?.message?.includes('messaging/unsupported-browser')) {
     // Silently ignore this known issue in test environment
