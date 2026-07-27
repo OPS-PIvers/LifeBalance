@@ -10,12 +10,18 @@ const mockData = vi.hoisted(() => ({
   transactions: [] as Transaction[],
   todos: [] as ToDo[],
   calendarItems: [] as CalendarItem[],
+  // Matches the makeTodo() default assignedTo of 'uid-1' so existing
+  // fixtures keep passing under the assignee filter.
+  currentUserUid: 'uid-1' as string | null,
 }));
 
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useFinance: () => ({ transactions: mockData.transactions }),
   useTodos: () => ({ todos: mockData.todos }),
   useExpandedCalendarItems: () => mockData.calendarItems,
+  useHouseholdCore: () => ({
+    currentUser: mockData.currentUserUid ? { uid: mockData.currentUserUid } : null,
+  }),
 }));
 
 vi.mock('@/hooks/useModuleVisibility', () => ({
@@ -71,6 +77,7 @@ describe('useActionQueue midnight rollover', () => {
     mockData.transactions = [];
     mockData.todos = [];
     mockData.calendarItems = [];
+    mockData.currentUserUid = 'uid-1';
   });
 
   afterEach(() => {

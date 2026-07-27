@@ -984,4 +984,175 @@ describe('ToDosPage', () => {
       );
     });
   });
+
+  // Paper cut: Save used to sit at the bottom of the scrolling form, so a long
+  // task (notes + subtasks) hid it. It now lives in the Drawer's fixed footer,
+  // which renders OUTSIDE the <form> — the association is the form= attribute.
+  describe('Save button in the drawer footer', () => {
+    const saveButton = (name: 'Create task' | 'Save changes') =>
+      screen.getByRole('button', { name });
+
+    it('renders outside the scrolling form and points back at it', () => {
+      setup();
+      openFullAddForm();
+
+      const button = saveButton('Create task');
+      const form = document.getElementById('task-form');
+      expect(form).not.toBeNull();
+      expect(button).toHaveAttribute('form', 'task-form');
+      expect(button).toHaveAttribute('type', 'submit');
+      // The whole point: it is NOT inside the element that scrolls.
+      expect(form!.contains(button)).toBe(false);
+    });
+
+    it('still submits a NEW task from the footer', async () => {
+      setup();
+      openFullAddForm();
+
+      fireEvent.change(screen.getByLabelText('Task'), { target: { value: 'Footer Save Task' } });
+      fireEvent.change(screen.getByLabelText('Due date'), { target: { value: today } });
+      fireEvent.change(screen.getByLabelText('Assign to'), { target: { value: 'user1' } });
+      fireEvent.click(saveButton('Create task'));
+
+      await waitFor(() => {
+        expect(mockAddToDo).toHaveBeenCalledWith(expect.objectContaining({
+          text: 'Footer Save Task',
+          completeByDate: today,
+          assignedTo: 'user1',
+        }));
+      });
+    });
+
+    it('still submits an EDIT from the footer', async () => {
+      setup();
+      fireEvent.click(screen.getByRole('button', { name: 'Edit task: Today Task' }));
+
+      fireEvent.change(screen.getByLabelText('Task'), { target: { value: 'Renamed from footer' } });
+      fireEvent.click(saveButton('Save changes'));
+
+      await waitFor(() => {
+        expect(mockUpdateToDo).toHaveBeenCalledWith(
+          '2',
+          expect.objectContaining({ text: 'Renamed from footer' })
+        );
+      });
+    });
+  });
+
+  // PC#6 — "Auto-reschedule": a repeating chore that rolls to its next date
+  // instead of going overdue.
+  describe('Auto-reschedule toggle', () => {
+    const moreOptions = () => screen.getByRole('button', { name: 'More options' });
+    const toggle = () => screen.queryByRole('button', { name: 'Auto-reschedule' });
+
+    it('is hidden for a one-off task and appears once a cadence is picked', () => {
+      setup();
+      openFullAddForm();
+      fireEvent.click(moreOptions());
+
+      expect(toggle()).toBeNull();
+
+      fireEvent.change(screen.getByLabelText('Repeat'), { target: { value: 'weekly' } });
+      expect(toggle()).not.toBeNull();
+      expect(toggle()).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('round-trips into the payload of a NEW repeating task', async () => {
+      setup();
+      openFullAddForm();
+
+      fireEvent.change(screen.getByLabelText('Task'), { target: { value: 'Kitchen reset' } });
+      fireEvent.change(screen.getByLabelText('Due date'), { target: { value: today } });
+      fireEvent.change(screen.getByLabelText('Assign to'), { target: { value: 'user1' } });
+      fireEvent.click(moreOptions());
+      fireEvent.change(screen.getByLabelText('Repeat'), { target: { value: 'weekly' } });
+      fireEvent.click(toggle()!);
+      expect(toggle()).toHaveAttribute('aria-pressed', 'true');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+
+      await waitFor(() => {
+        expect(mockAddToDo).toHaveBeenCalledWith(expect.objectContaining({
+          text: 'Kitchen reset',
+          recurrence: { frequency: 'weekly' },
+          resetWhenExpired: true,
+        }));
+      });
+    });
+
+    it('is not written at all for a plain (never-repeating) new task', async () => {
+      setup();
+      openFullAddForm();
+
+      fireEvent.change(screen.getByLabelText('Task'), { target: { value: 'One-off' } });
+      fireEvent.change(screen.getByLabelText('Due date'), { target: { value: today } });
+      fireEvent.change(screen.getByLabelText('Assign to'), { target: { value: 'user1' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+
+      await waitFor(() => expect(mockAddToDo).toHaveBeenCalled());
+      expect(mockAddToDo.mock.calls[0]![0]).not.toHaveProperty('resetWhenExpired');
+    });
+
+    it('seeds from the stored flag when editing, and CLEARS it as an explicit false', async () => {
+      setup([
+        {
+          ...mockTodos[1]!,
+          id: 'chore',
+          text: 'Chore Task',
+          recurrence: { frequency: 'weekly' },
+          resetWhenExpired: true,
+        },
+        ...mockTodos.slice(2),
+      ]);
+      fireEvent.click(screen.getByRole('button', { name: 'Edit task: Chore Task' }));
+
+      // A repeating task auto-expands "More options", so the chip is on screen.
+      expect(toggle()).toHaveAttribute('aria-pressed', 'true');
+
+      fireEvent.click(toggle()!); // turn it off
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      await waitFor(() => {
+        expect(mockUpdateToDo).toHaveBeenCalledWith(
+          'chore',
+          expect.objectContaining({ resetWhenExpired: false })
+        );
+      });
+    });
+
+    it('turning Repeat off also turns auto-reschedule off in the saved payload', async () => {
+      setup([
+        {
+          ...mockTodos[1]!,
+          id: 'chore',
+          text: 'Chore Task',
+          recurrence: { frequency: 'weekly' },
+          resetWhenExpired: true,
+        },
+        ...mockTodos.slice(2),
+      ]);
+      fireEvent.click(screen.getByRole('button', { name: 'Edit task: Chore Task' }));
+
+      fireEvent.change(screen.getByLabelText('Repeat'), { target: { value: 'none' } });
+      expect(toggle()).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      await waitFor(() => {
+        expect(mockUpdateToDo).toHaveBeenCalledWith(
+          'chore',
+          expect.objectContaining({ recurrence: undefined, resetWhenExpired: false })
+        );
+      });
+    });
+
+    it('leaves the field untouched on a plain edit', async () => {
+      setup();
+      fireEvent.click(screen.getByRole('button', { name: 'Edit task: Today Task' }));
+      fireEvent.change(screen.getByLabelText('Task'), { target: { value: 'Renamed' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      await waitFor(() => expect(mockUpdateToDo).toHaveBeenCalled());
+      expect(mockUpdateToDo.mock.calls[0]![1]).not.toHaveProperty('resetWhenExpired');
+    });
+  });
 });

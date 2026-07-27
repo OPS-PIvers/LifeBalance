@@ -105,7 +105,6 @@ beforeEach(() => {
 describe('ToDosPage — category filter', () => {
   it('hides the control entirely when nothing anywhere carries a category', () => {
     setup({ todoCategories: [], todos: [todo('1', 'Loose one'), todo('2', 'Loose two')] });
-    // Exact name: the ROW chips are also "Filter by category: <name>" buttons.
     expect(screen.queryByRole('button', { name: 'Filter by category' })).toBeNull();
   });
 
@@ -266,15 +265,6 @@ describe('ToDosPage — category filter', () => {
     window.localStorage.setItem('todos-category-filter', '{not json');
     setup();
     expect(activeTaskNames()).toHaveLength(3);
-  });
-
-  it('tapping a row chip toggles that category into the filter', () => {
-    setup();
-    const rowChips = screen.getAllByTestId('todo-category-chip');
-    const homeChip = rowChips.find(c => c.textContent?.includes('Home'));
-    expect(homeChip).toBeDefined();
-    fireEvent.click(homeChip as HTMLElement);
-    expect(activeTaskNames()).toEqual(['Edit task: Mow the lawn']);
   });
 });
 

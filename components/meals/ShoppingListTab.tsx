@@ -879,8 +879,6 @@ const ShoppingListTab: React.FC = () => {
                             )}
                             <ShoppingItemRow
                                 item={item}
-                                stores={stores}
-                                activeQuickList={itemQuickListMap.get(item.name.toLowerCase())?.[0]}
                                 onCheck={handleCheck}
                                 onDelete={handleDelete}
                                 onEdit={setEditingItem}
@@ -900,8 +898,6 @@ const ShoppingListTab: React.FC = () => {
                         <ShoppingItemRow
                             key={item.id}
                             item={item}
-                            stores={stores}
-                            activeQuickList={itemQuickListMap.get(item.name.toLowerCase())?.[0]}
                             onCheck={handleCheck}
                             onDelete={handleDelete}
                             onEdit={setEditingItem}

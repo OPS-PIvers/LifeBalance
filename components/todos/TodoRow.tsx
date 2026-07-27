@@ -15,7 +15,6 @@ import { cn } from '@/utils/cn';
 import { type SectionColor, dateColorMap } from './todoDisplay';
 import { formatDueTime } from '@/utils/todoTime';
 import { subtaskProgress } from '@/utils/subtasks';
-import { getTodoCategoryColor } from '@/utils/todoCategoryColor';
 
 // Small per-subtask assignee chip — read-only here (assignment happens in the
 // edit drawer). Mirrors ActionQueueItem's renderAssigneeChip styling at a
@@ -52,6 +51,15 @@ function SubtaskAssigneeChip({ assignee }: { assignee: HouseholdMember | undefin
 
 const LONG_PRESS_MS = 500;
 
+// Title column of the inline title+meta row (paper cut #3). The meta cluster
+// beside it is `shrink-0` — it holds an avatar and a tap target, so squeezing it
+// is never right — which means the title is what gives way. `min-w-36` is the
+// floor: below that a title wraps one word per line, so the flex row (which is
+// `flex-wrap`) instead drops the meta cluster onto its own line, degrading back
+// to the pre-#3 stacked layout only for the genuinely crowded rows (e.g. an
+// overdue timed chore with a checklist AND an assignee).
+const TITLE_COLUMN = 'flex-1 min-w-36';
+
 export interface TodoRowProps {
   item: ToDo;
   color: SectionColor;
@@ -73,10 +81,6 @@ export interface TodoRowProps {
    *  (read-only here — assignment happens in the edit drawer). Optional so
    *  existing callers/tests that don't pass it still render (no chips shown). */
   memberMap?: ReadonlyMap<string, HouseholdMember>;
-  /** F-TODO-16: tapping the row's category chip toggles that category in the
-   *  page's filter. Omit (or render in selection mode) and the chip stays an
-   *  inert label. MUST be `useCallback`-stable — this component is memoized. */
-  onCategoryClick?: (category: string) => void;
 }
 
 // Memoized row for a single active to-do.
@@ -97,7 +101,6 @@ export const TodoRow = React.memo(function TodoRow({
   onToggleSelection,
   onToggleSubtask,
   memberMap,
-  onCategoryClick,
 }: TodoRowProps) {
   // Parse the due date once per row render to avoid repeated parseISO calls
   const dueDate = parseISO(item.completeByDate);
@@ -445,68 +448,14 @@ export const TodoRow = React.memo(function TodoRow({
     </ul>
   );
 
-  // F-TODO-16 — category chip. An ABSENT (or blank) category is the
-  // "Uncategorized" state and renders NOTHING: the row keeps exactly today's
-  // density unless the household actually uses categories. Color is derived
-  // from the name (stable everywhere) via getTodoCategoryColor.
-  //
-  // When `onCategoryClick` is supplied (and we're not bulk-selecting) the chip
-  // is a real <button> that toggles that category in the page filter. Like the
-  // checklist pill it lives inside the row's gesture area, so it swallows its
-  // click (else the row would open the edit drawer), its pointerdown (else it
-  // arms the long-press timer / starts a swipe) and its Enter/Space (else the
-  // key would also reach an ancestor role="button").
-  const categoryLabel = item.category?.trim() ?? '';
-  const categoryColor = categoryLabel ? getTodoCategoryColor(categoryLabel) : null;
-  const handleCategoryPointerDown = (e: React.PointerEvent) => {
-    e.stopPropagation();
-  };
-  const handleCategoryKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.stopPropagation();
-    }
-  };
-  const handleCategoryClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onCategoryClick?.(categoryLabel);
-  };
-  // Canonical chip spec (DESIGN.md §6): pill, hairline border, xxs text.
-  const categoryChipClasses = categoryColor
-    ? cn(
-        'inline-flex items-center rounded-full border px-1.5 py-0.5 text-xxs font-semibold',
-        categoryColor.bg,
-        categoryColor.text,
-        categoryColor.border
-      )
-    : '';
-  const categoryChip = categoryLabel && categoryColor && (
-    isSelectionMode || !onCategoryClick ? (
-      <span data-testid="todo-category-chip" className={categoryChipClasses}>
-        {categoryLabel}
-      </span>
-    ) : (
-      /* Transparent vertical padding gives the small chip a ≥44px-tall touch
-         target without inflating the visible pill (same trick as the pill). */
-      <button
-        type="button"
-        data-testid="todo-category-chip"
-        onClick={handleCategoryClick}
-        onPointerDown={handleCategoryPointerDown}
-        onKeyDown={handleCategoryKeyDown}
-        aria-label={`Filter by category: ${categoryLabel}`}
-        className="inline-flex items-center py-2.5 -my-2.5 rounded-full focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
-      >
-        <span className={categoryChipClasses}>{categoryLabel}</span>
-      </button>
-    )
-  );
-
   // Meta line (urgency date/time, reminder bell, details dot, assignee) —
   // rendered in BOTH selection and normal modes so bulk-select doesn't hide
   // the row's status; in normal mode it doubles as the button's
-  // aria-describedby target via metaId.
+  // aria-describedby target via metaId. Rendered INLINE with the title (as a
+  // sibling, top-aligned) rather than on its own line below — see the
+  // cardInner layout below.
   const metaLine = (
-    <span id={metaId} className="flex flex-wrap items-center gap-3 mt-1.5 text-xs">
+    <span id={metaId} className="flex flex-wrap items-center gap-3 text-xs">
       {/* Small amber star marks an important (starred) task — the flat list
           sorts these first, so the mark explains the ordering at a glance.
           Unstarred rows render nothing here (zero space cost). */}
@@ -518,7 +467,7 @@ export const TodoRow = React.memo(function TodoRow({
       )}
       {/* Single primary status signal: urgency-colored text, not a bordered pill. */}
       {isOverdue ? (
-        <span className="flex items-center gap-1 font-semibold text-money-neg dark:text-money-negDark">
+        <span className="flex items-center gap-1 font-semibold text-warm-700 dark:text-warm-300">
           <AlertCircle size={11} />
           Overdue ({format(dueDate, 'MMM d')}{dueTimeLabel ? ` · ${dueTimeLabel}` : ''})
         </span>
@@ -551,11 +500,6 @@ export const TodoRow = React.memo(function TodoRow({
           <span className="sr-only">Has details</span>
         </span>
       )}
-
-      {/* F-TODO-16 category chip — placed just before the assignee so the two
-          "which bucket does this belong to" signals read together, after the
-          time-critical due cluster. Nothing renders when uncategorized. */}
-      {categoryChip}
 
       {assignee && (
         assignee.photoURL ? (
@@ -633,10 +577,21 @@ export const TodoRow = React.memo(function TodoRow({
 
       {isSelectionMode ? (
         <div className="flex-1 min-w-0">
-          <p className="font-medium leading-snug text-inherit">
-            <span className={isSelected ? 'text-accent-800 dark:text-accent-200' : 'text-brand-900 dark:text-brand-50'}>{item.text}</span>
-          </p>
-          {metaLine}
+          {/* Same inline title+meta treatment as normal mode (paper cut #3),
+              so bulk-select doesn't look denser/different than the regular list. */}
+          <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
+            <p className={cn(TITLE_COLUMN, 'font-medium leading-snug text-inherit')}>
+              <span className={isSelected ? 'text-accent-800 dark:text-accent-200' : 'text-brand-900 dark:text-brand-50'}>{item.text}</span>
+            </p>
+            {/* max-w-full is the overflow stop: the cluster never shrinks (it
+                holds an avatar and a tap target), so an extreme meta line —
+                overdue + time + reminder + checklist + assignee — would
+                otherwise push the row wider than the screen. Capped, its own
+                flex-wrap takes over instead. */}
+            <div className="shrink-0 max-w-full">
+              {metaLine}
+            </div>
+          </div>
           {subtaskList}
         </div>
       ) : (
@@ -653,30 +608,45 @@ export const TodoRow = React.memo(function TodoRow({
           onPointerCancel={cancelLongPress}
           onContextMenu={handleContextMenu}
         >
-          {/* The edit affordance is a role="button" wrapping ONLY the title, so
-              it has NO interactive descendant — ARIA forbids interactive
-              descendants of role=button, which would swallow the checklist pill
-              for VoiceOver/TalkBack. The meta line (which HOSTS the interactive
-              pill) is a SIBLING below, still wired here via aria-describedby.
-              Keyboard activation (Enter/Space → edit) is handled explicitly since
-              a role=button div gets no free activation. */}
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={handleBodyClick}
-            onKeyDown={handleBodyKeyDown}
-            aria-label={`Edit task: ${item.text}`}
-            aria-describedby={metaId}
-            className="block w-full text-left select-none [-webkit-touch-callout:none] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-card"
-          >
-            <span className="block font-medium leading-snug text-brand-900 dark:text-brand-50">{item.text}</span>
-          </div>
+          {/* Title + meta cluster share one row (paper cut #3: due date/assignee
+              inline with the title instead of on their own line below, cutting
+              vertical clutter). The edit affordance is a role="button" wrapping
+              ONLY the title, so it has NO interactive descendant — ARIA forbids
+              interactive descendants of role=button, which would swallow the
+              checklist pill for VoiceOver/TalkBack. The meta line (which HOSTS
+              the interactive pill) is a SIBLING in this same flex row, never a
+              descendant, still wired here via aria-describedby. items-start
+              keeps the meta cluster top-aligned with the title's first line
+              even when a long title wraps to multiple lines. */}
+          <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
+            {/* Keyboard activation (Enter/Space → edit) is handled explicitly
+                since a role=button div gets no free activation. */}
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={handleBodyClick}
+              onKeyDown={handleBodyKeyDown}
+              aria-label={`Edit task: ${item.text}`}
+              aria-describedby={metaId}
+              className={cn(TITLE_COLUMN, 'text-left select-none [-webkit-touch-callout:none] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-card')}
+            >
+              <span className="block font-medium leading-snug text-brand-900 dark:text-brand-50">{item.text}</span>
+            </div>
 
-          {/* Meta line — SIBLING of the edit button (not a descendant) so the
-              interactive checklist pill it hosts is never nested inside a
-              role=button. Wired to the button above via aria-describedby={metaId}
-              so AT still announces urgency/reminder/details/assignee. */}
-          {metaLine}
+            {/* Meta cluster — SIBLING of the edit button (not a descendant) so
+                the interactive checklist pill it hosts is never nested inside a
+                role=button. shrink-0 keeps it from being crushed by a long
+                title. Wired to the button above via aria-describedby={metaId}
+                so AT still announces urgency/reminder/details/assignee. */}
+            {/* max-w-full is the overflow stop: the cluster never shrinks (it
+                holds an avatar and a tap target), so an extreme meta line —
+                overdue + time + reminder + checklist + assignee — would
+                otherwise push the row wider than the screen. Capped, its own
+                flex-wrap takes over instead. */}
+            <div className="shrink-0 max-w-full">
+              {metaLine}
+            </div>
+          </div>
 
           {/* Inline subtask checklist — outside the tap-to-edit body so checking
               a step never opens the drawer. */}

@@ -479,6 +479,10 @@ const ToDosPage: React.FC = () => {
   const [reminderMinutesBefore, setReminderMinutesBefore] = useState<number | null>(null);
   // F-TODO-01: recurrence cadence for the full add/edit form. 'none' = one-off.
   const [recurrence, setRecurrence] = useState<'none' | TodoFrequency>('none');
+  // "Auto-reschedule": only meaningful for a repeating task — when the due date
+  // passes unfinished the chore rolls to its next occurrence (steps reset)
+  // instead of going overdue. See utils/todoRecurrence.computeExpiredTodoRoll.
+  const [resetWhenExpired, setResetWhenExpired] = useState(false);
   // Shared notes surfaced in the editor drawer — visible to all household members
   // (to-dos are already shared). Capped to match the firestore.rules validator.
   const [notes, setNotes] = useState('');
@@ -606,12 +610,6 @@ const ToDosPage: React.FC = () => {
     });
   }, []);
 
-  // Tapping a row's category chip toggles that category in the filter (and
-  // opens nothing). `useCallback`-stable so it never breaks TodoRow's memo.
-  const handleCategoryChipClick = useCallback((category: string) => {
-    setCategoryFilter(prev => toggleCategoryFilterEntry(prev, category));
-  }, []);
-
   // Deep-link + highlight from the dashboard Action Queue: tapping "Review" on
   // a to-do navigates here with `?todo=<id>`. We scroll that row into view and
   // briefly ring it so the user sees its full text + subtasks in context.
@@ -729,6 +727,7 @@ const ToDosPage: React.FC = () => {
     setDueTime('');
     setReminderMinutesBefore(null);
     setRecurrence('none');
+    setResetWhenExpired(false);
     setNotes('');
     setLinkedHabitId('');
     // Pre-select the category used on the last ADD (never on an edit), so a
@@ -787,6 +786,7 @@ const ToDosPage: React.FC = () => {
     setDueTime(todo.dueTime ?? '');
     setReminderMinutesBefore(todo.reminderMinutesBefore ?? null);
     setRecurrence(todo.recurrence?.frequency ?? 'none');
+    setResetWhenExpired(todo.resetWhenExpired === true);
     setNotes(todo.notes ?? '');
     setLinkedHabitId(todo.linkedHabitId ?? '');
     // Editing NEVER inherits the last-used default — the stored value (or the
@@ -1239,6 +1239,11 @@ const ToDosPage: React.FC = () => {
           : { frequency: recurrence, ...(editingTodo?.recurrence?.parentRecurringId
               ? { parentRecurringId: editingTodo.recurrence.parentRecurringId }
               : {}) };
+      // "Auto-reschedule" only exists on a REPEATING task, so turning Repeat off
+      // turns it off too. Clearing writes an explicit `false` rather than
+      // `undefined` — the sanitizer maps undefined to null, and an honest
+      // boolean is what the schema documents.
+      const resetWhenExpiredValue = recurrence === 'none' ? false : resetWhenExpired;
       const trimmedNotes = notes.trim();
       // Habit Automations (PRD #1065): '' (no selection) means "not linked".
       const linkedHabitValue = linkedHabitId || undefined;
@@ -1304,6 +1309,11 @@ const ToDosPage: React.FC = () => {
         } else if (editingTodo?.recurrence) {
           updates.recurrence = undefined; // sanitizer writes null → inert
         }
+        // Same "only when it changed" shape, so a plain (never-repeating) edit
+        // stays byte-identical to today's write.
+        if (resetWhenExpiredValue !== (editingTodo?.resetWhenExpired === true)) {
+          updates.resetWhenExpired = resetWhenExpiredValue;
+        }
         // Habit Automations (PRD #1065): only touch linkedHabitId when it
         // actually changed, so plain (never-linked) edits stay byte-identical.
         if ((linkedHabitValue ?? null) !== (editingTodo?.linkedHabitId ?? null)) {
@@ -1331,6 +1341,7 @@ const ToDosPage: React.FC = () => {
           ...(dueTimeValue !== undefined ? { dueTime: dueTimeValue } : {}),
           ...(reminderValue !== undefined ? { reminderMinutesBefore: reminderValue } : {}),
           ...(recurrenceValue ? { recurrence: recurrenceValue } : {}),
+          ...(resetWhenExpiredValue ? { resetWhenExpired: true } : {}),
           ...(linkedHabitValue ? { linkedHabitId: linkedHabitValue } : {}),
           ...(categoryValue ? { category: categoryValue } : {})
         });
@@ -1857,7 +1868,6 @@ const ToDosPage: React.FC = () => {
         onToggleSelection={toggleSelection}
         onToggleSubtask={toggleTodoSubtask}
         memberMap={memberMap}
-        onCategoryClick={handleCategoryChipClick}
       />
       {/* Transient deep-link highlight (~2s): an absolutely
           positioned, non-interactive ring overlay painted OVER
@@ -2226,8 +2236,26 @@ const ToDosPage: React.FC = () => {
         onClose={() => setIsAddModalOpen(false)}
         disableClose={isSaving}
         title={editingId ? 'Edit task' : 'New task'}
+        /* Paper cut: Save must never be a scroll away. The Drawer's `footer`
+           renders a fixed bar below the scrollable body — but OUTSIDE the
+           <form>, so the button is associated back to it via form="task-form".
+           Mirrors HabitFormModal's footer. */
+        footer={
+          <div className="bg-white dark:bg-brand-800 border-t border-brand-200 dark:border-brand-700 p-4">
+            <Button
+              type="submit"
+              form="task-form"
+              variant="primary"
+              isLoading={isSaving}
+              disabled={members.length === 0}
+              className="w-full py-3.5"
+            >
+              {editingId ? 'Save changes' : 'Create task'}
+            </Button>
+          </div>
+        }
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form id="task-form" onSubmit={handleSubmit} className="space-y-4">
           <Input
             id="task-input"
             label="Task"
@@ -2285,28 +2313,62 @@ const ToDosPage: React.FC = () => {
               yes/no (not low/med/high) to match the matrix's two-state axis.
               Compact star chip: the task-options drawer also toggles this, so
               it no longer needs a full explainer card. */}
-          <button
-            type="button"
-            onClick={() => setIsImportant(v => !v)}
-            aria-pressed={isImportant}
-            className={cn(
-              'inline-flex items-center gap-2 min-h-11 px-3 py-2 rounded-btn border text-sm font-medium transition-colors duration-(--duration-fast) ease-(--ease-standard)',
-              'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
-              isImportant
-                ? 'bg-warm-100 border-warm-500/40 text-warm-700 dark:bg-warm-500/15 dark:border-warm-500/40 dark:text-warm-300'
-                : 'bg-white border-brand-200 text-brand-600 hover:bg-brand-50 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:hover:bg-brand-700'
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsImportant(v => !v)}
+                aria-pressed={isImportant}
+                className={cn(
+                  'inline-flex items-center gap-2 min-h-11 px-3 py-2 rounded-btn border text-sm font-medium transition-colors duration-(--duration-fast) ease-(--ease-standard)',
+                  'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
+                  isImportant
+                    ? 'bg-warm-100 border-warm-500/40 text-warm-700 dark:bg-warm-500/15 dark:border-warm-500/40 dark:text-warm-300'
+                    : 'bg-white border-brand-200 text-brand-600 hover:bg-brand-50 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:hover:bg-brand-700'
+                )}
+              >
+                <Star
+                  size={18}
+                  aria-hidden="true"
+                  className={isImportant ? 'text-warm-500 fill-warm-500' : 'text-brand-300 dark:text-brand-500'}
+                />
+                Important
+              </button>
+
+              {/* Auto-reschedule — only meaningful for a repeating task, so it
+                  appears alongside Important once a cadence is chosen. Accent
+                  (not warm) on-state so it never reads as a second "Important". */}
+              {recurrence !== 'none' && (
+                <button
+                  type="button"
+                  onClick={() => setResetWhenExpired(v => !v)}
+                  aria-pressed={resetWhenExpired}
+                  className={cn(
+                    'inline-flex items-center gap-2 min-h-11 px-3 py-2 rounded-btn border text-sm font-medium transition-colors duration-(--duration-fast) ease-(--ease-standard)',
+                    'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
+                    resetWhenExpired
+                      ? 'bg-accent-50 border-accent-500/40 text-accent-700 dark:bg-accent-500/15 dark:border-accent-500/40 dark:text-accent-300'
+                      : 'bg-white border-brand-200 text-brand-600 hover:bg-brand-50 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:hover:bg-brand-700'
+                  )}
+                >
+                  <RotateCcw
+                    size={18}
+                    aria-hidden="true"
+                    className={resetWhenExpired ? 'text-accent-600 dark:text-accent-300' : 'text-brand-300 dark:text-brand-500'}
+                  />
+                  Auto-reschedule
+                </button>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-brand-400 dark:text-brand-450">
+              Matters to the family — big consequences if skipped.
+            </p>
+            {recurrence !== 'none' && (
+              <p className="mt-1 text-xs text-brand-400 dark:text-brand-450">
+                Not done by the due date? It moves to the next date instead of going overdue — and the steps reset.
+              </p>
             )}
-          >
-            <Star
-              size={18}
-              aria-hidden="true"
-              className={isImportant ? 'text-warm-500 fill-warm-500' : 'text-brand-300 dark:text-brand-500'}
-            />
-            Important
-          </button>
-          <p className="mt-1 text-xs text-brand-400 dark:text-brand-450">
-            Matters to the family — big consequences if skipped.
-          </p>
+          </div>
 
           {/* F-TODO-16 — category. A CORE field (not behind "More options"):
               new tasks pre-select the last-used category, and a default the
@@ -2399,7 +2461,9 @@ const ToDosPage: React.FC = () => {
             </Select>
             {recurrence !== 'none' && (
               <p className="mt-1.5 text-xs text-brand-400 dark:text-brand-450">
-                A fresh copy is created automatically each time you complete this task.
+                {resetWhenExpired
+                  ? 'A fresh copy is created each time you complete it — and if the due date passes first, this one moves to the next date.'
+                  : 'A fresh copy is created each time you complete it. Turn on Auto-reschedule above to also move it forward when the due date passes.'}
               </p>
             )}
           </div>
@@ -2550,16 +2614,6 @@ const ToDosPage: React.FC = () => {
             </div>
           </div>
           </div>
-
-          <Button
-            type="submit"
-            variant="primary"
-            isLoading={isSaving}
-            disabled={members.length === 0}
-            className="w-full mt-4 py-3.5"
-          >
-            {editingId ? 'Save changes' : 'Create task'}
-          </Button>
         </form>
       </Drawer>
 

@@ -1307,6 +1307,15 @@ export interface ToDo {
     parentRecurringId?: string;
   };
 
+  // "Auto-reschedule": a repeating chore that is never really *overdue* — when
+  // its due date passes unfinished, it rolls forward to the next occurrence of
+  // its cadence (and any checked subtasks reset, so a fresh period starts
+  // clean) instead of piling up in the overdue bucket. Only meaningful
+  // together with `recurrence.frequency`; absent/false = today's behaviour
+  // (the instance goes overdue). See utils/todoRecurrence.ts
+  // (`computeExpiredTodoRoll`) and hooks/useTodoAutoReschedule.ts.
+  resetWhenExpired?: boolean;
+
   // Habit Automations (PRD #1065): the habit this to-do is linked to. Completing
   // the to-do fires the habit exactly like one manual tap (same batch); restoring
   // reverses it. Authored on the to-do form ("Counts toward habit" picker). Absent
