@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { ReactElement } from 'react';
 import { addDays, format } from 'date-fns';
 import { ThemeProvider } from '@/contexts/ThemeContext';
-import { ToDo } from '@/types/schema';
+import { ToDo, HouseholdMember } from '@/types/schema';
 import { TodoRow } from './TodoRow';
 
 // TodoRow's SwipeActionRow reads the resolved theme from ThemeContext.
@@ -104,8 +104,8 @@ describe('TodoRow', () => {
     });
   });
 
-  describe('inline title + meta layout (paper cut #3)', () => {
-    it('renders the meta cluster as a SIBLING of the edit button, never a descendant', () => {
+  describe('fixed two-line row layout (paper cut #4)', () => {
+    it('renders the meta line as a SIBLING of the edit button, never a descendant', () => {
       render(<TodoRow {...baseProps} />);
       const editButton = screen.getByRole('button', { name: `Edit task: ${item.text}` });
       const describedById = editButton.getAttribute('aria-describedby');
@@ -115,7 +115,7 @@ describe('TodoRow', () => {
       expect(metaEl?.contains(editButton)).toBe(false);
     });
 
-    it('renders the meta cluster as a SIBLING of the title paragraph in selection mode too', () => {
+    it('renders the meta line as a SIBLING of the title paragraph in selection mode too', () => {
       render(<TodoRow {...baseProps} isSelectionMode />);
       // In selection mode the whole Row becomes role=button (select-toggle),
       // so the sibling contract here is against the title <p>, not a button.
@@ -127,7 +127,7 @@ describe('TodoRow', () => {
       expect(metaEl?.contains(titleEl)).toBe(false);
     });
 
-    it('keeps the subtask pill reachable and interactive inside the inline meta cluster', () => {
+    it('keeps the subtask pill reachable and interactive inside the meta line', () => {
       const withSubtasks: ToDo = {
         ...item,
         subtasks: [{ id: 's1', text: 'Step one', isDone: false }],
@@ -140,6 +140,72 @@ describe('TodoRow', () => {
       expect(screen.getByText('Step one')).toBeInTheDocument();
       // Clicking the pill must not have bubbled up and opened the edit drawer.
       expect(handlers.onEdit).not.toHaveBeenCalled();
+    });
+
+    it('clamps a long title to two lines instead of wrapping unbounded', () => {
+      const longTitle = 'Reorganize the entire garage including the workbench and every shelf on the back wall'.repeat(2);
+      render(<TodoRow {...baseProps} item={{ ...item, text: longTitle }} />);
+      const editButton = screen.getByRole('button', { name: `Edit task: ${longTitle}` });
+      const titleSpan = editButton.querySelector('span');
+      // Two lines, not one: a title cut off mid-word defeats the row's whole
+      // purpose, so the clamp bounds row growth without hiding short titles.
+      expect(titleSpan?.className).toMatch(/\bline-clamp-2\b/);
+      expect(titleSpan?.className).not.toMatch(/\btruncate\b/);
+      // The full title is still reachable off-screen (aria-label + native
+      // title tooltip) for the rare title that overruns even two lines.
+      expect(editButton.getAttribute('title')).toBe(longTitle);
+    });
+
+    it('reserves two title lines even for a short title, so row height never varies', () => {
+      // Clamping alone bounds a LONG title but lets a one-line row sit shorter
+      // than a two-line one — the same height jitter the "Tomorrow" tag caused,
+      // arriving from a different direction. The reserved min-height is what
+      // makes every row genuinely uniform, so assert it on a SHORT title.
+      render(<TodoRow {...baseProps} item={{ ...item, text: 'Milk' }} />);
+      const editButton = screen.getByRole('button', { name: 'Edit task: Milk' });
+      const titleSpan = editButton.querySelector('span');
+      // No trailing \b — `]` and the space after it are both non-word chars,
+      // so there is no boundary between them for \b to match.
+      expect(titleSpan?.className).toContain('min-h-[2.75em]');
+      expect(titleSpan?.className).toMatch(/\bline-clamp-2\b/);
+      // `line-clamp-2` supplies display:-webkit-box; a competing `block` in the
+      // same layer can win on stylesheet order and render the clamp inert.
+      expect(titleSpan?.className).not.toMatch(/\bblock\b/);
+    });
+
+    it('still renders the meta line (holding just the due date) when there are no subtasks and no assignee — the row never collapses to a single line', () => {
+      render(<TodoRow {...baseProps} assignee={undefined} />);
+      const metaEl = document.getElementById(`todo-row-meta-${item.id}`);
+      expect(metaEl).not.toBeNull();
+      expect(screen.queryByTestId('todo-subtask-pill')).toBeNull();
+      // No assignee and not a household-wide item (baseProps.item.assignedTo
+      // is set) — the assignee slot is empty, not a stray placeholder.
+      expect(metaEl?.querySelector('img')).toBeNull();
+    });
+
+    it('mutes a plain upcoming date (no urgency) instead of using the bold section-accent color reserved for overdue/today', () => {
+      // baseProps.item is due 3 days out — not overdue, not today.
+      render(<TodoRow {...baseProps} />);
+      const dueLabel = screen.getByTestId('todo-due-label');
+      expect(dueLabel.className).not.toMatch(/font-semibold/);
+      expect(dueLabel.className).not.toMatch(/text-accent-600/);
+    });
+
+    it('keeps a bold, colored urgency signal for a to-do due today', () => {
+      const today: ToDo = { ...item, completeByDate: format(new Date(), 'yyyy-MM-dd') };
+      render(<TodoRow {...baseProps} item={today} />);
+      const dueLabel = screen.getByTestId('todo-due-label');
+      expect(dueLabel.textContent).toContain('Today');
+      expect(dueLabel.className).toMatch(/font-semibold/);
+      expect(dueLabel.className).toMatch(/text-accent-600/); // baseProps.color is 'accent'
+    });
+
+    it('keeps a bold, colored urgency signal for an overdue to-do', () => {
+      const overdue: ToDo = { ...item, completeByDate: '2020-01-01' };
+      render(<TodoRow {...baseProps} item={overdue} />);
+      const dueLabel = screen.getByTestId('todo-due-label');
+      expect(dueLabel.textContent).toContain('Overdue');
+      expect(dueLabel.className).toMatch(/font-semibold/);
     });
   });
 
@@ -238,6 +304,64 @@ describe('TodoRow', () => {
         expect(screen.queryByText('Wheel to curb')).toBeNull();
         expect(handlers.onToggleSubtask).not.toHaveBeenCalled();
       });
+    });
+  });
+
+  describe('household assignment (paper cut #5)', () => {
+    const memberA: HouseholdMember = { uid: 'user-1', displayName: 'Alice', role: 'admin' } as HouseholdMember;
+    const memberB: HouseholdMember = { uid: 'user-2', displayName: 'Bob', role: 'member' } as HouseholdMember;
+    const memberC: HouseholdMember = { uid: 'user-3', displayName: 'Cara', role: 'member' } as HouseholdMember;
+    const memberD: HouseholdMember = { uid: 'user-4', displayName: 'Dev', role: 'member' } as HouseholdMember;
+    const householdItem: ToDo = { ...item, assignedTo: undefined };
+
+    it('renders a stacked avatar cluster (not a single dot) when a to-do has no single assignee', () => {
+      const memberMap = new Map([[memberA.uid, memberA], [memberB.uid, memberB]]);
+      render(<TodoRow {...baseProps} item={householdItem} memberMap={memberMap} />);
+      const cluster = screen.getByRole('img', { name: /Assigned to the whole household \(2 members\)/ });
+      // Both members render as chips (fallback initials since neither has a photoURL).
+      expect(cluster.textContent).toContain('A');
+      expect(cluster.textContent).toContain('B');
+    });
+
+    it('caps visible avatars and shows a "+N" chip for the remainder', () => {
+      const memberMap = new Map(
+        [memberA, memberB, memberC, memberD].map(m => [m.uid, m])
+      );
+      render(<TodoRow {...baseProps} item={householdItem} memberMap={memberMap} />);
+      const cluster = screen.getByRole('img', { name: /Assigned to the whole household \(4 members\)/ });
+      expect(cluster.textContent).toContain('+1');
+    });
+
+    it('keeps rendering exactly one chip for a single assigned member (unchanged behavior)', () => {
+      const memberMap = new Map([[memberA.uid, memberA]]);
+      render(<TodoRow {...baseProps} item={item} assignee={memberA} memberMap={memberMap} />);
+      expect(screen.queryByRole('img', { name: /whole household/ })).toBeNull();
+      expect(screen.getByTitle('Alice')).toBeInTheDocument();
+    });
+
+    it('degenerate case: a household of exactly one member still renders the household cluster (not the single-assignee chip)', () => {
+      const memberMap = new Map([[memberA.uid, memberA]]);
+      render(<TodoRow {...baseProps} item={householdItem} assignee={undefined} memberMap={memberMap} />);
+      const cluster = screen.getByRole('img', { name: /Assigned to the whole household \(1 member\)/ });
+      expect(cluster.textContent).toContain('A');
+      expect(screen.queryByTestId('todo-details-dot')).toBeNull(); // sanity: no stray unrelated dot
+    });
+
+    it('degenerate case: renders a photo avatar in the cluster for a member who has one, alongside an initials fallback for one who does not', () => {
+      const withPhoto: HouseholdMember = { ...memberB, photoURL: 'https://example.com/bob.jpg' };
+      const memberMap = new Map([[memberA.uid, memberA], [withPhoto.uid, withPhoto]]);
+      render(<TodoRow {...baseProps} item={householdItem} assignee={undefined} memberMap={memberMap} />);
+      const cluster = screen.getByRole('img', { name: /Assigned to the whole household \(2 members\)/ });
+      const img = cluster.querySelector('img');
+      expect(img).not.toBeNull();
+      expect(img).toHaveAttribute('src', withPhoto.photoURL);
+      // Alice has no photoURL — still falls back to her initial inside the cluster.
+      expect(cluster.textContent).toContain('A');
+    });
+
+    it('does not render a household cluster (or any chip) when the household member list is unavailable', () => {
+      render(<TodoRow {...baseProps} item={householdItem} assignee={undefined} memberMap={undefined} />);
+      expect(screen.queryByRole('img', { name: /whole household/ })).toBeNull();
     });
   });
 });

@@ -532,7 +532,7 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
       {/* Hero amount field — the primary action for an "awaiting amount" stub. */}
       <div className="flex justify-center py-1">
         <div className="relative">
-          <span className="absolute left-0 top-1/2 -translate-y-1/2 text-3xl font-bold text-brand-400 dark:text-brand-400">$</span>
+          <span className="absolute left-0 top-1/2 -translate-y-1/2 text-4xl font-bold text-brand-400 dark:text-brand-400">$</span>
           <input
             type="number"
             inputMode="decimal"
@@ -549,7 +549,7 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
             placeholder="0.00"
             step="0.01"
             min="0"
-            className="w-full pl-8 text-4xl font-mono font-bold text-brand-800 dark:text-brand-100 placeholder:text-brand-200 outline-hidden text-center bg-transparent"
+            className="w-full pl-12 text-5xl font-mono font-bold text-brand-800 dark:text-brand-100 placeholder:text-brand-200 outline-hidden text-center bg-transparent"
           />
         </div>
       </div>

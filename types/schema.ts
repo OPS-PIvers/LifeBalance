@@ -565,11 +565,24 @@ export interface CalendarItem {
    *  bill a subscription (mortgage, car payment, daycare are recurring but not
    *  subscriptions) — the Subscriptions tab groups by this explicit flag. */
   isSubscription?: boolean;
-  /** Bank-descriptor strings (from nightly bank-email sync rows) previously
-   *  learned to map to this bill, e.g. a bank statement descriptor like
-   *  "XCEL ENERGY WEB PYMT" mapped to a "Electric Bill" calendar item. Grows
-   *  as the (future) reconciliation pipeline learns new aliases; not written
-   *  by any endpoint yet — schema/settings groundwork only. */
+  /** Bank-descriptor strings previously learned to map to this bill, e.g. a
+   *  statement descriptor like "XCEL ENERGY WEB PYMT" mapped to an "Electric
+   *  Bill" calendar item. On a recurring bill these live on the TEMPLATE, not on
+   *  an expanded occurrence.
+   *
+   *  WRITTEN by two paths, both `arrayUnion`: the nightly bank-email sync when
+   *  it pays a bill it found by title token-overlap
+   *  (`functions/src/quickAdd/bankEmailSync.ts`), and the manual "Link to bill"
+   *  reconcile in the transaction review drawer
+   *  (`contexts/household/mutations/calendarMutations.ts`'s
+   *  `linkBankTransactionToBill`) — which is how a household TEACHES the link.
+   *
+   *  READ by the matcher on both sides of the workspace boundary:
+   *  `functions/src/quickAdd/bankSyncMatch.ts` (nightly sync) and its client
+   *  twin `utils/billDescriptorMatch.ts` (the Action Queue's bill↔transaction
+   *  recognition for screenshot imports). Alias comparison is EXACT normalized
+   *  equality — never fuzzy — so a learned alias can only ever re-match the same
+   *  descriptor. */
   bankDescriptorAliases?: string[];
 }
 

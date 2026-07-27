@@ -252,13 +252,20 @@ const BudgetAccounts: React.FC = () => {
 
   const startEditing = (id: string, currentBalance: number) => {
     setEditingId(id);
-    setEditValue(currentBalance.toString());
+    // Seed with a rounded, 2-decimal string — `currentBalance` can carry
+    // accumulated float drift (e.g. 125.777777777779 from summed
+    // sub-balances), which would otherwise land in the input verbatim and
+    // force the user to manually trim it before every edit.
+    setEditValue(roundMoney(currentBalance).toFixed(2));
   };
 
   const saveEditing = (id: string) => {
     const num = parseFloat(editValue);
     if (!isNaN(num)) {
-      updateAccountBalance(id, num);
+      // Round on save too, so an unrounded float (e.g. from a pasted value)
+      // can't reintroduce the same float-drift display bug next time this
+      // balance is edited.
+      updateAccountBalance(id, roundMoney(num));
     }
     setEditingId(null);
   };

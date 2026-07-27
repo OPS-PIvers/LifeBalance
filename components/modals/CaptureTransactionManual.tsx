@@ -327,7 +327,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
       <div>
         <div className="flex justify-center">
           <div className="relative">
-            <span className="absolute left-0 top-1/2 -translate-y-1/2 text-3xl font-bold text-brand-400 dark:text-brand-400">$</span>
+            <span className="absolute left-0 top-1/2 -translate-y-1/2 text-4xl font-bold text-brand-400 dark:text-brand-400">$</span>
             <input
               ref={amountInputRef}
               type="number"
@@ -348,7 +348,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
               placeholder="0.00"
               step="0.01"
               min="0"
-              className={`w-full min-h-11 pl-8 text-4xl font-mono font-bold text-brand-800 dark:text-brand-100 placeholder:text-brand-200 outline-hidden text-center bg-transparent border-b-2 ${
+              className={`w-full min-h-14 pl-12 text-5xl font-mono font-bold text-brand-800 dark:text-brand-100 placeholder:text-brand-200 outline-hidden text-center bg-transparent border-b-2 ${
                 fieldErrors.amount ? 'border-money-neg dark:border-money-negDark' : 'border-transparent'
               }`}
             />

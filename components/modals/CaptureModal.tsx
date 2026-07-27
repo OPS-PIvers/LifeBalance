@@ -100,8 +100,9 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
   const { addToDo, todoCategories, updateTodoCategories } = useTodos();
   const { addShoppingItem, stores, shoppingList, groceryCatalog, loadFullGroceryCatalog } = useShopping();
   // Resolve AI-returned store names to existing stores, creating new ones only
-  // when they're certainly not duplicates.
-  const { ensureStores } = useStoreResolver();
+  // when they're certainly not duplicates. `ensureStore` also backs the
+  // Shopping tab's "+ Add a new store" picker flow (same dedupe/create path).
+  const { ensureStores, ensureStore } = useStoreResolver();
   // Plan 090 — only show capture tabs whose destination is reachable for this
   // household (To-Do/Shop also require the Plan page to be on).
   const { isModuleEnabled, isPlanTabVisible } = useModuleVisibility();
@@ -955,6 +956,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialMan
               setQuantity={setShoppingQuantity}
               store={shoppingStore}
               setStore={setShoppingStore}
+              stores={stores}
+              onAddStore={ensureStore}
               smartDefaults={shoppingDefaults}
               onSubmit={handleShoppingSubmit}
             />

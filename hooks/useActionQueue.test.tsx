@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
-import type { Transaction, CalendarItem, ToDo, ModuleKey } from '@/types/schema';
+import type { Transaction, CalendarItem, ToDo, ModuleKey, MerchantRule } from '@/types/schema';
 import {
   useActionQueue,
   isTransactionQueueItem,
@@ -87,6 +87,10 @@ const setMocks = (opts: {
   /** Defaults to 'uid-1' to match the makeTodo() default assignedTo, so
       existing fixtures keep passing under the new assignee filter. */
   currentUserUid?: string | null;
+  /** Household-authored merchant rules — read by the real `useMerchantRules`
+      off the mocked `useHouseholdCore`, so the bill-match rule tier is
+      exercised through its production path rather than a second mock. */
+  merchantRules?: MerchantRule[];
 }) => {
   vi.mocked(useFinance).mockReturnValue({
     transactions: opts.transactions ?? [],
@@ -98,6 +102,7 @@ const setMocks = (opts: {
   const uid = opts.currentUserUid === undefined ? 'uid-1' : opts.currentUserUid;
   vi.mocked(useHouseholdCore).mockReturnValue({
     currentUser: uid ? { uid } : null,
+    householdSettings: { merchantRules: opts.merchantRules ?? [] },
   } as unknown as ReturnType<typeof useHouseholdCore>);
 };
 
@@ -358,6 +363,170 @@ describe('useActionQueue', () => {
     });
     const { result } = renderHook(() => useActionQueue());
     expect(result.current.actionQueue).toEqual([]);
+  });
+
+  // --- Owner paper cut PC#3: bill ← screenshot-imported transaction ---
+  //
+  // A screenshot import (CaptureModal → parseBankStatement) writes plain
+  // `pending_review` rows with NO bankRef, so it never passes the nightly
+  // sync's matcher. These pin that the queue now runs the SAME matcher
+  // (utils/billDescriptorMatch.ts) at the SAME strictness.
+  //
+  // Fixtures use the owner's real strings where they matter.
+  const gasBill = (overrides: Partial<CalendarItem> = {}) =>
+    makeCalendarItem({
+      id: 'tmpl-gas',
+      title: 'Centerpoint Energy (Natural Gas)',
+      amount: 142,
+      date: '2026-06-15',
+      type: 'expense',
+      isPaid: false,
+      ...overrides,
+    });
+
+  const gasCharge = (overrides: Partial<Transaction> = {}) =>
+    makeTransaction({
+      id: 'tx-gas',
+      merchant: 'Cpenergy Mngco',
+      amount: 37.91,
+      date: '2026-06-16',
+      status: 'pending_review',
+      ...overrides,
+    });
+
+  it('recognises a screenshot-imported charge whose descriptor matches a learned alias', () => {
+    setMocks({
+      calendar: [
+        gasBill({ amount: 120, bankDescriptorAliases: ['CPENERGY MNGCO'] }),
+      ],
+      // Within the ±10%/±$25 window, so the alias tier can fire.
+      transactions: [gasCharge({ amount: 118 })],
+    });
+
+    const { result } = renderHook(() => useActionQueue());
+    const queue = result.current.actionQueue;
+
+    // ONE row, not two: the bill is now represented by the charge that pays it.
+    expect(queue.map(i => i.id)).toEqual(['tx-gas']);
+    const item = queue[0];
+    expect(item && isTransactionQueueItem(item) && item.matchedBill).toEqual({
+      id: 'tmpl-gas',
+      title: 'Centerpoint Energy (Natural Gas)',
+      amount: 120,
+      matchedBy: 'alias',
+    });
+  });
+
+  it("honours a household merchant rule naming a bill, even for a variable amount", () => {
+    setMocks({
+      calendar: [gasBill()], // scheduled $142
+      transactions: [gasCharge()], // actually charged $37.91
+      merchantRules: [
+        {
+          id: 'rule-gas',
+          pattern: 'CPENERGY',
+          billId: 'tmpl-gas',
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    });
+
+    const { result } = renderHook(() => useActionQueue());
+    const queue = result.current.actionQueue;
+
+    expect(queue.map(i => i.id)).toEqual(['tx-gas']);
+    const item = queue[0];
+    expect(item && isTransactionQueueItem(item) && item.matchedBill?.matchedBy).toBe('rule');
+  });
+
+  it("resolves a rule's billId against an EXPANDED recurring occurrence", () => {
+    setMocks({
+      calendar: [
+        gasBill({ id: 'tmpl-gas_instance_2026-06-15', parentRecurringId: 'tmpl-gas' }),
+      ],
+      transactions: [gasCharge()],
+      merchantRules: [
+        {
+          id: 'rule-gas',
+          pattern: 'CPENERGY',
+          billId: 'tmpl-gas',
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    });
+
+    const { result } = renderHook(() => useActionQueue());
+    expect(result.current.actionQueue.map(i => i.id)).toEqual(['tx-gas']);
+  });
+
+  // STRICTNESS PIN — do not "fix" this test by loosening the matcher.
+  // "CENTERPOINT ENERGY NATURAL GAS" and "CPENERGY MNGCO" share no significant
+  // token, and $142.00 vs $37.91 is far outside the amount tolerance. Nothing
+  // links them on a first sighting, and that is correct: silently marking the
+  // wrong bill paid is far worse than one visible duplicate row.
+  it('leaves the real Centerpoint/Cpenergy pair as two independent rows', () => {
+    setMocks({
+      calendar: [gasBill()],
+      transactions: [gasCharge()],
+    });
+
+    const { result } = renderHook(() => useActionQueue());
+    const queue = result.current.actionQueue;
+
+    expect(queue.map(i => i.id)).toEqual(['tmpl-gas', 'tx-gas']);
+    const tx = queue.find(i => i.id === 'tx-gas');
+    expect(tx && isTransactionQueueItem(tx) && tx.matchedBill).toBeUndefined();
+  });
+
+  // The amount guard is not optional on the alias tier: a learned alias alone
+  // must not link a $37.91 charge to a $142 bill.
+  it('keeps two rows when a learned alias matches but the amount is out of tolerance', () => {
+    setMocks({
+      calendar: [gasBill({ bankDescriptorAliases: ['CPENERGY MNGCO'] })],
+      transactions: [gasCharge()],
+    });
+
+    const { result } = renderHook(() => useActionQueue());
+    expect(result.current.actionQueue.map(i => i.id)).toEqual(['tmpl-gas', 'tx-gas']);
+  });
+
+  it('never collapses a bill into an Apple Pay $0 stub (amount not yet known)', () => {
+    setMocks({
+      calendar: [gasBill({ title: 'Xcel Energy', amount: 20 })],
+      transactions: [
+        makeTransaction({
+          id: 'stub',
+          merchant: 'XCEL ENERGY WEB PYMT',
+          amount: 0,
+          needsAmount: true,
+          date: '2026-06-16',
+        }),
+      ],
+    });
+
+    const { result } = renderHook(() => useActionQueue());
+    expect(result.current.actionQueue.map(i => i.id)).toEqual(['tmpl-gas', 'stub']);
+  });
+
+  it('never collapses an INCOME calendar item into a transaction', () => {
+    setMocks({
+      calendar: [
+        makeCalendarItem({
+          id: 'paycheck',
+          title: 'Xcel Energy Payroll',
+          amount: 120,
+          date: '2026-06-15',
+          type: 'income',
+          isPaid: false,
+        }),
+      ],
+      transactions: [
+        makeTransaction({ id: 'tx-1', merchant: 'XCEL ENERGY WEB PYMT', amount: 118, date: '2026-06-16' }),
+      ],
+    });
+
+    const { result } = renderHook(() => useActionQueue());
+    expect(result.current.actionQueue.map(i => i.id)).toEqual(['paycheck', 'tx-1']);
   });
 
   it('type guards correctly narrow tagged items', () => {

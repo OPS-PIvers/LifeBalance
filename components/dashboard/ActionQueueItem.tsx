@@ -1,7 +1,7 @@
 import React, { useMemo, memo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  CalendarClock, Receipt, Check, Trash2, Clock, ListTodo, AlertCircle, Pencil, Tag
+  CalendarClock, Receipt, Check, Trash2, Clock, ListTodo, AlertCircle, Pencil, Tag, Link2
 } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { format, parseISO, isBefore, addDays, isAfter, startOfToday, isValid } from 'date-fns';
@@ -132,7 +132,10 @@ const areActionQueueItemPropsEqual = (
       return prev.item.amount === next.item.amount &&
              prev.item.merchant === next.item.merchant &&
              prev.item.date === next.item.date &&
-             prev.item.category === next.item.category;
+             prev.item.category === next.item.category &&
+             // The recognised bill is rendered in the summary row, so gaining or
+             // losing one must re-render even when nothing else changed.
+             prev.item.matchedBill?.id === next.item.matchedBill?.id;
   }
 
   if (isCalendarQueueItem(prev.item) && isCalendarQueueItem(next.item)) {
@@ -472,6 +475,15 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                  </span>
                )}
             </div>
+            {/* The bill this charge was recognised as paying (useActionQueue's
+                `matchedBills`). Its own queue row is suppressed, so this line is
+                what keeps the bill visible rather than silently vanishing. */}
+            {isTransactionQueueItem(item) && item.matchedBill && (
+              <p className="text-xs text-accent-700 dark:text-accent-200 flex items-center gap-1 mt-0.5">
+                <Link2 size={11} className="shrink-0" aria-hidden="true" />
+                <span className="truncate">Pays {item.matchedBill.title}</span>
+              </p>
+            )}
           </div>
         </div>
 

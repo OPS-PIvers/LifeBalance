@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Trash2, AlertCircle, Clock, User, CheckSquare, Bell, Star, ListChecks } from 'lucide-react';
+import { Check, Trash2, AlertCircle, Clock, CheckSquare, Bell, Star, ListChecks } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, startOfToday } from 'date-fns';
 import { ToDo, HouseholdMember } from '@/types/schema';
 import type { TodoSubtaskToggleResult, TodoCompletionOptions } from '@/contexts/household/mutations/todoMutations';
@@ -18,21 +18,53 @@ import { subtaskProgress } from '@/utils/subtasks';
 
 // Small per-subtask assignee chip — read-only here (assignment happens in the
 // edit drawer). Mirrors ActionQueueItem's renderAssigneeChip styling at a
-// slightly smaller size to fit the subtask row.
-function SubtaskAssigneeChip({ assignee }: { assignee: HouseholdMember | undefined }) {
+// slightly smaller size to fit the subtask row. `className` lets the
+// household cluster below layer on stacking/ring styles.
+function SubtaskAssigneeChip({ assignee, className }: { assignee: HouseholdMember | undefined; className?: string }) {
   if (!assignee) return null;
   return assignee.photoURL ? (
     <img
       src={assignee.photoURL}
       alt={assignee.displayName ?? 'Assigned member'}
-      className="w-4 h-4 rounded-full object-cover shrink-0"
+      className={cn('w-4 h-4 rounded-full object-cover shrink-0', className)}
     />
   ) : (
     <span
       title={assignee.displayName ?? 'Assigned member'}
-      className="w-4 h-4 rounded-full bg-brand-200 dark:bg-brand-500/30 flex items-center justify-center text-[8px] font-bold text-brand-600 dark:text-brand-200 shrink-0"
+      className={cn('w-4 h-4 rounded-full bg-brand-200 dark:bg-brand-500/30 flex items-center justify-center text-[8px] font-bold text-brand-600 dark:text-brand-200 shrink-0', className)}
     >
       {assignee.displayName?.charAt(0) || '?'}
+    </span>
+  );
+}
+
+// Paper cut #5: no single assignee means the whole household, not
+// "unassigned" — stacked ringed avatars (cap 3 + "+N"), one atomic image for
+// assistive tech rather than N separately-announced avatars.
+const HOUSEHOLD_CLUSTER_VISIBLE = 3;
+
+function HouseholdAssigneeCluster({ members }: { members: HouseholdMember[] }) {
+  if (members.length === 0) return null;
+  const visible = members.slice(0, HOUSEHOLD_CLUSTER_VISIBLE);
+  const extra = members.length - visible.length;
+  return (
+    <span
+      role="img"
+      aria-label={`Assigned to the whole household (${members.length} ${members.length === 1 ? 'member' : 'members'})`}
+      className="flex items-center shrink-0"
+    >
+      {visible.map((member, i) => (
+        <SubtaskAssigneeChip
+          key={member.uid}
+          assignee={member}
+          className={cn('ring-2 ring-white dark:ring-brand-800', i > 0 && '-ml-1.5')}
+        />
+      ))}
+      {extra > 0 && (
+        <span className="w-4 h-4 -ml-1.5 rounded-full bg-brand-300 dark:bg-brand-600 ring-2 ring-white dark:ring-brand-800 flex items-center justify-center text-[7px] font-bold text-brand-700 dark:text-brand-100 shrink-0">
+          +{extra}
+        </span>
+      )}
     </span>
   );
 }
@@ -51,14 +83,11 @@ function SubtaskAssigneeChip({ assignee }: { assignee: HouseholdMember | undefin
 
 const LONG_PRESS_MS = 500;
 
-// Title column of the inline title+meta row (paper cut #3). The meta cluster
-// beside it is `shrink-0` — it holds an avatar and a tap target, so squeezing it
-// is never right — which means the title is what gives way. `min-w-36` is the
-// floor: below that a title wraps one word per line, so the flex row (which is
-// `flex-wrap`) instead drops the meta cluster onto its own line, degrading back
-// to the pre-#3 stacked layout only for the genuinely crowded rows (e.g. an
-// overdue timed chore with a checklist AND an assignee).
-const TITLE_COLUMN = 'flex-1 min-w-36';
+// Title line of the two-line row (paper cut #4): title always gets the full
+// row width to itself, with the meta line stacked underneath — deterministic
+// for every row regardless of due-pill text length, unlike the old
+// same-line-until-it-doesn't-fit layout.
+const TITLE_COLUMN = 'w-full';
 
 export interface TodoRowProps {
   item: ToDo;
@@ -105,6 +134,10 @@ export const TodoRow = React.memo(function TodoRow({
   // Parse the due date once per row render to avoid repeated parseISO calls
   const dueDate = parseISO(item.completeByDate);
   const isOverdue = isBefore(dueDate, startOfToday());
+  // Paper cut #4: only overdue/today keep a bold, colored urgency signal on
+  // line 2 — a date that's merely coming up ("Tomorrow", "Jul 29") is muted
+  // instead, so it reads as quiet metadata rather than shouting.
+  const isDueToday = isToday(dueDate);
 
   // F-TODO-14: optional due time-of-day, shown after the date label. The bell
   // marks a task with a reminder configured.
@@ -135,6 +168,11 @@ export const TodoRow = React.memo(function TodoRow({
   const hasDetails =
     Boolean(item.notes && item.notes.trim().length > 0) ||
     Boolean(item.recurrence?.frequency);
+
+  // `assignee` is undefined both for a household-wide todo AND for a stale
+  // reference to a since-removed member — key off `item.assignedTo` itself.
+  const isHouseholdAssignment = !item.assignedTo;
+  const householdMembers = memberMap ? Array.from(memberMap.values()) : [];
 
   // Inline subtask access (owner-approved): ephemeral per-row expand state.
   // Multiple rows may be open at once; collapsed by default.
@@ -361,14 +399,16 @@ export const TodoRow = React.memo(function TodoRow({
   // role="button" toggling selection, so the pill must not be interactive
   // (ARIA forbids interactive descendants of role=button) and its silent
   // auto-complete path must be unreachable during bulk actions (finding 3).
+  // Muted default tone (paper cut #4: quiet supporting text); amber gated
+  // tone stays — it carries real meaning (completion is blocked).
   const pillToneClass = completionGated
     ? 'text-warm-700 dark:text-warm-300'
-    : 'text-brand-500 dark:text-brand-400';
+    : 'text-brand-400 dark:text-brand-500';
   const subtaskPill = subtaskCount > 0 && (
     isSelectionMode ? (
       <span
         data-testid="todo-subtask-pill"
-        className={cn('inline-flex items-center gap-1 font-semibold', pillToneClass)}
+        className={cn('inline-flex items-center gap-1 font-medium', pillToneClass)}
       >
         <ListChecks size={12} aria-hidden="true" />
         {subtasksDone}/{subtaskCount}
@@ -385,10 +425,10 @@ export const TodoRow = React.memo(function TodoRow({
         aria-label={`${subtasksDone} of ${subtaskCount} steps done — ${subtasksExpanded ? 'hide' : 'show'} steps`}
         data-testid="todo-subtask-pill"
         className={cn(
-          'inline-flex items-center gap-1 rounded-full px-2 py-3 -my-2 font-semibold transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
+          'inline-flex items-center gap-1 rounded-full px-2 py-3 -my-2 font-medium transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
           completionGated
             ? 'text-warm-700 dark:text-warm-300'
-            : 'text-brand-500 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-200'
+            : 'text-brand-400 dark:text-brand-500 hover:text-brand-700 dark:hover:text-brand-200'
         )}
       >
         <ListChecks size={12} aria-hidden="true" />
@@ -449,13 +489,17 @@ export const TodoRow = React.memo(function TodoRow({
   );
 
   // Meta line (urgency date/time, reminder bell, details dot, assignee) —
-  // rendered in BOTH selection and normal modes so bulk-select doesn't hide
-  // the row's status; in normal mode it doubles as the button's
-  // aria-describedby target via metaId. Rendered INLINE with the title (as a
-  // sibling, top-aligned) rather than on its own line below — see the
-  // cardInner layout below.
+  // rendered in BOTH selection and normal modes; in normal mode it doubles as
+  // the button's aria-describedby target via metaId. Paper cut #4: always its
+  // own line BELOW the title, and NEVER wraps (`flex-nowrap` +
+  // `overflow-x-auto`) so an extreme combination scrolls instead of
+  // reflowing the row — row height stays deterministic. Muted/subordinate to
+  // the title; the due-date color stays semantic (urgency).
   const metaLine = (
-    <span id={metaId} className="flex flex-wrap items-center gap-3 text-xs">
+    <span
+      id={metaId}
+      className="flex flex-nowrap items-center gap-3 text-xs text-brand-500 dark:text-brand-400 min-w-0 overflow-x-auto"
+    >
       {/* Small amber star marks an important (starred) task — the flat list
           sorts these first, so the mark explains the ordering at a glance.
           Unstarred rows render nothing here (zero space cost). */}
@@ -465,18 +509,34 @@ export const TodoRow = React.memo(function TodoRow({
           <span className="sr-only">Important</span>
         </span>
       )}
-      {/* Single primary status signal: urgency-colored text, not a bordered pill. */}
+      {/* Single primary status signal: urgency-colored text, not a bordered
+          pill. Paper cut #4: only overdue/today shout — a date that's merely
+          coming up ("Tomorrow", a plain "Jul 29") is muted instead, inheriting
+          the meta line's quiet default color rather than the bold
+          section-accent `dateColorMap` reserved for the two urgent cases.
+          (`dateColorMap` itself is untouched — it's shared with the
+          Eisenhower section accents.) */}
       {isOverdue ? (
-        <span className="flex items-center gap-1 font-semibold text-warm-700 dark:text-warm-300">
+        <span data-testid="todo-due-label" className="flex items-center gap-1 font-semibold text-warm-700 dark:text-warm-300">
           <AlertCircle size={11} />
           Overdue ({format(dueDate, 'MMM d')}{dueTimeLabel ? ` · ${dueTimeLabel}` : ''})
         </span>
-      ) : (
-        <span className={`flex items-center gap-1 font-semibold ${dateColorMap[color]}`}>
+      ) : isDueToday ? (
+        <span data-testid="todo-due-label" className={cn('flex items-center gap-1 font-semibold', dateColorMap[color])}>
           <Clock size={11} />
-          {isToday(dueDate) ? 'Today' :
-           isTomorrow(dueDate) ? 'Tomorrow' :
-           format(dueDate, 'MMM d')}
+          Today
+          {dueTimeLabel && ` · ${dueTimeLabel}`}
+          {hasReminder && (
+            <span title="Reminder set">
+              <Bell size={11} aria-hidden="true" />
+              <span className="sr-only">Reminder set</span>
+            </span>
+          )}
+        </span>
+      ) : (
+        <span data-testid="todo-due-label" className="flex items-center gap-1">
+          <Clock size={11} />
+          {isTomorrow(dueDate) ? 'Tomorrow' : format(dueDate, 'MMM d')}
           {dueTimeLabel && ` · ${dueTimeLabel}`}
           {hasReminder && (
             <span title="Reminder set">
@@ -501,21 +561,14 @@ export const TodoRow = React.memo(function TodoRow({
         </span>
       )}
 
-      {assignee && (
-        assignee.photoURL ? (
-          <img
-            src={assignee.photoURL}
-            className="w-4 h-4 rounded-full"
-            alt={assignee.displayName ?? 'Task assignee'}
-          />
-        ) : (
-          /* SVG aria-label is unreliable across AT — hide the icon and carry
-             the assignee name in a sibling sr-only span instead. */
-          <span className="text-brand-400 dark:text-brand-500" title={assignee.displayName ?? 'Task assignee'}>
-            <User size={12} aria-hidden="true" />
-            <span className="sr-only">{assignee.displayName ?? 'Task assignee'}</span>
-          </span>
-        )
+      {assignee ? (
+        // Reuse the exact same chip as the household cluster and the subtask
+        // list below (paper cut #5) — a specific assignee and "everyone"
+        // render with the identical avatar look, not two different
+        // photo-or-fallback implementations that could drift apart.
+        <SubtaskAssigneeChip assignee={assignee} />
+      ) : (
+        isHouseholdAssignment && <HouseholdAssigneeCluster members={householdMembers} />
       )}
     </span>
   );
@@ -577,20 +630,14 @@ export const TodoRow = React.memo(function TodoRow({
 
       {isSelectionMode ? (
         <div className="flex-1 min-w-0">
-          {/* Same inline title+meta treatment as normal mode (paper cut #3),
+          {/* Same two-line title/meta treatment as normal mode (paper cut #4),
               so bulk-select doesn't look denser/different than the regular list. */}
-          <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
-            <p className={cn(TITLE_COLUMN, 'font-medium leading-snug text-inherit')}>
+          <div className="flex flex-col gap-y-1">
+            {/* Two reserved lines — see the normal-mode title below for why. */}
+            <p className={cn(TITLE_COLUMN, 'line-clamp-2 min-h-[2.75em] font-medium leading-snug text-inherit')} title={item.text}>
               <span className={isSelected ? 'text-accent-800 dark:text-accent-200' : 'text-brand-900 dark:text-brand-50'}>{item.text}</span>
             </p>
-            {/* max-w-full is the overflow stop: the cluster never shrinks (it
-                holds an avatar and a tap target), so an extreme meta line —
-                overdue + time + reminder + checklist + assignee — would
-                otherwise push the row wider than the screen. Capped, its own
-                flex-wrap takes over instead. */}
-            <div className="shrink-0 max-w-full">
-              {metaLine}
-            </div>
+            {metaLine}
           </div>
           {subtaskList}
         </div>
@@ -608,17 +655,15 @@ export const TodoRow = React.memo(function TodoRow({
           onPointerCancel={cancelLongPress}
           onContextMenu={handleContextMenu}
         >
-          {/* Title + meta cluster share one row (paper cut #3: due date/assignee
-              inline with the title instead of on their own line below, cutting
-              vertical clutter). The edit affordance is a role="button" wrapping
-              ONLY the title, so it has NO interactive descendant — ARIA forbids
+          {/* Title on its own line, meta line stacked beneath it (paper cut
+              #4) — deterministic two-line row regardless of due-pill text
+              length. The edit affordance is a role="button" wrapping ONLY the
+              title, so it has NO interactive descendant — ARIA forbids
               interactive descendants of role=button, which would swallow the
               checklist pill for VoiceOver/TalkBack. The meta line (which HOSTS
-              the interactive pill) is a SIBLING in this same flex row, never a
-              descendant, still wired here via aria-describedby. items-start
-              keeps the meta cluster top-aligned with the title's first line
-              even when a long title wraps to multiple lines. */}
-          <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
+              the interactive pill) is a SIBLING here, never a descendant,
+              still wired to the title via aria-describedby. */}
+          <div className="flex flex-col gap-y-1">
             {/* Keyboard activation (Enter/Space → edit) is handled explicitly
                 since a role=button div gets no free activation. */}
             <div
@@ -628,24 +673,35 @@ export const TodoRow = React.memo(function TodoRow({
               onKeyDown={handleBodyKeyDown}
               aria-label={`Edit task: ${item.text}`}
               aria-describedby={metaId}
+              title={item.text}
               className={cn(TITLE_COLUMN, 'text-left select-none [-webkit-touch-callout:none] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-card')}
             >
-              <span className="block font-medium leading-snug text-brand-900 dark:text-brand-50">{item.text}</span>
+              {/* Two lines, RESERVED — not truncated to one, and not merely
+                  capped at two. The clamp bounds how far a long title can
+                  grow; `min-h-[2.75em]` reserves that same space when the
+                  title only needs one line, so EVERY row is the same height
+                  whatever its title. Capping alone would have left one-line
+                  and two-line rows different heights — the same jitter the
+                  "Tomorrow" tag caused, just from a different source.
+
+                  2.75em = 2 x `leading-snug` (1.375). In `em`, so it tracks
+                  this element's own font-size rather than pinning a px height
+                  that breaks if the row's type scale ever moves.
+
+                  A to-do list whose titles are cut off mid-word ("Connect with
+                  mom about worksho…") has traded away the one thing the row
+                  exists to show, so two lines it is; the rare title that
+                  overruns even that keeps its full text in this button's
+                  aria-label, the native `title` tooltip above, and the edit
+                  drawer a tap opens.
+
+                  No `block`: `line-clamp-2` supplies `display:-webkit-box`,
+                  and a competing `display:block` in the same layer can win by
+                  stylesheet order and silently render the clamp inert. */}
+              <span className="line-clamp-2 min-h-[2.75em] font-medium leading-snug text-brand-900 dark:text-brand-50">{item.text}</span>
             </div>
 
-            {/* Meta cluster — SIBLING of the edit button (not a descendant) so
-                the interactive checklist pill it hosts is never nested inside a
-                role=button. shrink-0 keeps it from being crushed by a long
-                title. Wired to the button above via aria-describedby={metaId}
-                so AT still announces urgency/reminder/details/assignee. */}
-            {/* max-w-full is the overflow stop: the cluster never shrinks (it
-                holds an avatar and a tap target), so an extreme meta line —
-                overdue + time + reminder + checklist + assignee — would
-                otherwise push the row wider than the screen. Capped, its own
-                flex-wrap takes over instead. */}
-            <div className="shrink-0 max-w-full">
-              {metaLine}
-            </div>
+            {metaLine}
           </div>
 
           {/* Inline subtask checklist — outside the tap-to-edit body so checking
