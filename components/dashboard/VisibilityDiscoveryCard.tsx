@@ -6,9 +6,9 @@ import { Section } from '@/components/ui/Section';
 import { isVisibilityDiscoveryDismissed, dismissVisibilityDiscovery } from '@/utils/visibilityDiscovery';
 
 /**
- * One-time "What I see" discovery nudge (2F.3, TODO §2F). The per-member
- * visibility editor (Settings → Modules → "What I see") has no other
- * discovery path — a member would never stumble into it. Dismissible, never
+ * One-time visibility discovery nudge (2F.3, TODO §2F). The per-member
+ * visibility editor (Settings → Modules & Dashboard → "Who sees what") has no
+ * other discovery path — a member would never stumble into it. Dismissible, never
  * reappears once dismissed (see `utils/visibilityDiscovery.ts` for the
  * per-member localStorage flag). A brand-new household creator who goes
  * through the onboarding wizard's own visibility step sees this same ground
@@ -57,7 +57,7 @@ export const VisibilityDiscoveryCard: React.FC = () => {
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-sm text-brand-900 dark:text-brand-100">Hide what you don&apos;t use</p>
           <p className="text-xs text-brand-500 dark:text-brand-400">
-            Settings → What I see lets you tailor your own nav and Home screen.
+            Settings → Who sees what lets you tailor your own nav and Home screen.
           </p>
         </div>
         <ChevronRight size={16} className="text-brand-400 dark:text-brand-450 shrink-0" aria-hidden="true" />

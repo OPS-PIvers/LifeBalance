@@ -1,8 +1,9 @@
 /**
- * One-time "What I see" discovery nudge (2F.3). Members have no other way to
- * find the per-member visibility editor (Settings → Modules → "What I see",
- * shipped in 2F.1) — it lives inside a Settings sub-screen they'd have no
- * reason to open otherwise. `VisibilityDiscoveryCard` (Dashboard) surfaces it
+ * One-time visibility discovery nudge (2F.3). Members have no other way to
+ * find the per-member visibility editor (Settings → Modules & Dashboard →
+ * "Who sees what", shipped in 2F.1 as "What I see" and since collapsed onto
+ * the one member matrix) — it lives inside a Settings sub-screen they'd have
+ * no reason to open otherwise. `VisibilityDiscoveryCard` (Dashboard) surfaces it
  * once and is dismissible; the flag lives here (not in the component file, so
  * `OnboardingWizard` can share it) following the same try/catch localStorage
  * idiom as `utils/firstTimeFlags.ts` and the `WeeklyRecapCard`/

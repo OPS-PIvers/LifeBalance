@@ -1,15 +1,17 @@
 import type { ModuleKey } from '@/types/schema';
 
 /**
- * Plan F-PLAT-07 — one-tap module presets shown above the per-module toggle
- * list in Settings → App Modules. Each preset is a COMPLETE
+ * Plan F-PLAT-07 — module presets, offered from the "Quick presets" dropdown
+ * above the visibility matrix in Settings → Modules & Dashboard → "Who sees
+ * what" (they were five wrapping chips above the old "App Modules" toggle list
+ * until that section was folded into the matrix). Each preset is a COMPLETE
  * `Record<ModuleKey, boolean>` (every key explicit, not partial) so applying
  * one is deterministic regardless of the household's current shape — no
  * stale `true`s survive from before the tap. Data-driven so adding a new
  * preset is just another array entry; no UI changes required.
  *
- * Manual per-module toggles remain the escape hatch below the preset row —
- * presets are a starting point, not a lock.
+ * The matrix's own household switches remain the escape hatch below the
+ * dropdown — presets are a starting point, not a lock.
  */
 export interface ModulePreset {
   /** Stable key for tests/analytics; not shown in the UI. */

@@ -1,16 +1,10 @@
 import React, { useCallback, useMemo } from 'react';
-import { ChevronUp, ChevronDown } from 'lucide-react';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import { Switch } from '@/components/ui/Switch';
-import { Button } from '@/components/ui/Button';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import Eyebrow from '@/components/ui/Eyebrow';
-import {
-  DASHBOARD_WIDGETS,
-  resolveDashboardOrder,
-  moveWidget,
-  type DashboardWidgetDef,
-} from '@/utils/dashboardLayout';
+import HomeWidgetOrder from '@/components/settings/HomeWidgetOrder';
+import { resolveDashboardOrder } from '@/utils/dashboardLayout';
 import {
   NAV_PAGES,
   isHouseholdModuleEnabled,
@@ -31,13 +25,17 @@ interface MyViewSettingsProps {
   onSave: (updates: Pick<HouseholdMember, 'dashboardLayout' | 'hiddenKeys' | 'homeScreen'>) => void;
 }
 
-const WIDGET_DEFS = new Map<string, DashboardWidgetDef>(DASHBOARD_WIDGETS.map(w => [w.id, w]));
-
 /**
- * Settings → "What I see" (2F.1, extending F-XCUT-02's widget editor).
+ * The first-run wizard's "What I see" step (2F.1, extending F-XCUT-02's widget
+ * editor). Settings no longer mounts this — its Modules & Dashboard screen
+ * collapsed onto the single `MemberVisibilityMatrix` — but
+ * `components/onboarding/OnboardingWizard.tsx` renders it as step 4, so it
+ * stays the wizard's own visibility surface (and the reason the heading text
+ * "What I see" still exists in the app).
  *
  * One list of everything this member can turn off: each page's sub-views first,
- * then the Home widgets (which additionally reorder). Both write the member's
+ * then the Home widgets (which additionally reorder, via the shared
+ * `HomeWidgetOrder` component Settings mounts too). Both write the member's
  * single `hiddenKeys` list — a page's sub-views and Home's widgets are the same
  * kind of key now.
  *
@@ -76,13 +74,6 @@ export const MyViewSettings: React.FC<MyViewSettingsProps> = ({ member, settings
   const handleToggle = useCallback(
     (key: VisibilityKey) => {
       onSave({ dashboardLayout: order, hiddenKeys: toggleHiddenKey(hidden, key) });
-    },
-    [order, hidden, onSave]
-  );
-
-  const handleMove = useCallback(
-    (id: string, direction: 'up' | 'down') => {
-      onSave({ dashboardLayout: moveWidget(order, id, direction), hiddenKeys: hidden });
     },
     [order, hidden, onSave]
   );
@@ -215,55 +206,15 @@ export const MyViewSettings: React.FC<MyViewSettingsProps> = ({ member, settings
         </div>
       )}
 
+      {/* Widget order + per-widget switches come from the SHARED
+          `HomeWidgetOrder` component (Settings' "Home widget order" section
+          mounts the same one) so there is a single implementation of the
+          drag list to keep in sync. */}
       <div className="space-y-2">
         <div className="px-1">
           <Eyebrow className="block">Home widgets</Eyebrow>
-          <p className="text-xs text-brand-500 dark:text-brand-400 mt-1">
-            Reorder with the arrows; switch off to hide.
-          </p>
         </div>
-        <SurfaceList>
-          {order.map((id, index) => {
-            const def = WIDGET_DEFS.get(id);
-            if (!def) return null;
-            const isHidden = hiddenSet.has(id);
-            return (
-              <Row key={id}>
-                <div className="flex flex-col gap-0.5 shrink-0">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`Move ${def.label} up`}
-                    disabled={index === 0}
-                    onClick={() => handleMove(id, 'up')}
-                  >
-                    <ChevronUp size={14} />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`Move ${def.label} down`}
-                    disabled={index === order.length - 1}
-                    onClick={() => handleMove(id, 'down')}
-                  >
-                    <ChevronDown size={14} />
-                  </Button>
-                </div>
-                <div className={`flex-1 min-w-0 ${isHidden ? 'opacity-50' : ''}`}>
-                  <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">
-                    {def.label}
-                  </p>
-                  <p className="text-xs text-brand-500 dark:text-brand-400">{def.description}</p>
-                </div>
-                <Switch
-                  aria-label={`Show ${def.label} on Home`}
-                  checked={!isHidden}
-                  onCheckedChange={() => handleToggle(def.id)}
-                />
-              </Row>
-            );
-          })}
-        </SurfaceList>
+        <HomeWidgetOrder member={member} onSave={onSave} />
       </div>
     </div>
   );

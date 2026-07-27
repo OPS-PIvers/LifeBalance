@@ -374,9 +374,11 @@ const OnboardingWizard: React.FC = () => {
 
             {/* Entirely optional: touching nothing here leaves this member on
                 the inherited household defaults, exactly today's pre-2F.3
-                behavior. Reuses the same Settings → "What I see" editor
-                (MyViewSettings) so there's only one implementation of this
-                list to keep in sync. */}
+                behavior. The wizard is now the only mount point for this
+                leaf/landing-screen editor (Settings collapsed onto
+                `MemberVisibilityMatrix`), but its Home-widget list is still the
+                shared `HomeWidgetOrder` Settings renders too, so there's only
+                one implementation of that list to keep in sync. */}
             {currentUser ? (
               <div className="max-h-72 overflow-y-auto -mx-1 px-1">
                 <MyViewSettings
