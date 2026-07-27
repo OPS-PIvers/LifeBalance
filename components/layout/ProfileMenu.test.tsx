@@ -40,6 +40,12 @@ vi.mock('@/components/ui/LazyMount', () => ({
 // pass (create mode + title) and a Save button that fires the real onSave. Like
 // the real modal it catches a rejected save and stays open, which also keeps a
 // failure from escaping as an unhandled rejection.
+//
+// The `save-error` node is a TEST PROBE for "the rejection reached onSave's
+// caller" — the real MemberModal renders no such element. It only
+// `console.error`s and skips `onClose()`; the user-facing signal is
+// addKidProfile's own toast plus the sheet staying open. Don't read this mock
+// as a mirror of the real modal's UI.
 vi.mock('@/components/modals/MemberModal', () => {
   const MockMemberModal = ({
     isOpen,
@@ -122,9 +128,11 @@ describe('ProfileMenu — add kid profile', () => {
     });
   });
 
-  it('propagates an addKidProfile failure to the modal instead of swallowing it', async () => {
-    // The old native-prompt path caught and dropped the error; the sheet needs it
-    // so it can stay open for a retry.
+  it('lets an addKidProfile rejection reach the modal instead of swallowing it', async () => {
+    // The old native-prompt path caught and dropped the error. What's asserted
+    // here is only that the rejection ARRIVES at the modal — that is what lets
+    // its handleSubmit skip onClose() and keep the sheet open for a retry. The
+    // modal itself renders no error text (see the mock's note above).
     addKidProfile.mockRejectedValueOnce(new Error('permission-denied'));
     renderMenu();
 
