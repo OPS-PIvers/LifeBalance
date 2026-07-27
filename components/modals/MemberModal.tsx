@@ -7,9 +7,10 @@ import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 
 // Match the firestore.rules displayName cap (isValidString ..., 50) for a
-// managed kid profile — ProfileMenu's handleAddKidProfile enforces the same
-// cap client-side so the user gets a friendly message instead of a raw
-// permission error when firestore.rules' managed-kid branch rejects the write.
+// managed kid profile. Enforced here on submit — for BOTH the add and the edit
+// flow, which share this modal — so the user gets a friendly message instead of
+// a raw permission error when firestore.rules' managed-kid branch rejects the
+// write.
 const KID_DISPLAY_NAME_MAX_LENGTH = 50;
 
 interface MemberModalProps {
@@ -18,6 +19,13 @@ interface MemberModalProps {
   onSave: (memberData: Partial<HouseholdMember>) => Promise<void>;
   initialMember?: HouseholdMember | null;
   title: string;
+  /**
+   * Create mode for a managed kid profile (ProfileMenu's "Add kid profile").
+   * There is no `initialMember` to read `isManaged` from when adding, so the
+   * caller declares it. Ignored when `initialMember` is present — an existing
+   * member's own `isManaged` is always the authority there.
+   */
+  createManagedKid?: boolean;
 }
 
 const MemberModal: React.FC<MemberModalProps> = ({
@@ -26,12 +34,13 @@ const MemberModal: React.FC<MemberModalProps> = ({
   onSave,
   initialMember,
   title,
+  createManagedKid = false,
 }) => {
   // Managed kid profiles (Plan 080) have no login, so no email — and no role,
   // since changing a managed kid's role away from 'kid' would un-manage them
   // and firestore.rules' managed-kid branch forbids it anyway; offering the
   // control at all would be a lie. Only the display name is editable.
-  const isManagedKid = initialMember?.isManaged === true;
+  const isManagedKid = initialMember ? initialMember.isManaged === true : createManagedKid;
 
   // Initialize the form from the member being edited (lazy initializers, so the
   // first render is already populated for the edit case).
@@ -70,7 +79,8 @@ const MemberModal: React.FC<MemberModalProps> = ({
           return;
         }
         // Only displayName — a kid has no email/role for the caller to route
-        // onto updateMember; the caller routes this payload to updateKidProfile.
+        // onto updateMember/addMember; the caller routes this payload to
+        // updateKidProfile (edit) or addKidProfile (create).
         await onSave({ displayName: trimmedName });
       } else {
         const trimmedEmail = email.trim();

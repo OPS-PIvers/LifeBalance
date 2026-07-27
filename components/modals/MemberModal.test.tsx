@@ -145,4 +145,73 @@ describe('MemberModal', () => {
       expect(onSave).not.toHaveBeenCalled();
     });
   });
+
+  // Create mode: ProfileMenu's "Add kid profile" has no `initialMember` to read
+  // `isManaged` from, so it declares kid-ness via `createManagedKid`.
+  describe('create mode (createManagedKid)', () => {
+    const renderCreateKid = (onSave = vi.fn().mockResolvedValue(undefined)) => {
+      render(
+        <MemberModal
+          isOpen={true}
+          onClose={vi.fn()}
+          onSave={onSave}
+          initialMember={null}
+          createManagedKid
+          title="Add Kid Profile"
+        />
+      );
+      return onSave;
+    };
+
+    it('renders only the display name field — no email, no role', () => {
+      renderCreateKid();
+
+      expect(screen.getByLabelText("Kid's Name", { exact: false })).toBeInTheDocument();
+      expect(screen.queryByLabelText('Email', { exact: false })).not.toBeInTheDocument();
+      expect(screen.queryByRole('radio', { name: 'Member' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('radio', { name: 'Admin' })).not.toBeInTheDocument();
+    });
+
+    it('saves with only a trimmed displayName — no email or role keys', async () => {
+      const onSave = renderCreateKid();
+
+      fireEvent.change(screen.getByLabelText("Kid's Name", { exact: false }), {
+        target: { value: '  Robin  ' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Save Kid Profile' }));
+
+      await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+      const payload = onSave.mock.calls[0]![0];
+      expect(payload).toEqual({ displayName: 'Robin' });
+    });
+
+    it('rejects a display name over 50 characters with a friendly message, and does not save', async () => {
+      const onSave = renderCreateKid();
+
+      fireEvent.change(screen.getByLabelText("Kid's Name", { exact: false }), {
+        target: { value: 'x'.repeat(51) },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Save Kid Profile' }));
+
+      await waitFor(() => expect(toastErrorSpy).toHaveBeenCalledWith('Kid name must be 50 characters or less'));
+      expect(onSave).not.toHaveBeenCalled();
+    });
+
+    it("defers to an existing member's own isManaged over the create-mode flag", () => {
+      render(
+        <MemberModal
+          isOpen={true}
+          onClose={vi.fn()}
+          onSave={vi.fn()}
+          initialMember={baseMember}
+          createManagedKid
+          title="Edit Member"
+        />
+      );
+
+      // baseMember is a full member, so the email/role fields must survive.
+      expect(screen.getByLabelText('Email', { exact: false })).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'Admin' })).toBeInTheDocument();
+    });
+  });
 });
