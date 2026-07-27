@@ -364,13 +364,28 @@ service cloud.firestore {
             // no longer requires touching this list AT ALL unless a non-admin
             // parent must be able to write that field directly on a kid (as
             // opposed to it only ever being admin/server-written, which already
-            // goes through Case 2). 'hiddenKeys' and 'homeScreen' are listed
-            // because MyViewSettings lets a non-admin parent edit a kid's own
-            // visibility directly; 'email' is listed because MemberModal's
-            // generic admin "Edit Member" form (pages/Settings.tsx
-            // handleEditMember) is not filtered to exclude managed kids and
-            // always submits `email` alongside displayName/role, so a non-admin
-            // parent using that same screen needs it allowed too.
+            // goes through Case 2).
+            //
+            // 'hiddenKeys' and 'homeScreen' are NOT reachable from any non-admin
+            // UI today: a managed kid has no login, MyViewSettings only ever
+            // renders for the signed-in member themselves (never a kid), and
+            // Kid Mode replaces the whole shell with KidDashboard rather than
+            // exposing Settings — so the only client writer of a kid's
+            // hiddenKeys/homeScreen is the admin-only MemberVisibilityMatrix,
+            // which goes through Case 2 (isAdminOf) and never touches this
+            // branch. They're listed here anyway as deliberate defence-in-depth
+            // for a non-admin parent or a direct API writer, not because a UI
+            // flow depends on it — don't assume one does.
+            //
+            // 'email' is listed conservatively, not because any current client
+            // writes it here: MemberModal became kid-aware (commit 0848c13)
+            // and now submits only `{ displayName }` for a managed kid via
+            // updateKidProfile, never through updateMember/this branch, and it
+            // no longer sends a blank email for anyone. Pre-existing kid docs
+            // may still carry an `email` key from before that fix, though, and
+            // dropping an entry from a security allowlist risks silently
+            // breaking a write nobody re-checked — so it stays allowlisted
+            // rather than removed.
             (
               isManagedKidData(resource.data) &&
               isManagedKidData(request.resource.data) &&
