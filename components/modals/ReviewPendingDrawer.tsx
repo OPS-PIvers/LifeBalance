@@ -58,8 +58,6 @@ const ReviewPendingDrawer: React.FC<ReviewPendingDrawerProps> = ({ items, isOpen
 
   if (!current) return null;
 
-  const isLast = index + 1 >= items.length;
-
   return (
     <Drawer
       isOpen={isOpen}
@@ -77,8 +75,11 @@ const ReviewPendingDrawer: React.FC<ReviewPendingDrawerProps> = ({ items, isOpen
               Only the transaction form opts in; the shopping/to-do forms are
               short enough to keep their own in-body CTAs. */}
           {current.kind === 'transaction' && <div ref={setActionsSlot} />}
+          {/* One label whether or not another card follows: this defers the
+              item either way, and on the last one deferring is also what
+              closes the drawer. */}
           <Button variant="ghost" className="w-full" onClick={advance}>
-            {isLast ? 'Review later' : 'Skip — add later'}
+            Skip — add later
           </Button>
         </div>
       }
