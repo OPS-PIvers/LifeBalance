@@ -4,6 +4,7 @@ import { addMonths, subMonths, parseISO, format as formatDate } from 'date-fns';
 
 import type { Transaction } from '@/types/schema';
 import { useExpandedCalendarItems, useFinance } from '@/contexts/FirebaseHouseholdContext';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { useSettleBill } from '@/hooks/useSettleBill';
 import { getBillLinkCandidates } from '@/utils/billLinkCandidates';
 import { suggestAccountForCalendarItem } from '@/utils/actionQueueSmart';
@@ -44,6 +45,7 @@ export const SettleBillSection: React.FC<SettleBillSectionProps> = ({
   onSettled,
 }) => {
   const { accounts, transactions } = useFinance();
+  const fmt = useFormatCurrency();
   const [showPicker, setShowPicker] = useState(false);
   // The bill a settle is currently running for — kept only so the account
   // suggestion can key on the BILL's title ("the account you paid this bill
@@ -174,7 +176,7 @@ export const SettleBillSection: React.FC<SettleBillSectionProps> = ({
                     </span>
                   </span>
                   <span className="shrink-0 font-mono font-bold tabular-nums text-brand-900 dark:text-brand-50">
-                    ${bill.amount.toFixed(2)}
+                    {fmt(bill.amount)}
                   </span>
                 </Button>
               ))}
