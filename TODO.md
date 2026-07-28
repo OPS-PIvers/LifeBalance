@@ -145,19 +145,45 @@ human-watched PR (tagged **[rules]** / **[index]**).
   `billId`/`calendarItemId` field on `Transaction` — the association is descriptor-based, so decide
   deliberately whether this needs a real foreign key or whether teaching the alias is sufficient.
   **M / MED.**
-- [ ] **Sticky save footer for the remaining 21 drawers** (paper cut #10 follow-up, 2026-07-27).
-  `components/ui/Drawer.tsx` already supports a fixed footer via its `footer` prop (L34/L62, rendered
-  as a `shrink-0` bar at L213-218). `BudgetCalendar`'s Edit Event drawer was moved onto it; **21 other
-  drawers still render their primary action inside the scrollable body**, so you must scroll to save.
-  Owner's standard: *"There shouldn't be a single drawer in the entire app where I have to scroll down
-  to find the save button."* Mechanical but ~19 files, each needing a visual check. Copy the wrapper
-  pattern from `components/settings/MerchantRuleFormDrawer.tsx:300`. The list:
-  `BudgetBuckets` (Fix Overspending), `SavingsGoals` (Add/Edit + Contribute), `AISuggestModal`,
-  `AddMealModal`, `IngredientSelectorModal`, `PasteImportDrawer`, `RecipeImportModal`, `RecipeModal`,
-  `ShoppingItemForm`, `BucketFormModal`, `FeedbackModal`, `MemberModal`, `SmartHabitAdjustModal`,
-  `SmartHabitReorderModal`, `PaywallModal`, `PhotoImportDrawer`, `ChallengeHubModal`,
-  `HabitSubmissionLogModal`, `ActionQueueItem`, `RewardManagerPanel`, `CsvImportDrawer`,
-  `TaskTemplateDrawer`. **M / MED.**
+- [x] **Sticky save footer for every drawer** (paper cut #10 follow-up). ✅ 2026-07-28, PRs #1128-#1131.
+  A fresh audit of all **68** `Drawer` consumers replaced the original 21-item list, which was both
+  wrong and short: it named drawers that already had a footer and missed others. Real result —
+  **21 already correct, 30 migrated, the rest have no primary action** (read-only sheets, and
+  tap-to-commit pickers like `AccountPicker`/`TodoTriageDrawer` where selecting the row IS the save).
+  The one bug class that mattered: a moved button that relied on implicit `<form>` submit stops
+  working silently once it leaves the form, so `FeedbackModal`/`MemberModal`/`RewardManagerPanel`
+  got `id` + `form="…"` association (verified in-browser via `btn.form` resolving to the real node).
+  Deliberately NOT forced: `TransactionMasterList`'s mobile filter sheet (filters apply live — no
+  commit action) and `HabitSubmissionLogModal`'s inline add form (already at the top of its tab).
+  **Finished by #1135**, which closed the one real gap: `TransactionReviewForm` — the app's longest
+  review body (measured 719px of content in a 505px viewport) — is SHARED by `ReviewPendingDrawer`
+  and `ActionQueueItem`, so neither host could hoist its CTA alone without duplicating the form's
+  `canApprove`/`handleApprove` ownership. Solved with an optional
+  `actionsContainer?: HTMLElement | null`: the form `createPortal`s its EXISTING Approve+Delete nodes
+  into whichever host footer opts in, so position moves and ownership doesn't, and omitting the prop
+  keeps the in-body render byte-identical. A render-prop can't work here — a node the form returns
+  still renders inside the form's own tree.
+- [ ] **Batch-update toasts over-report when the settled-bill guard skips a row.** Found by adversarial
+  review 2026-07-28, deliberately deferred as report-only (no money moves wrongly). The guard added in
+  #1134 refuses by toasting and returning *normally*, so `TransactionMasterList`'s
+  `handleBatchCategorize`/`executeBatchVerify` — which `Promise.allSettled` over the selection — see a
+  **fulfilled** promise for a refused row and report "Updated N transactions" when one was skipped.
+  Fix is either a distinguishable return value from the guarded mutations or filtering settled rows out
+  of the batch selection. Note the guard intentionally does NOT throw, to avoid a generic
+  "Failed to update" toast burying the specific refusal. **S / LOW.**
+- [ ] **Settle flow ignores an untouched-vs-edited Account select.** The live *amount* is now plumbed
+  into `settleBillWithTransaction`, but the Account select is not: for an UNTAGGED row that select is
+  pre-filled with a *suggestion* (`suggestAccountIdForTransaction`), so forwarding it blindly would skip
+  the `AccountPicker` confirmation the code deliberately requires ("a suggestion, never a silent
+  guess"). Needs a "user actually touched this field" signal the form doesn't currently track. Until
+  then, changing the Account select without saving has no effect on a settle. **S / LOW.**
+- [ ] **Full unlink for a settled bill.** Undo is one-directional by design: once a transaction settles
+  a bill, `deleteTransaction`/`mergeTransactions`/`splitTransaction`/`updateTransaction` (money fields)
+  and `reverseTransactionApproval` all refuse via `utils/settledBillGuard.ts`, pointing the user at the
+  calendar. Deleting the paid calendar doc *does* release the guard (the reference dangles, and the
+  guard is keyed on the bill still being paid — so a row can never be trapped), but the transaction
+  keeps its `paidCalendarItemId` stamp and stays verified. A real "unlink" action on the transaction
+  side would clear the stamp, un-pay the occurrence and reverse the delta in one batch. **M / MED.**
 - [x] **HabitSubmission history/stats view** — the data is already captured (`schema.ts:180`: `pointsEarned`/`streakDaysAtTime`/`multiplierApplied`); no reader UI exists. **S / LOW.** ❌ 2026-07-11: stale — `HabitSubmissionLogModal` (Log/Stats/Calendar tabs) already exists and is wired from `HabitCard`.
 - [x] **ShoppingListTab** mirrored-state-in-effect → derived `useMemo` (lint no longer fires, so this is optional cleanup). **M / LOW.** ❌ 2026-07-11: won't-fix — the mirrored state is load-bearing for `Reorder.Group` drag gestures (local mutation gated by `isDraggingRef` before committing via `reorderShoppingItems`); a derived `useMemo` would break mid-drag reordering.
 - [x] **Finish the `useHousehold()` migration** — ~7 shim consumers remain; move them to narrow domain slices. **S each / LOW.** ❌ 2026-07-11: stale — zero production consumers remain; only test-file mocks reference the shim.
