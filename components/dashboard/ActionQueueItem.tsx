@@ -614,10 +614,10 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                )}
                {isTodoQueueItem(item) && isBefore(parseISO(item.date), startOfToday()) && (
                  <span
-                   className="flex items-center ml-1 text-warm-600 dark:text-warm-300"
+                   className="w-4 h-4 flex items-center justify-center ml-1 text-warm-600 dark:text-warm-300"
                    title="Overdue"
                  >
-                   <AlertCircle size={12} />
+                   <AlertCircle size={16} />
                    <span className="sr-only">Overdue</span>
                  </span>
                )}

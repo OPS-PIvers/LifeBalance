@@ -98,9 +98,8 @@ describe('PastDayLogModal', () => {
     mockContextValue.habits = [{ ...baseHabit, completedDates: [yesterday] }];
     render(<PastDayLogModal isOpen={true} onClose={() => {}} />);
 
-    // The row stays tappable ("+1 more", Track-tab parity)…
+    // The row stays tappable (Track-tab parity)…
     expect(screen.getByRole('button', { name: /Log Read 30 mins again .* \(currently 1\)/ })).toBeInTheDocument();
-    expect(screen.getByText('+1 more')).toBeInTheDocument();
     // …and the × clears exactly that date.
     expect(screen.getByRole('button', { name: /Clear Read 30 mins/ })).toBeInTheDocument();
   });

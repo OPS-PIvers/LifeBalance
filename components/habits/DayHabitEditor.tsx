@@ -198,16 +198,6 @@ const DayHabitEditor: React.FC<DayHabitEditorProps> = ({
                       {habit.period === 'weekly' && <Badge variant="neutral" size="sm">Weekly</Badge>}
                     </span>
                   </span>
-
-                  <span
-                    className={cn(
-                      'relative shrink-0 text-xxs font-bold uppercase tracking-wide pointer-events-none',
-                      dayCount > 0 ? 'text-accent-600 dark:text-accent-400' : 'text-brand-400 dark:text-brand-450'
-                    )}
-                    style={{ zIndex: 2 }}
-                  >
-                    {dayCount > 0 ? '+1 more' : 'Log'}
-                  </span>
                 </div>
               );
             })}
