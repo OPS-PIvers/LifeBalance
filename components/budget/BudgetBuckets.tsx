@@ -350,6 +350,25 @@ const BudgetBuckets: React.FC = () => {
         isOpen={!!reallocateModal}
         onClose={() => setReallocateModal(null)}
         title="Fix Overspending"
+        footer={
+          <div className="flex gap-3 border-t border-brand-200 dark:border-brand-700 p-4">
+            <Button
+              variant="subtle"
+              onClick={() => setReallocateModal(null)}
+              className="flex-1 py-3"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleReallocateConfirm}
+              disabled={!reallocateModal?.sourceId || remainingAfterTransfer < 0}
+              className="flex-1 py-3"
+            >
+              Confirm
+            </Button>
+          </div>
+        }
       >
         <div className="mb-4 text-sm text-brand-600 dark:text-brand-300 bg-brand-50 dark:bg-brand-700/40 p-3 rounded-card border border-brand-200 dark:border-brand-700">
           Needs <strong>{fmt(amountToCover)}</strong> to cover <span className="font-bold">{targetForPreview?.name}</span>.
@@ -402,24 +421,6 @@ const BudgetBuckets: React.FC = () => {
                 </span>
             </div>
           )}
-
-          <div className="pt-4 flex gap-3">
-            <Button
-              variant="subtle"
-              onClick={() => setReallocateModal(null)}
-              className="flex-1 py-3"
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleReallocateConfirm}
-              disabled={!reallocateModal?.sourceId || remainingAfterTransfer < 0}
-              className="flex-1 py-3"
-            >
-              Confirm
-            </Button>
-          </div>
         </div>
       </Drawer>
     </div>

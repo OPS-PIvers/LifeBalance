@@ -225,6 +225,13 @@ const SavingsGoals: React.FC = () => {
         isOpen={isCreateOpen || !!editingGoal}
         onClose={() => { setIsCreateOpen(false); setEditingGoal(null); resetForm(); }}
         title={editingGoal ? 'Edit Savings Goal' : 'New Savings Goal'}
+        footer={
+          <div className="flex gap-2 border-t border-brand-200 dark:border-brand-700 p-4">
+            <Button onClick={handleSave} className="w-full py-3">
+              {editingGoal ? 'Save Changes' : 'Create Goal'}
+            </Button>
+          </div>
+        }
       >
         <div className="space-y-4">
           <p className="text-sm text-brand-500 dark:text-brand-400">
@@ -260,9 +267,6 @@ const SavingsGoals: React.FC = () => {
               ))}
             </Select>
           )}
-          <Button onClick={handleSave} className="w-full py-3 mt-2">
-            {editingGoal ? 'Save Changes' : 'Create Goal'}
-          </Button>
         </div>
       </Drawer>
 
@@ -271,6 +275,13 @@ const SavingsGoals: React.FC = () => {
         isOpen={!!contributingGoal}
         onClose={() => { setContributingGoal(null); setContributionAmount(''); }}
         title={`Add to "${contributingGoal?.name ?? ''}"`}
+        footer={
+          <div className="flex gap-2 border-t border-brand-200 dark:border-brand-700 p-4">
+            <Button onClick={handleContribute} className="w-full py-3">
+              Add Contribution
+            </Button>
+          </div>
+        }
       >
         <p className="text-sm text-brand-500 dark:text-brand-400 mb-4">
           A manual contribution — it doesn&apos;t touch any account balance.
@@ -281,12 +292,9 @@ const SavingsGoals: React.FC = () => {
           placeholder="Amount"
           value={contributionAmount}
           onChange={e => setContributionAmount(e.target.value)}
-          className="font-mono mb-4"
+          className="font-mono"
           autoFocus
         />
-        <Button onClick={handleContribute} className="w-full py-3">
-          Add Contribution
-        </Button>
       </Drawer>
 
       {/* Mobile Actions Drawer */}
