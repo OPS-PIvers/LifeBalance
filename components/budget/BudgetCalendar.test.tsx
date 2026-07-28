@@ -56,7 +56,8 @@ vi.mock('lucide-react', () => ({
   TrendingUp: () => <div data-testid="trending-up" />,
   TrendingDown: () => <div data-testid="trending-down" />,
   Check: () => <div data-testid="check" />,
-  // TransactionLinkPicker (the Edit drawer's "link a transaction" affordance).
+  // The 2H(a) settle-bill affordance pulls two more components onto this
+  // page: TransactionLinkPicker (Link2, Search) and AccountPicker (Sparkles).
   Link2: () => <div data-testid="link2" />,
   Search: () => <div data-testid="search" />,
   Sparkles: () => <div data-testid="sparkles" />,
