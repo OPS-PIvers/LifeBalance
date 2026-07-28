@@ -806,7 +806,11 @@ const BudgetCalendar: React.FC = () => {
       {/* Add/Edit Calendar Item Drawer */}
       <Drawer
         isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
+        // `cancelSettle` too: the settle flow's AccountPicker is a SIBLING
+        // sheet, so dismissing this drawer while it awaits an account would
+        // otherwise leave it floating with nothing behind it. A no-op when
+        // nothing is pending.
+        onClose={() => { setIsAddModalOpen(false); cancelSettle(); }}
         title={editingItem ? 'Edit Event' : 'Add Calendar Item'}
         footer={
           <div className="flex gap-2 border-t border-brand-200 dark:border-brand-700 p-4">
