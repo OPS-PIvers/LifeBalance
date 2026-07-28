@@ -63,6 +63,14 @@ describe('settledBillRefusal', () => {
 });
 
 describe('touchesSettledBillFields', () => {
+  // The row as stored: what every patch below is compared against.
+  const stored = {
+    amount: 153.95,
+    status: 'verified' as const,
+    category: 'Budgeted in Calendar',
+    accountId: 'acc-checking',
+  };
+
   it.each([
     ['amount', { amount: 12 }],
     ['status', { status: 'pending_review' as const }],
@@ -70,18 +78,55 @@ describe('touchesSettledBillFields', () => {
     ['accountId', { accountId: 'acc-card' }],
     ['creditPayment', { creditPayment: true }],
   ])('flags a %s edit', (_label, updates) => {
-    expect(touchesSettledBillFields(updates)).toBe(true);
+    expect(touchesSettledBillFields(updates, stored)).toBe(true);
   });
 
   it('ignores metadata-only edits, which cannot diverge the two documents', () => {
-    expect(touchesSettledBillFields({ notes: 'dog food' })).toBe(false);
-    expect(touchesSettledBillFields({ merchant: 'Xfinity', date: '2026-07-23' })).toBe(false);
-    expect(touchesSettledBillFields({})).toBe(false);
+    expect(touchesSettledBillFields({ notes: 'dog food' }, stored)).toBe(false);
+    expect(touchesSettledBillFields({ merchant: 'Xfinity', date: '2026-07-23' }, stored)).toBe(false);
+    expect(touchesSettledBillFields({}, stored)).toBe(false);
   });
 
-  it('flags an explicit CLEAR of a money field, not just a truthy value', () => {
-    // `accountId: undefined` is the "untag me" sentinel — `in` catches it where
-    // a truthiness check would not.
-    expect(touchesSettledBillFields({ accountId: undefined })).toBe(true);
+  it('flags an explicit CLEAR of a money field', () => {
+    // `accountId: undefined` is the "untag me" sentinel, and the row IS tagged,
+    // so this is a real change.
+    expect(touchesSettledBillFields({ accountId: undefined }, stored)).toBe(true);
+  });
+
+  // REGRESSION — the shape the ONLY edit surface actually sends.
+  // EditTransactionModal.handleSave always passes the whole form, so a
+  // presence-only check refused a settled row for a pure notes edit and made it
+  // permanently uneditable in the app.
+  it('allows a notes-only edit sent as EditTransactionModal sends it — the FULL form', () => {
+    expect(
+      touchesSettledBillFields(
+        {
+          amount: 153.95,
+          merchant: 'Comcast',
+          notes: "autopay, don't reconcile",
+          category: 'Budgeted in Calendar',
+          accountId: 'acc-checking',
+          creditPayment: undefined,
+          date: '2026-07-23',
+        },
+        stored,
+      ),
+    ).toBe(false);
+  });
+
+  it('treats unchanged-but-differently-shaped values as unchanged', () => {
+    // cent-equal amount, absent-vs-false creditPayment, ''-vs-undefined accountId
+    expect(touchesSettledBillFields({ amount: 153.9500000001 }, stored)).toBe(false);
+    expect(touchesSettledBillFields({ creditPayment: false }, stored)).toBe(false);
+    expect(touchesSettledBillFields({ accountId: undefined }, { ...stored, accountId: '' })).toBe(false);
+  });
+
+  it('still flags a real change hidden inside a full-form payload', () => {
+    expect(
+      touchesSettledBillFields(
+        { amount: 99.99, merchant: 'Comcast', category: 'Budgeted in Calendar', accountId: 'acc-checking' },
+        stored,
+      ),
+    ).toBe(true);
   });
 });

@@ -1160,7 +1160,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     // re-tagging a row that settled a bill would desync it from the calendar doc
     // it marked paid. Metadata-only edits stay allowed.
     const existing = transactions.find(t => t.id === id);
-    if (existing && touchesSettledBillFields(updates)) {
+    if (existing && touchesSettledBillFields(updates, existing)) {
       const settledBill = findSettledBill(existing, calendarItems);
       if (settledBill) {
         toast.error(settledBillRefusal('edit', settledBill.title));

@@ -1,3 +1,4 @@
+import { roundMoney } from '@/utils/money';
 import type { CalendarItem, Transaction } from '@/types/schema';
 
 /**
@@ -54,7 +55,36 @@ export function settledBillRefusal(action: string, billTitle?: string): string {
  */
 const MONEY_FIELDS = ['amount', 'status', 'category', 'accountId', 'creditPayment'] as const;
 
-/** Does this `updateTransaction` patch touch anything the settled bill depends on? */
-export function touchesSettledBillFields(updates: Partial<Transaction>): boolean {
-  return MONEY_FIELDS.some(field => field in updates);
+/**
+ * Compare one money field old-vs-new, normalising the shapes that mean "no
+ * change" but aren't `===`: cent-rounded amounts, a `creditPayment` that is
+ * `false`/`undefined`/absent, and an `accountId` that is `''`/`undefined`.
+ */
+function sameMoneyValue(field: (typeof MONEY_FIELDS)[number], next: unknown, prev: unknown): boolean {
+  if (field === 'amount') {
+    return roundMoney(typeof next === 'number' ? next : 0) === roundMoney(typeof prev === 'number' ? prev : 0);
+  }
+  if (field === 'creditPayment') return Boolean(next) === Boolean(prev);
+  return (next ?? '') === (prev ?? '');
+}
+
+/**
+ * Does this `updateTransaction` patch actually CHANGE anything the settled bill
+ * depends on?
+ *
+ * Compares values, never mere key presence. `EditTransactionModal` — the only
+ * edit surface for an existing row — always sends the whole form (amount,
+ * category, accountId, creditPayment) on every save, so a presence check
+ * refused a settled row for a pure notes or merchant edit, i.e. exactly the
+ * metadata case this guard's contract promises to leave alone. That made a
+ * settled bill-payment permanently uneditable through the app's own UI, with
+ * deleting the calendar payment as the only escape.
+ */
+export function touchesSettledBillFields(
+  updates: Partial<Transaction>,
+  existing: Partial<Transaction>,
+): boolean {
+  return MONEY_FIELDS.some(
+    field => field in updates && !sameMoneyValue(field, updates[field], existing[field]),
+  );
 }

@@ -1056,7 +1056,7 @@ export function makeUpdateTransaction(deps: {
       // calendar doc keeps the amount/paid state it was settled at. Only the fields
       // the pair actually depends on are refused — a notes/merchant/date edit can't
       // diverge the two documents and stays allowed.
-      if (touchesSettledBillFields(updates)) {
+      if (touchesSettledBillFields(updates, transaction)) {
         const settledBill = findSettledBill(transaction, calendarItems);
         if (settledBill) {
           toast.error(settledBillRefusal('edit', settledBill.title));
