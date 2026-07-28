@@ -299,17 +299,23 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
   // Review affordance. Calendar/transaction items open the in-place review
   // bottom-sheet (handleExpand); a to-do instead deep-links to the To-Dos list
   // page and highlights the row, so the user sees its full text + subtasks in
-  // context (ToDosPage reads the `?todo=<id>` param). Seed the Lists tab
-  // preference first so /lists opens on the To-Dos tab.
+  // context.
+  //
+  // The tab switch rides `state.tab` (the `useDeepLinkTab` convention `/budget`
+  // and `/habits` already use), NOT the `lists-active-tab` localStorage key
+  // alone: that key is only read when `ListsPage` MOUNTS, so seeding it did
+  // nothing when the user was already sitting on `/lists`. The key is still
+  // written so the preference survives, and `?todo=` is still sent so this link
+  // keeps working via ToDosPage's legacy param path.
   const handleReview = () => {
     if (isTodoQueueItem(item)) {
       try {
         localStorage.setItem('lists-active-tab', 'todos');
       } catch {
-        // Private-mode / storage-disabled: navigation still works, ListsPage
-        // just falls back to its default tab.
+        // Private-mode / storage-disabled: the router state below still
+        // switches the tab; only the persisted preference is lost.
       }
-      navigate(`/lists?todo=${encodeURIComponent(item.id)}`);
+      navigate(`/lists?todo=${encodeURIComponent(item.id)}`, { state: { tab: 'todos' } });
       return;
     }
     handleExpand();

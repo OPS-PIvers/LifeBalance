@@ -234,11 +234,17 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, onChec
     </SwipeActionRow>
   );
 
+  // Global search deep-link target (see hooks/useScrollToHighlight) — derived
+  // from `item.id` rather than taken as a prop deliberately: this component is
+  // memoized with a hand-written field-by-field comparator below, which a new
+  // prop would have to join, and the flash is applied imperatively via DOM
+  // classList so no render-time state is involved either way.
   if (isReorderable) {
     return (
         <Reorder.Item
             value={item}
             id={item.id}
+            data-highlight-target={item.id}
             dragListener={false}
             dragControls={dragControls}
             className="relative overflow-hidden bg-white dark:bg-brand-800 hairline-divider"
@@ -252,7 +258,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, onChec
   }
 
   return (
-    <div className="relative overflow-hidden bg-white dark:bg-brand-800 hairline-divider">
+    <div data-highlight-target={item.id} className="relative overflow-hidden bg-white dark:bg-brand-800 hairline-divider">
         {Content}
     </div>
   );

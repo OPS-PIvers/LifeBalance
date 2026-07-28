@@ -179,12 +179,41 @@ describe('SearchOverlay', () => {
     expect(screen.getByText('No matches')).toBeInTheDocument();
   });
 
-  it('navigates to /lists and seeds the shopping tab on select', () => {
+  // v1.2: `/lists` carries the SAME `{ tab, highlightId }` router state as
+  // `/budget` and `/habits`. Seeding `lists-active-tab` alone never switched
+  // the tab when the user was already on `/lists` (ListsPage reads that key
+  // once, in its useState initializer), so the state is what makes selecting a
+  // to-do / meal / shopping result do anything at all from that page.
+  it('navigates to /lists with the shopping tab, a highlightId, and seeds the tab preference', () => {
     renderOverlay();
     fireEvent.change(screen.getByLabelText('Search query'), { target: { value: 'Tostadas' } });
     fireEvent.click(screen.getByText('Tostadas'));
 
-    expect(screen.getByTestId('location-probe').textContent).toBe('/lists | null');
+    expect(screen.getByTestId('location-probe').textContent).toBe(
+      '/lists | {"tab":"shopping","highlightId":"shop-1"}'
+    );
     expect(window.localStorage.getItem('lists-active-tab')).toBe('shopping');
+  });
+
+  it('navigates to /lists with the todos tab and a highlightId on select', () => {
+    renderOverlay();
+    fireEvent.change(screen.getByLabelText('Search query'), { target: { value: 'trash' } });
+    fireEvent.click(screen.getByText('Take out the trash'));
+
+    expect(screen.getByTestId('location-probe').textContent).toBe(
+      '/lists | {"tab":"todos","highlightId":"todo-1"}'
+    );
+    expect(window.localStorage.getItem('lists-active-tab')).toBe('todos');
+  });
+
+  it('navigates to /lists with the meals tab and a highlightId on select', () => {
+    renderOverlay();
+    fireEvent.change(screen.getByLabelText('Search query'), { target: { value: 'Taco' } });
+    fireEvent.click(screen.getByText('Taco Tuesday'));
+
+    expect(screen.getByTestId('location-probe').textContent).toBe(
+      '/lists | {"tab":"meals","highlightId":"meal-1"}'
+    );
+    expect(window.localStorage.getItem('lists-active-tab')).toBe('meals');
   });
 });
