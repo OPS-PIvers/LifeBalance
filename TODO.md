@@ -108,12 +108,20 @@ human-watched PR (tagged **[rules]** / **[index]**).
 
 - [x] **Empty-state CTAs:** `DailyHabitsWidget` (and similar dashboard widgets) `return null` when empty — show an add-first CTA instead. **S / LOW.** ✅ 2026-07-11: `DailyHabitsWidget` + `MoneyPulseWidget` (the two true first-run cases) now show a compact `EmptyState` + CTA; the other null-returning widgets are period-scoped or intentionally dormant, left as-is.
 - [x] **Global search v1.1:** deep-link/highlight to the specific result item instead of just its containing tab; add a `SearchOverlay` component test. **M+S / LOW.** ✅ 2026-07-11: scroll-to + transient flash-highlight wired for transactions (Budget → Transactions) and habits (Track tab), reduced-motion-safe; meals/todos/shopping still deep-link to their tab only (their sectioned/paginated layouts need a follow-up — now carried as the open v1.2 item below). SearchOverlay tests extended.
-- [ ] **Global search v1.2 — deep-link highlight for meals / todos / shopping.** The three surfaces
-  v1.1 deliberately skipped: they still land on the containing tab with no scroll-to or flash-highlight,
-  because their sectioned/paginated layouts mean the target row may not be mounted when the deep link
-  resolves. Extend the existing `hooks/useDeepLinkHighlight.ts` path used by transactions and habits;
-  expanding/paginating to the target section is the actual work, not the highlight itself. Gate each
-  result on the specific leaf key as `isNavLeafKeyVisible` already does — never at page level. **M / LOW.**
+- [x] **Global search v1.2 — deep-link highlight for meals / todos / shopping.** **M / LOW.**
+  ✅ 2026-07-27. Prerequisite bug fixed first: `/lists` never accepted a router-state tab (it read
+  `lists-active-tab` from localStorage at MOUNT only), so selecting a to-do/meal/shopping result —
+  or the Action Queue's "Review" link — did nothing at all when already on `/lists`. `ListsPage` now
+  layers `useDeepLinkTab` over the stored preference, and `SearchOverlay`/`ActionQueueItem` send
+  `state: { tab, highlightId }`. Surfaces: **shopping** = `data-highlight-target` on both
+  `ShoppingItemRow` branches + an `onBeforeScroll` that clears the store filter only when the target
+  fails it; **to-dos** = the bespoke `?todo=` ref-map/ring path replaced by the shared hooks (the param
+  still works, translated onto the same target), with `onBeforeScroll` switching view mode, clearing
+  only the filters the target actually fails, expanding its collapsed category section, and exiting
+  the landscape grid; **meals** = a search hit is a RECIPE, and the tab renders plan items for one
+  day, so the deep link OPENS the recipe (`RecipeModal` without a plan item) rather than scrolling.
+  The shared `.search-highlight-flash` now paints via a `::after` overlay — the old
+  background-only flash was hidden under every row's own opaque background.
 - [ ] **Link a calendar event to an existing transaction from the Edit Event drawer** (paper cut #9,
   deferred 2026-07-27). Today the bill↔transaction link is **one-directional**: `linkBankTransactionToBill`
   ([contexts/household/mutations/calendarMutations.ts:537](contexts/household/mutations/calendarMutations.ts:537))

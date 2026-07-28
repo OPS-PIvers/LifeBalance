@@ -58,7 +58,8 @@ import {
 } from '@/utils/todoCategoryFilter';
 import { isTodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
 import { useStackedStickyOffset } from '@/hooks/useStackedStickyOffset';
-import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useDeepLinkHighlight } from '@/hooks/useDeepLinkHighlight';
+import { useScrollToHighlight } from '@/hooks/useScrollToHighlight';
 import type { TodoCompletionOptions } from '@/contexts/household/mutations/todoMutations';
 
 // Persisted like the Shopping list's sort mode — the derived view survives
@@ -110,6 +111,16 @@ function writeLastUsedCategory(category: string | undefined): void {
 /** Stable section key for a category group (null = the Uncategorized section). */
 const categorySectionKey = (category: string | null): string =>
   category === null ? 'uncat:' : `cat:${category.trim().toLowerCase()}`;
+
+/** The section key a to-do's own `category` field belongs to. */
+const categorySectionKeyForTodo = (todo: ToDo): string => {
+  const trimmed = (todo.category ?? '').trim();
+  return categorySectionKey(trimmed === '' ? null : trimmed);
+};
+
+// Mirrors `useDeepLinkHighlight`'s own self-clear window, so the legacy
+// `?todo=` path and the router-state path fade on the same schedule.
+const TODO_HIGHLIGHT_DURATION_MS = 2200;
 
 // Sentinel for the "Whole household" option in the Assign-to picker — no
 // member's uid ever collides with this. Selecting it stores `assignedTo:
@@ -611,45 +622,48 @@ const ToDosPage: React.FC = () => {
     });
   }, []);
 
-  // Deep-link + highlight from the dashboard Action Queue: tapping "Review" on
-  // a to-do navigates here with `?todo=<id>`. We scroll that row into view and
-  // briefly ring it so the user sees its full text + subtasks in context.
+  // --- Deep-link + highlight (ONE system, v1.2) -----------------------------
+  // The canonical transport is router state — `navigate('/lists', { state: {
+  // tab: 'todos', highlightId } })`, read by `useDeepLinkHighlight` and painted
+  // by `useScrollToHighlight` + `data-highlight-target`, exactly as Money and
+  // Habits do. The dashboard Action Queue's older `?todo=<id>` links are
+  // TRANSLATED onto that same internal target rather than kept as a second
+  // highlight path with its own ref map and its own ring overlay.
   const [searchParams, setSearchParams] = useSearchParams();
-  const reducedMotion = useReducedMotion();
-  const [highlightedTodoId, setHighlightedTodoId] = useState<string | null>(null);
-  // Ref map of active-list row wrappers, keyed by todo id — the scroll anchor.
-  const todoRowRefs = useRef(new Map<string, HTMLDivElement>());
+  const routerHighlightId = useDeepLinkHighlight();
 
-  // When the target row is rendered, scroll to it, mark it highlighted, and
-  // consume the param (replace, so it doesn't re-fire). If the row isn't
-  // present yet (list still loading) or is hidden (filtered out / completed
-  // view), we no-op and leave the param in place — the effect re-runs when
-  // `flatActive` changes, so it fires once the row appears.
+  // Legacy `?todo=` → the same internal target. Latched on the render the param
+  // arrives (a render-phase edge check, not an effect, so there is no cascading
+  // render) because ListsPage's own `useDeepLinkTab` replaces the location —
+  // dropping the query string with it — during that very render pass.
+  const paramTodoId = searchParams.get('todo');
+  const [consumedTodoParam, setConsumedTodoParam] = useState<string | null>(null);
+  const [paramHighlightId, setParamHighlightId] = useState<string | null>(null);
+  if (paramTodoId !== consumedTodoParam) {
+    setConsumedTodoParam(paramTodoId);
+    // Only ACT on a real incoming id; clearing back to null just re-arms the
+    // edge so the same link can fire again later.
+    if (paramTodoId) setParamHighlightId(paramTodoId);
+  }
+  // Consume the param so a refresh / back navigation doesn't re-fire it.
+  // Removes only the `todo` key, so any other params (filters, sort) survive.
   useEffect(() => {
-    const targetId = searchParams.get('todo');
-    if (!targetId) return;
-    const node = todoRowRefs.current.get(targetId);
-    if (!node) return;
-    node.scrollIntoView({ block: 'center', behavior: reducedMotion ? 'auto' : 'smooth' });
-    setHighlightedTodoId(targetId);
-    // Remove only the `todo` key so any other params (filters, sort, etc.)
-    // survive the deep-link arrival.
+    if (!paramTodoId) return;
     setSearchParams(prev => {
       const next = new URLSearchParams(prev);
       next.delete('todo');
       return next;
     }, { replace: true });
-  }, [searchParams, flatActive, reducedMotion, setSearchParams]);
-
-  // Clear the highlight ~2s after it lands. A dedicated effect keyed on the
-  // highlighted id (not the deep-link effect's cleanup) so consuming the param
-  // — which re-runs that effect — can't cancel this timer early. Timer is
-  // cleared on unmount / re-highlight.
+  }, [paramTodoId, setSearchParams]);
+  // Self-clearing on the same schedule as `useDeepLinkHighlight`'s own timer,
+  // so both sources of a highlight behave identically downstream.
   useEffect(() => {
-    if (!highlightedTodoId) return;
-    const timer = window.setTimeout(() => setHighlightedTodoId(null), 2000);
+    if (!paramHighlightId) return;
+    const timer = window.setTimeout(() => setParamHighlightId(null), TODO_HIGHLIGHT_DURATION_MS);
     return () => window.clearTimeout(timer);
-  }, [highlightedTodoId]);
+  }, [paramHighlightId]);
+
+  const highlightId = routerHighlightId ?? paramHighlightId;
 
   // Eisenhower buckets — computed unconditionally (hooks rule) but only
   // rendered in the matrix arrangement. Urgency uses the same midnight-
@@ -1091,6 +1105,50 @@ const ToDosPage: React.FC = () => {
   }, []);
 
   const gridOverlayVisible = gridActive && viewMode === 'active';
+
+  // Un-hide the deep-linked row BEFORE `useScrollToHighlight` looks for it in
+  // the DOM (it gives this callback one frame). Every branch is conditional on
+  // the target actually failing the current view — a deep link must reveal what
+  // it points at, but it must not stomp view choices it didn't need to touch.
+  const revealHighlightedTodo = useCallback(() => {
+    if (!highlightId) return;
+    const target = todos.find(t => t.id === highlightId);
+    if (!target) return;
+
+    // 1. The landscape Eisenhower overlay genuinely UNMOUNTS the flat list, so
+    //    a scroll target inside it doesn't exist at all while it is up.
+    if (gridActive) {
+      setGridActive(false);
+      setGridDismissed(true);
+    }
+
+    // 2. Active vs completed. `searchTodos` returns completed to-dos too, so a
+    //    completed hit would otherwise silently fail against the active view.
+    setViewMode(target.isCompleted ? 'completed' : 'active');
+    if (target.isCompleted) return; // the filters/sections below are active-only
+
+    // 3. Filters — cleared ONLY when this task actually fails them.
+    if (assigneeFilter !== null && target.assignedTo !== assigneeFilter) {
+      setAssigneeFilter(null);
+    }
+    if (!matchesCategoryFilter(target, categoryFilter)) {
+      setCategoryFilter([]);
+    }
+
+    // 4. Category sort collapses sections with `hidden` (display:none) rather
+    //    than unmounting them, and `scrollIntoView` on a display:none subtree is
+    //    a no-op — so expanding the target's section is required, not optional.
+    if (sortMode === 'category') {
+      const sectionKey = categorySectionKeyForTodo(target);
+      setCollapsedCategories(prev => {
+        if (!prev.has(sectionKey)) return prev;
+        const next = new Set(prev);
+        next.delete(sectionKey);
+        return next;
+      });
+    }
+  }, [highlightId, todos, gridActive, assigneeFilter, categoryFilter, sortMode]);
+  useScrollToHighlight(highlightId, revealHighlightedTodo);
 
   // Body-scroll lock for the immersive grid overlay, held at PAGE level as a
   // latch rather than inside GridOverlay. Why: if the user rotates to portrait
@@ -1840,19 +1898,19 @@ const ToDosPage: React.FC = () => {
     </div>
   );
 
-  // One active-list row + its deep-link scroll anchor/highlight. Extracted so
-  // the flat list and the category sections render IDENTICAL rows (a plain
-  // function, not a component, so the row's own state isn't remounted).
+  // One active-list row + its deep-link scroll anchor. Extracted so the flat
+  // list and the category sections render IDENTICAL rows (a plain function, not
+  // a component, so the row's own state isn't remounted).
   const renderTodoRow = (item: ToDo) => (
     <div
       key={item.id}
-      ref={(el) => {
-        if (el) todoRowRefs.current.set(item.id, el);
-        else todoRowRefs.current.delete(item.id);
-      }}
-      // scroll-mt clears the stacked sticky header when the row
-      // is scrolled into view; `relative` anchors the transient
-      // deep-link highlight overlay below (see the ?todo= effect).
+      // Global search / Action Queue deep-link target — the shared
+      // `data-highlight-target` convention (see hooks/useScrollToHighlight),
+      // which finds the node and applies `.search-highlight-flash`
+      // imperatively, so TodoRow's memo comparator needs no highlight prop.
+      data-highlight-target={item.id}
+      // scroll-mt clears the stacked sticky header when the row is scrolled
+      // into view; `relative` anchors the flash overlay (index.css).
       className="relative scroll-mt-32"
     >
       <TodoRow
@@ -1870,16 +1928,6 @@ const ToDosPage: React.FC = () => {
         onToggleSubtask={toggleTodoSubtask}
         memberMap={memberMap}
       />
-      {/* Transient deep-link highlight (~2s): an absolutely
-          positioned, non-interactive ring overlay painted OVER
-          the opaque row (an inset ring on the wrapper would sit
-          behind the row's own background and never show). */}
-      {highlightedTodoId === item.id && (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-10 rounded-card ring-2 ring-inset ring-accent-500 dark:ring-accent-400"
-        />
-      )}
     </div>
   );
 
@@ -2128,10 +2176,14 @@ const ToDosPage: React.FC = () => {
                 onDuplicate={handleDuplicate}
                 memberMap={memberMap}
             />
+            {/* The two collapsed buckets take the deep-link target so a hit
+                inside them opens its section instead of quietly finding no row
+                to scroll to. */}
             <CompletedSection
                 title="This week"
                 items={completedWeek}
                 defaultCollapsed
+                highlightId={highlightId}
                 onUncomplete={handleUncomplete}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
@@ -2141,6 +2193,7 @@ const ToDosPage: React.FC = () => {
                 title="Older"
                 items={completedOlder}
                 defaultCollapsed
+                highlightId={highlightId}
                 onUncomplete={handleUncomplete}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
@@ -2753,7 +2806,10 @@ const CompletedTodoRow = React.memo(function CompletedTodoRow({ item, assignee, 
 }) {
     const completedDate = item.completedAt ? parseISO(item.completedAt) : null;
     return (
-        <Row className="items-start">
+        // Completed rows carry the deep-link target too: `searchTodos` returns
+        // completed to-dos, so without this a completed hit would switch the
+        // view and then silently fail to find anything to flash.
+        <Row data-highlight-target={item.id} className="items-start">
             <HapticCheck
                 checked={true}
                 onCheckedChange={() => onUncomplete(item.id)}
@@ -2820,7 +2876,7 @@ const CompletedTodoRow = React.memo(function CompletedTodoRow({ item, assignee, 
 // SectionHeading voice (serif, sentence case — a content grouping per
 // DESIGN.md §3); older buckets reuse the shared CollapsibleSection primitive
 // (same heading spec) with the item count as its collapsed summary.
-const CompletedSection = React.memo(function CompletedSection({ title, items, onUncomplete, onDelete, onDuplicate, memberMap, defaultCollapsed = false }: {
+const CompletedSection = React.memo(function CompletedSection({ title, items, onUncomplete, onDelete, onDuplicate, memberMap, defaultCollapsed = false, highlightId = null }: {
   title: string;
   items: ToDo[];
   onUncomplete: (id: string) => void;
@@ -2833,7 +2889,26 @@ const CompletedSection = React.memo(function CompletedSection({ title, items, on
    * recent completions stay in view). Omit/false = always-expanded header.
    */
   defaultCollapsed?: boolean;
+  /**
+   * The active deep-link target. A collapsed `CollapsibleSection` does not
+   * render its children at all, so a deep link into the "This week" / "Older"
+   * buckets has to open this section or there is nothing to scroll to.
+   */
+  highlightId?: string | null;
 }) {
+    // Render-phase edge (the page's `wasSelectionMode` pattern): open once, on
+    // the render a NEW highlight naming a row in this bucket arrives, then hand
+    // control back to the user's own toggles — the section deliberately does not
+    // re-collapse when the highlight fades.
+    const [isOpen, setIsOpen] = useState(!defaultCollapsed);
+    const [consumedHighlightId, setConsumedHighlightId] = useState<string | null>(null);
+    if (highlightId !== consumedHighlightId) {
+      setConsumedHighlightId(highlightId);
+      if (highlightId && !isOpen && items.some(item => item.id === highlightId)) {
+        setIsOpen(true);
+      }
+    }
+
     if (items.length === 0) return null;
 
     const rows = (
@@ -2854,7 +2929,12 @@ const CompletedSection = React.memo(function CompletedSection({ title, items, on
     return (
         <div className="animate-in slide-in-from-bottom-4 duration-(--duration-slow)">
             {defaultCollapsed ? (
-                <CollapsibleSection title={title} summary={items.length}>
+                <CollapsibleSection
+                    title={title}
+                    summary={items.length}
+                    open={isOpen}
+                    onOpenChange={setIsOpen}
+                >
                     {rows}
                 </CollapsibleSection>
             ) : (
