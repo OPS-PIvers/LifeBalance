@@ -114,6 +114,38 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
           )}
         </div>
       }
+      footer={
+        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800 flex gap-3">
+          <Button variant="ghost" onClick={onClose} className="flex-1">
+            Close
+          </Button>
+          {onShopIngredients && meal.ingredients && meal.ingredients.length > 0 && (
+            <Button
+              variant="secondary"
+              onClick={() => onShopIngredients(meal.name, scaledIngredients, meal.id)}
+              className="flex-2"
+              leftIcon={<ShoppingCart size={18} />}
+            >
+              {isScaled ? `Shop for ${servings} servings` : 'Shop ingredients'}
+            </Button>
+          )}
+          {planItem && onMarkCooked && !isCooked && (
+            <Button
+              variant="primary"
+              onClick={onMarkCooked}
+              className="flex-2"
+              leftIcon={<ChefHat size={18} />}
+            >
+              Mark as Cooked
+            </Button>
+          )}
+          {isCooked && (
+             <div className="flex-2 flex items-center justify-center gap-2 bg-money-bgPos text-money-pos font-bold rounded-xl border border-money-pos/20 opacity-80 cursor-default dark:bg-money-pos/15 dark:text-money-posDark dark:border-money-pos/25">
+                <CheckCircle2 size={18} /> Bon Appétit!
+             </div>
+          )}
+        </div>
+      }
     >
         {/* Content (single Drawer scroll container) */}
         <div className="p-6 space-y-8 bg-brand-50 dark:bg-brand-900/30">
@@ -241,38 +273,6 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
                 <ExternalLink size={16} /> View Original Recipe
               </a>
             </div>
-          )}
-        </div>
-
-        {/* Footer (flows after content) */}
-        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800 flex gap-3">
-          <Button variant="ghost" onClick={onClose} className="flex-1">
-            Close
-          </Button>
-          {onShopIngredients && meal.ingredients && meal.ingredients.length > 0 && (
-            <Button
-              variant="secondary"
-              onClick={() => onShopIngredients(meal.name, scaledIngredients, meal.id)}
-              className="flex-2"
-              leftIcon={<ShoppingCart size={18} />}
-            >
-              {isScaled ? `Shop for ${servings} servings` : 'Shop ingredients'}
-            </Button>
-          )}
-          {planItem && onMarkCooked && !isCooked && (
-            <Button
-              variant="primary"
-              onClick={onMarkCooked}
-              className="flex-2"
-              leftIcon={<ChefHat size={18} />}
-            >
-              Mark as Cooked
-            </Button>
-          )}
-          {isCooked && (
-             <div className="flex-2 flex items-center justify-center gap-2 bg-money-bgPos text-money-pos font-bold rounded-xl border border-money-pos/20 opacity-80 cursor-default dark:bg-money-pos/15 dark:text-money-posDark dark:border-money-pos/25">
-                <CheckCircle2 size={18} /> Bon Appétit!
-             </div>
           )}
         </div>
     </Drawer>

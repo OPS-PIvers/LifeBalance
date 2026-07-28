@@ -17,12 +17,15 @@ vi.mock('@/components/ui/Drawer', () => {
     children: React.ReactNode;
     isOpen: boolean;
     title?: string;
+    /** The real Drawer renders this as a pinned bar below the body. */
+    footer?: React.ReactNode;
   }
   return {
-    Drawer: ({ children, isOpen, title }: MockDrawerProps) =>
+    Drawer: ({ children, isOpen, title, footer }: MockDrawerProps) =>
       isOpen ? (
         <div role="dialog" aria-label={title}>
           {children}
+          {footer}
         </div>
       ) : null,
   };

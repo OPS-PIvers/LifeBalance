@@ -11,8 +11,8 @@ const baseItem: ShoppingItem = {
   isPurchased: false,
 };
 
+// Save/Delete live in the consuming Drawer's footer, not in this component.
 const baseProps = {
-  onSave: vi.fn(),
   stores: [],
   categories: ['Uncategorized', 'Dairy'],
 };

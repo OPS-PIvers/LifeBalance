@@ -94,7 +94,27 @@ export const RecipeImportModal: React.FC<RecipeImportModalProps> = ({
   };
 
   return (
-    <Drawer isOpen={isOpen} onClose={onClose} title="Import Recipe">
+    <Drawer
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Import Recipe"
+      footer={
+        <div className="flex gap-3 border-t border-brand-200 dark:border-brand-700 p-4">
+            <Button variant="ghost" className="flex-1" onClick={onClose} disabled={isParsing}>
+                Cancel
+            </Button>
+            <Button
+                variant="primary"
+                className="flex-1"
+                onClick={handleParse}
+                disabled={!text.trim() || isParsing || isFetching}
+                leftIcon={isParsing ? <Loader2 className="animate-spin" /> : <Sparkles size={18} />}
+            >
+                {isParsing ? 'Parsing...' : 'Parse Recipe'}
+            </Button>
+        </div>
+      }
+    >
       {/* Single scroll container is the Drawer body — no nested scrollers. */}
       <div className="space-y-4">
         <div className="bg-brand-50 border border-brand-200 rounded-card p-4 dark:bg-brand-700/40 dark:border-brand-700">
@@ -139,21 +159,6 @@ export const RecipeImportModal: React.FC<RecipeImportModalProps> = ({
             placeholder="Paste recipe here...&#10;&#10;Example:&#10;Spaghetti Carbonara&#10;Ingredients:&#10;- 400g spaghetti&#10;- 150g pancetta&#10;..."
             className="w-full h-64 p-4 bg-white border border-brand-200 rounded-btn focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden text-sm font-mono text-brand-700 resize-none leading-relaxed dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-450"
         />
-
-        <div className="flex gap-3 pt-1">
-            <Button variant="ghost" className="flex-1" onClick={onClose} disabled={isParsing}>
-                Cancel
-            </Button>
-            <Button
-                variant="primary"
-                className="flex-1"
-                onClick={handleParse}
-                disabled={!text.trim() || isParsing || isFetching}
-                leftIcon={isParsing ? <Loader2 className="animate-spin" /> : <Sparkles size={18} />}
-            >
-                {isParsing ? 'Parsing...' : 'Parse Recipe'}
-            </Button>
-        </div>
       </div>
     </Drawer>
   );
