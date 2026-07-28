@@ -2,7 +2,7 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { useMerchantRules } from '@/hooks/useMerchantRules';
-import { looksLikeBankDescriptor } from '@/utils/bankDescriptor';
+import type { Transaction } from '@/types/schema';
 import { suggestPatternFromDescriptor } from '@/utils/merchantRules';
 
 /**
@@ -17,11 +17,42 @@ import { suggestPatternFromDescriptor } from '@/utils/merchantRules';
  * case people actually hit here — a friendly name — and leaves amount
  * qualifiers, category, bill links and no-spend exemptions to the Settings
  * editor, which is linked from the helper text.
+ *
+ * Offered on PROVENANCE, not spelling: a machine wrote this merchant string, so
+ * it is worth offering to rename regardless of how tidy it happens to read. See
+ * MACHINE_CAPTURE_SOURCES.
  */
+
+/**
+ * The sources whose merchant text a MACHINE produced — a scan, an import, a
+ * bank feed. Those names are whatever the capture happened to spell, so a
+ * rename is worth offering even when the text reads perfectly well: a receipt
+ * parser title-cases "St. Louis Park", which is neither ugly nor what the user
+ * would call their gas station.
+ *
+ * 'manual' and 'recurring' are deliberately absent. On a manual row the user
+ * typed the name themselves, and a recurring row is generated from a calendar
+ * item whose title they authored — the name is already exactly what they
+ * wanted, so an offer to rename it would just nag on every such row forever.
+ */
+const MACHINE_CAPTURE_SOURCES: ReadonlySet<Transaction['source']> = new Set([
+  'camera-scan',
+  'file-upload',
+  'image-capture',
+  'shortcut',
+  'plaid',
+  'bank-sync',
+]);
 
 export interface InlineMerchantRenameProps {
   /** The RAW bank descriptor, exactly as stored on the transaction. */
   merchant: string;
+  /**
+   * How the row was captured. REQUIRED, not optional, so TypeScript catches a
+   * host that forgets it — a missing source would silently retire the
+   * affordance there, which is the exact bug this gate replaced.
+   */
+  source: Transaction['source'];
   /** The row's amount, so an existing amount-qualified rule resolves correctly. */
   amount?: number;
   /** Host form is mid-save — don't let a rule write race it. */
@@ -30,6 +61,7 @@ export interface InlineMerchantRenameProps {
 
 const InlineMerchantRename: React.FC<InlineMerchantRenameProps> = ({
   merchant,
+  source,
   amount,
   disabled = false,
 }) => {
@@ -56,7 +88,7 @@ const InlineMerchantRename: React.FC<InlineMerchantRenameProps> = ({
   const existingName = ruleFor({ merchant, amount })?.name?.trim();
   const pattern = suggestPatternFromDescriptor(merchant);
 
-  if (existingName || !pattern || !looksLikeBankDescriptor(merchant)) return null;
+  if (existingName || !pattern || !MACHINE_CAPTURE_SOURCES.has(source)) return null;
 
   const close = () => {
     setIsOpen(false);
