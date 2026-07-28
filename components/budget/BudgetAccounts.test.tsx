@@ -125,15 +125,17 @@ vi.mock('@/components/ui/Drawer', () => {
     isOpen: boolean;
     title?: string;
     onClose?: () => void;
+    footer?: React.ReactNode;
   }
   return {
-    Drawer: ({ children, isOpen, title, onClose }: MockDrawerProps) => {
+    Drawer: ({ children, isOpen, title, onClose, footer }: MockDrawerProps) => {
       if (!isOpen) return null;
       return (
         <div data-testid="drawer">
           <h3>{title}</h3>
           {onClose && <button aria-label="Close drawer" onClick={onClose}>Close</button>}
           {children}
+          {footer && <div data-testid="drawer-footer">{footer}</div>}
         </div>
       );
     },

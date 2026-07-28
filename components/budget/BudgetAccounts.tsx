@@ -686,6 +686,16 @@ const BudgetAccounts: React.FC = () => {
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         title="Add Account"
+        footer={
+          <div className="flex gap-2 border-t border-brand-200 dark:border-brand-700 p-4">
+            <Button
+              onClick={handleAddAccount}
+              className="w-full py-3"
+            >
+              Save Account
+            </Button>
+          </div>
+        }
       >
         <div className="space-y-4">
           <Input
@@ -737,12 +747,6 @@ const BudgetAccounts: React.FC = () => {
               </p>
             </div>
           )}
-          <Button
-            onClick={handleAddAccount}
-            className="w-full py-3 mt-2"
-          >
-            Save Account
-          </Button>
         </div>
       </Drawer>
 
@@ -751,6 +755,16 @@ const BudgetAccounts: React.FC = () => {
         isOpen={!!isGoalModalOpen}
         onClose={() => setIsGoalModalOpen(null)}
         title="Set Savings Goal"
+        footer={
+          <div className="flex gap-2 border-t border-brand-200 dark:border-brand-700 p-4">
+            <Button
+              onClick={handleSetGoal}
+              className="w-full py-3"
+            >
+              Set Goal
+            </Button>
+          </div>
+        }
       >
         <p className="text-sm text-brand-500 dark:text-brand-400 mb-4">
           What is your target balance for this account?
@@ -761,15 +775,9 @@ const BudgetAccounts: React.FC = () => {
           placeholder="Goal Amount"
           value={goalAmount}
           onChange={e => setGoalAmount(e.target.value)}
-          className="font-mono mb-4"
+          className="font-mono"
           autoFocus
         />
-        <Button
-          onClick={handleSetGoal}
-          className="w-full py-3"
-        >
-          Set Goal
-        </Button>
       </Drawer>
 
       {/* Account Number & Cards Drawer */}
@@ -777,6 +785,16 @@ const BudgetAccounts: React.FC = () => {
         isOpen={!!isCardModalOpen}
         onClose={() => setIsCardModalOpen(null)}
         title="Account Number & Cards"
+        footer={
+          <div className="flex gap-2 border-t border-brand-200 dark:border-brand-700 p-4">
+            <Button
+              onClick={handleSetCard}
+              className="w-full py-3"
+            >
+              Save
+            </Button>
+          </div>
+        }
       >
         <div className="space-y-1 mb-5">
           <label className="text-xs font-semibold text-brand-600 dark:text-brand-300 uppercase tracking-wide">
@@ -845,13 +863,6 @@ const BudgetAccounts: React.FC = () => {
             </p>
           </div>
         )}
-
-        <Button
-          onClick={handleSetCard}
-          className="w-full py-3 mt-5"
-        >
-          Save
-        </Button>
       </Drawer>
 
       {/* Mobile Actions Drawer */}
