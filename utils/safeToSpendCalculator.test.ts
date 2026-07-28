@@ -574,7 +574,9 @@ describe('calculateSafeToSpend', () => {
   });
 
   it('should use end of month if no next paycheck is found', () => {
-    // If no next paycheck, range ends at endOfMonth(lastPaycheckDate)
+    // If no next paycheck, the range ends EXCLUSIVELY at the 1st of the
+    // following month — so the current month's days all count and the next
+    // month's do not.
     const startOfMonthDate = formatIso(new Date(2025, 0, 1)); // Jan 1 2025
     const midMonthDate = formatIso(new Date(2025, 0, 15));   // Jan 15 2025
     const nextMonthDate = formatIso(new Date(2025, 1, 1));   // Feb 1 2025
