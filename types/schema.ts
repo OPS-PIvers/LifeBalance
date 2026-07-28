@@ -492,6 +492,18 @@ export interface Transaction {
    *  (`createdBy: user.uid`); the converter passes it through. Used by the
    *  F-MONEY-13 Settle-Up math as the "payer" each split share is owed to. */
   createdBy?: string;
+  /** 2H(a): the PAID calendar-item doc this transaction settled — written by
+   *  `settleBillWithTransaction` when the user says "this charge IS that planned
+   *  bill". Always a REAL Firestore doc id: for a recurring occurrence it is the
+   *  paid-instance doc the merge creates (never the synthetic
+   *  `templateId_instance_yyyy-MM-dd` id, which is derived and goes stale when a
+   *  template's anchor or frequency is edited); for a one-off bill it is that
+   *  item's own id. Its presence is also the "already settled" guard: the merge
+   *  refuses a second settle, and `reverseTransactionApproval` refuses to undo a
+   *  row carrying it (undoing from the transaction side would leave the bill
+   *  marked paid and this doc orphaned — undo from the bill instead). Absent on
+   *  every transaction that has never settled a bill. */
+  paidCalendarItemId?: string;
   /** F-MONEY-13: shared-expense splitting overlay. A bookkeeping-only list of
    *  the OTHER people's shares of this expense (the payer keeps the remainder).
    *  It NEVER alters the payer's account balance — splitting is a display/

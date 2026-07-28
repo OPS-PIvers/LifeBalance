@@ -114,8 +114,18 @@ human-watched PR (tagged **[rules]** / **[index]**).
   resolves. Extend the existing `hooks/useDeepLinkHighlight.ts` path used by transactions and habits;
   expanding/paginating to the target section is the actual work, not the highlight itself. Gate each
   result on the specific leaf key as `isNavLeafKeyVisible` already does — never at page level. **M / LOW.**
-- [ ] **Link a calendar event to an existing transaction from the Edit Event drawer** (paper cut #9,
-  deferred 2026-07-27). Today the bill↔transaction link is **one-directional**: `linkBankTransactionToBill`
+- [x] **Link a calendar event to an existing transaction from the Edit Event drawer** (paper cut #9,
+  deferred 2026-07-27). ✅ 2026-07-27 — shipped together with 2H(a) below; both entry points call the
+  ONE new `settleBillWithTransaction` mutation. The Edit Event drawer gained a searchable
+  `TransactionLinkPicker` (`components/budget/TransactionLinkPicker.tsx`, filtering/sorting in the pure
+  `utils/transactionLinkCandidates.ts`, matched via `useMerchantRules().searchTermsFor` so a renamed row
+  stays findable by its raw descriptor). The question the bullet posed — alias vs. real foreign key —
+  was answered **both**: the alias write is kept AND a real `Transaction.paidCalendarItemId` foreign key
+  was added, holding the REAL paid-instance doc id (never a synthetic `..._instance_...` id). The drawer
+  carries the occurrence id/date in its own `settleTarget` state because `openEditModal` deliberately
+  swaps a recurring instance for its TEMPLATE — feeding `editingItem.id` to the mutation would have
+  permanently rewritten the series' budgeted amount. Original text below.
+  Today the bill↔transaction link is **one-directional**: `linkBankTransactionToBill`
   ([contexts/household/mutations/calendarMutations.ts:537](contexts/household/mutations/calendarMutations.ts:537))
   is reachable only from the *transaction* side, via `TransactionReviewForm`'s "Link to bill" picker
   ([components/transactions/TransactionReviewForm.tsx:93](components/transactions/TransactionReviewForm.tsx:93)).
@@ -426,13 +436,43 @@ same thing.
       match, with `ActionQueueItem` rendering a "Pays ⟨bill⟩" sub-line so the collapse is never
       silent. The collapse is derived, never persisted, so approving or deleting the transaction
       restores the bill's row.
-- [ ] **(a) Merge an automated transaction into a planned recurring bill from the action queue.**
-      The user needs a "this IS that bill" action on the transaction row that pays/settles the
-      calendar item using the *scanned* amount rather than the budgeted one, and leaves exactly one
-      record. Note the existing money-path atomicity requirement: `payCalendarItem` already commits
-      the calendar item + its transaction in a single `writeBatch` and retro-files under the prior
-      period's `payPeriodId` — a merge must go through that same batched path, never two writes.
-      **M / MED.**
+- [x] **(a) Merge an automated transaction into a planned recurring bill from the action queue.**
+      ✅ 2026-07-27. New `settleBillWithTransaction`
+      (`contexts/household/mutations/calendarMutations.ts`) — added ALONGSIDE
+      `linkBankTransactionToBill`, not replacing it, and deliberately not a parameterization of
+      `payCalendarItem` (which unconditionally writes a SECOND transaction and carries dead
+      income/paycheck/ceremony branches). One `writeBatch`: bill marked paid at the **scanned**
+      amount, transaction verified + filed as `Budgeted in Calendar` + stamped with
+      `paidCalendarItemId`, account balance moved, descriptor learned onto
+      `bankDescriptorAliases`, activity log appended. **Exactly one record** — no transaction is
+      created.
+      - **Balance model:** routed through `resolveTargetAccount`/`effectiveAccountImpact`/
+        `shouldSkipBankSyncDelta`, so a `pending_review` screenshot row debits its amount (it had
+        never touched a balance) while a bank-sync row whose balance is already authoritative moves
+        nothing, and credit-tagged rows raise card debt — all for free.
+      - **Recurrence:** a synthetic occurrence id writes a NEW paid-instance doc dated to the
+        occurrence's **due date** (what `expandCalendarItems` suppression keys on); the recurring
+        template's own amount is never touched. A recurring template's real doc id is refused
+        outright.
+      - **payPeriodId is NOT retro-filed** (unlike `payCalendarItem`, which retro-files because it
+        creates the transaction): the row already exists and its date is the authoritative charge
+        date.
+      - **Two entry points, one mutation:** `SettleBillSection` in the transaction review sheet —
+        offered on ANY non-bank-sync row via a bill picker, pre-selecting `useActionQueue`'s
+        `matchedBill` when there is one (the motivating Centerpoint case does NOT match, which is
+        why matched-only would not have fixed it) — and the Edit Event drawer's
+        `TransactionLinkPicker` (2E above). The account is confirmed via the existing
+        `AccountPicker` whenever the transaction carries no tag; this write moves real money, so it
+        is never guessed.
+      - **Deliberately NOT done:** no habit firing and no price-change nudge on this path (both
+        commented at the call site); **no `MerchantRule` upsert** (deferred — the alias write is
+        kept); and **no full unlink** — instead `reverseTransactionApproval` now REFUSES to reverse
+        a transaction carrying `paidCalendarItemId`, telling the user to undo from the bill side,
+        rather than silently orphaning the paid-instance doc.
+      - Tests: `calendarMutations.test.ts` (pending delta, bank-sync no-delta, occurrence-due-date +
+        template-amount-unchanged, double-merge guard, one-batch), `transactionLinkCandidates.test.ts`,
+        and the reverse-approval guard. Test Mode: new `'bill-merge'` seed variant reproduces the
+        reported Centerpoint duplicate.
 
 **Why (b) did not make (a) unnecessary, contrary to the original guess.** Only the **rule** tier
 bypasses the ±10%/±$25 amount guard. The **alias** tier is gated by that same tolerance, so on a

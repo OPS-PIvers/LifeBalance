@@ -20,6 +20,7 @@ import { pickKeeper } from '@/utils/transactionMerge';
 import { useFinance, useGamification, useExpandedCalendarItems } from '@/contexts/FirebaseHouseholdContext';
 import { useMerchantRules } from '@/hooks/useMerchantRules';
 import InlineMerchantRename from '@/components/transactions/InlineMerchantRename';
+import SettleBillSection from '@/components/transactions/SettleBillSection';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
@@ -33,6 +34,14 @@ export interface TransactionReviewFormProps {
   onDone: () => void;
   /** Called after a successful delete; falls back to `onDone` when omitted. */
   onDeleted?: () => void;
+  /**
+   * The unpaid bill the Action Queue RECOGNISED this charge as paying
+   * (`useActionQueue`'s `matchedBills`). Only pre-selects the "This IS that
+   * bill" affordance below — the affordance itself is offered on every
+   * non-bank-sync row regardless, because the variable-amount utility case that
+   * motivated it never matches.
+   */
+  matchedBill?: { id: string; title: string };
 }
 
 /**
@@ -47,7 +56,7 @@ export interface TransactionReviewFormProps {
  * field is editable inline, so a single Approve verifies + categorises + tags
  * the account + credits habits in ONE atomic context call.
  */
-const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transaction, onDone, onDeleted }) => {
+const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transaction, onDone, onDeleted, matchedBill }) => {
   const {
     accounts, buckets, transactions,
     updateTransactionCategory, deleteTransaction, addCalendarItem,
@@ -494,6 +503,23 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
             </div>
           )}
         </div>
+      )}
+
+      {/* TODO.md 2H(a): the OTHER road a charge takes in. `canLinkToBill`
+          above covers a bank-synced row (no balance delta — its balance is
+          already authoritative); this covers everything else, notably the
+          `pending_review` screenshot imports, and DOES move the balance. The
+          two are mutually exclusive so a row never offers both. Hidden wherever
+          the mutation would refuse anyway rather than offering a dead tap: a row
+          that already settled a bill (`paidCalendarItemId`), a $0 `needsAmount`
+          stub (nothing was charged yet), and income (a credit cannot pay an
+          expense). */}
+      {!canLinkToBill && !transaction.paidCalendarItemId && !transaction.needsAmount && !isIncome && (
+        <SettleBillSection
+          transaction={transaction}
+          matchedBill={matchedBill}
+          onSettled={onDone}
+        />
       )}
 
       <Input

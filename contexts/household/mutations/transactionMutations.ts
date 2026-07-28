@@ -855,6 +855,17 @@ export function makeReverseTransactionApproval(deps: {
       return;
     }
 
+    // SETTLED-BILL GUARD (TODO.md 2H(a)): this undo knows nothing about bills.
+    // Reversing a row that settled one would send the transaction back to
+    // `pending_review` and credit the balance back while leaving the bill marked
+    // paid and its paid-instance doc orphaned — a silent money/calendar
+    // divergence. Full unlink is deliberately out of scope, so REFUSE and point
+    // at the side that can actually undo it.
+    if (existingTx.paidCalendarItemId) {
+      toast.error('This transaction settled a bill. Undo it from that bill on the calendar.');
+      return;
+    }
+
     const batch = writeBatch(db);
 
     // 1. Reverse the balance the approve applied: reverse the CURRENT verified

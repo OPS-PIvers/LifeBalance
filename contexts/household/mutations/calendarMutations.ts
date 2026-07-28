@@ -16,7 +16,7 @@ import type { Transaction } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { describeError } from '@/utils/errorMessages';
 import { format, parseISO, addDays, startOfToday, isAfter, isValid } from 'date-fns';
-import { Account, CalendarItem, Household } from '@/types/schema';
+import { Account, CalendarItem, Household, INCOME_CATEGORY } from '@/types/schema';
 import type { MutationOpts } from '@/contexts/household/types';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { BUDGETED_IN_CALENDAR } from '@/utils/categories';
@@ -27,6 +27,12 @@ import { appendActivityLog, composeSummary } from '@/utils/activityLog';
 import { emitPayPeriodCeremony, type PayPeriodCeremonyEvent } from '@/utils/payPeriodCeremony';
 import { roundMoney } from '@/utils/money';
 import { computePriceChangeNudge } from '@/utils/priceChangeNudge';
+import {
+  effectiveAccountImpact,
+  isBankSyncTransaction,
+  resolveTargetAccount,
+  shouldSkipBankSyncDelta,
+} from '@/utils/accountImpact';
 
 // Pure-ish factories for the CALENDAR-ITEM mutation family (add/update/delete/
 // pay/defer) — moved verbatim out of FirebaseHouseholdContext. See
@@ -639,6 +645,250 @@ export function makeLinkBankTransactionToBill(deps: {
   };
 
   return { linkBankTransactionToBill };
+}
+
+/**
+ * settleBillWithTransaction (TODO.md 2H(a)) — "this charge IS that planned
+ * bill". The merge for the OTHER road a charge takes into this app: a bank/card
+ * SCREENSHOT import (CaptureModal → parseBankStatement) writes `pending_review`
+ * rows with no `bankRef`, so a recurring bill entered by hand and the imported
+ * charge that pays it surface as two unrelated rows. The user picks one and the
+ * pair collapses to ONE record.
+ *
+ * WHY NOT the two mutations that already exist:
+ *   - `linkBankTransactionToBill` (above) writes NO balance delta, which is only
+ *     sound because a bank-synced row's balance is already authoritative from
+ *     the nightly email's ending balance. A `pending_review` row's is not (see
+ *     `utils/accountImpact.ts` — `effectiveAccountImpact` is 0 until verified),
+ *     so it MUST move the balance. Its gate stays as-is for its existing caller.
+ *   - `payCalendarItem` unconditionally CREATES a second transaction, derives
+ *     its delta from `item.type` rather than from an existing row, and carries
+ *     income / paycheck-approval / pay-period-ceremony branches that are dead
+ *     weight here. Creating exactly ZERO new transactions is the whole point of
+ *     this path.
+ *
+ * In ONE writeBatch:
+ *   1. the bill is marked PAID at the SCANNED amount — a recurring occurrence
+ *      becomes a new paid-instance doc dated to the OCCURRENCE'S DUE DATE (that
+ *      is what `expandCalendarItems` suppression keys on; dating it to the
+ *      transaction's date would miss and the bill would reappear), a one-off
+ *      gets `isPaid`/`amount` on its own doc. The recurring TEMPLATE's amount is
+ *      NEVER touched, so next month still budgets the scheduled figure;
+ *   2. the transaction is verified, filed as `Budgeted in Calendar`, and stamped
+ *      with `paidCalendarItemId` (the real paid doc id) — its amount, and its
+ *      `payPeriodId`, are left alone (see the call site comment);
+ *   3. the account balance moves by the row's now-effective impact, routed
+ *      through `resolveTargetAccount`/`effectiveAccountImpact`/
+ *      `shouldSkipBankSyncDelta` so credit-tagged rows and bank-sync rows keep
+ *      their existing correct behaviour for free (a pending row nets
+ *      −scannedAmount; an already-authoritative bank-sync row nets 0);
+ *   4. the transaction's descriptor is learned onto the bill's
+ *      `bankDescriptorAliases` (the recurring TEMPLATE when applicable);
+ *   5. the payment is logged to the activity feed (F-XCUT-01).
+ *
+ * DELIBERATELY NOT DONE HERE: no habits are fired (unlike
+ * `updateTransactionCategory` — this is a bill reconciliation, not a spending
+ * review, and the row's habit tags are untouched so a later ordinary edit can
+ * still fire them), and no price-change nudge is shown (unlike
+ * `payCalendarItem` — the amount here is what the bank already charged, not a
+ * figure the user just typed, so there is no decision to nudge). No
+ * `MerchantRule` is written either; that is deferred.
+ *
+ * Returns `true` only when the batch committed. `false` for every guard
+ * early-return (missing transaction/bill, non-expense item, non-positive
+ * amount, already-paid bill, already-settled transaction) — callers MUST check
+ * it, a `false` means nothing was written.
+ */
+export function makeSettleBillWithTransaction(deps: {
+  db: Firestore;
+  householdId: string | null;
+  user: { uid: string } | null;
+  actorName?: string | null;
+  transactions: Transaction[];
+  calendarItems: CalendarItem[];
+  accounts: Account[];
+}) {
+  const { db, householdId, user, actorName, transactions, calendarItems, accounts } = deps;
+
+  const settleBillWithTransaction = async (
+    transactionId: string,
+    calendarItemId: string,
+    accountId?: string,
+  ): Promise<boolean> => {
+    if (!householdId || !user) return false;
+
+    const tx = transactions.find((t) => t.id === transactionId);
+    if (!tx) return false;
+    // A credit cannot pay an expense — filing income as `Budgeted in Calendar`
+    // would flip its balance sign from credit to debit.
+    if (tx.category === INCOME_CATEGORY) return false;
+    // Idempotence: a second settle would create a SECOND paid instance for the
+    // same occurrence and double-debit the account.
+    if (tx.paidCalendarItemId) {
+      toast.error('That transaction is already linked to a bill');
+      return false;
+    }
+    const paidAmount = roundMoney(tx.amount);
+    // A $0 Apple Pay stub has no charge yet — settling one would mark the bill
+    // paid for nothing and move no money.
+    if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
+      toast.error('Add the real amount before linking this to a bill');
+      return false;
+    }
+    const descriptor = (tx.merchant || '').trim();
+
+    const isRecurringInstance = isRecurringId(calendarItemId);
+
+    let item: CalendarItem | undefined;
+    let templateId: string | undefined;
+    let specificDate: string | undefined;
+
+    if (isRecurringInstance) {
+      const parsed = parseRecurringId(calendarItemId);
+      if (!parsed) return false;
+      templateId = parsed.templateId;
+      specificDate = parsed.date;
+      const template = calendarItems.find((i) => i.id === templateId);
+      if (!template || template.type !== 'expense') return false;
+      // Already-paid guard (matches payCalendarItem / linkBankTransactionToBill):
+      // without it a double-merge writes two paid instances for one occurrence.
+      const alreadyPaid = calendarItems.find(
+        (i) => i.parentRecurringId === templateId && i.date === specificDate && i.isPaid,
+      );
+      if (alreadyPaid) {
+        toast.error('That bill is already marked paid');
+        return false;
+      }
+      item = { ...template, date: specificDate };
+    } else {
+      item = calendarItems.find((i) => i.id === calendarItemId);
+      if (!item || item.type !== 'expense') return false;
+      if (item.isPaid) {
+        toast.error('That bill is already marked paid');
+        return false;
+      }
+    }
+
+    // --- Balance model -----------------------------------------------------
+    // Mirrors updateTransactionCategory's reverse/apply pair: reverse the row's
+    // CURRENT effective impact off the account it currently lands on, apply its
+    // verified impact to the (possibly re-tagged) target. A `pending_review` row
+    // reverses 0 and applies −amount; a row already `verified` on the same
+    // account nets 0; a bank-sync row's authoritative account is skipped on both
+    // sides. Merged per account so one batch never writes the same doc twice.
+    const requestedAccountId = accountId?.trim() || undefined;
+    const oldTarget = resolveTargetAccount(tx.accountId, accounts);
+    const newTarget = resolveTargetAccount(requestedAccountId ?? tx.accountId, accounts);
+    const isBankSync = isBankSyncTransaction(tx);
+    const bankSyncHomeId = isBankSync ? (tx.bankSyncAccountId ?? oldTarget?.id) : undefined;
+    const reverseDelta = shouldSkipBankSyncDelta(tx, oldTarget?.id, oldTarget?.id)
+      ? 0
+      : -effectiveAccountImpact(tx, oldTarget);
+    const applyDelta = shouldSkipBankSyncDelta(tx, newTarget?.id, oldTarget?.id)
+      ? 0
+      : effectiveAccountImpact(
+          {
+            amount: paidAmount,
+            category: BUDGETED_IN_CALENDAR,
+            creditPayment: tx.creditPayment,
+            status: 'verified',
+          },
+          newTarget,
+        );
+    const deltasByAccountId = new Map<string, number>();
+    if (oldTarget) deltasByAccountId.set(oldTarget.id, (deltasByAccountId.get(oldTarget.id) ?? 0) + reverseDelta);
+    if (newTarget) deltasByAccountId.set(newTarget.id, (deltasByAccountId.get(newTarget.id) ?? 0) + applyDelta);
+
+    try {
+      const batch = writeBatch(db);
+      const calPath = `households/${householdId}/calendarItems`;
+      const txPath = `households/${householdId}/transactions`;
+
+      // 1. Mark the bill paid at the SCANNED amount.
+      let paidCalendarItemId: string;
+      if (isRecurringInstance && templateId && specificDate) {
+        const paidInstanceRef = doc(collection(db, calPath));
+        paidCalendarItemId = paidInstanceRef.id;
+        batch.set(paidInstanceRef, sanitizeFirestoreData({
+          title: item.title,
+          amount: paidAmount,
+          // The OCCURRENCE's due date, NOT tx.date — expandCalendarItems keys
+          // its paid-occurrence suppression on {templateId, date}.
+          date: specificDate,
+          type: 'expense',
+          isPaid: true,
+          isRecurring: false,
+          parentRecurringId: templateId,
+          createdBy: user.uid,
+          createdAt: serverTimestamp(),
+        }));
+      } else {
+        paidCalendarItemId = calendarItemId;
+        batch.update(doc(db, calPath, calendarItemId), {
+          isPaid: true,
+          amount: paidAmount,
+          // 4. Learn the descriptor in the SAME update — a one-off bill is both
+          //    the paid doc and the alias target.
+          ...(descriptor ? { bankDescriptorAliases: arrayUnion(descriptor) } : {}),
+        });
+      }
+
+      // 2. File the transaction as the bill payment. The AMOUNT is untouched
+      //    (the bank's figure is the truth), and so is `payPeriodId`: unlike
+      //    payCalendarItem — which CREATES the transaction and therefore has to
+      //    choose a period — this row already exists and its own date is the
+      //    authoritative charge date, so retro-filing it under the bill's
+      //    due-date period would move real spend into a closed period.
+      batch.update(doc(db, txPath, transactionId), {
+        status: 'verified',
+        category: BUDGETED_IN_CALENDAR,
+        paidCalendarItemId,
+        ...(requestedAccountId ? { accountId: requestedAccountId } : {}),
+        ...(tx.needsCategory ? { needsCategory: deleteField() } : {}),
+        ...(tx.reviewSnoozedUntil ? { reviewSnoozedUntil: deleteField() } : {}),
+        // Backfill-on-write, same rule as updateTransactionCategory: stamp the
+        // bank-sync row's authoritative account the first time it is edited.
+        ...(isBankSync && !tx.bankSyncAccountId && bankSyncHomeId ? { bankSyncAccountId: bankSyncHomeId } : {}),
+      });
+
+      // 3. Account balance delta(s).
+      for (const [accId, delta] of deltasByAccountId) {
+        const rounded = roundMoney(delta);
+        if (rounded !== 0) {
+          batch.update(doc(db, `households/${householdId}/accounts`, accId), {
+            balance: increment(rounded),
+            lastUpdated: serverTimestamp(),
+          });
+        }
+      }
+
+      // 4. Learn the descriptor onto the recurring TEMPLATE (the one-off case
+      //    folded it into the update above). Free, and it does help the
+      //    fixed-amount bills the ±10%/±$25 matcher tolerance can reach.
+      if (isRecurringInstance && templateId && descriptor) {
+        batch.update(doc(db, calPath, templateId), {
+          bankDescriptorAliases: arrayUnion(descriptor),
+        });
+      }
+
+      // 5. F-XCUT-01: log the payment INSIDE the same batch.
+      appendActivityLog(batch, db, householdId, { uid: user.uid, name: actorName ?? '' }, {
+        domain: 'money',
+        action: 'bill_paid',
+        summary: composeSummary(actorName ?? '', 'paid', item.title, paidAmount),
+      });
+
+      await batch.commit();
+      toast.success(`Linked to ${item.title} — one record, not two`);
+      return true;
+    } catch (error) {
+      console.error('[settleBillWithTransaction] Failed:', error);
+      toast.error(describeError(error, 'link this transaction to the bill'));
+      return false;
+    }
+  };
+
+  return { settleBillWithTransaction };
 }
 
 /**

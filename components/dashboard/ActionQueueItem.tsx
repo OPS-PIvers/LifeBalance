@@ -684,9 +684,17 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
              </div>
           </div>
         ) : (
-          /* Transaction review — shared form (verify + inline edit + habits + delete) */
+          /* Transaction review — shared form (verify + inline edit + habits +
+             delete). `matchedBill` pre-selects the "This IS that bill" merge
+             (TODO.md 2H(a)) when the descriptor matcher recognised the pair;
+             the affordance is offered either way. */
           <TransactionReviewForm
             transaction={item}
+            matchedBill={
+              isTransactionQueueItem(item) && item.matchedBill
+                ? { id: item.matchedBill.id, title: item.matchedBill.title }
+                : undefined
+            }
             onDone={() => setExpandedId(null)}
           />
         )}

@@ -98,12 +98,19 @@ const normalizeCategory = (value: string | undefined) => (value ?? '').trim().to
  *     descriptors that the household's `merchantRules` rename on display, so
  *     the descriptor → friendly-name layer is walkable. Not seeded by default
  *     because several tests assert on the default seeds' merchant text.
+ *   - 'bill-merge' — additionally seed the reported TODO.md 2H duplicate: a
+ *     hand-entered recurring utility bill PLUS the screenshot-imported charge
+ *     that actually paid it, at a different amount. The only variant that seeds
+ *     `calendarItems` at all, and the only way to exercise
+ *     `settleBillWithTransaction` in Test Mode. Not seeded by default for the
+ *     same reason as 'stub' (its `pending_review` row changes the Money nav
+ *     link's accessible name).
  * Absent/unknown values leave the default seeds untouched.
  */
-const readTestSeedVariant = (): 'fresh' | 'stub' | 'merchant-rules' | null => {
+const readTestSeedVariant = (): 'fresh' | 'stub' | 'merchant-rules' | 'bill-merge' | null => {
   try {
     const v = window.sessionStorage.getItem('LIFEBALANCE_TEST_SEED');
-    return v === 'fresh' || v === 'stub' || v === 'merchant-rules' ? v : null;
+    return v === 'fresh' || v === 'stub' || v === 'merchant-rules' || v === 'bill-merge' ? v : null;
   } catch {
     return null;
   }
@@ -209,6 +216,51 @@ const STUB_TRANSACTION: Transaction = {
   status: 'pending_review', isRecurring: false, source: 'shortcut',
   autoCategorized: false, needsAmount: true, payPeriodId: MOCK_PAY_PERIOD_ID,
 };
+
+/**
+ * 'bill-merge' seed variant (TODO.md 2H) — the reported duplicate, reproduced:
+ * a recurring natural-gas bill entered BY HAND at its typical $142, and the
+ * screenshot-imported charge that actually paid it at $37.91 under the bank's
+ * own descriptor. The amounts deliberately sit far outside the matcher's
+ * ±10%/±$25 tolerance, so nothing auto-collapses them — which is precisely the
+ * case `settleBillWithTransaction` exists for. A second, one-off unpaid bill
+ * makes the non-recurring branch of the merge walkable too.
+ *
+ * NOTE the row is `pending_review` with NO `bankRef`: that is what the capture
+ * pipeline writes, and it is why the sibling `linkBankTransactionToBill`
+ * affordance correctly refuses to appear for it.
+ */
+const BILL_MERGE_CALENDAR_ITEMS: CalendarItem[] = [
+  {
+    id: 'cal_gas_template',
+    title: 'Centerpoint Energy (Natural Gas)',
+    amount: 142,
+    // The 5th of the current month, recurring monthly — inside every window the
+    // calendar and the review drawer expand.
+    date: `${getLocalDateString().slice(0, 7)}-05`,
+    type: 'expense',
+    isPaid: false,
+    isRecurring: true,
+    frequency: 'monthly',
+  },
+  {
+    id: 'cal_dentist_oneoff',
+    title: 'Dentist copay',
+    amount: 85,
+    date: getLocalDateString(),
+    type: 'expense',
+    isPaid: false,
+  },
+];
+
+const BILL_MERGE_TRANSACTIONS: Transaction[] = [
+  {
+    id: 'tx_cpenergy', amount: 37.91, merchant: 'Cpenergy Mngco', category: 'Uncategorized',
+    date: getLocalDateString(),
+    status: 'pending_review', isRecurring: false, source: 'image-capture',
+    autoCategorized: false, payPeriodId: MOCK_PAY_PERIOD_ID,
+  },
+];
 
 /**
  * Merchant rules for Test Mode — the descriptor → friendly-name layer
@@ -441,7 +493,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         ? [...SEED_TRANSACTIONS, STUB_TRANSACTION]
         : TEST_SEED_VARIANT === 'merchant-rules'
           ? [...SEED_TRANSACTIONS, ...BANK_DESCRIPTOR_TRANSACTIONS]
-          : SEED_TRANSACTIONS
+          : TEST_SEED_VARIANT === 'bill-merge'
+            ? [...SEED_TRANSACTIONS, ...BILL_MERGE_TRANSACTIONS]
+            : SEED_TRANSACTIONS
   );
   // Plan 23 — transaction comments, keyed by transaction id. Mirrors the real
   // context's on-demand fetch model (no listener); the "fetch" here is just a
@@ -450,7 +504,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     isFresh ? {} : SEED_TRANSACTION_COMMENTS
   );
   const [habits, setHabits] = useState<Habit[]>(isFresh ? [] : SEED_HABITS);
-  const [calendarItems, setCalendarItems] = useState<CalendarItem[]>([]);
+  // Empty by default (several specs count Action-Queue rows); the 'bill-merge'
+  // variant is the one that seeds bills, so the 2H merge is walkable.
+  const [calendarItems, setCalendarItems] = useState<CalendarItem[]>(
+    TEST_SEED_VARIANT === 'bill-merge' ? BILL_MERGE_CALENDAR_ITEMS : []
+  );
   const [challenges, setChallenges] = useState<Challenge[]>(isFresh ? [] : SEED_CHALLENGES);
   const [yearlyGoals] = useState<YearlyGoal[]>([]);
   const [rewards, setRewards] = useState<RewardItem[]>(SEED_REWARDS);
@@ -1749,6 +1807,109 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     return true;
   }, [transactions, calendarItems]);
 
+  // Mirrors makeSettleBillWithTransaction in calendarMutations.ts (TODO.md
+  // 2H(a)) — "this charge IS that planned bill". Unlike the mock above it DOES
+  // move the balance: a pending_review row has not touched any account yet.
+  // Creates NO new transaction, and never touches the recurring template's own
+  // amount.
+  const settleBillWithTransaction = useCallback(async (
+    transactionId: string,
+    calendarItemId: string,
+    accountId?: string,
+  ): Promise<boolean> => {
+    const tx = transactions.find(t => t.id === transactionId);
+    if (!tx) return false;
+    if (tx.paidCalendarItemId) {
+      toast.error('That transaction is already linked to a bill');
+      return false;
+    }
+    const paidAmount = roundMoney(tx.amount);
+    if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
+      toast.error('Add the real amount before linking this to a bill');
+      return false;
+    }
+    const descriptor = (tx.merchant || '').trim();
+
+    let paidCalendarItemId: string;
+    let billTitle: string;
+
+    if (isRecurringId(calendarItemId)) {
+      const parsed = parseRecurringId(calendarItemId);
+      if (!parsed) return false;
+      const { templateId, date: specificDate } = parsed;
+      const template = calendarItems.find(i => i.id === templateId);
+      if (!template || template.type !== 'expense') return false;
+      if (calendarItems.some(i => i.parentRecurringId === templateId && i.date === specificDate && i.isPaid)) {
+        toast.error('That bill is already marked paid');
+        return false;
+      }
+      paidCalendarItemId = generateId();
+      billTitle = template.title;
+      const paidInstance: CalendarItem = {
+        ...template,
+        id: paidCalendarItemId,
+        amount: paidAmount,
+        // The OCCURRENCE's due date — expandCalendarItems keys suppression on it.
+        date: specificDate,
+        isPaid: true,
+        isRecurring: false,
+        parentRecurringId: templateId,
+      };
+      setCalendarItems(prev => [
+        ...prev.map(i => i.id === templateId
+          ? { ...i, bankDescriptorAliases: [...(i.bankDescriptorAliases ?? []), descriptor] }
+          : i),
+        paidInstance,
+      ]);
+    } else {
+      const item = calendarItems.find(i => i.id === calendarItemId);
+      if (!item || item.type !== 'expense') return false;
+      if (item.isPaid) {
+        toast.error('That bill is already marked paid');
+        return false;
+      }
+      paidCalendarItemId = calendarItemId;
+      billTitle = item.title;
+      setCalendarItems(prev => prev.map(i => i.id === calendarItemId
+        ? {
+            ...i,
+            isPaid: true,
+            amount: paidAmount,
+            bankDescriptorAliases: [...(i.bankDescriptorAliases ?? []), descriptor],
+          }
+        : i));
+    }
+
+    // Balance parity, computed OUTSIDE the setState updaters (StrictMode
+    // double-invokes them): only a not-yet-verified row moves money here.
+    if (tx.status !== 'verified') {
+      const target = resolveTargetAccount(accountId ?? tx.accountId, accounts);
+      const balanceDelta = accountImpactOf(
+        { amount: paidAmount, category: BUDGETED_IN_CALENDAR, creditPayment: tx.creditPayment },
+        target,
+      );
+      if (target && balanceDelta !== 0) {
+        setAccounts(prev => prev.map(a => a.id === target.id
+          ? { ...a, balance: roundMoney(a.balance + balanceDelta), lastUpdated: new Date().toISOString() }
+          : a));
+      }
+    }
+
+    setTransactions(prev => prev.map(t => t.id === transactionId
+      ? {
+          ...t,
+          status: 'verified' as const,
+          category: BUDGETED_IN_CALENDAR,
+          paidCalendarItemId,
+          needsCategory: undefined,
+          reviewSnoozedUntil: undefined,
+          ...(accountId ? { accountId } : {}),
+        }
+      : t));
+    toast.success(`Linked to ${billTitle} — one record, not two`);
+    return true;
+  }, [transactions, calendarItems, accounts]);
+
   // Meal operations
   const addMeal = useCallback(async (meal: Omit<Meal, 'id'>) => {
     const id = generateId();
@@ -2560,6 +2721,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     payCalendarItem: noOp,
     deferCalendarItem: noOp,
     linkBankTransactionToBill,
+    settleBillWithTransaction,
     addHabit,
     updateHabit,
     deleteHabit,

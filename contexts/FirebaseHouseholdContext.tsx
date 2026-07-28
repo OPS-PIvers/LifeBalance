@@ -116,6 +116,7 @@ import {
   makePayCalendarItem,
   makeDeferCalendarItem,
   makeLinkBankTransactionToBill,
+  makeSettleBillWithTransaction,
 } from '@/contexts/household/mutations/calendarMutations';
 import {
   makeAddTransaction,
@@ -1867,6 +1868,17 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }).linkBankTransactionToBill(transactionId, calendarItemId);
   }, [householdId, user, currentUser, transactions, calendarItems]);
 
+  const settleBillWithTransaction = useCallback(async (
+    transactionId: string,
+    calendarItemId: string,
+    accountId?: string,
+  ) => {
+    return makeSettleBillWithTransaction({
+      db, householdId, user, actorName: currentUser?.displayName ?? user?.displayName ?? null,
+      transactions, calendarItems, accounts,
+    }).settleBillWithTransaction(transactionId, calendarItemId, accountId);
+  }, [householdId, user, currentUser, transactions, calendarItems, accounts]);
+
   // --- ACTIONS: TRANSACTIONS ---
   // (contexts/household/mutations/transactionMutations.ts)
 
@@ -2546,6 +2558,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     payCalendarItem,
     deferCalendarItem,
     linkBankTransactionToBill,
+    settleBillWithTransaction,
     addTransaction,
     addTransactions,
     updateTransactionCategory,
@@ -2567,7 +2580,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addAccount, updateAccountBalance, setAccountGoal, setAccountCardLast4, setAccountCardDetails, deleteAccount, archiveAccount, unarchiveAccount, updateAccountOrder, reorderAccounts,
     addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, contributeToGoal,
     addBucket, updateBucket, deleteBucket, updateBucketLimit, setBucketLimits, saveCeremonyChanges, reallocateBucket,
-    addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem, linkBankTransactionToBill,
+    addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem, linkBankTransactionToBill, settleBillWithTransaction,
     addTransaction, addTransactions, updateTransactionCategory, reverseTransactionApproval, updateTransaction, deleteTransaction, splitTransaction,
     setTransactionSplit, markSplitSettled,
     mergeTransactions, keepBothTransactions, getTransactionComments, addTransactionComment, deleteTransactionComment,

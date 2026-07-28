@@ -883,6 +883,25 @@ describe('habit firing writes DELTAS, never whole values', () => {
 
     expect(commitCount).toBe(1);
   });
+
+  it('REFUSES to reverse a transaction that settled a bill (TODO.md 2H(a) guard)', async () => {
+    // This undo knows nothing about bills: reversing would send the row back to
+    // pending_review and credit the balance back while leaving the bill marked
+    // paid and its paid-instance doc orphaned. Full unlink is out of scope, so
+    // it must refuse rather than silently orphan.
+    submissionDocs[submissionsPath('h1')] = [firedSubmission()];
+    const firedHabit: Habit = { ...threshHabit, completedDates: [backDate], totalCount: 5 };
+    const settledTx: Transaction = { ...verifiedBackdatedTx, paidCalendarItemId: 'paid-instance-1' };
+    const { reverseTransactionApproval } = makeReverseTransactionApproval(
+      reverseDeps([firedHabit], [settledTx])
+    );
+    await reverseTransactionApproval('tx-9', { category: 'Uncategorized' }, ['h1']);
+
+    // Nothing written at all — not the transaction, not the habit, not points.
+    expect(commitCount).toBe(0);
+    expect(capturedUpdates).toHaveLength(0);
+    expect(capturedDeletes).toHaveLength(0);
+  });
 });
 
 describe('makeUpdateTransaction — bank-sync rows never delta a balance', () => {
