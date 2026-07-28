@@ -78,7 +78,7 @@ const ReviewPendingDrawer: React.FC<ReviewPendingDrawerProps> = ({ items, isOpen
               short enough to keep their own in-body CTAs. */}
           {current.kind === 'transaction' && <div ref={setActionsSlot} />}
           <Button variant="ghost" className="w-full" onClick={advance}>
-            {isLast ? 'Done for now' : 'Skip — add later'}
+            {isLast ? 'Review later' : 'Skip — add later'}
           </Button>
         </div>
       }

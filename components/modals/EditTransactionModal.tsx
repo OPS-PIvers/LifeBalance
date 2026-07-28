@@ -357,6 +357,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
         {transaction && (
           <InlineMerchantRename
             merchant={transaction.merchant}
+            source={transaction.source}
             amount={transaction.amount}
             disabled={isSaving}
           />

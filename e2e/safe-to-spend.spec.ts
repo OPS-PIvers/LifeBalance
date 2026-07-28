@@ -33,8 +33,8 @@ test.describe('Safe to Spend (Test Mode)', () => {
     });
 
     // The pending-review drawer auto-opens on the first pending transaction;
-    // dismiss it (single card → "Done for now") without verifying.
-    await reviewDrawer(page).getByRole('button', { name: 'Done for now' }).click();
+    // dismiss it (single card → "Review later") without verifying.
+    await reviewDrawer(page).getByRole('button', { name: 'Review later' }).click();
     await expect(reviewDrawer(page)).not.toBeVisible();
 
     // Headline dropped by exactly the pending amount.

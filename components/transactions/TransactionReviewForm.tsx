@@ -424,37 +424,38 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
     }
   };
 
-  // The approve CTA + its secondary delete row, defined ONCE. They render at
+  // The approve CTA + its inline secondary delete, defined ONCE. They render at
   // the bottom of the body by default and are portalled — same elements, same
   // handlers, same `canApprove` gate — into the host drawer's sticky footer
   // when one is offered. Nothing about approving changes with the position.
   const actions = (
-    <>
-      {/* Approve CTA */}
+    <div className="flex items-center gap-2">
+      {/* Approve CTA — takes the row's remaining width. `px-4` trims size="lg"'s
+          px-6 so the longest label ("Add amount & approve") still sits on one
+          line beside Delete on a 375px (and narrower) phone. */}
       <Button
         variant="success"
         size="lg"
         onClick={handleApprove}
         disabled={!canApprove}
-        className="w-full py-3"
+        className="flex-1 py-3 px-4"
         leftIcon={<Check size={18} strokeWidth={3} />}
       >
         {approveLabel}
       </Button>
 
-      {/* Secondary delete row */}
-      <div className="flex pt-1 border-t border-brand-200 dark:border-brand-700 mt-2">
-        <Button
-          variant="ghost-danger"
-          size="sm"
-          className="flex-1 text-xs"
-          leftIcon={<Trash2 size={14} />}
-          onClick={handleDelete}
-        >
-          Delete
-        </Button>
-      </div>
-    </>
+      {/* Delete, inline beside Approve. Icon-only — the word does not fit next
+          to the longest approve label at 375px — so the accessible name comes
+          from aria-label rather than from the (absent) text. */}
+      <Button
+        variant="ghost-danger"
+        size="icon"
+        aria-label="Delete"
+        onClick={handleDelete}
+      >
+        <Trash2 size={18} />
+      </Button>
+    </div>
   );
 
   return (
@@ -595,12 +596,17 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
         </p>
       )}
 
-      {/* Offered only while this row is still showing raw bank text — reviewing
-          a charge is where you actually notice the ugly descriptor, so it's
-          where renaming it should be one tap away. Keyed on the STORED
-          descriptor, not the edited field above: the rule matches what the bank
-          sends next month, not what this row is retitled to. */}
-      <InlineMerchantRename merchant={transaction.merchant} amount={transaction.amount} />
+      {/* Offered on any MACHINE-captured row (see MACHINE_CAPTURE_SOURCES) —
+          reviewing a charge is where you actually notice the name a scan or a
+          bank feed chose for it, so it's where renaming it should be one tap
+          away. Keyed on the STORED descriptor, not the edited field above: the
+          rule matches what the bank sends next month, not what this row is
+          retitled to. */}
+      <InlineMerchantRename
+        merchant={transaction.merchant}
+        source={transaction.source}
+        amount={transaction.amount}
+      />
 
       <Input
         label="What was it? (Optional)"
@@ -610,29 +616,35 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
         placeholder="e.g. Minecraft, dog food"
       />
 
-      {/* Hero amount field — the primary action for an "awaiting amount" stub. */}
-      <div className="flex justify-center py-1">
-        <div className="relative">
-          <span className="absolute left-0 top-1/2 -translate-y-1/2 text-4xl font-bold text-brand-400 dark:text-brand-400">$</span>
-          <input
-            type="number"
-            inputMode="decimal"
-            value={amount}
-            aria-label="Amount"
-            autoFocus={transaction.needsAmount}
-            onChange={e => {
-              const value = e.target.value;
-              if (value === '' || parseFloat(value) >= 0) setAmount(value);
-            }}
-            onKeyDown={e => {
-              if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
-            }}
-            placeholder="0.00"
-            step="0.01"
-            min="0"
-            className="w-full pl-12 text-5xl font-mono font-bold text-brand-800 dark:text-brand-100 placeholder:text-brand-200 outline-hidden text-center bg-transparent"
-          />
-        </div>
+      {/* Hero amount field — the primary action for an "awaiting amount" stub.
+          The "$" is a plain baseline-aligned sibling (not absolutely positioned
+          and box-centred), and the field — which is MONOSPACE — is sized in `ch`
+          to exactly its content, so the mark and the figures read as one number
+          and the pair stays snug and centred at any length. The floor of 4
+          matches the "0.00" placeholder. The "$" stays a size down: a currency
+          mark taller than its own figures looks wrong.
+          Spinners are stripped because a `ch`-exact box has no room to spare. */}
+      <div className="flex items-baseline justify-center gap-1 py-1">
+        <span className="text-4xl font-bold text-brand-400 dark:text-brand-400">$</span>
+        <input
+          type="number"
+          inputMode="decimal"
+          value={amount}
+          aria-label="Amount"
+          autoFocus={transaction.needsAmount}
+          onChange={e => {
+            const value = e.target.value;
+            if (value === '' || parseFloat(value) >= 0) setAmount(value);
+          }}
+          onKeyDown={e => {
+            if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
+          }}
+          placeholder="0.00"
+          step="0.01"
+          min="0"
+          style={{ width: `${Math.max(4, amount.length)}ch` }}
+          className="text-5xl font-mono font-bold text-brand-800 dark:text-brand-100 placeholder:text-brand-200 outline-hidden bg-transparent appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        />
       </div>
 
       {/* [&>*]:min-w-0 — native date/select controls report a min-content width
