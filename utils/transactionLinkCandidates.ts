@@ -70,9 +70,9 @@ export function getTransactionLinkCandidates(
 
   const sorted = anchorValid
     ? eligible.slice().sort((a, b) => {
-        const da = distanceFrom(anchor, a.date);
-        const dbb = distanceFrom(anchor, b.date);
-        if (da !== dbb) return da - dbb;
+        const distA = distanceFrom(anchor, a.date);
+        const distB = distanceFrom(anchor, b.date);
+        if (distA !== distB) return distA - distB;
         // Same distance either side of the anchor: prefer the later charge —
         // a bill is paid on or after its due date more often than before it.
         return a.date > b.date ? -1 : a.date < b.date ? 1 : 0;
