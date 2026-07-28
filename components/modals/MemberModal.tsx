@@ -111,8 +111,25 @@ const MemberModal: React.FC<MemberModalProps> = ({
   };
 
   return (
-    <Drawer isOpen={isOpen} onClose={onClose} title={title} disableClose={loading}>
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <Drawer
+      isOpen={isOpen}
+      onClose={onClose}
+      title={title}
+      disableClose={loading}
+      footer={
+        // The submit button lives outside the <form>, so it re-associates via
+        // `form="member-form"` — without that, submit silently stops working.
+        <div className="flex justify-end gap-3 border-t border-brand-200 dark:border-brand-700 p-4">
+          <Button type="button" variant="ghost" onClick={onClose} disabled={loading}>
+            Cancel
+          </Button>
+          <Button type="submit" form="member-form" isLoading={loading} leftIcon={<Save size={18} />}>
+            {isManagedKid ? 'Save Kid Profile' : 'Save Member'}
+          </Button>
+        </div>
+      }
+    >
+      <form id="member-form" onSubmit={handleSubmit} className="space-y-4">
         <Input
           label={isManagedKid ? "Kid's Name" : 'Display Name'}
           value={displayName}
@@ -162,15 +179,6 @@ const MemberModal: React.FC<MemberModalProps> = ({
             </div>
           </div>
         )}
-
-        <div className="pt-4 flex justify-end gap-3">
-          <Button type="button" variant="ghost" onClick={onClose} disabled={loading}>
-            Cancel
-          </Button>
-          <Button type="submit" isLoading={loading} leftIcon={<Save size={18} />}>
-            {isManagedKid ? 'Save Kid Profile' : 'Save Member'}
-          </Button>
-        </div>
       </form>
     </Drawer>
   );
