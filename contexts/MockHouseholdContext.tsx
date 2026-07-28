@@ -1864,6 +1864,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     } else {
       const item = calendarItems.find(i => i.id === calendarItemId);
       if (!item || item.type !== 'expense') return false;
+      // Parity with the real mutation: a recurring TEMPLATE's own doc id would
+      // rewrite the whole series' budgeted amount here.
+      if (item.isRecurring) return false;
       if (item.isPaid) {
         toast.error('That bill is already marked paid');
         return false;

@@ -392,6 +392,21 @@ describe('makeSettleBillWithTransaction', () => {
     expect(capturedSets).toHaveLength(0);
   });
 
+  it("refuses a recurring TEMPLATE's real doc id — settling it would rewrite the whole series' amount", async () => {
+    const template = oneOffBill({ id: 'tmpl-1', amount: 142, isRecurring: true, date: '2026-07-05' });
+    const { settleBillWithTransaction } = makeSettleBillWithTransaction(
+      settleDeps([scannedTx()], [template]),
+    );
+    // The plain doc id (NOT a synthetic occurrence id) takes the one-off branch,
+    // where `isPaid: true` + the scanned amount would land on the TEMPLATE.
+    const result = await settleBillWithTransaction('tx-scan', 'tmpl-1');
+
+    expect(result).toBe(false);
+    expect(commitCount).toBe(0);
+    expect(capturedUpdates).toHaveLength(0);
+    expect(capturedSets).toHaveLength(0);
+  });
+
   it('refuses a transaction that already settled a bill (idempotence guard)', async () => {
     const { settleBillWithTransaction } = makeSettleBillWithTransaction(
       settleDeps([scannedTx({ paidCalendarItemId: 'some-paid-doc' })], [oneOffBill()]),

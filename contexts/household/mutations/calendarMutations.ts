@@ -763,6 +763,15 @@ export function makeSettleBillWithTransaction(deps: {
     } else {
       item = calendarItems.find((i) => i.id === calendarItemId);
       if (!item || item.type !== 'expense') return false;
+      // A recurring TEMPLATE's real doc id must never reach this branch: it
+      // would write `isPaid` onto the template and rewrite its `amount` to the
+      // scanned figure, corrupting every future occurrence's budgeted amount
+      // (and therefore Safe-to-Spend) while suppressing nothing — the bill
+      // would still show unpaid. Both callers already refuse it, but this is a
+      // money-path invariant, so it is enforced HERE too. `isRecurring` is the
+      // distinguishing flag: a paid-instance doc is always written with
+      // `isRecurring: false`.
+      if (item.isRecurring) return false;
       if (item.isPaid) {
         toast.error('That bill is already marked paid');
         return false;
