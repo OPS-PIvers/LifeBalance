@@ -30,6 +30,7 @@ import { SurfaceList, Row } from '@/components/ui/Section';
 import { Sparkles, Camera } from 'lucide-react';
 import { MealPlanPhotoImportDrawer } from '@/components/modals/MealPlanPhotoImportDrawer';
 import { haptic } from '@/utils/haptics';
+import { useDeepLinkHighlight } from '@/hooks/useDeepLinkHighlight';
 import clsx from 'clsx';
 import { groupMealPlanByDay } from '@/utils/mealPlanFormatter';
 import { groupShoppingListByStore } from '@/utils/shoppingListFormatter';
@@ -117,8 +118,10 @@ const MealPlanTab: React.FC = () => {
   const [isIngredientSelectorOpen, setIsIngredientSelectorOpen] = useState(false);
   const [ingredientSelectorData, setIngredientSelectorData] = useState<{mealId?: string, name: string, ingredients: MealIngredient[]} | null>(null);
 
-  // Recipe Viewer State
-  const [viewingMeal, setViewingMeal] = useState<{meal: Meal, planItem: MealPlanItem} | null>(null);
+  // Recipe Viewer State. `planItem` is OPTIONAL: a global-search hit is a
+  // RECIPE (a `Meal`), which may not be planned on any visible day — see the
+  // deep-link block below — so the viewer has to work library-only.
+  const [viewingMeal, setViewingMeal] = useState<{meal: Meal, planItem?: MealPlanItem} | null>(null);
 
   // Edit/Add Form State
   const [currentMeal, setCurrentMeal] = useState<Partial<Meal>>({
@@ -140,6 +143,38 @@ const MealPlanTab: React.FC = () => {
 
   // O(1) meal lookup — avoids repeated O(n) meals.find() calls during render
   const mealsById = useMemo(() => new Map(meals.map(m => [m.id, m])), [meals]);
+
+  // --- Global search deep-link (v1.2) ---------------------------------------
+  // A meal search result is a RECIPE, but this tab renders MealPlanItem rows
+  // for ONE selected day — so there is frequently no row to scroll to (the
+  // recipe may be planned for another week, or not planned at all). Product
+  // decision: OPEN THE RECIPE instead of scrolling. No date math, no scroll,
+  // and it works for an unplanned cookbook entry, which the alternative
+  // (scroll to a planned occurrence) silently misses.
+  const incomingHighlightMealId = useDeepLinkHighlight();
+  // The incoming id is latched, because `useDeepLinkHighlight` self-clears
+  // after ~2s while the live `meals` listener is bounded (MEALS_LIMIT) — an
+  // older recipe needs `loadAllMeals()` to resolve, which can outlast that.
+  const [pendingMealId, setPendingMealId] = useState<string | null>(null);
+  const [consumedHighlightId, setConsumedHighlightId] = useState<string | null>(null);
+  if (incomingHighlightMealId !== consumedHighlightId) {
+    setConsumedHighlightId(incomingHighlightMealId);
+    if (incomingHighlightMealId) setPendingMealId(incomingHighlightMealId);
+  }
+  // Open as soon as the meal resolves. Render-phase edge (the same pattern as
+  // `wasSelectionMode` in ToDosPage) rather than an effect, so the recipe is
+  // open on the first paint after the id resolves — no cascading render.
+  const pendingMeal = pendingMealId ? mealsById.get(pendingMealId) : undefined;
+  if (pendingMeal) {
+    setPendingMealId(null);
+    setViewingMeal({ meal: pendingMeal });
+  }
+  // Not in the bounded live window — pull the rest of the cookbook in
+  // (idempotent per household) and let the block above fire when it lands.
+  useEffect(() => {
+    if (!pendingMealId) return;
+    void loadAllMeals();
+  }, [pendingMealId, loadAllMeals]);
 
   const handleOpenIngredientSelector = (name: string, ingredients: MealIngredient[], mealId?: string) => {
       setIngredientSelectorData({ name, ingredients, mealId });
@@ -572,6 +607,9 @@ const MealPlanTab: React.FC = () => {
     if (!viewingMeal) return;
 
     const { meal, planItem } = viewingMeal;
+    // Library-only viewing (a global-search deep link) has no plan item to mark
+    // cooked — the button isn't rendered in that case, so this is belt-and-braces.
+    if (!planItem) return;
 
     // Haptic at gesture time: after the awaits, transient user activation has
     // expired and the iOS transport silently no-ops (see utils/haptics.ts).
@@ -1372,7 +1410,7 @@ const MealPlanTab: React.FC = () => {
             onClose={() => setViewingMeal(null)}
             meal={viewingMeal.meal}
             planItem={viewingMeal.planItem}
-            onMarkCooked={handleMarkCooked}
+            onMarkCooked={viewingMeal.planItem ? handleMarkCooked : undefined}
             onShopIngredients={handleOpenIngredientSelector}
         />
       )}

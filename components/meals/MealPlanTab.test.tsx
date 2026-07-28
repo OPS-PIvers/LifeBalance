@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
+import type { ReactElement } from 'react';
+import { MemoryRouter, useNavigate } from 'react-router-dom';
 import MealPlanTab from './MealPlanTab';
+
+// MealPlanTab reads the global-search deep link off router state
+// (`useDeepLinkHighlight`), so every render needs a Router around it.
+const render = (ui: ReactElement) =>
+  rtlRender(<MemoryRouter initialEntries={['/lists']}>{ui}</MemoryRouter>);
 
 // Mutable mock state so individual tests can supply fixtures.
 const mocks = vi.hoisted(() => ({
@@ -10,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   groceryCatalog: [] as unknown[],
   addShoppingItem: vi.fn(),
   addShoppingItems: vi.fn(),
+  loadAllMeals: vi.fn(async () => {}),
 }));
 
 // Mock dependencies
@@ -23,7 +31,7 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
     updateMealPlanItem: vi.fn(),
     deleteMealPlanItem: vi.fn(),
     ensureMealPlanWeek: vi.fn(),
-    loadAllMeals: vi.fn(async () => {}),
+    loadAllMeals: mocks.loadAllMeals,
   }),
   useShopping: () => ({
     addShoppingItem: mocks.addShoppingItem,
@@ -102,6 +110,11 @@ vi.mock('lucide-react', () => ({
   Hourglass: () => <div data-testid="hourglass-icon" />,
   Baby: () => <div data-testid="baby-icon" />,
   Clock: () => <div data-testid="clock-icon" />,
+  // RecipeModal (opened by the global-search deep link below).
+  Check: () => <div data-testid="check-icon" />,
+  ExternalLink: () => <div data-testid="external-link-icon" />,
+  ShieldAlert: () => <div data-testid="shield-alert-icon" />,
+  Minus: () => <div data-testid="minus-icon" />,
 }));
 
 describe('MealPlanTab', () => {
@@ -302,5 +315,89 @@ describe('MealPlanTab', () => {
     fireEvent.click(screen.getByLabelText('More week actions'));
     fireEvent.click(screen.getByText('Copy last week'));
     expect(screen.getByText('Copy Last Week')).toBeInTheDocument();
+  });
+});
+
+// --- Global search deep-link (v1.2) ------------------------------------------
+// A meal search result is a RECIPE, but this tab renders MealPlanItem rows for
+// ONE selected day — so there is frequently no row to scroll to. Product
+// decision: OPEN THE RECIPE. That works for a recipe planned in another week
+// and for one that was never planned at all, which is exactly what
+// "scroll to a planned occurrence" would miss.
+
+const DeepLinkTrigger: React.FC<{ highlightId: string }> = ({ highlightId }) => {
+  const navigate = useNavigate();
+  return (
+    <button onClick={() => navigate('/lists', { state: { tab: 'meals', highlightId } })}>
+      deep-link
+    </button>
+  );
+};
+
+describe('MealPlanTab — global search deep-link', () => {
+  beforeEach(() => {
+    mocks.meals = [];
+    mocks.mealPlan = [];
+    mocks.shoppingList = [];
+    mocks.groceryCatalog = [];
+    mocks.loadAllMeals.mockClear();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const renderWithTrigger = (highlightId: string) =>
+    rtlRender(
+      <MemoryRouter initialEntries={['/lists']}>
+        <MealPlanTab />
+        <DeepLinkTrigger highlightId={highlightId} />
+      </MemoryRouter>
+    );
+
+  it('opens the recipe for a meal that is not planned on any day', () => {
+    mocks.meals = [
+      { id: 'meal-9', name: 'Sheet-pan salmon', ingredients: [], instructions: [], tags: [] },
+    ];
+    renderWithTrigger('meal-9');
+    expect(screen.queryByText('Sheet-pan salmon')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('deep-link'));
+
+    // The recipe drawer's own heading — no plan item, no date math, no scroll.
+    expect(screen.getByRole('heading', { name: 'Sheet-pan salmon' })).toBeInTheDocument();
+  });
+
+  it('offers no "Mark as Cooked" action when there is no plan item', () => {
+    mocks.meals = [
+      { id: 'meal-9', name: 'Sheet-pan salmon', ingredients: [], instructions: [], tags: [] },
+    ];
+    renderWithTrigger('meal-9');
+    fireEvent.click(screen.getByText('deep-link'));
+
+    expect(screen.getByRole('heading', { name: 'Sheet-pan salmon' })).toBeInTheDocument();
+    expect(screen.queryByText('Mark as Cooked')).not.toBeInTheDocument();
+  });
+
+  it('pulls in the full cookbook when the target is outside the bounded live window', () => {
+    // The live `meals` listener is capped (MEALS_LIMIT), so an older recipe is
+    // simply absent — the id is latched and resolved once loadAllMeals lands.
+    const { rerender } = renderWithTrigger('meal-old');
+    fireEvent.click(screen.getByText('deep-link'));
+
+    expect(mocks.loadAllMeals).toHaveBeenCalled();
+    expect(screen.queryByRole('heading', { name: 'Grandma stew' })).not.toBeInTheDocument();
+
+    mocks.meals = [
+      { id: 'meal-old', name: 'Grandma stew', ingredients: [], instructions: [], tags: [] },
+    ];
+    rerender(
+      <MemoryRouter initialEntries={['/lists']}>
+        <MealPlanTab />
+        <DeepLinkTrigger highlightId="meal-old" />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole('heading', { name: 'Grandma stew' })).toBeInTheDocument();
   });
 });

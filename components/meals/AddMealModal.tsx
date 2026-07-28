@@ -395,36 +395,38 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
 
             </div>
         </div>
+    </div>
+  );
 
-        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800 flex flex-col gap-2 shrink-0">
-            {editingMealId && (
-                <Button
-                    variant="link"
-                    size="sm"
-                    className="w-full text-brand-600 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-200"
-                    onClick={() => onSave(true)}
-                >
-                    Save as New Meal (Copy)
-                </Button>
-            )}
-            <div className="flex gap-3 w-full">
-              <Button
-                  variant="secondary"
-                  size="lg"
-                  className="flex-1"
-                  onClick={onClose}
-              >
-                  Cancel
-              </Button>
-              <Button
-                  variant="primary"
-                  size="lg"
-                  className="flex-1"
-                  onClick={() => onSave(false)}
-              >
-                  {editingMealId ? 'Update & Save' : 'Save to Plan'}
-              </Button>
-            </div>
+  const footer = (
+    <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800 flex flex-col gap-2">
+        {editingMealId && (
+            <Button
+                variant="link"
+                size="sm"
+                className="w-full text-brand-600 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-200"
+                onClick={() => onSave(true)}
+            >
+                Save as New Meal (Copy)
+            </Button>
+        )}
+        <div className="flex gap-3 w-full">
+          <Button
+              variant="secondary"
+              size="lg"
+              className="flex-1"
+              onClick={onClose}
+          >
+              Cancel
+          </Button>
+          <Button
+              variant="primary"
+              size="lg"
+              className="flex-1"
+              onClick={() => onSave(false)}
+          >
+              {editingMealId ? 'Update & Save' : 'Save to Plan'}
+          </Button>
         </div>
     </div>
   );
@@ -435,6 +437,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
       onClose={onClose}
       title={title}
       noPadding
+      footer={footer}
     >
       {content}
     </Drawer>

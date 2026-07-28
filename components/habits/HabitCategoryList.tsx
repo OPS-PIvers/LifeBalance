@@ -64,7 +64,21 @@ const HabitCategoryList: React.FC<HabitCategoryListProps> = ({ category, habits 
       axis="y"
       values={items}
       onReorder={handleReorder}
-      className="surface-section overflow-hidden [&>*:first-child]:border-t-0"
+      // Hand-rolled SurfaceList (this is a Reorder.Group, not a <div>), with one
+      // deliberate difference: NO `overflow-hidden`. HabitCard's desktop kebab
+      // dropdown is anchored inside its own row and is much taller than it, so
+      // the usual grouped-surface clip sliced it off — on the last row of a
+      // category almost the whole menu disappeared.
+      //
+      // Dropping the clip alone is NOT enough here. Unlike BudgetAccounts' rows
+      // (which paint no background and so can just use
+      // `<SurfaceList className="overflow-visible">`), habit rows paint their
+      // own surface — white/brand-800, or a money-bg tint while active — so
+      // without the clip their SQUARE corners poke past this container's
+      // rounded-card border. The edge rows therefore round their own background
+      // instead: `>*:first-child` inside each Reorder.Item is HabitCard's
+      // ListRow, the element that actually paints the row.
+      className="surface-section overflow-visible [&>*:first-child]:border-t-0 [&>*:first-child>*:first-child]:rounded-t-card [&>*:last-child>*:first-child]:rounded-b-card"
       aria-label={`Habit list for ${category}`}
     >
       {items.map(habit => (

@@ -4,9 +4,27 @@ import ToDosPage from './ToDosPage';
 import MealPlanTab from '@/components/meals/MealPlanTab';
 import ShoppingListTab from '@/components/meals/ShoppingListTab';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
+import { useDeepLinkTab } from '@/hooks/useDeepLinkTab';
 import type { PlanTab } from '@/utils/moduleVisibility';
 
 const VALID_TABS = ['todos', 'meals', 'shopping'] as const;
+
+const LISTS_TAB_STORAGE_KEY = 'lists-active-tab';
+
+/** The persisted tab preference, or 'todos' when unset/unreadable/unknown. */
+function readStoredTab(): PlanTab {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const stored = window.localStorage.getItem(LISTS_TAB_STORAGE_KEY);
+      if (stored && VALID_TABS.includes(stored as PlanTab)) {
+        return stored as PlanTab;
+      }
+    }
+  } catch (_error) {
+    // Ignore localStorage errors
+  }
+  return 'todos';
+}
 
 const TAB_LABELS: Record<PlanTab, string> = {
   todos: 'To-Dos',
@@ -32,19 +50,20 @@ const ListsPage: React.FC = () => {
   // disabled/absent preference falls back to the first enabled tab WITHOUT a
   // setState-in-effect (which would cause cascading renders). When the user
   // re-enables a tab, their stored preference is honored again automatically.
-  const [selectedTab, setSelectedTab] = useState<PlanTab>(() => {
-    try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        const stored = window.localStorage.getItem('lists-active-tab');
-        if (stored && VALID_TABS.includes(stored as PlanTab)) {
-          return stored as PlanTab;
-        }
-      }
-    } catch (_error) {
-      // Ignore localStorage errors
-    }
-    return 'todos';
-  });
+  //
+  // The preference is the DEFAULT, not the whole story: `useDeepLinkTab` layers
+  // a one-shot router-state OVERRIDE on top (`navigate('/lists', { state: { tab
+  // } })`), exactly as `/budget` and `/habits` already do. Without it, a caller
+  // that only seeded localStorage — global search, the Action Queue's "Review"
+  // link — changed nothing whatsoever when `/lists` was ALREADY mounted, since
+  // the key is read once in the initializer below. The storage read is wrapped
+  // in a lazy `useState` so it happens once per mount rather than every render.
+  const [initialTab] = useState<PlanTab>(readStoredTab);
+  const [deepLinkTab, setDeepLinkTab] = useDeepLinkTab(initialTab, VALID_TABS);
+  // `useDeepLinkTab` validates every value it accepts against VALID_TABS, and
+  // `setSelectedTab` below is only ever called with a PlanTab.
+  const selectedTab = deepLinkTab as PlanTab;
+  const setSelectedTab = setDeepLinkTab;
 
   // Effective tab: the preference if it's enabled, else the first enabled tab.
   // The 'todos' fallback only satisfies the type — the no-tabs case returns
@@ -59,7 +78,7 @@ const ListsPage: React.FC = () => {
   useEffect(() => {
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.setItem('lists-active-tab', selectedTab);
+        window.localStorage.setItem(LISTS_TAB_STORAGE_KEY, selectedTab);
       }
     } catch (_error) {
       // Ignore persistence errors

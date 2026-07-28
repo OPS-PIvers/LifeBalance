@@ -76,27 +76,6 @@ export const AISuggestModal: React.FC<AISuggestModalProps> = ({
             </Row>
           </SurfaceList>
         </div>
-
-        <Button
-            variant="warning"
-            size="lg"
-            className="w-full"
-            onClick={onSuggest}
-            isLoading={isGeneratingAI}
-            leftIcon={<Sparkles className="w-5 h-5" />}
-        >
-            Suggest Meal
-        </Button>
-
-        <Button
-            variant="ghost"
-            size="lg"
-            className="mt-3 w-full"
-            onClick={onClose}
-            disabled={isGeneratingAI}
-        >
-            Cancel
-        </Button>
     </div>
   );
 
@@ -107,6 +86,30 @@ export const AISuggestModal: React.FC<AISuggestModalProps> = ({
       disableClose={isGeneratingAI}
       noPadding
       title="Chef AI"
+      footer={
+        <div className="flex flex-col gap-3 border-t border-brand-200 dark:border-brand-700 p-4">
+          <Button
+              variant="warning"
+              size="lg"
+              className="w-full"
+              onClick={onSuggest}
+              isLoading={isGeneratingAI}
+              leftIcon={<Sparkles className="w-5 h-5" />}
+          >
+              Suggest Meal
+          </Button>
+
+          <Button
+              variant="ghost"
+              size="lg"
+              className="w-full"
+              onClick={onClose}
+              disabled={isGeneratingAI}
+          >
+              Cancel
+          </Button>
+        </div>
+      }
     >
       {content}
     </Drawer>

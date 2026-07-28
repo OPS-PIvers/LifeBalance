@@ -1,8 +1,15 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { ReactElement } from 'react';
+import { MemoryRouter, useNavigate, type InitialEntry } from 'react-router-dom';
 import ListsPage from './ListsPage';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import type { PlanTab } from '@/utils/moduleVisibility';
+
+// ListsPage consumes a router-state tab via `useDeepLinkTab`, so it needs a
+// Router. `initialEntries` doubles as the deep-link fixture.
+const render = (ui: ReactElement, initialEntries: InitialEntry[] = ['/lists']) =>
+  rtlRender(<MemoryRouter initialEntries={initialEntries}>{ui}</MemoryRouter>);
 
 // Mock child components
 vi.mock('./ToDosPage', () => ({
@@ -88,5 +95,51 @@ describe('ListsPage', () => {
     expect(screen.getByTestId('todos-page')).toBeInTheDocument();
     expect(screen.queryByText('Shopping')).not.toBeInTheDocument();
     expect(screen.queryByText('Meals')).not.toBeInTheDocument();
+  });
+
+  // --- Global search / Action Queue deep-link (v1.2) ------------------------
+  describe('router-state tab deep-link', () => {
+    it('honours state.tab over the stored preference', () => {
+      localStorage.setItem('lists-active-tab', 'todos');
+      render(<ListsPage />, [{ pathname: '/lists', state: { tab: 'shopping' } }]);
+      expect(screen.getByTestId('shopping-page')).toBeInTheDocument();
+      expect(screen.queryByTestId('todos-page')).not.toBeInTheDocument();
+    });
+
+    it('ignores an unknown state.tab and falls back to the preference', () => {
+      localStorage.setItem('lists-active-tab', 'meals');
+      render(<ListsPage />, [{ pathname: '/lists', state: { tab: 'nonsense' } }]);
+      expect(screen.getByTestId('meals-page')).toBeInTheDocument();
+    });
+
+    // The bug this fix exists for: selecting a search result while ALREADY on
+    // /lists used to change nothing, because the tab came only from a
+    // localStorage key read once in the mount initializer.
+    it('switches the tab when the deep-link arrives while already on /lists', () => {
+      const Trigger: React.FC = () => {
+        const navigate = useNavigate();
+        return (
+          <button onClick={() => navigate('/lists', { state: { tab: 'meals' } })}>
+            deep-link
+          </button>
+        );
+      };
+      rtlRender(
+        <MemoryRouter initialEntries={['/lists']}>
+          <ListsPage />
+          <Trigger />
+        </MemoryRouter>
+      );
+      expect(screen.getByTestId('todos-page')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByText('deep-link'));
+      expect(screen.getByTestId('meals-page')).toBeInTheDocument();
+      expect(screen.queryByTestId('todos-page')).not.toBeInTheDocument();
+    });
+
+    it('still persists the deep-linked tab as the preference', () => {
+      render(<ListsPage />, [{ pathname: '/lists', state: { tab: 'shopping' } }]);
+      expect(localStorage.getItem('lists-active-tab')).toBe('shopping');
+    });
   });
 });

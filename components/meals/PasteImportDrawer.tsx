@@ -120,7 +120,25 @@ export const PasteImportDrawer: React.FC<PasteImportDrawerProps> = ({ isOpen, on
   };
 
   return (
-    <Drawer isOpen={isOpen} onClose={handleClose} title="Import list">
+    <Drawer
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="Import list"
+      footer={
+        <div className="flex justify-end gap-2 border-t border-brand-200 dark:border-brand-700 p-4">
+          <Button variant="secondary" onClick={handleClose} disabled={isImporting}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleImport}
+            disabled={isImporting || !text.trim()}
+            leftIcon={isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardPaste className="w-4 h-4" />}
+          >
+            {isImporting ? 'Importing…' : 'Import'}
+          </Button>
+        </div>
+      }
+    >
       <div className="space-y-4 px-4 pb-4">
         <p className="text-sm text-brand-500 dark:text-brand-400">
           Paste an ingredient list or grocery list — one item per line (or comma-separated) — and we&rsquo;ll clean it
@@ -139,18 +157,6 @@ export const PasteImportDrawer: React.FC<PasteImportDrawerProps> = ({ isOpen, on
         <p className="text-xxs text-brand-400 dark:text-brand-450">
           Up to {MAX_PASTE_IMPORT_ITEMS} items per import.
         </p>
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={handleClose} disabled={isImporting}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleImport}
-            disabled={isImporting || !text.trim()}
-            leftIcon={isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardPaste className="w-4 h-4" />}
-          >
-            {isImporting ? 'Importing…' : 'Import'}
-          </Button>
-        </div>
       </div>
     </Drawer>
   );

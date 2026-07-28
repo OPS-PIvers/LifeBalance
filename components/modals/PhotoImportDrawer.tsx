@@ -183,6 +183,27 @@ export function PhotoImportDrawer<T>({
       noPadding
       height="tall"
       disableClose={view === 'processing' || isCommitting}
+      // The commit action only exists in the review step, so the footer bar is
+      // conditional the same way — the menu/processing views keep the body's
+      // own pb-safe bottom inset.
+      footer={
+        view === 'review' ? (
+          <div className="flex gap-2 border-t border-brand-200 dark:border-brand-700 p-4">
+            <Button variant="ghost" onClick={() => setView('menu')} disabled={isCommitting}>
+              Retake
+            </Button>
+            <Button
+              variant="primary"
+              className="flex-1"
+              onClick={handleCommit}
+              isLoading={isCommitting}
+              disabled={selectedValidRows.length === 0}
+            >
+              {commitLabel(selectedValidRows.length)}
+            </Button>
+          </div>
+        ) : undefined
+      }
     >
       <div className="p-6">
         {/* Hidden capture inputs shared by both entry buttons. */}
@@ -261,20 +282,6 @@ export function PhotoImportDrawer<T>({
                 </li>
               ))}
             </ul>
-            <div className="flex gap-2 pt-2">
-              <Button variant="ghost" onClick={() => setView('menu')} disabled={isCommitting}>
-                Retake
-              </Button>
-              <Button
-                variant="primary"
-                className="flex-1"
-                onClick={handleCommit}
-                isLoading={isCommitting}
-                disabled={selectedValidRows.length === 0}
-              >
-                {commitLabel(selectedValidRows.length)}
-              </Button>
-            </div>
           </div>
         )}
       </div>

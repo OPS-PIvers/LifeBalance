@@ -26,6 +26,8 @@ import PageHeader from '@/components/ui/PageHeader';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
 import { useStackedStickyOffset } from '@/hooks/useStackedStickyOffset';
 import { usePowerToolsEnabled } from '@/hooks/usePowerToolsEnabled';
+import { useDeepLinkHighlight } from '@/hooks/useDeepLinkHighlight';
+import { useScrollToHighlight } from '@/hooks/useScrollToHighlight';
 import { haptic } from '@/utils/haptics';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { formatShoppingListForShare } from '@/utils/shoppingListFormatter';
@@ -249,6 +251,29 @@ const ShoppingListTab: React.FC = () => {
 
     setItems(sorted);
   }, [shoppingList, filterStore, sortMode, categories, storeOrder]);
+
+  // --- Global search deep-link (v1.2) ---------------------------------------
+  // A shopping result navigates to `/lists` with `state: { tab: 'shopping',
+  // highlightId }`; ListsPage switches the tab and this scrolls to + flashes
+  // the row. Deliberately DEFERRED until the list has actually arrived: the
+  // first commit after a cold navigation has an empty `shoppingList`, and
+  // `useScrollToHighlight` fires once per id — a rAF against an empty list
+  // would consume the highlight and find nothing. Passing `null` until the
+  // data lands means the effect re-runs with the real id when it does.
+  const incomingHighlightId = useDeepLinkHighlight();
+  const highlightId = !isLoading && shoppingList.length > 0 ? incomingHighlightId : null;
+  // The target may be filtered out of view by an active store filter. Clear the
+  // filter ONLY when the target actually fails it — a deep link must never
+  // silently discard a scoping choice it didn't need to. Looked up in the full
+  // `shoppingList`, not the filtered `items`, precisely because a failing target
+  // is absent from the latter. The Reorder.Group's mirrored `items` state is
+  // left alone: it is load-bearing for drag, and a deep link never races one.
+  const revealHighlightedItem = useCallback(() => {
+    if (!highlightId || !filterStore) return;
+    const target = shoppingList.find(item => item.id === highlightId);
+    if (target && target.store !== filterStore) setFilterStore(null);
+  }, [highlightId, filterStore, shoppingList]);
+  useScrollToHighlight(highlightId, revealHighlightedItem);
 
   // Input State
   const [newItemText, setNewItemText] = useState('');
@@ -921,16 +946,36 @@ const ShoppingListTab: React.FC = () => {
             isOpen={!!editingItem}
             onClose={() => setEditingItem(null)}
             title="Edit item"
+            footer={
+              <div className="p-4 border-t border-brand-200 dark:border-brand-700 flex items-center gap-3">
+                <Button
+                  type="button"
+                  variant="ghost-danger"
+                  size="lg"
+                  aria-label="Delete item"
+                  onClick={() => {
+                    deleteShoppingItem(editingItem.id);
+                    showDeleteUndoToast(editingItem);
+                    setEditingItem(null);
+                  }}
+                >
+                  <Trash2 size={20} />
+                </Button>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  onClick={handleSaveEdit}
+                  disabled={!editingItem.name.trim()}
+                  className="flex-1"
+                >
+                  Save changes
+                </Button>
+              </div>
+            }
           >
             <ShoppingItemForm
               item={editingItem}
               onChange={setEditingItem}
-              onSave={handleSaveEdit}
-              onDelete={() => {
-                deleteShoppingItem(editingItem.id);
-                showDeleteUndoToast(editingItem);
-                setEditingItem(null);
-              }}
               stores={stores}
               categories={categories}
               quickStockLists={quickStockLists}

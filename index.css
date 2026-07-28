@@ -468,11 +468,23 @@ html[data-font-scale='130'] {
 }
 
 /*
- * Global search deep-link highlight (Plan 14 v1.1) — a brief flash applied to
- * the row a search result scrolled to (see useScrollToHighlight). The
- * app-wide prefers-reduced-motion guard below collapses this animation's
- * duration to near-instant, so no separate reduced-motion variant is needed
- * here — the element still gets a (near-instant) visible tint.
+ * Global search deep-link highlight (Plan 14 v1.1; v1.2 added meals / to-dos /
+ * shopping) — a brief flash applied to the row a search result scrolled to
+ * (see useScrollToHighlight).
+ *
+ * The tint is painted by a pointer-events-none ::after OVERLAY rather than on
+ * the flashed element's own background. Every list row in this app draws its
+ * own opaque `bg-white dark:bg-brand-800` (TodoRow, HabitCard, ShoppingItemRow
+ * …), which sits ON TOP of a background-color animation applied to the row
+ * wrapper and hides it entirely — so the pre-v1.2 background-only flash was
+ * invisible on exactly the surfaces it was meant to mark. An overlay is also
+ * why this stays a TINT and not a ring/border: a full-bleed child of a rounded
+ * `overflow-hidden` surface would have its border corners sliced.
+ *
+ * The app-wide prefers-reduced-motion guard below collapses this animation's
+ * duration to near-instant (it gates `::after` too), so no separate
+ * reduced-motion variant is needed here — the element still gets a
+ * (near-instant) visible tint.
  */
 @keyframes search-highlight-flash {
   0%,
@@ -486,6 +498,19 @@ html[data-font-scale='130'] {
 }
 
 .search-highlight-flash {
+  /* Containing block for the overlay below. An inline `position: absolute`
+     (TransactionMasterList's virtualized row wrapper) wins over this and is
+     equally valid as a containing block. */
+  position: relative;
+}
+
+.search-highlight-flash::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  border-radius: inherit;
   animation: search-highlight-flash 1.6s ease-in-out;
 }
 

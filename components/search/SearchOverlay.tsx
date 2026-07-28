@@ -35,30 +35,28 @@ const TYPE_ICONS: Record<GlobalSearchEntityType, React.ReactNode> = {
 const TYPE_ORDER: GlobalSearchEntityType[] = ['transaction', 'habit', 'todo', 'meal', 'shopping'];
 
 /**
- * Navigates to a search result's target page/tab. `/budget` and `/habits`
- * use the `useDeepLinkTab` convention (`state: { tab }`); `/lists` has no such
- * param, so the target sub-tab is seeded into the `lists-active-tab`
- * localStorage key first, mirroring `PlanTabRedirect`
- * (`components/auth/PlanTabRedirect.tsx`).
+ * Navigates to a search result's target page/tab. All three target pages now
+ * share ONE convention — `state: { tab, highlightId }`, read by
+ * `useDeepLinkTab` + `useDeepLinkHighlight` — so a result lands on the right
+ * sub-view and flashes the specific row it named.
  *
- * v1.1 (Plan 14 follow-up): `/budget` and `/habits` also carry `highlightId`
- * in the same `state` object — `useDeepLinkHighlight` on those pages reads it
- * to scroll to and briefly flash the specific transaction/habit row, instead
- * of just landing on its containing tab. `/lists` (meals/todos/shopping)
- * still only deep-links to the tab — those pages have paginated/sectioned
- * layouts (Eisenhower quadrants, `maxVisible` caps) where "the matching row
- * may not even be rendered yet" is a bigger lift than a follow-up warrants;
- * tracked as a remaining gap rather than wired here.
+ * `/lists` additionally seeds the `lists-active-tab` localStorage key, which
+ * is `ListsPage`'s persisted PREFERENCE (mirroring `PlanTabRedirect` in
+ * `components/auth/PlanTabRedirect.tsx`). Router state alone is what actually
+ * switches the tab: before v1.2, `/lists` was navigated to with NO state and
+ * `ListsPage` read that key only in its `useState` initializer, so selecting a
+ * meal/to-do/shopping result while ALREADY on `/lists` changed nothing at all.
  */
 function navigateToResult(navigate: ReturnType<typeof useNavigate>, result: GlobalSearchResult): void {
   const { nav } = result;
   if (nav.path === '/lists') {
+    const listsTab = nav.listsTab ?? 'todos';
     try {
-      window.localStorage.setItem('lists-active-tab', nav.listsTab ?? 'todos');
+      window.localStorage.setItem('lists-active-tab', listsTab);
     } catch {
       /* best-effort */
     }
-    navigate('/lists');
+    navigate('/lists', { state: { tab: listsTab, highlightId: result.id } });
     return;
   }
   navigate(nav.path, { state: { tab: nav.tab, highlightId: result.id } });

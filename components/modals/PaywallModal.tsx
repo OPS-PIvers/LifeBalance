@@ -68,7 +68,26 @@ const PaywallModal: React.FC<PaywallModalProps> = ({ isOpen, onClose, householdI
   };
 
   return (
-    <Drawer isOpen={isOpen} onClose={onClose} title="Upgrade to Premium">
+    <Drawer
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Upgrade to Premium"
+      footer={
+        <div className="flex justify-end gap-3 border-t border-brand-200 dark:border-brand-700 p-4">
+          <Button variant="ghost" onClick={onClose} disabled={isRedirecting}>
+            Not now
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleUpgrade}
+            isLoading={isRedirecting}
+            leftIcon={<Sparkles className="w-4 h-4" />}
+          >
+            Continue to checkout
+          </Button>
+        </div>
+      }
+    >
       <div className="space-y-5">
         <div className="flex items-center gap-3">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-card bg-warm-500 shrink-0">
@@ -90,20 +109,6 @@ const PaywallModal: React.FC<PaywallModalProps> = ({ isOpen, onClose, householdI
             </li>
           ))}
         </ul>
-
-        <div className="flex justify-end gap-3 pt-2">
-          <Button variant="ghost" onClick={onClose} disabled={isRedirecting}>
-            Not now
-          </Button>
-          <Button
-            variant="primary"
-            onClick={handleUpgrade}
-            isLoading={isRedirecting}
-            leftIcon={<Sparkles className="w-4 h-4" />}
-          >
-            Continue to checkout
-          </Button>
-        </div>
       </div>
     </Drawer>
   );

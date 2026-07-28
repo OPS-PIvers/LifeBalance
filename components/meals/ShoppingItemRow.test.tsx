@@ -108,4 +108,25 @@ describe('ShoppingItemRow', () => {
     expect(screen.queryByText('Costco')).not.toBeInTheDocument();
     expect(screen.queryByText('2 lbs')).not.toBeInTheDocument();
   });
+
+  // Global search deep-link (v1.2): both render branches must be findable by
+  // `useScrollToHighlight`'s `[data-highlight-target]` query — the plain-div
+  // branch is what every non-'entry' sort mode and any active store filter
+  // renders, so tagging only the draggable branch would silently lose the
+  // highlight in exactly the filtered views a deep link most often lands in.
+  it('tags the reorderable row as a deep-link highlight target', () => {
+    const { container } = render(
+      <Reorder.Group axis="y" values={[item]} onReorder={() => {}}>
+        <ShoppingItemRow item={item} {...handlers} />
+      </Reorder.Group>
+    );
+    expect(container.querySelector('[data-highlight-target="item-1"]')).not.toBeNull();
+  });
+
+  it('tags the non-reorderable row as a deep-link highlight target', () => {
+    const { container } = render(
+      <ShoppingItemRow item={item} {...handlers} isReorderable={false} />
+    );
+    expect(container.querySelector('[data-highlight-target="item-1"]')).not.toBeNull();
+  });
 });
