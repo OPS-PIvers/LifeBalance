@@ -435,11 +435,15 @@ export const TodoRow = React.memo(function TodoRow({
   // Kept OUTSIDE the tap-to-edit body so checking a step never opens the drawer;
   // stops pointerdown from bubbling into SwipeActionRow so a checkbox tap can't
   // start a swipe. Styling mirrors the edit drawer's subtask list.
+  // It hangs off the ROW (not the title column) so the summary line above can
+  // stay vertically centered against the checkbox no matter how many steps are
+  // expanded; `pl-9` (checkbox 24px + gap 12px) keeps it indented under the
+  // title exactly as it was when it lived inside that column.
   const subtaskList = subtasksExpanded && subtaskCount > 0 && (
     <ul
       id={subtaskListId}
       aria-label={`Subtasks for ${item.text}`}
-      className="mt-2 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-(--duration-fast)"
+      className="mt-2 pl-9 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-(--duration-fast)"
       onPointerDown={(e) => e.stopPropagation()}
     >
       {(item.subtasks ?? []).map(sub => (
@@ -484,15 +488,18 @@ export const TodoRow = React.memo(function TodoRow({
 
   // Meta line (urgency date/time, reminder bell, details dot, assignee) —
   // rendered in BOTH selection and normal modes; in normal mode it doubles as
-  // the button's aria-describedby target via metaId. Paper cut #4: always its
-  // own line BELOW the title, and NEVER wraps (`flex-nowrap` +
-  // `overflow-x-auto`) so an extreme combination scrolls instead of
-  // reflowing the row — row height stays deterministic. Muted/subordinate to
-  // the title; the due-date color stays semantic (urgency).
+  // the button's aria-describedby target via metaId. Always its own line BELOW
+  // the title. Paper cut #2: this used to be `flex-nowrap` + `overflow-x-auto`
+  // so an extreme combination scrolled instead of reflowing — which turned
+  // EVERY row into its own horizontal scroll container, clipping "Today 0/4
+  // <avatars>" mid-glyph. Nothing in a to-do row scrolls sideways now: the
+  // meta wraps onto a second line in the rare case it doesn't fit, and the row
+  // grows to fit. Muted/subordinate to the title; the due-date color stays
+  // semantic (urgency).
   const metaLine = (
     <span
       id={metaId}
-      className="flex flex-nowrap items-center gap-3 text-xs text-brand-500 dark:text-brand-400 min-w-0 overflow-x-auto"
+      className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-brand-500 dark:text-brand-400 min-w-0"
     >
       {/* Small amber star marks an important (starred) task — the flat list
           sorts these first, so the mark explains the ordering at a glance.
@@ -574,7 +581,7 @@ export const TodoRow = React.memo(function TodoRow({
         }
       } : {})}
       className={cn(
-        'items-start p-4 transition-colors duration-(--duration-fast) ease-(--ease-standard)',
+        'flex-col items-stretch gap-0 p-4 transition-colors duration-(--duration-fast) ease-(--ease-standard)',
         isSelectionMode
           ? isSelected
             ? 'cursor-pointer bg-accent-50 dark:bg-accent-900/30'
@@ -582,42 +589,48 @@ export const TodoRow = React.memo(function TodoRow({
           : 'bg-white dark:bg-brand-800'
       )}
     >
-      {/* Complete Checkbox or Selection Box */}
-      {isSelectionMode ? (
-        <div className={`mt-0.5 w-6 h-6 flex items-center justify-center shrink-0 transition-colors ${isSelected ? 'text-accent-600 dark:text-accent-300' : 'text-brand-300 dark:text-brand-500'}`}>
-          {isSelected ? <CheckSquare aria-hidden="true" size={24} /> : <div className="w-5 h-5 border-2 border-current rounded-sm" />}
-        </div>
-      ) : (
-        <HapticCheck
-          checked={false}
-          onCheckedChange={handleComplete}
-          onClick={(e) => e.stopPropagation()}
-          disabled={completionGated}
-          className={cn('mt-0.5 p-2.5 -m-2.5 shrink-0', completionGated && 'cursor-not-allowed')}
-          aria-label={
-            completionGated
-              ? `Complete task: ${item.text} — ${stepsLeft} ${stepsLeft === 1 ? 'step' : 'steps'} left`
-              : `Complete task: ${item.text}`
-          }
-        >
-          <span
-            className={cn(
-              'w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors',
+      {/* Summary line, mirroring ActionQueueItem's row: a shrink-0 leading
+          control + a `min-w-0 flex-1` text column holding title-over-meta,
+          the pair vertically CENTERED against each other. The row itself is a
+          column so the expandable checklist below can't drag that centering
+          off (the old `items-start` + `mt-0.5` nudge existed only because the
+          checklist shared the cross axis with the checkbox). */}
+      <div className="flex items-center gap-3">
+        {/* Complete Checkbox or Selection Box */}
+        {isSelectionMode ? (
+          <div className={`w-6 h-6 flex items-center justify-center shrink-0 transition-colors ${isSelected ? 'text-accent-600 dark:text-accent-300' : 'text-brand-300 dark:text-brand-500'}`}>
+            {isSelected ? <CheckSquare aria-hidden="true" size={24} /> : <div className="w-5 h-5 border-2 border-current rounded-sm" />}
+          </div>
+        ) : (
+          <HapticCheck
+            checked={false}
+            onCheckedChange={handleComplete}
+            onClick={(e) => e.stopPropagation()}
+            disabled={completionGated}
+            className={cn('p-2.5 -m-2.5 shrink-0', completionGated && 'cursor-not-allowed')}
+            aria-label={
               completionGated
-                ? 'border-brand-200 bg-brand-100/60 dark:border-brand-700 dark:bg-brand-700/40'
-                : 'border-brand-300 group-hover:border-accent-500 group-hover:bg-accent-50 group-active:bg-accent-100 dark:border-brand-600 dark:group-hover:border-accent-400 dark:group-hover:bg-accent-900/30',
-            )}
+                ? `Complete task: ${item.text} — ${stepsLeft} ${stepsLeft === 1 ? 'step' : 'steps'} left`
+                : `Complete task: ${item.text}`
+            }
           >
-            <Check size={14} className={cn('transition-colors', completionGated ? 'text-transparent' : 'text-transparent group-hover:text-current group-active:text-current group-has-[:focus-visible]:text-current')} />
-          </span>
-        </HapticCheck>
-      )}
+            <span
+              className={cn(
+                'w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors',
+                completionGated
+                  ? 'border-brand-200 bg-brand-100/60 dark:border-brand-700 dark:bg-brand-700/40'
+                  : 'border-brand-300 group-hover:border-accent-500 group-hover:bg-accent-50 group-active:bg-accent-100 dark:border-brand-600 dark:group-hover:border-accent-400 dark:group-hover:bg-accent-900/30',
+              )}
+            >
+              <Check size={14} className={cn('transition-colors', completionGated ? 'text-transparent' : 'text-transparent group-hover:text-current group-active:text-current group-has-[:focus-visible]:text-current')} />
+            </span>
+          </HapticCheck>
+        )}
 
-      {isSelectionMode ? (
-        <div className="flex-1 min-w-0">
-          {/* Same two-line title/meta treatment as normal mode (paper cut #4),
-              so bulk-select doesn't look denser/different than the regular list. */}
-          <div className="flex flex-col gap-y-1">
+        {isSelectionMode ? (
+          /* Same title-over-meta text column as normal mode, so bulk-select
+             doesn't look denser/different than the regular list. */
+          <div className="flex-1 min-w-0">
             {/* Up to two lines — see the normal-mode title below for why the
                 reserved-height version of this was reverted. */}
             <p className={cn(TITLE_COLUMN, 'line-clamp-2 font-medium leading-snug text-inherit')} title={item.text}>
@@ -625,31 +638,30 @@ export const TodoRow = React.memo(function TodoRow({
             </p>
             {metaLine}
           </div>
-          {subtaskList}
-        </div>
-      ) : (
-        /* Row body — TAP (on the title button) = edit drawer, LONG-PRESS /
-           context-menu (anywhere on the body) = options drawer. The long-press
-           and context-menu handlers live on this outer container so they cover
-           the whole body, while the click/keyboard EDIT affordance is a
-           role="button" wrapping ONLY the title (below). */
-        <div
-          className="flex-1 min-w-0"
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={cancelLongPress}
-          onPointerCancel={cancelLongPress}
-          onContextMenu={handleContextMenu}
-        >
-          {/* Title on its own line, meta line stacked beneath it (paper cut
-              #4) — deterministic layout regardless of due-pill text length.
-              The edit affordance is a role="button" wrapping ONLY the
-              title, so it has NO interactive descendant — ARIA forbids
-              interactive descendants of role=button, which would swallow the
-              checklist pill for VoiceOver/TalkBack. The meta line (which HOSTS
-              the interactive pill) is a SIBLING here, never a descendant,
-              still wired to the title via aria-describedby. */}
-          <div className="flex flex-col gap-y-1">
+        ) : (
+          /* Row body — TAP (on the title button) = edit drawer, LONG-PRESS /
+             context-menu (anywhere on the body) = options drawer. The
+             long-press and context-menu handlers live on this outer container
+             so they cover the whole text column, while the click/keyboard EDIT
+             affordance is a role="button" wrapping ONLY the title (below).
+             (The checklist below already stops pointerdown itself, so moving it
+             out of this container costs no gesture coverage.)
+
+             Title on its own line with the meta line stacked beneath it — the
+             edit affordance is a role="button" wrapping ONLY the title, so it
+             has NO interactive descendant; ARIA forbids interactive descendants
+             of role=button, which would swallow the checklist pill for
+             VoiceOver/TalkBack. The meta line (which HOSTS the interactive
+             pill) is a SIBLING here, never a descendant, still wired to the
+             title via aria-describedby. */
+          <div
+            className="flex-1 min-w-0"
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={cancelLongPress}
+            onPointerCancel={cancelLongPress}
+            onContextMenu={handleContextMenu}
+          >
             {/* Keyboard activation (Enter/Space → edit) is handled explicitly
                 since a role=button div gets no free activation. */}
             <div
@@ -663,19 +675,21 @@ export const TodoRow = React.memo(function TodoRow({
               className={cn(TITLE_COLUMN, 'text-left select-none [-webkit-touch-callout:none] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-card')}
             >
               {/* Capped at two lines, NOT reserved to two — a one-line title
-                  yields a one-line-tall row. This used to also carry
-                  `min-h-[2.75em]` to reserve two lines' worth of height on
-                  every row so heights stayed uniform regardless of title
-                  length, but that left an ugly gap between the title and the
-                  meta row whenever the title fit on one line (paper cut #12);
-                  reverted in favor of a tighter, variable-height row.
+                  yields a one-line-tall row, and a long one grows the row to
+                  two. This used to also carry `min-h-[2.75em]` to reserve two
+                  lines' worth of height on every row so heights stayed uniform
+                  regardless of title length, but that left an ugly gap between
+                  the title and the meta row whenever the title fit on one line
+                  (paper cut #12); reverted in favor of a tighter,
+                  variable-height row.
 
                   A to-do list whose titles are cut off mid-word ("Connect with
                   mom about worksho…") has traded away the one thing the row
                   exists to show, so two lines it is; the rare title that
                   overruns even that keeps its full text in this button's
                   aria-label, the native `title` tooltip above, and the edit
-                  drawer a tap opens.
+                  drawer a tap opens. There is no Review button on this row, so
+                  the title gets the row's full width to do it in.
 
                   No `block`: `line-clamp-2` supplies `display:-webkit-box`,
                   and a competing `display:block` in the same layer can win by
@@ -685,12 +699,13 @@ export const TodoRow = React.memo(function TodoRow({
 
             {metaLine}
           </div>
+        )}
+      </div>
 
-          {/* Inline subtask checklist — outside the tap-to-edit body so checking
-              a step never opens the drawer. */}
-          {subtaskList}
-        </div>
-      )}
+      {/* Inline subtask checklist — outside the tap-to-edit body so checking
+          a step never opens the drawer, and outside the summary line so it
+          can't decentre the checkbox. */}
+      {subtaskList}
     </Row>
   );
 
