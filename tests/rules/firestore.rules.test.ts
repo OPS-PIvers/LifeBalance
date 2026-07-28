@@ -25,6 +25,7 @@ import {
 import {
   doc,
   collection,
+  arrayUnion,
   getDoc,
   getDocs,
   setDoc,
@@ -1514,6 +1515,122 @@ describe('todos (Eisenhower importance + shared notes — additive optional fiel
     await assertFails(
       updateDoc(doc(dbFor(BOB), 'households', H1, 'todos', TODO), {
         injected: 'x'.repeat(5000),
+      }),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// calendarItems — first coverage for this collection. The regression that
+// prompted it: `bankDescriptorAliases` was written by `linkBankTransactionToBill`
+// but was absent from BOTH calendarItem allowlists, so the update guard
+// (`changed.difference(allowedKeys).intersection(data.keys())`) denied it. The
+// mutation commits as ONE writeBatch, so the denial silently broke the entire
+// shipped "Link to bill" button — the transaction was never recategorized and
+// the bill was never marked paid. Note there is no isAdminOf bypass on this
+// match, so it failed for admins too.
+// ---------------------------------------------------------------------------
+describe('calendar items (bill↔transaction alias learning)', () => {
+  const BILL = 'bill-seed';
+
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = asFirestore(ctx.firestore());
+      await setDoc(doc(db, 'households', H1, 'calendarItems', BILL), {
+        title: 'Centerpoint Energy',
+        amount: 142,
+        date: '2026-06-22',
+        type: 'expense',
+        isPaid: false,
+        isRecurring: true,
+        frequency: 'monthly',
+      });
+    });
+  });
+
+  it('a member can learn a bank descriptor alias (the shipped Link-to-bill write)', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', BILL), {
+        bankDescriptorAliases: arrayUnion('CPENERGY MNGCO'),
+      }),
+    );
+  });
+
+  it('a member can mark the bill paid and learn the alias in one write', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', BILL), {
+        isPaid: true,
+        amount: 37.91,
+        bankDescriptorAliases: arrayUnion('CPENERGY MNGCO'),
+      }),
+    );
+  });
+
+  it('rejects a non-list bankDescriptorAliases', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', BILL), {
+        bankDescriptorAliases: 'CPENERGY MNGCO',
+      }),
+    );
+  });
+
+  it('rejects an unbounded alias list (storage abuse)', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', BILL), {
+        bankDescriptorAliases: Array.from({ length: 51 }, (_, i) => `ALIAS-${i}`),
+      }),
+    );
+  });
+
+  it('accepts an alias list at exactly the cap (boundary)', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', BILL), {
+        bankDescriptorAliases: Array.from({ length: 50 }, (_, i) => `ALIAS-${i}`),
+      }),
+    );
+  });
+
+  it('allows clearing the alias list (so a future unlink can retract one)', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', BILL), {
+        bankDescriptorAliases: deleteField(),
+      }),
+    );
+  });
+
+  it('a member can create a calendar item carrying aliases', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', 'bill-new'), {
+        title: 'Water Utility',
+        amount: 60,
+        date: '2026-06-25',
+        type: 'expense',
+        isPaid: false,
+        bankDescriptorAliases: ['CITY WATER'],
+      }),
+    );
+  });
+
+  it('still rejects an update carrying an unknown field (storage abuse)', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', BILL), {
+        injected: 'x'.repeat(5000),
+      }),
+    );
+  });
+
+  it('still prevents tampering with createdBy', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', BILL), {
+        createdBy: CAROL,
+      }),
+    );
+  });
+
+  it("a non-member cannot learn an alias on another household's bill", async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(CAROL), 'households', H1, 'calendarItems', BILL), {
+        bankDescriptorAliases: arrayUnion('CPENERGY MNGCO'),
       }),
     );
   });
