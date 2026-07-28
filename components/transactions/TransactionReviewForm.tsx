@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, Copy, Link2, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { subMonths, addMonths, parseISO, format as formatDate } from 'date-fns';
@@ -42,6 +43,19 @@ export interface TransactionReviewFormProps {
    * motivated it never matches.
    */
   matchedBill?: { id: string; title: string };
+  /**
+   * Optional DOM node — a host `Drawer`'s fixed footer bar — to render the
+   * approve + delete actions into. This is a POSITION change only: the very
+   * same elements are portalled there, so `canApprove` and `handleApprove`
+   * stay owned by this component and are never lifted, mirrored, or
+   * re-implemented by a host. The two drawer hosts pass their footer slot so
+   * the money CTA can't be scrolled past on the app's longest review body.
+   *
+   * Omitted (or `null` before the host's slot ref attaches) ⇒ the actions
+   * render at the bottom of the form body exactly as they always have, which
+   * is what keeps a non-Drawer / inline mount working unchanged.
+   */
+  actionsContainer?: HTMLElement | null;
 }
 
 /**
@@ -52,11 +66,13 @@ export interface TransactionReviewFormProps {
  *
  * Layout is mobile-first, top → bottom: merchant, a hero $ amount field, a
  * Date + Account grid, budget-category select, habit chips, then the approve CTA
- * and a secondary delete row. There is no separate "edit" sub-mode — every
- * field is editable inline, so a single Approve verifies + categorises + tags
- * the account + credits habits in ONE atomic context call.
+ * and a secondary delete row — the last two portalled into the host drawer's
+ * sticky footer when it offers an `actionsContainer`. There is no separate
+ * "edit" sub-mode — every field is editable inline, so a single Approve
+ * verifies + categorises + tags the account + credits habits in ONE atomic
+ * context call.
  */
-const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transaction, onDone, onDeleted, matchedBill }) => {
+const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transaction, onDone, onDeleted, matchedBill, actionsContainer }) => {
   const {
     accounts, buckets, transactions,
     updateTransactionCategory, deleteTransaction, addCalendarItem,
@@ -408,6 +424,39 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
     }
   };
 
+  // The approve CTA + its secondary delete row, defined ONCE. They render at
+  // the bottom of the body by default and are portalled — same elements, same
+  // handlers, same `canApprove` gate — into the host drawer's sticky footer
+  // when one is offered. Nothing about approving changes with the position.
+  const actions = (
+    <>
+      {/* Approve CTA */}
+      <Button
+        variant="success"
+        size="lg"
+        onClick={handleApprove}
+        disabled={!canApprove}
+        className="w-full py-3"
+        leftIcon={<Check size={18} strokeWidth={3} />}
+      >
+        {approveLabel}
+      </Button>
+
+      {/* Secondary delete row */}
+      <div className="flex pt-1 border-t border-brand-200 dark:border-brand-700 mt-2">
+        <Button
+          variant="ghost-danger"
+          size="sm"
+          className="flex-1 text-xs"
+          leftIcon={<Trash2 size={14} />}
+          onClick={handleDelete}
+        >
+          Delete
+        </Button>
+      </div>
+    </>
+  );
+
   return (
     <div className="space-y-4">
       {possibleDuplicate && !duplicateDismissed && (
@@ -689,30 +738,7 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
         </div>
       )}
 
-      {/* Approve CTA */}
-      <Button
-        variant="success"
-        size="lg"
-        onClick={handleApprove}
-        disabled={!canApprove}
-        className="w-full py-3"
-        leftIcon={<Check size={18} strokeWidth={3} />}
-      >
-        {approveLabel}
-      </Button>
-
-      {/* Secondary delete row */}
-      <div className="flex pt-1 border-t border-brand-200 dark:border-brand-700 mt-2">
-        <Button
-          variant="ghost-danger"
-          size="sm"
-          className="flex-1 text-xs"
-          leftIcon={<Trash2 size={14} />}
-          onClick={handleDelete}
-        >
-          Delete
-        </Button>
-      </div>
+      {actionsContainer ? createPortal(actions, actionsContainer) : actions}
     </div>
   );
 };

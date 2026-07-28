@@ -40,6 +40,10 @@ interface ReviewPendingDrawerProps {
  */
 const ReviewPendingDrawer: React.FC<ReviewPendingDrawerProps> = ({ items, isOpen, onClose }) => {
   const [index, setIndex] = useState(0);
+  // Footer slot for the transaction form's own Approve/Delete pair. Held as
+  // state (not a ref) so attaching the node re-renders and hands it down;
+  // `setActionsSlot` is a stable callback ref and React nulls it on unmount.
+  const [actionsSlot, setActionsSlot] = useState<HTMLDivElement | null>(null);
   const current = items[index];
 
   const advance = () => {
@@ -63,16 +67,27 @@ const ReviewPendingDrawer: React.FC<ReviewPendingDrawerProps> = ({ items, isOpen
       title={`Review (${index + 1} of ${items.length})`}
       height="tall"
       footer={
-        <Button variant="ghost" className="w-full" onClick={advance}>
-          {isLast ? 'Done for now' : 'Skip — add later'}
-        </Button>
+        <div
+          data-testid="review-drawer-footer"
+          className="flex flex-col gap-2 border-t border-brand-200 dark:border-brand-700 p-4"
+        >
+          {/* Slot the transaction form portals its Approve + Delete pair into,
+              so the primary money action sits WITH Skip in the sticky bar
+              instead of competing with it from the bottom of a long scroll.
+              Only the transaction form opts in; the shopping/to-do forms are
+              short enough to keep their own in-body CTAs. */}
+          {current.kind === 'transaction' && <div ref={setActionsSlot} />}
+          <Button variant="ghost" className="w-full" onClick={advance}>
+            {isLast ? 'Done for now' : 'Skip — add later'}
+          </Button>
+        </div>
       }
     >
       {/* key remounts the form per item so its lazy-initialized fields reflect
           the new item. Approving or deleting resolves the current card and
           advances (onDone/onDeleted → advance); the last card closes the
           drawer. Branch by kind to render the matching per-type form. */}
-      {renderReviewForm(current, advance)}
+      {renderReviewForm(current, advance, actionsSlot)}
     </Drawer>
   );
 };
@@ -81,8 +96,16 @@ const ReviewPendingDrawer: React.FC<ReviewPendingDrawerProps> = ({ items, isOpen
  * Renders the per-type review form for the current queue item. Each form takes
  * `onDone`/`onDeleted` = advance, so approve and delete both move to the next
  * card (the last card closes the drawer via `advance`).
+ *
+ * `actionsSlot` is the footer node the transaction form portals its own
+ * Approve/Delete pair into — it stays the form's markup and the form's
+ * validation, only the DOM position moves.
  */
-function renderReviewForm(current: ReviewQueueItem, advance: () => void): React.ReactNode {
+function renderReviewForm(
+  current: ReviewQueueItem,
+  advance: () => void,
+  actionsSlot: HTMLDivElement | null,
+): React.ReactNode {
   switch (current.kind) {
     case 'transaction':
       return (
@@ -91,6 +114,7 @@ function renderReviewForm(current: ReviewQueueItem, advance: () => void): React.
           transaction={current.transaction}
           onDone={advance}
           onDeleted={advance}
+          actionsContainer={actionsSlot}
         />
       );
     case 'shopping':

@@ -1,4 +1,5 @@
 import { render as rtlRender, screen, within, fireEvent, waitFor } from '@testing-library/react';
+import { createPortal } from 'react-dom';
 import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, afterEach } from 'vitest';
@@ -27,9 +28,17 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
 
 // The transaction review drawer is context-driven and has its own test suite
 // (TransactionReviewForm.test.tsx covers its confirmation-gated delete); stub
-// it so this file exercises only the card's own delete paths.
+// it so this file exercises only the card's own delete paths. The stub honours
+// `actionsContainer` the way the real form does (portal its CTA into the host's
+// footer slot) so the card's sticky-footer wiring is still covered here.
 vi.mock('@/components/transactions/TransactionReviewForm', () => ({
-  default: () => <div data-testid="transaction-review-form" />,
+  default: ({ actionsContainer }: { actionsContainer?: HTMLElement | null }) => (
+    <div data-testid="transaction-review-form">
+      {actionsContainer
+        ? createPortal(<button type="button">Approve Transaction</button>, actionsContainer)
+        : null}
+    </div>
+  ),
 }));
 
 const todoItem: ToDoActionQueueItem = {
@@ -342,6 +351,23 @@ describe('ActionQueueItemCard delete confirmation', () => {
 
       await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
       await waitFor(() => expect(handlers.deleteCalendarItem).toHaveBeenCalledWith('cal-1'));
+    });
+  });
+
+  describe('transaction review sheet footer', () => {
+    it('offers the review form a sticky footer slot and renders its CTA there', async () => {
+      const handlers = makeHandlers();
+      renderCard(transactionItem, handlers, { isExpanded: true });
+
+      const drawer = screen.getByRole('dialog', { name: 'Review Transaction' });
+      // The slot lives in the Drawer's fixed footer, OUTSIDE the scrollable
+      // body — that's the whole point: the approve CTA can't be scrolled past.
+      const slot = await within(drawer).findByTestId('transaction-review-actions');
+      expect(within(slot).getByRole('button', { name: 'Approve Transaction' })).toBeInTheDocument();
+      // ...and it is NOT left sitting at the bottom of the form body.
+      expect(
+        within(within(drawer).getByTestId('transaction-review-form')).queryByRole('button'),
+      ).toBeNull();
     });
   });
 });

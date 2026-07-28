@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import ReviewPendingDrawer from './ReviewPendingDrawer';
 import type { ReviewQueueItem } from '@/utils/reviewQueue';
 import type { ShoppingItem, ToDo, Transaction } from '@/types/schema';
@@ -99,6 +99,31 @@ describe('ReviewPendingDrawer', () => {
     expect(screen.getByDisplayValue('Shell Gas')).toBeInTheDocument();
     // A real amount prefills (only $0 stubs open blank).
     expect((screen.getByLabelText('Amount') as HTMLInputElement).value).toBe('25');
+  });
+
+  it('pins Approve in the sticky footer beside Skip (never below the body scroll)', async () => {
+    const items = [txItem('t1', 'Shell Gas'), txItem('t2', 'Target')];
+    render(<ReviewPendingDrawer items={items} isOpen onClose={vi.fn()} />);
+
+    const footer = screen.getByTestId('review-drawer-footer');
+    const approve = await within(footer).findByRole('button', { name: /Approve Transaction/ });
+    // The form's own Delete joins it there; Skip stays the last row.
+    expect(within(footer).getByRole('button', { name: /Delete/ })).toBeInTheDocument();
+    expect(within(footer).getByText('Skip — add later')).toBeInTheDocument();
+
+    // Approving from the footer is the SAME action as before — one write, then advance.
+    fireEvent.click(approve);
+    await waitFor(() => expect(mockUpdateCategory).toHaveBeenCalledTimes(1));
+    expect(mockUpdateCategory).toHaveBeenCalledWith('t1', 'Groceries', [], undefined, undefined);
+    await waitFor(() => expect(screen.getByDisplayValue('Target')).toBeInTheDocument());
+  });
+
+  it('leaves the footer to Skip alone for a non-transaction card', () => {
+    render(<ReviewPendingDrawer items={[todoItem('d1', 'Call plumber')]} isOpen onClose={vi.fn()} />);
+
+    const footer = screen.getByTestId('review-drawer-footer');
+    expect(within(footer).getByText('Done for now')).toBeInTheDocument();
+    expect(within(footer).queryByRole('button', { name: /Approve Transaction/ })).toBeNull();
   });
 
   it('approving verifies via a single call then advances to the next card', async () => {

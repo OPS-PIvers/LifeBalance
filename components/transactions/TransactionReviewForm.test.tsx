@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import TransactionReviewForm from './TransactionReviewForm';
@@ -589,6 +589,63 @@ describe('TransactionReviewForm', () => {
       );
 
       expect(screen.queryByText(/pre-selected from your history/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('actionsContainer (host drawer sticky footer)', () => {
+    it('keeps the actions in the form body when no host opts in', () => {
+      const { container } = render(<TransactionReviewForm transaction={baseTx} onDone={mockOnDone} />);
+
+      expect(
+        within(container).getByRole('button', { name: /approve transaction/i }),
+      ).toBeInTheDocument();
+      expect(within(container).getByRole('button', { name: /delete/i })).toBeInTheDocument();
+    });
+
+    it('renders the actions into the host node instead, with approve still fully wired', async () => {
+      const user = userEvent.setup();
+      const host = document.createElement('div');
+      document.body.appendChild(host);
+
+      const { container } = render(
+        <TransactionReviewForm transaction={baseTx} onDone={mockOnDone} actionsContainer={host} />,
+      );
+
+      // Moved OUT of the form body...
+      expect(within(container).queryByRole('button', { name: /approve transaction/i })).toBeNull();
+      expect(within(container).queryByRole('button', { name: /delete/i })).toBeNull();
+
+      // ...and into the host's footer, still driving the same approve call.
+      await user.click(within(host).getByRole('button', { name: /approve transaction/i }));
+
+      expect(mockUpdateTransactionCategory).toHaveBeenCalledTimes(1);
+      const call = mockUpdateTransactionCategory.mock.calls[0]!;
+      expect(call[0]).toBe('tx1');
+      expect(call[1]).toBe('Groceries');
+      expect(mockOnDone).toHaveBeenCalled();
+
+      host.remove();
+    });
+
+    it('keeps the canApprove gate on the portalled CTA (a $0 stub stays disabled)', async () => {
+      const user = userEvent.setup();
+      const host = document.createElement('div');
+      document.body.appendChild(host);
+
+      render(
+        <TransactionReviewForm
+          transaction={{ ...baseTx, amount: 0, needsAmount: true }}
+          onDone={mockOnDone}
+          actionsContainer={host}
+        />,
+      );
+
+      expect(within(host).getByRole('button', { name: /add amount & approve/i })).toBeDisabled();
+
+      await user.type(screen.getByLabelText(/amount/i), '12.50');
+      expect(within(host).getByRole('button', { name: /approve transaction/i })).toBeEnabled();
+
+      host.remove();
     });
   });
 
