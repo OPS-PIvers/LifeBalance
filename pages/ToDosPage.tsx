@@ -58,7 +58,7 @@ import {
 } from '@/utils/todoCategoryFilter';
 import { isTodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
 import { useStackedStickyOffset } from '@/hooks/useStackedStickyOffset';
-import { useDeepLinkHighlight } from '@/hooks/useDeepLinkHighlight';
+import { useDeepLinkHighlight, HIGHLIGHT_DURATION_MS } from '@/hooks/useDeepLinkHighlight';
 import { useScrollToHighlight } from '@/hooks/useScrollToHighlight';
 import type { TodoCompletionOptions } from '@/contexts/household/mutations/todoMutations';
 
@@ -117,10 +117,6 @@ const categorySectionKeyForTodo = (todo: ToDo): string => {
   const trimmed = (todo.category ?? '').trim();
   return categorySectionKey(trimmed === '' ? null : trimmed);
 };
-
-// Mirrors `useDeepLinkHighlight`'s own self-clear window, so the legacy
-// `?todo=` path and the router-state path fade on the same schedule.
-const TODO_HIGHLIGHT_DURATION_MS = 2200;
 
 // Sentinel for the "Whole household" option in the Assign-to picker — no
 // member's uid ever collides with this. Selecting it stores `assignedTo:
@@ -659,7 +655,7 @@ const ToDosPage: React.FC = () => {
   // so both sources of a highlight behave identically downstream.
   useEffect(() => {
     if (!paramHighlightId) return;
-    const timer = window.setTimeout(() => setParamHighlightId(null), TODO_HIGHLIGHT_DURATION_MS);
+    const timer = window.setTimeout(() => setParamHighlightId(null), HIGHLIGHT_DURATION_MS);
     return () => window.clearTimeout(timer);
   }, [paramHighlightId]);
 
