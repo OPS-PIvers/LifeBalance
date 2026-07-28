@@ -336,6 +336,12 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
   const parsedPayAmount = roundMoney(parseFloat(payAmountInput));
   const payAmountValid = Number.isFinite(parsedPayAmount) && parsedPayAmount > 0;
 
+  // Footer slot for the transaction branch — TransactionReviewForm portals its
+  // own Approve/Delete pair here (see below). Held as state, not a ref, so the
+  // node attaching re-renders and hands it down; `setReviewActionsSlot` is a
+  // stable callback ref and React nulls it when the sheet unmounts.
+  const [reviewActionsSlot, setReviewActionsSlot] = useState<HTMLDivElement | null>(null);
+
   // Compute icon and styles only when item type changes
   const { iconComponent, iconClasses } = useMemo(() => {
     if (isCalendarQueueItem(item)) {
@@ -369,9 +375,10 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
     : 'Approve';
 
   // Sticky action bar for the review sheet — per queue-item type, exactly as the
-  // bodies below are. The transaction branch has NO footer here on purpose: its
-  // approve/delete CTAs belong to the shared TransactionReviewForm (also mounted
-  // by ReviewPendingDrawer), so they stay inside that component's own body.
+  // bodies below are. The transaction branch's bar is an empty SLOT: the CTAs
+  // still belong to the shared TransactionReviewForm (also mounted by
+  // ReviewPendingDrawer), which portals them in, so its `canApprove` gate and
+  // `handleApprove` are neither lifted here nor duplicated.
   const drawerFooter = isCalendarQueueItem(item) ? (
     <div className="flex flex-row gap-2 border-t border-brand-200 dark:border-brand-700 p-4">
       <Button
@@ -494,7 +501,13 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
         Delete
       </Button>
     </div>
-  ) : undefined;
+  ) : (
+    <div
+      ref={setReviewActionsSlot}
+      data-testid="transaction-review-actions"
+      className="border-t border-brand-200 dark:border-brand-700 p-4"
+    />
+  );
 
   return (
     <div className="relative hairline-divider group">
@@ -709,6 +722,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                 : undefined
             }
             onDone={() => setExpandedId(null)}
+            actionsContainer={reviewActionsSlot}
           />
         )}
       </Drawer>
