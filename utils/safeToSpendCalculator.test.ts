@@ -385,11 +385,20 @@ describe('calculateSafeToSpend', () => {
   });
 
   it('should handle bills on boundary dates correctly', () => {
-    // Logic: On or after lastPaycheckDate (Inclusive) AND before or equal to nextPaycheckDate (Inclusive)
-    // An unpaid bill due on payday itself is still owed and must subtract.
+    // Logic: on or after lastPaycheckDate (INCLUSIVE start) AND strictly before
+    // nextPaycheckDate (EXCLUSIVE end).
+    //
+    // The start stays inclusive: a bill due on THIS period's payday is owed out
+    // of the paycheck already sitting in checking.
+    //
+    // The end is exclusive because a pay period BEGINS on its paycheck's date —
+    // the same rule `getPayPeriodForTransaction` already applies to a same-day
+    // transaction. A bill dated on the NEXT paycheck is paid out of THAT
+    // paycheck, so reserving it against the outgoing period (whose balance has
+    // not received it yet) manufactured a shortfall that was not real.
 
-    const onStartBillDate = lastPaycheckDate; // Should be INCLUDED (Inclusive start)
-    const onEndBillDate = nextPaycheckDate;   // Should be INCLUDED (Inclusive end)
+    const onStartBillDate = lastPaycheckDate; // Should be INCLUDED (inclusive start)
+    const onEndBillDate = nextPaycheckDate;   // Should be EXCLUDED (exclusive end)
 
     const items: CalendarItem[] = [
       {
@@ -424,8 +433,69 @@ describe('calculateSafeToSpend', () => {
       lastPaycheckDate
     );
 
-    // 5000 - 100 (Start Bill) - 200 (End Bill) = 4700.
-    expect(result).toBe(4700);
+    // 5000 - 100 (Start Bill) = 4900. The End Bill belongs to the period the
+    // next paycheck opens, so it does not subtract here.
+    expect(result).toBe(4900);
+  });
+
+  it('leaves a bill sharing the NEXT paycheck date to the period that paycheck opens', () => {
+    // The reported bug, in the owner's own numbers: an $83.11 utility bill
+    // scheduled on the same day as a $5,200 paycheck was reserved against the
+    // OUTGOING period, whose checking balance had not yet received that
+    // paycheck — which is what drove Safe-to-Spend negative.
+    const items: CalendarItem[] = [
+      {
+        id: 'p1',
+        title: 'Paycheck',
+        amount: 5200,
+        date: nextPaycheckDate,
+        type: 'income',
+        isPaid: false,
+      },
+      {
+        id: 'b1',
+        title: 'Xcel Energy (Electric)',
+        amount: 83.11,
+        date: nextPaycheckDate, // same day as the paycheck
+        type: 'expense',
+        isPaid: false,
+      },
+    ];
+
+    const result = calculateSafeToSpend(mockAccounts, items, lastPaycheckDate);
+
+    // The full checking balance stays spendable — the payday bill is the new
+    // period's problem, funded by the paycheck landing alongside it.
+    expect(result).toBe(5000);
+  });
+
+  it('still subtracts a bill dated the day BEFORE the next paycheck', () => {
+    // Guards the exclusive end from over-reaching: only the boundary date
+    // itself moves to the next period, never the day before it.
+    const dayBeforeNextPaycheck = formatIso(addDays(today, 13)); // nextPaycheckDate is +14
+
+    const items: CalendarItem[] = [
+      {
+        id: 'p1',
+        title: 'Paycheck',
+        amount: 2000,
+        date: nextPaycheckDate,
+        type: 'income',
+        isPaid: false,
+      },
+      {
+        id: 'b1',
+        title: 'Last-Minute Bill',
+        amount: 250,
+        date: dayBeforeNextPaycheck,
+        type: 'expense',
+        isPaid: false,
+      },
+    ];
+
+    const result = calculateSafeToSpend(mockAccounts, items, lastPaycheckDate);
+
+    expect(result).toBe(4750);
   });
 
   it('subtracts multiple unpaid bills dated exactly on the paycheck date', () => {
@@ -504,7 +574,9 @@ describe('calculateSafeToSpend', () => {
   });
 
   it('should use end of month if no next paycheck is found', () => {
-    // If no next paycheck, range ends at endOfMonth(lastPaycheckDate)
+    // If no next paycheck, the range ends EXCLUSIVELY at the 1st of the
+    // following month — so the current month's days all count and the next
+    // month's do not.
     const startOfMonthDate = formatIso(new Date(2025, 0, 1)); // Jan 1 2025
     const midMonthDate = formatIso(new Date(2025, 0, 15));   // Jan 15 2025
     const nextMonthDate = formatIso(new Date(2025, 1, 1));   // Feb 1 2025
@@ -537,6 +609,30 @@ describe('calculateSafeToSpend', () => {
 
     // 5000 - 100 = 4900. Only bill inside month is counted.
     expect(result).toBe(4900);
+  });
+
+  it('still counts a bill on the LAST day of the month when no next paycheck exists', () => {
+    // Guards the no-paycheck fallback. That bound moved from an end-of-DAY
+    // instant (endOfMonth) to an exclusive midnight one (the 1st of next
+    // month), so the month's final day has to stay inside the window — an
+    // off-by-one here would quietly stop reserving every month-end bill.
+    const startOfMonthDate = formatIso(new Date(2025, 0, 1));  // Jan 1 2025
+    const lastDayOfMonth = formatIso(new Date(2025, 0, 31));   // Jan 31 2025
+
+    const items: CalendarItem[] = [
+      {
+        id: 'b1',
+        title: 'Month-End Bill',
+        amount: 300,
+        date: lastDayOfMonth,
+        type: 'expense',
+        isPaid: false,
+      },
+    ];
+
+    const result = calculateSafeToSpend(mockAccounts, items, startOfMonthDate);
+
+    expect(result).toBe(4700);
   });
 
   it('should aggregate multiple unpaid bills', () => {

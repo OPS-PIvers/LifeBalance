@@ -1,5 +1,5 @@
 import { Account, CalendarItem, Transaction, INCOME_CATEGORY } from '@/types/schema';
-import { endOfMonth, parseISO, isAfter, isBefore, addMonths, subMonths } from 'date-fns';
+import { startOfMonth, parseISO, isAfter, isBefore, addMonths, subMonths } from 'date-fns';
 import { expandCalendarItems } from '@/utils/calendarRecurrence';
 import { sumMoney, subtractMoney } from '@/utils/money';
 
@@ -65,14 +65,15 @@ function findNextPaycheckFromExpanded(
  * components/budget/SafeToSpendBreakdownDrawer.tsx for the pool/overlay model.
  *
  * @param expandedItems - Pre-expanded calendar items
- * @param startDate - Start of the range (inclusive)
- * @param endDate - End of the range (inclusive)
+ * @param startDate - Start of the range (INCLUSIVE)
+ * @param endDateExclusive - End of the range (EXCLUSIVE); see the boundary note
+ *   on the filter below — callers pass a midnight instant, not an end-of-day one
  * @returns Total amount of unpaid bills in range
  */
 function calculateUnpaidBillsInRange(
   expandedItems: CalendarItem[],
   startDate: Date,
-  endDate: Date
+  endDateExclusive: Date
 ): number {
   const billsInRange = expandedItems.filter(item => {
     const itemDate = parseISO(item.date);
@@ -84,7 +85,15 @@ function calculateUnpaidBillsInRange(
       // must subtract — an exclusive bound here silently inflated Safe-to-Spend
       // by every bill sharing the paycheck's date.
       !isBefore(itemDate, startDate) &&
-      !isAfter(itemDate, endDate) // Up to range end (inclusive)
+      // EXCLUSIVE end: a pay period BEGINS on its paycheck's date, which is
+      // already how `getPayPeriodForTransaction` assigns a same-day transaction.
+      // An inclusive bound here contradicted that — a bill dated on the NEXT
+      // paycheck was reserved against the OUTGOING period, whose checking
+      // balance has not yet received that paycheck, so a routine payday bill
+      // read as a shortfall and could drive Safe-to-Spend negative.
+      // Nothing falls through the crack: once the period rolls, that same bill
+      // sits inside the new period's window via the INCLUSIVE start above.
+      isBefore(itemDate, endDateExclusive)
     );
   });
 
@@ -249,15 +258,22 @@ export const calculateSafeToSpendBreakdownFromExpanded = (
   // 4. Determine the bill date range (Paycheck A to Paycheck B)
   const paycheckA = parseISO(currentPeriodId);
   const paycheckBDate = findNextPaycheckFromExpanded(allExpandedItems, paycheckA);
-  // Fallback: end of current month if no next paycheck found.
-  const rangeEndDate = paycheckBDate ? parseISO(paycheckBDate) : endOfMonth(paycheckA);
+  // EXCLUSIVE end, expressed as a midnight instant in BOTH branches so the
+  // boundary never depends on a time-of-day accident:
+  //   - next paycheck known  → midnight of payday, so payday's own bills fall
+  //     into the period that paycheck STARTS, not the one it ends.
+  //   - no next paycheck     → midnight of the 1st of next month, which keeps
+  //     the current month's last day inside the window.
+  const rangeEndExclusive = paycheckBDate
+    ? parseISO(paycheckBDate)
+    : startOfMonth(addMonths(paycheckA, 1));
 
   // 5. Unpaid bills in range — from the overdue lookback (bills from the
-  //    previous period still owed) through the next paycheck, inclusive.
+  //    previous period still owed) up to, but NOT including, the next paycheck.
   const unpaidBills = calculateUnpaidBillsInRange(
     allExpandedItems,
     calculateSafeToSpendExpansionStart(paycheckA),
-    rangeEndDate
+    rangeEndExclusive
   );
 
   return {
