@@ -122,7 +122,7 @@ describe('ReviewPendingDrawer', () => {
     render(<ReviewPendingDrawer items={[todoItem('d1', 'Call plumber')]} isOpen onClose={vi.fn()} />);
 
     const footer = screen.getByTestId('review-drawer-footer');
-    expect(within(footer).getByText('Review later')).toBeInTheDocument();
+    expect(within(footer).getByText('Skip — add later')).toBeInTheDocument();
     expect(within(footer).queryByRole('button', { name: /Approve Transaction/ })).toBeNull();
   });
 
@@ -198,13 +198,13 @@ describe('ReviewPendingDrawer', () => {
     const onClose = vi.fn();
     render(<ReviewPendingDrawer items={items} isOpen onClose={onClose} />);
 
-    // Card 1 is not the last → "Skip — add later"; advances without a write.
+    // Card 1 is not the last: Skip advances without a write.
     fireEvent.click(screen.getByText('Skip — add later'));
     expect(mockUpdateCategory).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByDisplayValue('Target')).toBeInTheDocument());
 
-    // Card 2 is the last → "Review later" closes the whole drawer.
-    fireEvent.click(screen.getByText('Review later'));
+    // Card 2 is the last: the SAME label closes the whole drawer.
+    fireEvent.click(screen.getByText('Skip — add later'));
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -235,8 +235,9 @@ describe('ReviewPendingDrawer', () => {
     expect(screen.getByText('Review (3 of 3)')).toBeInTheDocument();
     expect(screen.queryByDisplayValue('Call plumber')).not.toBeInTheDocument();
 
-    // Last card's footer closes the drawer.
-    fireEvent.click(screen.getByText('Review later'));
+    // Last card's footer closes the drawer, under the same label as every
+    // other card.
+    fireEvent.click(screen.getByText('Skip — add later'));
     expect(onClose).toHaveBeenCalled();
   });
 
