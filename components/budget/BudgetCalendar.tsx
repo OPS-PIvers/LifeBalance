@@ -20,7 +20,10 @@ import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { cn } from '@/utils/cn';
 import toast from 'react-hot-toast';
 import { isTodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
+import { useSettleBill } from '@/hooks/useSettleBill';
 import RecurringBillsModal from './RecurringBillsModal';
+import TransactionLinkPicker from './TransactionLinkPicker';
+import AccountPicker from './AccountPicker';
 
 /** localStorage key remembering the user's Day/Month view choice (per-device). */
 const VIEW_MODE_KEY = 'lifebalance:budgetCalendar:viewMode';
@@ -66,6 +69,21 @@ const BudgetCalendar: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isRecurringModalOpen, setIsRecurringModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<CalendarItem | null>(null);
+  /**
+   * The OCCURRENCE the Edit drawer was opened from — carried separately from
+   * `editingItem` on purpose.
+   *
+   * `openEditModal` deliberately swaps a recurring INSTANCE for its TEMPLATE (so
+   * an edit changes the series), which discards the occurrence date and leaves
+   * `editingItem.id` holding a REAL template doc id. Feeding that id to
+   * `settleBillWithTransaction` would take its one-off branch and permanently
+   * rewrite the template's amount — changing every future occurrence's budgeted
+   * figure, and therefore Safe-to-Spend — while suppressing nothing, so the bill
+   * would still show unpaid. This holds the synthetic
+   * `templateId_instance_yyyy-MM-dd` id (or a genuine one-off's own id) plus its
+   * date; `null` hides the settle affordance entirely.
+   */
+  const [settleTarget, setSettleTarget] = useState<{ id: string; date: string; title: string } | null>(null);
   const [activeActionItem, setActiveActionItem] = useState<CalendarItem | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -78,6 +96,16 @@ const BudgetCalendar: React.FC = () => {
   const [isRecurring, setIsRecurring] = useState(false);
   const [frequency, setFrequency] = useState<'monthly' | 'bi-weekly' | 'weekly'>('monthly');
   const [isSubscription, setIsSubscription] = useState(false);
+
+  // TODO.md 2H(a): "this bill IS that charge", from the calendar side. Closes
+  // the Edit drawer once the merge actually commits.
+  const {
+    begin: beginSettle,
+    busy: isSettling,
+    needsAccount: settleNeedsAccount,
+    confirmAccount: confirmSettleAccount,
+    cancel: cancelSettle,
+  } = useSettleBill(() => setIsAddModalOpen(false));
 
   const { monthStart, startDate, endDate, days } = useCalendarGrid(currentDate);
 
@@ -233,6 +261,7 @@ const BudgetCalendar: React.FC = () => {
     setFrequency('monthly');
     setIsSubscription(false);
     setEditingItem(null);
+    setSettleTarget(null);
     setIsAddModalOpen(true);
   };
 
@@ -249,6 +278,18 @@ const BudgetCalendar: React.FC = () => {
   };
 
   const openEditModal = (item: CalendarItem) => {
+    // Capture the OCCURRENCE first — BEFORE the template swap below throws it
+    // away. Only an UNPAID EXPENSE can be settled, and only when the id we hold
+    // is safe to pass to the mutation: a synthetic occurrence id, or a genuine
+    // one-off. A recurring TEMPLATE opened directly (real doc id + isRecurring)
+    // is deliberately excluded — settling it would rewrite the series' budgeted
+    // amount instead of marking one month paid.
+    const settleable =
+      item.type === 'expense' &&
+      !item.isPaid &&
+      (isRecurringId(item.id) || !item.isRecurring);
+    setSettleTarget(settleable ? { id: item.id, date: item.date, title: item.title } : null);
+
     // If this is a recurring instance, edit the original item instead
     if (isInstance(item)) {
       const originalItem = findOriginalItem(item.id);
@@ -765,7 +806,11 @@ const BudgetCalendar: React.FC = () => {
       {/* Add/Edit Calendar Item Drawer */}
       <Drawer
         isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
+        // `cancelSettle` too: the settle flow's AccountPicker is a SIBLING
+        // sheet, so dismissing this drawer while it awaits an account would
+        // otherwise leave it floating with nothing behind it. A no-op when
+        // nothing is pending.
+        onClose={() => { setIsAddModalOpen(false); cancelSettle(); }}
         title={editingItem ? 'Edit Event' : 'Add Calendar Item'}
         footer={
           <div className="flex gap-2 border-t border-brand-200 dark:border-brand-700 p-4">
@@ -875,8 +920,42 @@ const BudgetCalendar: React.FC = () => {
                  />
                </div>
              )}
+
+             {/* TODO.md 2E/2H(a): the bill↔transaction link, from the CALENDAR
+                 side. Picking a transaction marks THIS occurrence paid at the
+                 charged amount and files that existing row as the payment — no
+                 second transaction, and the recurring template's own amount is
+                 never touched. `settleTarget` (not `editingItem.id`) carries the
+                 occurrence — see its declaration for why that distinction is
+                 load-bearing. */}
+             {editingItem && settleTarget && type === 'expense' && (
+               <div className="pt-3 border-t border-brand-200 dark:border-brand-700">
+                 <TransactionLinkPicker
+                   anchorDate={settleTarget.date}
+                   busy={isSettling}
+                   helperText={`Already paid ${settleTarget.title}? Link the charge that paid it instead of recording it twice.`}
+                   onSelect={(transactionId) =>
+                     beginSettle({ transactionId, calendarItemId: settleTarget.id })
+                   }
+                 />
+               </div>
+             )}
           </div>
       </Drawer>
+
+      {/* Settling moves real money out of an account. When the picked
+          transaction carries no account tag, confirm which one rather than
+          guessing (see useSettleBill). `includeCredit` because a bill CAN be
+          charged to a card — this asks where the charge landed, not which
+          account to fund a payment from (the picker's default). */}
+      <AccountPicker
+        isOpen={settleNeedsAccount}
+        onClose={cancelSettle}
+        onSelect={confirmSettleAccount}
+        includeCredit
+        title="Which account paid this?"
+        description="Marking this bill paid moves the charge out of an account. Pick the one it came from."
+      />
 
       <RecurringBillsModal
         isOpen={isRecurringModalOpen}

@@ -260,6 +260,32 @@ export interface HouseholdContextType {
    *  guard early-return (already paid, bad id, etc.); callers must not treat
    *  a `false` result as success. */
   linkBankTransactionToBill: (transactionId: string, calendarItemId: string) => Promise<boolean>;
+  /** TODO.md 2H(a) — "this charge IS that planned bill". Settles an unpaid
+   *  expense calendar item using an EXISTING transaction, creating no second
+   *  transaction: marks the bill paid at the transaction's (scanned) amount,
+   *  verifies + files the transaction as `Budgeted in Calendar`, stamps
+   *  `Transaction.paidCalendarItemId` with the REAL paid doc id, moves the
+   *  account balance by the row's now-effective impact (a `pending_review` row
+   *  debits its amount; a bank-sync row whose balance is already authoritative
+   *  moves nothing), and learns the descriptor onto the bill's
+   *  `bankDescriptorAliases`. The transaction's `payPeriodId` is left untouched.
+   *  `calendarItemId` accepts a plain doc id or a synthetic
+   *  recurring-occurrence id (`templateId_instance_yyyy-MM-dd`) — NEVER a
+   *  recurring template's own id, which would rewrite every future
+   *  occurrence's budgeted amount. `accountId` overrides which account the
+   *  balance delta lands on (the picker's confirmation); omit to use the
+   *  transaction's existing tag. `amount` co-commits a corrected amount onto the
+   *  transaction in the SAME batch and is what the bill is marked paid at and
+   *  what the balance moves by — the review form's live field, so settling a
+   *  mis-OCR'd row the user just fixed can't settle at the stale figure; omit to
+   *  use the stored amount. Returns `true` only when the batch committed;
+   *  `false` means nothing was written. */
+  settleBillWithTransaction: (
+    transactionId: string,
+    calendarItemId: string,
+    accountId?: string,
+    amount?: number,
+  ) => Promise<boolean>;
 
   // Transaction Actions
   addTransaction: (tx: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>) => Promise<void>;
@@ -591,7 +617,8 @@ export type FinanceContextValue = Pick<HouseholdContextType,
   | 'updateAccountOrder' | 'reorderAccounts'
   | 'addSavingsGoal' | 'updateSavingsGoal' | 'deleteSavingsGoal' | 'contributeToGoal'
   | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'setBucketLimits' | 'saveCeremonyChanges' | 'reallocateBucket'
-  | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem' | 'linkBankTransactionToBill'
+  | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
+  | 'linkBankTransactionToBill' | 'settleBillWithTransaction'
   | 'addTransaction' | 'addTransactions' | 'updateTransactionCategory' | 'reverseTransactionApproval' | 'updateTransaction' | 'deleteTransaction' | 'splitTransaction'
   | 'setTransactionSplit' | 'markSplitSettled'
   | 'mergeTransactions' | 'keepBothTransactions'

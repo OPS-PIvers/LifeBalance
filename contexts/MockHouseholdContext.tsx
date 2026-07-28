@@ -21,7 +21,8 @@ import type { TodoSubtaskToggleResult, TodoCompletionOptions } from '@/contexts/
 import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
 import { attributionString, type TriggerSource } from '@/utils/habitTriggers';
 import { selectAutoFreezeCandidates } from '@/utils/freezeBank';
-import { accountImpactOf, effectiveAccountImpact, isBankSyncTransaction, resolveTargetAccount } from '@/utils/accountImpact';
+import { accountImpactOf, effectiveAccountImpact, isBankSyncTransaction, resolveTargetAccount, shouldSkipBankSyncDelta } from '@/utils/accountImpact';
+import { findSettledBill, settledBillRefusal, touchesSettledBillFields } from '@/utils/settledBillGuard';
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
 import { selectHabitsToFire } from '@/utils/transactionHabitFiring';
 import { MAX_COMMENT_LENGTH } from '@/contexts/household/mutations/commentMutations';
@@ -72,7 +73,8 @@ import {
   SavingsGoal,
   TransactionComment,
   MerchantRule,
-  MAX_MERCHANT_RULES
+  MAX_MERCHANT_RULES,
+  INCOME_CATEGORY
 } from '@/types/schema';
 import toast from 'react-hot-toast';
 
@@ -98,12 +100,19 @@ const normalizeCategory = (value: string | undefined) => (value ?? '').trim().to
  *     descriptors that the household's `merchantRules` rename on display, so
  *     the descriptor → friendly-name layer is walkable. Not seeded by default
  *     because several tests assert on the default seeds' merchant text.
+ *   - 'bill-merge' — additionally seed the reported TODO.md 2H duplicate: a
+ *     hand-entered recurring utility bill PLUS the screenshot-imported charge
+ *     that actually paid it, at a different amount. The only variant that seeds
+ *     `calendarItems` at all, and the only way to exercise
+ *     `settleBillWithTransaction` in Test Mode. Not seeded by default for the
+ *     same reason as 'stub' (its `pending_review` row changes the Money nav
+ *     link's accessible name).
  * Absent/unknown values leave the default seeds untouched.
  */
-const readTestSeedVariant = (): 'fresh' | 'stub' | 'merchant-rules' | null => {
+const readTestSeedVariant = (): 'fresh' | 'stub' | 'merchant-rules' | 'bill-merge' | null => {
   try {
     const v = window.sessionStorage.getItem('LIFEBALANCE_TEST_SEED');
-    return v === 'fresh' || v === 'stub' || v === 'merchant-rules' ? v : null;
+    return v === 'fresh' || v === 'stub' || v === 'merchant-rules' || v === 'bill-merge' ? v : null;
   } catch {
     return null;
   }
@@ -209,6 +218,51 @@ const STUB_TRANSACTION: Transaction = {
   status: 'pending_review', isRecurring: false, source: 'shortcut',
   autoCategorized: false, needsAmount: true, payPeriodId: MOCK_PAY_PERIOD_ID,
 };
+
+/**
+ * 'bill-merge' seed variant (TODO.md 2H) — the reported duplicate, reproduced:
+ * a recurring natural-gas bill entered BY HAND at its typical $142, and the
+ * screenshot-imported charge that actually paid it at $37.91 under the bank's
+ * own descriptor. The amounts deliberately sit far outside the matcher's
+ * ±10%/±$25 tolerance, so nothing auto-collapses them — which is precisely the
+ * case `settleBillWithTransaction` exists for. A second, one-off unpaid bill
+ * makes the non-recurring branch of the merge walkable too.
+ *
+ * NOTE the row is `pending_review` with NO `bankRef`: that is what the capture
+ * pipeline writes, and it is why the sibling `linkBankTransactionToBill`
+ * affordance correctly refuses to appear for it.
+ */
+const BILL_MERGE_CALENDAR_ITEMS: CalendarItem[] = [
+  {
+    id: 'cal_gas_template',
+    title: 'Centerpoint Energy (Natural Gas)',
+    amount: 142,
+    // The 5th of the current month, recurring monthly — inside every window the
+    // calendar and the review drawer expand.
+    date: `${getLocalDateString().slice(0, 7)}-05`,
+    type: 'expense',
+    isPaid: false,
+    isRecurring: true,
+    frequency: 'monthly',
+  },
+  {
+    id: 'cal_dentist_oneoff',
+    title: 'Dentist copay',
+    amount: 85,
+    date: getLocalDateString(),
+    type: 'expense',
+    isPaid: false,
+  },
+];
+
+const BILL_MERGE_TRANSACTIONS: Transaction[] = [
+  {
+    id: 'tx_cpenergy', amount: 37.91, merchant: 'Cpenergy Mngco', category: 'Uncategorized',
+    date: getLocalDateString(),
+    status: 'pending_review', isRecurring: false, source: 'image-capture',
+    autoCategorized: false, payPeriodId: MOCK_PAY_PERIOD_ID,
+  },
+];
 
 /**
  * Merchant rules for Test Mode — the descriptor → friendly-name layer
@@ -441,7 +495,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         ? [...SEED_TRANSACTIONS, STUB_TRANSACTION]
         : TEST_SEED_VARIANT === 'merchant-rules'
           ? [...SEED_TRANSACTIONS, ...BANK_DESCRIPTOR_TRANSACTIONS]
-          : SEED_TRANSACTIONS
+          : TEST_SEED_VARIANT === 'bill-merge'
+            ? [...SEED_TRANSACTIONS, ...BILL_MERGE_TRANSACTIONS]
+            : SEED_TRANSACTIONS
   );
   // Plan 23 — transaction comments, keyed by transaction id. Mirrors the real
   // context's on-demand fetch model (no listener); the "fetch" here is just a
@@ -450,7 +506,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     isFresh ? {} : SEED_TRANSACTION_COMMENTS
   );
   const [habits, setHabits] = useState<Habit[]>(isFresh ? [] : SEED_HABITS);
-  const [calendarItems, setCalendarItems] = useState<CalendarItem[]>([]);
+  // Empty by default (several specs count Action-Queue rows); the 'bill-merge'
+  // variant is the one that seeds bills, so the 2H merge is walkable.
+  const [calendarItems, setCalendarItems] = useState<CalendarItem[]>(
+    TEST_SEED_VARIANT === 'bill-merge' ? BILL_MERGE_CALENDAR_ITEMS : []
+  );
   const [challenges, setChallenges] = useState<Challenge[]>(isFresh ? [] : SEED_CHALLENGES);
   const [yearlyGoals] = useState<YearlyGoal[]>([]);
   const [rewards, setRewards] = useState<RewardItem[]>(SEED_REWARDS);
@@ -1096,9 +1156,20 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   }, [accounts]);
 
   const updateTransaction = useCallback(async (id: string, updates: Partial<Transaction>) => {
+    // Settled-bill guard parity (utils/settledBillGuard.ts): re-pricing or
+    // re-tagging a row that settled a bill would desync it from the calendar doc
+    // it marked paid. Metadata-only edits stay allowed.
+    const existing = transactions.find(t => t.id === id);
+    if (existing && touchesSettledBillFields(updates, existing)) {
+      const settledBill = findSettledBill(existing, calendarItems);
+      if (settledBill) {
+        toast.error(settledBillRefusal('edit', settledBill.title));
+        return;
+      }
+    }
     setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
     toast.success('Mock: Transaction updated');
-  }, []);
+  }, [transactions, calendarItems]);
 
   // Test-Mode parity for the verify action: mark the transaction verified under
   // `category`, optionally (re)tag the account, and co-apply the same inline
@@ -1210,6 +1281,15 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     prior: { category: string; accountId?: string; relatedHabitIds?: string[] },
     firedHabitIds: string[],
   ) => {
+    // Settled-bill guard parity (utils/settledBillGuard.ts): this undo knows
+    // nothing about bills, so reversing a row that settled one would credit the
+    // balance back while the calendar doc stays paid and orphaned.
+    const existing = transactions.find(t => t.id === id);
+    const settledBill = existing ? findSettledBill(existing, calendarItems) : undefined;
+    if (settledBill) {
+      toast.error(settledBillRefusal('undo', settledBill.title));
+      return;
+    }
     setTransactions(prev => prev.map(t => {
       if (t.id !== id) return t;
       const next: Transaction = {
@@ -1228,7 +1308,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         ? { ...h, count: Math.max(0, h.count - 1), totalCount: Math.max(0, h.totalCount - 1) }
         : h));
     }
-  }, []);
+  }, [transactions, calendarItems]);
 
   // F-XCUT-03: push a soft-deleted record into the in-memory trash mirror so
   // Test Mode exercises the same restore/purge flow as the real listener.
@@ -1248,6 +1328,14 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   }, []);
 
   const deleteTransaction = useCallback(async (id: string) => {
+    // Settled-bill guard parity (utils/settledBillGuard.ts): deleting a row that
+    // paid a bill would leave the calendar doc marked paid and orphaned.
+    const existing = transactions.find(t => t.id === id);
+    const settledBill = existing ? findSettledBill(existing, calendarItems) : undefined;
+    if (settledBill) {
+      toast.error(settledBillRefusal('delete', settledBill.title));
+      return;
+    }
     setTransactions(prev => {
       const target = prev.find(t => t.id === id);
       // F-XCUT-03 parity: deleted transactions land in Recently Deleted too.
@@ -1255,7 +1343,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       return prev.filter(t => t.id !== id);
     });
     toast.success('Mock: Transaction deleted');
-  }, [pushToTrash]);
+  }, [pushToTrash, transactions, calendarItems]);
 
   // Test-Mode parity for the Merge action (plan 03 PR-3): applies the same
   // field-level winner set as the real context, deletes the dupe, and
@@ -1272,6 +1360,14 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       // treating the merge as a success.
       toast.error('Transaction not found');
       throw new Error('Transaction not found');
+    }
+
+    // Settled-bill guard parity (utils/settledBillGuard.ts): the DUPE is deleted
+    // by this merge, so a dupe that settled a bill orphans the paid calendar doc.
+    const dupeSettledBill = findSettledBill(dupeTx, calendarItems);
+    if (dupeSettledBill) {
+      toast.error(settledBillRefusal('merge away', dupeSettledBill.title));
+      return;
     }
 
     const updates = buildMergeUpdates(keeperTx, dupeTx);
@@ -1301,7 +1397,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
 
     track('duplicate_merged', { source: dupeTx.source });
     toast.success('Mock: Transactions merged');
-  }, [transactions, accounts]);
+  }, [transactions, accounts, calendarItems]);
 
   const keepBothTransactions = useCallback(async (txnId: string) => {
     setTransactions(prev => prev.map(t => {
@@ -1314,6 +1410,14 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   }, []);
 
   const splitTransaction = useCallback(async (originalTransactionId: string, newTransactions: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[]) => {
+    // Settled-bill guard parity (utils/settledBillGuard.ts): a split DELETES the
+    // original, orphaning the calendar doc it settled.
+    const original = transactions.find(t => t.id === originalTransactionId);
+    const settledBill = original ? findSettledBill(original, calendarItems) : undefined;
+    if (settledBill) {
+      toast.error(settledBillRefusal('split', settledBill.title));
+      return;
+    }
     setTransactions(prev => {
       // Filter out original transaction
       const filtered = prev.filter(t => t.id !== originalTransactionId);
@@ -1330,7 +1434,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       return [...filtered, ...newTxs];
     });
     toast.success('Mock: Transaction split');
-  }, []);
+  }, [transactions, calendarItems]);
 
   const setTransactionSplit = useCallback(async (transactionId: string, split: SplitParticipant[] | null) => {
     setTransactions(prev => prev.map(t => {
@@ -1748,6 +1852,132 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Linked to bill — future syncs will match automatically');
     return true;
   }, [transactions, calendarItems]);
+
+  // Mirrors makeSettleBillWithTransaction in calendarMutations.ts (TODO.md
+  // 2H(a)) — "this charge IS that planned bill". Unlike the mock above it DOES
+  // move the balance: a pending_review row has not touched any account yet.
+  // Creates NO new transaction, and never touches the recurring template's own
+  // amount.
+  const settleBillWithTransaction = useCallback(async (
+    transactionId: string,
+    calendarItemId: string,
+    accountId?: string,
+    amount?: number,
+  ): Promise<boolean> => {
+    const tx = transactions.find(t => t.id === transactionId);
+    if (!tx) return false;
+    // Parity guard: a credit cannot pay an expense — filing income as
+    // `Budgeted in Calendar` would flip its balance sign.
+    if (tx.category === INCOME_CATEGORY) return false;
+    if (tx.paidCalendarItemId) {
+      toast.error('That transaction is already linked to a bill');
+      return false;
+    }
+    // The caller's LIVE amount wins over the stored one (parity with the real
+    // mutation) and is co-committed onto the row below.
+    const paidAmount = roundMoney(amount ?? tx.amount);
+    if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
+      toast.error('Add the real amount before linking this to a bill');
+      return false;
+    }
+    const descriptor = (tx.merchant || '').trim();
+
+    let paidCalendarItemId: string;
+    let billTitle: string;
+
+    if (isRecurringId(calendarItemId)) {
+      const parsed = parseRecurringId(calendarItemId);
+      if (!parsed) return false;
+      const { templateId, date: specificDate } = parsed;
+      const template = calendarItems.find(i => i.id === templateId);
+      if (!template || template.type !== 'expense') return false;
+      if (calendarItems.some(i => i.parentRecurringId === templateId && i.date === specificDate && i.isPaid)) {
+        toast.error('That bill is already marked paid');
+        return false;
+      }
+      paidCalendarItemId = generateId();
+      billTitle = template.title;
+      const paidInstance: CalendarItem = {
+        ...template,
+        id: paidCalendarItemId,
+        amount: paidAmount,
+        // The OCCURRENCE's due date — expandCalendarItems keys suppression on it.
+        date: specificDate,
+        isPaid: true,
+        isRecurring: false,
+        parentRecurringId: templateId,
+      };
+      setCalendarItems(prev => [
+        ...prev.map(i => i.id === templateId
+          ? { ...i, bankDescriptorAliases: [...(i.bankDescriptorAliases ?? []), descriptor] }
+          : i),
+        paidInstance,
+      ]);
+    } else {
+      const item = calendarItems.find(i => i.id === calendarItemId);
+      if (!item || item.type !== 'expense') return false;
+      // Parity with the real mutation: a recurring TEMPLATE's own doc id would
+      // rewrite the whole series' budgeted amount here.
+      if (item.isRecurring) return false;
+      if (item.isPaid) {
+        toast.error('That bill is already marked paid');
+        return false;
+      }
+      paidCalendarItemId = calendarItemId;
+      billTitle = item.title;
+      setCalendarItems(prev => prev.map(i => i.id === calendarItemId
+        ? {
+            ...i,
+            isPaid: true,
+            amount: paidAmount,
+            bankDescriptorAliases: [...(i.bankDescriptorAliases ?? []), descriptor],
+          }
+        : i));
+    }
+
+    // Balance parity with the real mutation, computed OUTSIDE the setState
+    // updaters (StrictMode double-invokes them): the SAME reverse/apply pair
+    // updateTransactionCategory uses, not a one-sided "only if not yet verified"
+    // shortcut. A pending row reverses 0 and applies −amount; an ALREADY-VERIFIED
+    // row re-tagged to a different account moves the money off the old one and
+    // onto the new (the shortcut silently left it on the old); a bank-sync row's
+    // authoritative account is skipped on both sides.
+    const oldTarget = resolveTargetAccount(tx.accountId, accounts);
+    const newTarget = resolveTargetAccount(accountId ?? tx.accountId, accounts);
+    const reverseDelta = shouldSkipBankSyncDelta(tx, oldTarget?.id, oldTarget?.id)
+      ? 0
+      : -effectiveAccountImpact(tx, oldTarget);
+    const applyDelta = shouldSkipBankSyncDelta(tx, newTarget?.id, oldTarget?.id)
+      ? 0
+      : accountImpactOf(
+          { amount: paidAmount, category: BUDGETED_IN_CALENDAR, creditPayment: tx.creditPayment },
+          newTarget,
+        );
+    const settleDeltas = new Map<string, number>();
+    if (oldTarget) settleDeltas.set(oldTarget.id, (settleDeltas.get(oldTarget.id) ?? 0) + reverseDelta);
+    if (newTarget) settleDeltas.set(newTarget.id, (settleDeltas.get(newTarget.id) ?? 0) + applyDelta);
+    if (settleDeltas.size > 0) {
+      setAccounts(prev => prev.map(a => settleDeltas.has(a.id) && roundMoney(settleDeltas.get(a.id) ?? 0) !== 0
+        ? { ...a, balance: roundMoney(a.balance + (settleDeltas.get(a.id) ?? 0)), lastUpdated: new Date().toISOString() }
+        : a));
+    }
+
+    setTransactions(prev => prev.map(t => t.id === transactionId
+      ? {
+          ...t,
+          status: 'verified' as const,
+          category: BUDGETED_IN_CALENDAR,
+          amount: paidAmount,
+          paidCalendarItemId,
+          needsCategory: undefined,
+          reviewSnoozedUntil: undefined,
+          ...(t.needsAmount ? { needsAmount: false } : {}),
+          ...(accountId ? { accountId } : {}),
+        }
+      : t));
+    toast.success(`Linked to ${billTitle} — one record, not two`);
+    return true;
+  }, [transactions, calendarItems, accounts]);
 
   // Meal operations
   const addMeal = useCallback(async (meal: Omit<Meal, 'id'>) => {
@@ -2560,6 +2790,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     payCalendarItem: noOp,
     deferCalendarItem: noOp,
     linkBankTransactionToBill,
+    settleBillWithTransaction,
     addHabit,
     updateHabit,
     deleteHabit,

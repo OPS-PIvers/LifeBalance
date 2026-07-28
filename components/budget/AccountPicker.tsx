@@ -15,6 +15,18 @@ interface AccountPickerProps {
    *  with this value and editable — so a variable bill can be paid with what
    *  was actually charged without a detour through the calendar editor. */
   editableAmount?: number;
+  /**
+   * Include CREDIT accounts in the list. Default `false`, which is correct for
+   * the bill-pay flow this picker was built for (`payCalendarItem` pays a bill
+   * FROM checking/savings — a credit card is not a source of funds there).
+   *
+   * The settle flow ("this charge IS that bill") is the opposite case: the
+   * charge has ALREADY happened and the question is which account it hit, which
+   * may well be a card — `settleBillWithTransaction` routes a credit-tagged row
+   * through `effectiveAccountImpact` and signs it as card debt. Excluding cards
+   * there silently debited CHECKING for a card-charged bill.
+   */
+  includeCredit?: boolean;
   title?: string;
   description?: string;
   /** Optional highlighted first row rendered ABOVE the account list — used by
@@ -29,23 +41,25 @@ interface AccountPickerProps {
 }
 
 /**
- * Bottom-sheet picker of non-credit (checking/savings) accounts. Shared by the
- * Home and Money "Confirm Payment" flows, which were previously duplicated,
- * near-verbatim hand-rolled centered cards. Pulls accounts + currency formatting
- * internally so call sites stay tiny.
+ * Bottom-sheet picker of accounts — non-credit (checking/savings) by default,
+ * or every account when `includeCredit` is set. Shared by the Home and Money
+ * "Confirm Payment" flows, which were previously duplicated, near-verbatim
+ * hand-rolled centered cards. Pulls accounts + currency formatting internally so
+ * call sites stay tiny.
  */
 export const AccountPicker: React.FC<AccountPickerProps> = ({
   isOpen,
   onClose,
   onSelect,
   editableAmount,
+  includeCredit = false,
   title = 'Confirm payment',
   description = 'Select which account to deduct this payment from.',
   topAction,
 }) => {
   const { accounts } = useFinance();
   const fmt = useFormatCurrency();
-  const payable = accounts.filter(a => a.type !== 'credit');
+  const payable = includeCredit ? accounts : accounts.filter(a => a.type !== 'credit');
 
   // Amount is kept as the raw input string so partial entries ("12.") don't
   // fight the user; re-seeded on each open transition (render-time derived
@@ -135,7 +149,7 @@ export const AccountPicker: React.FC<AccountPickerProps> = ({
         ))}
         {payable.length === 0 && (
           <div className="px-4 py-6 text-sm text-center text-brand-400 dark:text-brand-450">
-            No checking or savings accounts available.
+            {includeCredit ? 'No accounts available.' : 'No checking or savings accounts available.'}
           </div>
         )}
       </div>

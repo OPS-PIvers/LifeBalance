@@ -95,10 +95,10 @@ vi.mock('react-hot-toast', () => ({
 
 vi.mock('@/services/analytics', () => ({ track: vi.fn() }));
 
-import { makeAddTransaction, makeDeleteTransaction, makeUpdateTransaction, makeUpdateTransactionCategory, makeReverseTransactionApproval } from './transactionMutations';
+import { makeAddTransaction, makeDeleteTransaction, makeMergeTransactions, makeSplitTransaction, makeUpdateTransaction, makeUpdateTransactionCategory, makeReverseTransactionApproval } from './transactionMutations';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { addDays, format, parseISO, subDays } from 'date-fns';
-import type { Account, FreezeBank, Habit, Transaction } from '@/types/schema';
+import type { Account, CalendarItem, FreezeBank, Habit, Transaction } from '@/types/schema';
 
 const HOUSEHOLD_ID = 'house1';
 const db = {} as never;
@@ -219,12 +219,13 @@ describe('makeDeleteTransaction — trash mirror + balance reversal', () => {
     payPeriodId: 'pp-1',
   };
 
-  const deleteDeps = (transactions: Transaction[]) => ({
+  const deleteDeps = (transactions: Transaction[], calendarItems: CalendarItem[] = []) => ({
     db,
     householdId: HOUSEHOLD_ID,
     transactions,
     accounts,
     user: { uid: 'user-1' },
+    calendarItems,
   });
 
   beforeEach(() => {
@@ -728,6 +729,7 @@ describe('habit firing writes DELTAS, never whole values', () => {
       habits: [firedHabit],
       transactions: [verifiedTx],
       accounts,
+      calendarItems: [],
     });
     await reverseTransactionApproval('tx-9', { category: 'Uncategorized' }, ['h1']);
 
@@ -774,12 +776,13 @@ describe('habit firing writes DELTAS, never whole values', () => {
     ...overrides,
   });
 
-  const reverseDeps = (habits: Habit[], transactions: Transaction[]) => ({
+  const reverseDeps = (habits: Habit[], transactions: Transaction[], calendarItems: CalendarItem[] = []) => ({
     db,
     householdId: HOUSEHOLD_ID,
     habits,
     transactions,
     accounts,
+    calendarItems,
   });
 
   it('reverses the EXACT points the submission credited, not a recomputation', async () => {
@@ -883,6 +886,45 @@ describe('habit firing writes DELTAS, never whole values', () => {
 
     expect(commitCount).toBe(1);
   });
+
+  it('REFUSES to reverse a transaction that settled a STILL-PAID bill (TODO.md 2H(a) guard)', async () => {
+    // This undo knows nothing about bills: reversing would send the row back to
+    // pending_review and credit the balance back while leaving the bill marked
+    // paid and its paid-instance doc orphaned. Full unlink is out of scope, so
+    // it must refuse rather than silently orphan.
+    submissionDocs[submissionsPath('h1')] = [firedSubmission()];
+    const firedHabit: Habit = { ...threshHabit, completedDates: [backDate], totalCount: 5 };
+    const settledTx: Transaction = { ...verifiedBackdatedTx, paidCalendarItemId: 'paid-instance-1' };
+    const paidInstance: CalendarItem = {
+      id: 'paid-instance-1',
+      title: 'Comcast Internet',
+      amount: 153.95,
+      date: '2026-07-18',
+      type: 'expense',
+      isPaid: true,
+    };
+    const { reverseTransactionApproval } = makeReverseTransactionApproval(
+      reverseDeps([firedHabit], [settledTx], [paidInstance])
+    );
+    await reverseTransactionApproval('tx-9', { category: 'Uncategorized' }, ['h1']);
+
+    // Nothing written at all — not the transaction, not the habit, not points.
+    expect(commitCount).toBe(0);
+    expect(capturedUpdates).toHaveLength(0);
+    expect(capturedDeletes).toHaveLength(0);
+  });
+
+  it('ALLOWS the reverse once the settled bill is gone — a dangling link has nothing left to orphan', async () => {
+    submissionDocs[submissionsPath('h1')] = [firedSubmission()];
+    const firedHabit: Habit = { ...threshHabit, completedDates: [backDate], totalCount: 5 };
+    const settledTx: Transaction = { ...verifiedBackdatedTx, paidCalendarItemId: 'paid-instance-1' };
+    const { reverseTransactionApproval } = makeReverseTransactionApproval(
+      reverseDeps([firedHabit], [settledTx], [])
+    );
+    await reverseTransactionApproval('tx-9', { category: 'Uncategorized' }, ['h1']);
+
+    expect(commitCount).toBe(1);
+  });
 });
 
 describe('makeUpdateTransaction — bank-sync rows never delta a balance', () => {
@@ -912,12 +954,13 @@ describe('makeUpdateTransaction — bank-sync rows never delta a balance', () =>
     accountId: 'acc-check',
   };
 
-  const updateDeps = (transactions: Transaction[]) => ({
+  const updateDeps = (transactions: Transaction[], calendarItems: CalendarItem[] = []) => ({
     db,
     householdId: HOUSEHOLD_ID,
     transactions,
     householdSettings: null,
     accounts,
+    calendarItems,
   });
 
   it('control: an amount edit on a verified MANUAL row deltas the account by (old − new) impact', async () => {
@@ -1014,5 +1057,166 @@ describe('makeUpdateTransaction — bank-sync rows never delta a balance', () =>
     expect(balanceUpdates).toHaveLength(0);
     const txUpdate = capturedUpdates.find(u => u.ref.__path === `households/${HOUSEHOLD_ID}/transactions/tx-1`);
     expect(txUpdate?.data).not.toHaveProperty('bankSyncAccountId');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SETTLED-BILL GUARD (utils/settledBillGuard.ts). A row carrying
+// `paidCalendarItemId` is one half of a pair: the transaction, and the calendar
+// doc it marked PAID. Every mutation that would delete, replace or re-price the
+// row from the transaction side must REFUSE while that bill is still paid —
+// otherwise the calendar doc is orphaned, `expandCalendarItems` keeps
+// suppressing the occurrence, and Safe-to-Spend overstates cash by the bill's
+// amount every period, forever.
+// ---------------------------------------------------------------------------
+describe('settled-bill guard across every mutation that could orphan the bill', () => {
+  const paidBill: CalendarItem = {
+    id: 'bill-1',
+    title: 'Comcast Internet',
+    amount: 153.95,
+    date: '2026-07-18',
+    type: 'expense',
+    isPaid: true,
+  };
+
+  const settledTx: Transaction = {
+    id: 'tx-1',
+    amount: 153.95,
+    merchant: 'COMCAST-XFINITY',
+    category: 'Budgeted in Calendar',
+    date: '2026-07-20',
+    status: 'verified',
+    isRecurring: false,
+    source: 'image-capture',
+    autoCategorized: false,
+    createdBy: 'user-1',
+    createdAt: '2026-07-20T00:00:00.000Z',
+    payPeriodId: 'pp-1',
+    accountId: 'acc-check',
+    paidCalendarItemId: 'bill-1',
+  };
+
+  const plainDupe: Transaction = { ...settledTx, id: 'tx-2', paidCalendarItemId: undefined };
+
+  beforeEach(() => {
+    capturedSets = [];
+    capturedUpdates = [];
+    capturedDeletes = [];
+    commitCount = 0;
+    commitErrors = [];
+    submissionDocs = {};
+    vi.clearAllMocks();
+  });
+
+  const deleteGuardDeps = (calendarItems: CalendarItem[]) => ({
+    db,
+    householdId: HOUSEHOLD_ID,
+    transactions: [settledTx],
+    accounts,
+    user: { uid: 'user-1' },
+    calendarItems,
+  });
+
+  it('deleteTransaction refuses — no balance credit, no delete, no trash mirror', async () => {
+    const { deleteTransaction } = makeDeleteTransaction(deleteGuardDeps([paidBill]));
+    await deleteTransaction('tx-1');
+
+    expect(commitCount).toBe(0);
+    expect(capturedDeletes).toHaveLength(0);
+    expect(capturedSets).toHaveLength(0);
+    expect(capturedUpdates).toHaveLength(0);
+  });
+
+  it('deleteTransaction ALLOWS the delete once the bill it settled is gone (no dead end)', async () => {
+    const { deleteTransaction } = makeDeleteTransaction(deleteGuardDeps([]));
+    await deleteTransaction('tx-1');
+
+    expect(commitCount).toBe(1);
+    expect(capturedDeletes.some(d => d.ref.__path === `households/${HOUSEHOLD_ID}/transactions/tx-1`)).toBe(true);
+  });
+
+  it('mergeTransactions refuses when the DUPE (the row it deletes) settled a bill', async () => {
+    const { mergeTransactions } = makeMergeTransactions({
+      db,
+      householdId: HOUSEHOLD_ID,
+      transactions: [plainDupe, settledTx],
+      accounts,
+      calendarItems: [paidBill],
+    });
+    await mergeTransactions('tx-2', 'tx-1');
+
+    expect(commitCount).toBe(0);
+    expect(capturedDeletes).toHaveLength(0);
+  });
+
+  it('mergeTransactions still runs when only the KEEPER settled a bill — the keeper survives untouched', async () => {
+    const { mergeTransactions } = makeMergeTransactions({
+      db,
+      householdId: HOUSEHOLD_ID,
+      transactions: [settledTx, plainDupe],
+      accounts,
+      calendarItems: [paidBill],
+    });
+    await mergeTransactions('tx-1', 'tx-2');
+
+    expect(commitCount).toBe(1);
+    expect(capturedDeletes.some(d => d.ref.__path === `households/${HOUSEHOLD_ID}/transactions/tx-2`)).toBe(true);
+  });
+
+  it('splitTransaction refuses — the split DELETES the original, orphaning the bill', async () => {
+    const { splitTransaction } = makeSplitTransaction({
+      db,
+      householdId: HOUSEHOLD_ID,
+      user: { uid: 'user-1' },
+      transactions: [settledTx],
+      householdSettings: null,
+      accounts,
+      calendarItems: [paidBill],
+    });
+    await splitTransaction('tx-1', [
+      { amount: 100, merchant: 'A', category: 'Groceries', date: '2026-07-20', status: 'verified', isRecurring: false, source: 'manual', autoCategorized: false },
+      { amount: 53.95, merchant: 'B', category: 'Groceries', date: '2026-07-20', status: 'verified', isRecurring: false, source: 'manual', autoCategorized: false },
+    ]);
+
+    expect(commitCount).toBe(0);
+    expect(capturedDeletes).toHaveLength(0);
+  });
+
+  it('updateTransaction refuses a MONEY edit but allows a metadata-only one', async () => {
+    const deps = {
+      db,
+      householdId: HOUSEHOLD_ID,
+      transactions: [settledTx],
+      householdSettings: null,
+      accounts,
+      calendarItems: [paidBill],
+    };
+
+    await makeUpdateTransaction(deps).updateTransaction('tx-1', { amount: 12 });
+    expect(commitCount).toBe(0);
+
+    await makeUpdateTransaction(deps).updateTransaction('tx-1', { status: 'pending_review' });
+    expect(commitCount).toBe(0);
+
+    // Notes carry no money and can't diverge the pair — still editable.
+    await makeUpdateTransaction(deps).updateTransaction('tx-1', { notes: 'July bill' });
+    expect(commitCount).toBe(1);
+    const txUpdate = capturedUpdates.find(u => u.ref.__path === `households/${HOUSEHOLD_ID}/transactions/tx-1`);
+    expect(txUpdate?.data?.['notes']).toBe('July bill');
+  });
+
+  it('reverseTransactionApproval refuses — the undo would credit the balance back with the bill still paid', async () => {
+    const { reverseTransactionApproval } = makeReverseTransactionApproval({
+      db,
+      householdId: HOUSEHOLD_ID,
+      habits: [],
+      transactions: [settledTx],
+      accounts,
+      calendarItems: [paidBill],
+    });
+    await reverseTransactionApproval('tx-1', { category: 'Uncategorized' }, []);
+
+    expect(commitCount).toBe(0);
+    expect(capturedUpdates).toHaveLength(0);
   });
 });
