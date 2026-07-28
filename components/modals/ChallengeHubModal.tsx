@@ -247,6 +247,41 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
         onClose={onClose}
         title="Challenge Hub"
         noPadding={true}
+        // Per-tab action bar, pinned below the scrollable body so "Save
+        // Challenge" is reachable without scrolling the (long) challenge form.
+        // The bar renders for every tab — each tab decides its own content —
+        // so the sheet keeps a stable bottom inset as tabs change.
+        footer={
+          <div className="p-4 border-t border-brand-100 dark:border-brand-700 bg-brand-50 dark:bg-brand-700/50">
+            {activeTab === 'challenge' && (
+              <Button
+                size="lg"
+                onClick={handleSaveChallenge}
+                disabled={!title}
+                className="w-full"
+              >
+                Save Challenge
+              </Button>
+            )}
+            {powerToolsEnabled && activeTab === 'yearly' && displayYearlyGoal && (
+              <div className="text-center">
+                <p className="text-xs text-brand-400 dark:text-brand-400">
+                  Monthly challenges automatically update yearly progress
+                </p>
+              </div>
+            )}
+            {activeTab === 'freeze' && (
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={onClose}
+                className="w-full"
+              >
+                Close
+              </Button>
+            )}
+          </div>
+        }
       >
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="flex flex-col h-full overflow-hidden">
           {/* Tab Navigation */}
@@ -749,37 +784,6 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                   )}
                 </Section>
               </TabsContent>
-          </div>
-
-          {/* Footer Actions */}
-          <div className="p-4 border-t border-brand-100 dark:border-brand-700 bg-brand-50 dark:bg-brand-700/50 shrink-0">
-            {activeTab === 'challenge' && (
-              <Button
-                size="lg"
-                onClick={handleSaveChallenge}
-                disabled={!title}
-                className="w-full"
-              >
-                Save Challenge
-              </Button>
-            )}
-            {powerToolsEnabled && activeTab === 'yearly' && displayYearlyGoal && (
-              <div className="text-center">
-                <p className="text-xs text-brand-400 dark:text-brand-400">
-                  Monthly challenges automatically update yearly progress
-                </p>
-              </div>
-            )}
-            {activeTab === 'freeze' && (
-              <Button
-                variant="secondary"
-                size="lg"
-                onClick={onClose}
-                className="w-full"
-              >
-                Close
-              </Button>
-            )}
           </div>
         </Tabs>
       </Drawer>

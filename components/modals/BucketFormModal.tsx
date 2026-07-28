@@ -89,7 +89,27 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
       confirmLabel="Delete"
       confirmVariant="destructive"
     />
-    <Drawer isOpen={isOpen} onClose={onClose} title={editingBucket ? 'Edit Bucket' : 'New Bucket'}>
+    <Drawer
+      isOpen={isOpen}
+      onClose={onClose}
+      title={editingBucket ? 'Edit Bucket' : 'New Bucket'}
+      footer={
+        <div className="border-t border-brand-200 dark:border-brand-700 p-4">
+          <Button
+            onClick={handleSave}
+            className="w-full py-3"
+            disabled={
+              !name ||
+              !limit ||
+              isNaN(parseFloat(limit)) ||
+              parseFloat(limit) <= 0
+            }
+          >
+            {editingBucket ? 'Save Changes' : 'Create Bucket'}
+          </Button>
+        </div>
+      }
+    >
       <div className="space-y-4">
         {/* This drawer is the ONE edit entry per bucket (impeccable r6), and
             changing the limit is by far the most common edit — so when editing,
@@ -164,22 +184,10 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
           </div>
         </div>
 
-        <Button
-          onClick={handleSave}
-          className="w-full py-3 mt-2"
-          disabled={
-            !name ||
-            !limit ||
-            isNaN(parseFloat(limit)) ||
-            parseFloat(limit) <= 0
-          }
-        >
-          {editingBucket ? 'Save Changes' : 'Create Bucket'}
-        </Button>
-
-        {/* Danger row — separated from Save by a hairline + air (echoes the
-            Settings Danger Zone idiom) so a thumb aiming at Save can't land on
-            Delete. The ConfirmDialog above stays as the second gate. */}
+        {/* Danger row — Save lives in the drawer's fixed footer bar, so Delete
+            stays down here behind a hairline + air (echoes the Settings Danger
+            Zone idiom) and a thumb aiming at Save can't land on it. The
+            ConfirmDialog above stays as the second gate. */}
         {editingBucket && (
           <div className="mt-6 pt-4 border-t border-brand-200 dark:border-brand-700">
             <Button

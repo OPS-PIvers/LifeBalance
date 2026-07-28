@@ -53,8 +53,34 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
   };
 
   return (
-    <Drawer isOpen={isOpen} onClose={onClose} title="Send Feedback">
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <Drawer
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Send Feedback"
+      footer={
+        // The submit button lives outside the <form>, so it re-associates via
+        // `form="feedback-form"` — without that, submit silently stops working.
+        <div className="flex justify-end gap-3 border-t border-brand-200 dark:border-brand-700 p-4">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onClose}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            form="feedback-form"
+            disabled={!message.trim()}
+            isLoading={isSubmitting}
+            leftIcon={<Send className="w-4 h-4" />}
+          >
+            Send Report
+          </Button>
+        </div>
+      }
+    >
+      <form id="feedback-form" onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
           <label htmlFor="feedback-message" className="block text-sm font-medium text-brand-700 dark:text-brand-200">
             Describe the issue or suggestion
@@ -67,23 +93,6 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
             placeholder="I found a bug when..."
             required
           />
-        </div>
-        <div className="flex justify-end pt-2 gap-3">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={onClose}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            disabled={!message.trim()}
-            isLoading={isSubmitting}
-            leftIcon={<Send className="w-4 h-4" />}
-          >
-            Send Report
-          </Button>
         </div>
       </form>
     </Drawer>

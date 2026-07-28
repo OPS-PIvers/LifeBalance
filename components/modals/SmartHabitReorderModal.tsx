@@ -113,6 +113,26 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
       onClose={onClose}
       noPadding
       title="Smart Reorder"
+      // Conditional the same way the action is: while loading (or on an error)
+      // there is nothing to apply, and the body keeps its own pb-safe inset.
+      footer={
+        plan && !isLoading ? (
+          <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-700/50 flex gap-3">
+            <Button variant="ghost" size="lg" onClick={onClose} className="flex-1">
+              Cancel
+            </Button>
+            <Button
+              variant="warning"
+              size="lg"
+              onClick={handleApply}
+              leftIcon={<Check size={18} />}
+              className="flex-1"
+            >
+              Apply Changes
+            </Button>
+          </div>
+        ) : undefined
+      }
     >
       {/* Content */}
       <div className="p-6">
@@ -178,24 +198,6 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
           </div>
         ) : null}
       </div>
-
-      {/* Footer */}
-      {plan && !isLoading && (
-        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-700/50 flex gap-3">
-          <Button variant="ghost" size="lg" onClick={onClose} className="flex-1">
-            Cancel
-          </Button>
-          <Button
-            variant="warning"
-            size="lg"
-            onClick={handleApply}
-            leftIcon={<Check size={18} />}
-            className="flex-1"
-          >
-            Apply Changes
-          </Button>
-        </div>
-      )}
     </Drawer>
   );
 };

@@ -5,10 +5,25 @@ import MemberModal from './MemberModal';
 import { HouseholdMember } from '@/types/schema';
 
 // Mock Drawer to a plain wrapper so the form renders without framer-motion's
-// AnimatePresence involved.
+// AnimatePresence involved. `footer` is rendered below the body exactly like the
+// real Drawer does — the Save button lives there and re-associates with the form
+// via its `form` attribute.
 vi.mock('@/components/ui/Drawer', () => ({
-  Drawer: ({ children, isOpen }: { children: React.ReactNode; isOpen: boolean }) =>
-    isOpen ? <div data-testid="drawer">{children}</div> : null,
+  Drawer: ({
+    children,
+    footer,
+    isOpen,
+  }: {
+    children: React.ReactNode;
+    footer?: React.ReactNode;
+    isOpen: boolean;
+  }) =>
+    isOpen ? (
+      <div data-testid="drawer">
+        {children}
+        {footer}
+      </div>
+    ) : null,
 }));
 
 const toastErrorSpy = vi.hoisted(() => vi.fn());
