@@ -22,6 +22,13 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true,
+    // `tsc --noEmit` is the single most expensive part of `pnpm lint` (~36s
+    // cold, ~5x the whole production bundle). Incremental lets a warm re-run
+    // check only what changed, which is the local edit→lint loop. CI always
+    // starts from a fresh checkout with no buildinfo, so it is unaffected.
+    // Lives under node_modules/ so it is already git-ignored.
+    "incremental": true,
+    "tsBuildInfoFile": "./node_modules/.cache/tsconfig.tsbuildinfo",
     "esModuleInterop": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,

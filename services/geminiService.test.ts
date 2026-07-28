@@ -703,11 +703,19 @@ describe('geminiService – quota, timeout, and retry', () => {
       .mockRejectedValueOnce(Object.assign(new Error('429 Too Many Requests'), { status: 429 }))
       .mockResolvedValueOnce({ text: JSON.stringify(successResponse) });
 
-    const result = await generateInsight('test-household', [], []);
+    vi.useFakeTimers();
+
+    const resultPromise = generateInsight('test-household', [], []);
+    // Advance past the single 500 ms backoff delay before awaiting, or the
+    // promise can never settle (real timers are paused).
+    await vi.advanceTimersByTimeAsync(500);
+    const result = await resultPromise;
 
     expect(result.text).toBe('Good insight.');
     // Gemini must have been called twice (initial + 1 retry).
     expect(generateContentMock).toHaveBeenCalledTimes(2);
+
+    vi.useRealTimers();
   });
 });
 // ---------------------------------------------------------------------------

@@ -1,10 +1,21 @@
 name: CI
 
+# PR-only. A `push: branches-ignore: [main]` trigger used to sit alongside this
+# one, but a PR branch is by definition not `main`, so every commit to an open
+# PR satisfied BOTH and GitHub fired two identical, independent runs of every
+# job below (verified 2026-07-28: runs 30401951577 and 30401948845, same commit,
+# started 3s apart). Pushes to main are covered by deploy.yml; a branch with no
+# PR open needs no CI, and opening the PR runs it.
 on:
   pull_request:
     branches: [ main ]
-  push:
-    branches-ignore: [ main ]
+
+# Supersede in-flight runs when new commits land on the same PR — the older run
+# is validating code nobody will merge. Keyed on the PR ref so concurrent PRs
+# never cancel each other.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:
@@ -43,9 +54,13 @@ jobs:
         # fails CI, so coverage of the critical business logic can only ratchet
         # up. Replaces the previous plain 'pnpm test' step (coverage runs the
         # tests too, so we don't run the suite twice).
+        # NOTE: this also covers functions/. The root `node` test project's
+        # include is repo-wide (`**/*.test.{ts,tsx}` in vite.config.ts), and the
+        # `functions/**` entry in coverage.exclude only drops them from the
+        # coverage REPORT, not from execution. A separate "Functions Tests" step
+        # (`cd .. && vitest run functions/src` — the same config, path-filtered)
+        # used to run here and re-executed them verbatim.
         run: pnpm test:coverage
-      - name: Functions Tests
-        run: pnpm --filter functions run test
       # Firestore Security Rules tests run against the Firestore emulator
       # (ubuntu-latest ships a compatible JDK, so no extra Java setup needed).
       # This gates every firestore.rules change: a bad rules deploy is atomic
@@ -83,9 +98,30 @@ jobs:
           node-version: '22'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
+      # Cache the Chromium binary, keyed on the resolved @playwright/test
+      # version so a Playwright bump invalidates it automatically. The download
+      # is normally 21-30s but is network-dependent and has spiked to 451s
+      # (run 30393407069) — this caps that tail as much as it trims the median.
+      - name: Resolve Playwright version
+        id: pw
+        run: echo "version=$(pnpm exec playwright --version | tr -d ' ')" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
       # Linux runner → --with-deps installs the OS libraries Chromium needs.
+      # On a cache hit the browser binary is already present, but the apt
+      # packages are not (they live outside the cached path), so still run
+      # install-deps — it is the cheap half of the step.
       - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
+        run: |
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then
+            pnpm exec playwright install-deps chromium
+          else
+            pnpm exec playwright install --with-deps chromium
+          fi
       - name: Run Playwright e2e
         # playwright.config.ts auto-starts `pnpm dev` (with VITE_ENABLE_TEST_MODE
         # set) via its webServer config. The dummy VITE_FIREBASE_* values mirror
