@@ -133,7 +133,25 @@ export const TaskTemplateDrawer: React.FC<TaskTemplateDrawerProps> = ({ isOpen, 
   };
 
   return (
-    <Drawer isOpen={isOpen} onClose={onClose} title="Task templates">
+    <Drawer
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Task templates"
+      // Only the create form has a primary action — the template list itself is
+      // one-tap-apply rows, so browsing keeps the body's pb-safe bottom inset.
+      footer={
+        isCreating ? (
+          <div className="flex items-center gap-2 justify-end border-t border-brand-200 dark:border-brand-700 p-4">
+            <Button variant="secondary" size="sm" onClick={() => setIsCreating(false)} disabled={isSavingNew}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleSaveNew} isLoading={isSavingNew}>
+              Save template
+            </Button>
+          </div>
+        ) : undefined
+      }
+    >
       <div className="space-y-2">
         <p className="text-xs text-brand-400 dark:text-brand-450 px-1 pb-1">
           Tap a template to add all of its tasks for today, e.g. &quot;Trash day&quot; or &quot;Guest prep&quot;.
@@ -266,14 +284,6 @@ export const TaskTemplateDrawer: React.FC<TaskTemplateDrawerProps> = ({ isOpen, 
               allowClear
               disabled={isSavingNew}
             />
-            <div className="flex items-center gap-2 justify-end">
-              <Button variant="secondary" size="sm" onClick={() => setIsCreating(false)} disabled={isSavingNew}>
-                Cancel
-              </Button>
-              <Button size="sm" onClick={handleSaveNew} isLoading={isSavingNew}>
-                Save template
-              </Button>
-            </div>
           </div>
         ) : (
           <Button

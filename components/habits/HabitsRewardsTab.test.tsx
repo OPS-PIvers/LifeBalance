@@ -38,15 +38,21 @@ vi.mock('@/components/ui/Drawer', () => ({
     isOpen,
     children,
     title,
+    footer,
   }: {
     isOpen: boolean;
     children: ReactNode;
     title?: string;
+    footer?: ReactNode;
   }) =>
     isOpen ? (
+      // The sticky action bar (submit / cancel) rides the real Drawer's
+      // `footer` slot, so the stub must render it too or the form's submit
+      // button is invisible to these tests.
       <div data-testid="reward-form-drawer">
         {title && <h1>{title}</h1>}
         {children}
+        {footer}
       </div>
     ) : null,
 }));

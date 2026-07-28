@@ -23,6 +23,9 @@ import {
 const labelClass =
   'block text-xs font-semibold uppercase tracking-wide text-warm-600 dark:text-warm-300 mb-1';
 
+/** Ties the drawer's footer submit button back to the form in the scroll body. */
+const REWARD_FORM_ID = 'reward-form';
+
 /**
  * Reward management (create / edit / delete) for the rewards center. Available to
  * EVERY household — the underlying addReward/updateReward/deleteReward mutations
@@ -196,8 +199,29 @@ const RewardManagerPanel: React.FC<RewardManagerPanelProps> = ({ kids, kidModeEn
         isOpen={formOpen}
         onClose={closeForm}
         title={editingId ? 'Edit reward' : 'New reward'}
+        footer={
+          <div className="flex gap-2 border-t border-brand-200 dark:border-brand-700 p-4">
+            {/* The form lives in the scrollable body, so the submit button —
+                which sits OUTSIDE it here — is associated back to it by id. */}
+            <button
+              type="submit"
+              form={REWARD_FORM_ID}
+              disabled={!canSubmit}
+              className="flex-1 rounded-btn bg-warm-500 hover:bg-warm-600 px-4 py-2 text-sm font-bold text-white transition-[transform,background-color] duration-(--duration-fast) ease-(--ease-standard) active:scale-95 disabled:opacity-50 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
+            >
+              {editingId ? 'Save changes' : 'Add reward'}
+            </button>
+            <button
+              type="button"
+              onClick={closeForm}
+              className="rounded-btn border border-brand-300 dark:border-brand-600 px-4 py-2 text-sm font-bold text-brand-600 dark:text-brand-300 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-400/40"
+            >
+              Cancel
+            </button>
+          </div>
+        }
       >
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form id={REWARD_FORM_ID} onSubmit={handleSubmit} className="space-y-3">
           <div className="grid grid-cols-[1fr_auto] gap-3">
             <Input
               label="Title"
@@ -313,23 +337,6 @@ const RewardManagerPanel: React.FC<RewardManagerPanelProps> = ({ kids, kidModeEn
               onCheckedChange={(checked) => setDraft((d) => ({ ...d, active: checked }))}
             />
             <label htmlFor="reward-active" className="cursor-pointer">Active (shown in the store)</label>
-          </div>
-
-          <div className="flex gap-2 pt-1">
-            <button
-              type="submit"
-              disabled={!canSubmit}
-              className="flex-1 rounded-btn bg-warm-500 hover:bg-warm-600 px-4 py-2 text-sm font-bold text-white transition-[transform,background-color] duration-(--duration-fast) ease-(--ease-standard) active:scale-95 disabled:opacity-50 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
-            >
-              {editingId ? 'Save changes' : 'Add reward'}
-            </button>
-            <button
-              type="button"
-              onClick={closeForm}
-              className="rounded-btn border border-brand-300 dark:border-brand-600 px-4 py-2 text-sm font-bold text-brand-600 dark:text-brand-300 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-400/40"
-            >
-              Cancel
-            </button>
           </div>
         </form>
       </Drawer>

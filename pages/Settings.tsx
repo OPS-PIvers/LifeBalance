@@ -1605,6 +1605,29 @@ const Settings: React.FC = () => {
         isOpen={isKidModeOpen}
         onClose={() => setIsKidModeOpen(false)}
         title="Kid Mode PIN"
+        footer={
+          <div className="flex gap-2 border-t border-brand-200 dark:border-brand-700 p-4">
+            <Button
+              onClick={handleSaveKidPin}
+              isLoading={isSavingPin}
+              disabled={isSavingPin || pinDraft.length === 0}
+              variant="primary"
+              className="flex-1"
+            >
+              {hasKidPin ? 'Update PIN' : 'Set PIN'}
+            </Button>
+            {hasKidPin && (
+              <Button
+                onClick={handleRemoveKidPin}
+                isLoading={isSavingPin}
+                disabled={isSavingPin}
+                variant="ghost-danger"
+              >
+                Remove
+              </Button>
+            )}
+          </div>
+        }
       >
         <div className="space-y-4">
           <p className="text-sm text-brand-500 dark:text-brand-400">
@@ -1645,27 +1668,6 @@ const Settings: React.FC = () => {
               aria-label="Confirm Kid Mode PIN"
               className="tracking-widest"
             />
-            <div className="flex gap-2">
-              <Button
-                onClick={handleSaveKidPin}
-                isLoading={isSavingPin}
-                disabled={isSavingPin || pinDraft.length === 0}
-                variant="primary"
-                className="flex-1"
-              >
-                {hasKidPin ? 'Update PIN' : 'Set PIN'}
-              </Button>
-              {hasKidPin && (
-                <Button
-                  onClick={handleRemoveKidPin}
-                  isLoading={isSavingPin}
-                  disabled={isSavingPin}
-                  variant="ghost-danger"
-                >
-                  Remove
-                </Button>
-              )}
-            </div>
           </div>
         </div>
       </Drawer>
