@@ -632,7 +632,7 @@ service cloud.firestore {
                 'title', 'amount', 'date', 'type', 'isPaid',
                 'isRecurring', 'frequency', 'parentRecurringId', 'isDeleted',
                 'createdBy', 'notes', 'createdAt', 'updatedAt', 'accountId', 'bucketId',
-                'isSubscription'
+                'isSubscription', 'bankDescriptorAliases'
               ]) &&
               isValidString(data.title, 100) &&
               isValidNumber(data.amount) &&
@@ -651,6 +651,11 @@ service cloud.firestore {
               isValidOptionalString(data.get('accountId', null), 50) &&
               // Bucket linking (optional): used for precise bill→bucket coverage matching
               isValidOptionalString(data.get('bucketId', null), 50) &&
+              // Learned bank descriptors for this bill (optional): written by
+              // linkBankTransactionToBill and by the nightly sync. Bounded like
+              // the other client-writable lists to keep it from becoming storage.
+              (data.get('bankDescriptorAliases', null) == null ||
+                (data.bankDescriptorAliases is list && data.bankDescriptorAliases.size() <= 50)) &&
               // Legacy fields (optional, for backward compatibility)
               isValidOptionalString(data.get('notes', null), 500) &&
               // createdAt/updatedAt can be either strings or timestamps
@@ -673,7 +678,7 @@ service cloud.firestore {
             'title', 'amount', 'date', 'type', 'isPaid',
             'isRecurring', 'frequency', 'parentRecurringId', 'isDeleted',
             'createdBy', 'notes', 'createdAt', 'updatedAt', 'accountId', 'bucketId',
-            'isSubscription'
+            'isSubscription', 'bankDescriptorAliases'
           ].toSet();
           return (
                  // Block writes to any non-allowlisted field (storage abuse): a key
@@ -695,6 +700,8 @@ service cloud.firestore {
                  (!changed.hasAny(['accountId']) || isValidOptionalString(data.get('accountId', null), 50)) &&
                  (!changed.hasAny(['bucketId']) || isValidOptionalString(data.get('bucketId', null), 50)) &&
                  (!changed.hasAny(['notes']) || isValidOptionalString(data.get('notes', null), 500)) &&
+                 (!changed.hasAny(['bankDescriptorAliases']) ||
+                   (data.bankDescriptorAliases is list && data.bankDescriptorAliases.size() <= 50)) &&
                  (!changed.hasAny(['updatedAt']) || data.get('updatedAt', null) == null || data.updatedAt is string || data.updatedAt is timestamp) &&
                  // Prevent tampering with ownership metadata and creation timestamps
                  !changed.hasAny(['createdBy', 'createdAt'])
