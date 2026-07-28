@@ -177,29 +177,62 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
     : mode === 'import' ? 'Import week.json'
     : 'Plan my week';
 
+  const footerBarClass = 'bg-white dark:bg-brand-800 p-4 flex gap-3 border-t border-brand-200 dark:border-brand-700';
+
+  // One action bar per mode. 'choose' has no primary action — its two tiles ARE
+  // the choice — so it stays undefined and the body keeps its pb-safe inset.
+  const footer =
+    mode === 'preview' && plan ? (
+      <div className={footerBarClass}>
+        <Button variant="secondary" size="lg" className="flex-1" onClick={reset}>Discard</Button>
+        <Button
+          variant="primary"
+          size="lg"
+          className="flex-2"
+          onClick={handleApply}
+          isLoading={busy}
+          leftIcon={<CalendarPlus className="w-5 h-5" />}
+        >
+          Add to my week
+        </Button>
+      </div>
+    ) : mode === 'generate' ? (
+      <div className={footerBarClass}>
+        <Button variant="secondary" size="lg" className="flex-1" onClick={() => setMode('choose')}>Back</Button>
+        <Button
+          variant="warning"
+          size="lg"
+          className="flex-2"
+          onClick={handleGenerate}
+          isLoading={busy}
+          leftIcon={<Sparkles className="w-5 h-5" />}
+        >
+          Generate
+        </Button>
+      </div>
+    ) : mode === 'import' ? (
+      <div className={footerBarClass}>
+        <Button variant="secondary" size="lg" className="flex-1" onClick={() => setMode('choose')}>Back</Button>
+        <Button
+          variant="primary"
+          size="lg"
+          className="flex-2"
+          onClick={handleImport}
+          disabled={!importText.trim()}
+          leftIcon={<ChefHat className="w-5 h-5" />}
+        >
+          Preview
+        </Button>
+      </div>
+    ) : undefined;
+
   return (
     <Drawer
       isOpen={isOpen}
       onClose={handleClose}
       title={title}
       className="max-h-[92vh]"
-      footer={
-        mode === 'preview' && plan ? (
-          <div className="bg-white dark:bg-brand-800 p-4 flex gap-3 border-t border-brand-200 dark:border-brand-700">
-            <Button variant="secondary" size="lg" className="flex-1" onClick={reset}>Discard</Button>
-            <Button
-              variant="primary"
-              size="lg"
-              className="flex-2"
-              onClick={handleApply}
-              isLoading={busy}
-              leftIcon={<CalendarPlus className="w-5 h-5" />}
-            >
-              Add to my week
-            </Button>
-          </div>
-        ) : undefined
-      }
+      footer={footer}
     >
       {/* Choose */}
       {mode === 'choose' && (
@@ -247,19 +280,6 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
               className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl text-sm focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-450"
             />
           </div>
-          <div className="flex gap-3">
-            <Button variant="secondary" size="lg" className="flex-1" onClick={() => setMode('choose')}>Back</Button>
-            <Button
-              variant="warning"
-              size="lg"
-              className="flex-2"
-              onClick={handleGenerate}
-              isLoading={busy}
-              leftIcon={<Sparkles className="w-5 h-5" />}
-            >
-              Generate
-            </Button>
-          </div>
         </div>
       )}
 
@@ -287,19 +307,6 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
             placeholder='Paste week.json here…'
             className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-450"
           />
-          <div className="flex gap-3">
-            <Button variant="secondary" size="lg" className="flex-1" onClick={() => setMode('choose')}>Back</Button>
-            <Button
-              variant="primary"
-              size="lg"
-              className="flex-2"
-              onClick={handleImport}
-              disabled={!importText.trim()}
-              leftIcon={<ChefHat className="w-5 h-5" />}
-            >
-              Preview
-            </Button>
-          </div>
         </div>
       )}
 

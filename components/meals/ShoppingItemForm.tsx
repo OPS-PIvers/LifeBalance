@@ -1,8 +1,7 @@
 import React from 'react';
 import { ShoppingItem, Store as StoreType, QuickStockList } from '@/types/schema';
-import { Trash2, ShoppingBag, Minus, Plus, ChevronDown, Check } from 'lucide-react';
+import { ShoppingBag, Minus, Plus, ChevronDown, Check } from 'lucide-react';
 import { TEMPLATE_ICONS } from '@/data/templateIcons';
-import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { FIELD_BASE } from '@/components/ui/fieldStyles';
@@ -10,11 +9,15 @@ import { cn } from '@/utils/cn';
 import { parseQuantity, formatQuantity } from '@/utils/grocerySmartDefaults';
 import type { SuggestedDefaults } from '@/utils/grocerySmartDefaults';
 
+/**
+ * The fields half of the "Edit item" sheet. The Save/Delete action bar
+ * deliberately lives in the consuming `Drawer`'s `footer` prop (see
+ * `ShoppingListTab`) so the CTA is pinned above the fold instead of sitting at
+ * the bottom of the scrolled form.
+ */
 interface ShoppingItemFormProps {
   item: ShoppingItem;
   onChange: (item: ShoppingItem) => void;
-  onSave: () => void;
-  onDelete?: () => void;
   stores: StoreType[];
   categories: string[];
   quickStockLists?: QuickStockList[];
@@ -29,8 +32,6 @@ const templateIconMap = new Map(TEMPLATE_ICONS.map(i => [i.id, i.icon]));
 export const ShoppingItemForm: React.FC<ShoppingItemFormProps> = ({
   item,
   onChange,
-  onSave,
-  onDelete,
   stores,
   categories,
   quickStockLists,
@@ -267,28 +268,6 @@ export const ShoppingItemForm: React.FC<ShoppingItemFormProps> = ({
                     )}
                 </div>
             )}
-        </div>
-        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-800 shrink-0 flex items-center gap-3">
-            {onDelete && (
-                <Button
-                    type="button"
-                    variant="ghost-danger"
-                    size="lg"
-                    aria-label="Delete item"
-                    onClick={onDelete}
-                >
-                    <Trash2 size={20} />
-                </Button>
-            )}
-            <Button
-                variant="primary"
-                size="lg"
-                onClick={onSave}
-                disabled={!item.name.trim()}
-                className="flex-1"
-            >
-                Save changes
-            </Button>
         </div>
     </div>
   );

@@ -921,16 +921,36 @@ const ShoppingListTab: React.FC = () => {
             isOpen={!!editingItem}
             onClose={() => setEditingItem(null)}
             title="Edit item"
+            footer={
+              <div className="p-4 border-t border-brand-200 dark:border-brand-700 flex items-center gap-3">
+                <Button
+                  type="button"
+                  variant="ghost-danger"
+                  size="lg"
+                  aria-label="Delete item"
+                  onClick={() => {
+                    deleteShoppingItem(editingItem.id);
+                    showDeleteUndoToast(editingItem);
+                    setEditingItem(null);
+                  }}
+                >
+                  <Trash2 size={20} />
+                </Button>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  onClick={handleSaveEdit}
+                  disabled={!editingItem.name.trim()}
+                  className="flex-1"
+                >
+                  Save changes
+                </Button>
+              </div>
+            }
           >
             <ShoppingItemForm
               item={editingItem}
               onChange={setEditingItem}
-              onSave={handleSaveEdit}
-              onDelete={() => {
-                deleteShoppingItem(editingItem.id);
-                showDeleteUndoToast(editingItem);
-                setEditingItem(null);
-              }}
               stores={stores}
               categories={categories}
               quickStockLists={quickStockLists}
