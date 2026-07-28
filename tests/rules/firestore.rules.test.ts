@@ -1582,6 +1582,22 @@ describe('calendar items (bill↔transaction alias learning)', () => {
     );
   });
 
+  it('accepts an alias list at exactly the cap (boundary)', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', BILL), {
+        bankDescriptorAliases: Array.from({ length: 50 }, (_, i) => `ALIAS-${i}`),
+      }),
+    );
+  });
+
+  it('allows clearing the alias list (so a future unlink can retract one)', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', BILL), {
+        bankDescriptorAliases: deleteField(),
+      }),
+    );
+  });
+
   it('a member can create a calendar item carrying aliases', async () => {
     await assertSucceeds(
       setDoc(doc(dbFor(BOB), 'households', H1, 'calendarItems', 'bill-new'), {

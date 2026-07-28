@@ -700,7 +700,11 @@ service cloud.firestore {
                  (!changed.hasAny(['accountId']) || isValidOptionalString(data.get('accountId', null), 50)) &&
                  (!changed.hasAny(['bucketId']) || isValidOptionalString(data.get('bucketId', null), 50)) &&
                  (!changed.hasAny(['notes']) || isValidOptionalString(data.get('notes', null), 500)) &&
+                 // Mirrors the create validator's null-guard, so clearing the
+                 // list (a future "unlink" retracting a learned alias) stays
+                 // possible rather than being denied by the is-list check.
                  (!changed.hasAny(['bankDescriptorAliases']) ||
+                   data.get('bankDescriptorAliases', null) == null ||
                    (data.bankDescriptorAliases is list && data.bankDescriptorAliases.size() <= 50)) &&
                  (!changed.hasAny(['updatedAt']) || data.get('updatedAt', null) == null || data.updatedAt is string || data.updatedAt is timestamp) &&
                  // Prevent tampering with ownership metadata and creation timestamps
