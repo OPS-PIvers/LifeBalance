@@ -362,6 +362,134 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
     : isTransactionQueueItem(item) && item.needsAmount ? 'Add amount'
     : 'Approve';
 
+  // Sticky action bar for the review sheet — per queue-item type, exactly as the
+  // bodies below are. The transaction branch has NO footer here on purpose: its
+  // approve/delete CTAs belong to the shared TransactionReviewForm (also mounted
+  // by ReviewPendingDrawer), so they stay inside that component's own body.
+  const drawerFooter = isCalendarQueueItem(item) ? (
+    <div className="flex flex-row gap-2 border-t border-brand-200 dark:border-brand-700 p-4">
+      <Button
+        variant="success"
+        disabled={!payAmountValid}
+        onClick={() => {
+          openPaySheet(item.id, parsedPayAmount);
+          setExpandedId(null);
+        }}
+        className="flex-1"
+        leftIcon={<Check size={16} />}
+      >
+        Approve
+      </Button>
+      <Button
+        variant="warning"
+        onClick={async () => {
+          await deferCalendarItem(item.id);
+          setExpandedId(null);
+        }}
+        className="flex-1"
+        leftIcon={<Clock size={16} />}
+      >
+        Defer
+      </Button>
+      <Button
+        variant="destructive"
+        onClick={() => {
+          showDeleteConfirmation(async () => {
+            await deleteCalendarItem(item.id);
+            setExpandedId(null);
+          }, 'calendar item');
+        }}
+        className="flex-1"
+        leftIcon={<Trash2 size={16} />}
+      >
+        Delete
+      </Button>
+    </div>
+  ) : isTodoQueueItem(item) ? (
+    <div className="flex flex-row gap-2 border-t border-brand-200 dark:border-brand-700 p-4">
+      <Button
+        variant="success"
+        onClick={async () => {
+          try {
+            await completeToDo(item.id);
+            toast.success('To-Do completed!');
+            setExpandedId(null);
+          } catch (error) {
+            // A habit-linked to-do with unfinished subtasks is REFUSED by
+            // the mutation (PRD #1065), not a failure — surface the
+            // remaining step count instead.
+            if (isTodoSubtasksIncompleteError(error)) {
+              toast(`${error.stepsLeft} step${error.stepsLeft === 1 ? '' : 's'} left on “${error.title}”`);
+              return;
+            }
+            console.error('Failed to complete task:', error);
+            toast.error('Failed to complete to-do');
+          }
+        }}
+        className="flex-1"
+        leftIcon={<Check size={16} />}
+      >
+        Complete
+      </Button>
+      <Button
+        variant="warning"
+        onClick={async () => {
+          const today = startOfToday();
+          const tomorrowDate = addDays(today, 1);
+          const originalDueDate = parseISO(item.date);
+
+          if (!isValid(originalDueDate)) {
+            toast.error('Invalid due date');
+            return;
+          }
+
+          const deferredFromOriginal = addDays(originalDueDate, 1);
+          const newDueDate = isAfter(deferredFromOriginal, tomorrowDate)
+            ? deferredFromOriginal
+            : tomorrowDate;
+
+          const newDueDateString = format(newDueDate, 'yyyy-MM-dd');
+          try {
+            await updateToDo(item.id, { completeByDate: newDueDateString });
+
+            if (isBefore(originalDueDate, today)) {
+              toast.success(
+                `Deferred overdue task (was due ${format(
+                  originalDueDate,
+                  'MMM d'
+                )}) to ${format(newDueDate, 'MMM d')}`
+              );
+            } else {
+              toast.success(`Deferred to ${format(newDueDate, 'MMM d')}`);
+            }
+            setExpandedId(null);
+          } catch (error) {
+            console.error('Failed to defer task:', error);
+            toast.error('Failed to defer task. Please try again.');
+          }
+        }}
+        className="flex-1"
+        leftIcon={<Clock size={16} />}
+      >
+        Defer
+      </Button>
+      <Button
+        variant="destructive"
+        onClick={() => {
+          showDeleteConfirmation(async () => {
+            await deleteToDo(item.id);
+            setExpandedId(null);
+            toast.success('Task deleted');
+          });
+        }}
+        className="flex-1"
+        leftIcon={<Trash2 size={16} />}
+      >
+        Delete
+      </Button>
+    </div>
+  ) : undefined;
+
   return (
     <div className="relative hairline-divider group">
       {/* Gmail-style swipe (right = approve/complete, left = defer): partial
@@ -513,7 +641,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
 
       {/* Review / approve flow lives in its own bottom sheet rather than
           expanding the row in place, so the list stays a static summary. */}
-      <Drawer isOpen={isExpanded} onClose={handleClose} title={drawerTitle}>
+      <Drawer isOpen={isExpanded} onClose={handleClose} title={drawerTitle} footer={drawerFooter}>
         {isCalendarQueueItem(item) ? (
           /* Calendar Item Actions */
           <div className="space-y-2">
@@ -554,45 +682,6 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                 </p>
               )}
             </div>
-
-            <div className="flex flex-row gap-2">
-              <Button
-                variant="success"
-                disabled={!payAmountValid}
-                onClick={() => {
-                  openPaySheet(item.id, parsedPayAmount);
-                  setExpandedId(null);
-                }}
-                className="flex-1"
-                leftIcon={<Check size={16} />}
-              >
-                Approve
-              </Button>
-              <Button
-                variant="warning"
-                onClick={async () => {
-                  await deferCalendarItem(item.id);
-                  setExpandedId(null);
-                }}
-                className="flex-1"
-                leftIcon={<Clock size={16} />}
-              >
-                Defer
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => {
-                  showDeleteConfirmation(async () => {
-                    await deleteCalendarItem(item.id);
-                    setExpandedId(null);
-                  }, 'calendar item');
-                }}
-                className="flex-1"
-                leftIcon={<Trash2 size={16} />}
-              >
-                Delete
-              </Button>
-            </div>
           </div>
         ) : isTodoQueueItem(item) ? (
           /* To-Do Item Actions */
@@ -600,88 +689,6 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
              <p className="text-xs text-brand-500 dark:text-brand-400 mb-3">
                Mark this task as complete or delay it:
              </p>
-             <div className="flex flex-row gap-2">
-               <Button
-                 variant="success"
-                 onClick={async () => {
-                   try {
-                     await completeToDo(item.id);
-                     toast.success('To-Do completed!');
-                     setExpandedId(null);
-                   } catch (error) {
-                     // A habit-linked to-do with unfinished subtasks is REFUSED by
-                     // the mutation (PRD #1065), not a failure — surface the
-                     // remaining step count instead.
-                     if (isTodoSubtasksIncompleteError(error)) {
-                       toast(`${error.stepsLeft} step${error.stepsLeft === 1 ? '' : 's'} left on “${error.title}”`);
-                       return;
-                     }
-                     console.error('Failed to complete task:', error);
-                     toast.error('Failed to complete to-do');
-                   }
-                 }}
-                 className="flex-1"
-                 leftIcon={<Check size={16} />}
-               >
-                 Complete
-               </Button>
-               <Button
-                 variant="warning"
-                 onClick={async () => {
-                   const today = startOfToday();
-                   const tomorrowDate = addDays(today, 1);
-                   const originalDueDate = parseISO(item.date);
-
-                   if (!isValid(originalDueDate)) {
-                     toast.error('Invalid due date');
-                     return;
-                   }
-
-                   const deferredFromOriginal = addDays(originalDueDate, 1);
-                   const newDueDate = isAfter(deferredFromOriginal, tomorrowDate)
-                     ? deferredFromOriginal
-                     : tomorrowDate;
-
-                   const newDueDateString = format(newDueDate, 'yyyy-MM-dd');
-                   try {
-                     await updateToDo(item.id, { completeByDate: newDueDateString });
-
-                     if (isBefore(originalDueDate, today)) {
-                       toast.success(
-                         `Deferred overdue task (was due ${format(
-                           originalDueDate,
-                           'MMM d'
-                         )}) to ${format(newDueDate, 'MMM d')}`
-                       );
-                     } else {
-                       toast.success(`Deferred to ${format(newDueDate, 'MMM d')}`);
-                     }
-                     setExpandedId(null);
-                   } catch (error) {
-                     console.error('Failed to defer task:', error);
-                     toast.error('Failed to defer task. Please try again.');
-                   }
-                 }}
-                 className="flex-1"
-                 leftIcon={<Clock size={16} />}
-               >
-                 Defer
-               </Button>
-               <Button
-                 variant="destructive"
-                 onClick={() => {
-                   showDeleteConfirmation(async () => {
-                     await deleteToDo(item.id);
-                     setExpandedId(null);
-                     toast.success('Task deleted');
-                   });
-                 }}
-                 className="flex-1"
-                 leftIcon={<Trash2 size={16} />}
-               >
-                 Delete
-               </Button>
-             </div>
           </div>
         ) : (
           /* Transaction review — shared form (verify + inline edit + habits + delete) */

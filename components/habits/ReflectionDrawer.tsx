@@ -52,7 +52,21 @@ const ReflectionDrawer: React.FC<ReflectionDrawerProps> = ({ isOpen, onClose, ha
   };
 
   return (
-    <Drawer isOpen={isOpen} onClose={handleClose} title={`Reflect on "${habitTitle}"`}>
+    <Drawer
+      isOpen={isOpen}
+      onClose={handleClose}
+      title={`Reflect on "${habitTitle}"`}
+      footer={
+        <div className="flex gap-2 border-t border-brand-200 dark:border-brand-700 p-4">
+          <Button variant="secondary" className="flex-1" onClick={handleClose} disabled={isSaving}>
+            Skip
+          </Button>
+          <Button variant="primary" className="flex-1" onClick={handleSave} isLoading={isSaving}>
+            Save
+          </Button>
+        </div>
+      }
+    >
       <div className="space-y-4">
         <div>
           <p className="text-xs font-semibold text-brand-500 dark:text-brand-400 uppercase tracking-wider mb-2">
@@ -89,15 +103,6 @@ const ReflectionDrawer: React.FC<ReflectionDrawerProps> = ({ isOpen, onClose, ha
           showCount
           rows={3}
         />
-
-        <div className="flex gap-2">
-          <Button variant="secondary" className="flex-1" onClick={handleClose} disabled={isSaving}>
-            Skip
-          </Button>
-          <Button variant="primary" className="flex-1" onClick={handleSave} isLoading={isSaving}>
-            Save
-          </Button>
-        </div>
       </div>
     </Drawer>
   );

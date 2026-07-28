@@ -231,7 +231,29 @@ const CsvImportDrawer: React.FC<CsvImportDrawerProps> = ({ isOpen, onClose }) =>
   const selectValue = (col: number | undefined): string => (col === undefined ? '' : String(col));
 
   return (
-    <Drawer isOpen={isOpen} onClose={handleClose} title="Import transactions (CSV)" height="tall">
+    <Drawer
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="Import transactions (CSV)"
+      height="tall"
+      // Step-scoped: the upload step has no primary action of its own (its
+      // "Choose CSV file" button IS the step), so it keeps the body's pb-safe.
+      footer={
+        fileName ? (
+          <div className="flex gap-2 border-t border-brand-200 dark:border-brand-700 p-4">
+            <Button
+              variant="primary"
+              className="w-full"
+              onClick={handleImport}
+              isLoading={isImporting}
+              disabled={selectedCount === 0 || isImporting}
+            >
+              Import {selectedCount} transaction{selectedCount === 1 ? '' : 's'}
+            </Button>
+          </div>
+        ) : undefined
+      }
+    >
       <div className="space-y-5">
         {!fileName ? (
           <div className="flex flex-col items-center gap-3 py-8 text-center">
@@ -406,16 +428,6 @@ const CsvImportDrawer: React.FC<CsvImportDrawerProps> = ({ isOpen, onClose }) =>
                 {mapResult.errors.length} row(s) couldn&apos;t be parsed (bad date/amount) and will be skipped.
               </p>
             )}
-
-            <Button
-              variant="primary"
-              className="w-full"
-              onClick={handleImport}
-              isLoading={isImporting}
-              disabled={selectedCount === 0 || isImporting}
-            >
-              Import {selectedCount} transaction{selectedCount === 1 ? '' : 's'}
-            </Button>
           </>
         )}
       </div>
