@@ -494,15 +494,19 @@ export interface Transaction {
   createdBy?: string;
   /** 2H(a): the PAID calendar-item doc this transaction settled — written by
    *  `settleBillWithTransaction` when the user says "this charge IS that planned
-   *  bill". Always a REAL Firestore doc id: for a recurring occurrence it is the
-   *  paid-instance doc the merge creates (never the synthetic
-   *  `templateId_instance_yyyy-MM-dd` id, which is derived and goes stale when a
-   *  template's anchor or frequency is edited); for a one-off bill it is that
-   *  item's own id. Its presence is also the "already settled" guard: the merge
-   *  refuses a second settle, and `reverseTransactionApproval` refuses to undo a
-   *  row carrying it (undoing from the transaction side would leave the bill
-   *  marked paid and this doc orphaned — undo from the bill instead). Absent on
-   *  every transaction that has never settled a bill. */
+   *  bill", and by `payCalendarItem` on the transaction it creates for an
+   *  EXPENSE (never for a paycheck). Always a REAL Firestore doc id: for a
+   *  recurring occurrence it is the paid-instance doc that path creates (never
+   *  the synthetic `templateId_instance_yyyy-MM-dd` id, which is derived and goes
+   *  stale when a template's anchor or frequency is edited); for a one-off bill
+   *  it is that item's own id. Its presence is also the "already settled" guard:
+   *  the merge refuses a second settle, and — while the referenced bill is still
+   *  marked paid — `deleteTransaction`, `mergeTransactions` (on the dupe),
+   *  `splitTransaction`, `updateTransaction` (money fields only) and
+   *  `reverseTransactionApproval` all refuse, because each would leave the bill
+   *  marked paid with this doc orphaned. See `utils/settledBillGuard.ts`; undo
+   *  from the bill on the calendar instead. Absent on every transaction that has
+   *  never settled a bill. */
   paidCalendarItemId?: string;
   /** F-MONEY-13: shared-expense splitting overlay. A bookkeeping-only list of
    *  the OTHER people's shares of this expense (the payer keeps the remainder).

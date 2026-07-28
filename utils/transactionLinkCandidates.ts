@@ -1,6 +1,7 @@
 import { differenceInCalendarDays, parseISO, isValid } from 'date-fns';
 
 import { INCOME_CATEGORY, type Transaction } from '@/types/schema';
+import { BUDGETED_IN_CALENDAR } from '@/utils/categories';
 
 /**
  * Pure filter/sort for the Edit Event drawer's "link this bill to a transaction"
@@ -12,6 +13,10 @@ import { INCOME_CATEGORY, type Transaction } from '@/types/schema';
  * A row is a candidate when it could actually settle a bill:
  *   - not already linked to one (`paidCalendarItemId`) — the mutation refuses a
  *     second settle, so offering it would be a dead tap;
+ *   - not already A BILL PAYMENT (`Budgeted in Calendar`) — belt-and-braces on
+ *     top of the `paidCalendarItemId` stamp `payCalendarItem` now writes, so a
+ *     $1,200 Rent payment can never be picked to "settle" a $95 storage bill
+ *     even on a legacy row written before that stamp existed;
  *   - not income (a credit cannot pay an expense);
  *   - a real charge — a `needsAmount` $0 Apple Pay stub has no amount yet, and
  *     the mutation refuses a non-positive one.
@@ -61,6 +66,7 @@ export function getTransactionLinkCandidates(
 
   const eligible = transactions.filter((tx) => {
     if (tx.paidCalendarItemId) return false;
+    if (tx.category === BUDGETED_IN_CALENDAR) return false;
     if (tx.category === INCOME_CATEGORY) return false;
     if (tx.needsAmount) return false;
     if (!(tx.amount > 0)) return false;

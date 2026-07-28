@@ -1872,11 +1872,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     transactionId: string,
     calendarItemId: string,
     accountId?: string,
+    amount?: number,
   ) => {
     return makeSettleBillWithTransaction({
       db, householdId, user, actorName: currentUser?.displayName ?? user?.displayName ?? null,
       transactions, calendarItems, accounts,
-    }).settleBillWithTransaction(transactionId, calendarItemId, accountId);
+    }).settleBillWithTransaction(transactionId, calendarItemId, accountId, amount);
   }, [householdId, user, currentUser, transactions, calendarItems, accounts]);
 
   // --- ACTIONS: TRANSACTIONS ---
@@ -1914,23 +1915,23 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     firedHabitIds: string[],
   ) => {
     await makeReverseTransactionApproval({
-      db, householdId, habits, transactions, accounts,
+      db, householdId, habits, transactions, accounts, calendarItems,
     }).reverseTransactionApproval(id, prior, firedHabitIds);
-  }, [householdId, habits, transactions, accounts]);
+  }, [householdId, habits, transactions, accounts, calendarItems]);
 
   const updateTransaction = useCallback(async (id: string, updates: Partial<Transaction>, opts?: MutationOpts) => {
     await makeUpdateTransaction({
-      db, householdId, transactions, householdSettings, accounts,
+      db, householdId, transactions, householdSettings, accounts, calendarItems,
     }).updateTransaction(id, updates, opts);
-  }, [householdId, transactions, householdSettings, accounts]);
+  }, [householdId, transactions, householdSettings, accounts, calendarItems]);
 
   const deleteTransaction = useCallback(async (id: string, opts?: MutationOpts) => {
-    await makeDeleteTransaction({ db, householdId, transactions, accounts, user }).deleteTransaction(id, opts);
-  }, [householdId, transactions, accounts, user]);
+    await makeDeleteTransaction({ db, householdId, transactions, accounts, user, calendarItems }).deleteTransaction(id, opts);
+  }, [householdId, transactions, accounts, user, calendarItems]);
 
   const mergeTransactions = useCallback(async (keeperId: string, dupeId: string) => {
-    await makeMergeTransactions({ db, householdId, transactions, accounts }).mergeTransactions(keeperId, dupeId);
-  }, [householdId, transactions, accounts]);
+    await makeMergeTransactions({ db, householdId, transactions, accounts, calendarItems }).mergeTransactions(keeperId, dupeId);
+  }, [householdId, transactions, accounts, calendarItems]);
 
   const keepBothTransactions = useCallback(async (txnId: string) => {
     await makeKeepBothTransactions({ db, householdId }).keepBothTransactions(txnId);
@@ -1938,9 +1939,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   const splitTransaction = useCallback(async (originalTransactionId: string, newTransactions: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[]) => {
     await makeSplitTransaction({
-      db, householdId, user, transactions, householdSettings, accounts,
+      db, householdId, user, transactions, householdSettings, accounts, calendarItems,
     }).splitTransaction(originalTransactionId, newTransactions);
-  }, [householdId, user, transactions, householdSettings, accounts]);
+  }, [householdId, user, transactions, householdSettings, accounts, calendarItems]);
 
   const setTransactionSplit = useCallback(async (transactionId: string, split: SplitParticipant[] | null) => {
     await makeSetTransactionSplit({ db, householdId }).setTransactionSplit(transactionId, split);

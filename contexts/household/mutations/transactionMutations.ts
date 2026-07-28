@@ -21,6 +21,7 @@ import { Star } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
 import {
   Account,
+  CalendarItem,
   FreezeBank,
   FreezeBankHistoryEntry,
   Habit,
@@ -31,6 +32,7 @@ import {
 } from '@/types/schema';
 import type { MutationOpts } from '@/contexts/household/types';
 import { effectiveAccountImpact, isBankSyncTransaction, resolveTargetAccount, shouldSkipBankSyncDelta } from '@/utils/accountImpact';
+import { findSettledBill, settledBillRefusal, touchesSettledBillFields } from '@/utils/settledBillGuard';
 import { splitParticipantKey } from '@/utils/settlement';
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
 import { processToggleHabit, habitPeriodStart, streakForHabit } from '@/utils/habitLogic';
@@ -839,8 +841,9 @@ export function makeReverseTransactionApproval(deps: {
   habits: Habit[];
   transactions: Transaction[];
   accounts: Account[];
+  calendarItems: CalendarItem[];
 }) {
-  const { db, householdId, habits, transactions, accounts } = deps;
+  const { db, householdId, habits, transactions, accounts, calendarItems } = deps;
 
   const reverseTransactionApproval = async (
     id: string,
@@ -859,10 +862,11 @@ export function makeReverseTransactionApproval(deps: {
     // Reversing a row that settled one would send the transaction back to
     // `pending_review` and credit the balance back while leaving the bill marked
     // paid and its paid-instance doc orphaned — a silent money/calendar
-    // divergence. Full unlink is deliberately out of scope, so REFUSE and point
-    // at the side that can actually undo it.
-    if (existingTx.paidCalendarItemId) {
-      toast.error('This transaction settled a bill. Undo it from that bill on the calendar.');
+    // divergence. See utils/settledBillGuard.ts; the same refusal guards every
+    // other mutation that could break the pair (delete/merge/split/edit).
+    const settledBill = findSettledBill(existingTx, calendarItems);
+    if (settledBill) {
+      toast.error(settledBillRefusal('undo', settledBill.title));
       return;
     }
 
@@ -1033,8 +1037,9 @@ export function makeUpdateTransaction(deps: {
   transactions: Transaction[];
   householdSettings: Household | null;
   accounts: Account[];
+  calendarItems: CalendarItem[];
 }) {
-  const { db, householdId, transactions, householdSettings, accounts } = deps;
+  const { db, householdId, transactions, householdSettings, accounts, calendarItems } = deps;
 
   const updateTransaction = async (id: string, updates: Partial<Transaction>, opts?: MutationOpts) => {
     if (!householdId) return;
@@ -1044,6 +1049,19 @@ export function makeUpdateTransaction(deps: {
       if (!transaction) {
         toast.error('Transaction not found');
         return;
+      }
+
+      // SETTLED-BILL GUARD (see utils/settledBillGuard.ts): re-pricing, re-tagging
+      // or un-verifying a row that settled a bill would move the balance while the
+      // calendar doc keeps the amount/paid state it was settled at. Only the fields
+      // the pair actually depends on are refused — a notes/merchant/date edit can't
+      // diverge the two documents and stays allowed.
+      if (touchesSettledBillFields(updates)) {
+        const settledBill = findSettledBill(transaction, calendarItems);
+        if (settledBill) {
+          toast.error(settledBillRefusal('edit', settledBill.title));
+          return;
+        }
       }
 
       // Round any incoming amount to whole cents before it is both stored (via
@@ -1219,8 +1237,9 @@ export function makeDeleteTransaction(deps: {
   transactions: Transaction[];
   accounts: Account[];
   user: { uid: string } | null;
+  calendarItems: CalendarItem[];
 }) {
-  const { db, householdId, transactions, accounts, user } = deps;
+  const { db, householdId, transactions, accounts, user, calendarItems } = deps;
 
   const deleteTransaction = async (id: string, opts?: MutationOpts) => {
     if (!householdId) return;
@@ -1229,6 +1248,17 @@ export function makeDeleteTransaction(deps: {
       const transaction = transactions.find(tx => tx.id === id);
       if (!transaction) {
         toast.error('Transaction not found');
+        return;
+      }
+
+      // SETTLED-BILL GUARD (see utils/settledBillGuard.ts): deleting a row that
+      // paid a bill reverses the balance but leaves the calendar doc marked paid
+      // and orphaned, so that occurrence never returns to unpaid bills and
+      // Safe-to-Spend overstates cash by its amount forever. Refuse (no write) and
+      // point at the calendar, which is where the pair can actually be undone.
+      const settledBill = findSettledBill(transaction, calendarItems);
+      if (settledBill) {
+        toast.error(settledBillRefusal('delete', settledBill.title));
         return;
       }
 
@@ -1327,8 +1357,9 @@ export function makeMergeTransactions(deps: {
   householdId: string | null;
   transactions: Transaction[];
   accounts: Account[];
+  calendarItems: CalendarItem[];
 }) {
-  const { db, householdId, transactions, accounts } = deps;
+  const { db, householdId, transactions, accounts, calendarItems } = deps;
 
   const mergeTransactions = async (keeperId: string, dupeId: string) => {
     if (!householdId) return;
@@ -1341,6 +1372,18 @@ export function makeMergeTransactions(deps: {
         // doesn't advance as if the merge succeeded. The outer catch shows
         // the failure toast and re-throws.
         throw new Error('Transaction not found');
+      }
+
+      // SETTLED-BILL GUARD (see utils/settledBillGuard.ts): the DUPE is deleted by
+      // this merge, so a dupe that settled a bill would orphan the paid calendar
+      // doc exactly as deleteTransaction would. The keeper survives untouched by
+      // any money field (`buildMergeUpdates` only unions identity/metadata), so it
+      // needs no guard. Toast + return rather than throw so the caller's own
+      // generic "failed to merge" toast doesn't bury the actual reason.
+      const dupeSettledBill = findSettledBill(dupeTx, calendarItems);
+      if (dupeSettledBill) {
+        toast.error(settledBillRefusal('merge away', dupeSettledBill.title));
+        return;
       }
 
       const updates = buildMergeUpdates(keeperTx, dupeTx);
@@ -1430,8 +1473,9 @@ export function makeSplitTransaction(deps: {
   transactions: Transaction[];
   householdSettings: Household | null;
   accounts: Account[];
+  calendarItems: CalendarItem[];
 }) {
-  const { db, householdId, user, transactions, householdSettings, accounts } = deps;
+  const { db, householdId, user, transactions, householdSettings, accounts, calendarItems } = deps;
 
   const splitTransaction = async (originalTransactionId: string, newTransactions: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[]) => {
     if (!householdId || !user) return;
@@ -1442,6 +1486,15 @@ export function makeSplitTransaction(deps: {
 
       if (!originalTx) {
         throw new Error('Original transaction not found');
+      }
+
+      // SETTLED-BILL GUARD (see utils/settledBillGuard.ts): step 1 below DELETES
+      // the original, so splitting a row that settled a bill orphans the paid
+      // calendar doc exactly as deleting it would.
+      const settledBill = findSettledBill(originalTx, calendarItems);
+      if (settledBill) {
+        toast.error(settledBillRefusal('split', settledBill.title));
+        return;
       }
 
       // Round each split's STORED amount to whole cents ONCE, and use the same

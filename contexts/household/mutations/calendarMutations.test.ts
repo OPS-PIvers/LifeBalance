@@ -60,7 +60,7 @@ vi.mock('@/utils/firestoreSanitizer', () => ({
   sanitizeFirestoreData: (d: Record<string, unknown>) => d,
 }));
 
-import { makeLinkBankTransactionToBill, makeSettleBillWithTransaction } from './calendarMutations';
+import { makeLinkBankTransactionToBill, makePayCalendarItem, makeSettleBillWithTransaction } from './calendarMutations';
 import type { Account, CalendarItem, Transaction } from '@/types/schema';
 
 const HOUSEHOLD_ID = 'house1';
@@ -454,5 +454,100 @@ describe('makeSettleBillWithTransaction', () => {
     expect(await settleBillWithTransaction('tx-pay', 'bill-1')).toBe(false);
     expect(await settleBillWithTransaction('nope', 'inc-1')).toBe(false);
     expect(commitCount).toBe(0);
+  });
+
+  // The review form's amount field is LIVE state the stored row has not seen. A
+  // user who corrects a mis-OCR'd 379.10 to 37.91 and then taps settle must
+  // settle at 37.91 — the stale figure would mark the bill paid at, and debit,
+  // ten times the real charge.
+  it('settles at the CALLER-SUPPLIED amount and co-commits it onto the transaction', async () => {
+    const { settleBillWithTransaction } = makeSettleBillWithTransaction(
+      settleDeps([scannedTx({ amount: 379.1, accountId: 'acc-check' })], [oneOffBill({ amount: 142 })]),
+    );
+    const result = await settleBillWithTransaction('tx-scan', 'bill-1', undefined, 37.91);
+
+    expect(result).toBe(true);
+    // The bill records the CORRECTED amount...
+    const billUpdate = capturedUpdates.find(u => u.ref.__path === calPath('bill-1'));
+    expect(billUpdate?.data).toMatchObject({ isPaid: true, amount: 37.91 });
+    // ...the row is re-priced to match in the SAME batch...
+    const txUpdate = capturedUpdates.find(u => u.ref.__path === txPath('tx-scan'));
+    expect(txUpdate?.data?.amount).toBe(37.91);
+    // ...and the balance moves by the corrected figure, not the stale 379.10.
+    const accUpdate = capturedUpdates.find(u => u.ref.__path === accountPath('acc-check'));
+    expect(accUpdate?.data?.balance).toEqual({ __increment: -37.91 });
+    expect(commitCount).toBe(1);
+  });
+
+  it('leaves the stored amount alone when no override is passed', async () => {
+    const { settleBillWithTransaction } = makeSettleBillWithTransaction(
+      settleDeps([scannedTx()], [oneOffBill({ amount: 142 })]),
+    );
+    await settleBillWithTransaction('tx-scan', 'bill-1');
+
+    const txUpdate = capturedUpdates.find(u => u.ref.__path === txPath('tx-scan'));
+    expect(txUpdate?.data).not.toHaveProperty('amount');
+  });
+
+  it('refuses a non-positive override even when the stored amount is fine', async () => {
+    const { settleBillWithTransaction } = makeSettleBillWithTransaction(
+      settleDeps([scannedTx()], [oneOffBill()]),
+    );
+    expect(await settleBillWithTransaction('tx-scan', 'bill-1', undefined, 0)).toBe(false);
+    expect(await settleBillWithTransaction('tx-scan', 'bill-1', undefined, Number.NaN)).toBe(false);
+    expect(commitCount).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// payCalendarItem stamps `paidCalendarItemId` on the transaction it creates, so
+// a bill payment is recognisable AS one: without it a $1,200 Rent payment stayed
+// an eligible candidate in the calendar-side settle picker and could be used to
+// mark an unrelated $95 storage bill paid at $1,200.
+// ---------------------------------------------------------------------------
+describe('makePayCalendarItem — paidCalendarItemId stamp', () => {
+  const payDeps = (calendarItems: CalendarItem[]) => ({
+    db,
+    householdId: HOUSEHOLD_ID,
+    user: USER,
+    actorName: 'Paul',
+    accounts,
+    calendarItems,
+    householdSettings: null,
+    handlePaycheckApproval: vi.fn(async () => {}),
+  });
+
+  beforeEach(() => {
+    capturedSets = [];
+    capturedUpdates = [];
+    commitCount = 0;
+    vi.clearAllMocks();
+  });
+
+  it('stamps the ONE-OFF bill’s own doc id onto the transaction it creates', async () => {
+    const { payCalendarItem } = makePayCalendarItem(payDeps([oneOffBill()]));
+    await payCalendarItem('bill-1', 'acc-check');
+
+    const txSet = capturedSets.find(s => s.ref.__path.startsWith(`households/${HOUSEHOLD_ID}/transactions`));
+    expect(txSet?.data?.paidCalendarItemId).toBe('bill-1');
+  });
+
+  it('stamps the NEW paid-instance doc id for a recurring occurrence', async () => {
+    const template = oneOffBill({ id: 'tmpl-1', isRecurring: true, frequency: 'monthly' });
+    const { payCalendarItem } = makePayCalendarItem(payDeps([template]));
+    await payCalendarItem('tmpl-1_instance_2026-07-18', 'acc-check');
+
+    // The mocked auto-id ref resolves to `__autoId` (see the doc() mock above).
+    const txSet = capturedSets.find(s => s.ref.__path.startsWith(`households/${HOUSEHOLD_ID}/transactions`));
+    expect(txSet?.data?.paidCalendarItemId).toBe('__autoId');
+  });
+
+  it('does NOT stamp an income (paycheck) approval — the field, its guards and their copy are about bills', async () => {
+    const paycheck = oneOffBill({ id: 'inc-1', type: 'income', title: 'Paycheck' });
+    const { payCalendarItem } = makePayCalendarItem(payDeps([paycheck]));
+    await payCalendarItem('inc-1', 'acc-check');
+
+    const txSet = capturedSets.find(s => s.ref.__path.startsWith(`households/${HOUSEHOLD_ID}/transactions`));
+    expect(txSet?.data).not.toHaveProperty('paidCalendarItemId');
   });
 });

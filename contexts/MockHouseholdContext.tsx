@@ -21,7 +21,8 @@ import type { TodoSubtaskToggleResult, TodoCompletionOptions } from '@/contexts/
 import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
 import { attributionString, type TriggerSource } from '@/utils/habitTriggers';
 import { selectAutoFreezeCandidates } from '@/utils/freezeBank';
-import { accountImpactOf, effectiveAccountImpact, isBankSyncTransaction, resolveTargetAccount } from '@/utils/accountImpact';
+import { accountImpactOf, effectiveAccountImpact, isBankSyncTransaction, resolveTargetAccount, shouldSkipBankSyncDelta } from '@/utils/accountImpact';
+import { findSettledBill, settledBillRefusal, touchesSettledBillFields } from '@/utils/settledBillGuard';
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
 import { selectHabitsToFire } from '@/utils/transactionHabitFiring';
 import { MAX_COMMENT_LENGTH } from '@/contexts/household/mutations/commentMutations';
@@ -72,7 +73,8 @@ import {
   SavingsGoal,
   TransactionComment,
   MerchantRule,
-  MAX_MERCHANT_RULES
+  MAX_MERCHANT_RULES,
+  INCOME_CATEGORY
 } from '@/types/schema';
 import toast from 'react-hot-toast';
 
@@ -1154,9 +1156,20 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   }, [accounts]);
 
   const updateTransaction = useCallback(async (id: string, updates: Partial<Transaction>) => {
+    // Settled-bill guard parity (utils/settledBillGuard.ts): re-pricing or
+    // re-tagging a row that settled a bill would desync it from the calendar doc
+    // it marked paid. Metadata-only edits stay allowed.
+    const existing = transactions.find(t => t.id === id);
+    if (existing && touchesSettledBillFields(updates)) {
+      const settledBill = findSettledBill(existing, calendarItems);
+      if (settledBill) {
+        toast.error(settledBillRefusal('edit', settledBill.title));
+        return;
+      }
+    }
     setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
     toast.success('Mock: Transaction updated');
-  }, []);
+  }, [transactions, calendarItems]);
 
   // Test-Mode parity for the verify action: mark the transaction verified under
   // `category`, optionally (re)tag the account, and co-apply the same inline
@@ -1268,6 +1281,15 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     prior: { category: string; accountId?: string; relatedHabitIds?: string[] },
     firedHabitIds: string[],
   ) => {
+    // Settled-bill guard parity (utils/settledBillGuard.ts): this undo knows
+    // nothing about bills, so reversing a row that settled one would credit the
+    // balance back while the calendar doc stays paid and orphaned.
+    const existing = transactions.find(t => t.id === id);
+    const settledBill = existing ? findSettledBill(existing, calendarItems) : undefined;
+    if (settledBill) {
+      toast.error(settledBillRefusal('undo', settledBill.title));
+      return;
+    }
     setTransactions(prev => prev.map(t => {
       if (t.id !== id) return t;
       const next: Transaction = {
@@ -1286,7 +1308,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         ? { ...h, count: Math.max(0, h.count - 1), totalCount: Math.max(0, h.totalCount - 1) }
         : h));
     }
-  }, []);
+  }, [transactions, calendarItems]);
 
   // F-XCUT-03: push a soft-deleted record into the in-memory trash mirror so
   // Test Mode exercises the same restore/purge flow as the real listener.
@@ -1306,6 +1328,14 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   }, []);
 
   const deleteTransaction = useCallback(async (id: string) => {
+    // Settled-bill guard parity (utils/settledBillGuard.ts): deleting a row that
+    // paid a bill would leave the calendar doc marked paid and orphaned.
+    const existing = transactions.find(t => t.id === id);
+    const settledBill = existing ? findSettledBill(existing, calendarItems) : undefined;
+    if (settledBill) {
+      toast.error(settledBillRefusal('delete', settledBill.title));
+      return;
+    }
     setTransactions(prev => {
       const target = prev.find(t => t.id === id);
       // F-XCUT-03 parity: deleted transactions land in Recently Deleted too.
@@ -1313,7 +1343,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       return prev.filter(t => t.id !== id);
     });
     toast.success('Mock: Transaction deleted');
-  }, [pushToTrash]);
+  }, [pushToTrash, transactions, calendarItems]);
 
   // Test-Mode parity for the Merge action (plan 03 PR-3): applies the same
   // field-level winner set as the real context, deletes the dupe, and
@@ -1330,6 +1360,14 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       // treating the merge as a success.
       toast.error('Transaction not found');
       throw new Error('Transaction not found');
+    }
+
+    // Settled-bill guard parity (utils/settledBillGuard.ts): the DUPE is deleted
+    // by this merge, so a dupe that settled a bill orphans the paid calendar doc.
+    const dupeSettledBill = findSettledBill(dupeTx, calendarItems);
+    if (dupeSettledBill) {
+      toast.error(settledBillRefusal('merge away', dupeSettledBill.title));
+      return;
     }
 
     const updates = buildMergeUpdates(keeperTx, dupeTx);
@@ -1359,7 +1397,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
 
     track('duplicate_merged', { source: dupeTx.source });
     toast.success('Mock: Transactions merged');
-  }, [transactions, accounts]);
+  }, [transactions, accounts, calendarItems]);
 
   const keepBothTransactions = useCallback(async (txnId: string) => {
     setTransactions(prev => prev.map(t => {
@@ -1372,6 +1410,14 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   }, []);
 
   const splitTransaction = useCallback(async (originalTransactionId: string, newTransactions: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[]) => {
+    // Settled-bill guard parity (utils/settledBillGuard.ts): a split DELETES the
+    // original, orphaning the calendar doc it settled.
+    const original = transactions.find(t => t.id === originalTransactionId);
+    const settledBill = original ? findSettledBill(original, calendarItems) : undefined;
+    if (settledBill) {
+      toast.error(settledBillRefusal('split', settledBill.title));
+      return;
+    }
     setTransactions(prev => {
       // Filter out original transaction
       const filtered = prev.filter(t => t.id !== originalTransactionId);
@@ -1388,7 +1434,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       return [...filtered, ...newTxs];
     });
     toast.success('Mock: Transaction split');
-  }, []);
+  }, [transactions, calendarItems]);
 
   const setTransactionSplit = useCallback(async (transactionId: string, split: SplitParticipant[] | null) => {
     setTransactions(prev => prev.map(t => {
@@ -1816,14 +1862,20 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     transactionId: string,
     calendarItemId: string,
     accountId?: string,
+    amount?: number,
   ): Promise<boolean> => {
     const tx = transactions.find(t => t.id === transactionId);
     if (!tx) return false;
+    // Parity guard: a credit cannot pay an expense — filing income as
+    // `Budgeted in Calendar` would flip its balance sign.
+    if (tx.category === INCOME_CATEGORY) return false;
     if (tx.paidCalendarItemId) {
       toast.error('That transaction is already linked to a bill');
       return false;
     }
-    const paidAmount = roundMoney(tx.amount);
+    // The caller's LIVE amount wins over the stored one (parity with the real
+    // mutation) and is co-committed onto the row below.
+    const paidAmount = roundMoney(amount ?? tx.amount);
     if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
       toast.error('Add the real amount before linking this to a bill');
       return false;
@@ -1883,19 +1935,31 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         : i));
     }
 
-    // Balance parity, computed OUTSIDE the setState updaters (StrictMode
-    // double-invokes them): only a not-yet-verified row moves money here.
-    if (tx.status !== 'verified') {
-      const target = resolveTargetAccount(accountId ?? tx.accountId, accounts);
-      const balanceDelta = accountImpactOf(
-        { amount: paidAmount, category: BUDGETED_IN_CALENDAR, creditPayment: tx.creditPayment },
-        target,
-      );
-      if (target && balanceDelta !== 0) {
-        setAccounts(prev => prev.map(a => a.id === target.id
-          ? { ...a, balance: roundMoney(a.balance + balanceDelta), lastUpdated: new Date().toISOString() }
-          : a));
-      }
+    // Balance parity with the real mutation, computed OUTSIDE the setState
+    // updaters (StrictMode double-invokes them): the SAME reverse/apply pair
+    // updateTransactionCategory uses, not a one-sided "only if not yet verified"
+    // shortcut. A pending row reverses 0 and applies −amount; an ALREADY-VERIFIED
+    // row re-tagged to a different account moves the money off the old one and
+    // onto the new (the shortcut silently left it on the old); a bank-sync row's
+    // authoritative account is skipped on both sides.
+    const oldTarget = resolveTargetAccount(tx.accountId, accounts);
+    const newTarget = resolveTargetAccount(accountId ?? tx.accountId, accounts);
+    const reverseDelta = shouldSkipBankSyncDelta(tx, oldTarget?.id, oldTarget?.id)
+      ? 0
+      : -effectiveAccountImpact(tx, oldTarget);
+    const applyDelta = shouldSkipBankSyncDelta(tx, newTarget?.id, oldTarget?.id)
+      ? 0
+      : accountImpactOf(
+          { amount: paidAmount, category: BUDGETED_IN_CALENDAR, creditPayment: tx.creditPayment },
+          newTarget,
+        );
+    const settleDeltas = new Map<string, number>();
+    if (oldTarget) settleDeltas.set(oldTarget.id, (settleDeltas.get(oldTarget.id) ?? 0) + reverseDelta);
+    if (newTarget) settleDeltas.set(newTarget.id, (settleDeltas.get(newTarget.id) ?? 0) + applyDelta);
+    if (settleDeltas.size > 0) {
+      setAccounts(prev => prev.map(a => settleDeltas.has(a.id) && roundMoney(settleDeltas.get(a.id) ?? 0) !== 0
+        ? { ...a, balance: roundMoney(a.balance + (settleDeltas.get(a.id) ?? 0)), lastUpdated: new Date().toISOString() }
+        : a));
     }
 
     setTransactions(prev => prev.map(t => t.id === transactionId
@@ -1903,9 +1967,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
           ...t,
           status: 'verified' as const,
           category: BUDGETED_IN_CALENDAR,
+          amount: paidAmount,
           paidCalendarItemId,
           needsCategory: undefined,
           reviewSnoozedUntil: undefined,
+          ...(t.needsAmount ? { needsAmount: false } : {}),
           ...(accountId ? { accountId } : {}),
         }
       : t));

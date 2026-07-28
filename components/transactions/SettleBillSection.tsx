@@ -23,6 +23,14 @@ export interface SettleBillSectionProps {
    * ANY transaction rather than only on matched ones.
    */
   matchedBill?: { id: string; title: string };
+  /**
+   * The host form's LIVE amount (already rounded to whole cents), which the
+   * stored `transaction` prop has not seen. Settling reads THIS, not
+   * `transaction.amount`: a user who corrects a mis-OCR'd 379.10 to 37.91 and
+   * then taps settle must settle — and debit — 37.91. The mutation co-commits it
+   * onto the row, so nothing is left half-saved.
+   */
+  liveAmount: number;
   /** Called after a settle actually committed — the host closes its drawer. */
   onSettled: () => void;
 }
@@ -42,6 +50,7 @@ export interface SettleBillSectionProps {
 export const SettleBillSection: React.FC<SettleBillSectionProps> = ({
   transaction,
   matchedBill,
+  liveAmount,
   onSettled,
 }) => {
   const { accounts, transactions } = useFinance();
@@ -89,7 +98,10 @@ export const SettleBillSection: React.FC<SettleBillSectionProps> = ({
   const settle = (calendarItemId: string, billTitle: string) => {
     setShowPicker(false);
     setPendingBillTitle(billTitle);
-    begin({ transactionId: transaction.id, calendarItemId });
+    // `liveAmount` — NOT transaction.amount: the sibling amount field may hold an
+    // unsaved correction, and settling at the stale figure would debit the wrong
+    // money with no warning.
+    begin({ transactionId: transaction.id, calendarItemId, amount: liveAmount });
   };
 
   return (
@@ -186,11 +198,16 @@ export const SettleBillSection: React.FC<SettleBillSectionProps> = ({
       )}
 
       {/* This write moves real money out of an account, and an untagged
-          transaction doesn't say which — so confirm rather than guess. */}
+          transaction doesn't say which — so confirm rather than guess.
+          `includeCredit` because a bill CAN be charged to a card (the mutation
+          routes and signs a credit-tagged row correctly); the picker's default
+          exclusion is for the bill-PAY flow, which funds a payment FROM
+          checking. Without it a card-charged bill silently debited checking. */}
       <AccountPicker
         isOpen={needsAccount}
         onClose={cancel}
         onSelect={(accountId) => confirmAccount(accountId)}
+        includeCredit
         title="Which account paid this?"
         description="Marking the bill paid moves this charge out of an account. Pick the one it came from."
         topAction={suggestedAccount ? {

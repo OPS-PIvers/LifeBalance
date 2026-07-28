@@ -945,11 +945,14 @@ const BudgetCalendar: React.FC = () => {
 
       {/* Settling moves real money out of an account. When the picked
           transaction carries no account tag, confirm which one rather than
-          guessing (see useSettleBill). */}
+          guessing (see useSettleBill). `includeCredit` because a bill CAN be
+          charged to a card — this asks where the charge landed, not which
+          account to fund a payment from (the picker's default). */}
       <AccountPicker
         isOpen={settleNeedsAccount}
         onClose={cancelSettle}
         onSelect={confirmSettleAccount}
+        includeCredit
         title="Which account paid this?"
         description="Marking this bill paid moves the charge out of an account. Pick the one it came from."
       />

@@ -8,6 +8,14 @@ export interface SettleBillRequest {
   transactionId: string;
   /** Plain calendar-item doc id, or a synthetic `templateId_instance_date` id. */
   calendarItemId: string;
+  /**
+   * The amount to settle at, when the host has a LIVE one the stored row hasn't
+   * seen — the review form's amount field, where a mis-OCR'd 379.10 may have
+   * just been corrected to 37.91. Co-committed onto the transaction by the
+   * mutation, so the row, the bill and the balance all move together. Omit
+   * (calendar-side settle, which has no editable amount) to use the stored one.
+   */
+  amount?: number;
 }
 
 export interface SettleBillApi {
@@ -57,6 +65,7 @@ export function useSettleBill(onSettled?: () => void): SettleBillApi {
         request.transactionId,
         request.calendarItemId,
         accountId,
+        request.amount,
       );
       // A `false` return means a guard refused and NOTHING was written — the
       // mutation has already explained why, so don't claim success.

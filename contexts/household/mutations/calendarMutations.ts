@@ -404,9 +404,13 @@ export function makePayCalendarItem(deps: {
       const balanceDelta = item.type === 'expense' ? -paidAmount : paidAmount;
 
       // 1. Create or update the paid calendar item
+      // The doc id of whichever calendar doc ends up marked paid — stamped onto
+      // the transaction below so the pair is traceable from both sides.
+      let paidCalendarItemId: string;
       if (isRecurringInstance) {
         // Create a new paid instance record
         const newCalendarRef = doc(collection(db, `households/${householdId}/calendarItems`));
+        paidCalendarItemId = newCalendarRef.id;
         payBatch.set(newCalendarRef, {
           title: item.title,
           amount: paidAmount,
@@ -418,6 +422,7 @@ export function makePayCalendarItem(deps: {
           createdBy: user.uid,
         });
       } else {
+        paidCalendarItemId = itemId;
         // Mark non-recurring item as paid — recording the actual amount so the
         // calendar reflects what really cleared.
         payBatch.update(doc(db, `households/${householdId}/calendarItems`, itemId), {
@@ -435,6 +440,16 @@ export function makePayCalendarItem(deps: {
       // 3. Create transaction. `accountId` records which account the bill was
       // paid from — it's what lets the Action Queue's swipe-approve suggest
       // "the account you used last time" for this bill going forward.
+      //
+      // `paidCalendarItemId` marks this row as ALREADY BEING a bill payment
+      // (expenses only — the field, its guards and their copy are all about
+      // bills; an approved paycheck is not one). Without it, a $1,200 Rent
+      // payment stayed an eligible candidate in the calendar-side
+      // `TransactionLinkPicker` and could be picked to "settle" an unrelated $95
+      // storage bill, marking it paid at $1,200 off a payment that was never for
+      // it. It also brings this row under the shared settled-bill guard
+      // (utils/settledBillGuard.ts), so deleting/splitting it can no longer
+      // silently orphan the calendar doc it paid.
       const newTransactionRef = doc(collection(db, `households/${householdId}/transactions`));
       payBatch.set(newTransactionRef, {
         amount: paidAmount,
@@ -447,6 +462,7 @@ export function makePayCalendarItem(deps: {
         autoCategorized: true,
         payPeriodId,
         accountId,
+        ...(item.type === 'expense' ? { paidCalendarItemId } : {}),
         createdBy: user.uid,
         createdAt: serverTimestamp(),
       });
@@ -675,8 +691,10 @@ export function makeLinkBankTransactionToBill(deps: {
  *      gets `isPaid`/`amount` on its own doc. The recurring TEMPLATE's amount is
  *      NEVER touched, so next month still budgets the scheduled figure;
  *   2. the transaction is verified, filed as `Budgeted in Calendar`, and stamped
- *      with `paidCalendarItemId` (the real paid doc id) — its amount, and its
- *      `payPeriodId`, are left alone (see the call site comment);
+ *      with `paidCalendarItemId` (the real paid doc id) — its `payPeriodId` is
+ *      left alone (see the call site comment), and so is its amount UNLESS the
+ *      caller passed a corrected `amount`, which then drives all three of the
+ *      row, the bill and the balance delta;
  *   3. the account balance moves by the row's now-effective impact, routed
  *      through `resolveTargetAccount`/`effectiveAccountImpact`/
  *      `shouldSkipBankSyncDelta` so credit-tagged rows and bank-sync rows keep
@@ -714,6 +732,7 @@ export function makeSettleBillWithTransaction(deps: {
     transactionId: string,
     calendarItemId: string,
     accountId?: string,
+    amount?: number,
   ): Promise<boolean> => {
     if (!householdId || !user) return false;
 
@@ -728,13 +747,20 @@ export function makeSettleBillWithTransaction(deps: {
       toast.error('That transaction is already linked to a bill');
       return false;
     }
-    const paidAmount = roundMoney(tx.amount);
+    // `amount` is the caller's LIVE figure (the review form's amount field),
+    // which the stored row has not seen yet — a user who corrects a mis-OCR'd
+    // 379.10 to 37.91 and taps settle must settle at 37.91, not at the stale
+    // stored value. It drives the bill's paid amount, the balance delta AND the
+    // transaction's own amount, all in the one batch below, so the three can
+    // never disagree. Undefined ⇒ the stored amount, exactly as before.
+    const paidAmount = roundMoney(amount ?? tx.amount);
     // A $0 Apple Pay stub has no charge yet — settling one would mark the bill
     // paid for nothing and move no money.
     if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
       toast.error('Add the real amount before linking this to a bill');
       return false;
     }
+    const amountChanged = paidAmount !== roundMoney(tx.amount);
     const descriptor = (tx.merchant || '').trim();
 
     const isRecurringInstance = isRecurringId(calendarItemId);
@@ -843,15 +869,21 @@ export function makeSettleBillWithTransaction(deps: {
       }
 
       // 2. File the transaction as the bill payment. The AMOUNT is untouched
-      //    (the bank's figure is the truth), and so is `payPeriodId`: unlike
-      //    payCalendarItem — which CREATES the transaction and therefore has to
-      //    choose a period — this row already exists and its own date is the
-      //    authoritative charge date, so retro-filing it under the bill's
-      //    due-date period would move real spend into a closed period.
+      //    unless the caller passed a corrected one (see `paidAmount` above), in
+      //    which case it is co-committed HERE so the row, the bill and the
+      //    balance delta all carry the same figure. `payPeriodId` is untouched
+      //    either way: unlike payCalendarItem — which CREATES the transaction and
+      //    therefore has to choose a period — this row already exists and its own
+      //    date is the authoritative charge date, so retro-filing it under the
+      //    bill's due-date period would move real spend into a closed period.
       batch.update(doc(db, txPath, transactionId), {
         status: 'verified',
         category: BUDGETED_IN_CALENDAR,
         paidCalendarItemId,
+        ...(amountChanged ? { amount: paidAmount } : {}),
+        // A settled row is no longer awaiting an amount. Written as `false` (not
+        // deleted) to match updateTransactionCategory's `clearNeedsAmount`.
+        ...(tx.needsAmount ? { needsAmount: false } : {}),
         ...(requestedAccountId ? { accountId: requestedAccountId } : {}),
         ...(tx.needsCategory ? { needsCategory: deleteField() } : {}),
         ...(tx.reviewSnoozedUntil ? { reviewSnoozedUntil: deleteField() } : {}),

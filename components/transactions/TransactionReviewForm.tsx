@@ -511,13 +511,19 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
           `pending_review` screenshot imports, and DOES move the balance. The
           two are mutually exclusive so a row never offers both. Hidden wherever
           the mutation would refuse anyway rather than offering a dead tap: a row
-          that already settled a bill (`paidCalendarItemId`), a $0 `needsAmount`
-          stub (nothing was charged yet), and income (a credit cannot pay an
-          expense). */}
-      {!canLinkToBill && !transaction.paidCalendarItemId && !transaction.needsAmount && !isIncome && (
+          that already settled a bill (`paidCalendarItemId`), income (a credit
+          cannot pay an expense), and a non-positive amount.
+
+          The amount gate is the LIVE `parsedAmount`, matching the mutation's own
+          `roundMoney(amount) <= 0` refusal exactly — gating on
+          `!transaction.needsAmount` instead offered a button that always failed
+          on a stored-$0 row that never carried the stub flag, while hiding it on
+          a stub the user had just typed a real amount into. */}
+      {!canLinkToBill && !transaction.paidCalendarItemId && !isIncome && parsedAmount > 0 && (
         <SettleBillSection
           transaction={transaction}
           matchedBill={matchedBill}
+          liveAmount={parsedAmount}
           onSettled={onDone}
         />
       )}

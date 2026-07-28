@@ -268,18 +268,23 @@ export interface HouseholdContextType {
    *  account balance by the row's now-effective impact (a `pending_review` row
    *  debits its amount; a bank-sync row whose balance is already authoritative
    *  moves nothing), and learns the descriptor onto the bill's
-   *  `bankDescriptorAliases`. The transaction's own amount and `payPeriodId`
-   *  are left untouched. `calendarItemId` accepts a plain doc id or a synthetic
+   *  `bankDescriptorAliases`. The transaction's `payPeriodId` is left untouched.
+   *  `calendarItemId` accepts a plain doc id or a synthetic
    *  recurring-occurrence id (`templateId_instance_yyyy-MM-dd`) — NEVER a
    *  recurring template's own id, which would rewrite every future
    *  occurrence's budgeted amount. `accountId` overrides which account the
    *  balance delta lands on (the picker's confirmation); omit to use the
-   *  transaction's existing tag. Returns `true` only when the batch committed;
+   *  transaction's existing tag. `amount` co-commits a corrected amount onto the
+   *  transaction in the SAME batch and is what the bill is marked paid at and
+   *  what the balance moves by — the review form's live field, so settling a
+   *  mis-OCR'd row the user just fixed can't settle at the stale figure; omit to
+   *  use the stored amount. Returns `true` only when the batch committed;
    *  `false` means nothing was written. */
   settleBillWithTransaction: (
     transactionId: string,
     calendarItemId: string,
     accountId?: string,
+    amount?: number,
   ) => Promise<boolean>;
 
   // Transaction Actions

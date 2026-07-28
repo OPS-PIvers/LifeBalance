@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 
 import { getTransactionLinkCandidates } from '@/utils/transactionLinkCandidates';
 import { INCOME_CATEGORY, type Transaction } from '@/types/schema';
+import { BUDGETED_IN_CALENDAR } from '@/utils/categories';
 
 const tx = (over: Partial<Transaction> & { id: string; date: string }): Transaction => ({
   amount: 40,
@@ -45,6 +46,18 @@ describe('getTransactionLinkCandidates', () => {
       tx({ id: 'income', date: '2026-07-18', category: INCOME_CATEGORY }),
       tx({ id: 'stub', date: '2026-07-18', amount: 0, needsAmount: true }),
       tx({ id: 'zero', date: '2026-07-18', amount: 0 }),
+    ];
+    expect(ids(getTransactionLinkCandidates(rows, { anchorDate: '2026-07-18' }))).toEqual(['ok']);
+  });
+
+  it('excludes a row that IS ALREADY a bill payment, even without the paidCalendarItemId stamp', () => {
+    // `payCalendarItem` now stamps `paidCalendarItemId`, but rows it wrote
+    // BEFORE that carry only the category. Without this arm, a $1,200 Rent
+    // payment was an eligible candidate for a $95 storage bill — settling would
+    // have marked that bill paid at $1,200 off a payment never made for it.
+    const rows = [
+      tx({ id: 'ok', date: '2026-07-18' }),
+      tx({ id: 'legacy-rent-payment', date: '2026-07-18', amount: 1200, category: BUDGETED_IN_CALENDAR }),
     ];
     expect(ids(getTransactionLinkCandidates(rows, { anchorDate: '2026-07-18' }))).toEqual(['ok']);
   });
