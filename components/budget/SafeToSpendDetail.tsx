@@ -59,15 +59,13 @@ export const SafeToSpendDetail: React.FC = () => {
             />
 
             {/* Pending transactions */}
-            {breakdown.pendingSpend > 0 && (
-              <DetailRow
-                icon={<Clock size={16} />}
-                label="Pending transactions"
-                sub="Spent but not yet cleared"
-                value={`- ${fmt(breakdown.pendingSpend)}`}
-                negative
-              />
-            )}
+            <DetailRow
+              icon={<Clock size={16} />}
+              label="Pending transactions"
+              sub="Spent but not yet cleared"
+              value={breakdown.pendingSpend >= 0.005 ? `- ${fmt(breakdown.pendingSpend)}` : fmt(0)}
+              negative={breakdown.pendingSpend >= 0.005}
+            />
 
             <div className="px-4 pt-3 pb-3.5 hairline-divider">
               {dailyPace !== null && (
