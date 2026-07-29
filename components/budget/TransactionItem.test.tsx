@@ -121,7 +121,7 @@ describe('TransactionItem — the row is the primary target (CRIT-01)', () => {
       expect(handlers.onEdit).not.toHaveBeenCalled();
     });
 
-    it('does not fire the row when a nested action button is activated by keyboard', async () => {
+    it('does not fire the row when an action button is activated by keyboard', async () => {
       const user = userEvent.setup();
       const handlers = renderRow();
 
@@ -130,6 +130,46 @@ describe('TransactionItem — the row is the primary target (CRIT-01)', () => {
 
       expect(handlers.onMore).toHaveBeenCalledTimes(1);
       expect(handlers.onEdit).not.toHaveBeenCalled();
+    });
+
+    // ARIA forbids interactive descendants of role="button". Nesting the 1-5
+    // action controls inside the row's own button subtree gave a keyboard user
+    // 2-5 tab stops per row across a 100-row virtualized list, with the hover
+    // "Edit" button firing the very same onEdit(tx) as its own container.
+    it('renders every action control as a SIBLING of the row body, never inside it', () => {
+      renderRow();
+
+      const body = screen.getByRole('button', { name: /^Edit expense/ });
+      expect(body.querySelector('button')).toBeNull();
+
+      const actionLabels = [
+        'Edit transaction from Safeway',
+        'Duplicate transaction from Safeway',
+        'Split transaction from Safeway',
+        'Delete transaction from Safeway',
+        'More options transaction from Safeway',
+      ];
+      for (const label of actionLabels) {
+        const action = screen.getByLabelText(label);
+        expect(body.contains(action)).toBe(false);
+        // Same parent chain: the action cluster hangs off the row that also
+        // hosts the body, so they are siblings within one visual row.
+        expect(body.parentElement?.contains(action)).toBe(true);
+      }
+    });
+
+    it('gives the row body exactly one tab stop, ahead of the action controls', async () => {
+      const user = userEvent.setup();
+      renderRow();
+
+      const body = screen.getByRole('button', { name: /^Edit expense/ });
+      await user.tab();
+      expect(body).toHaveFocus();
+
+      // The next stop must be an action control, not the row body a second time.
+      await user.tab();
+      expect(body).not.toHaveFocus();
+      expect(document.activeElement).toBe(screen.getByLabelText('Edit transaction from Safeway'));
     });
   });
 
@@ -165,6 +205,15 @@ describe('TransactionItem — the row is the primary target (CRIT-01)', () => {
     it('leaves no stray "Select transaction" label on the hidden checkbox glyph', () => {
       renderRow({ isSelectionMode: true });
       expect(screen.queryByLabelText('Select transaction')).not.toBeInTheDocument();
+    });
+
+    // Selection mode hides every action button, so the role can safely sit on
+    // the whole row here — but only while that stays true.
+    it('hosts the checkbox role on a subtree with no interactive descendant', () => {
+      renderRow({ isSelectionMode: true });
+      const row = screen.getByRole('checkbox', { name: /^Select expense/ });
+      expect(row.querySelector('button')).toBeNull();
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
     });
   });
 
