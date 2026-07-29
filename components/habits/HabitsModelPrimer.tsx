@@ -104,7 +104,10 @@ export const HabitsModelPrimerLink: React.FC<{ className?: string }> = ({ classN
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 text-xs font-semibold text-warm-600 hover:text-warm-700 dark:text-warm-300 dark:hover:text-warm-200 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 rounded-xs"
+        // 16px text-line hit area is well under the 44px floor; the house
+        // extender pattern (Button's `sm`/`md` sizes) grows the tap target
+        // vertically without inflating the visible link.
+        className="relative inline-flex items-center gap-1.5 text-xs font-semibold text-warm-600 hover:text-warm-700 dark:text-warm-300 dark:hover:text-warm-200 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 rounded-xs before:absolute before:inset-x-0 before:-inset-y-4 before:content-['']"
       >
         <BookOpen size={13} aria-hidden="true" />
         How points &amp; streaks work

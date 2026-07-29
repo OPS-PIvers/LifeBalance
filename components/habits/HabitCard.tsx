@@ -160,11 +160,24 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
     setIsMenuOpen(false);
   };
 
+  // F-HABITS-06 owner note (2): jot a note/mood once the habit is active
+  // today. Lives in the kebab menu (not inline on the row) — an inline
+  // "Reflect" affordance previously sat INSIDE the row-wide toggle button's
+  // bounding box, so a near-miss tap silently logged a habit completion
+  // (points + streak) instead of opening the reflection drawer.
+  const handleReflect = () => {
+    setIsReflectionOpen(true);
+    setIsMenuOpen(false);
+  };
+
   // Shared action set for the desktop dropdown (Menu) and mobile Drawer.
   const menuItems: MenuItem[] = [
     { key: 'edit', label: 'Edit', icon: <Edit2 size={14} />, onSelect: handleEdit },
     ...(isPaused
       ? [{ key: 'resume', label: 'Resume', icon: <Play size={14} />, onSelect: handleResume } as MenuItem]
+      : []),
+    ...(isActive
+      ? [{ key: 'reflect', label: 'Add a note or mood', icon: <MessageSquarePlus size={14} />, onSelect: handleReflect } as MenuItem]
       : []),
     { key: 'log', label: 'View Log', icon: <Calendar size={14} />, onSelect: handleViewLog },
     {
@@ -216,18 +229,22 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
                 )}
               </div>
 
-              {/* Reset Button (X) — the visible circle stays w-6 h-6 at the
-                  indicator's top-right corner; the after: pseudo-element
-                  extends the hit area to ~44px without shifting the circle
-                  (the old p-2/-m-2 hack moved an absolutely-positioned box
-                  instead of growing it, clipping the top habit row). */}
+              {/* Reset Button (X) — the visible circle stays w-6 h-6, flush
+                  with (not overhanging) the indicator's top-right corner; the
+                  after: pseudo-element extends the hit area to ~44px without
+                  shifting the circle. Flush placement (not the old -1.5
+                  overhang) keeps the full 44px extension inside the row's own
+                  vertical margin instead of bleeding into the row above,
+                  where a sibling row's static content painted over it and
+                  silently shrank the real hit area back down (measured
+                  live — see PR). */}
               {isActive && (
                 <button
                   onClick={(e) => {
                      e.stopPropagation();
                      resetHabit(habit.id);
                   }}
-                  className="absolute -top-1.5 -right-1.5 bg-white dark:bg-brand-700 border border-brand-200 dark:border-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-brand-400 dark:text-brand-300 active:scale-90 hover:bg-money-bgNeg dark:hover:bg-money-neg/20 hover:text-money-neg dark:hover:text-money-negDark hover:border-money-neg/30 transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-1 focus:ring-money-neg/50 pointer-events-auto after:absolute after:-inset-2.5 after:rounded-full after:content-['']"
+                  className="absolute top-0 right-0 bg-white dark:bg-brand-700 border border-brand-200 dark:border-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-brand-400 dark:text-brand-300 active:scale-90 hover:bg-money-bgNeg dark:hover:bg-money-neg/20 hover:text-money-neg dark:hover:text-money-negDark hover:border-money-neg/30 transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-1 focus:ring-money-neg/50 pointer-events-auto after:absolute after:-inset-3 after:rounded-full after:content-['']"
                   aria-label="Reset habit progress"
                   style={{ zIndex: 20 }}
                 >
@@ -305,21 +322,6 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
               </Badge>
             )}
 
-            {/* F-HABITS-06 owner note (2): unobtrusive one-tap affordance to
-                jot a note/mood once the habit is active today. */}
-            {isActive && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsReflectionOpen(true);
-                }}
-                className="relative z-10 flex items-center gap-1 text-xxs font-semibold text-brand-400 dark:text-brand-450 hover:text-accent-600 dark:hover:text-accent-300 transition-colors"
-                aria-label={`Add a note or mood for ${habit.title}`}
-              >
-                <MessageSquarePlus size={12} /> Reflect
-              </button>
-            )}
           </div>
 
         {/* Action menu (desktop dropdown; mobile uses the Drawer below).
@@ -359,6 +361,16 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
               onClick={handleResume}
             >
               Resume Habit
+            </Button>
+          )}
+          {isActive && (
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-lg py-4"
+              leftIcon={<MessageSquarePlus className="text-brand-400" />}
+              onClick={handleReflect}
+            >
+              Add a Note or Mood
             </Button>
           )}
           <Button
