@@ -4,7 +4,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import TransactionReviewForm from './TransactionReviewForm';
 import { Transaction, MerchantRule } from '@/types/schema';
 import { getLocalDateString } from '@/utils/dateHelpers';
-import { format, parseISO, subDays } from 'date-fns';
+import { addDays, format, isSameDay, parseISO, startOfISOWeek, subDays } from 'date-fns';
 
 // Hoisted mocks (available before the module imports run).
 const {
@@ -389,6 +389,16 @@ describe('TransactionReviewForm', () => {
       ...baseTx, merchant: 'AMAZON MKTPL', date: fourDaysAgo,
     };
 
+    // Some OTHER day inside the transaction's ISO week — the week's Monday,
+    // unless the transaction itself is that Monday, in which case Tuesday.
+    // Anchoring to the transaction's own week (rather than an offset from
+    // today) is what makes the weekly-suppression test independent of which
+    // weekday the suite happens to run on.
+    const txWeekStart = startOfISOWeek(parseISO(fourDaysAgo));
+    const elsewhereInTxWeek = isSameDay(txWeekStart, parseISO(fourDaysAgo))
+      ? addDays(txWeekStart, 1)
+      : txWeekStart;
+
     it('pre-selects a keyword habit that has NOT been logged for the transaction date', async () => {
       const user = userEvent.setup();
       mockHabits.push({ ...amazonHabit, completedDates: [] });
@@ -430,8 +440,13 @@ describe('TransactionReviewForm', () => {
       mockHabits.push({
         ...amazonHabit,
         period: 'weekly',
-        // Two days after the fire date — a different day, same ISO week.
-        completedDates: [format(subDays(parseISO(today), 2), 'yyyy-MM-dd')],
+        // A different day inside the TRANSACTION's own ISO week. Derived from
+        // that week's Monday rather than offset from `today`: the suppression
+        // compares the completion against the transaction's week (weekStartsOn:
+        // 1, see habitLogic), and a fixed offset from today lands in the next
+        // week whenever the transaction falls on a Sat/Sun — which made this
+        // test fail every Wednesday and Thursday.
+        completedDates: [format(elsewhereInTxWeek, 'yyyy-MM-dd')],
       });
 
       render(<TransactionReviewForm transaction={recentAmazonTx} onDone={mockOnDone} />);
