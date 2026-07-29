@@ -158,6 +158,27 @@ describe('TransactionItem — the row is the primary target (CRIT-01)', () => {
       }
     });
 
+    // The whole point of this row's restructure is that it must never invite a
+    // tap it will swallow. `Row interactive` paints `hover:bg-* cursor-pointer`
+    // on the ROW, but outside selection mode the activation handlers live on
+    // the BODY — so a hard-coded `interactive` left the Row's own `px-4`
+    // gutters and the `gap-3` beside the action cluster tinted and
+    // pointer-cursored while a click there hit the (handler-less) Row and did
+    // nothing. Affordance and handler must sit on the SAME element.
+    it('paints the hover/pointer affordance on the element that actually activates', () => {
+      renderRow();
+
+      const body = screen.getByRole('button', { name: /^Edit expense/ });
+      expect(body.className).toMatch(/(?:^|\s)cursor-pointer(?:\s|$)/);
+      expect(body.className).toMatch(/(?:^|\s)hover:bg-/);
+
+      // …and NOT on the Row wrapping it, which has no handler in this mode.
+      const row = body.parentElement;
+      expect(row).not.toBeNull();
+      expect(row?.className).not.toMatch(/(?:^|\s)cursor-pointer(?:\s|$)/);
+      expect(row?.className).not.toMatch(/(?:^|\s)hover:bg-/);
+    });
+
     it('gives the row body exactly one tab stop, ahead of the action controls', async () => {
       const user = userEvent.setup();
       renderRow();
@@ -205,6 +226,21 @@ describe('TransactionItem — the row is the primary target (CRIT-01)', () => {
     it('leaves no stray "Select transaction" label on the hidden checkbox glyph', () => {
       renderRow({ isSelectionMode: true });
       expect(screen.queryByLabelText('Select transaction')).not.toBeInTheDocument();
+    });
+
+    // Mirror of the normal-mode invariant: here the Row itself carries the
+    // handlers, so it — and only it — carries the affordance.
+    it('paints the hover/pointer affordance on the row, which is what activates here', () => {
+      renderRow({ isSelectionMode: true });
+
+      const row = screen.getByRole('checkbox', { name: /^Select expense/ });
+      expect(row.className).toMatch(/(?:^|\s)cursor-pointer(?:\s|$)/);
+      expect(row.className).toMatch(/(?:^|\s)hover:bg-/);
+
+      const body = row.firstElementChild;
+      expect(body).not.toBeNull();
+      expect(body?.className ?? '').not.toMatch(/(?:^|\s)cursor-pointer(?:\s|$)/);
+      expect(body?.className ?? '').not.toMatch(/(?:^|\s)hover:bg-/);
     });
 
     // Selection mode hides every action button, so the role can safely sit on

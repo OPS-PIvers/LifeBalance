@@ -123,8 +123,16 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
   };
 
   return (
+    // `interactive` paints `hover:bg-* cursor-pointer` on the Row, so it may only
+    // be set in the mode where the Row ITSELF activates. Outside selection mode
+    // the handlers sit on the body below, and a hard-coded `interactive` tinted
+    // and pointer-cursored the Row's own `px-4` gutters and the `gap-3` beside
+    // the action cluster — surfaces that promise a tap and then swallow it,
+    // which is the exact defect this row was restructured to remove. The
+    // affordance travels WITH the handlers (same rule as
+    // `components/todos/TodoRow.tsx`): hovered surface == clickable surface.
     <Row
-      interactive
+      interactive={isSelectionMode}
       {...(isSelectionMode ? targetProps : {})}
       className={cn(
         'justify-between group',
@@ -135,12 +143,21 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
       {/* Row body — identity + amount, i.e. everything that is NOT a control.
           In normal mode this is the `role="button"` target; the action cluster
           below is its sibling, so the subtree hosting the role contains no
-          focusable descendant and the row keeps a single tab stop. */}
+          focusable descendant and the row keeps a single tab stop. It therefore
+          also carries the hover tint + pointer cursor in that mode (the Row
+          carries them in selection mode) — the affordance marks exactly the box
+          that handles the click, never a millimetre more. Only paint properties
+          are added here (`bg`/`cursor`/`border-radius`/`transition`), so the
+          box the virtualizer measures is byte-for-byte the one it measured
+          before. */}
       <div
         {...(isSelectionMode ? {} : targetProps)}
         className={cn(
           'flex flex-1 min-w-0 items-center justify-between gap-3 text-left',
-          !isSelectionMode && focusRing
+          !isSelectionMode && [
+            focusRing,
+            'cursor-pointer rounded-btn transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-brand-50 dark:hover:bg-brand-700/40',
+          ]
         )}
       >
         <div className="flex items-center gap-3 overflow-hidden">
