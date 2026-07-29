@@ -38,6 +38,12 @@ export function readStoredShoppingSortMode(): ShoppingSortMode {
   return 'entry';
 }
 
+// Purchased items always sink below unpurchased ones, regardless of mode, so
+// checking an item off immediately moves it out of the way (the user clears
+// the checked block later in one go).
+const byPurchased = (a: ShoppingItem, b: ShoppingItem) =>
+  Number(a.isPurchased) - Number(b.isPurchased);
+
 const byName = (a: ShoppingItem, b: ShoppingItem) =>
   a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
 
@@ -68,13 +74,14 @@ export function sortShoppingItems(
   storeOrder: ReadonlyMap<string, number> = new Map()
 ): ShoppingItem[] {
   const sorted = [...items];
+  let compare: (a: ShoppingItem, b: ShoppingItem) => number;
 
   switch (mode) {
     case 'alpha':
-      sorted.sort(byName);
+      compare = byName;
       break;
     case 'store':
-      sorted.sort((a, b) => {
+      compare = (a, b) => {
         const storeA = a.store?.trim();
         const storeB = b.store?.trim();
         // Items without a store sink to the bottom.
@@ -88,7 +95,7 @@ export function sortShoppingItems(
         if (idxA === undefined && idxB !== undefined) return 1;
         const cmp = storeA.localeCompare(storeB, undefined, { sensitivity: 'base' });
         return cmp !== 0 ? cmp : byName(a, b);
-      });
+      };
       break;
     case 'section': {
       // Case-insensitive index into the category walk order.
@@ -97,7 +104,7 @@ export function sortShoppingItems(
         const key = cat.toLowerCase();
         if (!indexByCategory.has(key)) indexByCategory.set(key, i);
       });
-      sorted.sort((a, b) => {
+      compare = (a, b) => {
         const catA = (a.category || 'Uncategorized').toLowerCase();
         const catB = (b.category || 'Uncategorized').toLowerCase();
         const idxA = indexByCategory.get(catA) ?? Number.MAX_SAFE_INTEGER;
@@ -108,15 +115,16 @@ export function sortShoppingItems(
           return catA.localeCompare(catB);
         }
         return byName(a, b);
-      });
+      };
       break;
     }
     case 'entry':
     default:
-      sorted.sort(byEntryOrder);
+      compare = byEntryOrder;
       break;
   }
 
+  sorted.sort((a, b) => byPurchased(a, b) || compare(a, b));
   return sorted;
 }
 
@@ -125,6 +133,9 @@ export function sortShoppingItems(
  * headers between groups. Returns null for flat modes (entry/alpha).
  */
 export function shoppingGroupLabel(item: ShoppingItem, mode: ShoppingSortMode): string | null {
+  // Purchased items sink into a single trailing block; label it once rather
+  // than repeating the store/section headers below the fold.
+  if (item.isPurchased && (mode === 'store' || mode === 'section')) return 'Purchased';
   if (mode === 'store') return item.store?.trim() || 'No store';
   if (mode === 'section') return item.category || 'Uncategorized';
   return null;
