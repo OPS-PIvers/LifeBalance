@@ -127,7 +127,11 @@ export const PulseStripWidget: React.FC = React.memo(() => {
         : Minus;
 
   return (
-    <Section title="This week" aria-label="This week at a glance">
+    // "(so far)" distinguishes this in-progress running total from the
+    // WeeklyRecapCard's completed-week figure ("Week of …"), which otherwise
+    // sits unlabeled ~200px below with a conflicting number for the same
+    // "weekly spend" concept (CRIT-05).
+    <Section title="This week (so far)" aria-label="This week at a glance">
       {/* A hairline-edged stat BAND on the canvas — deliberately not a rounded
           card, so it reads as a lightweight ledger strip under the hero rather
           than another peer surface competing for weight. */}
