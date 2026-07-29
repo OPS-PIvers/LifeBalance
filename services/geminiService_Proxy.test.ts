@@ -181,11 +181,19 @@ describe('geminiService transport switch', () => {
       .mockRejectedValueOnce(transient)
       .mockResolvedValueOnce({ data: { text: MEAL_JSON } });
 
-    const result = await suggestMeal('hh', { ...REQUEST });
+    vi.useFakeTimers();
+
+    const resultPromise = suggestMeal('hh', { ...REQUEST });
+    // Advance past the single 500 ms backoff delay before awaiting, or the
+    // promise can never settle (real timers are paused).
+    await vi.advanceTimersByTimeAsync(500);
+    const result = await resultPromise;
 
     expect(result.name).toBe('Quick Pasta');
     // Retried once after the transient failure (2 invocations total).
     expect(callableInvokeMock).toHaveBeenCalledTimes(2);
+
+    vi.useRealTimers();
   });
 
   // -------------------------------------------------------------------------
@@ -261,9 +269,17 @@ describe('geminiService transport switch', () => {
       .mockRejectedValueOnce(transient429)
       .mockResolvedValueOnce({ data: { text: MEAL_JSON } });
 
-    const result = await suggestMeal('hh', { ...REQUEST });
+    vi.useFakeTimers();
+
+    const resultPromise = suggestMeal('hh', { ...REQUEST });
+    // Advance past the single 500 ms backoff delay before awaiting, or the
+    // promise can never settle (real timers are paused).
+    await vi.advanceTimersByTimeAsync(500);
+    const result = await resultPromise;
 
     expect(result.name).toBe('Quick Pasta');
     expect(callableInvokeMock).toHaveBeenCalledTimes(2);
+
+    vi.useRealTimers();
   });
 });

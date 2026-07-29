@@ -45,11 +45,16 @@ jobs:
         run: pnpm --filter functions run lint
 
       - name: Run unit tests
-        # Runs 'vitest run' via package.json script
+        # Runs 'vitest run' via package.json script. This covers functions/ too:
+        # the root `node` test project's include is repo-wide, so a separate
+        # "Functions Tests" step (which used to sit here) only re-ran the same
+        # files through the same config. See the matching note in ci.yml.
+        #
+        # This lint+test block duplicates what CI already proved on the PR. It
+        # stays because branch protection on `main` is currently DISABLED
+        # (verified 2026-07-28), so a direct push to main would otherwise reach
+        # production ungated. Revisit only once required checks are durably back.
         run: pnpm test
-
-      - name: Functions Tests
-        run: pnpm --filter functions run test
 
       - name: Generate build version
         run: |
