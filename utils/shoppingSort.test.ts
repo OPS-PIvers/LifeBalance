@@ -127,7 +127,7 @@ describe('sortShoppingItems', () => {
     ]);
   });
 
-  it('sinks purchased items to the bottom in every mode', () => {
+  it('sinks purchased items to the bottom in flat modes (entry and alpha)', () => {
     const items = [
       item({ name: 'Apples', order: 1, isPurchased: true }),
       item({ name: 'Bread', order: 2 }),
