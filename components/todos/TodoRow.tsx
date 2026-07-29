@@ -395,9 +395,12 @@ export const TodoRow = React.memo(function TodoRow({
   // auto-complete path must be unreachable during bulk actions (finding 3).
   // Muted default tone (paper cut #4: quiet supporting text); amber gated
   // tone stays — it carries real meaning (completion is blocked).
+  // dark:text-brand-500 measures 3.56:1 on this row's brand-800 surface for
+  // this 12px (text-xs) count text — below the 4.5:1 AA floor for small
+  // text. brand-450 (4.95:1) is the documented muted/hint half-step.
   const pillToneClass = completionGated
     ? 'text-warm-700 dark:text-warm-300'
-    : 'text-brand-400 dark:text-brand-500';
+    : 'text-brand-400 dark:text-brand-450';
   const subtaskPill = subtaskCount > 0 && (
     isSelectionMode ? (
       <span
@@ -420,9 +423,10 @@ export const TodoRow = React.memo(function TodoRow({
         data-testid="todo-subtask-pill"
         className={cn(
           'inline-flex items-center gap-1 rounded-full px-2 py-3 -my-2 font-medium transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
+          // Same 3.56:1-on-brand-800 failure as pillToneClass above, same fix.
           completionGated
             ? 'text-warm-700 dark:text-warm-300'
-            : 'text-brand-400 dark:text-brand-500 hover:text-brand-700 dark:hover:text-brand-200'
+            : 'text-brand-400 dark:text-brand-450 hover:text-brand-700 dark:hover:text-brand-200'
         )}
       >
         <ListChecks size={12} aria-hidden="true" />
@@ -472,7 +476,9 @@ export const TodoRow = React.memo(function TodoRow({
               />
               <span className={cn(
                 'flex-1 min-w-0 text-sm',
-                sub.isDone ? 'line-through text-brand-400 dark:text-brand-500' : 'text-brand-700 dark:text-brand-200'
+                // Same 3.56:1-on-brand-800 failure as the subtask pill above —
+                // this 14px text needs the 4.5:1 AA floor, not the 3:1 one.
+                sub.isDone ? 'line-through text-brand-400 dark:text-brand-450' : 'text-brand-700 dark:text-brand-200'
               )}>
                 {sub.text}
               </span>
@@ -597,6 +603,11 @@ export const TodoRow = React.memo(function TodoRow({
           checklist shared the cross axis with the checkbox). */}
       <div className="flex items-center gap-3">
         {/* Complete Checkbox or Selection Box */}
+        {/* dark:text-brand-500 here draws a graphical UI component (the
+            unselected checkbox outline), not text — WCAG 1.4.11 non-text
+            contrast is 3:1, and this measures 3.56:1 on brand-800. Left
+            as-is; it is NOT the same failure as the three text usages
+            fixed above. */}
         {isSelectionMode ? (
           <div className={`w-6 h-6 flex items-center justify-center shrink-0 transition-colors ${isSelected ? 'text-accent-600 dark:text-accent-300' : 'text-brand-300 dark:text-brand-500'}`}>
             {isSelected ? <CheckSquare aria-hidden="true" size={24} /> : <div className="w-5 h-5 border-2 border-current rounded-sm" />}
@@ -672,7 +683,17 @@ export const TodoRow = React.memo(function TodoRow({
               aria-label={`Edit task: ${item.text}`}
               aria-describedby={metaId}
               title={item.text}
-              className={cn(TITLE_COLUMN, 'text-left select-none [-webkit-touch-callout:none] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-card')}
+              // A one-line title renders ~22px tall — under the 44px floor.
+              // The house p-N/-m-N trick (same one HapticCheck already uses
+              // on this row's checkbox) grows the tap target without
+              // growing the row: the negative margin cancels the padding's
+              // layout footprint, so metaLine below is unmoved. The overflow
+              // eats into the row's own top padding (safe, empty space) and
+              // into metaLine's box below — metaLine paints later in DOM
+              // order so it still wins hit-testing over its own content
+              // (including the subtask pill), the overlap only ever goes
+              // inert, never mis-fires another action.
+              className={cn(TITLE_COLUMN, 'text-left select-none [-webkit-touch-callout:none] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-card py-3 -my-3')}
             >
               {/* Capped at two lines, NOT reserved to two — a one-line title
                   yields a one-line-tall row, and a long one grows the row to

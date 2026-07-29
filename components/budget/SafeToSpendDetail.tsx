@@ -95,7 +95,9 @@ export const SafeToSpendDetail: React.FC = () => {
           onClick={() => setExpanded(v => !v)}
           aria-expanded={expanded}
           aria-controls="sts-detail-breakdown"
-          className="flex w-full items-center gap-1 px-4 py-3 hairline-divider text-left text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-200 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-inset"
+          // py-3 gave a 40px tap target (12px padding + 16px xs-text line);
+          // py-4 clears the 44px floor with margin (16*2+16=48).
+          className="flex w-full items-center gap-1 px-4 py-4 hairline-divider text-left text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-200 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-inset"
         >
           {expanded ? 'Hide breakdown' : 'How is this calculated?'}
           <ChevronDown
