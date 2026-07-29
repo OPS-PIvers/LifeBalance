@@ -12,6 +12,7 @@ import Select from '@/components/ui/Select';
 import ProgressBar from '@/components/ui/ProgressBar';
 import EmptyState from '@/components/ui/EmptyState';
 import { SurfaceList, Row } from '@/components/ui/Section';
+import SectionHeading from '@/components/ui/SectionHeading';
 
 /**
  * Plan 24 (savings goals / sinking funds) — goals list + create/edit drawer +
@@ -135,7 +136,7 @@ const SavingsGoals: React.FC = () => {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 px-1">
-        <h3 className="font-display text-sm font-semibold text-brand-700 dark:text-brand-200 uppercase tracking-wide">Savings Goals</h3>
+        <SectionHeading>Savings goals</SectionHeading>
         <div className="flex-1 h-px bg-brand-200 dark:bg-brand-700"></div>
       </div>
 
