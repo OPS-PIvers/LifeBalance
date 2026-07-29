@@ -126,9 +126,41 @@ describe('sortShoppingItems', () => {
       'Apples', 'Mystery',
     ]);
   });
+
+  it('sinks purchased items to the bottom in flat modes (entry and alpha)', () => {
+    const items = [
+      item({ name: 'Apples', order: 1, isPurchased: true }),
+      item({ name: 'Bread', order: 2 }),
+      item({ name: 'Milk', order: 3 }),
+    ];
+    expect(sortShoppingItems(items, 'entry').map(i => i.name)).toEqual([
+      'Bread', 'Milk', 'Apples',
+    ]);
+    expect(sortShoppingItems(items, 'alpha').map(i => i.name)).toEqual([
+      'Bread', 'Milk', 'Apples',
+    ]);
+  });
+
+  it('keeps the mode ordering within the purchased block', () => {
+    const items = [
+      item({ name: 'Zucchini', isPurchased: true, category: 'Produce' }),
+      item({ name: 'Milk', isPurchased: true, category: 'Dairy' }),
+      item({ name: 'Chicken', category: 'Meat' }),
+      item({ name: 'Apples', category: 'Produce' }),
+    ];
+    expect(sortShoppingItems(items, 'section', CATEGORY_ORDER).map(i => i.name)).toEqual([
+      'Apples', 'Chicken', 'Zucchini', 'Milk',
+    ]);
+  });
 });
 
 describe('shoppingGroupLabel', () => {
+  it('labels purchased items as one Purchased group in grouped modes', () => {
+    expect(shoppingGroupLabel(item({ name: 'Milk', store: 'Target', isPurchased: true }), 'store')).toBe('Purchased');
+    expect(shoppingGroupLabel(item({ name: 'Milk', category: 'Dairy', isPurchased: true }), 'section')).toBe('Purchased');
+    expect(shoppingGroupLabel(item({ name: 'Milk', isPurchased: true }), 'entry')).toBeNull();
+  });
+
   it('returns store name / fallback in store mode', () => {
     expect(shoppingGroupLabel(item({ name: 'Milk', store: 'Target' }), 'store')).toBe('Target');
     expect(shoppingGroupLabel(item({ name: 'Milk' }), 'store')).toBe('No store');
