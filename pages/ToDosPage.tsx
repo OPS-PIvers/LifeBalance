@@ -2039,10 +2039,16 @@ const ToDosPage: React.FC = () => {
                   type="button"
                   onClick={() => setTriageBannerDismissed(true)}
                   aria-label="Dismiss the triage reminder"
-                  // 22x22 icon button; a symmetric extender clears the 44px
-                  // floor while staying inside the banner's own gap to its
-                  // neighbors (measured — see PR).
-                  className="relative shrink-0 rounded-lg p-1 text-brand-400 hover:bg-brand-100 dark:text-brand-300 dark:hover:bg-brand-700 before:absolute before:-inset-3 before:content-['']"
+                  // 22x22 icon button. The extender is DELIBERATELY ASYMMETRIC:
+                  // a symmetric one reaching 44px would overhang the 8px `gap-2`
+                  // and steal the right edge of the Triage pill next to it
+                  // (whose own extender is inset-x-0, so it can't push back).
+                  // `ml-1` widens this one gap to 12px and the extender reaches
+                  // only 4px left, leaving an 8px dead zone between the two hit
+                  // areas; the remaining width is taken to the RIGHT, where the
+                  // banner's px-3 padding and the page gutter hold nothing
+                  // clickable. Verified with elementFromPoint along the seam.
+                  className="relative ml-1 shrink-0 rounded-lg p-1 text-brand-400 hover:bg-brand-100 dark:text-brand-300 dark:hover:bg-brand-700 before:absolute before:-top-3 before:-bottom-3 before:-left-1 before:-right-5 before:content-['']"
                 >
                   <X size={14} aria-hidden="true" />
                 </button>
