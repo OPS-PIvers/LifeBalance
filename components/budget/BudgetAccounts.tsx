@@ -19,7 +19,9 @@ import ProgressBar from '@/components/ui/ProgressBar';
 import Select from '@/components/ui/Select';
 import EmptyState from '@/components/ui/EmptyState';
 import { Popover } from '@/components/ui/Popover';
-import { SurfaceList, Row } from '@/components/ui/Section';
+import { SurfaceList, Row, DisclosureRow } from '@/components/ui/Section';
+import SectionHeading from '@/components/ui/SectionHeading';
+import Eyebrow from '@/components/ui/Eyebrow';
 import SavingsGoals from '@/components/budget/SavingsGoals';
 
 const BudgetAccounts: React.FC = () => {
@@ -358,9 +360,15 @@ const BudgetAccounts: React.FC = () => {
     const hitGoal = account.monthlyGoal && account.balance >= account.monthlyGoal;
     const isDragging = draggedId === account.id;
     const isDragOver = dragOverId === account.id;
+    const bankBalance = account.plaidBalanceCurrent ?? 0;
 
     return (
-      <Row
+      /* One account = ONE grouped block, not N sibling rows. The block draws
+         the only hairline (separating it from the next account) and cancels
+         every hairline the `Row`/`DisclosureRow` primitives draw inside it —
+         the descendant-class selector is what wins over `.hairline-divider`'s
+         own specificity (same trick as ToDosPage's flush list card). */
+      <div
         key={account.id}
         draggable
         onDragStart={(e) => handleDragStart(e, account.id)}
@@ -368,12 +376,15 @@ const BudgetAccounts: React.FC = () => {
         onDragLeave={handleDragLeave}
         onDrop={(e) => handleDrop(e, account.id, isLiabilityGroup)}
         onDragEnd={handleDragEnd}
-        className={`flex-col items-stretch gap-2 transition-[opacity,transform,background-color] duration-(--duration-base) ease-(--ease-standard) ${
-          isDragging ? 'opacity-50 scale-95' : ''
-        } ${isDragOver ? 'bg-accent-50 dark:bg-accent-900/20' : ''}`}
+        className={cn(
+          'hairline-divider [&_.hairline-divider]:border-t-0',
+          'transition-[opacity,transform,background-color] duration-(--duration-base) ease-(--ease-standard)',
+          isDragging && 'opacity-50 scale-95',
+          isDragOver && 'bg-accent-50 dark:bg-accent-900/20'
+        )}
       >
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
+        <Row className="pb-1.5 items-start">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
             {/* Drag Handle */}
             <div className="cursor-grab active:cursor-grabbing text-brand-300 dark:text-brand-500 hover:text-brand-500 dark:hover:text-brand-400 touch-none shrink-0">
               <GripVertical size={18} />
@@ -448,7 +459,7 @@ const BudgetAccounts: React.FC = () => {
               variant="ghost"
               size="icon-sm"
               onClick={() => handleArchiveAccount(account.id)}
-              className="text-brand-300 dark:text-brand-500 hidden sm:flex"
+              className="text-brand-400 dark:text-brand-450 hidden sm:flex"
               aria-label={`Archive ${account.name} account`}
             >
               <Archive size={14} />
@@ -459,7 +470,7 @@ const BudgetAccounts: React.FC = () => {
               variant="ghost-destructive"
               size="icon-sm"
               onClick={() => setDeletingId(account.id)}
-              className="text-brand-300 dark:text-brand-500 hidden sm:flex"
+              className="text-brand-400 dark:text-brand-450 hidden sm:flex"
               aria-label={`Delete ${account.name} account`}
             >
               <Trash2 size={14} />
@@ -471,53 +482,81 @@ const BudgetAccounts: React.FC = () => {
                 variant="ghost"
                 size="icon"
                 onClick={() => setActionAccount(account)}
-                className="text-brand-300 dark:text-brand-450"
+                className="text-brand-400 dark:text-brand-450"
                 aria-label={`Options for ${account.name}`}
               >
                 <MoreVertical size={20} />
               </Button>
             </div>
-
-            {isEditing ? (
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  className="w-24 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-btn px-2 py-1 text-right font-mono font-bold outline-hidden focus:ring-2 focus:ring-accent-500/40 dark:text-brand-100"
-                  autoFocus
-                />
-                <Button
-                  variant="primary"
-                  size="icon-sm"
-                  onClick={() => saveEditing(account.id)}
-                  aria-label="Save balance"
-                >
-                  <Check size={16} />
-                </Button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => startEditing(account.id, account.balance)}
-                className="group cursor-pointer text-right focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-800 rounded-btn"
-                aria-label={`Edit balance for ${account.name}`}
-              >
-                <p className={`font-mono tabular-nums font-bold text-lg ${isLiability ? 'text-money-neg dark:text-money-negDark' : 'text-money-pos dark:text-money-posDark'}`}>
-                  {fmt(account.balance)}
-                </p>
-                <p className="text-xxs text-brand-300 dark:text-brand-450 group-hover:text-brand-500 dark:group-hover:text-brand-400 flex justify-end items-center gap-1 transition-colors">
-                  Tap to edit <Pencil size={8} />
-                </p>
-              </button>
-            )}
           </div>
-        </div>
+        </Row>
+
+        {/* Balance — the affordance IS the row. Previously this was a bare
+            figure with a 10px "Tap to edit" hint at 1.69:1 contrast; the row
+            now carries its own hover/press/focus states and a chevron, the
+            same language as every Settings drill-in row. */}
+        {isEditing ? (
+          <Row className="justify-between gap-3">
+            <label
+              htmlFor={`account-balance-${account.id}`}
+              className="text-sm font-medium text-brand-900 dark:text-brand-50"
+            >
+              Balance
+            </label>
+            <div className="flex items-center gap-2 shrink-0">
+              <input
+                id={`account-balance-${account.id}`}
+                type="number"
+                inputMode="decimal"
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                className="h-11 w-28 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-btn px-2 text-right font-mono font-bold outline-hidden focus:ring-2 focus:ring-accent-500/40 dark:text-brand-100"
+                autoFocus
+              />
+              <Button
+                variant="primary"
+                size="icon"
+                onClick={() => saveEditing(account.id)}
+                aria-label="Save balance"
+              >
+                <Check size={16} />
+              </Button>
+            </div>
+          </Row>
+        ) : (
+          <DisclosureRow
+            className="min-h-11"
+            /* The visible label is just "Balance" (the account name is already
+               the line above it), but the accessible name has to stand alone —
+               a screen-reader user landing on the row otherwise hears "Balance
+               $5,000.00" with no idea whose. Each text node is trimmed before
+               the accessible name is joined, so the account name goes in as one
+               complete phrase rather than as a leading-space fragment. */
+            title={
+              <>
+                <span className="sr-only">{`Balance for ${account.name}`}</span>
+                <span aria-hidden="true">Balance</span>
+              </>
+            }
+            value={
+              <span
+                className={cn(
+                  'font-mono tabular-nums font-bold text-lg',
+                  isLiability
+                    ? 'text-money-neg dark:text-money-negDark'
+                    : 'text-money-pos dark:text-money-posDark'
+                )}
+              >
+                {fmt(account.balance)}
+              </span>
+            }
+            onClick={() => startEditing(account.id, account.balance)}
+          />
+        )}
 
         {/* Savings Goal Bar */}
         {isSavings && account.monthlyGoal && (
-          <div className="ml-7">
+          <div className="px-4 pb-3">
             <div className="flex justify-between text-xxs text-brand-400 dark:text-brand-450 mb-1">
               <span className="flex items-center gap-1">{hitGoal && <Star size={10} className="fill-habit-gold text-habit-gold"/>} {Math.round(progress)}% to goal</span>
               <span>Target: {fmt(account.monthlyGoal)}</span>
@@ -531,21 +570,29 @@ const BudgetAccounts: React.FC = () => {
           </div>
         )}
 
-        {/* Advisory Plaid balance chip — only when a linked bank balance has
-            diverged from the manual balance by more than the threshold. */}
+        {/* Advisory Plaid balance — only when a linked bank balance has
+            diverged from the manual balance by more than the threshold. The
+            entered balance disagreeing with the bank is a real attention
+            state, so it gets a full-width row in the amber (caution) voice
+            rather than a 23px footnote chip. */}
         {shouldOfferBalanceAdoption(account) && (
-          <div className="ml-7">
-            <button
-              type="button"
+          <Row dense className="min-h-11 justify-between gap-3 pb-3">
+            <span className="flex min-w-0 items-center gap-2 text-sm text-warm-600 dark:text-warm-300">
+              <Banknote size={16} aria-hidden className="shrink-0" />
+              <span className="truncate">Bank says {fmt(bankBalance)}</span>
+            </span>
+            <Button
+              variant="warning"
+              size="sm"
+              className="shrink-0"
               onClick={() => handleAdoptPlaidBalance(account)}
-              className="inline-flex items-center gap-1.5 text-xxs font-medium text-accent-700 dark:text-accent-300 bg-accent-50 dark:bg-accent-900/30 hover:bg-accent-100 dark:hover:bg-accent-900/50 rounded-full px-2.5 py-1 transition-colors"
+              aria-label={`Update ${account.name} to the bank balance ${fmt(bankBalance)}`}
             >
-              <Banknote size={11} aria-hidden />
-              Update to bank balance {fmt(account.plaidBalanceCurrent ?? 0)}
-            </button>
-          </div>
+              Update
+            </Button>
+          </Row>
         )}
-      </Row>
+      </div>
     );
   };
 
@@ -555,7 +602,9 @@ const BudgetAccounts: React.FC = () => {
           Liabilities totals are repeated in the section headers below, so this
           keeps only the headline figure — UX audit Batch 3). */}
       <div className="bg-accent-600 dark:bg-accent-700 rounded-lg px-5 py-4 text-white shadow-raised flex items-center justify-between">
-        <p className="font-display text-xs font-semibold uppercase tracking-widest text-white/70">Total Net Worth</p>
+        {/* A stat caption, so it's the micro-caps `Eyebrow` voice — not the
+            serif-wearing-eyebrow-clothes third voice this used to be. */}
+        <Eyebrow as="p" className="text-white/70 dark:text-white/70">Total net worth</Eyebrow>
         <p className="text-2xl font-mono font-bold tracking-tight tabular-nums">
           {fmt(netWorth)}
         </p>
@@ -565,7 +614,9 @@ const BudgetAccounts: React.FC = () => {
       {assetAccounts.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2 px-1">
-            <h3 className="font-display text-sm font-semibold text-brand-700 dark:text-brand-200 uppercase tracking-wide">Assets</h3>
+            {/* A content grouping the reader scans by, so it's the editorial
+                serif `SectionHeading` voice in sentence case (DESIGN.md §3). */}
+            <SectionHeading className="shrink-0">Assets</SectionHeading>
             <div className="flex-1 h-px bg-brand-200 dark:bg-brand-700"></div>
             <span className="text-sm font-mono tabular-nums text-money-pos dark:text-money-posDark">{fmt(assets)}</span>
           </div>
@@ -581,7 +632,7 @@ const BudgetAccounts: React.FC = () => {
       {liabilityAccounts.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2 px-1">
-            <h3 className="font-display text-sm font-semibold text-brand-700 dark:text-brand-200 uppercase tracking-wide">Liabilities</h3>
+            <SectionHeading className="shrink-0">Liabilities</SectionHeading>
             <div className="flex-1 h-px bg-brand-200 dark:bg-brand-700"></div>
             <span className="text-sm font-mono tabular-nums text-money-neg dark:text-money-negDark">{fmt(debts)}</span>
           </div>

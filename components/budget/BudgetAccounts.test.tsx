@@ -96,6 +96,8 @@ vi.mock('lucide-react', () => ({
   Trash2: () => <span data-testid="trash-icon" />,
   Loader2: () => <span data-testid="loader-icon" />,
   ChevronDown: () => <span data-testid="chevron-down-icon" />,
+  // Rendered by the `DisclosureRow` primitive the balance row now uses.
+  ChevronRight: () => <span data-testid="chevron-right-icon" />,
   MoreVertical: () => <span data-testid="more-vertical-icon" />,
   PiggyBank: () => <span data-testid="piggy-bank-icon" />,
   Archive: () => <span data-testid="archive-icon" />,
@@ -210,7 +212,7 @@ describe('BudgetAccounts', () => {
     render(<BudgetAccounts />);
 
     // Click on checking balance ($5,000)
-    const balanceDisplay = screen.getByRole('button', { name: /Edit balance for Main Checking/i });
+    const balanceDisplay = screen.getByRole('button', { name: /Balance for Main Checking/i });
     await user.click(balanceDisplay);
 
     // Input should appear with current value
@@ -242,7 +244,7 @@ describe('BudgetAccounts', () => {
       const user = userEvent.setup();
       render(<BudgetAccounts />);
 
-      await user.click(screen.getByRole('button', { name: /Edit balance for Main Checking/i }));
+      await user.click(screen.getByRole('button', { name: /Balance for Main Checking/i }));
 
       const input = screen.getByRole('spinbutton') as HTMLInputElement;
       expect(input.value).toBe('125.78');
@@ -260,7 +262,7 @@ describe('BudgetAccounts', () => {
       const user = userEvent.setup();
       render(<BudgetAccounts />);
 
-      await user.click(screen.getByRole('button', { name: /Edit balance for Main Checking/i }));
+      await user.click(screen.getByRole('button', { name: /Balance for Main Checking/i }));
 
       const input = screen.getByRole('spinbutton') as HTMLInputElement;
       expect(input.value).toBe('50.00');
@@ -279,7 +281,7 @@ describe('BudgetAccounts', () => {
       const user = userEvent.setup();
       render(<BudgetAccounts />);
 
-      await user.click(screen.getByRole('button', { name: /Edit balance for Visa Card/i }));
+      await user.click(screen.getByRole('button', { name: /Balance for Visa Card/i }));
 
       const input = screen.getByRole('spinbutton') as HTMLInputElement;
       expect(input.value).toBe('-42.01');
@@ -463,5 +465,98 @@ describe('BudgetAccounts', () => {
     } finally {
       delete acc.cardLast4s;
     }
+  });
+
+  // ---- CRIT-02: the balance affordance ----
+
+  it('explains nothing — there is no "Tap to edit" hint anywhere', () => {
+    render(<BudgetAccounts />);
+    expect(screen.queryByText(/tap to edit/i)).not.toBeInTheDocument();
+  });
+
+  it('renders the balance as a real row-sized button with a trailing chevron', () => {
+    render(<BudgetAccounts />);
+
+    const balanceRow = screen.getByRole('button', { name: /Balance for Main Checking/i });
+    // A real <button>, not a click-handled div — this is what makes it
+    // focusable and Enter/Space-operable for free.
+    expect(balanceRow.tagName).toBe('BUTTON');
+    // The `DisclosureRow` chevron, the same drill-in cue the Settings rows use.
+    expect(within(balanceRow).getByTestId('chevron-right-icon')).toBeInTheDocument();
+    // The figure itself still lives in the row.
+    expect(within(balanceRow).getByText((c) => c.includes('5,000'))).toBeInTheDocument();
+  });
+
+  it('opens the balance editor from the keyboard', async () => {
+    const user = userEvent.setup();
+    render(<BudgetAccounts />);
+
+    const balanceRow = screen.getByRole('button', { name: /Balance for Main Checking/i });
+    balanceRow.focus();
+    expect(balanceRow).toHaveFocus();
+
+    await user.keyboard('{Enter}');
+
+    expect(screen.getByRole('spinbutton')).toHaveValue(5000);
+  });
+
+  it('promotes a diverged bank balance to its own labelled row with an Update action', async () => {
+    const acc = mockAccounts[0];
+    if (!acc) throw new Error('missing mock account');
+    acc.plaidBalanceCurrent = 5389.12;
+    try {
+      const user = userEvent.setup();
+      render(<BudgetAccounts />);
+
+      expect(screen.getByText((c) => c.includes('Bank says') && c.includes('5,389.12'))).toBeInTheDocument();
+
+      const update = screen.getByRole('button', {
+        name: /Update Main Checking to the bank balance/i,
+      });
+      await user.click(update);
+
+      expect(updateAccountBalanceMock).toHaveBeenCalledWith('acc1', 5389.12);
+    } finally {
+      delete acc.plaidBalanceCurrent;
+    }
+  });
+
+  it('hides the bank-balance row when the manual balance already agrees', () => {
+    const acc = mockAccounts[0];
+    if (!acc) throw new Error('missing mock account');
+    // Inside PLAID_BALANCE_DIVERGENCE_THRESHOLD, so there is nothing to flag.
+    acc.plaidBalanceCurrent = 5000.4;
+    try {
+      render(<BudgetAccounts />);
+      expect(screen.queryByText(/Bank says/i)).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /to the bank balance/i })
+      ).not.toBeInTheDocument();
+    } finally {
+      delete acc.plaidBalanceCurrent;
+    }
+  });
+
+  // ---- CRIT-02: two labeling voices, not three ----
+
+  it('names the account groupings in the editorial serif voice, not micro-caps', () => {
+    render(<BudgetAccounts />);
+
+    for (const name of ['Assets', 'Liabilities']) {
+      const heading = screen.getByRole('heading', { name });
+      expect(heading).toHaveClass('font-display');
+      // Sentence case is the whole point — an uppercase transform here is the
+      // serif-wearing-eyebrow-clothes third voice DESIGN.md §3 rules out.
+      expect(heading.className).not.toMatch(/uppercase/);
+    }
+  });
+
+  it('labels the net-worth stat caption with the micro-caps eyebrow voice', () => {
+    render(<BudgetAccounts />);
+
+    const caption = screen.getByText('Total net worth');
+    expect(caption).toHaveClass('uppercase');
+    // The eyebrow is grotesk, never the serif display face.
+    expect(caption.className).not.toMatch(/font-display/);
   });
 });
