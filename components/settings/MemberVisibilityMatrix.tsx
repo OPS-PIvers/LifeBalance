@@ -302,6 +302,13 @@ const MemberLeafRow: React.FC<MemberLeafRowProps> = ({
 }) => {
   const locked = isMatrixRowLocked(settings, section, row);
   const memberWantsIt = !hidden.has(row.key);
+  // Stable id so the disabled Switch's input can point at the caption via
+  // aria-describedby — the two were only visual siblings before, so a
+  // screen-reader user tabbing to the switch heard just "checkbox, dimmed"
+  // with no explanation of WHY (the sighted "Off for the household" caption
+  // was never announced). Only set when locked, matching when the caption
+  // itself renders, so we never point at a description that isn't there.
+  const lockedReasonId = `${row.key}-${member.uid}-locked-reason`;
 
   return (
     <Row className="py-1">
@@ -315,13 +322,14 @@ const MemberLeafRow: React.FC<MemberLeafRowProps> = ({
           {row.label}
         </span>
         {locked && (
-          <span className="block text-xs text-brand-400 dark:text-brand-450">
+          <span id={lockedReasonId} className="block text-xs text-brand-400 dark:text-brand-450">
             Off for the household
           </span>
         )}
       </span>
       <Switch
         aria-label={`Show ${row.label} for ${member.displayName}`}
+        aria-describedby={locked ? lockedReasonId : undefined}
         checked={!locked && memberWantsIt}
         disabled={locked}
         onCheckedChange={() => {

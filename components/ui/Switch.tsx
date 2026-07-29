@@ -12,6 +12,7 @@ interface SwitchProps {
   tone?: 'accent' | 'warm';
   'aria-label'?: string;
   'aria-labelledby'?: string;
+  'aria-describedby'?: string;
 }
 
 const SWITCH_TONES = {
@@ -34,6 +35,7 @@ export const Switch: React.FC<SwitchProps> = ({
   tone = 'accent',
   'aria-label': ariaLabel,
   'aria-labelledby': ariaLabelledby,
+  'aria-describedby': ariaDescribedby,
 }) => {
   // Fall back to a generated id so the <label htmlFor> always associates with
   // the input, even when no explicit id is passed by the call site.
@@ -54,6 +56,7 @@ export const Switch: React.FC<SwitchProps> = ({
         ref={markAsWebKitSwitch}
         aria-label={ariaLabel}
         aria-labelledby={ariaLabelledby}
+        aria-describedby={ariaDescribedby}
         checked={checked}
         onChange={(e) => {
           if (disabled) return;

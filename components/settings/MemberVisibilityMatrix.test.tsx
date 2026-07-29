@@ -352,6 +352,34 @@ describe('MemberVisibilityMatrix', () => {
       expect(screen.getByRole('checkbox', { name: 'Show Overview for Alice' })).toBeDisabled();
     });
 
+    it("wires a locked row's caption to the switch via aria-describedby, and omits it when unlocked", () => {
+      // The caption used to be only a visual sibling of the switch — a
+      // screen-reader user tabbing to it heard just "checkbox, dimmed" with
+      // no explanation. Pin that the disabled switch's aria-describedby
+      // resolves to an element containing the caption text, and that an
+      // unlocked switch (no caption rendered) carries no aria-describedby.
+      render(
+        <MemberVisibilityMatrix
+          members={[alice]}
+          settings={{ moduleVisibility: { money: false } }}
+          onToggleModule={vi.fn()}
+          onUpdateMember={vi.fn()}
+        />
+      );
+
+      const lockedOverview = screen.getByRole('checkbox', { name: 'Show Overview for Alice' });
+      const describedbyId = lockedOverview.getAttribute('aria-describedby');
+      expect(describedbyId).toBeTruthy();
+      expect(document.getElementById(describedbyId as string)).toHaveTextContent(
+        'Off for the household'
+      );
+
+      // Track (Habits) is untouched by the money:false household toggle, so
+      // its switch stays unlocked and must not carry aria-describedby.
+      const unlockedTrack = screen.getByRole('checkbox', { name: 'Show Track for Alice' });
+      expect(unlockedTrack).not.toHaveAttribute('aria-describedby');
+    });
+
     it('names each member section with the editorial serif heading, not an uppercase eyebrow', () => {
       // DESIGN.md §3's decision test: a member's block and the view groups
       // inside it are CONTENT groupings, so they take `SectionHeading`
