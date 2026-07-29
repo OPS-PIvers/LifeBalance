@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import type { MerchantRule, Transaction } from '@/types/schema';
+import { INCOME_CATEGORY, type MerchantRule, type Transaction } from '@/types/schema';
 
 // The row reads the household's merchant rules through `useMerchantRules`, which
 // resolves them from `useHouseholdCore().householdSettings`. Drive that from a
@@ -28,7 +29,7 @@ vi.mock('lucide-react', () => ({
   MessageSquare: () => <div data-testid="icon-message-square" />,
 }));
 
-import { TransactionItem } from './TransactionItem';
+import { TransactionItem, type TransactionItemProps } from './TransactionItem';
 
 const baseTx: Transaction = {
   id: 'tx1',
@@ -46,6 +47,140 @@ const noop = () => {};
 
 beforeEach(() => {
   merchantRules = undefined;
+});
+
+describe('TransactionItem — the row is the primary target (CRIT-01)', () => {
+  const renderRow = (
+    overrides: Partial<TransactionItemProps> = {},
+    transaction: Transaction = baseTx
+  ) => {
+    const handlers = {
+      onEdit: vi.fn(),
+      onDelete: vi.fn(),
+      onDuplicate: vi.fn(),
+      onSplit: vi.fn(),
+      onMore: vi.fn(),
+      onToggleSelection: vi.fn(),
+    };
+    render(
+      <TransactionItem
+        transaction={transaction}
+        {...handlers}
+        isSelectionMode={false}
+        isSelected={false}
+        {...overrides}
+      />
+    );
+    return handlers;
+  };
+
+  describe('selection mode OFF', () => {
+    it('exposes the row as a button naming the edit action, the sign and the merchant', () => {
+      renderRow();
+      const row = screen.getByRole('button', { name: 'Edit expense of $45.50 from Safeway, Jul 1, 2026' });
+      expect(row).toHaveAttribute('tabindex', '0');
+      expect(row).not.toHaveAttribute('aria-checked');
+    });
+
+    it('says "income" for an income row', () => {
+      renderRow({}, { ...baseTx, category: INCOME_CATEGORY });
+      expect(
+        screen.getByRole('button', { name: 'Edit income of $45.50 from Safeway, Jul 1, 2026' })
+      ).toBeInTheDocument();
+    });
+
+    it('opens the editor on click instead of doing nothing', async () => {
+      const user = userEvent.setup();
+      const handlers = renderRow();
+
+      await user.click(screen.getByRole('button', { name: /^Edit expense/ }));
+
+      expect(handlers.onEdit).toHaveBeenCalledTimes(1);
+      expect(handlers.onEdit).toHaveBeenCalledWith(baseTx);
+      expect(handlers.onToggleSelection).not.toHaveBeenCalled();
+    });
+
+    it.each(['{Enter}', ' '])('opens the editor when %s is pressed on the focused row', async (key) => {
+      const user = userEvent.setup();
+      const handlers = renderRow();
+
+      const row = screen.getByRole('button', { name: /^Edit expense/ });
+      row.focus();
+      await user.keyboard(key);
+
+      expect(handlers.onEdit).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not fire the row when the kebab is clicked', async () => {
+      const user = userEvent.setup();
+      const handlers = renderRow();
+
+      await user.click(screen.getByLabelText('More options transaction from Safeway'));
+
+      expect(handlers.onMore).toHaveBeenCalledTimes(1);
+      expect(handlers.onEdit).not.toHaveBeenCalled();
+    });
+
+    it('does not fire the row when a nested action button is activated by keyboard', async () => {
+      const user = userEvent.setup();
+      const handlers = renderRow();
+
+      screen.getByLabelText('More options transaction from Safeway').focus();
+      await user.keyboard('{Enter}');
+
+      expect(handlers.onMore).toHaveBeenCalledTimes(1);
+      expect(handlers.onEdit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('selection mode ON', () => {
+    it('still announces as a checkbox carrying its checked state', () => {
+      renderRow({ isSelectionMode: true, isSelected: true });
+      const row = screen.getByRole('checkbox', { name: 'Select expense of $45.50 from Safeway, Jul 1, 2026' });
+      expect(row).toHaveAttribute('aria-checked', 'true');
+      expect(row).toHaveAttribute('tabindex', '0');
+    });
+
+    it('toggles selection on click and never opens the editor', async () => {
+      const user = userEvent.setup();
+      const handlers = renderRow({ isSelectionMode: true });
+
+      await user.click(screen.getByRole('checkbox', { name: /^Select expense/ }));
+
+      expect(handlers.onToggleSelection).toHaveBeenCalledWith('tx1');
+      expect(handlers.onEdit).not.toHaveBeenCalled();
+    });
+
+    it.each(['{Enter}', ' '])('toggles selection when %s is pressed on the focused row', async (key) => {
+      const user = userEvent.setup();
+      const handlers = renderRow({ isSelectionMode: true });
+
+      screen.getByRole('checkbox', { name: /^Select expense/ }).focus();
+      await user.keyboard(key);
+
+      expect(handlers.onToggleSelection).toHaveBeenCalledTimes(1);
+      expect(handlers.onEdit).not.toHaveBeenCalled();
+    });
+
+    it('leaves no stray "Select transaction" label on the hidden checkbox glyph', () => {
+      renderRow({ isSelectionMode: true });
+      expect(screen.queryByLabelText('Select transaction')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('leading category glyph', () => {
+    it('is not a 44x44 bordered box masquerading as an icon button', () => {
+      renderRow();
+      const glyph = screen.getByTestId('icon-up').parentElement;
+
+      expect(glyph).toHaveAttribute('aria-hidden', 'true');
+      // `w-11 h-11 rounded-card border` + a filled bg was dimensionally identical
+      // to `Button size="icon"`, so the row read as having a control it did not
+      // have. Keep the glyph a bare icon.
+      const classes = glyph?.className ?? '';
+      expect(classes).not.toMatch(/\bw-11\b|\bh-11\b|\bborder\b|\bbg-/);
+    });
+  });
 });
 
 describe('TransactionItem — Plan 23 comment count badge', () => {

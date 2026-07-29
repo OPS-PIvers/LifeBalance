@@ -16,13 +16,19 @@ const getSourceIcon = (source: string, isRecurring: boolean) => {
   return null;
 };
 
-const getSanitizedLabel = (name: string, action: string) => {
+/**
+ * Strip punctuation and clamp a merchant descriptor so it reads cleanly when a
+ * screen reader speaks it inside an `aria-label`.
+ */
+const sanitizeMerchantName = (name: string) => {
   // Replace all non-alphanumeric chars (except spaces) with nothing
   // Then replace multiple spaces with single space
   const sanitizedName = name.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
-  const truncatedName = sanitizedName.length > 30 ? `${sanitizedName.slice(0, 30)}...` : sanitizedName;
-  return `${action} transaction from ${truncatedName}`;
+  return sanitizedName.length > 30 ? `${sanitizedName.slice(0, 30)}...` : sanitizedName;
 };
+
+const getSanitizedLabel = (name: string, action: string) =>
+  `${action} transaction from ${sanitizeMerchantName(name)}`;
 
 // --- Memoized Transaction Item Component ---
 
@@ -52,31 +58,55 @@ export interface TransactionItemProps {
  * down as a prop so the rules subscription rides the core-context subscription
  * this row already has (via `useFormatCurrency`): a rules edit re-renders every
  * mounted row directly, without widening the memo comparator below.
+ *
+ * The ROW ITSELF is the primary target (CRIT-01): outside selection mode a tap
+ * opens the edit drawer, inside selection mode it toggles selection. It carries
+ * `role="button"` / `role="checkbox"` accordingly plus its own `aria-label`, so
+ * the accessible name is a single sentence rather than the concatenation of
+ * every nested action button's label. The kebab / hover actions stay as the
+ * secondary path and `stopPropagation` so they never double-fire the row.
  */
 export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDuplicate, onSplit, onMore, isSelectionMode, isSelected, onToggleSelection }: TransactionItemProps) => {
   const fmt = useFormatCurrency();
   const { displayNameFor } = useMerchantRules();
   const merchantName = displayNameFor({ merchant: tx.merchant, amount: tx.amount });
+  const isIncome = tx.category === INCOME_CATEGORY;
+
+  const activate = () => {
+    if (isSelectionMode) onToggleSelection(tx.id);
+    else onEdit(tx);
+  };
+
+  // The row's own accessible name. It carries the expense/income distinction in
+  // words, which is why the leading glyph below can be purely decorative — the
+  // arrow direction and the amount's "+" sign are visual cues only.
+  const rowLabel = `${isSelectionMode ? 'Select' : 'Edit'} ${isIncome ? 'income' : 'expense'} of ${fmt(tx.amount)} from ${sanitizeMerchantName(merchantName)}, ${format(parseISO(tx.date), 'MMM d, yyyy')}`;
+
   return (
     <Row
       interactive
-      onClick={() => isSelectionMode && onToggleSelection(tx.id)}
-      role={isSelectionMode ? 'checkbox' : undefined}
+      onClick={activate}
+      role={isSelectionMode ? 'checkbox' : 'button'}
       aria-checked={isSelectionMode ? isSelected : undefined}
-      tabIndex={isSelectionMode ? 0 : undefined}
-      onKeyDown={isSelectionMode ? (e) => {
+      aria-label={rowLabel}
+      tabIndex={0}
+      onKeyDown={(e) => {
+        // Guard on the target: Enter/Space pressed on a nested action button
+        // bubbles up here, and must not also fire the row.
+        if (e.target !== e.currentTarget) return;
         if (e.key === ' ' || e.key === 'Enter') {
           e.preventDefault();
-          onToggleSelection(tx.id);
+          activate();
         }
-      } : undefined}
-      className={`justify-between group ${isSelected ? 'bg-brand-50 dark:bg-brand-700/40' : ''}`}
+      }}
+      className={`justify-between group focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-inset ${isSelected ? 'bg-brand-50 dark:bg-brand-700/40' : ''}`}
     >
-      <div className="flex items-center gap-4 overflow-hidden">
-        {/* Selection Checkbox */}
+      <div className="flex items-center gap-3 overflow-hidden">
+        {/* Selection checkbox — decorative. The row itself is the `checkbox`
+            (role + aria-checked + aria-label above), so exposing this node too
+            would announce the state twice. */}
         {isSelectionMode && (
           <div
-            aria-label="Select transaction"
             aria-hidden="true"
             className={`shrink-0 transition-colors ${isSelected ? 'text-accent-700 dark:text-accent-300' : 'text-brand-300 dark:text-brand-500'}`}
           >
@@ -84,12 +114,19 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
           </div>
         )}
 
-        <div className={`w-11 h-11 rounded-card flex items-center justify-center shrink-0 border ${
-           tx.category === INCOME_CATEGORY
-            ? 'bg-money-bgPos dark:bg-money-pos/15 border-money-pos/20 text-money-pos dark:text-money-posDark'
-            : 'bg-brand-100 dark:bg-brand-700/50 border-brand-200 dark:border-brand-700 text-brand-500 dark:text-brand-400'
-        }`}>
-          {tx.category === INCOME_CATEGORY ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
+        {/* Category glyph — a bare icon, NOT a bordered/filled 44x44 box. That
+            treatment was dimensionally identical to `Button size="icon"` and
+            read as a control the row never made it. Decorative: the row's
+            aria-label already says "income"/"expense". */}
+        <div
+          aria-hidden="true"
+          className={`w-6 flex items-center justify-center shrink-0 ${
+            isIncome
+              ? 'text-money-pos dark:text-money-posDark'
+              : 'text-brand-400 dark:text-brand-450'
+          }`}
+        >
+          {isIncome ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
         </div>
 
         <div className="min-w-0">
@@ -154,9 +191,9 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
       <div className="flex items-center gap-3 pl-2">
         <div className="text-right">
           <p className={`font-mono font-bold tabular-nums tracking-tight text-base ${
-            tx.category === INCOME_CATEGORY ? 'text-money-pos dark:text-money-posDark' : 'text-brand-900 dark:text-brand-100'
+            isIncome ? 'text-money-pos dark:text-money-posDark' : 'text-brand-900 dark:text-brand-100'
           }`}>
-            {tx.category === INCOME_CATEGORY ? '+' : ''}{fmt(tx.amount)}
+            {isIncome ? '+' : ''}{fmt(tx.amount)}
           </p>
           {tx.status === 'pending_review' && (
             <Badge variant="warning" size="sm">
