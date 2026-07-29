@@ -157,9 +157,15 @@ export const WeeklyRecapCard: React.FC<WeeklyRecapCardProps> = ({ drawerOnly = f
               The delta lives in its own line below (not inline with "spent")
               so a 5-figure amount + a 3-digit habit count never fight for the
               same row at 375px — that's what orphaned "week" onto a second
-              line and threw off the row's baseline alignment. */}
+              line and threw off the row's baseline alignment. The row itself
+              wraps (matching MoneyPulseWidget's convention) rather than
+              forcing both halves to nowrap on one line: a two-char currency
+              prefix (CAD renders "CA$") or an unconverted 5-6 digit JPY
+              amount can outgrow the budget a 1-character "$" assumed, and
+              without flex-wrap that ran the habit stat off the card instead
+              of dropping it to its own line. */}
           <div>
-            <div className="flex items-baseline justify-between gap-3">
+            <div className="flex items-baseline justify-between gap-x-3 gap-y-1 flex-wrap">
               <div className="flex items-baseline gap-1.5 whitespace-nowrap">
                 <span className="stat-num text-2xl font-bold text-accent-700 dark:text-accent-300">
                   {fmt(latest.totalSpend, { decimals: 0 })}
@@ -168,7 +174,7 @@ export const WeeklyRecapCard: React.FC<WeeklyRecapCardProps> = ({ drawerOnly = f
                   spent
                 </span>
               </div>
-              <span className="flex items-center gap-1 text-xs font-semibold text-warm-700 dark:text-warm-300 shrink-0 whitespace-nowrap">
+              <span className="flex items-center gap-1 text-xs font-semibold text-warm-700 dark:text-warm-300 whitespace-nowrap">
                 <Sparkles size={12} aria-hidden="true" />
                 {latest.habitCompletions} habit{latest.habitCompletions === 1 ? '' : 's'} done
               </span>

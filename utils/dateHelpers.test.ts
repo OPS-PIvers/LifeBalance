@@ -63,4 +63,15 @@ describe('isoWeekStartDate', () => {
     expect(isoWeekStartDate('2026-27')).toBeNull();
     expect(isoWeekStartDate('')).toBeNull();
   });
+
+  it('returns null for a well-formed but out-of-range week number', () => {
+    // The shape regex alone lets '2026-W60' through — date-fns' setISOWeek
+    // then happily extrapolates it into a later ISO week-year instead of
+    // failing, so range must be checked explicitly.
+    expect(isoWeekStartDate('2026-W00')).toBeNull();
+    // 2026 has 53 ISO weeks (getISOWeeksInYear(2026) === 53), so W53 is the
+    // last valid week and W54 is already one past it.
+    expect(isoWeekStartDate('2026-W54')).toBeNull();
+    expect(isoWeekStartDate('2026-W60')).toBeNull();
+  });
 });

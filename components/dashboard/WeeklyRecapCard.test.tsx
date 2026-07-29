@@ -72,6 +72,16 @@ describe('WeeklyRecapCard', () => {
     expect(screen.getByText('Week of Dec 29')).toBeInTheDocument();
   });
 
+  it('falls back to the generic title when isoWeek is malformed', () => {
+    // isoWeekStartDate returns null for a well-formed-but-impossible (or
+    // shape-invalid) week — a corrupted/hand-edited doc must render the
+    // generic title instead of a confidently wrong date.
+    mockCore.recaps = [makeRecap({ id: '2026-W60', isoWeek: '2026-W60' })];
+    render(<WeeklyRecapCard />);
+    expect(screen.getByText('Your week in review')).toBeInTheDocument();
+    expect(screen.queryByText(/^Week of/)).not.toBeInTheDocument();
+  });
+
   it('keeps the vs-last-week delta out of the spent/habits row (own line beneath it)', () => {
     mockCore.recaps = [makeRecap()];
     render(<WeeklyRecapCard />);
