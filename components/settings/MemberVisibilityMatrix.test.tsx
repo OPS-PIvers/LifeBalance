@@ -206,11 +206,30 @@ describe('MemberVisibilityMatrix', () => {
       // Select primitive's shared FIELD_BASE recipe (components/ui/fieldStyles.ts)
       // — a hand-rolled <select> wouldn't carry them. `min-h-11` is this call
       // site's override that keeps the touch target >=44px (DESIGN.md's
-      // Accessibility section) to match the Switch cells beside it, which get
+      // Accessibility section) to match the Switch rows above it, which get
       // their 44px target from a `h-11 w-11` wrapping label instead.
       expect(bobLanding.className).toContain('rounded-btn');
       expect(bobLanding.className).toContain('focus:ring-2');
       expect(bobLanding.className).toContain('min-h-11');
+    });
+
+    // CRIT-03: the old matrix cell clamped this select to `max-w-28`, which at
+    // 375px measured 55-61px wide — "Home" rendered as "Ho…" and every longer
+    // option was equally unreadable. `w-full` (from the Select primitive's
+    // FIELD_BASE) with no max-width clamp is what makes the value legible.
+    it('lets the landing-screen picker span the full content width (no max-width clamp)', () => {
+      render(
+        <MemberVisibilityMatrix
+          members={[alice, bob]}
+          settings={{ moduleVisibility: undefined }}
+          onToggleModule={vi.fn()}
+          onUpdateMember={vi.fn()}
+        />
+      );
+
+      const bobLanding = screen.getByRole('combobox', { name: 'Landing screen for Bob' });
+      expect(bobLanding.className).toContain('w-full');
+      expect(bobLanding.className).not.toMatch(/\bmax-w-/);
     });
 
     it("a managed kid's row supports both hiding Home and setting a landing screen — the only way, since kids have no login", () => {
@@ -232,6 +251,155 @@ describe('MemberVisibilityMatrix', () => {
       }) as HTMLSelectElement;
       fireEvent.change(kidLanding, { target: { value: 'habits' } });
       expect(onUpdateMember).toHaveBeenCalledWith('m-kid', { homeScreen: 'habits' });
+    });
+  });
+
+  /**
+   * CRIT-03 — the 4-column table became one stacked section per member. These
+   * pin the two things the reflow could plausibly have broken: that BOTH
+   * visibility layers survived, and that the permission model didn't move.
+   */
+  describe('stacked per-member layout (CRIT-03)', () => {
+    const carol: HouseholdMember = {
+      uid: 'm-carol',
+      displayName: 'Carol',
+      role: 'member',
+      points,
+      hiddenKeys: [],
+    };
+
+    it('renders the household layer exactly ONCE, however many members there are', () => {
+      // FOUR members — the case that broke the table outright. The household
+      // switches must not multiply with them: they are one shared field
+      // (`Household.moduleVisibility`), not a per-member choice.
+      render(
+        <MemberVisibilityMatrix
+          members={[alice, bob, carol, kid]}
+          settings={{ moduleVisibility: undefined }}
+          onToggleModule={vi.fn()}
+          onUpdateMember={vi.fn()}
+        />
+      );
+
+      expect(screen.getAllByRole('checkbox', { name: 'Toggle Habits for the household' })).toHaveLength(1);
+      expect(screen.getAllByRole('checkbox', { name: 'Toggle Money for the household' })).toHaveLength(1);
+      expect(screen.getAllByRole('checkbox', { name: 'Toggle Lists for the household' })).toHaveLength(1);
+      // Lists' three sub-tabs keep their OWN household toggles — each is
+      // independently gated, unlike Habits'/Money's leaves.
+      expect(screen.getAllByRole('checkbox', { name: 'Toggle To-Dos for the household' })).toHaveLength(1);
+      expect(screen.getAllByRole('checkbox', { name: 'Toggle Meals for the household' })).toHaveLength(1);
+      expect(screen.getAllByRole('checkbox', { name: 'Toggle Shopping for the household' })).toHaveLength(1);
+    });
+
+    it('gives each of four members their own switches and their own landing-screen picker', () => {
+      render(
+        <MemberVisibilityMatrix
+          members={[alice, bob, carol, kid]}
+          settings={{ moduleVisibility: undefined }}
+          onToggleModule={vi.fn()}
+          onUpdateMember={vi.fn()}
+        />
+      );
+
+      for (const name of ['Alice', 'Bob', 'Carol', 'Kiddo']) {
+        expect(screen.getByRole('checkbox', { name: `Show Home for ${name}` })).toBeInTheDocument();
+        expect(screen.getByRole('checkbox', { name: `Show Overview for ${name}` })).toBeInTheDocument();
+        expect(screen.getByRole('combobox', { name: `Landing screen for ${name}` })).toBeInTheDocument();
+      }
+    });
+
+    it('a non-admin (own column only) still gets their own editor AND the any-member household switches', () => {
+      // Settings passes `[currentUser]` for a non-admin. The household layer
+      // was never admin-only and must not regress to it, so a lone non-admin
+      // still sees — and can flip — the household switches.
+      const onToggleModule = vi.fn();
+      render(
+        <MemberVisibilityMatrix
+          members={[bob]}
+          settings={{ moduleVisibility: undefined }}
+          onToggleModule={onToggleModule}
+          onUpdateMember={vi.fn()}
+        />
+      );
+
+      expect(screen.getByRole('checkbox', { name: 'Show Overview for Bob' })).toBeInTheDocument();
+      expect(screen.getByRole('combobox', { name: 'Landing screen for Bob' })).toBeInTheDocument();
+      // Nobody else's controls leaked in.
+      expect(screen.queryByRole('checkbox', { name: 'Show Overview for Alice' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('combobox', { name: 'Landing screen for Alice' })).not.toBeInTheDocument();
+
+      const householdMoney = screen.getByRole('checkbox', { name: 'Toggle Money for the household' });
+      expect(householdMoney).not.toBeDisabled();
+      householdMoney.click();
+      expect(onToggleModule).toHaveBeenCalledWith('money', false);
+    });
+
+    it('captions a locked row so the reason survives the two layers being split apart', () => {
+      // In the table, "greyed row" was legible because the section header
+      // carrying the household switch sat directly above it. Stacked, the
+      // household switch is a screen away, so each locked row says why.
+      render(
+        <MemberVisibilityMatrix
+          members={[alice]}
+          settings={{ moduleVisibility: { money: false } }}
+          onToggleModule={vi.fn()}
+          onUpdateMember={vi.fn()}
+        />
+      );
+
+      // Money has 7 leaves, every one of them locked for the one member shown.
+      expect(screen.getAllByText('Off for the household')).toHaveLength(7);
+      expect(screen.getByRole('checkbox', { name: 'Show Overview for Alice' })).toBeDisabled();
+    });
+
+    it("wires a locked row's caption to the switch via aria-describedby, and omits it when unlocked", () => {
+      // The caption used to be only a visual sibling of the switch — a
+      // screen-reader user tabbing to it heard just "checkbox, dimmed" with
+      // no explanation. Pin that the disabled switch's aria-describedby
+      // resolves to an element containing the caption text, and that an
+      // unlocked switch (no caption rendered) carries no aria-describedby.
+      render(
+        <MemberVisibilityMatrix
+          members={[alice]}
+          settings={{ moduleVisibility: { money: false } }}
+          onToggleModule={vi.fn()}
+          onUpdateMember={vi.fn()}
+        />
+      );
+
+      const lockedOverview = screen.getByRole('checkbox', { name: 'Show Overview for Alice' });
+      const describedbyId = lockedOverview.getAttribute('aria-describedby');
+      expect(describedbyId).toBeTruthy();
+      expect(document.getElementById(describedbyId as string)).toHaveTextContent(
+        'Off for the household'
+      );
+
+      // Track (Habits) is untouched by the money:false household toggle, so
+      // its switch stays unlocked and must not carry aria-describedby.
+      const unlockedTrack = screen.getByRole('checkbox', { name: 'Show Track for Alice' });
+      expect(unlockedTrack).not.toHaveAttribute('aria-describedby');
+    });
+
+    it('names each member section with the editorial serif heading, not an uppercase eyebrow', () => {
+      // DESIGN.md §3's decision test: a member's block and the view groups
+      // inside it are CONTENT groupings, so they take `SectionHeading`
+      // (font-display, sentence case) — `Eyebrow` micro-caps label controls.
+      render(
+        <MemberVisibilityMatrix
+          members={[alice]}
+          settings={{ moduleVisibility: undefined }}
+          onToggleModule={vi.fn()}
+          onUpdateMember={vi.fn()}
+        />
+      );
+
+      const memberHeading = screen.getByRole('heading', { name: /Alice/ });
+      expect(memberHeading.className).toContain('font-display');
+      expect(memberHeading.className).not.toContain('uppercase');
+
+      const groupHeading = screen.getByRole('heading', { name: 'Money' });
+      expect(groupHeading.className).toContain('font-display');
+      expect(groupHeading.className).not.toContain('uppercase');
     });
   });
 });
