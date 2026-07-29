@@ -623,8 +623,13 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
           and the pair stays snug and centred at any length. The floor of 4
           matches the "0.00" placeholder. The "$" stays a size down: a currency
           mark taller than its own figures looks wrong.
+          text-5xl lives on the WRAPPER, not just the input: index.css's iOS
+          anti-zoom rule (`@media (pointer: coarse) input { font-size:
+          max(1rem, 1em) }`) is unlayered so it beats any utility class on the
+          input itself — `1em` must inherit the hero size from here or the
+          figures collapse to 16px on every phone while the "$" stays 4xl.
           Spinners are stripped because a `ch`-exact box has no room to spare. */}
-      <div className="flex items-baseline justify-center gap-1 py-1">
+      <div className="flex items-baseline justify-center gap-1 py-1 text-5xl">
         <span className="text-4xl font-bold text-brand-400 dark:text-brand-400">$</span>
         <input
           type="number"

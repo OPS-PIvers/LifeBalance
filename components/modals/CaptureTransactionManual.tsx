@@ -326,7 +326,10 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
     >
       <div>
         <div className="flex justify-center">
-          <div className="relative">
+          {/* text-5xl on the wrapper so index.css's unlayered iOS anti-zoom rule
+              (`max(1rem, 1em)`) inherits the hero size — see the hero amount
+              comment in TransactionReviewForm.tsx. */}
+          <div className="relative text-5xl">
             <span className="absolute left-0 top-1/2 -translate-y-1/2 text-4xl font-bold text-brand-400 dark:text-brand-400">$</span>
             <input
               ref={amountInputRef}
