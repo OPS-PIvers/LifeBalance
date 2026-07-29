@@ -96,6 +96,8 @@ vi.mock('lucide-react', () => ({
   Trash2: () => <span data-testid="trash-icon" />,
   Loader2: () => <span data-testid="loader-icon" />,
   ChevronDown: () => <span data-testid="chevron-down-icon" />,
+  // Rendered by the `DisclosureRow` primitive the balance row now uses.
+  ChevronRight: () => <span data-testid="chevron-right-icon" />,
   MoreVertical: () => <span data-testid="more-vertical-icon" />,
   PiggyBank: () => <span data-testid="piggy-bank-icon" />,
   Archive: () => <span data-testid="archive-icon" />,
@@ -205,28 +207,58 @@ describe('BudgetAccounts', () => {
     }));
   });
 
-  it('edits account balance when clicked', async () => {
+  it('edits account balance in a drawer when the row is clicked', async () => {
     const user = userEvent.setup();
     render(<BudgetAccounts />);
 
     // Click on checking balance ($5,000)
-    const balanceDisplay = screen.getByRole('button', { name: /Edit balance for Main Checking/i });
+    const balanceDisplay = screen.getByRole('button', { name: /Balance for Main Checking/i });
     await user.click(balanceDisplay);
 
+    // The chevron promises a drill-in, so the editor is a Drawer bottom sheet —
+    // not an in-place accordion.
+    const drawer = screen.getByTestId('drawer');
+    expect(within(drawer).getByText('Update Balance')).toBeInTheDocument();
+    expect(
+      within(drawer).getByText((c) => c.includes('current balance of Main Checking'))
+    ).toBeInTheDocument();
+
     // Input should appear with current value
-    const input = screen.getByRole('spinbutton'); // type="number"
+    const input = within(drawer).getByRole('spinbutton'); // type="number"
     expect(input).toHaveValue(5000);
 
     // Change value
     await user.clear(input);
     await user.type(input, '6000');
 
-    // Click save (Check icon)
-    // The check icon is inside a button
-    const saveButton = screen.getByLabelText('Save balance');
-    await user.click(saveButton);
+    await user.click(within(drawer).getByRole('button', { name: /Save Balance/i }));
 
     expect(updateAccountBalanceMock).toHaveBeenCalledWith('acc1', 6000);
+    // Saving dismisses the sheet.
+    await waitFor(() => expect(screen.queryByTestId('drawer')).not.toBeInTheDocument());
+  });
+
+  it('marks the balance field with data-autofocus so the drawer focus trap lands on it', async () => {
+    const user = userEvent.setup();
+    render(<BudgetAccounts />);
+
+    await user.click(screen.getByRole('button', { name: /Balance for Main Checking/i }));
+
+    // useFocusTrap prefers [data-autofocus]; a plain React autoFocus is
+    // clobbered by the trap's open effect and focus lands on the close button.
+    expect(screen.getByRole('spinbutton')).toHaveAttribute('data-autofocus');
+  });
+
+  it('leaves the balance untouched when the drawer is dismissed without saving', async () => {
+    const user = userEvent.setup();
+    render(<BudgetAccounts />);
+
+    await user.click(screen.getByRole('button', { name: /Balance for Main Checking/i }));
+    await user.type(screen.getByRole('spinbutton'), '9');
+    await user.click(screen.getByLabelText('Close drawer'));
+
+    await waitFor(() => expect(screen.queryByTestId('drawer')).not.toBeInTheDocument());
+    expect(updateAccountBalanceMock).not.toHaveBeenCalled();
   });
 
   it('seeds the edit input with a float-drift balance rounded to 2 decimals', async () => {
@@ -242,7 +274,7 @@ describe('BudgetAccounts', () => {
       const user = userEvent.setup();
       render(<BudgetAccounts />);
 
-      await user.click(screen.getByRole('button', { name: /Edit balance for Main Checking/i }));
+      await user.click(screen.getByRole('button', { name: /Balance for Main Checking/i }));
 
       const input = screen.getByRole('spinbutton') as HTMLInputElement;
       expect(input.value).toBe('125.78');
@@ -260,7 +292,7 @@ describe('BudgetAccounts', () => {
       const user = userEvent.setup();
       render(<BudgetAccounts />);
 
-      await user.click(screen.getByRole('button', { name: /Edit balance for Main Checking/i }));
+      await user.click(screen.getByRole('button', { name: /Balance for Main Checking/i }));
 
       const input = screen.getByRole('spinbutton') as HTMLInputElement;
       expect(input.value).toBe('50.00');
@@ -279,14 +311,14 @@ describe('BudgetAccounts', () => {
       const user = userEvent.setup();
       render(<BudgetAccounts />);
 
-      await user.click(screen.getByRole('button', { name: /Edit balance for Visa Card/i }));
+      await user.click(screen.getByRole('button', { name: /Balance for Visa Card/i }));
 
       const input = screen.getByRole('spinbutton') as HTMLInputElement;
       expect(input.value).toBe('-42.01');
 
       await user.clear(input);
       await user.type(input, '-30');
-      await user.click(screen.getByLabelText('Save balance'));
+      await user.click(screen.getByRole('button', { name: /Save Balance/i }));
 
       expect(updateAccountBalanceMock).toHaveBeenCalledWith('acc3', -30);
     } finally {
@@ -358,11 +390,17 @@ describe('BudgetAccounts', () => {
     expect(within(drawer).getByRole('button', { name: /Set Savings Goal/i })).toBeInTheDocument();
     expect(within(drawer).getByRole('button', { name: /Delete Account/i })).toBeInTheDocument();
 
-    // Test Edit Balance trigger
+    // Test Edit Balance trigger — the actions sheet closes and hands off to the
+    // Edit Balance sheet (the same drawer the balance row drills into).
     await user.click(within(drawer).getByRole('button', { name: /Edit Balance/i }));
-    expect(drawer).not.toBeInTheDocument(); // Drawer should close
-    // Edit input should appear
-    expect(screen.getByRole('spinbutton')).toHaveValue(10000);
+    expect(drawer).not.toBeInTheDocument(); // Actions drawer should close
+    const balanceDrawer = screen.getByTestId('drawer');
+    expect(within(balanceDrawer).getByText('Update Balance')).toBeInTheDocument();
+    expect(within(balanceDrawer).getByRole('spinbutton')).toHaveValue(10000);
+
+    // Dismiss it so only one sheet is ever mounted at a time.
+    await user.click(within(balanceDrawer).getByLabelText('Close drawer'));
+    await waitFor(() => expect(screen.queryByTestId('drawer')).not.toBeInTheDocument());
 
     // Re-open drawer for next action
     await user.click(moreBtn);
@@ -463,5 +501,98 @@ describe('BudgetAccounts', () => {
     } finally {
       delete acc.cardLast4s;
     }
+  });
+
+  // ---- CRIT-02: the balance affordance ----
+
+  it('explains nothing — there is no "Tap to edit" hint anywhere', () => {
+    render(<BudgetAccounts />);
+    expect(screen.queryByText(/tap to edit/i)).not.toBeInTheDocument();
+  });
+
+  it('renders the balance as a real row-sized button with a trailing chevron', () => {
+    render(<BudgetAccounts />);
+
+    const balanceRow = screen.getByRole('button', { name: /Balance for Main Checking/i });
+    // A real <button>, not a click-handled div — this is what makes it
+    // focusable and Enter/Space-operable for free.
+    expect(balanceRow.tagName).toBe('BUTTON');
+    // The `DisclosureRow` chevron, the same drill-in cue the Settings rows use.
+    expect(within(balanceRow).getByTestId('chevron-right-icon')).toBeInTheDocument();
+    // The figure itself still lives in the row.
+    expect(within(balanceRow).getByText((c) => c.includes('5,000'))).toBeInTheDocument();
+  });
+
+  it('opens the balance editor from the keyboard', async () => {
+    const user = userEvent.setup();
+    render(<BudgetAccounts />);
+
+    const balanceRow = screen.getByRole('button', { name: /Balance for Main Checking/i });
+    balanceRow.focus();
+    expect(balanceRow).toHaveFocus();
+
+    await user.keyboard('{Enter}');
+
+    expect(screen.getByRole('spinbutton')).toHaveValue(5000);
+  });
+
+  it('promotes a diverged bank balance to its own labelled row with an Update action', async () => {
+    const acc = mockAccounts[0];
+    if (!acc) throw new Error('missing mock account');
+    acc.plaidBalanceCurrent = 5389.12;
+    try {
+      const user = userEvent.setup();
+      render(<BudgetAccounts />);
+
+      expect(screen.getByText((c) => c.includes('Bank says') && c.includes('5,389.12'))).toBeInTheDocument();
+
+      const update = screen.getByRole('button', {
+        name: /Update Main Checking to the bank balance/i,
+      });
+      await user.click(update);
+
+      expect(updateAccountBalanceMock).toHaveBeenCalledWith('acc1', 5389.12);
+    } finally {
+      delete acc.plaidBalanceCurrent;
+    }
+  });
+
+  it('hides the bank-balance row when the manual balance already agrees', () => {
+    const acc = mockAccounts[0];
+    if (!acc) throw new Error('missing mock account');
+    // Inside PLAID_BALANCE_DIVERGENCE_THRESHOLD, so there is nothing to flag.
+    acc.plaidBalanceCurrent = 5000.4;
+    try {
+      render(<BudgetAccounts />);
+      expect(screen.queryByText(/Bank says/i)).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /to the bank balance/i })
+      ).not.toBeInTheDocument();
+    } finally {
+      delete acc.plaidBalanceCurrent;
+    }
+  });
+
+  // ---- CRIT-02: two labeling voices, not three ----
+
+  it('names the account groupings in the editorial serif voice, not micro-caps', () => {
+    render(<BudgetAccounts />);
+
+    for (const name of ['Assets', 'Liabilities']) {
+      const heading = screen.getByRole('heading', { name });
+      expect(heading).toHaveClass('font-display');
+      // Sentence case is the whole point — an uppercase transform here is the
+      // serif-wearing-eyebrow-clothes third voice DESIGN.md §3 rules out.
+      expect(heading.className).not.toMatch(/uppercase/);
+    }
+  });
+
+  it('labels the net-worth stat caption with the micro-caps eyebrow voice', () => {
+    render(<BudgetAccounts />);
+
+    const caption = screen.getByText('Total net worth');
+    expect(caption).toHaveClass('uppercase');
+    // The eyebrow is grotesk, never the serif display face.
+    expect(caption.className).not.toMatch(/font-display/);
   });
 });

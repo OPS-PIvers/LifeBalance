@@ -117,13 +117,26 @@ describe('SafeToSpendDetail', () => {
     expect(screen.getByText('Buckets are a lens, not envelopes')).toBeInTheDocument();
   });
 
-  it('only shows the Pending transactions row when pendingSpend > 0', () => {
+  it('always renders the Pending transactions row, showing $0.00 when pendingSpend is 0', () => {
     setBreakdown({ pendingSpend: 0 });
     render(<SafeToSpendDetail />);
 
     fireEvent.click(screen.getByRole('button', { name: 'How is this calculated?' }));
 
     expect(screen.getByText('Checking balance')).toBeInTheDocument();
-    expect(screen.queryByText('Pending transactions')).not.toBeInTheDocument();
+    expect(screen.getByText('Pending transactions')).toBeInTheDocument();
+    // Row count parity with "Unpaid bills this period": both show $0.00 as
+    // plain (non-negative-styled) text when their value is zero, never omitted.
+    expect(screen.getByText('$0.00')).toBeInTheDocument();
+  });
+
+  it('renders the Pending transactions row with a negative value when pendingSpend is > 0', () => {
+    setBreakdown({ pendingSpend: 75 });
+    render(<SafeToSpendDetail />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'How is this calculated?' }));
+
+    expect(screen.getByText('Pending transactions')).toBeInTheDocument();
+    expect(screen.getByText('- $75.00')).toBeInTheDocument();
   });
 });

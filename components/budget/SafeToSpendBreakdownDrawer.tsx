@@ -139,14 +139,12 @@ const SafeToSpendBreakdownDrawer: React.FC<SafeToSpendBreakdownDrawerProps> = ({
               value={breakdown.unpaidBills >= 0.005 ? `− ${fmt(breakdown.unpaidBills)}` : fmt(0)}
               negative={breakdown.unpaidBills >= 0.005}
             />
-            {breakdown.pendingSpend > 0 && (
-              <LedgerRow
-                label="Pending transactions"
-                sub="Spent but not yet cleared"
-                value={`− ${fmt(breakdown.pendingSpend)}`}
-                negative
-              />
-            )}
+            <LedgerRow
+              label="Pending transactions"
+              sub="Spent but not yet cleared"
+              value={breakdown.pendingSpend >= 0.005 ? `− ${fmt(breakdown.pendingSpend)}` : fmt(0)}
+              negative={breakdown.pendingSpend >= 0.005}
+            />
             <Row className="justify-between bg-brand-50 dark:bg-brand-700/30">
               <span className="font-display text-sm font-semibold tracking-tight text-brand-800 dark:text-brand-100">
                 Safe to Spend

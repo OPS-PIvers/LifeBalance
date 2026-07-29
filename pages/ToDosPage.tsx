@@ -2026,7 +2026,12 @@ const ToDosPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsTriageOpen(true)}
-                  className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-accent-700 hover:bg-accent-50 dark:text-accent-300 dark:hover:bg-accent-900/30"
+                  // The 51x24 visible pill is well under the 44px floor; the
+                  // house extender (Button's `sm` idiom) grows the tap target
+                  // vertically only — the banner itself is ~42px tall, so a
+                  // full ::before inset would bleed into the sticky header
+                  // above / first to-do row below.
+                  className="relative shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-accent-700 hover:bg-accent-50 dark:text-accent-300 dark:hover:bg-accent-900/30 before:absolute before:inset-x-0 before:-inset-y-2.5 before:content-['']"
                 >
                   Triage
                 </button>
@@ -2034,7 +2039,16 @@ const ToDosPage: React.FC = () => {
                   type="button"
                   onClick={() => setTriageBannerDismissed(true)}
                   aria-label="Dismiss the triage reminder"
-                  className="shrink-0 rounded-lg p-1 text-brand-400 hover:bg-brand-100 dark:text-brand-300 dark:hover:bg-brand-700"
+                  // 22x22 icon button. The extender is DELIBERATELY ASYMMETRIC:
+                  // a symmetric one reaching 44px would overhang the 8px `gap-2`
+                  // and steal the right edge of the Triage pill next to it
+                  // (whose own extender is inset-x-0, so it can't push back).
+                  // `ml-1` widens this one gap to 12px and the extender reaches
+                  // only 4px left, leaving an 8px dead zone between the two hit
+                  // areas; the remaining width is taken to the RIGHT, where the
+                  // banner's px-3 padding and the page gutter hold nothing
+                  // clickable. Verified with elementFromPoint along the seam.
+                  className="relative ml-1 shrink-0 rounded-lg p-1 text-brand-400 hover:bg-brand-100 dark:text-brand-300 dark:hover:bg-brand-700 before:absolute before:-top-3 before:-bottom-3 before:-left-1 before:-right-5 before:content-['']"
                 >
                   <X size={14} aria-hidden="true" />
                 </button>

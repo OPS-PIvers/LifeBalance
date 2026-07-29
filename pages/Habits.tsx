@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
-import Eyebrow from '@/components/ui/Eyebrow';
+import SectionHeading from '@/components/ui/SectionHeading';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { TabSubViewMenu } from '@/components/ui/TabSubViewMenu';
 import { tabValueAtPoint } from '@/components/ui/tabValueAtPoint';
@@ -703,9 +703,9 @@ const Habits: React.FC = () => {
 
             {categories.map((category) => (
               <div key={category}>
-                <Eyebrow as="h2" className="mb-2 px-1">
+                <SectionHeading as="h2" className="mb-2 px-1">
                   {category}
-                </Eyebrow>
+                </SectionHeading>
                 <HabitCategoryList category={category} habits={groupedHabits[category] ?? []} />
               </div>
             ))}
@@ -721,10 +721,12 @@ const Habits: React.FC = () => {
                 count nor part of what the push was about. */}
             {!showArchived && !appliedDueFilter && kidModeEnabled && kidsWithChores.length > 0 && (
               <section aria-label="Kids chores">
-                <Eyebrow as="h2" tone="warm" className="flex items-center gap-2 mb-2 px-1">
-                  <Star size={14} className="fill-current" />
-                  Kids&apos; chores
-                </Eyebrow>
+                <SectionHeading as="h2" className="mb-2 px-1">
+                  <span className="inline-flex items-center gap-2">
+                    <Star size={14} className="shrink-0 fill-current text-warm-500 dark:text-warm-400" />
+                    Kids&apos; chores
+                  </span>
+                </SectionHeading>
                 <div className="space-y-6">
                   {kidsWithChores.map(({ kid, chores }) => (
                     <KidChoresGroup key={kid.uid} kid={kid} chores={chores} />

@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { format } from 'date-fns';
 import { X, Lock, ChevronRight, Sparkles } from 'lucide-react';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { consumeRecapParam } from '@/utils/recapParam';
 import { track } from '@/services/analytics';
 import { roundMoney } from '@/utils/money';
+import { isoWeekStartDate } from '@/utils/dateHelpers';
 import { cn } from '@/utils/cn';
 import { Section } from '@/components/ui/Section';
 import { WeeklyRecapDrawer } from '@/components/dashboard/WeeklyRecapDrawer';
@@ -126,10 +128,16 @@ export const WeeklyRecapCard: React.FC<WeeklyRecapCardProps> = ({ drawerOnly = f
     setDismissedWeek(latest.isoWeek);
   };
 
+  // Visible title states WHICH week this is ("Week of Jul 20") so it can never
+  // be mistaken for the Dashboard's in-progress "This week (so far)" figure —
+  // falls back to the generic title only if isoWeek is somehow malformed.
+  const weekStart = isoWeekStartDate(latest.isoWeek);
+  const weekTitle = weekStart ? `Week of ${format(weekStart, 'MMM d')}` : 'Your week in review';
+
   return (
     <>
       <Section
-        title="Your week in review"
+        title={weekTitle}
         action={
           <button
             onClick={dismiss}
@@ -145,30 +153,44 @@ export const WeeklyRecapCard: React.FC<WeeklyRecapCardProps> = ({ drawerOnly = f
           className="w-full text-left surface-section p-4 space-y-3 hover:border-brand-300 dark:hover:border-brand-600 active:scale-[0.99] transition-[transform,colors] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
           aria-label={`Open weekly recap for ${latest.isoWeek}`}
         >
-          {/* Headline numbers — money in directional tokens, habits in amber */}
-          <div className="flex items-baseline justify-between gap-3">
-            <div>
-              <span className="stat-num text-2xl font-bold text-accent-700 dark:text-accent-300">
-                {fmt(latest.totalSpend, { decimals: 0 })}
+          {/* Headline numbers — money in directional tokens, habits in amber.
+              The delta lives in its own line below (not inline with "spent")
+              so a 5-figure amount + a 3-digit habit count never fight for the
+              same row at 375px — that's what orphaned "week" onto a second
+              line and threw off the row's baseline alignment. The row itself
+              wraps (matching MoneyPulseWidget's convention) rather than
+              forcing both halves to nowrap on one line: a two-char currency
+              prefix (CAD renders "CA$") or an unconverted 5-6 digit JPY
+              amount can outgrow the budget a 1-character "$" assumed, and
+              without flex-wrap that ran the habit stat off the card instead
+              of dropping it to its own line. */}
+          <div>
+            <div className="flex items-baseline justify-between gap-x-3 gap-y-1 flex-wrap">
+              <div className="flex items-baseline gap-1.5 whitespace-nowrap">
+                <span className="stat-num text-2xl font-bold text-accent-700 dark:text-accent-300">
+                  {fmt(latest.totalSpend, { decimals: 0 })}
+                </span>
+                <span className="text-xs font-medium text-brand-500 dark:text-brand-400">
+                  spent
+                </span>
+              </div>
+              <span className="flex items-center gap-1 text-xs font-semibold text-warm-700 dark:text-warm-300 whitespace-nowrap">
+                <Sparkles size={12} aria-hidden="true" />
+                {latest.habitCompletions} habit{latest.habitCompletions === 1 ? '' : 's'} done
               </span>
-              <span className="ml-1.5 text-xs font-medium text-brand-500 dark:text-brand-400">
-                spent
-              </span>
-              {latest.priorWeekSpend > 0 && diff !== 0 && (
+            </div>
+            {latest.priorWeekSpend > 0 && diff !== 0 && (
+              <div className="mt-1">
                 <span
                   className={cn(
-                    'ml-2 text-xs font-semibold',
+                    'text-xs font-semibold',
                     spentLess ? 'text-money-pos dark:text-money-posDark' : 'text-money-neg dark:text-money-negDark'
                   )}
                 >
                   {spentLess ? '↓' : '↑'} {fmt(Math.abs(diff), { decimals: 0 })} vs last week
                 </span>
-              )}
-            </div>
-            <span className="flex items-center gap-1 text-xs font-semibold text-warm-700 dark:text-warm-300 shrink-0">
-              <Sparkles size={12} aria-hidden="true" />
-              {latest.habitCompletions} habit{latest.habitCompletions === 1 ? '' : 's'} done
-            </span>
+              </div>
+            )}
           </div>
 
           {/* Narrative snippet — blurred + upsell when the recap is free-tier */}

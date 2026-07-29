@@ -101,14 +101,28 @@ describe('SafeToSpendBreakdownDrawer', () => {
     expect(screen.getAllByText('$1,700.00').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('hides the Pending transactions row when pendingSpend is 0', () => {
+  it('always renders the Pending transactions row, showing $0.00 when pendingSpend is 0', () => {
     setFinance({
       safeToSpendBreakdown: {
         checkingBalance: 2000, unpaidBills: 300, pendingSpend: 0, safeToSpend: 1700, nextPaycheckDate: null,
       },
     });
     render(<SafeToSpendBreakdownDrawer open={true} onClose={() => {}} />);
-    expect(screen.queryByText('Pending transactions')).not.toBeInTheDocument();
+    expect(screen.getByText('Pending transactions')).toBeInTheDocument();
+    // Row count parity with "Unpaid bills this period": both show $0.00 as
+    // plain (non-negative-styled) text when their value is zero, never omitted.
+    expect(screen.getByText('$0.00')).toBeInTheDocument();
+  });
+
+  it('renders the Pending transactions row with a negative value when pendingSpend is > 0', () => {
+    setFinance({
+      safeToSpendBreakdown: {
+        checkingBalance: 2000, unpaidBills: 300, pendingSpend: 75, safeToSpend: 1625, nextPaycheckDate: null,
+      },
+    });
+    render(<SafeToSpendBreakdownDrawer open={true} onClose={() => {}} />);
+    expect(screen.getByText('Pending transactions')).toBeInTheDocument();
+    expect(screen.getByText('− $75.00')).toBeInTheDocument();
   });
 
   it('renders one distribution row per bucket with remaining, spent-of-limit, and the Unallocated leftover', () => {
