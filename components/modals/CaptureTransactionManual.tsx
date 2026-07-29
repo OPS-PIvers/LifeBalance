@@ -326,7 +326,12 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
     >
       <div>
         <div className="flex justify-center">
-          <div className="relative">
+          {/* text-5xl on the wrapper, not just the input: index.css's unlayered
+              iOS anti-zoom rule (`@media (pointer: coarse) input { font-size:
+              max(1rem, 1em) }`) beats any utility class on the input itself, so
+              `1em` must inherit the hero size from here — otherwise the figures
+              collapse to 16px on phones while the "$" stays 4xl. */}
+          <div className="relative text-5xl">
             <span className="absolute left-0 top-1/2 -translate-y-1/2 text-4xl font-bold text-brand-400 dark:text-brand-400">$</span>
             <input
               ref={amountInputRef}
