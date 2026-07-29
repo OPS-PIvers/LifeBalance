@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
-import { Pencil, Check, Plus, Target, Star, GripVertical, Trash2, MoreVertical, Landmark, CreditCard, Banknote, Archive, ArchiveRestore, ChevronDown, X } from 'lucide-react';
+import { Pencil, Plus, Target, Star, GripVertical, Trash2, MoreVertical, Landmark, CreditCard, Banknote, Archive, ArchiveRestore, ChevronDown, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Account } from '@/types/schema';
 import { roundMoney } from '@/utils/money';
@@ -28,6 +28,11 @@ const BudgetAccounts: React.FC = () => {
   const { accounts, updateAccountBalance, addAccount, setAccountGoal, setAccountCardDetails, deleteAccount, archiveAccount, unarchiveAccount, reorderAccounts } = useFinance();
   const [showArchived, setShowArchived] = useState(false);
   const fmt = useFormatCurrency();
+
+  // Edit Balance Drawer (id of the account being edited, or null). The balance
+  // row is a `DisclosureRow`, whose chevron promises a drill-in — so it opens a
+  // Drawer bottom sheet like every other form on this page, never an in-place
+  // accordion (see the DisclosureRow JSDoc in components/ui/Section.tsx).
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>('');
 
@@ -99,6 +104,13 @@ const BudgetAccounts: React.FC = () => {
     ? (accounts.find(a => a.id === isCardModalOpen) ?? null)
     : null;
   const isCardModalSavings = cardModalAccount?.type === 'savings';
+
+  // The account currently open in the Edit Balance drawer, so the sheet can
+  // name which balance is being changed (the row that opened it is behind the
+  // backdrop by then).
+  const editingAccount = editingId
+    ? (accounts.find(a => a.id === editingId) ?? null)
+    : null;
 
   const handleAddAccount = () => {
     if (!newName || !newBalance) return;
@@ -341,7 +353,6 @@ const BudgetAccounts: React.FC = () => {
 
   const renderAccountRow = (account: Account, isLiabilityGroup: boolean) => {
     const isLiability = account.type === 'credit';
-    const isEditing = editingId === account.id;
     const isSavings = account.type === 'savings';
     // Legacy `cardLast4` is treated as an extra (deduped) entry of `cardLast4s`
     // for display, mirroring the read-side handling in accountMatch.ts.
@@ -494,65 +505,37 @@ const BudgetAccounts: React.FC = () => {
         {/* Balance — the affordance IS the row. Previously this was a bare
             figure with a 10px "Tap to edit" hint at 1.69:1 contrast; the row
             now carries its own hover/press/focus states and a chevron, the
-            same language as every Settings drill-in row. */}
-        {isEditing ? (
-          <Row className="justify-between gap-3">
-            <label
-              htmlFor={`account-balance-${account.id}`}
-              className="text-sm font-medium text-brand-900 dark:text-brand-50"
+            same language as every Settings drill-in row. The chevron means
+            "drills into a Drawer", and it does — the amount field lives in the
+            Edit Balance sheet at the bottom of this file. */}
+        <DisclosureRow
+          className="min-h-11"
+          /* The visible label is just "Balance" (the account name is already
+             the line above it), but the accessible name has to stand alone —
+             a screen-reader user landing on the row otherwise hears "Balance
+             $5,000.00" with no idea whose. Each text node is trimmed before
+             the accessible name is joined, so the account name goes in as one
+             complete phrase rather than as a leading-space fragment. */
+          title={
+            <>
+              <span className="sr-only">{`Balance for ${account.name}`}</span>
+              <span aria-hidden="true">Balance</span>
+            </>
+          }
+          value={
+            <span
+              className={cn(
+                'font-mono tabular-nums font-bold text-lg',
+                isLiability
+                  ? 'text-money-neg dark:text-money-negDark'
+                  : 'text-money-pos dark:text-money-posDark'
+              )}
             >
-              Balance
-            </label>
-            <div className="flex items-center gap-2 shrink-0">
-              <input
-                id={`account-balance-${account.id}`}
-                type="number"
-                inputMode="decimal"
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                className="h-11 w-28 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-btn px-2 text-right font-mono font-bold outline-hidden focus:ring-2 focus:ring-accent-500/40 dark:text-brand-100"
-                autoFocus
-              />
-              <Button
-                variant="primary"
-                size="icon"
-                onClick={() => saveEditing(account.id)}
-                aria-label="Save balance"
-              >
-                <Check size={16} />
-              </Button>
-            </div>
-          </Row>
-        ) : (
-          <DisclosureRow
-            className="min-h-11"
-            /* The visible label is just "Balance" (the account name is already
-               the line above it), but the accessible name has to stand alone —
-               a screen-reader user landing on the row otherwise hears "Balance
-               $5,000.00" with no idea whose. Each text node is trimmed before
-               the accessible name is joined, so the account name goes in as one
-               complete phrase rather than as a leading-space fragment. */
-            title={
-              <>
-                <span className="sr-only">{`Balance for ${account.name}`}</span>
-                <span aria-hidden="true">Balance</span>
-              </>
-            }
-            value={
-              <span
-                className={cn(
-                  'font-mono tabular-nums font-bold text-lg',
-                  isLiability
-                    ? 'text-money-neg dark:text-money-negDark'
-                    : 'text-money-pos dark:text-money-posDark'
-                )}
-              >
-                {fmt(account.balance)}
-              </span>
-            }
-            onClick={() => startEditing(account.id, account.balance)}
-          />
-        )}
+              {fmt(account.balance)}
+            </span>
+          }
+          onClick={() => startEditing(account.id, account.balance)}
+        />
 
         {/* Savings Goal Bar */}
         {isSavings && account.monthlyGoal && (
@@ -799,6 +782,42 @@ const BudgetAccounts: React.FC = () => {
             </div>
           )}
         </div>
+      </Drawer>
+
+      {/* Edit Balance Drawer — the destination the balance row's chevron
+          promises. Same shell as the Set Savings Goal sheet below it (sticky
+          footer CTA, single field) so the two drill-ins feel identical. */}
+      <Drawer
+        isOpen={!!editingId}
+        onClose={() => setEditingId(null)}
+        title="Update Balance"
+        footer={
+          <div className="flex gap-2 border-t border-brand-200 dark:border-brand-700 p-4">
+            <Button
+              onClick={() => { if (editingId) saveEditing(editingId); }}
+              className="w-full py-3"
+            >
+              Save Balance
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-sm text-brand-500 dark:text-brand-400 mb-4">
+          {editingAccount
+            ? `What is the current balance of ${editingAccount.name}?`
+            : 'What is the current balance of this account?'}
+        </p>
+        <Input
+          label="Balance"
+          type="number"
+          inputMode="decimal"
+          value={editValue}
+          onChange={e => setEditValue(e.target.value)}
+          className="font-mono"
+          // The Drawer's focus trap prefers [data-autofocus]; a plain autoFocus
+          // is clobbered by the trap and focus lands on the close button.
+          data-autofocus
+        />
       </Drawer>
 
       {/* Goal Drawer */}

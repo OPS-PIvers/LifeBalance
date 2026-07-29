@@ -207,7 +207,7 @@ describe('BudgetAccounts', () => {
     }));
   });
 
-  it('edits account balance when clicked', async () => {
+  it('edits account balance in a drawer when the row is clicked', async () => {
     const user = userEvent.setup();
     render(<BudgetAccounts />);
 
@@ -215,20 +215,50 @@ describe('BudgetAccounts', () => {
     const balanceDisplay = screen.getByRole('button', { name: /Balance for Main Checking/i });
     await user.click(balanceDisplay);
 
+    // The chevron promises a drill-in, so the editor is a Drawer bottom sheet —
+    // not an in-place accordion.
+    const drawer = screen.getByTestId('drawer');
+    expect(within(drawer).getByText('Update Balance')).toBeInTheDocument();
+    expect(
+      within(drawer).getByText((c) => c.includes('current balance of Main Checking'))
+    ).toBeInTheDocument();
+
     // Input should appear with current value
-    const input = screen.getByRole('spinbutton'); // type="number"
+    const input = within(drawer).getByRole('spinbutton'); // type="number"
     expect(input).toHaveValue(5000);
 
     // Change value
     await user.clear(input);
     await user.type(input, '6000');
 
-    // Click save (Check icon)
-    // The check icon is inside a button
-    const saveButton = screen.getByLabelText('Save balance');
-    await user.click(saveButton);
+    await user.click(within(drawer).getByRole('button', { name: /Save Balance/i }));
 
     expect(updateAccountBalanceMock).toHaveBeenCalledWith('acc1', 6000);
+    // Saving dismisses the sheet.
+    await waitFor(() => expect(screen.queryByTestId('drawer')).not.toBeInTheDocument());
+  });
+
+  it('marks the balance field with data-autofocus so the drawer focus trap lands on it', async () => {
+    const user = userEvent.setup();
+    render(<BudgetAccounts />);
+
+    await user.click(screen.getByRole('button', { name: /Balance for Main Checking/i }));
+
+    // useFocusTrap prefers [data-autofocus]; a plain React autoFocus is
+    // clobbered by the trap's open effect and focus lands on the close button.
+    expect(screen.getByRole('spinbutton')).toHaveAttribute('data-autofocus');
+  });
+
+  it('leaves the balance untouched when the drawer is dismissed without saving', async () => {
+    const user = userEvent.setup();
+    render(<BudgetAccounts />);
+
+    await user.click(screen.getByRole('button', { name: /Balance for Main Checking/i }));
+    await user.type(screen.getByRole('spinbutton'), '9');
+    await user.click(screen.getByLabelText('Close drawer'));
+
+    await waitFor(() => expect(screen.queryByTestId('drawer')).not.toBeInTheDocument());
+    expect(updateAccountBalanceMock).not.toHaveBeenCalled();
   });
 
   it('seeds the edit input with a float-drift balance rounded to 2 decimals', async () => {
@@ -288,7 +318,7 @@ describe('BudgetAccounts', () => {
 
       await user.clear(input);
       await user.type(input, '-30');
-      await user.click(screen.getByLabelText('Save balance'));
+      await user.click(screen.getByRole('button', { name: /Save Balance/i }));
 
       expect(updateAccountBalanceMock).toHaveBeenCalledWith('acc3', -30);
     } finally {
@@ -360,11 +390,17 @@ describe('BudgetAccounts', () => {
     expect(within(drawer).getByRole('button', { name: /Set Savings Goal/i })).toBeInTheDocument();
     expect(within(drawer).getByRole('button', { name: /Delete Account/i })).toBeInTheDocument();
 
-    // Test Edit Balance trigger
+    // Test Edit Balance trigger — the actions sheet closes and hands off to the
+    // Edit Balance sheet (the same drawer the balance row drills into).
     await user.click(within(drawer).getByRole('button', { name: /Edit Balance/i }));
-    expect(drawer).not.toBeInTheDocument(); // Drawer should close
-    // Edit input should appear
-    expect(screen.getByRole('spinbutton')).toHaveValue(10000);
+    expect(drawer).not.toBeInTheDocument(); // Actions drawer should close
+    const balanceDrawer = screen.getByTestId('drawer');
+    expect(within(balanceDrawer).getByText('Update Balance')).toBeInTheDocument();
+    expect(within(balanceDrawer).getByRole('spinbutton')).toHaveValue(10000);
+
+    // Dismiss it so only one sheet is ever mounted at a time.
+    await user.click(within(balanceDrawer).getByLabelText('Close drawer'));
+    await waitFor(() => expect(screen.queryByTestId('drawer')).not.toBeInTheDocument());
 
     // Re-open drawer for next action
     await user.click(moreBtn);
