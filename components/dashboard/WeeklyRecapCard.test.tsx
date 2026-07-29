@@ -50,13 +50,13 @@ describe('WeeklyRecapCard', () => {
 
   it('renders nothing (but keeps the drawer mount) without a recap', () => {
     render(<WeeklyRecapCard />);
-    expect(screen.queryByText('Your week in review')).not.toBeInTheDocument();
+    expect(screen.queryByText('Week of Jun 29')).not.toBeInTheDocument();
   });
 
   it('renders headline numbers and narrative for a fresh premium recap', () => {
     mockCore.recaps = [makeRecap()];
     render(<WeeklyRecapCard />);
-    expect(screen.getByText('Your week in review')).toBeInTheDocument();
+    expect(screen.getByText('Week of Jun 29')).toBeInTheDocument();
     expect(screen.getByText('$412')).toBeInTheDocument();
     expect(screen.getByText(/\$56 vs last week/)).toBeInTheDocument();
     expect(screen.getByText(/12 habits done/)).toBeInTheDocument();
@@ -64,12 +64,44 @@ describe('WeeklyRecapCard', () => {
     expect(screen.queryByText(/Unlock your personal recap/)).not.toBeInTheDocument();
   });
 
+  it('titles the card with the ISO week start date across a year boundary', () => {
+    // 2026-W01's Monday falls in the PRIOR calendar year (2025-12-29) — the
+    // classic ISO-week-year edge case CRIT-05 asked to be verified.
+    mockCore.recaps = [makeRecap({ id: '2026-W01', isoWeek: '2026-W01' })];
+    render(<WeeklyRecapCard />);
+    expect(screen.getByText('Week of Dec 29')).toBeInTheDocument();
+  });
+
+  it('falls back to the generic title when isoWeek is malformed', () => {
+    // isoWeekStartDate returns null for a well-formed-but-impossible (or
+    // shape-invalid) week — a corrupted/hand-edited doc must render the
+    // generic title instead of a confidently wrong date.
+    mockCore.recaps = [makeRecap({ id: '2026-W60', isoWeek: '2026-W60' })];
+    render(<WeeklyRecapCard />);
+    expect(screen.getByText('Your week in review')).toBeInTheDocument();
+    expect(screen.queryByText(/^Week of/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the vs-last-week delta out of the spent/habits row (own line beneath it)', () => {
+    mockCore.recaps = [makeRecap()];
+    render(<WeeklyRecapCard />);
+    const spentAmount = screen.getByText('$412');
+    const habitsStat = screen.getByText(/12 habits done/);
+    const delta = screen.getByText(/\$56 vs last week/);
+    // The amount and the habits stat share one row…
+    const row = spentAmount.closest('.flex.items-baseline.justify-between');
+    expect(row).not.toBeNull();
+    expect(row?.contains(habitsStat)).toBe(true);
+    // …but the delta is NOT part of that row (it sits in its own block below).
+    expect(row?.contains(delta)).toBe(false);
+  });
+
   it('hides the card when the recap is older than the freshness window', () => {
     mockCore.recaps = [
       makeRecap({ generatedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString() }),
     ];
     render(<WeeklyRecapCard />);
-    expect(screen.queryByText('Your week in review')).not.toBeInTheDocument();
+    expect(screen.queryByText('Week of Jun 29')).not.toBeInTheDocument();
   });
 
   it('locks the narrative behind an upsell row when premium is false', () => {
@@ -89,7 +121,7 @@ describe('WeeklyRecapCard', () => {
     mockCore.recaps = [makeRecap()];
     render(<WeeklyRecapCard />);
     fireEvent.click(screen.getByLabelText('Dismiss weekly recap'));
-    expect(screen.queryByText('Your week in review')).not.toBeInTheDocument();
+    expect(screen.queryByText('Week of Jun 29')).not.toBeInTheDocument();
     expect(window.localStorage.getItem('lb_recap_dismissed_2026-W27')).toBe('1');
 
     // A re-mount (fresh state) stays hidden thanks to the persisted flag.

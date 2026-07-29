@@ -68,7 +68,11 @@ export const MoneyPulseWidget: React.FC = () => {
           <p className="text-xs text-brand-500 dark:text-brand-400 font-medium">Spent this week</p>
           <div className="flex items-baseline gap-3 flex-wrap">
             <p className="stat-num text-2xl font-bold text-brand-900 dark:text-brand-50">
-              {fmt(spendingStats.thisWeek)}
+              {/* Whole-dollar precision, matching PulseStripWidget's "This
+                  week (so far)" headline for the same underlying datum
+                  (CRIT-05) — this widget and that one previously showed
+                  $165.50 vs $166 for one number. */}
+              {fmt(spendingStats.thisWeek, { decimals: 0 })}
             </p>
             <div
               className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
