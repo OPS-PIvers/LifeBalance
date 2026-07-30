@@ -9,16 +9,17 @@ import type { ModuleKey } from '@/types/schema';
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useFinance: () => ({ safeToSpendBreakdown: { safeToSpend: 1234 } }),
   useGamification: () => ({ dailyPoints: 10, weeklyPoints: 50 }),
-  useHouseholdCore: () => ({ household: { pendingRedemptions: [] }, unreadNotificationCount: 0 }),
+  useHouseholdCore: () => ({ unreadNotificationCount: 0 }),
 }));
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ currentUser: { displayName: 'Test User', photoURL: null } }),
 }));
-vi.mock('@/hooks/useKidModeEnabled', () => ({
-  useKidModeEnabled: () => false,
-}));
 vi.mock('@/hooks/useFormatCurrency', () => ({
   useFormatCurrency: () => (n: number) => `$${n}`,
+}));
+const trackMock = vi.fn();
+vi.mock('@/services/analytics', () => ({
+  track: (...args: unknown[]) => trackMock(...args),
 }));
 
 // Keep the lazy FeedbackModal + preload off the test path, but still render
@@ -33,6 +34,13 @@ vi.mock('@/components/ui/LazyMount', () => ({
 vi.mock('@/components/modals/FeedbackModal', () => ({
   default: ({ isOpen }: { isOpen: boolean }) =>
     isOpen ? <div data-testid="feedback-modal" /> : null,
+}));
+// Points Breakdown drawer (PR3) — the toolbar just needs to know it opened,
+// not render its full standings; the drawer's own content states are covered
+// by PointsBreakdownDrawer.test.tsx.
+vi.mock('@/components/habits/PointsBreakdownDrawer', () => ({
+  default: ({ open }: { open: boolean }) =>
+    open ? <div data-testid="points-breakdown-drawer" /> : null,
 }));
 // ProfileMenu pulls in heavy deps; the toolbar visibility logic doesn't need
 // its full implementation, but it does need to expose the "Send Feedback"
@@ -143,5 +151,19 @@ describe('TopToolbar', () => {
     await waitFor(() => {
       expect(screen.getByTestId('feedback-modal')).toBeInTheDocument();
     });
+  });
+
+  it('opens the Points Breakdown drawer when the points cluster is tapped, and tracks it', async () => {
+    renderToolbar();
+
+    expect(screen.queryByTestId('points-breakdown-drawer')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: REWARDS_LABEL }));
+
+    // React.lazy resolves asynchronously even with the module mocked.
+    await waitFor(() => {
+      expect(screen.getByTestId('points-breakdown-drawer')).toBeInTheDocument();
+    });
+    expect(trackMock).toHaveBeenCalledWith('points_drawer_opened');
   });
 });

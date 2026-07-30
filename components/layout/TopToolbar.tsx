@@ -1,15 +1,13 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Gift, Star, TrendingUp, User } from 'lucide-react';
+import { Star, TrendingUp, User } from 'lucide-react';
 import { useFinance, useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { LazyMount } from '@/components/ui/LazyMount';
-import CountBadge from '@/components/ui/CountBadge';
 import { preloadOnIdle } from '@/utils/preloadOnIdle';
+import { track } from '@/services/analytics';
 import ProfileMenu from './ProfileMenu';
 
 // Lazy-loaded so this drawer (and framer-motion via Drawer) stays out of the
@@ -40,34 +38,37 @@ const SafeToSpendBreakdownDrawer = React.lazy(loadSafeToSpendBreakdownDrawer);
 const loadNotificationInboxDrawer = () => import('@/components/layout/NotificationInboxDrawer');
 const NotificationInboxDrawer = React.lazy(loadNotificationInboxDrawer);
 
+// PER_MEMBER_POINTS_HANDOFF.md §4 PR3: the points cluster now opens a Points
+// Breakdown drawer instead of deep-linking straight to Rewards (the drawer's
+// bottom Reward-pool row carries that link one tap deeper — including the
+// pending-redemption count badge, absorbed off this header). Lazy for the same
+// boot-bundle reason as the other Drawer-based modals above.
+const loadPointsBreakdownDrawer = () => import('@/components/habits/PointsBreakdownDrawer');
+const PointsBreakdownDrawer = React.lazy(loadPointsBreakdownDrawer);
+
 const TopToolbar: React.FC = () => {
   const { safeToSpendBreakdown } = useFinance();
   // Fall back to 0 while the breakdown hasn't been computed yet (matches the
   // toolbar's prior initial render with the raw `safeToSpend` field).
   const safeToSpend = safeToSpendBreakdown?.safeToSpend ?? 0;
   const { dailyPoints, weeklyPoints } = useGamification();
-  const { household, unreadNotificationCount } = useHouseholdCore();
+  const { unreadNotificationCount } = useHouseholdCore();
   const { currentUser } = useAuth();
-  const kidModeEnabled = useKidModeEnabled();
   const { isModuleEnabled } = useModuleVisibility();
   const fmt = useFormatCurrency();
-  const navigate = useNavigate();
 
-  // Plan 080d-2: count of kid redemption requests awaiting parent review, badged
-  // on the rewards (points) control. Dormant: only counts when Kid Mode is on.
-  const pendingRedemptionCount = kidModeEnabled
-    ? household?.pendingRedemptions?.length ?? 0
-    : 0;
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [stsOpen, setStsOpen] = useState(false);
   const [isInboxOpen, setIsInboxOpen] = useState(false);
+  const [isPointsOpen, setIsPointsOpen] = useState(false);
 
   useEffect(() => preloadOnIdle(loadFeedbackModal), []);
   useEffect(() => preloadOnIdle(loadSearchOverlay), []);
   useEffect(() => preloadOnIdle(loadSafeToSpendBreakdownDrawer), []);
   useEffect(() => preloadOnIdle(loadNotificationInboxDrawer), []);
+  useEffect(() => preloadOnIdle(loadPointsBreakdownDrawer), []);
 
   // Cmd/Ctrl+K opens search — a lightweight keydown listener only; no slice
   // consumption is added here (SearchOverlay owns its own data).
@@ -147,19 +148,13 @@ const TopToolbar: React.FC = () => {
             {isModuleEnabled('habits') && (
               <button
                 type="button"
-                aria-label={
-                  pendingRedemptionCount > 0
-                    ? `View Rewards and Points breakdown, ${pendingRedemptionCount} pending request${pendingRedemptionCount === 1 ? '' : 's'}`
-                    : 'View Rewards and Points breakdown'
-                }
+                aria-label="View Rewards and Points breakdown"
                 className="relative flex items-center gap-2 sm:gap-4 cursor-pointer active:opacity-80 transition-opacity focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-400 focus-visible:rounded-lg"
-                onClick={() => navigate('/habits', { state: { tab: 'rewards' } })}
+                onClick={() => {
+                  track('points_drawer_opened');
+                  setIsPointsOpen(true);
+                }}
               >
-                {/* Plan 080d-2 — pending kid-redemption-request badge. Dormant unless
-                    Kid Mode is on and there is at least one request awaiting review.
-                    The Gift icon matches the Rewards tab this button opens, so the
-                    numeral has visible meaning (the aria-label above spells it out). */}
-                <CountBadge count={pendingRedemptionCount} icon={Gift} className="-top-2 z-10 ring-brand-800" />
                 {/* Daily Points (warm gold star) */}
                 <div className="flex flex-col items-end">
                   <div className="flex items-center gap-1">
@@ -251,6 +246,10 @@ const TopToolbar: React.FC = () => {
 
       <LazyMount when={isInboxOpen}>
         <NotificationInboxDrawer open={isInboxOpen} onClose={() => setIsInboxOpen(false)} />
+      </LazyMount>
+
+      <LazyMount when={isPointsOpen}>
+        <PointsBreakdownDrawer open={isPointsOpen} onClose={() => setIsPointsOpen(false)} />
       </LazyMount>
     </>
   );
