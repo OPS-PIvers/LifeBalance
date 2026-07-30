@@ -707,6 +707,10 @@ const Settings: React.FC = () => {
   // below, which re-orders admins first) — `buildMemberColorMap` assigns
   // default colors POSITIONALLY, so a re-sorted copy would color members
   // differently than every other surface sharing this same roster.
+  // NOT memoized, unlike the other call sites in this sweep: this line sits
+  // after an early return in this component, so `useMemo` here is a
+  // conditional hook (`react-hooks/rules-of-hooks` rejects it, and tsc/eslint
+  // both fail). The map is a cheap walk of a household-sized roster.
   const memberColors = buildMemberColorMap(members);
 
   const sortedMembers = [...members].sort((a, b) => {
@@ -742,7 +746,6 @@ const Settings: React.FC = () => {
               color={memberColorFor(memberColors, currentUser?.uid ?? '')}
               size={40}
               alt={user?.displayName || 'User'}
-              className="ring-1 ring-brand-200 dark:ring-brand-700"
             />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
@@ -979,7 +982,6 @@ const Settings: React.FC = () => {
                     fallbackGlyph={member.avatarEmoji}
                     size={40}
                     alt={member.displayName}
-                    className="ring-1 ring-brand-200 dark:ring-brand-700"
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
