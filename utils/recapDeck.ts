@@ -128,6 +128,15 @@ export interface RecapDeck {
   viewerStanding: RecapStanding | null;
   /** Signed household points for the week. */
   totalPoints: number;
+  /**
+   * The household's OWN share of `totalPoints` — points earned together that
+   * belong to no individual member (pre-attribution legacy history today, and
+   * once shipped, Household-credit habits). Summed straight from
+   * `dailyPoints[].unattributed`, the same series `buildRecapChart` already
+   * draws as the chart's "Household" segment, so the figure and the chart can
+   * never disagree. Zero when every day's `unattributed` is zero/absent.
+   */
+  householdSharePoints: number;
   /** Percent change vs the prior week, or null when there is no base. */
   trendPct: number | null;
   /** True when this week beat every other recap week in its calendar month. */
@@ -378,6 +387,7 @@ export function buildRecapDeck(input: RecapDeckInput): RecapDeck {
     viewer,
     viewerStanding,
     totalPoints: recapTotalPoints(recap),
+    householdSharePoints: (recap.dailyPoints ?? []).reduce((sum, d) => sum + d.unattributed, 0),
     trendPct: recapTrendPct(recap),
     isBestWeekThisMonth: isBestWeekOfMonth(recap, recaps),
     weekNumber: weekNumberOf(recap.isoWeek),

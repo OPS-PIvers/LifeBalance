@@ -10,6 +10,7 @@ import {
   listScoreboardWeekOptions,
   weekHasMemberAttribution,
   buildWeekStandings,
+  calculateHouseholdShareForDateRange,
   type ScoreboardWeekOption,
   type ScoreboardWeekStanding,
 } from '@/utils/scoreboardWidget';
@@ -19,12 +20,15 @@ import { cn } from '@/utils/cn';
 import { Section, SurfaceList } from '@/components/ui/Section';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 import MemberAvatar from '@/components/ui/MemberAvatar';
+import HouseholdBadge from '@/components/ui/HouseholdBadge';
 
 /** Result of the async past-week recompute, keyed to whichever week it was fetched for. */
 interface PastWeekData {
   total: number;
   standings: ScoreboardWeekStanding[];
   hasAttribution: boolean;
+  /** The household's own share of `total` — see `calculateHouseholdShareForDateRange`. */
+  householdShare: number;
 }
 
 /**
@@ -81,6 +85,16 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
   );
   const currentWeek = weekOptions[0] ?? null;
 
+  // The household's own share of the CURRENT week's total — the unattributed
+  // remainder (pre-attribution legacy history today). Derived the same way
+  // `calculateHouseholdShareForDateRange` is derived for a past week below,
+  // so the Household row and `weeklyPoints` can never structurally disagree —
+  // see the util's own doc comment for why this is never a subtraction.
+  const currentWeekHouseholdShare = useMemo(
+    () => calculateHouseholdShareForDateRange(habits, currentWeek?.weekStart ?? getLocalDateString(), getLocalDateString()),
+    [habits, currentWeek]
+  );
+
   // null = current week. Component state only, never written to storage.
   const [selectedWeekStart, setSelectedWeekStart] = useState<string | null>(null);
   const [isWeekMenuOpen, setIsWeekMenuOpen] = useState(false);
@@ -122,10 +136,18 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
         const pointsByMemberId = new Map(
           adults.map(m => [m.uid, calculateMemberPointsForDateRange(habits, m.uid, weekStart, weekEnd, today)])
         );
+        const householdShare = calculateHouseholdShareForDateRange(
+          habits,
+          weekStart,
+          weekEnd,
+          today,
+          submissionTotals
+        );
         setPastWeekData({
           total,
           standings: hasAttribution ? buildWeekStandings(adults, pointsByMemberId) : [],
           hasAttribution,
+          householdShare,
         });
       } catch {
         // A transient Firestore failure in fetchSubmissionTotals must not leave
@@ -173,6 +195,9 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
   const trendPositive = (trend.trendPct ?? 0) >= 0;
 
   const displayTotal = isPastWeek ? pastWeekData?.total : weeklyPoints;
+  // The Household row's value — see `currentWeekHouseholdShare`'s doc comment
+  // for why this is a derived figure, not `displayTotal - Σ rows.value`.
+  const householdShare = isPastWeek ? pastWeekData?.householdShare : currentWeekHouseholdShare;
   const rows = isPastWeek
     ? (pastWeekData?.standings ?? []).map(s => ({
         memberId: s.memberId,
@@ -326,6 +351,28 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
                 </div>
               </div>
             ))}
+            {/* Household row — the unattributed remainder: pre-attribution
+                legacy history today, and (once shipped) Household-credit
+                habits. Shown only when nonzero so an ordinary household with
+                neither sees exactly what it saw before this row existed. */}
+            {!!householdShare && (
+              <div className="flex items-center gap-[11px] py-[5px]" data-testid="scoreboard-household-row">
+                <HouseholdBadge size={30} data-testid="scoreboard-household-badge" />
+                <div className="flex-1 min-w-0">
+                  <span className="text-[13.5px] font-semibold text-brand-900 dark:text-brand-50 tracking-tight truncate">
+                    Household
+                  </span>
+                </div>
+                <div className="flex-none w-14 text-right">
+                  <div className="font-mono font-bold text-[17px] leading-tight text-brand-900 dark:text-brand-50 tabular-nums">
+                    {householdShare}
+                  </div>
+                  <div className="text-[9px] font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">
+                    Week
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </SurfaceList>

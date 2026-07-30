@@ -5,6 +5,7 @@ import {
   listScoreboardWeekOptions,
   weekHasMemberAttribution,
   buildWeekStandings,
+  calculateHouseholdShareForDateRange,
 } from '@/utils/scoreboardWidget';
 import type { Habit, HouseholdMember, WeeklyRecap } from '@/types/schema';
 
@@ -320,6 +321,44 @@ describe('weekHasMemberAttribution', () => {
   it('treats a zero/negative-count entry as absent, matching the completedBy write discipline', () => {
     const habits = [makeHabit({ completedBy: { '2026-07-22': { paul: 0 } } })];
     expect(weekHasMemberAttribution(habits, start, end)).toBe(false);
+  });
+});
+
+describe('calculateHouseholdShareForDateRange', () => {
+  const start = '2026-07-20';
+  const end = '2026-07-26';
+  const today = '2026-07-26'; // fixed — never the wall clock, see the suite-wide rule elsewhere.
+
+  it('reports a legacy (pre-attribution) completion inside the range as the household share', () => {
+    // Threshold habit, basePoints 10, met once with NO completedBy — the
+    // grandfathering case: the legacy scorer's points belong to nobody.
+    const habits = [makeHabit({ completedDates: ['2026-07-22'], completedBy: undefined })];
+    expect(calculateHouseholdShareForDateRange(habits, start, end, today)).toBe(10);
+  });
+
+  it('is 0 once the completion is fully attributed to a member', () => {
+    const habits = [makeHabit({ completedDates: ['2026-07-22'], completedBy: { '2026-07-22': { paul: 1 } } })];
+    expect(calculateHouseholdShareForDateRange(habits, start, end, today)).toBe(0);
+  });
+
+  it('excludes assigned (chore) habits — their points route to the assignee, never the pool', () => {
+    const habits = [makeHabit({ assignedTo: 'kid_leo', completedDates: ['2026-07-22'], completedBy: undefined })];
+    expect(calculateHouseholdShareForDateRange(habits, start, end, today)).toBe(0);
+  });
+
+  it('sums every day in the range across multiple habits, not just one date', () => {
+    // Neither date equals `today` — a same-day completion with the default
+    // `count: 0` would read as "reset back off" (see `pointsForHabitOnDate`'s
+    // current-period gate), which isn't what this test is checking.
+    const habits = [
+      makeHabit({ id: 'h-a', completedDates: ['2026-07-20'], completedBy: undefined }),
+      makeHabit({ id: 'h-b', completedDates: ['2026-07-25'], completedBy: undefined }),
+    ];
+    expect(calculateHouseholdShareForDateRange(habits, start, end, today)).toBe(20);
+  });
+
+  it('is 0 with no habits at all', () => {
+    expect(calculateHouseholdShareForDateRange([], start, end, today)).toBe(0);
   });
 });
 

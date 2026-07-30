@@ -231,7 +231,7 @@ const WeekCard: React.FC<{ deck: RecapDeckModel }> = ({ deck }) => {
           {hasUnattributed && (
             <span className="inline-flex items-center gap-1.5">
               <span className="inline-block h-2 w-2 rounded-[2px] bg-brand-300" aria-hidden="true" />
-              Household
+              Household · {deck.householdSharePoints} pts
             </span>
           )}
         </div>

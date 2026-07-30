@@ -342,6 +342,37 @@ describe('buildRecapDeck', () => {
     expect(deck.bestDay?.date).toBe('2026-07-05');
     expect(deck.totalPoints).toBe(795);
   });
+
+  it('sums householdSharePoints from dailyPoints[].unattributed, not from totalPoints (household-points-visibility)', () => {
+    // The base fixture's week has zero unattributed history.
+    expect(buildRecapDeck({ ...base, recap: recap(), viewerId: 'jen' }).householdSharePoints).toBe(0);
+
+    const withHousehold = recap({
+      dailyPoints: DAYS.map((date, i) => ({
+        date,
+        byMember: { jen: 50, paul: 45 },
+        unattributed: i === 0 ? 15 : i === 3 ? 5 : 0,
+        total: i === 0 ? 110 : i === 3 ? 100 : 95,
+      })),
+    });
+    const deck = buildRecapDeck({ ...base, recap: withHousehold, viewerId: 'jen' });
+    expect(deck.householdSharePoints).toBe(20); // 15 + 5, summed across the week
+  });
+
+  it('still builds a full deck for a recap with ceremony data after the household relabel/figure work (hasCeremonyData regression guard)', () => {
+    const withHousehold = recap({
+      dailyPoints: DAYS.map((date, i) => ({
+        date,
+        byMember: { jen: 50, paul: 45 },
+        unattributed: i === 0 ? 15 : 0,
+        total: i === 0 ? 110 : 95,
+      })),
+    });
+    expect(hasCeremonyData(withHousehold)).toBe(true);
+    const deck = buildRecapDeck({ ...base, recap: withHousehold, viewerId: 'jen' });
+    expect(deck.cards.map(c => c.kind)).toEqual(['cover', 'week', 'personal', 'finish']);
+    expect(deck.householdSharePoints).toBe(15);
+  });
 });
 
 describe('week label helpers', () => {

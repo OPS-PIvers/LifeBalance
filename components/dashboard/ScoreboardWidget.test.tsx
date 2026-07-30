@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import type { Habit, HouseholdMember, WeeklyRecap } from '@/types/schema';
 import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 import { calculateHouseholdPointsForDateRange, calculateMemberPointsForDateRange } from '@/utils/habitAttribution';
+import { calculateHouseholdShareForDateRange } from '@/utils/scoreboardWidget';
 import { ScoreboardWidget } from './ScoreboardWidget';
 
 // The widget reads members + recaps (useHouseholdCore) and weeklyPoints/
@@ -278,6 +279,65 @@ describe('ScoreboardWidget', () => {
       const expectedTotal = calculateHouseholdPointsForDateRange(habits, '2026-07-13', '2026-07-19', '2026-07-30');
       expect(expectedTotal).toBeGreaterThan(0);
       expect(screen.getByTestId('scoreboard-total')).toHaveTextContent(String(expectedTotal));
+    });
+  });
+
+  describe('Household row (household-points-visibility)', () => {
+    // Current week is Jul 27 - Aug 2 (mockToday = Thu Jul 30).
+    it('shows a Household row whose value the visible rows sum exactly to the household total', () => {
+      // A legacy (pre-attribution) completion inside the current week — no
+      // `completedBy` at all, so it belongs to nobody: the household-only
+      // share of `weeklyPoints`.
+      const habits = [
+        makeHabit({ id: 'h-legacy', completedDates: ['2026-07-28'], completedBy: undefined }),
+      ];
+      mockHabits.mockReturnValue(habits);
+      const expectedHouseholdShare = calculateHouseholdShareForDateRange(habits, '2026-07-27', '2026-07-30', '2026-07-30');
+      expect(expectedHouseholdShare).toBeGreaterThan(0);
+
+      // Weekly values deliberately distinct from `expectedHouseholdShare` and
+      // from each other, so the DOM assertions below can't pass by accident.
+      mockMembers.mockReturnValue([
+        makeMember({ uid: 'paul', displayName: 'Paul', points: { daily: 5, weekly: 44, total: 44 } }),
+        makeMember({ uid: 'jen', displayName: 'Jen', points: { daily: 0, weekly: 17, total: 17 } }),
+      ]);
+      const total = 44 + 17 + expectedHouseholdShare;
+      mockWeeklyPoints.mockReturnValue(total);
+
+      render(<ScoreboardWidget />);
+
+      expect(screen.getByTestId('scoreboard-total')).toHaveTextContent(String(total));
+      const householdRow = screen.getByTestId('scoreboard-household-row');
+      expect(householdRow).toHaveTextContent('Household');
+      expect(householdRow).toHaveTextContent(String(expectedHouseholdShare));
+      // Paul (44) and Jen (17) each still render their own weekly value.
+      expect(screen.getByText('44')).toBeInTheDocument();
+      expect(screen.getByText('17')).toBeInTheDocument();
+
+      // The three visible rows — Paul, Jen, Household — sum EXACTLY to the
+      // displayed household total (constructed that way above; the point of
+      // this test is that the WIDGET, not the fixture, produces
+      // `expectedHouseholdShare` via the production scorer rather than any
+      // other value).
+      expect(44 + 17 + expectedHouseholdShare).toBe(total);
+    });
+
+    it('omits the Household row when there is no unattributed remainder', () => {
+      // Fully attributed — nothing left for the household pool alone.
+      const habits = [
+        makeHabit({ id: 'h-attributed', completedDates: ['2026-07-28'], completedBy: { '2026-07-28': { paul: 1 } } }),
+      ];
+      mockHabits.mockReturnValue(habits);
+      mockMembers.mockReturnValue([
+        makeMember({ uid: 'paul', displayName: 'Paul', points: { daily: 10, weekly: 10, total: 10 } }),
+        makeMember({ uid: 'jen', displayName: 'Jen', points: { daily: 0, weekly: 0, total: 0 } }),
+      ]);
+      mockWeeklyPoints.mockReturnValue(10);
+
+      render(<ScoreboardWidget />);
+
+      expect(screen.queryByTestId('scoreboard-household-row')).not.toBeInTheDocument();
+      expect(screen.queryByText('Household')).not.toBeInTheDocument();
     });
   });
 });

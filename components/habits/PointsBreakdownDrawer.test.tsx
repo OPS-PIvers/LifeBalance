@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import PointsBreakdownDrawer from './PointsBreakdownDrawer';
-import type { HouseholdMember, WeeklyRecap } from '@/types/schema';
+import type { Habit, HouseholdMember, WeeklyRecap } from '@/types/schema';
 import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 
 const mockUseGamification = vi.fn();
@@ -22,6 +22,15 @@ const mockNavigate = vi.fn();
 vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
+
+// Thursday inside the "current" Jul 27 - Aug 2 week — fixed so the
+// Household row's date range is deterministic regardless of wall-clock date
+// (see ScoreboardWidget.test.tsx for the same convention).
+const mockToday = '2026-07-30';
+vi.mock('@/utils/dateHelpers', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/utils/dateHelpers')>();
+  return { ...actual, getLocalDateString: () => mockToday };
+});
 
 // Simplify Drawer to a passthrough (header + children) so the test focuses on
 // this drawer's own content — Drawer's own portal/focus-trap/motion behavior
@@ -53,6 +62,24 @@ const LEO = member({
   points: { daily: 999, weekly: 999, total: 999 },
 });
 
+const makeHabit = (overrides: Partial<Habit> = {}): Habit =>
+  ({
+    id: 'h-1',
+    title: 'Workout',
+    category: 'Health',
+    type: 'positive',
+    period: 'daily',
+    basePoints: 10,
+    scoringType: 'threshold',
+    targetCount: 1,
+    count: 0,
+    totalCount: 0,
+    completedDates: [],
+    streakDays: 0,
+    lastUpdated: '2026-07-27T00:00:00.000Z',
+    ...overrides,
+  } as unknown as Habit);
+
 const recap = (pointsByMember: WeeklyRecap['pointsByMember']): WeeklyRecap => ({
   id: '2026-W29',
   isoWeek: '2026-W29',
@@ -77,11 +104,13 @@ const setup = (config: {
   weeklyPoints?: number;
   totalPoints?: number;
   kidModeEnabled?: boolean;
+  habits?: Habit[];
 }) => {
   mockUseGamification.mockReturnValue({
     dailyPoints: config.dailyPoints ?? 60,
     weeklyPoints: config.weeklyPoints ?? 610,
     totalPoints: config.totalPoints ?? 12480,
+    habits: config.habits ?? [],
   });
   mockUseHouseholdCore.mockReturnValue({
     members: config.members ?? [JEN, PAUL],
@@ -221,5 +250,40 @@ describe('PointsBreakdownDrawer', () => {
     setup({ kidModeEnabled: false, household: { pendingRedemptions: [{}, {}] } });
     renderDrawer();
     expect(screen.queryByText(/pending/)).not.toBeInTheDocument();
+  });
+
+  describe('Household row (household-points-visibility)', () => {
+    it('shows a Household row for a legacy (pre-attribution) completion this week', () => {
+      const habits = [makeHabit({ completedDates: ['2026-07-28'], completedBy: undefined })];
+      setup({ habits });
+      renderDrawer();
+
+      const householdRow = screen.getByTestId('points-drawer-household-row');
+      expect(householdRow).toHaveTextContent('Household');
+      // Threshold habit, basePoints 10, no streak — 10 points, attributed to nobody.
+      expect(householdRow).toHaveTextContent('10');
+    });
+
+    it('omits the Household row when there is no unattributed remainder', () => {
+      setup({ habits: [] });
+      renderDrawer();
+      expect(screen.queryByTestId('points-drawer-household-row')).not.toBeInTheDocument();
+      expect(screen.queryByText('Household')).not.toBeInTheDocument();
+    });
+
+    it('switches the Household value between Day and Week the same as the standings do', () => {
+      // A legacy completion TODAY counts in both Day and Week windows. `count:
+      // 1` matters — a same-day 0 counter reads as "reset back off" rather
+      // than "still completed" (see `pointsForHabitOnDate`'s current-period
+      // gate in utils/habitLogic.ts).
+      const habits = [makeHabit({ completedDates: ['2026-07-30'], completedBy: undefined, count: 1 })];
+      setup({ habits });
+      renderDrawer();
+
+      expect(screen.getByTestId('points-drawer-household-row')).toHaveTextContent('10');
+
+      fireEvent.click(screen.getByRole('radio', { name: 'Day' }));
+      expect(screen.getByTestId('points-drawer-household-row')).toHaveTextContent('10');
+    });
   });
 });
