@@ -125,6 +125,11 @@ export const SegmentedControl = <T extends string>({
               aria-checked={isActive}
               aria-label={option.ariaLabel}
               tabIndex={isActive ? 0 : -1}
+              // Initial focus (e.g. when this control sits inside a Drawer that
+              // opens with a non-default value selected) should land on the
+              // active segment, not the first one — useFocusTrap prefers
+              // [data-autofocus] over the first focusable (see TabSubViewMenu).
+              data-autofocus={isActive || undefined}
               disabled={disabled}
               onClick={() => onChange(option.value)}
               onKeyDown={(e) => handleKeyDown(e, index)}

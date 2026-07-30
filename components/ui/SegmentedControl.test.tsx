@@ -82,6 +82,19 @@ describe('SegmentedControl', () => {
     expect(btn2).not.toHaveClass('text-warm-700');
   });
 
+  it('marks the active option with data-autofocus so a Drawer/Popover focus trap lands there, not the first option', () => {
+    // useFocusTrap prefers [data-autofocus] over the first focusable — a
+    // control whose default value isn't the first option (e.g. Day/Week
+    // defaulting to "week") must not leave initial focus on the unselected
+    // first segment.
+    render(<SegmentedControl options={options} value="opt2" onChange={() => {}} />);
+    const btn1 = screen.getByRole('radio', { name: /option 1/i });
+    const btn2 = screen.getByRole('radio', { name: /option 2/i });
+
+    expect(btn2).toHaveAttribute('data-autofocus');
+    expect(btn1).not.toHaveAttribute('data-autofocus');
+  });
+
   it('applies radiogroup role and name', () => {
     render(<SegmentedControl options={options} value="opt1" onChange={() => {}} name="My Group" />);
     const group = screen.getByRole('radiogroup', { name: /my group/i });

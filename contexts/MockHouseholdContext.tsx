@@ -18,12 +18,15 @@ import {
   attributedUnitsOnDate,
   attributionReversalForDates,
   habitFeedsMemberAttribution,
-  householdPeriodPoints,
+  householdPeriodPointsDelta,
+  legacyPeriodPoints,
   memberCompletionCount,
   memberPeriodPointsDelta,
   resolveReversalSources,
+  wholePeriodClearDates,
   withAttributionDelta,
   withDatesUnattributed,
+  type PointsBuckets,
 } from '@/utils/habitAttribution';
 import { computeBackdatedHabitFire, computeHabitTriggerFire, computeHabitTriggerReverse } from '@/utils/habitTriggerFire';
 import { evaluateTodoSubtaskGate, TodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
@@ -355,7 +358,20 @@ const SEED_HABITS: Habit[] = [
   {
     id: 'h1', title: 'Drink 8 Glasses of Water', category: 'Health', type: 'positive',
     basePoints: 10, scoringType: 'threshold', period: 'daily', targetCount: 8,
-    totalCount: 0, count: 0, completedDates: [], streakDays: 0,
+    // Per-member points (stage 2) Test-Mode harness: a genuinely multi-member
+    // day, so the row's pie counter renders 2 : 1 in two member colors and the
+    // badge row shows both credited avatars — one with an ember flame ring
+    // (three consecutive attributed days), one without — without needing any
+    // interaction first. `completedDates` stays EMPTY on purpose: this is a
+    // threshold habit at 3 of 8, and the subsystem's invariant is "a date in
+    // completedDates ⟹ that day's target was met", which is exactly what
+    // production's per-tap attribution writes look like mid-progress.
+    totalCount: 3, count: 3, completedDates: [], streakDays: 0,
+    completedBy: {
+      [getLocalDateString()]: { 'test-user-id': 2, 'test-partner-id': 1 },
+      [getLocalDateString(subDays(new Date(), 1))]: { 'test-user-id': 1 },
+      [getLocalDateString(subDays(new Date(), 2))]: { 'test-user-id': 1 },
+    },
     createdBy: 'test-user-id', lastUpdated: new Date().toISOString()
   },
   {
@@ -400,12 +416,16 @@ const SEED_MEMBERS: HouseholdMember[] = [
   {
     uid: 'test-partner-id', displayName: 'Jordan', email: 'jordan@example.com',
     role: 'member',
-    // Distinct + nonzero from Test User's (30/150/500) so the per-member
-    // scoreboard widget (PR 4/6) has two real standings to demo — Test User
-    // stays the leader, keeping every OTHER surface keyed off members[0]
-    // (dailyPoints/weeklyPoints, TopToolbar, etc. — see the toggleHabit
-    // comment below) unchanged.
-    points: { daily: 20, weekly: 95, total: 310 },
+    // Non-zero and DISTINCT from the admin's own points (stage 3 PR: the Points
+    // Breakdown drawer's adults-only standings need two members with different
+    // figures to be worth looking at in Test Mode). Post-flip (stage 1.5) the
+    // household `dailyPoints`/`weeklyPoints` are derived as the Σ of the ADULT
+    // members' scores, so Jordan's points DO feed the toolbar figures
+    // (30+18=48 / 150+95=245) — the drawer's "together" number and the member
+    // standings must agree, that Σ being the whole point of the model. The
+    // per-member scoreboard widget (PR 4/6) also demos off this pair: Test
+    // User stays the leader (30/150 > 18/95).
+    points: { daily: 18, weekly: 95, total: 310 },
     hiddenKeys: [...DEFAULT_HIDDEN_DASHBOARD_WIDGETS, 'trends', 'subscriptions']
   },
   // Plan 080 (Kid Mode) Test-Mode harness: one managed kid so the dormant kid
@@ -1750,11 +1770,23 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         // dates in the SAME batch, and leaving them behind here would break the
         // "completedDates and completedBy always agree" invariant in Test Mode.
         const staleReversal = habitFeedsMemberAttribution(habit)
-          ? attributionReversalForDates(habit, staleResult.datesToRemove)
-          : { perMember: new Map<string, { daily: number; weekly: number; total: number }>(), clearPaths: [] };
+          ? attributionReversalForDates(
+              habit, staleResult.datesToRemove, getLocalDateString(), 0,
+            )
+          : null;
+        // Stage 1.5 parity: an attributed stale deselect debits the pool the
+        // competition figure those dates carried; a grandfathered one keeps
+        // `processStaleDownToggle`'s own date-gated figure.
+        const stalePoolDelta: PointsBuckets =
+          staleReversal && staleReversal.clearPaths.length > 0
+            ? staleReversal.household
+            : staleResult.pointsDelta;
         setHabits(prev => prev.map(h => h.id === id
           ? {
-              ...withDatesUnattributed(h, staleResult.datesToRemove),
+              // The reversal owns the scope: on a threshold habit it also
+              // clears the period's progress days, which never entered
+              // `completedDates` (see attributionReversalForDates).
+              ...withDatesUnattributed(h, staleReversal?.clearedDates ?? []),
               count: 0,
               totalCount: staleResult.datesToRemove.length > 0
                 ? Math.max(0, h.totalCount - h.count)
@@ -1766,12 +1798,12 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
           : h));
         // Pool routing parity: an assigned chore reverses on the ASSIGNEE's doc,
         // a shared habit on the household pool (creditHabitPool).
-        creditHabitPool(habit, staleResult.pointsDelta);
+        creditHabitPool(habit, stalePoolDelta);
         // The test user's own score already moved with the pool above (this
         // mock deliberately conflates the two — see the toggle note below), so
         // only OTHER members' reversals are applied here, exactly as resetHabit
         // does.
-        for (const [memberId, delta] of staleReversal.perMember) {
+        for (const [memberId, delta] of staleReversal?.perMember ?? new Map<string, PointsBuckets>()) {
           if (memberId !== MOCK_USER_UID) creditMemberPoints(memberId, delta);
         }
         toast.success('Mock: previous period completion undone');
@@ -1790,11 +1822,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     // shape production does.
     //
     // NOTE: no SEPARATE member-points credit is applied here, because this mock
-    // deliberately derives `dailyPoints`/`weeklyPoints` from `members[0]` —
-    // `creditHabitPool` below already moves the test user's member score for a
-    // shared habit. Stage 2 untangles that conflation when the scoreboard needs
-    // true per-member numbers; the credit/un-credit mutations below already keep
-    // them separate.
+    // derives the household `dailyPoints`/`weeklyPoints` as the Σ of adult
+    // member scores — `creditHabitPool` below already moves the credited
+    // member's own score, and the derived household figure follows (the Σ
+    // model, stage 1.5). The credit/un-credit mutations below keep per-member
+    // scores separate the same way.
     //
     // 🛡️ Reversal parity with production: a 'down' takes its unit back from
     // whoever STORED attribution records (`resolveReversalSources`), not from
@@ -1807,6 +1839,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         ? [{ memberId: attributedTo, delta: 1 }]
         : resolveReversalSources(effectiveHabit, attributedTo, toggleDate, 1)
             .map(source => ({ memberId: source.memberId, delta: -source.units }));
+    let habitAfter: Habit = { ...effectiveHabit, ...result.updatedHabit };
+    for (const move of attributionMoves) {
+      habitAfter = withAttributionDelta(habitAfter, toggleDate, move.memberId, move.delta);
+    }
     setHabits(prev => prev.map(h => {
       if (h.id !== id) return h;
       let next: Habit = { ...h, ...result.updatedHabit };
@@ -1815,11 +1851,18 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       }
       return next;
     }));
-    // Plan 080c parity: an assigned chore pays its ASSIGNEE, never the pool.
+    // Stage 1.5 parity: a SHARED habit pays the pool `Σ member awards + the
+    // unattributed remainder` — the credited member's own streak multiplier,
+    // not the habit's. An assigned chore (Plan 080c parity: pays its ASSIGNEE,
+    // never the pool) and a grandfathered down-toggle keep `result.pointsChange`.
+    const togglePoolDelta =
+      attributionMoves.length > 0 && habitFeedsMemberAttribution(habit)
+        ? householdPeriodPointsDelta(effectiveHabit, habitAfter, toggleDate, toggleDate)
+        : result.pointsChange;
     creditHabitPool(habit, {
-      daily: result.pointsChange,
-      weekly: result.pointsChange,
-      total: result.pointsChange,
+      daily: togglePoolDelta,
+      weekly: togglePoolDelta,
+      total: togglePoolDelta,
     });
     toast.success(
       `Mock: Habit ${direction === 'up' ? 'incremented' : 'decremented'}${attribution ? ` (${attribution})` : ''}`
@@ -1865,12 +1908,28 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     // resetHabit is: an ASSIGNED chore's points already reverse on the
     // assignee's doc through `creditHabitPool` above, so also applying the
     // per-member reversal would debit them twice.
+    // `wholePeriodClearDates` parity: an INCREMENTAL habit with `targetCount > 1`
+    // records attribution (and credits points) on every tap while only entering
+    // `completedDates` at target, so today alone can leave the period's orphaned
+    // attributed days — and the member points hanging off them — behind.
     const reversal = habitFeedsMemberAttribution(habit)
-      ? attributionReversalForDates(habit, [today], today)
-      : { perMember: new Map<string, { daily: number; weekly: number; total: number }>(), clearPaths: [] };
+      ? attributionReversalForDates(
+          habit, wholePeriodClearDates(habit, [today], today), today, 0,
+        )
+      : null;
+    // Stage 1.5 parity (see production resetHabit): an attributed reset debits
+    // the competition figure, a grandfathered one `calculateResetPoints`.
+    const resetPoolDelta: PointsBuckets =
+      reversal && reversal.clearPaths.length > 0
+        ? reversal.household
+        : { daily: -pointsToRemove, weekly: -pointsToRemove, total: -pointsToRemove };
     setHabits(prev => prev.map(h => h.id === id
       ? {
-          ...(reversal.clearPaths.length > 0 ? withDatesUnattributed(h, [today]) : h),
+          // Threshold habits clear the whole period's attribution, not just
+          // today's (see attributionReversalForDates).
+          ...(reversal && reversal.clearedDates.length > 0
+            ? withDatesUnattributed(h, reversal.clearedDates)
+            : h),
           count: 0,
           completedDates: newCompletedDates,
           streakDays: streakForHabit({ period: h.period, completedDates: newCompletedDates, frozenDates: h.frozenDates }),
@@ -1879,12 +1938,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       : h));
     // Plan 080c parity: an assigned chore's reset debits the ASSIGNEE, not the
     // shared pool (creditHabitPool).
-    creditHabitPool(habit, {
-      daily: -pointsToRemove,
-      weekly: -pointsToRemove,
-      total: -pointsToRemove,
-    });
-    for (const [memberId, delta] of reversal.perMember) {
+    creditHabitPool(habit, resetPoolDelta);
+    for (const [memberId, delta] of reversal?.perMember ?? new Map<string, PointsBuckets>()) {
       if (memberId !== MOCK_USER_UID) creditMemberPoints(memberId, delta);
     }
     toast.success('Mock: Habit reset');
@@ -1950,9 +2005,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     });
 
     setHabits(prev => prev.map(h => (h.id === habitId ? after : h)));
-    const poolDelta =
-      householdPeriodPoints(after, targetDate, today) -
-      householdPeriodPoints(habit, targetDate, today);
+    // Stage 1.5 parity: a "Both of us" credit pays the pool BOTH member awards.
+    const poolDelta = habitFeedsMemberAttribution(habit)
+      ? householdPeriodPointsDelta(habit, after, targetDate, today)
+      : legacyPeriodPoints(after, targetDate, today) -
+        legacyPeriodPoints(habit, targetDate, today);
     if (poolDelta !== 0) setTotalPoints(prev => prev + poolDelta);
     if (habitFeedsMemberAttribution(habit)) {
       for (const memberId of memberIds) {
@@ -2019,9 +2076,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     });
 
     setHabits(prev => prev.map(h => (h.id === habitId ? after : h)));
-    const poolDelta =
-      householdPeriodPoints(after, targetDate, today) -
-      householdPeriodPoints(habit, targetDate, today);
+    // Stage 1.5 parity: the pool loses exactly the member award being reversed.
+    const poolDelta = habitFeedsMemberAttribution(habit)
+      ? householdPeriodPointsDelta(habit, after, targetDate, today)
+      : legacyPeriodPoints(after, targetDate, today) -
+        legacyPeriodPoints(habit, targetDate, today);
     if (poolDelta !== 0) setTotalPoints(prev => prev + poolDelta);
     if (habitFeedsMemberAttribution(habit)) {
       creditMemberPoints(
@@ -2822,10 +2881,13 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     [accounts, calendarItems, currentPeriodId, transactions]
   );
   const safeToSpend = safeToSpendBreakdown.safeToSpend;
-  // Derived from the test user's member points so habit toggles/resets move
-  // the toolbar figures exactly like the real context (seeded 30/150).
-  const dailyPoints = members[0]?.points.daily ?? 0;
-  const weeklyPoints = members[0]?.points.weekly ?? 0;
+  // Post-flip (stage 1.5): household daily/weekly = Σ the ADULT members' own
+  // scores, exactly like production's competition model (managed kids' chore
+  // points route to the kid alone and never the household). Seeded
+  // 30+18=48 / 150+95=245, and a habit toggle crediting any adult's member
+  // score moves these derived figures just like the real context.
+  const dailyPoints = members.reduce((sum, m) => (m.isManaged ? sum : sum + m.points.daily), 0);
+  const weeklyPoints = members.reduce((sum, m) => (m.isManaged ? sum : sum + m.points.weekly), 0);
   const currentUser = members[0] || null;
   const activeChallenge = challenges[0] || null;
   const activeYearlyGoals: YearlyGoal[] = [];
