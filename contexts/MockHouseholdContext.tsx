@@ -1722,9 +1722,17 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     if (isHabitStale(habit)) {
       if (direction === 'down') {
         const staleResult = processStaleDownToggle(habit);
+        // Per-member points (stage 1) parity: the prior period's completion
+        // dates are being erased, so their attribution goes with them — the
+        // production stale-down branch clears `completedBy` for exactly those
+        // dates in the SAME batch, and leaving them behind here would break the
+        // "completedDates and completedBy always agree" invariant in Test Mode.
+        const staleReversal = habitFeedsMemberAttribution(habit)
+          ? attributionReversalForDates(habit, staleResult.datesToRemove)
+          : { perMember: new Map<string, { daily: number; weekly: number; total: number }>(), clearPaths: [] };
         setHabits(prev => prev.map(h => h.id === id
           ? {
-              ...h,
+              ...withDatesUnattributed(h, staleResult.datesToRemove),
               count: 0,
               totalCount: staleResult.datesToRemove.length > 0
                 ? Math.max(0, h.totalCount - h.count)
@@ -1736,10 +1744,17 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
           : h));
         const { daily, weekly, total } = staleResult.pointsDelta;
         if (daily !== 0 || weekly !== 0 || total !== 0) {
-          setMembers(prev => prev.map(m => m.uid === 'test-user-id'
+          setMembers(prev => prev.map(m => m.uid === MOCK_USER_UID
             ? { ...m, points: { daily: m.points.daily + daily, weekly: m.points.weekly + weekly, total: m.points.total + total } }
             : m));
           setTotalPoints(prev => prev + total);
+        }
+        // The test user's own score already moved with the pool above (this
+        // mock deliberately conflates the two — see the toggle note below), so
+        // only OTHER members' reversals are applied here, exactly as resetHabit
+        // does.
+        for (const [memberId, delta] of staleReversal.perMember) {
+          if (memberId !== MOCK_USER_UID) creditMemberPoints(memberId, delta);
         }
         toast.success('Mock: previous period completion undone');
         return;
@@ -1751,8 +1766,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     if (!result) return; // e.g. decrement below 0
 
     // Per-member points (stage 1) parity: a tap attributes one unit to the
-    // signed-in member (or withdraws one on a 'down'), so Test Mode carries the
-    // same `completedBy` shape production does.
+    // member the completion BELONGS to — the signed-in member, or the ASSIGNEE
+    // for an assigned chore (a managed kid never taps for themselves) — or
+    // withdraws one on a 'down', so Test Mode carries the same `completedBy`
+    // shape production does.
     //
     // NOTE: no SEPARATE member-points credit is applied here, because this mock
     // deliberately derives `dailyPoints`/`weeklyPoints` from `members[0]` —
@@ -1760,14 +1777,15 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     // untangles that conflation when the scoreboard needs true per-member
     // numbers; the credit/un-credit mutations below already keep them separate.
     const toggleDate = getLocalDateString();
+    const attributedTo = habit.assignedTo ?? MOCK_USER_UID;
     const attributionDelta =
       direction === 'up'
         ? 1
-        : memberCompletionCount(effectiveHabit, MOCK_USER_UID, toggleDate) > 0
+        : memberCompletionCount(effectiveHabit, attributedTo, toggleDate) > 0
           ? -1
           : 0;
     setHabits(prev => prev.map(h => h.id === id
-      ? withAttributionDelta({ ...h, ...result.updatedHabit }, toggleDate, MOCK_USER_UID, attributionDelta)
+      ? withAttributionDelta({ ...h, ...result.updatedHabit }, toggleDate, attributedTo, attributionDelta)
       : h));
     creditPoints(result.pointsChange);
     toast.success(
@@ -1795,7 +1813,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         });
       }
     }
-  }, [habits, creditPoints, rewards, unlockedRewardIds]);
+  }, [habits, creditPoints, creditMemberPoints, rewards, unlockedRewardIds]);
 
   // Manual reset (the card's X button): zero the period counter, drop today
   // from completedDates, and reverse today's awarded points — mirroring the

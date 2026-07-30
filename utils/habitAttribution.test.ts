@@ -104,6 +104,34 @@ describe('habitAttribution — readers', () => {
     expect(memberCompletionDates(h, PAUL)).toEqual([d(0)]);
     expect(memberCompletionDates(h, 'nobody')).toEqual([]);
   });
+
+  // 🛡️ Decrements are written as unconditional dot-path increments (choosing
+  // deleteField() at zero would have to trust a client-cached prior count, and
+  // a stale offline cache would then wipe a concurrent increment). That leaves
+  // 0 — or, after concurrent decrements, negative — residue nodes behind, so
+  // EVERY reader must read `count <= 0` as ABSENT.
+  it('treats zero and negative residue counts as absent', () => {
+    const residue = habit({
+      completedDates: [d(0)],
+      completedBy: { [d(0)]: { [PAUL]: 0, [JEN]: -2, 'sam-uid': 1 } },
+    });
+    expect(memberCompletionCount(residue, PAUL, d(0))).toBe(0);
+    expect(memberCompletionCount(residue, JEN, d(0))).toBe(0);
+    expect(attributedUnitsOnDate(residue, d(0))).toBe(1);
+    expect(memberIdsOnDate(residue, d(0))).toEqual(['sam-uid']);
+    expect(attributedMemberIds(residue)).toEqual(['sam-uid']);
+    expect(memberCompletionDates(residue, PAUL)).toEqual([]);
+    expect(memberCompletionDates(residue, JEN)).toEqual([]);
+  });
+
+  it('scores a residue node as zero points, not as a completion', () => {
+    const residue = habit({
+      completedDates: [d(0)],
+      completedBy: { [d(0)]: { [PAUL]: 0, [JEN]: -1 } },
+    });
+    expect(memberPointsForHabitOnDate(residue, PAUL, d(0), d(0))).toBe(0);
+    expect(memberPointsForHabitOnDate(residue, JEN, d(0), d(0))).toBe(0);
+  });
 });
 
 describe('habitAttribution — local attribution edits', () => {
@@ -125,6 +153,12 @@ describe('habitAttribution — local attribution edits', () => {
   it('never goes negative', () => {
     const after = withAttributionDelta(habit(), d(0), PAUL, -1);
     expect(memberCompletionCount(after, PAUL, d(0))).toBe(0);
+  });
+
+  it('applies a delta from 0, never compounding a residue node', () => {
+    // `{PAUL: -2}` means "absent", so a +1 must land on 1 — not on −1.
+    const before = habit({ completedBy: { [d(0)]: { [PAUL]: -2 } } });
+    expect(memberCompletionCount(withAttributionDelta(before, d(0), PAUL, 1), PAUL, d(0))).toBe(1);
   });
 
   it('clears whole dates', () => {

@@ -753,12 +753,24 @@ export interface Habit {
   // completion: it still counts for the household and is deliberately attributed
   // to nobody.
   //
+  // SEMANTIC: the uid is WHO THE COMPLETION BELONGS TO, never "which device
+  // operator tapped". An ASSIGNED habit (a kid chore) is attributed to
+  // `assignedTo`, because a managed kid has no auth session of their own and
+  // every Kid-Mode completion is physically performed by a parent — recording
+  // the signed-in adult there would credit the wrong person for every chore.
+  // This mirrors how the habit's POINTS are already routed to the assignee.
+  //
   // 🛡️ WRITE DISCIPLINE: this map is only ever written via dot-path
-  // `increment()` / `deleteField()` at `completedBy.<date>.<uid>` (or
-  // `completedBy.<date>` for a whole-day clear) — NEVER as a whole-map write.
-  // A whole-map write from a device holding a stale offline cache would wipe
-  // other days'/members' attribution, the exact class of bug that erased
-  // completion history on 2026-07-15. See utils/habitAttribution.ts.
+  // `increment()` at `completedBy.<date>.<uid>` (or a `deleteField()` on the
+  // whole `completedBy.<date>` node when a day is cleared for everyone) — NEVER
+  // as a whole-map write, and never a per-member `deleteField()` decided from a
+  // client-cached prior count. A whole-map write (or a delete-at-zero chosen off
+  // a stale cache) from a device holding a stale offline cache would wipe other
+  // days'/members' attribution, the exact class of bug that erased completion
+  // history on 2026-07-15. Consequently a member's count may legitimately sit at
+  // 0 (or, after concurrent decrements, below it); readers treat `count <= 0` as
+  // ABSENT and the converter drops such nodes on read. See
+  // utils/habitAttribution.ts.
   completedBy?: HabitCompletedBy;
   streakDays: number;
   lastUpdated: string; // To handle resets

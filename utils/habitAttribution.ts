@@ -26,8 +26,18 @@
  * it bridges the habit's own. Per-member freeze banks are a later stage.
  *
  * 🛡️ WRITE DISCIPLINE — `completedBy` is only ever written through
- * `completedByPath()` / `completedByDatePath()` dot paths with `increment()` or
- * `deleteField()`. Never write the whole map (habit-history-clobber hazard).
+ * `completedByPath()` / `completedByDatePath()` dot paths. Never write the whole
+ * map (habit-history-clobber hazard). Per-MEMBER writes are unconditional
+ * `increment()`s in both directions: choosing `deleteField()` at zero would have
+ * to read a client-cached prior count, and a stale offline cache would then
+ * delete a node another device had just incremented — the same clobber class,
+ * one level down. `deleteField()` is reserved for a whole-DATE clear
+ * (`completedByDatePath()`), which is absolute by design and mirrors the
+ * `completedDates` arrayRemove committed in the same batch.
+ *
+ * The cost of that discipline is zero/negative residue nodes. Every reader here
+ * treats `count <= 0` as ABSENT, and `habitConverter` drops such nodes on read,
+ * so residue is invisible bookkeeping — never worth a cleanup write.
  */
 import {
   Habit,
@@ -77,12 +87,21 @@ export const completedByDatePath = (date: string): string => `completedBy.${date
 /** Attribution shape a reader needs — narrower than a full `Habit`. */
 type AttributedHabit = Pick<Habit, 'completedBy'>;
 
-/** How many completions `memberId` logged for `habit` on `date` (0 when none). */
+/**
+ * How many completions `memberId` logged for `habit` on `date` (0 when none).
+ *
+ * 🛡️ Clamped at zero: decrements are written as unconditional dot-path
+ * `increment(-1)`s (never a delete-at-zero decided from a client-cached prior
+ * count, which a stale device would use to wipe a concurrent increment), so a
+ * node can legitimately rest at 0 — or dip below it when two devices decrement
+ * the same unit. `count <= 0` means ABSENT everywhere in this module; the
+ * residue is harmless bookkeeping and is dropped on read by `habitConverter`.
+ */
 export const memberCompletionCount = (
   habit: AttributedHabit,
   memberId: string,
   date: string,
-): number => habit.completedBy?.[date]?.[memberId] ?? 0;
+): number => Math.max(0, habit.completedBy?.[date]?.[memberId] ?? 0);
 
 /** Total attributed completions on `date`, across every member. */
 export const attributedUnitsOnDate = (habit: AttributedHabit, date: string): number => {
@@ -136,7 +155,10 @@ export const withAttributionDelta = <T extends Habit>(
   delta: number,
 ): T => {
   const day = { ...(habit.completedBy?.[date] ?? {}) };
-  const next = (day[memberId] ?? 0) + delta;
+  // Clamp the base at 0 for the same reason `memberCompletionCount` does: a
+  // zero/negative residue node means "absent", so applying a delta to it must
+  // start from 0 rather than compounding the residue.
+  const next = Math.max(0, day[memberId] ?? 0) + delta;
   if (next > 0) day[memberId] = next;
   else delete day[memberId];
 

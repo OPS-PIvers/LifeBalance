@@ -660,8 +660,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const householdSettingsRef = useRef<Household | null>(householdSettings);
   useEffect(() => { householdSettingsRef.current = householdSettings; }, [householdSettings]);
 
-  // Habit Actions Hook
-  const habitActions = useHabitActions(householdId, currentUser, habits, householdSettings, rewards);
+  // Habit Actions Hook. `members` is passed so the per-member points writes can
+  // be filtered to members whose doc still EXISTS — attribution outlives
+  // membership (a removed member's uid stays in `Habit.completedBy`), and a
+  // batch.update() on a deleted doc would fail the whole batch with NOT_FOUND.
+  const habitActions = useHabitActions(householdId, currentUser, habits, householdSettings, rewards, members);
 
   // Derived state (Optimized to prevent extra re-renders)
   const currentPeriodId = householdSettings?.lastPaycheckDate || '';
