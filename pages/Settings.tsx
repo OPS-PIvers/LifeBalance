@@ -51,6 +51,7 @@ import CalendarFeedCard from '@/components/settings/CalendarFeedCard';
 import ShortcutSetupGuide from '@/components/settings/ShortcutSetupGuide';
 import ActivityLogCard from '@/components/settings/ActivityLogCard';
 import MerchantRulesCard from '@/components/settings/MerchantRulesCard';
+import HabitPlaySettings from '@/components/settings/HabitPlaySettings';
 import { ChangelogDrawer } from '@/components/settings/ChangelogDrawer';
 import { CHANGELOG } from '@/data/changelog';
 import { HomeWidgetOrder } from '@/components/settings/HomeWidgetOrder';
@@ -74,7 +75,7 @@ import { requestNotificationPermission, setupForegroundNotificationListener } fr
 import { generateJsonBackup, generateCsvExport, buildExportPayload } from '@/utils/exportUtils';
 import { useMerchantRules } from '@/hooks/useMerchantRules';
 import { getCaptureReviewMode } from '@/utils/captureReview';
-import { HouseholdMember, NotificationPreferences, Transaction, Meal, CaptureType, CaptureReviewMode } from '@/types/schema';
+import { HouseholdMember, NotificationPreferences, Transaction, Meal, CaptureType, CaptureReviewMode, CeremonyTone, FreezeMode } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { doc, updateDoc } from 'firebase/firestore';
 import { computeAnyNotificationsEnabled } from '@/utils/notificationFlags';
@@ -192,6 +193,8 @@ const Settings: React.FC = () => {
     updateModuleVisibility,
     setCaptureReviewMode,
     setKidModePin,
+    setFreezeMode,
+    setCeremonyTone,
     apiKeys,
     activityLog,
     updateKidProfile,
@@ -361,6 +364,27 @@ const Settings: React.FC = () => {
     } catch (error) {
       console.error('[Settings] Failed to update capture review mode:', error);
       toast.error('Failed to update review settings');
+    }
+  };
+
+  // Per-member habit points (stage 6) — the two household habit settings.
+  const handleFreezeModeChange = async (mode: FreezeMode) => {
+    try {
+      await setFreezeMode(mode);
+      toast.success('Freeze setting updated');
+    } catch (error) {
+      console.error('[Settings] Failed to update freeze mode:', error);
+      toast.error('Failed to update freeze setting');
+    }
+  };
+
+  const handleCeremonyToneChange = async (tone: CeremonyTone) => {
+    try {
+      await setCeremonyTone(tone);
+      toast.success('Weekly wrap-up updated');
+    } catch (error) {
+      console.error('[Settings] Failed to update ceremony tone:', error);
+      toast.error('Failed to update weekly wrap-up');
     }
   };
 
@@ -1020,6 +1044,16 @@ const Settings: React.FC = () => {
           </SurfaceList>
         </Section>
       )}
+
+      {/* Per-member habit points (stage 6) — the two household-wide habit
+          settings (freeze mode, weekly wrap-up tone). Admin-editable, read-only
+          for everyone else; both are inert until an admin picks a mode. */}
+      <HabitPlaySettings
+        settings={householdSettings}
+        isAdmin={currentUser?.role === 'admin'}
+        onChangeFreezeMode={(mode) => void handleFreezeModeChange(mode)}
+        onChangeCeremonyTone={(tone) => void handleCeremonyToneChange(tone)}
+      />
 
       {/* F-MEALS-03 — standing household dietary restrictions/allergens,
           auto-applied to every AI meal suggestion + weekly plan and matched

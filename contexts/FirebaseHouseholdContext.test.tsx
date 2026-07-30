@@ -1105,6 +1105,212 @@ describe('FirebaseHouseholdContext — autoApplyFreezes (Plan 25)', () => {
     expect(batches[0]!.committed).toBe(false);
     expect(updateDocMock).not.toHaveBeenCalled();
   });
+
+  // -------------------------------------------------------------------------
+  // Stage 6 — `Household.freezeMode` dispatch.
+  //
+  // The load-bearing claims: (1) with the field ABSENT, and with either shared
+  // value, the batch is bit-for-bit the pre-stage-6 one; (2) 'per_member'
+  // spends the MEMBER's bank and writes the MEMBER's frozen date only; and
+  // (3) neither path ever touches a points field.
+  // -------------------------------------------------------------------------
+  const PAUL = 'user1';
+  const JEN = 'user2';
+
+  /** Attribution: `uids` each completed on every date in `dates`. */
+  const attributed = (dates: string[], uids: string[]) =>
+    Object.fromEntries(dates.map(dt => [dt, Object.fromEntries(uids.map(u => [u, 1]))]));
+
+  function seedTwoAdults() {
+    emitCollection(`${householdPath}/members`, [
+      docSnap(PAUL, { uid: PAUL, displayName: 'Paul', points: { daily: 0, weekly: 0, total: 0 } }),
+      docSnap(JEN, { uid: JEN, displayName: 'Jen', points: { daily: 0, weekly: 0, total: 0 } }),
+    ]);
+  }
+
+  /**
+   * Seeding attributed habits + members fires the unrelated once-per-login
+   * points sync, whose corrective write is its own batch. Let it settle and
+   * drop it so every assertion below scopes to the mutation under test.
+   */
+  async function settleAndClearBatches() {
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await Promise.resolve(); });
+    batches = [];
+  }
+
+  /** Paul has a 3-day chain and missed yesterday; Jen completed yesterday too. */
+  const perMemberHabit = (id = 'hb1') =>
+    docSnap(
+      id,
+      baseHabit({
+        id,
+        type: 'positive',
+        scoringType: 'threshold',
+        completedDates: [d(1), d(2), d(3), d(4)],
+        completedBy: {
+          ...attributed([d(2), d(3), d(4)], [PAUL, JEN]),
+          [d(1)]: { [JEN]: 1 },
+        },
+        streakDays: 0,
+      })
+    );
+
+  it.each(['shared', 'freeze_both'] as const)(
+    'freezeMode %s takes the household path unchanged (frozenDates + the shared bank)',
+    async (freezeMode) => {
+      renderProvider();
+      emitCollection(`${householdPath}/habits`, [protectable('hb1')]);
+      emitDoc(householdPath, HOUSEHOLD_ID, {
+        memberUids: [PAUL],
+        points: { daily: 0, weekly: 0, total: 0 },
+        freezeBank: bank(2),
+        freezeMode,
+      });
+
+      await act(async () => {
+        await captured.value!.gamification.autoApplyFreezes();
+      });
+
+      expect(batches).toHaveLength(1);
+      const batch = batches[0]!;
+      const habitData = opsForPath(batch, `${householdPath}/habits/hb1`)[0]!.data!;
+      expect(habitData['frozenDates']).toEqual([d(1)]);
+      expect(habitData['streakDays']).toBe(3);
+      expect(habitData['frozenDatesBy']).toBeUndefined();
+
+      const hhData = opsForPath(batch, householdPath)[0]!.data!;
+      expect((hhData['freezeBank'] as FreezeBank).tokens).toBe(1);
+      // No per-member bank node is created in a shared mode.
+      expect(Object.keys(hhData).some(k => k.startsWith('freezeBanksByMember'))).toBe(false);
+    }
+  );
+
+  it('freezeMode per_member spends the MEMBER bank and bridges only that member', async () => {
+    renderProvider();
+    seedTwoAdults();
+    emitCollection(`${householdPath}/habits`, [perMemberHabit()]);
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: [PAUL, JEN],
+      points: { daily: 0, weekly: 0, total: 0 },
+      freezeBank: bank(2),
+      freezeMode: 'per_member',
+    });
+    await settleAndClearBatches();
+
+    await act(async () => {
+      await captured.value!.gamification.autoApplyFreezes();
+    });
+
+    // Only Paul's chain broke, so exactly one application.
+    expect(batches).toHaveLength(1);
+    const batch = batches[0]!;
+    expect(batch.committed).toBe(true);
+
+    // 1) The habit records the freeze as a DOT-PATH arrayUnion for Paul only —
+    //    never a whole-map write, and never the household-wide `frozenDates`
+    //    (a personal token buys no household bridge), so `streakDays` is
+    //    untouched too.
+    const habitData = opsForPath(batch, `${householdPath}/habits/hb1`)[0]!.data!;
+    expect(habitData).toEqual({ [`frozenDatesBy.${d(1)}`]: { __arrayUnion: [PAUL] } });
+
+    // 2) The SAME batch debits PAUL's bank via dot paths under his uid — Jen's
+    //    node is not addressed at all.
+    const hhData = opsForPath(batch, householdPath)[0]!.data!;
+    expect(hhData[`freezeBanksByMember.${PAUL}.tokens`]).toBe(1);
+    expect(hhData[`freezeBanksByMember.${PAUL}.history`]).toEqual({
+      __arrayUnion: [expect.objectContaining({ type: 'used', amount: -1, habitId: 'hb1' })],
+    });
+    expect(Object.keys(hhData).every(k => k.startsWith(`freezeBanksByMember.${PAUL}.`))).toBe(true);
+    // The shared bank is left alone, so flipping back restores the old balance.
+    expect(hhData['freezeBank']).toBeUndefined();
+
+    // 3) ZERO-POINTS INVARIANT holds on this path too.
+    for (const op of batch.ops) {
+      for (const key of Object.keys(op.data ?? {})) {
+        expect(key.startsWith('points')).toBe(false);
+      }
+    }
+    expect(incrementMock).not.toHaveBeenCalled();
+  });
+
+  it('per_member caps each member at their OWN token balance', async () => {
+    renderProvider();
+    seedTwoAdults();
+    // Two protectable habits for Paul; his bank holds one token.
+    emitCollection(`${householdPath}/habits`, [perMemberHabit('hb-a'), perMemberHabit('hb-b')]);
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: [PAUL, JEN],
+      points: { daily: 0, weekly: 0, total: 0 },
+      freezeBank: bank(2),
+      freezeMode: 'per_member',
+      freezeBanksByMember: { [PAUL]: bank(1) },
+    });
+    await settleAndClearBatches();
+
+    await act(async () => {
+      await captured.value!.gamification.autoApplyFreezes();
+    });
+
+    // One token, one application — deterministically the lower habit id.
+    expect(batches).toHaveLength(1);
+    expect(opsForPath(batches[0]!, `${householdPath}/habits/hb-a`)).toHaveLength(1);
+    expect(opsForPath(batches[0]!, `${householdPath}/habits/hb-b`)).toHaveLength(0);
+    const hhData = opsForPath(batches[0]!, householdPath)[0]!.data!;
+    expect(hhData[`freezeBanksByMember.${PAUL}.tokens`]).toBe(0);
+  });
+
+  it('per_member is idempotent: a member already frozen yesterday writes nothing', async () => {
+    renderProvider();
+    seedTwoAdults();
+    const habitSnap = docSnap(
+      'hb1',
+      baseHabit({
+        id: 'hb1',
+        type: 'positive',
+        scoringType: 'threshold',
+        completedDates: [d(2), d(3), d(4)],
+        completedBy: attributed([d(2), d(3), d(4)], [PAUL]),
+        frozenDatesBy: { [d(1)]: [PAUL] },
+        streakDays: 0,
+      })
+    );
+    emitCollection(`${householdPath}/habits`, [habitSnap]);
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: [PAUL, JEN],
+      points: { daily: 0, weekly: 0, total: 0 },
+      freezeBank: bank(2),
+      freezeMode: 'per_member',
+    });
+    await settleAndClearBatches();
+
+    await act(async () => {
+      await captured.value!.gamification.autoApplyFreezes();
+    });
+
+    expect(batches).toHaveLength(0);
+  });
+
+  it('per_member ignores a member whose own bank is empty', async () => {
+    renderProvider();
+    seedTwoAdults();
+    emitCollection(`${householdPath}/habits`, [perMemberHabit()]);
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: [PAUL, JEN],
+      points: { daily: 0, weekly: 0, total: 0 },
+      // The SHARED bank is full — which must not fund a per-member freeze.
+      freezeBank: bank(2),
+      freezeMode: 'per_member',
+      freezeBanksByMember: { [PAUL]: bank(0) },
+    });
+    await settleAndClearBatches();
+
+    await act(async () => {
+      await captured.value!.gamification.autoApplyFreezes();
+    });
+
+    expect(batches).toHaveLength(0);
+  });
 });
 
 describe('FirebaseHouseholdContext — habit+points toggle atomicity', () => {

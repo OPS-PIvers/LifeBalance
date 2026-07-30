@@ -23,6 +23,7 @@ import {
   legacyPeriodPoints,
   memberCompletionCount,
   memberCompletionDates,
+  memberFrozenDates,
   memberIdsOnDate,
   memberMostRecentUnitDateInPeriod,
   memberPeriodPoints,
@@ -42,6 +43,7 @@ import {
 import {
   calculatePointsForDate,
   calculateResetPoints,
+  calculateStreak,
   pointsForHabitOnDate,
 } from '@/utils/habitLogic';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -318,10 +320,11 @@ describe('habitAttribution — per-member streaks', () => {
   });
 
   it('bridges EVERY member’s chain across a habit-level frozen date', () => {
-    // Paul: Mon, (Tue frozen), Wed. The freeze is stored on the HABIT, and per
-    // the locked decision it bridges every member's chain until per-member
-    // freeze banks land — so Paul's streak is 2 (frozen days never count as a
-    // completion, they only preserve continuity).
+    // Paul: Mon, (Tue frozen), Wed. The freeze is stored on the HABIT, which
+    // stays the household-wide bridge in every shared freeze mode AND for all
+    // legacy data — so Paul's streak is 2 (frozen days never count as a
+    // completion, they only preserve continuity). The narrower per-member
+    // bridge is `frozenDatesBy`, covered in its own block below.
     const h = habit({
       completedDates: [d(0), d(2)],
       frozenDates: [d(1)],
@@ -359,6 +362,96 @@ describe('habitAttribution — per-member streaks', () => {
     expect(prospectiveMultiplierForMember(h, PAUL, d(2), d(2))).toBe(1.5);
     // Jen starts from nothing, so her first completion is still 1.0×.
     expect(prospectiveMultiplierForMember(h, JEN, d(2), d(2))).toBe(1.0);
+  });
+});
+
+// Stage 6 — `Habit.frozenDatesBy`: the NARROW bridge written only under
+// `freezeMode: 'per_member'`. A date listed for one uid bridges that member's
+// chain and nobody else's.
+describe('habitAttribution — per-member frozen dates', () => {
+  /** Paul and Jen both did Mon and Wed; nobody completed Tue. */
+  const monWed = (extra: Partial<Habit> = {}): Habit =>
+    habit({
+      completedDates: [d(0), d(2)],
+      completedBy: {
+        [d(0)]: { [PAUL]: 1, [JEN]: 1 },
+        [d(2)]: { [PAUL]: 1, [JEN]: 1 },
+      },
+      ...extra,
+    });
+
+  it('reads only the dates listed for that member', () => {
+    const h = monWed({ frozenDatesBy: { [d(1)]: [PAUL], [d(5)]: [JEN, PAUL] } });
+    expect(memberFrozenDates(h, PAUL)).toEqual([d(1), d(5)]);
+    expect(memberFrozenDates(h, JEN)).toEqual([d(5)]);
+    expect(memberFrozenDates(h, 'nobody')).toEqual([]);
+  });
+
+  it('bridges ONLY the frozen member’s chain', () => {
+    // Paul spent a token on Tuesday; Jen did not. Same completions, same habit,
+    // different streaks — this is the whole point of the per-member mode.
+    const h = monWed({ frozenDatesBy: { [d(1)]: [PAUL] } });
+    expect(streakForMember(h, PAUL, d(2))).toBe(2);
+    expect(streakForMember(h, JEN, d(2))).toBe(1);
+  });
+
+  it('leaves the HABIT-level streak alone (a personal token buys no household bridge)', () => {
+    // The habit-level walk reads `frozenDates`, which a per-member freeze never
+    // writes — so the household chain still shows the Tuesday break.
+    const h = monWed({ frozenDatesBy: { [d(1)]: [PAUL] } });
+    expect(h.frozenDates).toBeUndefined();
+    expect(calculateStreak(h.completedDates, d(2), h.frozenDates ?? [])).toBe(1);
+  });
+
+  it('feeds the historical multiplier for that member only', () => {
+    const h = monWed({ frozenDatesBy: { [d(1)]: [PAUL] } });
+    expect(streakEndingOnForMember(h, PAUL, d(2), d(2))).toBe(2);
+    expect(streakEndingOnForMember(h, JEN, d(2), d(2))).toBe(1);
+  });
+
+  it('feeds the PROSPECTIVE multiplier for that member only', () => {
+    // Paul: Mon, (Tue frozen), Wed → completing Thu makes 3 → 1.5×.
+    // Jen: same completions, no freeze → Thu is only her 2nd in a row → 1.0×.
+    const h = monWed({ frozenDatesBy: { [d(1)]: [PAUL] } });
+    expect(prospectiveMultiplierForMember(h, PAUL, d(3), d(3))).toBe(1.5);
+    expect(prospectiveMultiplierForMember(h, JEN, d(3), d(3))).toBe(1.0);
+  });
+
+  it('composes with the household-wide bridge rather than replacing it', () => {
+    // Mon completed, Tue frozen household-wide, Wed frozen for Paul only, Thu
+    // completed. Paul's chain survives both gaps; Jen's survives only the first.
+    const h = habit({
+      completedDates: [d(0), d(3)],
+      completedBy: { [d(0)]: { [PAUL]: 1, [JEN]: 1 }, [d(3)]: { [PAUL]: 1, [JEN]: 1 } },
+      frozenDates: [d(1)],
+      frozenDatesBy: { [d(2)]: [PAUL] },
+    });
+    expect(streakForMember(h, PAUL, d(3))).toBe(2);
+    expect(streakForMember(h, JEN, d(3))).toBe(1);
+  });
+
+  it('is INERT when absent: every walk matches the pre-stage-6 result', () => {
+    // The regression pin. Identical habits bar an absent vs. empty map — and
+    // an empty map must score exactly as the absent one does.
+    const base = monWed();
+    const empty = monWed({ frozenDatesBy: {} });
+    for (const member of [PAUL, JEN]) {
+      expect(streakForMember(empty, member, d(2))).toBe(streakForMember(base, member, d(2)));
+      expect(streakEndingOnForMember(empty, member, d(2), d(2)))
+        .toBe(streakEndingOnForMember(base, member, d(2), d(2)));
+      expect(prospectiveMultiplierForMember(empty, member, d(3), d(3)))
+        .toBe(prospectiveMultiplierForMember(base, member, d(3), d(3)));
+      expect(memberPointsForHabitOnDate(empty, member, d(2), d(2)))
+        .toBe(memberPointsForHabitOnDate(base, member, d(2), d(2)));
+    }
+  });
+
+  it('never earns points: a frozen day is not a completion', () => {
+    const h = monWed({ frozenDatesBy: { [d(1)]: [PAUL] } });
+    // Tuesday is bridged for Paul, but he has no attributed unit there, so it
+    // scores zero — the freeze buys continuity, never points.
+    expect(memberCompletionCount(h, PAUL, d(1))).toBe(0);
+    expect(memberPointsForHabitOnDate(h, PAUL, d(1), d(2))).toBe(0);
   });
 });
 

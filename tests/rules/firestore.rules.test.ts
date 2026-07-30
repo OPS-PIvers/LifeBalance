@@ -827,6 +827,91 @@ describe('habit completedBy attribution', () => {
   });
 });
 
+// `frozenDatesBy` (date → the uids that date's freeze was spent for) rides the
+// SAME habit writes `frozenDates` always has, so — exactly like `completedBy`
+// above — the rule adds only a type guard, no new grant.
+describe('habit frozenDatesBy per-member freezes', () => {
+  const habitDoc = {
+    title: 'Exercise',
+    category: 'Health',
+    count: 1,
+    totalCount: 1,
+    completedDates: ['2026-06-22'],
+  };
+
+  it('a member can write per-member freezes alongside frozenDates', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'habits', 'habit-frz'), {
+        ...habitDoc,
+        frozenDates: ['2026-06-21'],
+        frozenDatesBy: { '2026-06-21': [BOB, ALICE] },
+      }),
+    );
+  });
+
+  it('a member can add another member to an existing day via a dot path', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(
+        doc(asFirestore(ctx.firestore()), 'households', H1, 'habits', 'habit-frz2'),
+        habitDoc,
+      );
+    });
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'habits', 'habit-frz2'), {
+        'frozenDatesBy.2026-06-21': [ALICE],
+      }),
+    );
+  });
+
+  it('rejects a non-map frozenDatesBy', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'habits', 'habit-frz3'), {
+        ...habitDoc,
+        frozenDatesBy: ['2026-06-21'],
+      }),
+    );
+  });
+
+  it('a member of another household still cannot write per-member freezes', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(CAROL), 'households', H1, 'habits', 'habit-frz4'), {
+        ...habitDoc,
+        frozenDatesBy: { '2026-06-21': [CAROL] },
+      }),
+    );
+  });
+});
+
+// The two stage-6 household settings ride the field-permissive household-doc
+// update rule (like pendingRedemptions / merchantRules before them), so they
+// need no rules change at all. Pinned so a future tightening of that rule can't
+// silently start denying them.
+describe('household freeze/ceremony settings', () => {
+  it('a member can set freezeMode and ceremonyTone', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1), {
+        freezeMode: 'per_member',
+        ceremonyTone: 'podium',
+      }),
+    );
+  });
+
+  it('a member can spend from a per-member freeze bank via dot paths', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1), {
+        [`freezeBanksByMember.${BOB}.tokens`]: 1,
+        [`freezeBanksByMember.${BOB}.maxTokens`]: 2,
+      }),
+    );
+  });
+
+  it('a non-member cannot', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(CAROL), 'households', H1), { freezeMode: 'per_member' }),
+    );
+  });
+});
+
 describe('immutable household fields', () => {
   it('a member cannot rewrite createdBy', async () => {
     await assertFails(

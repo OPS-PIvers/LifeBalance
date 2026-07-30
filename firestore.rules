@@ -487,7 +487,19 @@ service cloud.firestore {
                               // enumerable in rules (arbitrary date/uid keys), and
                               // the converter re-validates counts on read.
                               (request.resource.data.get('completedBy', null) == null ||
-                               request.resource.data.completedBy is map);
+                               request.resource.data.completedBy is map) &&
+                              // 🛡️ Per-member habit points (stage 6): `frozenDatesBy`
+                              // (date → the uids that date's freeze was spent for) is
+                              // written by the same members, in the same batches, as
+                              // `frozenDates` — which this rule has always allowed
+                              // with no field allowlist — so, exactly like
+                              // `completedBy` above, no new grant is needed. Type
+                              // guard only: reject a non-map so a client can't turn
+                              // the field into a string/array and break every reader.
+                              // Its CONTENTS are not enumerable in rules (arbitrary
+                              // date keys); the converter re-validates on read.
+                              (request.resource.data.get('frozenDatesBy', null) == null ||
+                               request.resource.data.frozenDatesBy is map);
 
         allow delete: if isMemberOf(householdId);
 

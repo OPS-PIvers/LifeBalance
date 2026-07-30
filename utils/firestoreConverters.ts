@@ -42,6 +42,7 @@ import type {
   CalendarItem,
   Habit,
   HabitCompletedBy,
+  HabitFrozenDatesBy,
   HabitSubmission,
   Challenge,
   YearlyGoal,
@@ -169,6 +170,27 @@ const normalizeCompletedBy = (raw: unknown): HabitCompletedBy => {
   return out;
 };
 
+/**
+ * Per-member freeze attribution (stage 6): normalise `Habit.frozenDatesBy` on
+ * read — date → the uids that date's freeze was spent for.
+ *
+ * Absent on every habit outside a `freezeMode: 'per_member'` household → `{}`,
+ * so `memberFrozenDates` finds nothing and every streak walk stays exactly what
+ * it was. Non-array days and non-string uids are dropped rather than trusted
+ * (this map is written by dot-path `arrayUnion`s from several clients), and an
+ * emptied day is dropped entirely so readers never see a `[]` node.
+ */
+const normalizeFrozenDatesBy = (raw: unknown): HabitFrozenDatesBy => {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out: HabitFrozenDatesBy = {};
+  for (const [date, uids] of Object.entries(raw as Record<string, unknown>)) {
+    if (!Array.isArray(uids)) continue;
+    const clean = [...new Set(uids.filter((u): u is string => typeof u === 'string' && u !== ''))];
+    if (clean.length > 0) out[date] = clean;
+  }
+  return out;
+};
+
 // ---------------------------------------------------------------------------
 // Habit — preserves existing default: scoringType defaults to 'threshold'
 //          and lastUpdated Timestamp→ISO normalisation.
@@ -184,6 +206,7 @@ export const habitConverter: FirestoreDataConverter<Habit> = {
       id: snapshot.id,
       scoringType: d['scoringType'] || 'threshold',
       completedBy: normalizeCompletedBy(d['completedBy']),
+      frozenDatesBy: normalizeFrozenDatesBy(d['frozenDatesBy']),
       lastUpdated:
         d['lastUpdated'] instanceof Timestamp
           ? d['lastUpdated'].toDate().toISOString()

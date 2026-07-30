@@ -452,6 +452,55 @@ const attributedHabit = (completedBy: Record<string, number>, overrides: Partial
 const pieSlices = (container: HTMLElement): SVGPathElement[] =>
   Array.from(container.querySelectorAll<SVGPathElement>('svg[viewBox="0 0 46 46"] path'));
 
+describe('HabitCard - per-member freeze protection (freezeMode: per_member, stage 6)', () => {
+  const yesterdayStr = '2024-02-09';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupMatchMedia(true);
+    mockedYesterday.current = new Date('2024-02-09T12:00:00');
+  });
+
+  const frozenForPaulOnly: Habit = {
+    id: 'h1',
+    title: 'Test Habit',
+    category: 'Health',
+    type: 'positive',
+    basePoints: 10,
+    scoringType: 'threshold',
+    period: 'daily',
+    targetCount: 1,
+    count: 0,
+    totalCount: 0,
+    completedDates: ['2024-02-07', '2024-02-08'],
+    streakDays: 2,
+    lastUpdated: '2024-02-10T00:00:00Z',
+    // A per-member freeze token was spent for Paul only — the household-wide
+    // `frozenDates` (shared/freeze_both) is deliberately left untouched, which
+    // is exactly what a real `freezeMode: 'per_member'` write looks like.
+    frozenDatesBy: { [yesterdayStr]: [PAUL] },
+  };
+
+  it('shows the Protected badge for the member whose chain the per-member freeze bridged', () => {
+    const attribution = buildHabitRowMemberContext(ROSTER_MEMBERS, PAUL);
+    render(<HabitCard habit={frozenForPaulOnly} attribution={attribution} />);
+
+    expect(screen.getByText('Protected')).toBeInTheDocument();
+  });
+
+  it('does NOT show the Protected badge for a different member whose chain was never bridged', () => {
+    const attribution = buildHabitRowMemberContext(ROSTER_MEMBERS, JEN);
+    render(<HabitCard habit={frozenForPaulOnly} attribution={attribution} />);
+
+    expect(screen.queryByText('Protected')).not.toBeInTheDocument();
+  });
+
+  it('does NOT show the Protected badge with no attribution context at all', () => {
+    render(<HabitCard habit={frozenForPaulOnly} />);
+    expect(screen.queryByText('Protected')).not.toBeInTheDocument();
+  });
+});
+
 describe('HabitCard - pie attribution counter', () => {
   beforeEach(() => {
     vi.clearAllMocks();

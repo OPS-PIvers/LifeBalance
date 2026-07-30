@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   addDoc,
+  arrayUnion,
   updateDoc,
   deleteDoc,
   deleteField,
@@ -19,6 +20,7 @@ import { toastIcon } from '@/components/ui/toastIcon';
 import { parseISO, format, subDays } from 'date-fns';
 import {
   Challenge,
+  Household,
   RewardItem,
   RewardRedemption,
   RewardRedemptionRecord,
@@ -29,7 +31,20 @@ import {
   Habit,
 } from '@/types/schema';
 import { calculateChallengeProgress } from '@/utils/challengeCalculator';
-import { FREEZE_MAX_TOKENS, selectAutoFreezeCandidates } from '@/utils/freezeBank';
+import {
+  FREEZE_MAX_TOKENS,
+  selectAutoFreezeCandidates,
+  selectMemberAutoFreezeCandidates,
+} from '@/utils/freezeBank';
+import {
+  freezeBankMemberIds,
+  isPerMemberFreeze,
+  memberFreezeBank,
+  memberFreezeBankPatch,
+  memberFreezeRefill,
+  resolveFreezeMode,
+} from '@/utils/freezeSettings';
+import { frozenDatesByPath } from '@/utils/habitAttribution';
 import { calculateStreak } from '@/utils/habitLogic';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
@@ -764,25 +779,106 @@ export function makeRedemptionResolutionMutations(deps: {
  * both predate each other's commits can each apply a freeze computed from the
  * same starting balance; the absolute `tokens` write converges last-writer-
  * wins and is floored at 0 via Math.max — it can never go negative.
+ *
+ * Stage 6 (`Household.freezeMode`) adds ONE branch and changes nothing else:
+ * 'shared' (the absent default) and 'freeze_both' run `applyShared` below,
+ * which is the code above verbatim; 'per_member' runs `applyPerMember`, which
+ * spends each adult's own bank and writes each adult's own frozen date. Every
+ * invariant in this comment — one batch per application, idempotency, zero
+ * points — holds identically on both paths.
  */
 export function makeAutoApplyFreezes(deps: {
   db: Firestore;
   householdId: string | null;
   freezeBank: FreezeBank | null;
   habits: Habit[];
+  /** Stage 6: the household doc, read ONLY for `freezeMode` + per-member banks. */
+  householdSettings: Household | null;
+  /** Stage 6: the roster the per-member mode fans out over. */
+  members: HouseholdMember[];
 }) {
-  const { db, householdId, freezeBank, habits } = deps;
+  const { db, householdId, freezeBank, habits, householdSettings, members } = deps;
 
-  const autoApplyFreezes = async () => {
-    if (!householdId || !freezeBank || freezeBank.tokens <= 0) return;
+  /**
+   * Stage 6 — `freezeMode: 'per_member'`. Each adult spends from their OWN bank
+   * and freezes only their OWN chain.
+   *
+   * Differences from the shared path, and why:
+   *  - the habit write is a dot-path `arrayUnion` on `frozenDatesBy.<date>`
+   *    (never a whole-map write — see `Habit.frozenDatesBy`), and it does NOT
+   *    touch `frozenDates` or `streakDays`: those are the household-wide chain,
+   *    which a personal token deliberately does not bridge;
+   *  - the bank write is a dot-path patch under
+   *    `freezeBanksByMember.<uid>`, so one member's spend can never clobber
+   *    another's node — strictly narrower than the shared bank's whole-object
+   *    write;
+   *  - the pass fans out over EVERY adult, not just the signed-in one. Only
+   *    yesterday is ever freezable, so waiting for each person to open the app
+   *    would mean their streak is already gone by the time they do.
+   *
+   * Unchanged: one batch per application, and NOT ONE POINTS FIELD anywhere —
+   * a frozen day still earns zero.
+   */
+  const applyPerMember = async (today: string, yesterday: string): Promise<number> => {
+    const memberIds = freezeBankMemberIds(members);
+    if (memberIds.length === 0) return 0;
 
-    const today = getLocalDateString();
-    const yesterday = format(subDays(parseISO(today), 1), 'yyyy-MM-dd');
+    const candidates = selectMemberAutoFreezeCandidates(habits, memberIds, today);
+    if (candidates.length === 0) return 0;
+
+    const now = new Date();
+    // Per-member running balances, so a member with two protectable habits and
+    // one token spends it once — the shared path's `tokens` counter, per uid.
+    const banks = new Map<string, FreezeBank>(
+      memberIds.map(uid => [uid, memberFreezeBank(householdSettings, uid, now)]),
+    );
+    let applied = 0;
+
+    for (const { habit, memberId, protectedStreak } of candidates) {
+      const bank = banks.get(memberId);
+      if (!bank || bank.tokens <= 0) continue;
+
+      const historyEntry: FreezeBankHistoryEntry = {
+        id: crypto.randomUUID(),
+        type: 'used',
+        amount: -1,
+        date: today,
+        habitId: habit.id,
+        habitDate: yesterday,
+        notes: `Freeze auto-applied: protected the ${protectedStreak}-day streak on ${habit.title} (${yesterday})`,
+        createdAt: new Date().toISOString(),
+      };
+
+      const nextBank: FreezeBank = {
+        ...bank,
+        tokens: Math.max(0, bank.tokens - 1),
+        history: [...bank.history, historyEntry],
+      };
+      banks.set(memberId, nextBank);
+
+      const batch = writeBatch(db);
+      batch.update(doc(db, `households/${householdId}/habits`, habit.id), {
+        [frozenDatesByPath(yesterday)]: arrayUnion(memberId),
+      });
+      batch.update(
+        doc(db, `households/${householdId}`),
+        memberFreezeBankPatch(memberId, nextBank, arrayUnion(historyEntry)),
+      );
+      await batch.commit();
+      applied++;
+    }
+
+    return applied;
+  };
+
+  /** The pre-stage-6 path, byte-for-byte: one household bank, one shared bridge. */
+  const applyShared = async (today: string, yesterday: string): Promise<number> => {
+    if (!freezeBank || freezeBank.tokens <= 0) return 0;
 
     // Deterministic candidate order (highest protected streak first, then id)
     // so two devices racing at midnight converge on the same applications.
     const candidates = selectAutoFreezeCandidates(habits, today);
-    if (candidates.length === 0) return;
+    if (candidates.length === 0) return 0;
 
     let tokens = freezeBank.tokens;
     let history = freezeBank.history;
@@ -824,6 +920,21 @@ export function makeAutoApplyFreezes(deps: {
       applied++;
     }
 
+    return applied;
+  };
+
+  const autoApplyFreezes = async () => {
+    if (!householdId) return;
+
+    const today = getLocalDateString();
+    const yesterday = format(subDays(parseISO(today), 1), 'yyyy-MM-dd');
+
+    // Stage 6 dispatch. 'shared' and 'freeze_both' are the SAME mechanics on
+    // purpose (see FreezeMode) — only 'per_member' branches.
+    const applied = isPerMemberFreeze(resolveFreezeMode(householdSettings))
+      ? await applyPerMember(today, yesterday)
+      : await applyShared(today, yesterday);
+
     if (applied > 0) {
       toast(`Streak protected — ${applied} freeze${applied === 1 ? '' : 's'} auto-applied`, { icon: toastIcon(Snowflake) });
     }
@@ -840,22 +951,68 @@ export function makeAutoApplyFreezes(deps: {
  * (FREEZE_MAX_TOKENS = 2). The old 2-new + 1-carryover math, expiry, and
  * carryover concepts are gone. A legacy 3-token bank is clamped down to the
  * new max on its first rollover; maxTokens is rewritten to 2 at the same time.
+ *
+ * Stage 6: under `freezeMode: 'per_member'` the same refill is also applied to
+ * every adult's own bank, in the SAME `updateDoc` as the shared one. Outside
+ * that mode the member patch is empty and this function is unchanged.
  */
 export function makeRolloverFreezeBankTokens(deps: {
   db: Firestore;
   householdId: string | null;
   freezeBank: FreezeBank | null;
+  /** Stage 6: read ONLY for `freezeMode` + the per-member banks to refill. */
+  householdSettings: Household | null;
+  /** Stage 6: the roster whose per-member banks refill. */
+  members: HouseholdMember[];
 }) {
-  const { db, householdId, freezeBank } = deps;
+  const { db, householdId, freezeBank, householdSettings, members } = deps;
+
+  /**
+   * Stage 6: the per-member banks' monthly refill, same math as the shared
+   * bank's (refill to the fixed max, clamp a legacy over-max balance down,
+   * stamp the month), written as dot paths so members never clobber each other.
+   * Returns an EMPTY patch outside `freezeMode: 'per_member'`, which is what
+   * keeps the shared path below byte-identical to its pre-stage-6 self.
+   */
+  const perMemberRefillPatch = (now: Date): Record<string, unknown> => {
+    if (!isPerMemberFreeze(resolveFreezeMode(householdSettings))) return {};
+
+    const patch: Record<string, unknown> = {};
+    for (const memberId of freezeBankMemberIds(members)) {
+      const refill = memberFreezeRefill(
+        memberId,
+        memberFreezeBank(householdSettings, memberId, now),
+        now,
+        crypto.randomUUID(),
+      );
+      if (!refill) continue;
+      Object.assign(
+        patch,
+        memberFreezeBankPatch(
+          memberId,
+          refill.bank,
+          refill.entry ? arrayUnion(refill.entry) : undefined,
+        ),
+      );
+    }
+    return patch;
+  };
 
   const rolloverFreezeBankTokens = async () => {
     if (!householdId || !freezeBank) return;
 
     const now = new Date();
     const currentMonth = format(now, 'yyyy-MM');
+    const memberPatch = perMemberRefillPatch(now);
+    const householdRef = doc(db, `households/${householdId}`);
 
-    // Only rollover if we're in a new month
-    if (freezeBank.lastRolloverMonth === currentMonth) return;
+    // Only rollover if we're in a new month. The shared bank and the per-member
+    // banks each carry their OWN `lastRolloverMonth`, so a member seeded
+    // mid-month still refills on the 1st even though the shared bank is current.
+    if (freezeBank.lastRolloverMonth === currentMonth) {
+      if (Object.keys(memberPatch).length > 0) await updateDoc(householdRef, memberPatch);
+      return;
+    }
 
     const newBalance = FREEZE_MAX_TOKENS;
     // Negative when clamping a legacy 3-token bank down to the new max.
@@ -872,7 +1029,7 @@ export function makeRolloverFreezeBankTokens(deps: {
     // Bank already at the max: just record the month guard — no history entry,
     // no toast.
     if (tokensAdded === 0) {
-      await updateDoc(doc(db, `households/${householdId}`), { freezeBank: refilled });
+      await updateDoc(householdRef, { freezeBank: refilled, ...memberPatch });
       return;
     }
 
@@ -890,8 +1047,9 @@ export function makeRolloverFreezeBankTokens(deps: {
       createdAt: new Date().toISOString(),
     };
 
-    await updateDoc(doc(db, `households/${householdId}`), {
+    await updateDoc(householdRef, {
       freezeBank: { ...refilled, history: [...freezeBank.history, historyEntry] },
+      ...memberPatch,
     });
 
     if (tokensAdded > 0) {
