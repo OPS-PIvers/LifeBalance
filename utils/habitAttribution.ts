@@ -1190,6 +1190,61 @@ export interface PointsBuckets {
   total: number;
 }
 
+/** A fresh all-zero bucket triple. */
+const zeroBuckets = (): PointsBuckets => ({ daily: 0, weekly: 0, total: 0 });
+
+/** Monday of the week containing `today` (yyyy-MM-dd). */
+const weekStartOf = (today: string): string =>
+  format(startOfWeek(parseISO(today), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+
+/**
+ * 🛡️ THE BUCKET-GATING RULE — one implementation, every points-writing path.
+ *
+ * Apply a signed delta to one bucket triple, gated by the date the points
+ * actually MOVED ON: `total` always (it is a lifetime counter), `weekly` only
+ * inside the current Monday-anchored week, `daily` only for today.
+ *
+ * The gating date is deliberately the date of the AWARD, never the date of the
+ * write that triggered it. A threshold period spanning several days flips an
+ * EARLIER member's award as a side effect of a LATER member's credit completing
+ * the period — gating that earlier award by the triggering date credits a member
+ * for a day they did not act on, and contradicts what
+ * `memberPointsForHabitOnDate` (and therefore every corrective recompute)
+ * attributes to each date.
+ */
+const applyGatedDelta = (
+  bucket: PointsBuckets,
+  date: string,
+  delta: number,
+  weekStart: string,
+  today: string,
+): void => {
+  if (delta === 0) return;
+  bucket.total += delta;
+  if (date >= weekStart && date <= today) bucket.weekly += delta;
+  if (date === today) bucket.daily += delta;
+};
+
+/** Fetch-or-create one member's bucket triple inside a per-member map. */
+const bucketFor = (map: Map<string, PointsBuckets>, memberId: string): PointsBuckets => {
+  const existing = map.get(memberId);
+  if (existing) return existing;
+  const fresh = zeroBuckets();
+  map.set(memberId, fresh);
+  return fresh;
+};
+
+/**
+ * Drop members whose deltas all cancelled — they have nothing to write, and a
+ * zero-delta `batch.update()` on a member doc is pure noise (and, for a
+ * since-removed member, an avoidable NOT_FOUND risk).
+ */
+const pruneEmptyBuckets = (map: Map<string, PointsBuckets>): void => {
+  for (const [memberId, bucket] of map) {
+    if (bucket.daily === 0 && bucket.weekly === 0 && bucket.total === 0) map.delete(memberId);
+  }
+};
+
 /** Signed points buckets to APPLY (already negated) plus the paths to clear. */
 export interface AttributionReversal {
   /** memberUid → the deltas to apply to that member's points. */
@@ -1318,21 +1373,11 @@ export const attributionReversalForDates = (
   const uniqueDates = [...new Set(dates)];
   if (uniqueDates.length === 0) return { perMember, household, clearedDates, clearPaths };
 
-  const weekStart = format(startOfWeek(parseISO(today), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+  const weekStart = weekStartOf(today);
   /** Apply a signed delta to one bucket triple, gated by the cleared date. */
-  const applyGated = (bucket: PointsBuckets, date: string, delta: number): void => {
-    if (delta === 0) return;
-    bucket.total += delta;
-    if (date >= weekStart && date <= today) bucket.weekly += delta;
-    if (date === today) bucket.daily += delta;
-  };
-  const memberBucket = (memberId: string): PointsBuckets => {
-    const existing = perMember.get(memberId);
-    if (existing) return existing;
-    const fresh: PointsBuckets = { daily: 0, weekly: 0, total: 0 };
-    perMember.set(memberId, fresh);
-    return fresh;
-  };
+  const applyGated = (bucket: PointsBuckets, date: string, delta: number): void =>
+    applyGatedDelta(bucket, date, delta, weekStart, today);
+  const memberBucket = (memberId: string): PointsBuckets => bucketFor(perMember, memberId);
 
   // Clear one date at a time and score the delta each removal actually causes,
   // so every reversal is bucket-gated by ITS OWN date. (Scoring all dates at
@@ -1399,11 +1444,119 @@ export const attributionReversalForDates = (
 
   // A member whose deltas all cancelled has nothing to write; dropping them here
   // keeps `perMember` exactly as sparse as the pre-split implementation left it.
-  for (const [memberId, bucket] of perMember) {
-    if (bucket.daily === 0 && bucket.weekly === 0 && bucket.total === 0) {
-      perMember.delete(memberId);
+  pruneEmptyBuckets(perMember);
+
+  return { perMember, household, clearedDates, clearPaths };
+};
+
+// ---------------------------------------------------------------------------
+// Forward moves (the credit paths' twin of `attributionReversalForDates`)
+// ---------------------------------------------------------------------------
+
+/**
+ * The points one habit MOVE writes: the pool's delta and every affected
+ * member's, both bucket-gated per date.
+ *
+ * 🏁 THE INVARIANT: `household = Σ perMember + the unattributed remainder's own
+ * move`, bucket for bucket — because both sides come out of the SAME per-date
+ * decomposition below. Anything that writes one without the other, or gates them
+ * differently, reintroduces permanent `points.total` drift (the corrective sync
+ * only ever RAISES the household total and never rebuilds `total` at all).
+ */
+export interface PeriodPointsMove {
+  /** The POOL delta for the move. */
+  household: PointsBuckets;
+  /** memberUid → that member's own delta. Only members who actually moved. */
+  perMember: Map<string, PointsBuckets>;
+}
+
+/**
+ * Every date in the period containing `date` that either side of a move could
+ * score: the completion dates and the attributed dates of BOTH habit views,
+ * plus the triggering date itself.
+ *
+ * A SUPERSET is safe, a subset is not. A date neither view completes nor
+ * attributes scores 0 on both sides (`pointsForHabitOnDate` short-circuits a
+ * non-completion to 0, and `unattributedPointsForHabitOnDate` follows it), so it
+ * contributes a 0 delta — whereas a date only ONE side holds carries a real
+ * delta that must not be dropped. That is what makes
+ * `Σ_d householdPointsForHabitOnDate(h, d)` equal `householdPeriodPoints(h)` for
+ * both views, and therefore the per-date sum equal
+ * `householdPeriodPointsDelta`.
+ */
+const periodScoredDates = (before: Habit, after: Habit, date: string): string[] => {
+  const periodStart = habitPeriodStart(before.period, date);
+  const dates = new Set<string>([date]);
+  for (const habit of [before, after]) {
+    for (const d of habit.completedDates) {
+      if (habitPeriodStart(habit.period, d) === periodStart) dates.add(d);
+    }
+    for (const d of Object.keys(habit.completedBy ?? {})) {
+      if (habitPeriodStart(habit.period, d) !== periodStart) continue;
+      if (attributedUnitsOnDate(habit, d) > 0) dates.add(d);
+    }
+  }
+  return [...dates].sort();
+};
+
+/**
+ * Score a habit's move from `before` to `after` around `date`, decomposed PER
+ * DATE so every delta is bucket-gated by the day it actually moved on rather
+ * than by the day the write was triggered on.
+ *
+ * The totals are unchanged from the period-level scorers —
+ * `household.total === householdPeriodPointsDelta(before, after, date, today)`
+ * and `perMember.get(m).total === memberPeriodPointsDelta(before, after, m, …)`
+ * — because the per-date figures sum to the period ones by construction (see
+ * `periodScoredDates`). Only the daily/weekly gating differs, and it differs in
+ * the direction the recompute agrees with: a weekly threshold period completed
+ * on Wednesday by member B pays member A's award on A's OWN Monday, so A's
+ * `points.daily` is not moved for a day A never acted on.
+ *
+ * The member SCOPE is the period's holders on both sides — never just the uids
+ * a caller was handed. A threshold period spanning several days flips an
+ * earlier member's award from 0 to a full one as a side effect of a later
+ * member's credit; a path that wrote only its own uids would move the pool by
+ * more than the sum of its member writes, and `points.total` never self-heals.
+ */
+export const periodPointsMove = (
+  before: Habit,
+  after: Habit,
+  date: string,
+  today: string = getLocalDateString(),
+): PeriodPointsMove => {
+  const household = zeroBuckets();
+  const perMember = new Map<string, PointsBuckets>();
+  const weekStart = weekStartOf(today);
+
+  for (const d of periodScoredDates(before, after, date)) {
+    applyGatedDelta(
+      household,
+      d,
+      householdPointsForHabitOnDate(after, d, today) -
+        householdPointsForHabitOnDate(before, d, today),
+      weekStart,
+      today,
+    );
+    // Anyone holding attribution on this date in EITHER view: a reversal can
+    // empty a member out of `after`, a credit can add them only to `after`, and
+    // a side-effect award moves a member present in both.
+    const holders = new Set<string>([
+      ...memberIdsOnDate(before, d),
+      ...memberIdsOnDate(after, d),
+    ]);
+    for (const memberId of holders) {
+      applyGatedDelta(
+        bucketFor(perMember, memberId),
+        d,
+        memberPointsForHabitOnDate(after, memberId, d, today) -
+          memberPointsForHabitOnDate(before, memberId, d, today),
+        weekStart,
+        today,
+      );
     }
   }
 
-  return { perMember, household, clearedDates, clearPaths };
+  pruneEmptyBuckets(perMember);
+  return { household, perMember };
 };

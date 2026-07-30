@@ -339,6 +339,14 @@ const DayHabitEditor: React.FC<DayHabitEditorProps> = ({
                   className={cn(
                     'relative w-full px-4 py-3 hairline-divider flex items-center gap-3 text-left transition-colors duration-(--duration-fast)',
                     'hover:bg-brand-50 dark:hover:bg-brand-700/40',
+                    // `select-none` matches HabitCard's containerClasses and is
+                    // load-bearing on touch, not cosmetic: without it iOS runs
+                    // its native long-press text-selection gesture on the row's
+                    // label during the same 500ms hold that opens the picker,
+                    // so the selection loupe fights the popover. preventing
+                    // onContextMenu below is NOT sufficient — the selection
+                    // gesture is separate and fires first.
+                    'select-none',
                     // Background ONLY — never a transform. A transform on this
                     // row would create a stacking context that traps the
                     // non-portalled picker behind the page's sticky tab strip

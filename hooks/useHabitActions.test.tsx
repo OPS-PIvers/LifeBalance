@@ -1255,29 +1255,47 @@ describe('useHabitActions.uncreditHabitCompletion (weekly threshold, multiple co
     // as a side effect. Leaving that to the corrective recompute was the F1 bug
     // — `points.total` is a lifetime counter `computeMemberPointsSync` never
     // rebuilds, so the drift would have been permanent.
+    //
+    // 🛡️ HER debit is gated by HER OWN day (Wednesday = the fixture's today),
+    // not by the `targetDate` this call was made against (Paul's Monday). That
+    // is where her award lives: `memberPointsForHabitOnDate` puts a threshold
+    // period's award on the member's FIRST attributed day, which is Wednesday
+    // for Jen and Monday for Paul. This assertion used to read `toBeUndefined()`
+    // — the pre-fix code ran every side-effect member through the CALLER's date
+    // gate, so her `points.daily` kept 10 points for an award the recompute no
+    // longer attributes to today.
     const expectedJenDelta = memberPeriodPointsDelta(habit, after, 'jen-uid', targetDate!, today);
     expect(expectedJenDelta).toBe(-10);
     const jenWrite = memberWrites().find(u => u.ref.__path.endsWith('jen-uid'));
     expect(jenWrite).toBeDefined();
     expect(jenWrite!.data['points.total']).toEqual({ __increment: expectedJenDelta });
     expect(jenWrite!.data['points.weekly']).toEqual({ __increment: expectedJenDelta });
-    expect(jenWrite!.data['points.daily']).toBeUndefined();
+    expect(jenWrite!.data['points.daily']).toEqual({ __increment: expectedJenDelta });
 
-    // --- Household pool debit matches the shared formula exactly.
+    // --- Household pool debit matches the shared formula exactly, bucket for
+    // bucket: total/weekly carry BOTH awards, and daily carries only Jen's —
+    // the pool is gated by the very same per-date decomposition the member
+    // writes are, so the two can never disagree.
     const hh = householdUpdate();
     expect(hh).toBeDefined();
     expect(hh!.data['points.total']).toEqual({ __increment: expectedPoolDelta });
     expect(hh!.data['points.weekly']).toEqual({ __increment: expectedPoolDelta });
-    expect(hh!.data['points.daily']).toBeUndefined();
+    expect(hh!.data['points.daily']).toEqual({ __increment: expectedJenDelta });
 
     // 🏁 THE INVARIANT: pool = Σ member awards + unattributed (0 for a fully
-    // attributed threshold week), so the two sides of this batch must agree.
+    // attributed threshold week), so the two sides of this batch must agree —
+    // in EVERY bucket, not just the lifetime total.
     expect(expectedPaulDelta + expectedJenDelta).toBe(expectedPoolDelta);
-    expect(
+    const summedMembers = (bucket: string) =>
       memberWrites().reduce(
-        (sum, u) => sum + (u.data['points.total'] as { __increment: number }).__increment, 0,
-      )
-    ).toBe(expectedPoolDelta);
+        (sum, u) => sum + ((u.data[bucket] as { __increment: number } | undefined)?.__increment ?? 0),
+        0,
+      );
+    for (const bucket of ['points.total', 'points.weekly', 'points.daily']) {
+      expect(summedMembers(bucket)).toBe(
+        (hh!.data[bucket] as { __increment: number } | undefined)?.__increment ?? 0,
+      );
+    }
 
     expect(commitCount).toBe(1);
   });
@@ -3013,5 +3031,163 @@ describe('useHabitActions — period-wide member point writes (household = Σ me
     expect(memberUpdate('jen-uid')).toBeUndefined();
     expect(totalOf(householdUpdate())).toBe(10);
     expect(summedMemberTotals()).toBe(totalOf(householdUpdate()));
+  });
+});
+
+// 🛡️ The two findings the period-wide rule was written for, on the paths that
+// still bypassed it.
+//
+// F1 — `toggleHabit` (the ordinary tap, by far the most-used gesture in the
+// app) computed its member writes from the ACTING member alone while its pool
+// delta already summed every member holding attribution anywhere in the period.
+// A weekly `targetCount: 2` habit completed by a second member on a later day
+// therefore paid the pool 20 and one member 10, permanently shorting the other
+// member's lifetime `points.total` — which no recompute rebuilds.
+//
+// F2 — every side-effect member's delta was written through the CALLER's date
+// gate. A member whose award lives on an earlier day of the same live week had
+// their `points.daily` moved for a day they never acted on, contradicting
+// `memberPointsForHabitOnDate` (which puts a threshold period's award on the
+// member's FIRST attributed day).
+describe('useHabitActions — the awarding date, not the triggering date (F1 + F2)', () => {
+  // Monday 2026-07-13 and Wednesday 2026-07-15 sit in ONE Monday-anchored week,
+  // and Wednesday is the fixture's "today" — the live week, which is exactly
+  // where the daily/weekly gating is observable. Anchored to its own week, never
+  // to an offset from `new Date()`.
+  const MON = '2026-07-13';
+  const WED = '2026-07-15';
+  const NOW = new Date('2026-07-15T09:00:00');
+
+  const roster = (...uids: string[]) => uids.map(uid => ({ uid })) as HouseholdMember[];
+  const memberUpdate = (uid: string) =>
+    capturedUpdates.find(u => u.ref.__path === `${householdPath}/members/${uid}`);
+  const memberWrites = () => capturedUpdates.filter(u => u.ref.__path.includes('/members/'));
+  const bucketOf = (u: CapturedUpdate | undefined, bucket: string) =>
+    (u?.data[bucket] as { __increment: number } | undefined)?.__increment ?? 0;
+  /** 🏁 household = Σ members + unattributed, in EVERY bucket. */
+  const expectPoolEqualsMembers = () => {
+    for (const bucket of ['points.total', 'points.weekly', 'points.daily']) {
+      expect(memberWrites().reduce((sum, u) => sum + bucketOf(u, bucket), 0)).toBe(
+        bucketOf(householdUpdate(), bucket),
+      );
+    }
+  };
+
+  /**
+   * Weekly threshold, target 2 — the shape where one member's award flips from
+   * 0 to a full one as a SIDE EFFECT of another member's later-day completion.
+   * The fixture is the state after user1's Monday tap: one unit banked, the
+   * period still 1/2, so nothing has been awarded yet. `lastUpdated` sits in the
+   * same week as `NOW`, so the habit is NOT stale (no lazy reset).
+   */
+  const afterMondayTap = () => baseHabit({
+    period: 'weekly',
+    scoringType: 'threshold',
+    targetCount: 2,
+    basePoints: 10,
+    count: 1,
+    totalCount: 1,
+    completedDates: [],
+    completedBy: { [MON]: { 'user1': 1 } },
+    lastUpdated: `${MON}T09:00:00`,
+  });
+
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    capturedDeletes.length = 0;
+    commitCount = 0;
+    nextCommitError = null;
+    incrementMock.mockClear();
+    getDocsMock.mockReset();
+    getDocMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('F1: a plain toggle that COMPLETES a weekly threshold week pays the earlier member too', async () => {
+    vi.useFakeTimers({ now: NOW });
+    const habit = afterMondayTap();
+    // Jen is the one tapping on Wednesday — the plain toggle attributes to the
+    // signed-in member, so she is `currentUser` here, not user1.
+    const jen = { uid: 'jen-uid' } as HouseholdMember;
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, jen, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'up');
+    });
+
+    // The tap crosses the target, so Wednesday enters completedDates and only
+    // Jen's own unit is attributed…
+    const hu = habitUpdate()!;
+    expect(hu.data['completedDates']).toEqual({ __arrayUnion: [WED] });
+    expect(hu.data[`completedBy.${WED}.jen-uid`]).toEqual({ __increment: 1 });
+    expect(hu.data[`completedBy.${MON}.user1`]).toBeUndefined();
+
+    // …but BOTH awards materialize, so BOTH member docs must be written. The
+    // pre-fix toggle wrote only Jen's, and user1's +10 was lost forever.
+    expect(bucketOf(memberUpdate('user1'), 'points.total')).toBe(10);
+    expect(bucketOf(memberUpdate('jen-uid'), 'points.total')).toBe(10);
+    expect(bucketOf(householdUpdate(), 'points.total')).toBe(20);
+    expect(memberWrites()).toHaveLength(2);
+
+    // F2 on the same tap: user1's award belongs to MONDAY, so it moves his
+    // weekly and lifetime totals but NOT today's daily.
+    expect(memberUpdate('user1')!.data['points.daily']).toBeUndefined();
+    expect(bucketOf(memberUpdate('user1'), 'points.weekly')).toBe(10);
+    expect(bucketOf(memberUpdate('jen-uid'), 'points.daily')).toBe(10);
+
+    // Σ member deltas === the pool delta, in every bucket.
+    expectPoolEqualsMembers();
+    expect(bucketOf(householdUpdate(), 'points.daily')).toBe(10);
+    expect(bucketOf(householdUpdate(), 'points.weekly')).toBe(20);
+    expect(commitCount).toBe(1);
+  });
+
+  it('F2: a side-effect award inside the LIVE week is gated by its own day, pool and member alike', async () => {
+    // The trigger date IS today (Wednesday); user1's award date is Monday, an
+    // earlier day of the SAME live week — the one window where the caller's gate
+    // and the awarding day disagree on `daily` while both still move `weekly`.
+    vi.useFakeTimers({ now: NOW });
+    const habit = afterMondayTap();
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.creditHabitCompletion('h1', ['jen-uid']);
+    });
+
+    // user1 never acted today, so his daily must not move — `points.daily` is
+    // rebuilt by `computeMemberPointsReset` from `memberPointsForHabitOnDate`,
+    // which attributes his award to MONDAY (his first attributed day in the
+    // period). The pre-fix code wrote it through the caller's Wednesday gate.
+    const user1Write = memberUpdate('user1')!;
+    expect(user1Write.data['points.daily']).toBeUndefined();
+    expect(bucketOf(user1Write, 'points.weekly')).toBe(10);
+    expect(bucketOf(user1Write, 'points.total')).toBe(10);
+
+    // Jen DID act today, so all three of her buckets move.
+    const jenWrite = memberUpdate('jen-uid')!;
+    expect(bucketOf(jenWrite, 'points.daily')).toBe(10);
+    expect(bucketOf(jenWrite, 'points.weekly')).toBe(10);
+    expect(bucketOf(jenWrite, 'points.total')).toBe(10);
+
+    // 🛡️ THE CONSISTENCY REQUIREMENT: the pool is gated by the SAME per-date
+    // decomposition, so it carries both awards in weekly/total and only Jen's in
+    // daily — matching what `calculateHouseholdPointsForDate` derives for today.
+    expect(bucketOf(householdUpdate(), 'points.total')).toBe(20);
+    expect(bucketOf(householdUpdate(), 'points.weekly')).toBe(20);
+    expect(bucketOf(householdUpdate(), 'points.daily')).toBe(10);
+    expectPoolEqualsMembers();
+    expect(commitCount).toBe(1);
   });
 });
