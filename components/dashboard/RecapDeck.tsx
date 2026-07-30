@@ -7,8 +7,8 @@ import {
   weekdayNameOf,
   type RecapChartDay,
   type RecapDeck as RecapDeckModel,
-  type RecapStanding,
 } from '@/utils/recapDeck';
+import MemberAvatar from '@/components/ui/MemberAvatar';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type { RecapMemberFacts, WeeklyRecap } from '@/types/schema';
 
@@ -49,16 +49,6 @@ const SWIPE_VELOCITY = 320;
 // ---------------------------------------------------------------------------
 // Shared bits
 // ---------------------------------------------------------------------------
-
-const MemberAvatar: React.FC<{ standing: RecapStanding; size: number }> = ({ standing, size }) => (
-  <span
-    className="inline-flex items-center justify-center rounded-full font-bold text-white shrink-0"
-    style={{ width: size, height: size, backgroundColor: standing.color, fontSize: Math.round(size * 0.42) }}
-    aria-hidden="true"
-  >
-    {standing.name.charAt(0).toUpperCase()}
-  </span>
-);
 
 const CardEyebrow: React.FC<{ children: React.ReactNode; tone?: 'warm' | 'accent' | 'quiet' }> = ({
   children,
@@ -132,7 +122,7 @@ const CoverCard: React.FC<{ deck: RecapDeckModel; householdName: string }> = ({ 
     {deck.headToHead.standings.length > 0 && (
       <div className="mt-6 flex items-center gap-3">
         {deck.headToHead.standings.map(s => (
-          <MemberAvatar key={s.memberId} standing={s} size={44} />
+          <MemberAvatar key={s.memberId} name={s.name} photoURL={s.photoURL} color={s.color} size={44} />
         ))}
       </div>
     )}
@@ -190,7 +180,7 @@ const WeekCard: React.FC<{ deck: RecapDeckModel }> = ({ deck }) => {
         <>
           <CardEyebrow>{h2h.runaway ? 'Ran away with the week' : 'Won the week'}</CardEyebrow>
           <div className="mt-1 flex items-center gap-2.5">
-            <MemberAvatar standing={h2h.leader} size={34} />
+            <MemberAvatar name={h2h.leader.name} photoURL={h2h.leader.photoURL} color={h2h.leader.color} size={34} />
             <span className="font-display text-[28px] font-semibold leading-none tracking-tight text-brand-900 dark:text-brand-50">
               {h2h.leader.name}
             </span>
@@ -281,16 +271,19 @@ const StatTile: React.FC<{
 );
 
 const PersonalCard: React.FC<{ deck: RecapDeckModel; facts: RecapMemberFacts }> = ({ deck, facts }) => {
-  const standing =
-    deck.headToHead.standings.find(s => s.memberId === facts.memberId) ??
-    ({ memberId: facts.memberId, name: facts.name, points: facts.points, color: '#285742' } as RecapStanding);
+  // `deck.viewerStanding` is resolved for whoever `deck.viewer` is, including
+  // a managed kid (who never appears in the adults-only `headToHead.standings`)
+  // — always present here since this card only renders when `deck.viewer` is
+  // set (see the `body` switch below), but guarded rather than asserted.
+  const standing = deck.viewerStanding;
+  if (!standing) return null;
   const perfect = facts.perfectHabits[0];
   const streak = facts.topStreak;
 
   return (
     <div className="flex h-full flex-col justify-center px-5">
       <div className="flex items-center gap-2.5">
-        <MemberAvatar standing={standing} size={34} />
+        <MemberAvatar name={standing.name} photoURL={standing.photoURL} color={standing.color} size={34} />
         <CardEyebrow tone="accent">Your week, {facts.name}</CardEyebrow>
       </div>
       <div className="mt-2">
@@ -354,7 +347,7 @@ const FinishCard: React.FC<{ deck: RecapDeckModel; recap: WeeklyRecap }> = ({ de
       {h2h.standings.length > 0 && (
         <div className="mt-3.5 flex items-center gap-3">
           {h2h.standings.map(s => (
-            <MemberAvatar key={s.memberId} standing={s} size={38} />
+            <MemberAvatar key={s.memberId} name={s.name} photoURL={s.photoURL} color={s.color} size={38} />
           ))}
         </div>
       )}

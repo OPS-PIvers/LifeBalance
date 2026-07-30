@@ -6,6 +6,8 @@ import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { useMerchantRules } from '@/hooks/useMerchantRules';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
+import MemberAvatar from '@/components/ui/MemberAvatar';
+import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 import { getSessionBaseline } from '@/utils/lastVisit';
 import { selectPartnerActivity, partnerNames } from '@/utils/partnerActivity';
 
@@ -55,6 +57,12 @@ export const PartnerActivityWidget: React.FC = () => {
     [transactions, members, baselineVisit, currentUser?.uid]
   );
 
+  // Built from the FULL, unsorted household roster (`members` straight off
+  // `useHouseholdCore()`) — never a filtered/reordered copy — so a member's
+  // fallback color here matches their badge everywhere else that shares the
+  // same roster (see utils/memberColors.ts).
+  const colors = useMemo(() => buildMemberColorMap(members), [members]);
+
   // Money module off → nothing to show (these are transactions). Empty digest or
   // dismissed → render nothing; this is a greeting, not a standing panel.
   if (!isModuleEnabled('money') || dismissed || items.length === 0) return null;
@@ -89,16 +97,16 @@ export const PartnerActivityWidget: React.FC = () => {
           </p>
         </Row>
         {items.map(item => {
-          const initial = item.memberName.trim().charAt(0).toUpperCase() || '?';
+          const member = members.find(m => m.uid === item.memberUid);
           return (
             <Row key={item.id} className="justify-between">
               <div className="flex items-center gap-3 min-w-0">
-                <div
-                  className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-warm-100 text-warm-700 dark:bg-warm-500/20 dark:text-warm-200 font-display text-sm font-semibold"
-                  aria-hidden="true"
-                >
-                  {initial}
-                </div>
+                <MemberAvatar
+                  name={item.memberName}
+                  photoURL={member?.photoURL}
+                  color={memberColorFor(colors, item.memberUid)}
+                  size={36}
+                />
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-brand-800 dark:text-brand-100 truncate max-w-[160px] md:max-w-[240px]">
                     {displayNameFor(item)}

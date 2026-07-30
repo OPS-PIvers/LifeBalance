@@ -69,6 +69,8 @@ import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { LazyMount } from '@/components/ui/LazyMount';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import MemberAvatar from '@/components/ui/MemberAvatar';
+import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 import { MODULE_PRESETS, type ModulePreset } from '@/utils/modulePresets';
 import type { ModuleKey } from '@/types/schema';
 import { requestNotificationPermission, setupForegroundNotificationListener } from '@/services/notificationService';
@@ -701,6 +703,12 @@ const Settings: React.FC = () => {
     ? `${dietaryProfileCount} restriction${dietaryProfileCount === 1 ? '' : 's'} applied to AI meal suggestions`
     : 'Applied automatically to AI meal suggestions';
 
+  // Built from the FULL, unsorted `members` roster (never `sortedMembers`
+  // below, which re-orders admins first) — `buildMemberColorMap` assigns
+  // default colors POSITIONALLY, so a re-sorted copy would color members
+  // differently than every other surface sharing this same roster.
+  const memberColors = buildMemberColorMap(members);
+
   const sortedMembers = [...members].sort((a, b) => {
     // Sort admins first
     if (a.role === 'admin' && b.role !== 'admin') return -1;
@@ -728,17 +736,14 @@ const Settings: React.FC = () => {
               ProfileMenu), so this is just enough to confirm "who am I
               signed in as" — see UX content audit Batch 4. */}
           <div className="flex items-center gap-3 px-1">
-            {user?.photoURL ? (
-              <img
-                src={user.photoURL}
-                alt={user.displayName || 'User'}
-                className="w-10 h-10 rounded-full ring-1 ring-brand-200 dark:ring-brand-700"
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-700 flex items-center justify-center">
-                <User className="w-5 h-5 text-brand-400 dark:text-brand-450" />
-              </div>
-            )}
+            <MemberAvatar
+              name={user?.displayName || 'User'}
+              photoURL={user?.photoURL}
+              color={memberColorFor(memberColors, currentUser?.uid ?? '')}
+              size={40}
+              alt={user?.displayName || 'User'}
+              className="ring-1 ring-brand-200 dark:ring-brand-700"
+            />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
                 <p className="font-semibold text-brand-900 dark:text-brand-50 tracking-tight truncate text-sm">
@@ -967,17 +972,15 @@ const Settings: React.FC = () => {
               />
               {sortedMembers.map((member) => (
                 <Row key={member.uid}>
-                  {member.photoURL ? (
-                    <img
-                      src={member.photoURL}
-                      alt={member.displayName}
-                      className="w-10 h-10 rounded-full ring-1 ring-brand-200 dark:ring-brand-700"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-700 flex items-center justify-center">
-                      <User className="w-5 h-5 text-brand-400 dark:text-brand-450" />
-                    </div>
-                  )}
+                  <MemberAvatar
+                    name={member.displayName}
+                    photoURL={member.photoURL}
+                    color={memberColorFor(memberColors, member.uid)}
+                    fallbackGlyph={member.avatarEmoji}
+                    size={40}
+                    alt={member.displayName}
+                    className="ring-1 ring-brand-200 dark:ring-brand-700"
+                  />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="font-semibold text-brand-900 dark:text-brand-100 truncate tracking-tight">

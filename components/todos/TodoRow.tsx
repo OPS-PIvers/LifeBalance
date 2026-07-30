@@ -68,11 +68,11 @@ function HouseholdAssigneeCluster({ members, colors }: { members: HouseholdMembe
           key={member.uid}
           assignee={member}
           colors={colors}
-          className={cn('ring-2 ring-white dark:ring-brand-800', i > 0 && '-ml-1.5')}
+          className={cn(i > 0 && '-ml-1.5')}
         />
       ))}
       {extra > 0 && (
-        <span className="w-4 h-4 -ml-1.5 rounded-full bg-brand-300 dark:bg-brand-600 ring-2 ring-white dark:ring-brand-800 flex items-center justify-center text-[7px] font-bold text-brand-700 dark:text-brand-100 shrink-0">
+        <span className="w-4 h-4 -ml-1.5 rounded-full bg-brand-300 dark:bg-brand-600 ring-2 ring-white flex items-center justify-center text-[7px] font-bold text-brand-700 dark:text-brand-100 shrink-0">
           +{extra}
         </span>
       )}
@@ -183,12 +183,15 @@ export const TodoRow = React.memo(function TodoRow({
   // from `useHouseholdCore().members`, same order) as ScoreboardWidget/
   // PointsBreakdownDrawer/ActionQueueItem build theirs from — so an assignee
   // chip's fallback color matches that member's badge on every other surface.
-  // Falls back to just the one known assignee when no `memberMap` was passed
-  // (existing callers/tests that render without it), which still colors that
-  // single chip rather than leaving it uncolored. Not memoized, matching
+  // Deliberately NOT `[assignee]` when `memberMap` is absent: default colors
+  // are assigned POSITIONALLY, so a one-element roster hands that member
+  // sequence slot 0 — confidently the WRONG color, and usually some other
+  // member's. An empty roster instead lets `memberColorFor` fall through to
+  // its deterministic per-uid fallback, which is the same degrade path the
+  // rest of the app uses for a uid it can't place. Not memoized, matching
   // `householdMembers` above — both are cheap per-render derivations of the
   // same map/assignee props, not large collections.
-  const colors = buildMemberColorMap(memberMap ? householdMembers : assignee ? [assignee] : []);
+  const colors = buildMemberColorMap(householdMembers);
 
   // Inline subtask access (owner-approved): ephemeral per-row expand state.
   // Multiple rows may be open at once; collapsed by default.

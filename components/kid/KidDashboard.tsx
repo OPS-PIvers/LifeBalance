@@ -9,9 +9,10 @@ import { getLocalDateString } from '@/utils/dateHelpers';
 import { signedHabitPoints } from '@/utils/habitLogic';
 import { calculateChallengeProgress } from '@/utils/challengeCalculator';
 import { verifyKidPin } from '@/utils/kidPin';
-import { resolveAvatarColor } from '@/utils/avatarColor';
+import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 import ProgressBar from '@/components/ui/ProgressBar';
 import { Badge } from '@/components/ui/Badge';
+import MemberAvatar from '@/components/ui/MemberAvatar';
 import type { Habit, RewardItem } from '@/types/schema';
 
 /**
@@ -43,6 +44,11 @@ const KidDashboard: React.FC = () => {
     () => members.find((m) => m.uid === activeMemberId),
     [members, activeMemberId],
   );
+
+  // Full, unfiltered roster — colors are assigned positionally over the whole
+  // household (utils/memberColors.ts), so this must not be built from just
+  // `activeKid` or any filtered subset.
+  const memberColors = useMemo(() => buildMemberColorMap(members), [members]);
 
   // Plan 24 — savings goals owned by this kid render as progress "jars" over
   // the allowance IOU above. Manual contributions only; NEVER touches balances
@@ -210,12 +216,13 @@ const KidDashboard: React.FC = () => {
         {/* Header: who you are + exit */}
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
-            <div
-              className="w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-extrabold text-white shrink-0"
-              style={{ backgroundColor: resolveAvatarColor(activeKid.avatarColor, activeKid.uid) }}
-            >
-              {activeKid.avatarEmoji ?? activeKid.displayName.charAt(0).toUpperCase()}
-            </div>
+            <MemberAvatar
+              name={activeKid.displayName}
+              color={memberColorFor(memberColors, activeKid.uid)}
+              fallbackGlyph={activeKid.avatarEmoji}
+              shape="rounded-2xl"
+              size={48}
+            />
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-wide text-warm-600 dark:text-warm-300">
                 Hi there

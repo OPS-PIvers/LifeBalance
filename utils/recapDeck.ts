@@ -45,6 +45,10 @@ export interface RecapStanding {
   name: string;
   points: number;
   color: string;
+  /** The member's live Google/Firebase profile photo, resolved from the
+   *  household roster (the recap document itself carries no photoURL — it's
+   *  a server-written snapshot). Null/undefined falls back to the initial. */
+  photoURL?: string | null;
 }
 
 export interface RecapHeadToHead {
@@ -115,6 +119,13 @@ export interface RecapDeck {
   chart: RecapChartDay[];
   /** The viewing member's own facts, when they have any. */
   viewer: RecapMemberFacts | null;
+  /**
+   * The viewer's own resolved standing (color + photo), independent of the
+   * ADULTS-ONLY head-to-head — a managed kid viewer never appears in
+   * `headToHead.standings`, so this is computed for whoever `viewer` is, not
+   * looked up from that filtered list. Null exactly when `viewer` is null.
+   */
+  viewerStanding: RecapStanding | null;
   /** Signed household points for the week. */
   totalPoints: number;
   /** Percent change vs the prior week, or null when there is no base. */
@@ -209,7 +220,8 @@ function monthOf(recap: WeeklyRecap): string | null {
 export function buildHeadToHead(
   recap: WeeklyRecap,
   tone: CeremonyTone,
-  colors: Record<string, string>
+  colors: Record<string, string>,
+  photos: Readonly<Record<string, string | null | undefined>> = {}
 ): RecapHeadToHead {
   const standings: RecapStanding[] = (recap.memberFacts ?? [])
     .filter(f => !f.isManaged)
@@ -218,6 +230,7 @@ export function buildHeadToHead(
       name: f.name,
       points: f.points,
       color: memberColorFor(colors, f.memberId),
+      photoURL: photos[f.memberId] ?? null,
     }))
     .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
 
@@ -289,13 +302,22 @@ export function buildRecapChart(
   });
 }
 
+/**
+ * A roster member as the deck builder needs it: colorable (the existing
+ * contract) plus the live photo every other member-badge surface resolves
+ * from the roster — see `RecapStanding.photoURL`.
+ */
+export interface RecapRosterMember extends ColorableMember {
+  photoURL?: string | null;
+}
+
 /** Options for `buildRecapDeck` — everything it can't read off the recap. */
 export interface RecapDeckInput {
   recap: WeeklyRecap;
   /** The whole recaps slice (newest first) — used for "best week this month". */
   recaps: readonly WeeklyRecap[];
-  /** The household roster, for member colors. */
-  members: readonly ColorableMember[];
+  /** The household roster, for member colors + photos. */
+  members: readonly RecapRosterMember[];
   /** The signed-in (or acting) member's uid. */
   viewerId: string | null | undefined;
   /** The household's ceremony tone. Falls back to the recap's own stored tone. */
@@ -316,11 +338,27 @@ export function buildRecapDeck(input: RecapDeckInput): RecapDeck {
   const { recap, recaps, members, viewerId, unattributedColor } = input;
   const tone = input.tone ?? recap.ceremonyTone ?? resolveCeremonyTone(null);
   const colors = buildMemberColorMap(members);
-  const headToHead = buildHeadToHead(recap, tone, colors);
+  const photos: Record<string, string | null | undefined> = {};
+  for (const member of members) photos[member.uid] = member.photoURL;
+  const headToHead = buildHeadToHead(recap, tone, colors, photos);
   const chart = buildRecapChart(recap.dailyPoints ?? [], colors, unattributedColor);
 
   const facts = recap.memberFacts ?? [];
   const viewer = (viewerId ? facts.find(f => f.memberId === viewerId) : undefined) ?? null;
+
+  // The viewer's own standing, resolved independent of the adults-only
+  // head-to-head — a managed kid viewer isn't IN `headToHead.standings`
+  // (filtered by `!isManaged`), so this can't be a lookup into that list
+  // alone; it falls back to building the same shape directly from `viewer`.
+  const viewerStanding: RecapStanding | null = viewer
+    ? (headToHead.standings.find(s => s.memberId === viewer.memberId) ?? {
+        memberId: viewer.memberId,
+        name: viewer.name,
+        points: viewer.points,
+        color: memberColorFor(colors, viewer.memberId),
+        photoURL: photos[viewer.memberId] ?? null,
+      })
+    : null;
 
   const cards: RecapDeckCard[] = [
     { kind: 'cover', id: 'cover' },
@@ -338,6 +376,7 @@ export function buildRecapDeck(input: RecapDeckInput): RecapDeck {
     headToHead,
     chart,
     viewer,
+    viewerStanding,
     totalPoints: recapTotalPoints(recap),
     trendPct: recapTrendPct(recap),
     isBestWeekThisMonth: isBestWeekOfMonth(recap, recaps),

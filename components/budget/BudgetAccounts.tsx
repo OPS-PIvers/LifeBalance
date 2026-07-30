@@ -443,7 +443,7 @@ const BudgetAccounts: React.FC = () => {
                             ? <Landmark size={12} aria-hidden className="shrink-0 text-brand-400 dark:text-brand-450" />
                             : <CreditCard size={12} aria-hidden className="shrink-0 text-brand-400 dark:text-brand-450" />}
                           <span>···{e.digits}</span>
-                          <span className="ml-auto font-sans text-xxs text-brand-400 dark:text-brand-450">{e.label}</span>
+                          <span className="ml-auto font-sans text-xxs text-brand-400 dark:text-brand-400">{e.label}</span>
                         </span>
                       ))}
                     </Popover>

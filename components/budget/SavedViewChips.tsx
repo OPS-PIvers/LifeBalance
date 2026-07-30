@@ -132,7 +132,7 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
           ariaLabel="Saved views"
           className="w-64 p-2"
         >
-          <p className="px-2 pt-1 pb-2 text-xxs font-bold uppercase tracking-wider text-brand-400 dark:text-brand-450">
+          <p className="px-2 pt-1 pb-2 text-xxs font-bold uppercase tracking-wider text-brand-400 dark:text-brand-400">
             Saved views
           </p>
 
@@ -147,7 +147,7 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
                       toast.success(`Applied "${view.name}"`);
                       closeMenu();
                     }}
-                    className="min-w-0 flex-1 truncate rounded-btn px-2 py-2 text-left text-sm font-medium text-brand-700 dark:text-brand-200 hover:bg-brand-50 dark:hover:bg-brand-700/40 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+                    className="min-w-0 flex-1 truncate rounded-btn px-2 py-2 text-left text-sm font-medium text-brand-700 dark:text-brand-200 hover:bg-brand-50 dark:hover:bg-brand-600/40 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
                     title={`Apply ${view.name}`}
                   >
                     {view.name}
@@ -164,12 +164,12 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
               ))}
             </ul>
           ) : (
-            <p className="px-2 py-2 text-xs text-brand-400 dark:text-brand-450">
+            <p className="px-2 py-2 text-xs text-brand-400 dark:text-brand-400">
               No saved views yet.
             </p>
           )}
 
-          <div className="my-1.5 h-px bg-brand-200 dark:bg-brand-700" />
+          <div className="my-1.5 h-px bg-brand-200 dark:bg-brand-600" />
 
           {isSaving ? (
             <form onSubmit={handleSaveView} className="flex items-center gap-1 px-1 pb-1">
@@ -179,7 +179,7 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
                 onChange={(e) => setNewViewName(e.target.value)}
                 placeholder="View name…"
                 aria-label="View name"
-                className="min-w-0 flex-1 rounded-btn border border-brand-300 px-2 py-1.5 text-sm dark:border-brand-700 dark:bg-brand-800 dark:text-brand-100 dark:placeholder:text-brand-450 focus:outline-hidden focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500"
+                className="min-w-0 flex-1 rounded-btn border border-brand-300 px-2 py-1.5 text-sm dark:border-brand-600 dark:bg-brand-800 dark:text-brand-100 dark:placeholder:text-brand-450 focus:outline-hidden focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500"
                 autoFocus
               />
               <button
@@ -203,7 +203,7 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
             <button
               type="button"
               onClick={() => setIsSaving(true)}
-              className="flex w-full items-center gap-2 rounded-btn px-2 py-2 text-sm font-semibold text-accent-700 dark:text-accent-300 hover:bg-brand-50 dark:hover:bg-brand-700/40 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+              className="flex w-full items-center gap-2 rounded-btn px-2 py-2 text-sm font-semibold text-accent-700 dark:text-accent-300 hover:bg-brand-50 dark:hover:bg-brand-600/40 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
             >
               <Plus size={14} />
               Save current view

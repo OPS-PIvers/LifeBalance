@@ -112,11 +112,11 @@ const HabitAttributionPicker: React.FC<HabitAttributionPickerProps> = ({
             handleRow(member);
           }}
           className={[
-            'flex w-full min-h-11 items-center gap-3 border-t border-brand-200 px-3.5 text-left text-sm font-semibold first:border-t-0 dark:border-brand-700',
+            'flex w-full min-h-11 items-center gap-3 border-t border-brand-200 px-3.5 text-left text-sm font-semibold first:border-t-0 dark:border-brand-600',
             'focus:outline-hidden focus-visible:bg-warm-50 dark:focus-visible:bg-warm-900/20',
             member.credited
               ? 'bg-accent-50 text-accent-700 dark:bg-accent-900/30 dark:text-accent-200'
-              : 'text-brand-700 hover:bg-brand-50 dark:text-brand-200 dark:hover:bg-brand-700/40',
+              : 'text-brand-700 hover:bg-brand-50 dark:text-brand-200 dark:hover:bg-brand-600/40',
           ].join(' ')}
         >
           <PickerAvatar member={member} />
@@ -144,7 +144,7 @@ const HabitAttributionPicker: React.FC<HabitAttributionPickerProps> = ({
             onClose();
             onCredit(uncredited.map(m => m.uid));
           }}
-          className="flex w-full min-h-11 items-center gap-3 border-t border-brand-200 px-3.5 text-left text-sm font-semibold text-brand-700 hover:bg-brand-50 focus:outline-hidden focus-visible:bg-warm-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-brand-700 dark:text-brand-200 dark:hover:bg-brand-700/40 dark:focus-visible:bg-warm-900/20"
+          className="flex w-full min-h-11 items-center gap-3 border-t border-brand-200 px-3.5 text-left text-sm font-semibold text-brand-700 hover:bg-brand-50 focus:outline-hidden focus-visible:bg-warm-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-brand-600 dark:text-brand-200 dark:hover:bg-brand-600/40 dark:focus-visible:bg-warm-900/20"
         >
           <span className="flex shrink-0 items-center">
             {members.map((member, index) => (

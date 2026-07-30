@@ -43,6 +43,36 @@ export interface MemberAvatarProps {
   color: string;
   /** Diameter in px. */
   size: number;
+  /**
+   * Corner radius. Defaults to `'circle'` (`rounded-full`) — every surface
+   * except the Kid Mode ones. `'rounded-card'`/`'rounded-2xl'` cover the kid
+   * surfaces that are deliberately squircle, not circular (KidDashboard,
+   * KidsChoresWidget, Habits' KidChoresGroup).
+   *
+   * This is a prop, not a `className` override, because `rounded-card` is a
+   * custom radius token `tailwind-merge` doesn't know conflicts with
+   * `rounded-full` (see `utils/cn.ts`'s font-size comment for the same class
+   * of problem) — passed via `className` it keeps BOTH classes rather than
+   * replacing one, and which wins is a CSS source-order accident.
+   */
+  shape?: 'circle' | 'rounded-card' | 'rounded-2xl';
+  /**
+   * White separating ring, ON by default (owner: "the white ring should be
+   * there whether the avatars are stacked or even if there is just one — it
+   * looks more professional").
+   *
+   * White in BOTH themes, deliberately unlike the `ring-white
+   * dark:ring-brand-800` cut-out used by CountBadge and the Settings rows:
+   * that idiom hides the ring by painting it the surface colour, which on a
+   * dark row leaves two adjacent avatars with nothing between them. A real
+   * white ring is also the reason there is NO shadow here — DESIGN.md
+   * reserves shadow for hero surfaces and bans ad-hoc ones, and at 16px a
+   * shadow reads as smudge rather than lift.
+   *
+   * Pass `false` only where something else already rings the avatar (the
+   * habits-page flame ring).
+   */
+  ring?: boolean;
   /** Overrides the derived initial in the fallback circle (e.g. a kid
    *  profile's chosen `avatarEmoji`). Ignored while a photo is showing. */
   fallbackGlyph?: string;
@@ -60,6 +90,8 @@ const MemberAvatar: React.FC<MemberAvatarProps> = ({
   photoURL,
   color,
   size,
+  shape = 'circle',
+  ring = true,
   fallbackGlyph,
   alt,
   title,
@@ -73,6 +105,8 @@ const MemberAvatar: React.FC<MemberAvatarProps> = ({
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const initial = fallbackGlyph ?? (name.trim().charAt(0).toUpperCase() || '?');
   const showPhoto = !!photoURL && photoURL !== failedUrl;
+  const radiusClass = shape === 'circle' ? 'rounded-full' : shape === 'rounded-card' ? 'rounded-card' : 'rounded-2xl';
+  const ringClass = ring ? 'ring-2 ring-white' : undefined;
 
   const sizeStyle: React.CSSProperties = { width: size, height: size, ...style };
 
@@ -85,7 +119,7 @@ const MemberAvatar: React.FC<MemberAvatarProps> = ({
         title={title}
         onError={() => setFailedUrl(photoURL)}
         data-testid={dataTestId}
-        className={cn('rounded-full object-cover shrink-0', className)}
+        className={cn(radiusClass, ringClass, 'object-cover shrink-0', className)}
         style={sizeStyle}
       />
     );
@@ -99,7 +133,9 @@ const MemberAvatar: React.FC<MemberAvatarProps> = ({
       title={title}
       data-testid={dataTestId}
       className={cn(
-        'flex items-center justify-center rounded-full font-bold text-white shrink-0',
+        'flex items-center justify-center font-bold text-white shrink-0',
+        radiusClass,
+        ringClass,
         className
       )}
       style={{ ...sizeStyle, backgroundColor: color, fontSize: Math.round(size * 0.44) }}

@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
 import SectionHeading from '@/components/ui/SectionHeading';
+import MemberAvatar from '@/components/ui/MemberAvatar';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { TabSubViewMenu } from '@/components/ui/TabSubViewMenu';
 import { tabValueAtPoint } from '@/components/ui/tabValueAtPoint';
@@ -38,7 +39,7 @@ import { useScrollToHighlight } from '@/hooks/useScrollToHighlight';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { isHabitCompletedInCurrentPeriod, signedHabitPoints } from '@/utils/habitLogic';
 import { haptic } from '@/utils/haptics';
-import { resolveAvatarColor } from '@/utils/avatarColor';
+import { buildMemberColorMap, memberColorFor, type MemberColorMap } from '@/utils/memberColors';
 import { buildHabitRowMemberContext } from '@/utils/habitRowAttribution';
 import { getCatchUpEligibleHabits } from '@/utils/catchUpHabits';
 import { generateCsvExport } from '@/utils/exportUtils';
@@ -142,7 +143,11 @@ const HabitsSkeleton: React.FC = () => (
  * match the redesigned household/gamification side. Rendered only when Kid
  * Mode is on and the kid has at least one chore, so it is dormant by default.
  */
-const KidChoresGroup: React.FC<{ kid: HouseholdMember; chores: Habit[] }> = ({ kid, chores }) => {
+const KidChoresGroup: React.FC<{ kid: HouseholdMember; chores: Habit[]; colorMap: MemberColorMap }> = ({
+  kid,
+  chores,
+  colorMap,
+}) => {
   const { toggleHabit } = useGamification();
   // Guard against rapid double-taps on a chore row: toggleHabit's batch write
   // is async, so a second tap before the first resolves would double-credit
@@ -170,12 +175,13 @@ const KidChoresGroup: React.FC<{ kid: HouseholdMember; chores: Habit[] }> = ({ k
     <div className="surface-section p-4">
       {/* Kid header: avatar + name + today's completion summary */}
       <div className="flex items-center gap-3 mb-3">
-        <div
-          className="w-9 h-9 rounded-card flex items-center justify-center text-sm font-extrabold text-white shrink-0"
-          style={{ backgroundColor: resolveAvatarColor(kid.avatarColor, kid.uid) }}
-        >
-          {kid.avatarEmoji ?? kid.displayName.charAt(0).toUpperCase()}
-        </div>
+        <MemberAvatar
+          name={kid.displayName}
+          color={memberColorFor(colorMap, kid.uid)}
+          fallbackGlyph={kid.avatarEmoji}
+          shape="rounded-card"
+          size={36}
+        />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-brand-900 dark:text-brand-50 truncate">{kid.displayName}</p>
           <p className="text-xs font-medium text-warm-600 dark:text-warm-300">
@@ -474,6 +480,12 @@ const Habits: React.FC = () => {
     [members, habits]
   );
 
+  // Full, unfiltered roster (not `kidsWithChores` above) — colors are assigned
+  // positionally over the whole household (utils/memberColors.ts), so a map
+  // built from a filtered list would hand out different colors than every
+  // other surface sharing this map.
+  const memberColors = useMemo(() => buildMemberColorMap(members), [members]);
+
   if (isLoading) {
     return <HabitsSkeleton />;
   }
@@ -744,7 +756,7 @@ const Habits: React.FC = () => {
                 </SectionHeading>
                 <div className="space-y-6">
                   {kidsWithChores.map(({ kid, chores }) => (
-                    <KidChoresGroup key={kid.uid} kid={kid} chores={chores} />
+                    <KidChoresGroup key={kid.uid} kid={kid} chores={chores} colorMap={memberColors} />
                   ))}
                 </div>
               </section>

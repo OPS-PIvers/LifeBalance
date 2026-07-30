@@ -69,8 +69,8 @@ const TONE_ICON: Record<MenuItemTone, string> = {
 // Hover + keyboard-focus highlight. Default/primary share the warm habit-side
 // tint; danger/info tint with their own semantic color.
 const TONE_BG: Record<MenuItemTone, string> = {
-  default: 'hover:bg-brand-50 dark:hover:bg-brand-700/40 focus:bg-warm-50 dark:focus:bg-warm-900/20',
-  primary: 'hover:bg-brand-50 dark:hover:bg-brand-700/40 focus:bg-warm-50 dark:focus:bg-warm-900/20',
+  default: 'hover:bg-brand-50 dark:hover:bg-brand-600/40 focus:bg-warm-50 dark:focus:bg-warm-900/20',
+  primary: 'hover:bg-brand-50 dark:hover:bg-brand-600/40 focus:bg-warm-50 dark:focus:bg-warm-900/20',
   danger: 'hover:bg-money-bgNeg dark:hover:bg-money-neg/15 focus:bg-money-bgNeg dark:focus:bg-money-neg/15',
   info: 'hover:bg-habit-blue/10 dark:hover:bg-habit-blue/15 focus:bg-habit-blue/10 dark:focus:bg-habit-blue/15',
 };
