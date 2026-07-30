@@ -195,6 +195,10 @@ const normalizeFrozenDatesBy = (raw: unknown): HabitFrozenDatesBy => {
 // Habit — preserves existing default: scoringType defaults to 'threshold'
 //          and lastUpdated Timestamp→ISO normalisation.
 // ---------------------------------------------------------------------------
+// The spread-all behaviour passes optional fields straight through in both
+// directions — including `creditMode` (household credit mode), which needs no
+// normalization: every consumer tests `creditMode === 'household'`, so an absent
+// or unrecognised value reads as the default `'members'` behaviour.
 export const habitConverter: FirestoreDataConverter<Habit> = {
   toFirestore(habit: Habit): DocumentData {
     return omitKey(habit, 'id');

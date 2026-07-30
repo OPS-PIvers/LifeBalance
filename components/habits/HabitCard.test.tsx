@@ -23,6 +23,8 @@ const { mockHouseholdContext } = vi.hoisted(() => ({
     resetHabit: vi.fn(),
     creditHabitCompletion: vi.fn(() => Promise.resolve()),
     uncreditHabitCompletion: vi.fn(() => Promise.resolve()),
+    creditHouseholdCompletion: vi.fn(() => Promise.resolve()),
+    uncreditHouseholdCompletion: vi.fn(() => Promise.resolve()),
     activeChallenge: null as unknown,
   }
 }));
@@ -73,6 +75,8 @@ vi.mock('lucide-react', () => ({
   MessageSquarePlus: () => <span data-testid="icon-message-square-plus" />,
   Archive: () => <span data-testid="icon-archive" />,
   ArchiveRestore: () => <span data-testid="icon-archive-restore" />,
+  // Household credit mode: HouseholdAvatar's house glyph (picker row + badge).
+  Home: () => <span data-testid="icon-home" />,
   Users: () => <span data-testid="icon-users" />,
   Check: () => <span data-testid="icon-check" />,
 }));
@@ -865,13 +869,78 @@ describe('HabitCard - attribution picker', () => {
     expect(mockHouseholdContext.creditHabitCompletion).not.toHaveBeenCalled();
   });
 
+  // --- Household credit mode ------------------------------------------------
+  // The Household row is a THIRD meaning, not a rename of "Both of us": one
+  // award, to the pool, to nobody — versus N awards and a pool paid N times.
+  it('offers a Household row on EVERY habit, and it credits nobody', async () => {
+    const user = userEvent.setup();
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+
+    const household = screen.getByRole('menuitemcheckbox', { name: /^Household/ });
+    // Paul's single unit IS the day's only unit, so nothing is unattributed.
+    expect(household).toHaveAttribute('aria-checked', 'false');
+    await user.click(household);
+
+    expect(mockHouseholdContext.creditHouseholdCompletion).toHaveBeenCalledWith('h1');
+    expect(mockHouseholdContext.creditHabitCompletion).not.toHaveBeenCalled();
+    expect(mockHouseholdContext.toggleHabit).not.toHaveBeenCalled();
+  });
+
+  it('checks Household when the period holds a completion nobody is credited for', async () => {
+    const user = userEvent.setup();
+    // Two units, one of them Paul's → one unattributed unit remains.
+    render(
+      <HabitCard
+        habit={attributedHabit({ [PAUL]: 1 }, { count: 2, creditMode: 'household' })}
+        attribution={ROSTER}
+      />,
+    );
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+
+    const household = screen.getByRole('menuitemcheckbox', { name: /^Household/ });
+    expect(household).toHaveAttribute('aria-checked', 'true');
+    await user.click(household);
+
+    expect(mockHouseholdContext.uncreditHouseholdCompletion).toHaveBeenCalledWith('h1', TODAY);
+  });
+
+  it('sorts Household FIRST on a household habit and LAST on a members habit', async () => {
+    const user = userEvent.setup();
+    const openPicker = async () => {
+      await user.click(screen.getByLabelText('Options for Morning walk'));
+      await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+      return screen.getAllByRole('menuitemcheckbox').map(el => el.textContent ?? '');
+    };
+
+    const { unmount } = render(
+      <HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />,
+    );
+    const membersRows = await openPicker();
+    expect(membersRows[0]).not.toContain('Household');
+    expect(membersRows[membersRows.length - 1]).toContain('Household');
+    unmount();
+
+    render(
+      <HabitCard
+        habit={attributedHabit({ [PAUL]: 1 }, { creditMode: 'household' })}
+        attribution={ROSTER}
+      />,
+    );
+    expect((await openPicker())[0]).toContain('Household');
+  });
+
   it('"Both of us" credits only whoever is not credited yet', async () => {
     const user = userEvent.setup();
     render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
 
     await user.click(screen.getByLabelText('Options for Morning walk'));
     await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Both of us' }));
+    await user.click(screen.getByRole('menuitem', { name: /^Both of us/ }));
 
     expect(mockHouseholdContext.creditHabitCompletion).toHaveBeenCalledWith('h1', [JEN]);
   });
@@ -883,7 +952,58 @@ describe('HabitCard - attribution picker', () => {
     await user.click(screen.getByLabelText('Options for Morning walk'));
     await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
 
-    expect(screen.getByRole('menuitem', { name: 'Both of us' })).toBeDisabled();
+    expect(screen.getByRole('menuitem', { name: /^Both of us/ })).toBeDisabled();
+  });
+
+  // 🔒 Regression (adversarial review, PR #1165). "Both of us" and "Household"
+  // are the two most OPPOSITE outcomes on the sheet and sat adjacent, separated
+  // by a 1px hairline. Undoing a mistaken "Both of us" costs TWO taps before
+  // "Household" can even be picked, so the difference has to be legible BEFORE
+  // the tap — not merely recoverable after it.
+  it('spells out what each compound row does, and breaks Household off from the member rows', async () => {
+    const user = userEvent.setup();
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+
+    // Each compound row says what it actually does — and says it in the
+    // ACCESSIBLE NAME, so a screen reader gets the same warning.
+    expect(screen.getByRole('menuitem', { name: /^Both of us/ })).toHaveAccessibleName(
+      /2 awards — one each/,
+    );
+    expect(screen.getByRole('menuitemcheckbox', { name: /^Household/ })).toHaveAccessibleName(
+      /One award — nobody credited/,
+    );
+    // A plain member row carries no descriptor — only the compound ones do.
+    expect(screen.getByRole('menuitemcheckbox', { name: /^Jen/ })).toHaveAccessibleName('Jen');
+
+    // …and a group break sits between the member-ish rows and Household.
+    const menu = screen.getByRole('menu', { name: /Who completed Morning walk/ });
+    const separator = menu.querySelector('[role="separator"]');
+    expect(separator).not.toBeNull();
+    const rows = Array.from(
+      menu.querySelectorAll('[role="menuitem"],[role="menuitemcheckbox"],[role="separator"]'),
+    );
+    // Members habit ⇒ Household sorts LAST, so the break is immediately above it.
+    expect(rows.at(-2)).toBe(separator);
+    expect(rows.at(-1)).toHaveAccessibleName(/^Household/);
+  });
+
+  it('keeps every picker row at the 44px minimum hit target', async () => {
+    const user = userEvent.setup();
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+
+    const menu = screen.getByRole('menu', { name: /Who completed Morning walk/ });
+    const rows = menu.querySelectorAll('[role="menuitem"],[role="menuitemcheckbox"]');
+    expect(rows.length).toBeGreaterThan(0);
+    // jsdom has no layout, so the CONTRACT is asserted on the class that
+    // provides it (min-h-11 = 2.75rem = 44px), which is what a descriptor-driven
+    // height change could silently have dropped.
+    for (const row of rows) expect(row.className).toContain('min-h-11');
   });
 
   it('lists adults only — managed kid profiles are excluded', async () => {

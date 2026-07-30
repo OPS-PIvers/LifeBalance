@@ -14,6 +14,8 @@ vi.mock('lucide-react', () => ({
   Star: () => <span data-testid="icon-star" />,
   Users: () => <span data-testid="icon-users" />,
   X: () => <span data-testid="icon-x" />,
+  // Household credit mode: HouseholdAvatar's house glyph (picker row + badge).
+  Home: () => <span data-testid="icon-home" />,
 }));
 
 vi.mock('@/services/analytics', () => ({ track: vi.fn() }));

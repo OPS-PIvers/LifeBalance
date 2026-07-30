@@ -1,5 +1,6 @@
 import React, { useId } from 'react';
 import MemberAvatar from '@/components/ui/MemberAvatar';
+import HouseholdAvatar from '@/components/ui/HouseholdAvatar';
 
 /**
  * Badge-row "done by" avatars with flame streak rings — HABITS-PAGE ONLY.
@@ -91,6 +92,17 @@ interface HabitDoneByAvatarsProps {
   showStreakRings: boolean;
   /** Avatar diameter in px (the ring adds ~5px around it). */
   size?: number;
+  /**
+   * Household credit mode: prepend the HOUSE badge, for a completion that pays
+   * the household and credits nobody.
+   *
+   * No flame ring — deliberately. A ring is a MEMBER's momentum, and a household
+   * completion grows no personal chain; the habit's own flame is already visible
+   * in the points badge. The caller gates this on the habit actually DECLARING
+   * `creditMode: 'household'`, so a merely grandfathered row (unattributed for a
+   * different reason) keeps its untouched look.
+   */
+  showHousehold?: boolean;
 }
 
 const RING_PAD = 2.5;
@@ -168,12 +180,19 @@ const HabitDoneByAvatars: React.FC<HabitDoneByAvatarsProps> = ({
   streakUnit,
   showStreakRings,
   size = 15,
+  showHousehold = false,
 }) => {
-  if (entries.length === 0) return null;
+  if (entries.length === 0 && !showHousehold) return null;
   return (
     // Spaced, never overlapped: overlapping avatars would collide their flame
     // rings into an unreadable blob.
     <span className="ml-1 inline-flex items-center gap-[9px]">
+      {showHousehold && (
+        <span className="relative inline-flex shrink-0 items-center justify-center">
+          <HouseholdAvatar size={size} />
+          <span className="sr-only">Completed together — credited to the household</span>
+        </span>
+      )}
       {entries.map(entry => (
         <FlameRingAvatar
           key={entry.memberId}
