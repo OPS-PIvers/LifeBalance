@@ -530,6 +530,25 @@ pay-with-balance-delta mutation — not a widening of the existing gates.**
 
 ## 3. Product backlog (needs a product decision before planning)
 
+Per-member habit points follow-ups (from the 2026-07-30 six-stage ship, PRs #1152–#1158; spec
+`.claude/PER_MEMBER_POINTS_HANDOFF.md`):
+
+- **Automated completions carry NO per-member attribution** — the Cloud Functions quickAdd path
+  (iOS Shortcuts) and the habit-trigger fires in `utils/habitTriggerFire.ts` /
+  `contexts/household/mutations/{todo,transaction}Mutations.ts` write no `completedBy`, so an
+  automated completion credits the household at the legacy habit-level multiplier and counts
+  toward nobody's personal score. Self-consistent under grandfathering (the recompute agrees),
+  but this household leans on automations, so personal scores under-count. Needs a product
+  decision on WHO gets credit (the Shortcut key's owner? the transaction's member? the habit's
+  `linkedMemberId`?) before wiring. **M / MED.**
+- **Stale-deselect of a below-target incremental prior period reverses nothing by design**
+  (`processStaleDownToggle` contract) — pool and member stay mutually consistent, only orphan
+  attribution residue remains. Revisit only if "undo the previous period" should mean more than
+  completion-date reversal for incremental habits.
+- **`payCalendarItem` atomicity test flake under heavy parallel load** — `checkPointsReset`'s
+  100ms midnight-scheduler timer can add a second batch to the test's capture; fix is to
+  reset/filter `batches` in that test (contexts/FirebaseHouseholdContext.test.tsx), not the code.
+
 From the 2026-07-09 product-scope audit — grounded findings, not yet greenlit:
 
 - **Meals/grocery spend → Groceries budget-bucket linkage** — flagged the highest-value net-new differentiator; needs a matching-logic decision. **M / MED.**
