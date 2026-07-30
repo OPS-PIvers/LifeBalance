@@ -11,6 +11,9 @@ import { cn } from '@/utils/cn';
  *   - primary      Main page/dialog action (filled evergreen).
  *   - secondary    Secondary action beside a primary (bordered, on-surface).
  *   - subtle       Low-emphasis affirmative (tinted accent, e.g. inline "Add").
+ *   - positive     Tinted positive-money PILL chip (rounded-full), the mirror
+ *                  of `danger` — a small in-row action like "Pay down" or
+ *                  "Review" that shouldn't compete with a page's primary CTA.
  *   - success      Confirm/positive-money action (solid green). Use sparingly.
  *
  *  Low-emphasis / neutral
@@ -31,7 +34,7 @@ import { cn } from '@/utils/cn';
  *   - warning      Solid amber, for caution actions. Rare.
  */
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'dashed'| 'subtle' | 'ghost-danger' | 'success' | 'warning' | 'destructive' | 'ghost-destructive' | 'link' | 'ghost-inverted' | 'ghost-brand';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'dashed'| 'subtle' | 'positive' | 'ghost-danger' | 'success' | 'warning' | 'destructive' | 'ghost-destructive' | 'link' | 'ghost-inverted' | 'ghost-brand';
   size?: 'sm' | 'md' | 'lg' | 'icon' | 'icon-sm';
   layout?: 'horizontal' | 'vertical';
   isLoading?: boolean;
@@ -49,6 +52,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       outline: 'bg-transparent border border-brand-200 text-brand-600 hover:bg-brand-50 hover:text-brand-900 dark:border-brand-700 dark:text-brand-400 dark:hover:bg-brand-700/50 dark:hover:text-brand-100',
       dashed: 'bg-transparent border border-dashed border-brand-300 text-brand-500 font-semibold hover:bg-brand-50 hover:border-brand-400 hover:text-brand-600 shadow-none dark:border-brand-600 dark:text-brand-400 dark:hover:bg-brand-700/50 dark:hover:border-brand-500 dark:hover:text-brand-300',
       subtle: 'bg-accent-50 text-accent-700 hover:bg-accent-100 border border-transparent hover:border-accent-200 dark:bg-accent-800/50 dark:text-accent-100 dark:hover:bg-accent-800/70 dark:hover:border-accent-700',
+      positive: 'rounded-full bg-money-bgPos text-money-pos border border-money-pos/30 hover:bg-money-pos/10 dark:bg-money-pos/15 dark:text-money-posDark dark:border-money-pos/40 dark:hover:bg-money-pos/25',
       'ghost-danger': 'bg-transparent text-money-neg hover:text-money-neg hover:bg-money-bgNeg dark:text-money-negDark dark:hover:text-money-negDark dark:hover:bg-money-neg/15',
       'ghost-destructive': 'bg-transparent text-brand-400 hover:text-money-neg hover:bg-money-bgNeg dark:text-brand-450 dark:hover:text-money-negDark dark:hover:bg-money-neg/15',
       'ghost-brand': 'bg-transparent text-brand-400 hover:text-accent-600 active:text-accent-800 active:bg-accent-50 dark:text-brand-400 dark:hover:text-accent-300 dark:active:text-accent-200 dark:active:bg-accent-800/40',

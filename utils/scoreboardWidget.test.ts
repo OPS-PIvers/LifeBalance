@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { selectAdultStandings, deriveScoreboardTrend } from '@/utils/scoreboardWidget';
-import type { HouseholdMember, WeeklyRecap } from '@/types/schema';
+import {
+  selectAdultStandings,
+  deriveScoreboardTrend,
+  listScoreboardWeekOptions,
+  weekHasMemberAttribution,
+  buildWeekStandings,
+} from '@/utils/scoreboardWidget';
+import type { Habit, HouseholdMember, WeeklyRecap } from '@/types/schema';
 
 function member(overrides: Partial<HouseholdMember> & Pick<HouseholdMember, 'uid' | 'displayName'>): HouseholdMember {
   return {
@@ -8,6 +14,25 @@ function member(overrides: Partial<HouseholdMember> & Pick<HouseholdMember, 'uid
     points: { daily: 0, weekly: 0, total: 0 },
     ...overrides,
   };
+}
+
+function makeHabit(overrides: Partial<Habit> = {}): Habit {
+  return {
+    id: 'h-1',
+    title: 'Read',
+    category: 'General',
+    type: 'positive',
+    period: 'daily',
+    basePoints: 10,
+    scoringType: 'threshold',
+    targetCount: 1,
+    count: 0,
+    totalCount: 0,
+    completedDates: [],
+    streakDays: 0,
+    lastUpdated: '2026-07-27T00:00:00.000Z',
+    ...overrides,
+  } as unknown as Habit;
 }
 
 function recap(overrides: Partial<WeeklyRecap> & Pick<WeeklyRecap, 'isoWeek' | 'pointsByMember'>): WeeklyRecap {
@@ -230,5 +255,101 @@ describe('deriveScoreboardTrend', () => {
     // so this shape reaches the widget on real data.
     const recaps: WeeklyRecap[] = [recap({ isoWeek: '2026-W30', pointsByMember: [] })];
     expect(deriveScoreboardTrend(recaps, 610, adults).trendPct).toBeNull();
+  });
+});
+
+describe('listScoreboardWeekOptions', () => {
+  // Thursday inside the Jul 27 - Aug 2 week.
+  const today = new Date(2026, 6, 30);
+
+  it('always offers the current week first, even with zero completions', () => {
+    const options = listScoreboardWeekOptions([], today, 4);
+    expect(options).toEqual([
+      { weekStart: '2026-07-27', weekEnd: '2026-08-02', label: 'Jul 27 – Aug 2', isCurrent: true },
+    ]);
+  });
+
+  it('offers a past week only when a habit was actually completed inside it, skipping empty gaps', () => {
+    const habits = [makeHabit({ completedDates: ['2026-07-22'] })]; // inside Jul 20-26
+    const options = listScoreboardWeekOptions(habits, today, 4);
+
+    // Jul 13-19, Jul 6-12, Jun 29-Jul 5 all have zero completions and are
+    // skipped — offering them would resolve to a wall of zeroes.
+    expect(options).toEqual([
+      { weekStart: '2026-07-27', weekEnd: '2026-08-02', label: 'Jul 27 – Aug 2', isCurrent: true },
+      { weekStart: '2026-07-20', weekEnd: '2026-07-26', label: 'Jul 20 – Jul 26', isCurrent: false },
+    ]);
+  });
+
+  it('respects maxPastWeeks as an upper bound on how far back it looks', () => {
+    const habits = [makeHabit({ completedDates: ['2026-06-15'] })]; // 6+ weeks back
+    const options = listScoreboardWeekOptions(habits, today, 2);
+
+    // The week holding the completion is further back than maxPastWeeks=2
+    // reaches, so only the current week is offered.
+    expect(options).toEqual([
+      { weekStart: '2026-07-27', weekEnd: '2026-08-02', label: 'Jul 27 – Aug 2', isCurrent: true },
+    ]);
+  });
+});
+
+describe('weekHasMemberAttribution', () => {
+  const start = '2026-07-20';
+  const end = '2026-07-26';
+
+  it('is true when a shared habit has a positive completedBy entry inside the range', () => {
+    const habits = [makeHabit({ completedBy: { '2026-07-22': { paul: 1 } } })];
+    expect(weekHasMemberAttribution(habits, start, end)).toBe(true);
+  });
+
+  it('is false for a grandfathered habit — completedDates with no completedBy at all', () => {
+    const habits = [makeHabit({ completedDates: ['2026-07-22'], completedBy: undefined })];
+    expect(weekHasMemberAttribution(habits, start, end)).toBe(false);
+  });
+
+  it('is false when the only completedBy entry falls outside the range', () => {
+    const habits = [makeHabit({ completedBy: { '2026-07-01': { paul: 1 } } })];
+    expect(weekHasMemberAttribution(habits, start, end)).toBe(false);
+  });
+
+  it('excludes assigned (chore) habits — their attribution routes to the assignee directly', () => {
+    const habits = [makeHabit({ assignedTo: 'kid_leo', completedBy: { '2026-07-22': { kid_leo: 1 } } })];
+    expect(weekHasMemberAttribution(habits, start, end)).toBe(false);
+  });
+
+  it('treats a zero/negative-count entry as absent, matching the completedBy write discipline', () => {
+    const habits = [makeHabit({ completedBy: { '2026-07-22': { paul: 0 } } })];
+    expect(weekHasMemberAttribution(habits, start, end)).toBe(false);
+  });
+});
+
+describe('buildWeekStandings', () => {
+  const adults = [
+    { uid: 'paul', displayName: 'Paul' },
+    { uid: 'jen', displayName: 'Jen' },
+  ];
+
+  it('sorts by points descending, computes bar percentages, and crowns the strict leader', () => {
+    const pointsByMemberId = new Map([['paul', 30], ['jen', 90]]);
+
+    const standings = buildWeekStandings(adults, pointsByMemberId);
+
+    expect(standings.map(s => s.memberId)).toEqual(['jen', 'paul']);
+    expect(standings[0]).toMatchObject({ points: 90, barPct: 100, isLeader: true });
+    expect(standings[1]).toMatchObject({ points: 30, barPct: 33, isLeader: false });
+  });
+
+  it('defaults a member absent from the points map to 0, not a crash', () => {
+    const pointsByMemberId = new Map([['paul', 50]]);
+
+    const standings = buildWeekStandings(adults, pointsByMemberId);
+    const jen = standings.find(s => s.memberId === 'jen');
+
+    expect(jen).toMatchObject({ points: 0, barPct: 0, isLeader: false });
+  });
+
+  it('never crowns an all-zero field (both members absent from the map)', () => {
+    const standings = buildWeekStandings(adults, new Map());
+    expect(standings.every(s => !s.isLeader)).toBe(true);
   });
 });

@@ -5,6 +5,7 @@ import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { sumMoney, subtractMoney } from '@/utils/money';
 import { cn } from '@/utils/cn';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
+import { Button } from '@/components/ui/Button';
 import type { Account } from '@/types/schema';
 
 interface CreditCardActivity {
@@ -107,16 +108,16 @@ export const CreditCardActivityWidget: React.FC<CreditCardActivityWidgetProps> =
                     )}
                   />
                 </button>
-                <button
+                <Button
                   type="button"
+                  variant="positive"
+                  size="sm"
                   onClick={() => onPayDown(account.id)}
-                  // before:-inset-y-2 grows the tap area to ~44px without
-                  // changing the chip's visual size.
-                  className="relative before:absolute before:-inset-y-2 before:-inset-x-1 before:content-[''] shrink-0 inline-flex items-center gap-1 rounded-full bg-money-bgPos dark:bg-money-pos/15 px-3 py-1.5 text-xs font-semibold text-money-pos dark:text-money-posDark border border-money-pos/30 active:scale-95 transition-transform duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-money-pos/40"
+                  className="shrink-0"
+                  leftIcon={<ArrowDownCircle size={14} aria-hidden="true" />}
                 >
-                  <ArrowDownCircle size={14} aria-hidden="true" />
                   Pay down
-                </button>
+                </Button>
               </div>
 
               {isExpanded && (

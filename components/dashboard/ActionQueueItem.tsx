@@ -1,7 +1,7 @@
 import React, { useMemo, memo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  CalendarClock, Receipt, Check, Trash2, Clock, ListTodo, AlertCircle, Pencil, Tag, Link2
+  CalendarClock, Receipt, Check, CheckCircle2, Trash2, Clock, ListTodo, AlertCircle, Pencil, Tag, Link2
 } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
 import { format, parseISO, isBefore, addDays, isAfter, startOfToday, isValid } from 'date-fns';
@@ -654,9 +654,9 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
           ) : null}
           {!isExpanded && !selectionMode && (
             <Button
-              variant="primary"
+              variant="positive"
               size="sm"
-              className="px-4 min-h-11"
+              leftIcon={<CheckCircle2 size={14} aria-hidden="true" />}
               onClick={handleReview}
               aria-label={`Review ${itemLabel}`}
             >
