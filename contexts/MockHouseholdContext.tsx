@@ -399,7 +399,15 @@ const SEED_MEMBERS: HouseholdMember[] = [
   // to the identical `MEMBER_DEFAULT_HIDDEN_KEYS` default).
   {
     uid: 'test-partner-id', displayName: 'Jordan', email: 'jordan@example.com',
-    role: 'member', points: { daily: 0, weekly: 0, total: 0 },
+    role: 'member',
+    // Non-zero and DISTINCT from the admin's own points (stage 3 PR: the Points
+    // Breakdown drawer's adults-only standings need two members with different
+    // figures to be worth looking at in Test Mode). Deliberately does NOT feed
+    // `dailyPoints`/`weeklyPoints` — this mock still derives those household
+    // figures from `members[0]` alone (see the `toggleHabit` comment below), so
+    // Jordan's own points are additive test data only and never move the
+    // household totals every OTHER surface (TopToolbar, Dashboard, …) shows.
+    points: { daily: 18, weekly: 95, total: 310 },
     hiddenKeys: [...DEFAULT_HIDDEN_DASHBOARD_WIDGETS, 'trends', 'subscriptions']
   },
   // Plan 080 (Kid Mode) Test-Mode harness: one managed kid so the dormant kid
