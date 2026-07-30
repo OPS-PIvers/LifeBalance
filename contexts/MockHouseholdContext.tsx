@@ -367,7 +367,20 @@ const SEED_HABITS: Habit[] = [
   {
     id: 'h1', title: 'Drink 8 Glasses of Water', category: 'Health', type: 'positive',
     basePoints: 10, scoringType: 'threshold', period: 'daily', targetCount: 8,
-    totalCount: 0, count: 0, completedDates: [], streakDays: 0,
+    // Per-member points (stage 2) Test-Mode harness: a genuinely multi-member
+    // day, so the row's pie counter renders 2 : 1 in two member colors and the
+    // badge row shows both credited avatars — one with an ember flame ring
+    // (three consecutive attributed days), one without — without needing any
+    // interaction first. `completedDates` stays EMPTY on purpose: this is a
+    // threshold habit at 3 of 8, and the subsystem's invariant is "a date in
+    // completedDates ⟹ that day's target was met", which is exactly what
+    // production's per-tap attribution writes look like mid-progress.
+    totalCount: 3, count: 3, completedDates: [], streakDays: 0,
+    completedBy: {
+      [getLocalDateString()]: { 'test-user-id': 2, 'test-partner-id': 1 },
+      [getLocalDateString(subDays(new Date(), 1))]: { 'test-user-id': 1 },
+      [getLocalDateString(subDays(new Date(), 2))]: { 'test-user-id': 1 },
+    },
     createdBy: 'test-user-id', lastUpdated: new Date().toISOString()
   },
   {
@@ -411,7 +424,15 @@ const SEED_MEMBERS: HouseholdMember[] = [
   // to the identical `MEMBER_DEFAULT_HIDDEN_KEYS` default).
   {
     uid: 'test-partner-id', displayName: 'Jordan', email: 'jordan@example.com',
-    role: 'member', points: { daily: 0, weekly: 0, total: 0 },
+    role: 'member',
+    // Non-zero and DISTINCT from the admin's own points (stage 3 PR: the Points
+    // Breakdown drawer's adults-only standings need two members with different
+    // figures to be worth looking at in Test Mode). Post-flip (stage 1.5) the
+    // household `dailyPoints`/`weeklyPoints` are derived as the Σ of the ADULT
+    // members' scores, so Jordan's points DO feed the toolbar figures
+    // (30+18=48 / 150+95=245) — the drawer's "together" number and the member
+    // standings must agree, that Σ being the whole point of the model.
+    points: { daily: 18, weekly: 95, total: 310 },
     hiddenKeys: [...DEFAULT_HIDDEN_DASHBOARD_WIDGETS, 'trends', 'subscriptions']
   },
   // Plan 080 (Kid Mode) Test-Mode harness: one managed kid so the dormant kid
@@ -1827,11 +1848,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     // shape production does.
     //
     // NOTE: no SEPARATE member-points credit is applied here, because this mock
-    // deliberately derives `dailyPoints`/`weeklyPoints` from `members[0]` —
-    // `creditHabitPool` below already moves the test user's member score for a
-    // shared habit. Stage 2 untangles that conflation when the scoreboard needs
-    // true per-member numbers; the credit/un-credit mutations below already keep
-    // them separate.
+    // derives the household `dailyPoints`/`weeklyPoints` as the Σ of adult
+    // member scores — `creditHabitPool` below already moves the credited
+    // member's own score, and the derived household figure follows (the Σ
+    // model, stage 1.5). The credit/un-credit mutations below keep per-member
+    // scores separate the same way.
     //
     // 🛡️ Reversal parity with production: a 'down' takes its unit back from
     // whoever STORED attribution records (`resolveReversalSources`), not from
@@ -2886,10 +2907,13 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     [accounts, calendarItems, currentPeriodId, transactions]
   );
   const safeToSpend = safeToSpendBreakdown.safeToSpend;
-  // Derived from the test user's member points so habit toggles/resets move
-  // the toolbar figures exactly like the real context (seeded 30/150).
-  const dailyPoints = members[0]?.points.daily ?? 0;
-  const weeklyPoints = members[0]?.points.weekly ?? 0;
+  // Post-flip (stage 1.5): household daily/weekly = Σ the ADULT members' own
+  // scores, exactly like production's competition model (managed kids' chore
+  // points route to the kid alone and never the household). Seeded
+  // 30+18=48 / 150+95=245, and a habit toggle crediting any adult's member
+  // score moves these derived figures just like the real context.
+  const dailyPoints = members.reduce((sum, m) => (m.isManaged ? sum : sum + m.points.daily), 0);
+  const weeklyPoints = members.reduce((sum, m) => (m.isManaged ? sum : sum + m.points.weekly), 0);
   const currentUser = members[0] || null;
   const activeChallenge = challenges[0] || null;
   const activeYearlyGoals: YearlyGoal[] = [];

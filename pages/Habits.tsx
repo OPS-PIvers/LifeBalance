@@ -39,6 +39,7 @@ import { getLocalDateString } from '@/utils/dateHelpers';
 import { isHabitCompletedInCurrentPeriod, signedHabitPoints } from '@/utils/habitLogic';
 import { haptic } from '@/utils/haptics';
 import { resolveAvatarColor } from '@/utils/avatarColor';
+import { buildHabitRowMemberContext } from '@/utils/habitRowAttribution';
 import { getCatchUpEligibleHabits } from '@/utils/catchUpHabits';
 import { generateCsvExport } from '@/utils/exportUtils';
 import toast from 'react-hot-toast';
@@ -245,7 +246,7 @@ const KidChoresGroup: React.FC<{ kid: HouseholdMember; chores: Habit[] }> = ({ k
 
 const Habits: React.FC = () => {
   const { habits, toggleHabit } = useGamification();
-  const { isLoading, members } = useHouseholdCore();
+  const { isLoading, members, currentUser } = useHouseholdCore();
   const kidModeEnabled = useKidModeEnabled();
   const powerToolsEnabled = usePowerToolsEnabled();
   const [isWizardOpen, setIsWizardOpen] = useState(false);
@@ -443,6 +444,16 @@ const Habits: React.FC = () => {
       return acc;
     }, {} as Record<string, Habit[]>),
     [categories, habits, showArchived, appliedDueFilter]
+  );
+
+  // --- Per-member attribution context (per-member points, stage 2) ---
+  // Built ONCE per roster change and threaded down by identity so every habit
+  // row shares one object: the rows' React.memo compares it by reference, and a
+  // card that subscribed to the core slice itself would re-render the whole
+  // list on any household change.
+  const rowMemberContext = useMemo(
+    () => buildHabitRowMemberContext(members, currentUser?.uid),
+    [members, currentUser?.uid]
   );
 
   // --- Kids chores (read-only parent view, Plan 080c-4) ---
@@ -706,7 +717,11 @@ const Habits: React.FC = () => {
                 <SectionHeading as="h2" className="mb-2 px-1">
                   {category}
                 </SectionHeading>
-                <HabitCategoryList category={category} habits={groupedHabits[category] ?? []} />
+                <HabitCategoryList
+                  category={category}
+                  habits={groupedHabits[category] ?? []}
+                  attribution={rowMemberContext}
+                />
               </div>
             ))}
 

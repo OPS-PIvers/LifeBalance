@@ -78,7 +78,7 @@ import {
   type SubmissionTotalsByHabitDate,
 } from '@/utils/habitLogic';
 import { getLocalDateString } from '@/utils/dateHelpers';
-import { format, parseISO, startOfWeek } from 'date-fns';
+import { addDays, format, parseISO, startOfWeek } from 'date-fns';
 
 // ---------------------------------------------------------------------------
 // Field paths (the ONLY sanctioned way to write attribution)
@@ -142,6 +142,94 @@ export const memberIdsOnDate = (habit: AttributedHabit, date: string): string[] 
   const day = habit.completedBy?.[date];
   if (!day) return [];
   return Object.keys(day).filter(uid => (day[uid] ?? 0) > 0);
+};
+
+/**
+ * Attributed units per member across the PERIOD containing `date` — the day
+ * itself for a daily habit, the Monday-anchored week for a weekly one.
+ *
+ * This is what the habit row's pie counter is drawn from, so the slices always
+ * describe the same span the row's live `count` does: a weekly habit's counter
+ * accumulates all week, and splitting it by only today's attribution would show
+ * a 3-count disc filled by one person's single completion.
+ */
+export const memberUnitsForPeriod = (
+  habit: Pick<Habit, 'completedBy' | 'period'>,
+  date: string,
+): Record<string, number> => {
+  // Addressed by DATE KEY (1 lookup for a daily habit, 7 for a weekly one)
+  // rather than by scanning `completedBy` and filtering — the map is keyed by
+  // date, and a habit tracked for a year holds hundreds of entries this is
+  // called against on every snapshot (it backs the habit row's memo compare).
+  const out: Record<string, number> = {};
+  const periodStart = habitPeriodStart(habit.period, date);
+  const days =
+    habit.period === 'weekly'
+      ? Array.from({ length: 7 }, (_, i) => format(addDays(parseISO(periodStart), i), 'yyyy-MM-dd'))
+      : [periodStart];
+  for (const day of days) {
+    const counts = habit.completedBy?.[day];
+    if (!counts) continue;
+    for (const [uid, count] of Object.entries(counts)) {
+      if (count > 0) out[uid] = (out[uid] ?? 0) + count;
+    }
+  }
+  return out;
+};
+
+/**
+ * The most recent date, within the PERIOD containing `today`, on which
+ * `memberId` holds at least one attributed unit — `null` when they hold none
+ * in the period.
+ *
+ * This is the un-credit TARGET for the habit row's picker (F-HABITS per-member
+ * points, stage 2): the picker's checkmark is period-scoped (see
+ * `memberUnitsForPeriod`), so for a weekly habit "tap the checked row to undo"
+ * must reverse whichever day in the week actually holds the unit — which, for
+ * a daily habit, is always `today` itself (the period IS the day), so this
+ * degrades to exactly the old day-scoped behavior there.
+ *
+ * Scans newest-day-first, bounded at `today` — a day after `today` cannot yet
+ * hold a completion, so there is nothing to gain (and a stray future-dated
+ * fixture nothing to trip over) by considering it.
+ */
+export const memberMostRecentUnitDateInPeriod = (
+  habit: Pick<Habit, 'completedBy' | 'period'>,
+  memberId: string,
+  today: string,
+): string | null => {
+  const periodStart = habitPeriodStart(habit.period, today);
+  const days =
+    habit.period === 'weekly'
+      ? Array.from({ length: 7 }, (_, i) => format(addDays(parseISO(periodStart), i), 'yyyy-MM-dd'))
+      : [periodStart];
+  for (let i = days.length - 1; i >= 0; i -= 1) {
+    const day = days[i];
+    if (!day || day > today) continue;
+    if ((habit.completedBy?.[day]?.[memberId] ?? 0) > 0) return day;
+  }
+  return null;
+};
+
+/**
+ * A stable string summarising the period's attribution — the memo key habit
+ * rows compare on.
+ *
+ * Scoped to ONE period on purpose: the provider rebuilds every habit object on
+ * each snapshot, so a row's `React.memo` comparator runs constantly — and
+ * `memberUnitsForPeriod` reaches the period by DATE KEY, so the cost is one (or
+ * seven) lookups rather than a walk of the habit's whole history. Key order is
+ * normalised so two equivalent maps always produce the same string.
+ */
+export const attributionFingerprint = (
+  habit: Pick<Habit, 'completedBy' | 'period'>,
+  date: string,
+): string => {
+  const units = memberUnitsForPeriod(habit, date);
+  return Object.keys(units)
+    .sort()
+    .map(uid => `${uid}=${units[uid]}`)
+    .join(',');
 };
 
 /** Every member uid with at least one attributed completion on this habit. */

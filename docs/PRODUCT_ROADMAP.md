@@ -388,6 +388,7 @@ explorations against this table.
 | `recap_viewed` | Weekly recap detail drawer opens (`components/dashboard/WeeklyRecapCard.tsx`) | `isoWeek` — the recap's ISO week; `source` — `card` \| `push` |
 | `recap_push_opened` | App arrives via the weekly recap push deep link (`?recap=<isoWeek>`, consumed by `utils/recapParam.ts`) | — |
 | `recap_shared` | Share button in `WeeklyRecapDrawer` generates the canvas share card (`utils/recapShareCard.ts`) | `isoWeek`; `method` — `shared` (Web Share API) \| `downloaded` (fallback) |
+| `points_drawer_opened` | Points Breakdown drawer opens — the TopToolbar points cluster tap, retargeted off the direct Rewards deep-link (`components/layout/TopToolbar.tsx`, per-member points stage 3) | — |
 | `duplicate_merged` | A `possibleDuplicateOf`-flagged transaction pair is merged (`mergeTransactions` in the context, or the Merge action in `TransactionReviewForm`) | `source` — the deleted duplicate row's `Transaction.source` |
 | `setup_checklist_item_completed` | A post-onboarding setup checklist item (`components/dashboard/SetupChecklistCard.tsx`) transitions from undone to done | `item` — the item id (`bucket` \| `notifications` \| `invite` \| `bank`) |
 | `duplicate_kept_both` | A `possibleDuplicateOf` flag is dismissed without merging (`keepBothTransactions` / the Keep-both action) | — |

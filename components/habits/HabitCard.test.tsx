@@ -1,9 +1,17 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import HabitCard from './HabitCard';
-import { Habit } from '@/types/schema';
+import { Habit, HouseholdMember } from '@/types/schema';
+import { getLocalDateString } from '@/utils/dateHelpers';
+import { buildHabitRowMemberContext } from '@/utils/habitRowAttribution';
+import { habitPeriodStart } from '@/utils/habitLogic';
+// Only `subDays` is faked below (for the freeze badge's "yesterday") — `format`
+// /`parseISO`/`subWeeks` pass through to the real implementation, so weekly
+// streak math (calculateWeeklyStreak walks ISO weeks via `subWeeks`, never
+// `subDays`) stays correct in these tests.
+import { format, parseISO, subWeeks } from 'date-fns';
 
 // Mock context
 const { mockHouseholdContext } = vi.hoisted(() => ({
@@ -13,6 +21,8 @@ const { mockHouseholdContext } = vi.hoisted(() => ({
     archiveHabit: vi.fn(),
     unarchiveHabit: vi.fn(),
     resetHabit: vi.fn(),
+    creditHabitCompletion: vi.fn(() => Promise.resolve()),
+    uncreditHabitCompletion: vi.fn(() => Promise.resolve()),
     activeChallenge: null as unknown,
   }
 }));
@@ -63,6 +73,8 @@ vi.mock('lucide-react', () => ({
   MessageSquarePlus: () => <span data-testid="icon-message-square-plus" />,
   Archive: () => <span data-testid="icon-archive" />,
   ArchiveRestore: () => <span data-testid="icon-archive-restore" />,
+  Users: () => <span data-testid="icon-users" />,
+  Check: () => <span data-testid="icon-check" />,
 }));
 
 // Mock date-fns with controlled dates. `mockedYesterday.current` is mutable so
@@ -307,18 +319,23 @@ describe('HabitCard - period-aware multiplier display', () => {
     expect(screen.queryByText('10 pts')).not.toBeInTheDocument();
   });
 
-  it('weekly habit streak badge reads "2 Weeks" (not "2 Days")', () => {
-    render(<HabitCard habit={{ ...baseWeekly, streakDays: 2 }} />);
+  // Per-member points (stage 2): the streak PILL is gone from the row — streak
+  // reads as flame-ring intensity on the credited member's avatar, and the
+  // exact number lives in the habit's log. The MULTIPLIER it earns must still
+  // be visible, which is what these assertions pin.
+  it('no longer renders a streak pill, at any cadence', () => {
+    const { rerender } = render(<HabitCard habit={{ ...baseWeekly, streakDays: 2 }} />);
+    expect(screen.queryByText(/2 Weeks?/)).not.toBeInTheDocument();
 
-    expect(screen.getByText(/2 Weeks/)).toBeInTheDocument();
-    expect(screen.queryByText(/2 Days/)).not.toBeInTheDocument();
+    rerender(<HabitCard habit={{ ...baseWeekly, period: 'daily', streakDays: 5, lastUpdated: '2024-02-10T00:01:00Z' }} />);
+    expect(screen.queryByText(/5 Days?/)).not.toBeInTheDocument();
   });
 
   it('weekly habit with a 4-week streak shows the 2.0x multiplier (20 pts)', () => {
     render(<HabitCard habit={{ ...baseWeekly, streakDays: 4 }} />);
 
     expect(screen.getByText('20 pts')).toBeInTheDocument();
-    expect(screen.getByText(/4 Weeks/)).toBeInTheDocument();
+    expect(screen.queryByText(/4 Weeks?/)).not.toBeInTheDocument();
   });
 
   it('weekly habit with a 1-week streak nudges "1 week from 1.5x" (week unit, not day)', () => {
@@ -337,7 +354,7 @@ describe('HabitCard - period-aware multiplier display', () => {
     expect(screen.getByText('1 week from 2x!')).toBeInTheDocument();
   });
 
-  it('regression: daily habit with a 3-day streak still shows 1.5x (15 pts) and "3 Days"', () => {
+  it('regression: daily habit with a 3-day streak still shows 1.5x (15 pts)', () => {
     const dailyHabit: Habit = {
       ...baseWeekly,
       title: 'Daily Habit',
@@ -347,7 +364,6 @@ describe('HabitCard - period-aware multiplier display', () => {
     render(<HabitCard habit={dailyHabit} />);
 
     expect(screen.getByText('15 pts')).toBeInTheDocument();
-    expect(screen.getByText(/3 Days/)).toBeInTheDocument();
     // Daily nudge ladder unchanged: no nudge fires at a 3-day streak.
     expect(screen.queryByText(/from 1.5x/)).not.toBeInTheDocument();
     expect(screen.queryByText(/from 2x/)).not.toBeInTheDocument();
@@ -401,6 +417,581 @@ describe('HabitCard - React.memo', () => {
 
     // Component should still display correctly (memo preserved the DOM)
     expect(screen.getByText('Memo Habit')).toBeInTheDocument();
+  });
+});
+
+// --- Per-member attribution (stage 2) ---------------------------------------
+// "Today" is read from the same helper the component uses, so these fixtures
+// carry no weekday dependency of their own.
+const TODAY = getLocalDateString();
+const PAUL = 'paul-uid';
+const JEN = 'jen-uid';
+
+const ROSTER_MEMBERS: HouseholdMember[] = [
+  { uid: PAUL, displayName: 'Paul', role: 'admin', points: { daily: 0, weekly: 0, total: 0 } },
+  { uid: JEN, displayName: 'Jen', role: 'member', points: { daily: 0, weekly: 0, total: 0 } },
+  {
+    uid: 'kid_leo', displayName: 'Leo', role: 'kid', isManaged: true,
+    points: { daily: 0, weekly: 0, total: 0 },
+  },
+];
+const ROSTER = buildHabitRowMemberContext(ROSTER_MEMBERS, PAUL);
+
+const attributedHabit = (completedBy: Record<string, number>, overrides: Partial<Habit> = {}): Habit => ({
+  ...mockHabit,
+  title: 'Morning walk',
+  scoringType: 'incremental',
+  count: Object.values(completedBy).reduce((a, b) => a + b, 0),
+  totalCount: 1,
+  completedDates: [TODAY],
+  completedBy: { [TODAY]: completedBy },
+  lastUpdated: new Date().toISOString(),
+  ...overrides,
+});
+
+const pieSlices = (container: HTMLElement): SVGPathElement[] =>
+  Array.from(container.querySelectorAll<SVGPathElement>('svg[viewBox="0 0 46 46"] path'));
+
+describe('HabitCard - pie attribution counter', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupMatchMedia(true);
+  });
+
+  it('fills the toggle with one solid disc for a solo completion', () => {
+    const { container } = render(
+      <HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />
+    );
+
+    const slices = pieSlices(container);
+    expect(slices).toHaveLength(1);
+    expect(slices[0]?.getAttribute('fill')).toBe('#285742'); // accent-600
+    expect(screen.getByLabelText('Toggle habit: Morning walk, current count: 1')).toBeInTheDocument();
+  });
+
+  it('splits the disc 2:1 in member colors, first adult from 12 o’clock', () => {
+    const { container } = render(
+      <HabitCard habit={attributedHabit({ [PAUL]: 2, [JEN]: 1 })} attribution={ROSTER} />
+    );
+
+    const slices = pieSlices(container);
+    expect(slices.map(p => p.getAttribute('fill'))).toEqual(['#285742', '#b87a29']);
+    // No stroke between slices — the seam was explicitly rejected.
+    expect(slices.every(p => !p.getAttribute('stroke'))).toBe(true);
+  });
+
+  it('leaves a grandfathered (unattributed) completion looking exactly as before', () => {
+    const { container } = render(
+      <HabitCard
+        habit={{ ...mockHabit, count: 1, totalCount: 1, completedDates: [TODAY], lastUpdated: new Date().toISOString() }}
+        attribution={ROSTER}
+      />
+    );
+
+    expect(pieSlices(container)).toHaveLength(0);
+    expect(screen.queryByText(/completed this/)).not.toBeInTheDocument();
+  });
+
+  it('renders no attribution at all without the roster context (non-Habits surfaces)', () => {
+    const { container } = render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} />);
+    expect(pieSlices(container)).toHaveLength(0);
+  });
+
+  it('shows nothing for a stale row, whose counter belongs to a previous period', () => {
+    // A fixed past timestamp, not clock arithmetic: `Date.now() - 86_400_000`
+    // near local midnight in a UTC+X zone can still land on TODAY's local date,
+    // at which point the habit isn't stale and this assertion flips (the
+    // getLocalDateString rule in CLAUDE.md, same family of bug).
+    const { container } = render(
+      <HabitCard
+        habit={attributedHabit({ [PAUL]: 1 }, { lastUpdated: '2024-02-09T12:00:00.000Z' })}
+        attribution={ROSTER}
+      />
+    );
+    expect(pieSlices(container)).toHaveLength(0);
+  });
+});
+
+describe('HabitCard - flame-ring avatars', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupMatchMedia(true);
+  });
+
+  it('names each credited member for screen readers', () => {
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 2, [JEN]: 1 })} attribution={ROSTER} />);
+
+    expect(screen.getByText('Paul completed this 2 times')).toBeInTheDocument();
+    expect(screen.getByText('Jen completed this')).toBeInTheDocument();
+  });
+
+  // Ring tiers and their screen-reader text are covered in
+  // HabitDoneByAvatars.test.tsx — this suite mocks date-fns (for the freeze
+  // badge's "yesterday"), which would also blunt a DAILY streak walk here
+  // (calculateStreak's `subDays` calls resolve to the frozen mock date). A
+  // WEEKLY habit's streak walks `subWeeks` instead, which is untouched by the
+  // mock (see the `date-fns` import above) — the tests below use that to get
+  // a real, ring-worthy streak inside this suite.
+
+  it('shows no avatars on an untouched row', () => {
+    render(<HabitCard habit={mockHabit} attribution={ROSTER} />);
+    expect(screen.queryByText(/completed this/)).not.toBeInTheDocument();
+  });
+
+  // A flame ring is a celebration; a "streak" on a negative habit is a run of
+  // the behaviour the household is trying to stop. The streak pill this
+  // replaced was gated on `isPositive`, and that gate has to survive.
+  it('credits the member on a NEGATIVE habit but never rings them', () => {
+    const { container } = render(
+      <HabitCard
+        habit={attributedHabit({ [PAUL]: 1 }, { type: 'negative', basePoints: -10, streakDays: 30 })}
+        attribution={ROSTER}
+      />
+    );
+
+    expect(screen.getByText('Paul completed this')).toBeInTheDocument();
+    expect(container.querySelectorAll('svg[viewBox="0 0 48 48"]')).toHaveLength(0);
+    expect(screen.queryByText(/streak/)).not.toBeInTheDocument();
+    // The pie still reads: who did it is the point, on a negative habit most of all.
+    expect(pieSlices(container)).toHaveLength(1);
+  });
+
+  // Belt-and-suspenders on the test above: `attributedHabit` only records ONE
+  // day of completion (streakDays:30 is inert for entry.streak, which is
+  // derived from the member's ACTUAL completedBy history, not that field), so
+  // that test's streak never crosses the ember threshold and would pass even
+  // without the showStreakRings gate. This one forces a REAL, ring-worthy
+  // streak (three consecutive ISO weeks, via subWeeks — unaffected by this
+  // suite's subDays mock) so the suppression is actually exercised.
+  it('suppresses the flame ring AND the streak text for a negative habit at a ring-worthy streak, but keeps the avatar (F1)', () => {
+    // Three consecutive completed ISO weeks — real weekly-streak math (see the
+    // comment above), landing squarely in the "ember" tier a positive habit
+    // would ring.
+    const weekStart = habitPeriodStart('weekly', TODAY);
+    const oneWeekAgo = format(subWeeks(parseISO(weekStart), 1), 'yyyy-MM-dd');
+    const twoWeeksAgo = format(subWeeks(parseISO(weekStart), 2), 'yyyy-MM-dd');
+
+    const negativeHabit: Habit = {
+      ...mockHabit,
+      title: 'Late night snack',
+      type: 'negative',
+      period: 'weekly',
+      scoringType: 'incremental',
+      basePoints: -10,
+      count: 1,
+      totalCount: 3,
+      streakDays: 3,
+      completedDates: [TODAY, oneWeekAgo, twoWeeksAgo],
+      completedBy: {
+        [TODAY]: { [PAUL]: 1 },
+        [oneWeekAgo]: { [PAUL]: 1 },
+        [twoWeeksAgo]: { [PAUL]: 1 },
+      },
+      lastUpdated: new Date().toISOString(),
+    };
+
+    const { container } = render(<HabitCard habit={negativeHabit} attribution={ROSTER} />);
+
+    // The avatar still renders — who did it is the point on a negative habit
+    // most of all — but neither the ring NOR the streak text celebrates three
+    // consecutive weeks of a habit the household is trying to discourage.
+    expect(screen.getByText('Paul completed this')).toBeInTheDocument();
+    expect(screen.queryByText(/weeks streak/)).not.toBeInTheDocument();
+    expect(container.querySelectorAll('svg[viewBox="0 0 48 48"]')).toHaveLength(0);
+  });
+
+  it('still rings a POSITIVE habit at the same streak (regression guard for the negative-habit suppression above)', () => {
+    const weekStart = habitPeriodStart('weekly', TODAY);
+    const oneWeekAgo = format(subWeeks(parseISO(weekStart), 1), 'yyyy-MM-dd');
+    const twoWeeksAgo = format(subWeeks(parseISO(weekStart), 2), 'yyyy-MM-dd');
+
+    const positiveHabit: Habit = {
+      ...mockHabit,
+      title: 'Weekly walk',
+      type: 'positive',
+      period: 'weekly',
+      scoringType: 'incremental',
+      count: 1,
+      totalCount: 3,
+      streakDays: 3,
+      completedDates: [TODAY, oneWeekAgo, twoWeeksAgo],
+      completedBy: {
+        [TODAY]: { [PAUL]: 1 },
+        [oneWeekAgo]: { [PAUL]: 1 },
+        [twoWeeksAgo]: { [PAUL]: 1 },
+      },
+      lastUpdated: new Date().toISOString(),
+    };
+
+    const { container } = render(<HabitCard habit={positiveHabit} attribution={ROSTER} />);
+
+    expect(screen.getByText('Paul completed this, 3 weeks streak')).toBeInTheDocument();
+    expect(container.querySelectorAll('svg[viewBox="0 0 48 48"]')).toHaveLength(1);
+  });
+});
+
+describe('HabitCard - React.memo comparator refreshes stale rings on out-of-period edits (F3)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupMatchMedia(true);
+  });
+
+  it('re-renders when a back-dated (prior-week) edit changes a member streak, even though the current period fingerprint is unchanged', () => {
+    // `attributionFingerprint`/`memberUnitsForPeriod` only reach the CURRENT
+    // week's 7 days, so attributing two PRIOR weeks moves neither it nor
+    // today's live `count`/`habit.streakDays` — the exact "changes a member's
+    // own streak without moving today's counts" scenario. The comparator's
+    // `habit.lastUpdated` equality check (which every attribution-writing
+    // mutation bumps via `serverTimestamp()` in the same batch — see
+    // useHabitActions' credit/uncredit/addHabitSubmission/etc.) is what makes
+    // this row refresh anyway.
+    const weekStart = habitPeriodStart('weekly', TODAY);
+    const oneWeekAgo = format(subWeeks(parseISO(weekStart), 1), 'yyyy-MM-dd');
+    const twoWeeksAgo = format(subWeeks(parseISO(weekStart), 2), 'yyyy-MM-dd');
+
+    const before: Habit = {
+      ...mockHabit,
+      title: 'Weekly walk',
+      period: 'weekly',
+      scoringType: 'incremental',
+      count: 1,
+      totalCount: 1,
+      streakDays: 1,
+      completedDates: [TODAY],
+      completedBy: { [TODAY]: { [PAUL]: 1 } },
+      lastUpdated: new Date().toISOString(),
+    };
+
+    const { rerender } = render(<HabitCard habit={before} attribution={ROSTER} />);
+
+    // Below the ember threshold (a lone week, streak 1): no streak text yet.
+    expect(screen.getByText('Paul completed this')).toBeInTheDocument();
+    expect(screen.queryByText(/weeks streak/)).not.toBeInTheDocument();
+
+    const after: Habit = {
+      ...before,
+      completedDates: [TODAY, oneWeekAgo, twoWeeksAgo],
+      completedBy: {
+        [TODAY]: { [PAUL]: 1 },
+        [oneWeekAgo]: { [PAUL]: 1 },
+        [twoWeeksAgo]: { [PAUL]: 1 },
+      },
+      // Every real attribution-writing mutation bumps this in the same batch.
+      lastUpdated: new Date(Date.now() + 1000).toISOString(),
+    };
+    rerender(<HabitCard habit={after} attribution={ROSTER} />);
+
+    // Paul's own weekly streak is now 3 (ember tier) — the row must refresh to
+    // show it, proving the comparator did not treat `before`/`after` as equal.
+    expect(screen.getByText('Paul completed this, 3 weeks streak')).toBeInTheDocument();
+  });
+});
+
+describe('HabitCard - attribution picker', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupMatchMedia(true);
+  });
+
+  const longPress = (element: HTMLElement) => {
+    fireEvent.pointerDown(element, { clientX: 10, clientY: 10, button: 0 });
+    act(() => { vi.advanceTimersByTime(600); });
+    fireEvent.pointerUp(element);
+    fireEvent.click(element);
+  };
+
+  it('opens on long-press and does NOT also increment the habit', () => {
+    vi.useFakeTimers();
+    try {
+      render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+      longPress(screen.getByLabelText('Toggle habit: Morning walk, current count: 1'));
+
+      expect(screen.getByRole('menu', { name: 'Who completed Morning walk?' })).toBeInTheDocument();
+      expect(mockHouseholdContext.toggleHabit).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a short tap still increments (the long-press never fires)', () => {
+    vi.useFakeTimers();
+    try {
+      render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+      const toggle = screen.getByLabelText('Toggle habit: Morning walk, current count: 1');
+      fireEvent.pointerDown(toggle, { clientX: 10, clientY: 10, button: 0 });
+      act(() => { vi.advanceTimersByTime(120); });
+      fireEvent.pointerUp(toggle);
+      fireEvent.click(toggle);
+
+      expect(mockHouseholdContext.toggleHabit).toHaveBeenCalledWith('h1', 'up');
+      expect(screen.queryByRole('menu', { name: /Who completed/ })).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Touch does not always emit the trailing click after a long-press, so the
+  // suppression flag must never survive into the NEXT gesture.
+  it('does not swallow the tap that follows a click-less long-press', () => {
+    vi.useFakeTimers();
+    try {
+      render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+      const toggle = screen.getByLabelText('Toggle habit: Morning walk, current count: 1');
+
+      // Long-press, release, and never fire a click (the touch case).
+      fireEvent.pointerDown(toggle, { clientX: 10, clientY: 10, button: 0 });
+      act(() => { vi.advanceTimersByTime(600); });
+      fireEvent.pointerUp(toggle);
+
+      // The very next tap must behave normally.
+      fireEvent.pointerDown(toggle, { clientX: 10, clientY: 10, button: 0 });
+      act(() => { vi.advanceTimersByTime(100); });
+      fireEvent.pointerUp(toggle);
+      fireEvent.click(toggle);
+
+      expect(mockHouseholdContext.toggleHabit).toHaveBeenCalledWith('h1', 'up');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a press that turns into a scroll cancels the long-press', () => {
+    vi.useFakeTimers();
+    try {
+      render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+      const toggle = screen.getByLabelText('Toggle habit: Morning walk, current count: 1');
+      fireEvent.pointerDown(toggle, { clientX: 10, clientY: 10, button: 0 });
+      fireEvent.pointerMove(toggle, { clientX: 10, clientY: 90 });
+      act(() => { vi.advanceTimersByTime(600); });
+
+      expect(screen.queryByRole('menu', { name: /Who completed/ })).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // A long-press can never be the ONLY path to an action.
+  it('opens from the kebab’s "Who did this?" item', async () => {
+    const user = userEvent.setup();
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+
+    expect(screen.getByRole('menu', { name: 'Who completed Morning walk?' })).toBeInTheDocument();
+  });
+
+  it('credits an un-credited member, and un-credits a checked one', async () => {
+    const user = userEvent.setup();
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+
+    // Paul is already credited today → checked, and tapping him takes it back.
+    const me = screen.getByRole('menuitemcheckbox', { name: /^Me/ });
+    expect(me).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText('Tap to undo')).toBeInTheDocument();
+
+    const jen = screen.getByRole('menuitemcheckbox', { name: /^Jen/ });
+    expect(jen).toHaveAttribute('aria-checked', 'false');
+    await user.click(jen);
+
+    expect(mockHouseholdContext.creditHabitCompletion).toHaveBeenCalledWith('h1', [JEN]);
+    expect(mockHouseholdContext.toggleHabit).not.toHaveBeenCalled();
+  });
+
+  it('un-credits the checked member', async () => {
+    const user = userEvent.setup();
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /^Me/ }));
+
+    // F2: the un-credit target is now the member's most recent attributed
+    // date within the CURRENT PERIOD, not an implicit "today" default — for a
+    // daily habit (period === day) that is always today, i.e. TODAY here.
+    expect(mockHouseholdContext.uncreditHabitCompletion).toHaveBeenCalledWith('h1', PAUL, TODAY);
+    expect(mockHouseholdContext.creditHabitCompletion).not.toHaveBeenCalled();
+  });
+
+  it('"Both of us" credits only whoever is not credited yet', async () => {
+    const user = userEvent.setup();
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Both of us' }));
+
+    expect(mockHouseholdContext.creditHabitCompletion).toHaveBeenCalledWith('h1', [JEN]);
+  });
+
+  it('"Both of us" is inert once everyone is credited', async () => {
+    const user = userEvent.setup();
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 1, [JEN]: 1 })} attribution={ROSTER} />);
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+
+    expect(screen.getByRole('menuitem', { name: 'Both of us' })).toBeDisabled();
+  });
+
+  it('lists adults only — managed kid profiles are excluded', async () => {
+    const user = userEvent.setup();
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+
+    expect(screen.queryByRole('menuitemcheckbox', { name: /Leo/ })).not.toBeInTheDocument();
+  });
+
+  it('is not offered for an ASSIGNED chore, whose points route to the assignee', async () => {
+    const user = userEvent.setup();
+    render(
+      <HabitCard
+        habit={attributedHabit({ [PAUL]: 1 }, { assignedTo: 'kid_leo' })}
+        attribution={ROSTER}
+      />
+    );
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    expect(screen.queryByRole('menuitem', { name: 'Who did this?' })).not.toBeInTheDocument();
+  });
+});
+
+describe('HabitCard - attribution picker is PERIOD-scoped, not day-scoped (F2)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupMatchMedia(true);
+  });
+
+  // A fixed system clock (Wednesday of a known ISO week), so "credited Monday,
+  // viewed Wednesday" is deterministic regardless of which real weekday the
+  // suite happens to run on (see the weekday-dependent-test hazard) — every
+  // date used below is derived from THIS clock, never real "today".
+  const WEDNESDAY = '2024-02-14T12:00:00';
+  const MONDAY = '2024-02-12'; // Monday of the same ISO week as WEDNESDAY
+
+  it('shows a checkmark for a weekly habit credited earlier in the week (not just today)', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(WEDNESDAY));
+      const habit: Habit = {
+        ...mockHabit,
+        title: 'Morning walk',
+        period: 'weekly',
+        scoringType: 'incremental',
+        count: 1,
+        totalCount: 1,
+        completedDates: [MONDAY],
+        completedBy: { [MONDAY]: { [PAUL]: 1 } },
+        lastUpdated: new Date().toISOString(),
+      };
+      render(<HabitCard habit={habit} attribution={ROSTER} />);
+
+      fireEvent.click(screen.getByLabelText('Options for Morning walk'));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+
+      // Credited MONDAY, viewed WEDNESDAY: still checked — the old day-scoped
+      // read (`memberCompletionCount(habit, uid, today)`) would show Paul as
+      // un-credited here and let a second tap double-credit a unit he already
+      // holds this week.
+      expect(screen.getByRole('menuitemcheckbox', { name: /^Me/ })).toHaveAttribute('aria-checked', 'true');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('un-crediting a weekly checkmark reverses the day the unit actually lives on, not today', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(WEDNESDAY));
+      const habit: Habit = {
+        ...mockHabit,
+        title: 'Morning walk',
+        period: 'weekly',
+        scoringType: 'incremental',
+        count: 1,
+        totalCount: 1,
+        completedDates: [MONDAY],
+        completedBy: { [MONDAY]: { [PAUL]: 1 } },
+        lastUpdated: new Date().toISOString(),
+      };
+      render(<HabitCard habit={habit} attribution={ROSTER} />);
+
+      fireEvent.click(screen.getByLabelText('Options for Morning walk'));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+      fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /^Me/ }));
+
+      // Reverses MONDAY's unit — the day it actually lives on. The old
+      // day-scoped un-credit had no way to reach it at all (it always targeted
+      // `today`, which holds nothing here), so this both fixes the missing
+      // "un-credit Monday" affordance and rules out a double-credit from the
+      // checkmark-visibility fix above.
+      expect(mockHouseholdContext.uncreditHabitCompletion).toHaveBeenCalledWith('h1', PAUL, MONDAY);
+      expect(mockHouseholdContext.creditHabitCompletion).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('period-scopes a THRESHOLD weekly habit\'s picker too, and un-credits the day the unit lives on', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(WEDNESDAY));
+      const habit: Habit = {
+        ...mockHabit,
+        title: 'Weekly review',
+        period: 'weekly',
+        scoringType: 'threshold',
+        targetCount: 1,
+        count: 1,
+        totalCount: 1,
+        completedDates: [MONDAY],
+        completedBy: { [MONDAY]: { [PAUL]: 1 } },
+        lastUpdated: new Date().toISOString(),
+      };
+      render(<HabitCard habit={habit} attribution={ROSTER} />);
+
+      fireEvent.click(screen.getByLabelText('Options for Weekly review'));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+      expect(screen.getByRole('menuitemcheckbox', { name: /^Me/ })).toHaveAttribute('aria-checked', 'true');
+
+      fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /^Me/ }));
+      expect(mockHouseholdContext.uncreditHabitCompletion).toHaveBeenCalledWith('h1', PAUL, MONDAY);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('regression: a DAILY habit still targets today, exactly as before (period === day)', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(WEDNESDAY));
+      const today = getLocalDateString();
+      const habit: Habit = {
+        ...mockHabit,
+        title: 'Morning walk',
+        scoringType: 'incremental',
+        count: 1,
+        totalCount: 1,
+        completedDates: [today],
+        completedBy: { [today]: { [PAUL]: 1 } },
+        lastUpdated: new Date().toISOString(),
+      };
+      render(<HabitCard habit={habit} attribution={ROSTER} />);
+
+      fireEvent.click(screen.getByLabelText('Options for Morning walk'));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+      expect(screen.getByRole('menuitemcheckbox', { name: /^Me/ })).toHaveAttribute('aria-checked', 'true');
+
+      fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /^Me/ }));
+      expect(mockHouseholdContext.uncreditHabitCompletion).toHaveBeenCalledWith('h1', PAUL, today);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
