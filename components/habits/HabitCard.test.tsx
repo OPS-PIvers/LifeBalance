@@ -1,9 +1,11 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import HabitCard from './HabitCard';
-import { Habit } from '@/types/schema';
+import { Habit, HouseholdMember } from '@/types/schema';
+import { getLocalDateString } from '@/utils/dateHelpers';
+import { buildHabitRowMemberContext } from '@/utils/habitRowAttribution';
 
 // Mock context
 const { mockHouseholdContext } = vi.hoisted(() => ({
@@ -13,6 +15,8 @@ const { mockHouseholdContext } = vi.hoisted(() => ({
     archiveHabit: vi.fn(),
     unarchiveHabit: vi.fn(),
     resetHabit: vi.fn(),
+    creditHabitCompletion: vi.fn(() => Promise.resolve()),
+    uncreditHabitCompletion: vi.fn(() => Promise.resolve()),
     activeChallenge: null as unknown,
   }
 }));
@@ -63,6 +67,8 @@ vi.mock('lucide-react', () => ({
   MessageSquarePlus: () => <span data-testid="icon-message-square-plus" />,
   Archive: () => <span data-testid="icon-archive" />,
   ArchiveRestore: () => <span data-testid="icon-archive-restore" />,
+  Users: () => <span data-testid="icon-users" />,
+  Check: () => <span data-testid="icon-check" />,
 }));
 
 // Mock date-fns with controlled dates. `mockedYesterday.current` is mutable so
@@ -307,18 +313,23 @@ describe('HabitCard - period-aware multiplier display', () => {
     expect(screen.queryByText('10 pts')).not.toBeInTheDocument();
   });
 
-  it('weekly habit streak badge reads "2 Weeks" (not "2 Days")', () => {
-    render(<HabitCard habit={{ ...baseWeekly, streakDays: 2 }} />);
+  // Per-member points (stage 2): the streak PILL is gone from the row — streak
+  // reads as flame-ring intensity on the credited member's avatar, and the
+  // exact number lives in the habit's log. The MULTIPLIER it earns must still
+  // be visible, which is what these assertions pin.
+  it('no longer renders a streak pill, at any cadence', () => {
+    const { rerender } = render(<HabitCard habit={{ ...baseWeekly, streakDays: 2 }} />);
+    expect(screen.queryByText(/2 Weeks?/)).not.toBeInTheDocument();
 
-    expect(screen.getByText(/2 Weeks/)).toBeInTheDocument();
-    expect(screen.queryByText(/2 Days/)).not.toBeInTheDocument();
+    rerender(<HabitCard habit={{ ...baseWeekly, period: 'daily', streakDays: 5, lastUpdated: '2024-02-10T00:01:00Z' }} />);
+    expect(screen.queryByText(/5 Days?/)).not.toBeInTheDocument();
   });
 
   it('weekly habit with a 4-week streak shows the 2.0x multiplier (20 pts)', () => {
     render(<HabitCard habit={{ ...baseWeekly, streakDays: 4 }} />);
 
     expect(screen.getByText('20 pts')).toBeInTheDocument();
-    expect(screen.getByText(/4 Weeks/)).toBeInTheDocument();
+    expect(screen.queryByText(/4 Weeks?/)).not.toBeInTheDocument();
   });
 
   it('weekly habit with a 1-week streak nudges "1 week from 1.5x" (week unit, not day)', () => {
@@ -337,7 +348,7 @@ describe('HabitCard - period-aware multiplier display', () => {
     expect(screen.getByText('1 week from 2x!')).toBeInTheDocument();
   });
 
-  it('regression: daily habit with a 3-day streak still shows 1.5x (15 pts) and "3 Days"', () => {
+  it('regression: daily habit with a 3-day streak still shows 1.5x (15 pts)', () => {
     const dailyHabit: Habit = {
       ...baseWeekly,
       title: 'Daily Habit',
@@ -347,7 +358,6 @@ describe('HabitCard - period-aware multiplier display', () => {
     render(<HabitCard habit={dailyHabit} />);
 
     expect(screen.getByText('15 pts')).toBeInTheDocument();
-    expect(screen.getByText(/3 Days/)).toBeInTheDocument();
     // Daily nudge ladder unchanged: no nudge fires at a 3-day streak.
     expect(screen.queryByText(/from 1.5x/)).not.toBeInTheDocument();
     expect(screen.queryByText(/from 2x/)).not.toBeInTheDocument();
@@ -401,6 +411,289 @@ describe('HabitCard - React.memo', () => {
 
     // Component should still display correctly (memo preserved the DOM)
     expect(screen.getByText('Memo Habit')).toBeInTheDocument();
+  });
+});
+
+// --- Per-member attribution (stage 2) ---------------------------------------
+// "Today" is read from the same helper the component uses, so these fixtures
+// carry no weekday dependency of their own.
+const TODAY = getLocalDateString();
+const PAUL = 'paul-uid';
+const JEN = 'jen-uid';
+
+const ROSTER_MEMBERS: HouseholdMember[] = [
+  { uid: PAUL, displayName: 'Paul', role: 'admin', points: { daily: 0, weekly: 0, total: 0 } },
+  { uid: JEN, displayName: 'Jen', role: 'member', points: { daily: 0, weekly: 0, total: 0 } },
+  {
+    uid: 'kid_leo', displayName: 'Leo', role: 'kid', isManaged: true,
+    points: { daily: 0, weekly: 0, total: 0 },
+  },
+];
+const ROSTER = buildHabitRowMemberContext(ROSTER_MEMBERS, PAUL);
+
+const attributedHabit = (completedBy: Record<string, number>, overrides: Partial<Habit> = {}): Habit => ({
+  ...mockHabit,
+  title: 'Morning walk',
+  scoringType: 'incremental',
+  count: Object.values(completedBy).reduce((a, b) => a + b, 0),
+  totalCount: 1,
+  completedDates: [TODAY],
+  completedBy: { [TODAY]: completedBy },
+  lastUpdated: new Date().toISOString(),
+  ...overrides,
+});
+
+const pieSlices = (container: HTMLElement): SVGPathElement[] =>
+  Array.from(container.querySelectorAll<SVGPathElement>('svg[viewBox="0 0 46 46"] path'));
+
+describe('HabitCard - pie attribution counter', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupMatchMedia(true);
+  });
+
+  it('fills the toggle with one solid disc for a solo completion', () => {
+    const { container } = render(
+      <HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />
+    );
+
+    const slices = pieSlices(container);
+    expect(slices).toHaveLength(1);
+    expect(slices[0]?.getAttribute('fill')).toBe('#285742'); // accent-600
+    expect(screen.getByLabelText('Toggle habit: Morning walk, current count: 1')).toBeInTheDocument();
+  });
+
+  it('splits the disc 2:1 in member colors, first adult from 12 o’clock', () => {
+    const { container } = render(
+      <HabitCard habit={attributedHabit({ [PAUL]: 2, [JEN]: 1 })} attribution={ROSTER} />
+    );
+
+    const slices = pieSlices(container);
+    expect(slices.map(p => p.getAttribute('fill'))).toEqual(['#285742', '#b87a29']);
+    // No stroke between slices — the seam was explicitly rejected.
+    expect(slices.every(p => !p.getAttribute('stroke'))).toBe(true);
+  });
+
+  it('leaves a grandfathered (unattributed) completion looking exactly as before', () => {
+    const { container } = render(
+      <HabitCard
+        habit={{ ...mockHabit, count: 1, totalCount: 1, completedDates: [TODAY], lastUpdated: new Date().toISOString() }}
+        attribution={ROSTER}
+      />
+    );
+
+    expect(pieSlices(container)).toHaveLength(0);
+    expect(screen.queryByText(/completed this/)).not.toBeInTheDocument();
+  });
+
+  it('renders no attribution at all without the roster context (non-Habits surfaces)', () => {
+    const { container } = render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} />);
+    expect(pieSlices(container)).toHaveLength(0);
+  });
+
+  it('shows nothing for a stale row, whose counter belongs to a previous period', () => {
+    const yesterdayIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { container } = render(
+      <HabitCard
+        habit={attributedHabit({ [PAUL]: 1 }, { lastUpdated: yesterdayIso })}
+        attribution={ROSTER}
+      />
+    );
+    expect(pieSlices(container)).toHaveLength(0);
+  });
+});
+
+describe('HabitCard - flame-ring avatars', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupMatchMedia(true);
+  });
+
+  it('names each credited member for screen readers', () => {
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 2, [JEN]: 1 })} attribution={ROSTER} />);
+
+    expect(screen.getByText('Paul completed this 2 times')).toBeInTheDocument();
+    expect(screen.getByText('Jen completed this')).toBeInTheDocument();
+  });
+
+  // Ring tiers and their screen-reader text are covered in
+  // HabitDoneByAvatars.test.tsx — this suite mocks date-fns (for the freeze
+  // badge's "yesterday"), which would also blunt the streak walk here.
+
+  it('shows no avatars on an untouched row', () => {
+    render(<HabitCard habit={mockHabit} attribution={ROSTER} />);
+    expect(screen.queryByText(/completed this/)).not.toBeInTheDocument();
+  });
+});
+
+describe('HabitCard - attribution picker', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupMatchMedia(true);
+  });
+
+  const longPress = (element: HTMLElement) => {
+    fireEvent.pointerDown(element, { clientX: 10, clientY: 10, button: 0 });
+    act(() => { vi.advanceTimersByTime(600); });
+    fireEvent.pointerUp(element);
+    fireEvent.click(element);
+  };
+
+  it('opens on long-press and does NOT also increment the habit', () => {
+    vi.useFakeTimers();
+    try {
+      render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+      longPress(screen.getByLabelText('Toggle habit: Morning walk, current count: 1'));
+
+      expect(screen.getByRole('menu', { name: 'Who completed Morning walk?' })).toBeInTheDocument();
+      expect(mockHouseholdContext.toggleHabit).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a short tap still increments (the long-press never fires)', () => {
+    vi.useFakeTimers();
+    try {
+      render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+      const toggle = screen.getByLabelText('Toggle habit: Morning walk, current count: 1');
+      fireEvent.pointerDown(toggle, { clientX: 10, clientY: 10, button: 0 });
+      act(() => { vi.advanceTimersByTime(120); });
+      fireEvent.pointerUp(toggle);
+      fireEvent.click(toggle);
+
+      expect(mockHouseholdContext.toggleHabit).toHaveBeenCalledWith('h1', 'up');
+      expect(screen.queryByRole('menu', { name: /Who completed/ })).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Touch does not always emit the trailing click after a long-press, so the
+  // suppression flag must never survive into the NEXT gesture.
+  it('does not swallow the tap that follows a click-less long-press', () => {
+    vi.useFakeTimers();
+    try {
+      render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+      const toggle = screen.getByLabelText('Toggle habit: Morning walk, current count: 1');
+
+      // Long-press, release, and never fire a click (the touch case).
+      fireEvent.pointerDown(toggle, { clientX: 10, clientY: 10, button: 0 });
+      act(() => { vi.advanceTimersByTime(600); });
+      fireEvent.pointerUp(toggle);
+
+      // The very next tap must behave normally.
+      fireEvent.pointerDown(toggle, { clientX: 10, clientY: 10, button: 0 });
+      act(() => { vi.advanceTimersByTime(100); });
+      fireEvent.pointerUp(toggle);
+      fireEvent.click(toggle);
+
+      expect(mockHouseholdContext.toggleHabit).toHaveBeenCalledWith('h1', 'up');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a press that turns into a scroll cancels the long-press', () => {
+    vi.useFakeTimers();
+    try {
+      render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+      const toggle = screen.getByLabelText('Toggle habit: Morning walk, current count: 1');
+      fireEvent.pointerDown(toggle, { clientX: 10, clientY: 10, button: 0 });
+      fireEvent.pointerMove(toggle, { clientX: 10, clientY: 90 });
+      act(() => { vi.advanceTimersByTime(600); });
+
+      expect(screen.queryByRole('menu', { name: /Who completed/ })).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // A long-press can never be the ONLY path to an action.
+  it('opens from the kebab’s "Who did this?" item', async () => {
+    const user = userEvent.setup();
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+
+    expect(screen.getByRole('menu', { name: 'Who completed Morning walk?' })).toBeInTheDocument();
+  });
+
+  it('credits an un-credited member, and un-credits a checked one', async () => {
+    const user = userEvent.setup();
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+
+    // Paul is already credited today → checked, and tapping him takes it back.
+    const me = screen.getByRole('menuitemcheckbox', { name: /^Me/ });
+    expect(me).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText('Tap to undo')).toBeInTheDocument();
+
+    const jen = screen.getByRole('menuitemcheckbox', { name: /^Jen/ });
+    expect(jen).toHaveAttribute('aria-checked', 'false');
+    await user.click(jen);
+
+    expect(mockHouseholdContext.creditHabitCompletion).toHaveBeenCalledWith('h1', [JEN]);
+    expect(mockHouseholdContext.toggleHabit).not.toHaveBeenCalled();
+  });
+
+  it('un-credits the checked member', async () => {
+    const user = userEvent.setup();
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /^Me/ }));
+
+    expect(mockHouseholdContext.uncreditHabitCompletion).toHaveBeenCalledWith('h1', PAUL);
+    expect(mockHouseholdContext.creditHabitCompletion).not.toHaveBeenCalled();
+  });
+
+  it('"Both of us" credits only whoever is not credited yet', async () => {
+    const user = userEvent.setup();
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Both of us' }));
+
+    expect(mockHouseholdContext.creditHabitCompletion).toHaveBeenCalledWith('h1', [JEN]);
+  });
+
+  it('"Both of us" is inert once everyone is credited', async () => {
+    const user = userEvent.setup();
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 1, [JEN]: 1 })} attribution={ROSTER} />);
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+
+    expect(screen.getByRole('menuitem', { name: 'Both of us' })).toBeDisabled();
+  });
+
+  it('lists adults only — managed kid profiles are excluded', async () => {
+    const user = userEvent.setup();
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+
+    expect(screen.queryByRole('menuitemcheckbox', { name: /Leo/ })).not.toBeInTheDocument();
+  });
+
+  it('is not offered for an ASSIGNED chore, whose points route to the assignee', async () => {
+    const user = userEvent.setup();
+    render(
+      <HabitCard
+        habit={attributedHabit({ [PAUL]: 1 }, { assignedTo: 'kid_leo' })}
+        attribution={ROSTER}
+      />
+    );
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    expect(screen.queryByRole('menuitem', { name: 'Who did this?' })).not.toBeInTheDocument();
   });
 });
 

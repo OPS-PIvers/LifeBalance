@@ -119,6 +119,50 @@ export const memberIdsOnDate = (habit: AttributedHabit, date: string): string[] 
   return Object.keys(day).filter(uid => (day[uid] ?? 0) > 0);
 };
 
+/**
+ * Attributed units per member across the PERIOD containing `date` — the day
+ * itself for a daily habit, the Monday-anchored week for a weekly one.
+ *
+ * This is what the habit row's pie counter is drawn from, so the slices always
+ * describe the same span the row's live `count` does: a weekly habit's counter
+ * accumulates all week, and splitting it by only today's attribution would show
+ * a 3-count disc filled by one person's single completion.
+ */
+export const memberUnitsForPeriod = (
+  habit: Pick<Habit, 'completedBy' | 'period'>,
+  date: string,
+): Record<string, number> => {
+  const periodStart = habitPeriodStart(habit.period, date);
+  const out: Record<string, number> = {};
+  for (const [day, counts] of Object.entries(habit.completedBy ?? {})) {
+    if (habitPeriodStart(habit.period, day) !== periodStart) continue;
+    for (const [uid, count] of Object.entries(counts)) {
+      if (count > 0) out[uid] = (out[uid] ?? 0) + count;
+    }
+  }
+  return out;
+};
+
+/**
+ * A stable string summarising the period's attribution — the memo key habit
+ * rows compare on.
+ *
+ * Scoped to ONE period on purpose: the provider rebuilds every habit object on
+ * each snapshot, so a row's `React.memo` comparator runs constantly and must
+ * not walk a year of history to decide. Key order is normalised so two
+ * equivalent maps always produce the same string.
+ */
+export const attributionFingerprint = (
+  habit: Pick<Habit, 'completedBy' | 'period'>,
+  date: string,
+): string => {
+  const units = memberUnitsForPeriod(habit, date);
+  return Object.keys(units)
+    .sort()
+    .map(uid => `${uid}=${units[uid]}`)
+    .join(',');
+};
+
 /** Every member uid with at least one attributed completion on this habit. */
 export const attributedMemberIds = (habit: AttributedHabit): string[] => {
   const out = new Set<string>();

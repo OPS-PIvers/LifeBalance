@@ -4,6 +4,7 @@ import type { Habit } from '@/types/schema';
 import {
   attributedMemberIds,
   attributedUnitsOnDate,
+  attributionFingerprint,
   attributionReversalForDates,
   calculateMemberPointsForDate,
   calculateMemberPointsForDateRange,
@@ -20,6 +21,7 @@ import {
   memberPeriodPoints,
   memberPeriodPointsDelta,
   memberPointsForHabitOnDate,
+  memberUnitsForPeriod,
   prospectiveMultiplierForMember,
   resolveReversalSources,
   streakEndingOnForMember,
@@ -98,6 +100,48 @@ describe('habitAttribution — readers', () => {
   it('lists every member ever credited on the habit', () => {
     expect(attributedMemberIds(h).sort()).toEqual([JEN, PAUL].sort());
     expect(attributedMemberIds(habit())).toEqual([]);
+  });
+
+  it('sums a DAILY habit’s period units from that day alone', () => {
+    expect(memberUnitsForPeriod(h, d(0))).toEqual({ [PAUL]: 2, [JEN]: 1 });
+    expect(memberUnitsForPeriod(h, d(1))).toEqual({ [JEN]: 1 });
+    expect(memberUnitsForPeriod(h, d(2))).toEqual({});
+  });
+
+  it('sums a WEEKLY habit’s period units across the whole ISO week', () => {
+    // The live counter of a weekly habit accumulates all week, so the row's pie
+    // must split the same span — splitting only today would show a 3-count disc
+    // filled by one person's single completion.
+    const weekly = habit({
+      period: 'weekly',
+      completedDates: [d(0), d(1)],
+      completedBy: {
+        [d(0)]: { [PAUL]: 2, [JEN]: 1 },
+        [d(1)]: { [JEN]: 1 },
+        // Previous week — must NOT bleed into this week's disc.
+        [d(-3)]: { [PAUL]: 5 },
+      },
+    });
+    expect(memberUnitsForPeriod(weekly, d(4))).toEqual({ [PAUL]: 2, [JEN]: 2 });
+    expect(memberUnitsForPeriod(weekly, d(-3))).toEqual({ [PAUL]: 5 });
+  });
+
+  it('fingerprints only the current period, and is key-order independent', () => {
+    const reordered = habit({
+      completedDates: [d(0), d(1)],
+      completedBy: {
+        [d(1)]: { [JEN]: 1 },
+        [d(0)]: { [JEN]: 1, [PAUL]: 2 },
+      },
+    });
+    expect(attributionFingerprint(reordered, d(0))).toBe(attributionFingerprint(h, d(0)));
+    // A change on a DIFFERENT day never moves the fingerprint of this one.
+    const otherDay = habit({ ...h, completedBy: { ...h.completedBy, [d(1)]: { [JEN]: 9 } } });
+    expect(attributionFingerprint(otherDay, d(0))).toBe(attributionFingerprint(h, d(0)));
+    // A change on THIS day always does.
+    const sameDay = habit({ ...h, completedBy: { ...h.completedBy, [d(0)]: { [PAUL]: 3 } } });
+    expect(attributionFingerprint(sameDay, d(0))).not.toBe(attributionFingerprint(h, d(0)));
+    expect(attributionFingerprint(habit(), d(0))).toBe('');
   });
 
   it('derives a member’s own completion-date set, newest first', () => {
