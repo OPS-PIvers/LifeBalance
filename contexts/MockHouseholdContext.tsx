@@ -1763,21 +1763,26 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Habits reordered');
   }, []);
 
-  // Credit (or debit, negative delta) the HOUSEHOLD pool: the redeemable
-  // lifetime total plus — by this mock's deliberate conflation, which Stage 2
-  // untangles — the test user's own three point windows. The same three-window
-  // update the real context's habit writeBatch applies to household points.
+  // Credit (or debit, negative delta) the HOUSEHOLD pool ONLY — the redeemable
+  // lifetime total (`totalPoints`). Production writes a shared habit's pool
+  // share to a SEPARATE `households/{id}.points` document that no member doc
+  // ever mirrors, so this must not touch `members` either.
+  //
+  // 🛡️ This USED TO also mirror `delta` onto the signed-in test user's own
+  // three point windows, on the theory that "the pool and the tapper move by
+  // the same number." That happens to be true for an ORDINARY members-mode tap
+  // (the pool figure IS that lone credited member's own award) but is wrong in
+  // two ways it papered over: a `creditMode: 'household'` completion has NO
+  // actor at all — the pool moves, the tapper must not — and every OTHER
+  // credited member's own award ALSO reaches the pool through this function,
+  // so mirroring only the test user double-counted whichever of them happened
+  // to be MOCK_USER_UID. Every caller that needs a member's own score to move
+  // now does so explicitly via `creditMemberPoints`, the same pattern
+  // `addHabitSubmission`/`deleteHabitSubmission` already used unmodified.
   const creditHouseholdPool = useCallback((
     delta: { daily: number; weekly: number; total: number },
   ) => {
-    if (delta.daily === 0 && delta.weekly === 0 && delta.total === 0) return;
-    setMembers(prev => prev.map(m => m.uid === MOCK_USER_UID
-      ? { ...m, points: {
-          daily: m.points.daily + delta.daily,
-          weekly: m.points.weekly + delta.weekly,
-          total: m.points.total + delta.total,
-        } }
-      : m));
+    if (delta.total === 0) return;
     setTotalPoints(prev => prev + delta.total);
   }, []);
 
@@ -1920,12 +1925,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         // Pool routing parity: an assigned chore reverses on the ASSIGNEE's doc,
         // a shared habit on the household pool (creditHabitPool).
         creditHabitPool(habit, stalePoolDelta);
-        // The test user's own score already moved with the pool above (this
-        // mock deliberately conflates the two — see the toggle note below), so
-        // only OTHER members' reversals are applied here, exactly as resetHabit
-        // does.
+        // Every credited member's reversal is applied here, the test user's
+        // own included — `creditHabitPool` above only moves the pool now, so
+        // there is no mirror to double it, exactly as resetHabit does below.
         for (const [memberId, delta] of staleReversal?.perMember ?? new Map<string, PointsBuckets>()) {
-          if (memberId !== MOCK_USER_UID) creditMemberPoints(memberId, delta);
+          creditMemberPoints(memberId, delta);
         }
         toast.success('Mock: previous period completion undone');
         return;
@@ -1942,12 +1946,17 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     // withdraws one on a 'down', so Test Mode carries the same `completedBy`
     // shape production does.
     //
-    // NOTE: no SEPARATE member-points credit is applied here, because this mock
-    // derives the household `dailyPoints`/`weeklyPoints` as the Σ of adult
-    // member scores — `creditHabitPool` below already moves the credited
-    // member's own score, and the derived household figure follows (the Σ
-    // model, stage 1.5). The credit/un-credit mutations below keep per-member
-    // scores separate the same way.
+    // A SEPARATE member-points credit IS applied below, via `creditMemberPoints`
+    // for each `attributionMoves` target (plus any other member the period's
+    // before/after holds — see `affectedPeriodMembers`) — the same
+    // `addHabitSubmission`/`deleteHabitSubmission` pattern, and the pool
+    // (`creditHabitPool` → `creditHouseholdPool`) moves ONLY the shared pool
+    // total. The two used to be conflated: `creditHouseholdPool` mirrored the
+    // pool delta onto the signed-in test user's own doc, which happened to look
+    // right for an ordinary members-mode tap (the pool figure IS that lone
+    // member's own award) but double-credited them whenever they ALSO appeared
+    // in `attributionMoves`, and credited them at all on a `creditMode:
+    // 'household'` tap, which must credit nobody.
     //
     // 🛡️ Reversal parity with production: a 'down' takes its unit back from
     // whoever STORED attribution records (`resolveReversalSources`), not from
@@ -1993,6 +2002,23 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       weekly: togglePoolDelta,
       total: togglePoolDelta,
     });
+    // Per-member points: every member `attributionMoves` touched — plus anyone
+    // ELSE the period's before/after holds, since a threshold period's award
+    // can flip an earlier member's day from 0 to a full one as a side effect of
+    // THIS toggle (`affectedPeriodMembers`, same as addHabitSubmission) — is
+    // credited their OWN delta at their OWN prospective multiplier, never the
+    // pool's figure. `toggleDate` is always today, so daily/weekly/total gate
+    // identically (no back-dating here, unlike addHabitSubmission).
+    if (habitFeedsMemberAttribution(habit)) {
+      for (const uid of affectedPeriodMembers(
+        effectiveHabit, habitAfter, toggleDate, attributionMoves.map(m => m.memberId),
+      )) {
+        const memberDelta = memberPeriodPointsDelta(effectiveHabit, habitAfter, uid, toggleDate, toggleDate);
+        if (memberDelta !== 0) {
+          creditMemberPoints(uid, { daily: memberDelta, weekly: memberDelta, total: memberDelta });
+        }
+      }
+    }
     toast.success(
       `Mock: Habit ${direction === 'up' ? 'incremented' : 'decremented'}${attribution ? ` (${attribution})` : ''}`
     );
@@ -2068,8 +2094,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     // Plan 080c parity: an assigned chore's reset debits the ASSIGNEE, not the
     // shared pool (creditHabitPool).
     creditHabitPool(habit, resetPoolDelta);
+    // Every credited member's reversal, the test user's own included — see
+    // `creditHouseholdPool`'s doc comment for why there is no mirror to double.
     for (const [memberId, delta] of reversal?.perMember ?? new Map<string, PointsBuckets>()) {
-      if (memberId !== MOCK_USER_UID) creditMemberPoints(memberId, delta);
+      creditMemberPoints(memberId, delta);
     }
     toast.success('Mock: Habit reset');
   }, [habits, creditHabitPool, creditMemberPoints]);
