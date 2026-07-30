@@ -634,8 +634,8 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
   // this the pie and the avatars would silently go stale.
   // The reference check is only a fast path for a genuinely unchanged object —
   // the provider rebuilds habits on every snapshot, so the fingerprint is what
-  // normally decides. That is why the fingerprint is period-scoped rather than
-  // a walk of the habit's whole history.
+  // normally decides. It stays cheap because it addresses the period by date
+  // key (see memberUnitsForPeriod), never by scanning the habit's history.
   (prev.habit.completedBy === next.habit.completedBy ||
     attributionFingerprint(prev.habit, getLocalDateString()) ===
       attributionFingerprint(next.habit, getLocalDateString()))

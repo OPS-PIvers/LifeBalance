@@ -60,7 +60,7 @@ import {
   type SubmissionTotalsByHabitDate,
 } from '@/utils/habitLogic';
 import { getLocalDateString } from '@/utils/dateHelpers';
-import { format, parseISO, startOfWeek } from 'date-fns';
+import { addDays, format, parseISO, startOfWeek } from 'date-fns';
 
 // ---------------------------------------------------------------------------
 // Field paths (the ONLY sanctioned way to write attribution)
@@ -132,10 +132,19 @@ export const memberUnitsForPeriod = (
   habit: Pick<Habit, 'completedBy' | 'period'>,
   date: string,
 ): Record<string, number> => {
-  const periodStart = habitPeriodStart(habit.period, date);
+  // Addressed by DATE KEY (1 lookup for a daily habit, 7 for a weekly one)
+  // rather than by scanning `completedBy` and filtering — the map is keyed by
+  // date, and a habit tracked for a year holds hundreds of entries this is
+  // called against on every snapshot (it backs the habit row's memo compare).
   const out: Record<string, number> = {};
-  for (const [day, counts] of Object.entries(habit.completedBy ?? {})) {
-    if (habitPeriodStart(habit.period, day) !== periodStart) continue;
+  const periodStart = habitPeriodStart(habit.period, date);
+  const days =
+    habit.period === 'weekly'
+      ? Array.from({ length: 7 }, (_, i) => format(addDays(parseISO(periodStart), i), 'yyyy-MM-dd'))
+      : [periodStart];
+  for (const day of days) {
+    const counts = habit.completedBy?.[day];
+    if (!counts) continue;
     for (const [uid, count] of Object.entries(counts)) {
       if (count > 0) out[uid] = (out[uid] ?? 0) + count;
     }
@@ -148,9 +157,10 @@ export const memberUnitsForPeriod = (
  * rows compare on.
  *
  * Scoped to ONE period on purpose: the provider rebuilds every habit object on
- * each snapshot, so a row's `React.memo` comparator runs constantly and must
- * not walk a year of history to decide. Key order is normalised so two
- * equivalent maps always produce the same string.
+ * each snapshot, so a row's `React.memo` comparator runs constantly — and
+ * `memberUnitsForPeriod` reaches the period by DATE KEY, so the cost is one (or
+ * seven) lookups rather than a walk of the habit's whole history. Key order is
+ * normalised so two equivalent maps always produce the same string.
  */
 export const attributionFingerprint = (
   habit: Pick<Habit, 'completedBy' | 'period'>,
