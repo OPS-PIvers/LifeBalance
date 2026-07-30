@@ -34,8 +34,13 @@ import CountUp from './CountUp';
 
 /** How long the toggle must be held before the "who did this?" picker opens. */
 const LONG_PRESS_MS = 500;
-/** Movement (px) that turns a press into a scroll and cancels the long-press. */
-const LONG_PRESS_SLOP = 10;
+/**
+ * Movement (px) that turns a press into a scroll and cancels the long-press.
+ * 16px, not 10: a finger wanders during a deliberate half-second hold, and a
+ * hold that silently fails is worse than a scroll that also opened the picker
+ * (a real scroll leaves this far behind within the same 500ms).
+ */
+const LONG_PRESS_SLOP = 16;
 
 interface HabitCardProps {
   habit: Habit;
@@ -183,6 +188,10 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
     const estimatedHeight = rows * 44 + 16;
     setPickerPlacement(rect && rect.top < estimatedHeight ? 'below' : 'above');
     setIsPickerOpen(true);
+    // Depends on the COUNT, not on `pickerMembers` itself: all this callback
+    // needs is the sheet's height. The member list reaches the picker through
+    // JSX props, so it is always current at render time — no stale closure to
+    // fix with a useMemo here.
   }, [pickerMembers.length]);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
