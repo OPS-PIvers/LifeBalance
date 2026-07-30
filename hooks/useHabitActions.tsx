@@ -539,8 +539,13 @@ export const useHabitActions = (
         // `completedBy` and `completedDates` mutually consistent in the SAME
         // batch — and every member credited on those dates has exactly what
         // they earned there reversed.
+        // `count: 0` is written below, so that is the counter the reversal must
+        // score its "after" state against (only observable on a threshold habit
+        // whose cleared period keeps a completion date).
         const staleReversal = habitFeedsMemberAttribution(habit)
-          ? attributionReversalForDates(habit, staleResult.datesToRemove)
+          ? attributionReversalForDates(
+              habit, staleResult.datesToRemove, getLocalDateString(), 0,
+            )
           : null;
         const staleClearPaths = staleReversal?.clearPaths ?? [];
         const stalePerMember = staleReversal?.perMember ?? new Map<string, PointsBuckets>();
@@ -991,8 +996,28 @@ export const useHabitActions = (
     // strips from `completedDates` also loses its attribution — in the same
     // batch — and each credited member has exactly their own earned points
     // reversed at the multiplier that applied on the date they earned them.
+    // `count: 0` below is the counter the reversal scores its "after" state
+    // against. A THRESHOLD habit's reversal is period-scoped: the week's
+    // progress days (a 3×/week target logs Mon/Wed before Friday's completion)
+    // never entered `completedDates`, so `datesToRemove` alone would strip
+    // neither their attribution nor the award that hangs off them.
+    //
+    // A threshold period can also carry attribution with NO completion date at
+    // all — that same 3×/week habit sitting at 2/3 has logged Mon and Wed and
+    // entered `completedDates` never. `count: 0` wipes that progress, so its
+    // attribution has to go with it; anchor the reversal on today when there is
+    // no completion date to anchor it on. Empty `datesToRemove` PROVES the
+    // period is below target (it is exactly this period's completion dates), so
+    // nothing was ever awarded and the points delta is 0 — this is purely an
+    // orphan sweep, and it never needs an `arrayRemove` the batch omits.
+    const reversalDates =
+      datesToRemove.length > 0
+        ? datesToRemove
+        : habit.scoringType === 'threshold'
+          ? [today]
+          : [];
     const resetReversal = habitFeedsMemberAttribution(habit)
-      ? attributionReversalForDates(habit, datesToRemove, today)
+      ? attributionReversalForDates(habit, reversalDates, today, 0)
       : null;
     const resetClearPaths = resetReversal?.clearPaths ?? [];
     const resetPerMember = resetReversal?.perMember ?? new Map<string, PointsBuckets>();
@@ -1518,15 +1543,24 @@ export const useHabitActions = (
         totalCount: Math.max(0, habit.totalCount - unitsRemoved),
         lastUpdated: serverTimestamp(),
       };
+      const countAfter = inLivePeriod
+        ? Math.max(0, habit.count - unitsRemoved)
+        : habit.count;
       if (inLivePeriod) {
-        habitUpdates['count'] = Math.max(0, habit.count - unitsRemoved);
+        habitUpdates['count'] = countAfter;
       }
 
       // Per-member points (stage 1): clearing a day clears it for EVERYONE, so
       // the day's whole attribution map goes with it and each credited member
-      // has exactly what they earned that day reversed.
+      // has exactly what they earned that day reversed. On a THRESHOLD habit
+      // the clear is period-scoped — the cleared day was the period's
+      // completion, so the progress days behind it (a 3×/week target logs
+      // Mon/Wed before Friday's completion) are part of what's being undone and
+      // would otherwise be stranded, attributed to a completion that no longer
+      // exists. `countAfter` is the counter written above, so the reversal
+      // scores the state this batch actually leaves behind.
       const dayReversal = habitFeedsMemberAttribution(habit)
-        ? attributionReversalForDates(habit, [date], today)
+        ? attributionReversalForDates(habit, [date], today, countAfter)
         : null;
       const dayClearPaths = dayReversal?.clearPaths ?? [];
       const dayPerMember = dayReversal?.perMember ?? new Map<string, PointsBuckets>();

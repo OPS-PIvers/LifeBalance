@@ -1746,7 +1746,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         // dates in the SAME batch, and leaving them behind here would break the
         // "completedDates and completedBy always agree" invariant in Test Mode.
         const staleReversal = habitFeedsMemberAttribution(habit)
-          ? attributionReversalForDates(habit, staleResult.datesToRemove)
+          ? attributionReversalForDates(
+              habit, staleResult.datesToRemove, getLocalDateString(), 0,
+            )
           : null;
         // Stage 1.5 parity: an attributed stale deselect debits the pool the
         // competition figure those dates carried; a grandfathered one keeps
@@ -1757,7 +1759,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
             : staleResult.pointsDelta;
         setHabits(prev => prev.map(h => h.id === id
           ? {
-              ...withDatesUnattributed(h, staleResult.datesToRemove),
+              // The reversal owns the scope: on a threshold habit it also
+              // clears the period's progress days, which never entered
+              // `completedDates` (see attributionReversalForDates).
+              ...withDatesUnattributed(h, staleReversal?.clearedDates ?? []),
               count: 0,
               totalCount: staleResult.datesToRemove.length > 0
                 ? Math.max(0, h.totalCount - h.count)
@@ -1880,7 +1885,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     // assignee's doc through `creditHabitPool` above, so also applying the
     // per-member reversal would debit them twice.
     const reversal = habitFeedsMemberAttribution(habit)
-      ? attributionReversalForDates(habit, [today], today)
+      ? attributionReversalForDates(habit, [today], today, 0)
       : null;
     // Stage 1.5 parity (see production resetHabit): an attributed reset debits
     // the competition figure, a grandfathered one `calculateResetPoints`.
@@ -1890,7 +1895,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         : { daily: -pointsToRemove, weekly: -pointsToRemove, total: -pointsToRemove };
     setHabits(prev => prev.map(h => h.id === id
       ? {
-          ...(reversal && reversal.clearPaths.length > 0 ? withDatesUnattributed(h, [today]) : h),
+          // Threshold habits clear the whole period's attribution, not just
+          // today's (see attributionReversalForDates).
+          ...(reversal && reversal.clearedDates.length > 0
+            ? withDatesUnattributed(h, reversal.clearedDates)
+            : h),
           count: 0,
           completedDates: newCompletedDates,
           streakDays: streakForHabit({ period: h.period, completedDates: newCompletedDates, frozenDates: h.frozenDates }),

@@ -224,6 +224,12 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
     // corrective recompute will derive. RESTORING a date attributes nothing —
     // there is no record of who earned it — so it stays grandfathered and the
     // habit-level credit above is exactly right.
+    //
+    // On a THRESHOLD habit the reversal is period-scoped (the period's award
+    // hangs off its first attributed day, which for a weekly target > 1 is not
+    // the day in `completedDates`), so removing the completion date also clears
+    // that period's progress days. This edit leaves `count` alone, so the
+    // reversal keeps the habit's stored counter as its "after" figure.
     const today = getLocalDateString();
     const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
     const reversal = isCompleted && habitFeedsMemberAttribution(habit)

@@ -619,6 +619,128 @@ describe('habitAttribution — un-credit reversal math', () => {
     expect(household.total).toBe(-30); // Paul's award + the two legacy units
   });
 
+  it('reverses a weekly threshold period whose award sits on an earlier progress day', () => {
+    // 🔒 Regression (adversarial review, PR #1155). Weekly `targetCount: 3`:
+    // Paul taps Mon (1/3), Wed (2/3), Fri (3/3 → the award lands). ONLY Friday
+    // enters `completedDates`, but the award is attributed to Monday — his first
+    // attributed day of the week — so scoring Friday's own per-date contribution
+    // reversed NOTHING: the pool and Paul both kept a completion that no longer
+    // existed, and Mon/Wed stayed attributed forever (inflating his streak).
+    const h = habit({
+      period: 'weekly',
+      scoringType: 'threshold',
+      targetCount: 3,
+      count: 3,
+      completedDates: [d(4)],
+      completedBy: {
+        [d(0)]: { [PAUL]: 1 },
+        [d(2)]: { [PAUL]: 1 },
+        [d(4)]: { [PAUL]: 1 },
+      },
+    });
+    // The award really does sit on Monday, not on the completion day.
+    expect(memberPointsForHabitOnDate(h, PAUL, d(0), d(4))).toBe(10);
+    expect(memberPointsForHabitOnDate(h, PAUL, d(4), d(4))).toBe(0);
+
+    const { perMember, household, clearedDates, clearPaths } =
+      attributionReversalForDates(h, [d(4)], d(4), 0);
+
+    // The whole period's attribution goes, progress days included.
+    expect(clearedDates).toEqual([d(0), d(2), d(4)]);
+    expect(clearPaths).toEqual([d(0), d(2), d(4)].map(completedByDatePath));
+    expect(attributedMemberIds(withDatesUnattributed(h, clearedDates))).toEqual([]);
+
+    expect(perMember.get(PAUL)).toEqual({ daily: -10, weekly: -10, total: -10 });
+    // Gated by the COMPLETION day (Friday), which is where the credit landed.
+    expect(household).toEqual({ daily: -10, weekly: -10, total: -10 });
+  });
+
+  it('reverses each member’s own weekly threshold award', () => {
+    const h = habit({
+      period: 'weekly',
+      scoringType: 'threshold',
+      targetCount: 2,
+      count: 2,
+      completedDates: [d(2)],
+      completedBy: { [d(0)]: { [PAUL]: 1 }, [d(2)]: { [PAUL]: 1, [JEN]: 1 } },
+    });
+    const { perMember, household, clearedDates } =
+      attributionReversalForDates(h, [d(2)], d(2), 0);
+
+    expect(clearedDates).toEqual([d(0), d(2)]);
+    expect(perMember.get(PAUL)!.total).toBe(-10);
+    expect(perMember.get(JEN)!.total).toBe(-10);
+    expect(household.total).toBe(-20);
+  });
+
+  it('reverses a daily threshold day at the member’s own award', () => {
+    const h = habit({
+      scoringType: 'threshold',
+      targetCount: 2,
+      count: 2,
+      completedDates: [d(0)],
+      completedBy: { [d(0)]: { [PAUL]: 1 } },
+    });
+    const { perMember, household, clearedDates } =
+      attributionReversalForDates(h, [d(0)], d(0), 0);
+    expect(clearedDates).toEqual([d(0)]); // the day IS the period
+    expect(perMember.get(PAUL)!.total).toBe(-10);
+    expect(household.total).toBe(-10);
+  });
+
+  it('sweeps a below-target threshold period’s orphans without moving points', () => {
+    // 2/3 of a weekly target: Mon and Wed are attributed, nothing ever entered
+    // `completedDates`, and nothing was ever awarded. Resetting must still take
+    // the attribution — leaving it would inflate Paul's per-member streak — but
+    // must not move a single point.
+    const h = habit({
+      period: 'weekly',
+      scoringType: 'threshold',
+      targetCount: 3,
+      count: 2,
+      completedDates: [],
+      completedBy: { [d(0)]: { [PAUL]: 1 }, [d(2)]: { [PAUL]: 1 } },
+    });
+    const { perMember, household, clearedDates } =
+      attributionReversalForDates(h, [d(2)], d(2), 0);
+
+    expect(clearedDates).toEqual([d(0), d(2)]);
+    expect(perMember.size).toBe(0);
+    expect(household).toEqual({ daily: 0, weekly: 0, total: 0 });
+  });
+
+  it('still debits a grandfathered threshold day at the legacy figure', () => {
+    const h = habit({
+      scoringType: 'threshold',
+      targetCount: 1,
+      count: 1,
+      completedDates: [d(0)],
+    });
+    const { perMember, household, clearPaths } =
+      attributionReversalForDates(h, [d(0)], d(0), 0);
+    expect(clearPaths).toEqual([]);
+    expect(perMember.size).toBe(0);
+    expect(household).toEqual({ daily: -10, weekly: -10, total: -10 });
+  });
+
+  it('keeps an incremental habit’s reversal strictly per-date', () => {
+    // Incremental attribution is genuinely one award per action per date, so
+    // clearing Wednesday must leave Monday's unit — and its points — alone.
+    const h = habit({
+      count: 2,
+      completedDates: [d(0), d(2)],
+      completedBy: { [d(0)]: { [PAUL]: 1 }, [d(2)]: { [PAUL]: 1 } },
+    });
+    const { perMember, household, clearedDates } =
+      attributionReversalForDates(h, [d(2)], d(2), 0);
+
+    expect(clearedDates).toEqual([d(2)]);
+    expect(perMember.get(PAUL)!.total).toBe(-10);
+    // Wednesday's own contribution: Paul's award plus the one live-counter unit
+    // nobody holds — unchanged from before the threshold split.
+    expect(household.total).toBe(-20);
+  });
+
   it('never debits the pool twice for a duplicated date', () => {
     const h = habit({
       count: 1,

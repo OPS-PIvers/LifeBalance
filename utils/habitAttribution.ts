@@ -468,6 +468,24 @@ const periodMemberIds = (habit: Habit, date: string): string[] => {
   return [...out];
 };
 
+/**
+ * Every date in the period containing `date` that carries attribution, oldest
+ * first. This is the SCOPE a threshold reversal has to clear: a weekly
+ * `targetCount: 3` habit records progress on Mon/Wed/Fri but only Friday (the
+ * day the target was crossed) ever enters `completedDates`, so clearing "the
+ * completion" without Mon/Wed would strand two attributed days that no longer
+ * belong to any completion — inflating their holder's per-member streak forever.
+ */
+const attributedDatesInPeriod = (habit: Habit, date: string): string[] => {
+  const periodStart = habitPeriodStart(habit.period, date);
+  const out: string[] = [];
+  for (const d of Object.keys(habit.completedBy ?? {})) {
+    if (habitPeriodStart(habit.period, d) !== periodStart) continue;
+    if (attributedUnitsOnDate(habit, d) > 0) out.push(d);
+  }
+  return out.sort();
+};
+
 /** Attributed units summed across the whole period containing `date`. */
 const attributedUnitsInPeriod = (habit: Habit, date: string): number => {
   const periodStart = habitPeriodStart(habit.period, date);
@@ -1027,65 +1045,160 @@ export interface AttributionReversal {
    * leaves at exactly the legacy points the recompute credited it.
    */
   household: PointsBuckets;
-  /** Dot paths to `deleteField()` — one per cleared date. */
+  /**
+   * The attribution dates actually being cleared. For an incremental habit this
+   * is (a subset of) the dates passed in; for a THRESHOLD habit it also carries
+   * the period's progress days, which never entered `completedDates` (see
+   * `attributedDatesInPeriod`). Local state mirrors (the Mock context) should
+   * strip exactly these.
+   */
+  clearedDates: string[];
+  /** Dot paths to `deleteField()` — one per entry in `clearedDates`. */
   clearPaths: string[];
 }
 
 /**
- * Reverse ALL attribution on the given dates: what each credited member loses
- * and what the pool loses, bucket-gated by the DATE being cleared (total always,
- * weekly only inside the current Monday-anchored week, daily only for today) —
- * the same gating `deleteHabitSubmission` / `resetHabitDay` already use.
+ * Reverse the attribution a clear of `dates` takes with it: what each credited
+ * member loses and what the pool loses, bucket-gated by the DATE being cleared
+ * (total always, weekly only inside the current Monday-anchored week, daily only
+ * for today) — the same gating `deleteHabitSubmission` / `resetHabitDay` already
+ * use. The gating date is the completion day, which is where the credit actually
+ * landed: a threshold period pays out the moment its target is crossed.
  *
- * The caller strips the same dates from `completedDates` in the SAME batch, so
- * each date's whole household contribution — member awards and remainder alike —
- * goes away: `household` is the negated `householdPointsForHabitOnDate` of every
- * date. Callers that must preserve a legacy figure exactly (an untouched,
- * fully-grandfathered reset) check `clearPaths.length === 0` and keep their own.
+ * 🛡️ THRESHOLD REVERSALS ARE PERIOD-SCOPED, INCREMENTAL ONES ARE PER-DATE.
+ * A threshold habit's award is attributed to the member's FIRST attributed day
+ * in the period, and for a weekly target > 1 that day is usually NOT the day
+ * that entered `completedDates`. Scoring each passed-in date's own per-date
+ * contribution therefore reversed NOTHING for the classic case — weekly
+ * `targetCount: 3`, tapped Mon (1/3), Wed (2/3), Fri (3/3 → the award): the
+ * caller passes `[Fri]`, whose own contribution is 0 because the award sits on
+ * Mon. The pool and the member kept points for a completion that no longer
+ * exists (and `points.total` never self-corrects — the sync only raises it),
+ * while Mon/Wed stayed attributed forever, inflating that member's streak.
+ *
+ * So for a threshold habit the unit of reversal is the PERIOD: the whole
+ * period's attribution is stripped (`attributedDatesInPeriod`) and the deltas
+ * are the difference in `householdPeriodPoints` / `memberPeriodPoints` between
+ * the habit as-is and the habit as the caller is about to write it. Incremental
+ * habits keep the per-date algorithm verbatim — their attribution genuinely is
+ * per-action-per-date, and their period scoring reads the live counter (which
+ * this function deliberately does not model per date).
+ *
+ * The caller strips the same `dates` from `completedDates` in the SAME batch, so
+ * the "after" state scored here removes them too — without that, a threshold
+ * period's award simply moves from the member term back into the grandfathering
+ * remainder and the delta stays 0. Callers that must preserve a legacy figure
+ * exactly (an untouched, fully-grandfathered reset) check
+ * `clearPaths.length === 0` and keep their own.
+ *
+ * @param countAfter - the live period counter the caller is about to WRITE
+ *   (`resetHabit` → 0, `resetHabitDay` → its decremented counter, a path that
+ *   leaves `count` alone → omit). Only observable when a completion date
+ *   SURVIVES in the cleared period — a weekly threshold habit tapped past its
+ *   target on several days — where the surviving day's legacy award depends on
+ *   whether the counter still meets the target.
  */
 export const attributionReversalForDates = (
   habit: Habit,
   dates: string[],
   today: string = getLocalDateString(),
+  countAfter: number = habit.count,
 ): AttributionReversal => {
   const perMember = new Map<string, PointsBuckets>();
+  const clearedDates: string[] = [];
   const clearPaths: string[] = [];
   const household: PointsBuckets = { daily: 0, weekly: 0, total: 0 };
   // Deduplicated (order-preserving): a repeated date would otherwise debit the
   // pool twice for one clear.
   const uniqueDates = [...new Set(dates)];
-  if (uniqueDates.length === 0) return { perMember, household, clearPaths };
+  if (uniqueDates.length === 0) return { perMember, household, clearedDates, clearPaths };
 
   const weekStart = format(startOfWeek(parseISO(today), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+  /** Apply a signed delta to one bucket triple, gated by the cleared date. */
+  const applyGated = (bucket: PointsBuckets, date: string, delta: number): void => {
+    if (delta === 0) return;
+    bucket.total += delta;
+    if (date >= weekStart && date <= today) bucket.weekly += delta;
+    if (date === today) bucket.daily += delta;
+  };
+  const memberBucket = (memberId: string): PointsBuckets => {
+    const existing = perMember.get(memberId);
+    if (existing) return existing;
+    const fresh: PointsBuckets = { daily: 0, weekly: 0, total: 0 };
+    perMember.set(memberId, fresh);
+    return fresh;
+  };
 
   // Clear one date at a time and score the delta each removal actually causes,
   // so every reversal is bucket-gated by ITS OWN date. (Scoring all dates at
   // once would have to pick a single date to gate the whole reversal by, which
   // is wrong the moment a cleared range straddles today or a week boundary.)
+  // `current` carries each step's result forward, so two dates in one period
+  // telescope into that period's single delta instead of double-counting it.
   let current = habit;
   for (const date of uniqueDates) {
-    const earned = householdPointsForHabitOnDate(current, date, today);
-    if (earned !== 0) {
-      household.total -= earned;
-      if (date >= weekStart && date <= today) household.weekly -= earned;
-      if (date === today) household.daily -= earned;
+    if (habit.scoringType === 'threshold') {
+      const scope = attributedDatesInPeriod(current, date);
+      const stripped = withDatesUnattributed(current, scope);
+      const next: Habit = {
+        ...stripped,
+        completedDates: stripped.completedDates.filter(d => d !== date),
+        count: countAfter,
+      };
+
+      applyGated(
+        household,
+        date,
+        householdPeriodPoints(next, date, today) - householdPeriodPoints(current, date, today),
+      );
+
+      const holders = new Set<string>();
+      for (const scoped of scope) {
+        for (const memberId of memberIdsOnDate(current, scoped)) holders.add(memberId);
+      }
+      for (const memberId of holders) {
+        applyGated(
+          memberBucket(memberId),
+          date,
+          memberPeriodPoints(next, memberId, date, today) -
+            memberPeriodPoints(current, memberId, date, today),
+        );
+      }
+
+      for (const scoped of scope) {
+        clearedDates.push(scoped);
+        clearPaths.push(completedByDatePath(scoped));
+      }
+      current = next;
+      continue;
     }
 
+    // Incremental: one action, one date, one award — reverse exactly what that
+    // date contributed (unchanged from before the threshold split).
+    const earned = householdPointsForHabitOnDate(current, date, today);
+    applyGated(household, date, -earned);
+
     if (current.completedBy?.[date] === undefined) continue;
+    clearedDates.push(date);
     clearPaths.push(completedByDatePath(date));
     const next = withDatesUnattributed(current, [date]);
     for (const memberId of memberIdsOnDate(current, date)) {
-      const delta = memberPeriodPointsDelta(current, next, memberId, date, today);
-      if (delta !== 0) {
-        const bucket = perMember.get(memberId) ?? { daily: 0, weekly: 0, total: 0 };
-        bucket.total += delta;
-        if (date >= weekStart && date <= today) bucket.weekly += delta;
-        if (date === today) bucket.daily += delta;
-        perMember.set(memberId, bucket);
-      }
+      applyGated(
+        memberBucket(memberId),
+        date,
+        memberPeriodPointsDelta(current, next, memberId, date, today),
+      );
     }
     current = next;
   }
 
-  return { perMember, household, clearPaths };
+  // A member whose deltas all cancelled has nothing to write; dropping them here
+  // keeps `perMember` exactly as sparse as the pre-split implementation left it.
+  for (const [memberId, bucket] of perMember) {
+    if (bucket.daily === 0 && bucket.weekly === 0 && bucket.total === 0) {
+      perMember.delete(memberId);
+    }
+  }
+
+  return { perMember, household, clearedDates, clearPaths };
 };
