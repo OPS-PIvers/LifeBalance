@@ -85,6 +85,12 @@ vi.mock('react-hot-toast', () => ({
 
 import { useHabitActions } from './useHabitActions';
 import { streakForHabit } from '@/utils/habitLogic';
+import {
+  memberMostRecentUnitDateInPeriod,
+  memberPeriodPointsDelta,
+  householdPeriodPointsDelta,
+  withAttributionDelta,
+} from '@/utils/habitAttribution';
 // The mocked updateDoc — updateHabit writes via updateDoc(ref, data), not a batch,
 // so we read its captured call args to assert on the whitelisted update payload.
 // getDocs backs the prior-submissions lookup for back-dated threshold submissions.
@@ -1138,6 +1144,124 @@ describe('useHabitActions.creditHabitCompletion / uncreditHabitCompletion', () =
 
     expect(capturedUpdates).toHaveLength(0);
     expect(commitCount).toBe(0);
+  });
+});
+
+// 🛡️ The un-credit TARGET DATE is resolved by the CALLER (HabitCard, via
+// `memberMostRecentUnitDateInPeriod`) and handed to `uncreditHabitCompletion`
+// as an explicit argument — the two are only correct together. For a weekly
+// threshold habit with multiple contributors, the day the household record
+// shows as "complete" (whoever's unit CROSSED the target) and a given
+// member's own most-recent unit can be different days entirely. This test
+// pins that the picker's date-selection and the mutation's internals agree:
+// the right day gets debited, and the pool/member figures stay internally
+// consistent with the shared attribution formulas (`habitAttribution.ts`)
+// that the corrective recompute also uses.
+describe('useHabitActions.uncreditHabitCompletion (weekly threshold, multiple contributors, mid-week unit)', () => {
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    commitCount = 0;
+    incrementMock.mockClear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("un-credits Paul's Monday unit (not Jen's Wednesday one that crossed the target) — member debit, household debit, and completedDates stay consistent", async () => {
+    // Wednesday 2026-07-15, same ISO week (Mon 2026-07-13 – Sun 2026-07-19)
+    // already used elsewhere in this file — a fixture anchored to its own
+    // week, never to an offset from `new Date()`.
+    vi.useFakeTimers({ now: new Date('2026-07-15T09:00:00') });
+    const today = '2026-07-15';
+
+    // Paul completed his only unit Monday; Jen's Wednesday unit crossed the
+    // shared targetCount:2 threshold, so ONLY Wednesday ever entered
+    // completedDates (creditHabitCompletion always stamps the CREDITING
+    // day, not every contributor's day).
+    const habit = baseHabit({
+      period: 'weekly',
+      scoringType: 'threshold',
+      targetCount: 2,
+      count: 2,
+      totalCount: 2,
+      completedDates: ['2026-07-15'],
+      completedBy: { '2026-07-13': { 'paul-uid': 1 }, '2026-07-15': { 'jen-uid': 1 } },
+      lastUpdated: '2026-07-15T08:00:00',
+    });
+
+    // The picker's own target-date resolution (HabitCard.handleUncreditMember
+    // calls exactly this before invoking uncreditHabitCompletion) must land on
+    // PAUL'S day, not the day the record shows as complete.
+    const targetDate = memberMostRecentUnitDateInPeriod(habit, 'paul-uid', today);
+    expect(targetDate).toBe('2026-07-13');
+
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], [
+        { uid: 'paul-uid' },
+        { uid: 'jen-uid' },
+      ] as HouseholdMember[])
+    );
+
+    await act(async () => {
+      await result.current.uncreditHabitCompletion('h1', 'paul-uid', targetDate!);
+    });
+
+    // --- Habit doc: Paul's Monday unit is stripped; Jen's Wednesday one is untouched.
+    const hu = habitUpdate();
+    expect(hu).toBeDefined();
+    expect(hu!.data['completedBy.2026-07-13.paul-uid']).toEqual({ __increment: -1 });
+    expect(hu!.data['completedBy.2026-07-15.jen-uid']).toBeUndefined();
+    expect(hu!.data['count']).toEqual({ __increment: -1 });
+    expect(hu!.data['totalCount']).toEqual({ __increment: -1 });
+    // `targetDate` ('2026-07-13') isn't in `completedDates` (only '2026-07-15'
+    // is), so there is nothing for this un-credit to remove — no arrayRemove.
+    expect('completedDates' in hu!.data).toBe(false);
+    expect(hu!.data['streakDays']).toBe(
+      streakForHabit({ period: 'weekly', completedDates: habit.completedDates })
+    );
+
+    // --- Member debit: EXACTLY what Paul's own period award was, recomputed
+    // from the shared attribution formula (`memberPeriodPointsDelta`) —
+    // building the same before/after pair `uncreditHabitCompletion` builds
+    // internally, so this pins the WIRING (right date, right batch shape),
+    // not a re-derivation of the scoring math (already covered by
+    // `habitAttribution.test.ts`).
+    const stripped = withAttributionDelta(habit, targetDate!, 'paul-uid', -1);
+    const after = {
+      ...stripped,
+      count: Math.max(0, habit.count - 1),
+      totalCount: Math.max(0, habit.totalCount - 1),
+      completedDates: habit.completedDates,
+    };
+    const expectedPaulDelta = memberPeriodPointsDelta(habit, after, 'paul-uid', targetDate!, today);
+    const expectedPoolDelta = householdPeriodPointsDelta(habit, after, targetDate!, today);
+
+    const memberWrites = () => capturedUpdates.filter(u => u.ref.__path.includes('/members/'));
+    const paulWrite = memberWrites().find(u => u.ref.__path.endsWith('paul-uid'));
+    expect(paulWrite).toBeDefined();
+    expect(paulWrite!.data['points.total']).toEqual({ __increment: expectedPaulDelta });
+    // Monday predates the fixture's "today" (Wednesday) but is inside the
+    // same Monday-anchored week, so weekly is debited and daily is not.
+    expect(paulWrite!.data['points.daily']).toBeUndefined();
+    expect(paulWrite!.data['points.weekly']).toEqual({ __increment: expectedPaulDelta });
+
+    // Jen's own member doc is untouched by THIS un-credit — only the targeted
+    // member (Paul) gets a write. Any drift in Jen's stored figure (the
+    // shared threshold no longer being met household-wide zeroes her period
+    // award too, in `expectedPoolDelta`) is left to the corrective recompute,
+    // exactly like every other reversal path in this file.
+    expect(memberWrites().some(u => u.ref.__path.endsWith('jen-uid'))).toBe(false);
+
+    // --- Household pool debit matches the shared formula exactly.
+    const hh = householdUpdate();
+    expect(hh).toBeDefined();
+    expect(hh!.data['points.total']).toEqual({ __increment: expectedPoolDelta });
+    expect(hh!.data['points.weekly']).toEqual({ __increment: expectedPoolDelta });
+    expect(hh!.data['points.daily']).toBeUndefined();
+
+    expect(commitCount).toBe(1);
   });
 });
 

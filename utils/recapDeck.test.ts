@@ -158,6 +158,21 @@ describe('buildHeadToHead', () => {
     expect(buildHeadToHead(runaway, 'adaptive', colors).framing).toBe('podium');
   });
 
+  it('crowns the strict leader even in a net-negative week — lost the least still wins', () => {
+    // Paul -5, Jen -20: matches the Scoreboard widget's and the Points
+    // Breakdown drawer's crown rule via the shared `findLeaderId` predicate —
+    // the old `points > 0` scorers filter here silently un-crowned exactly
+    // this week while the other two surfaces still crowned it.
+    const netNegative = recap({
+      memberFacts: [facts('paul', 'Paul', -5), facts('jen', 'Jen', -20)],
+    });
+    const h2h = buildHeadToHead(netNegative, 'podium', colors);
+    expect(h2h.leader?.memberId).toBe('paul');
+    expect(h2h.runnerUp?.memberId).toBe('jen');
+    expect(h2h.margin).toBe(15);
+    expect(h2h.framing).toBe('podium');
+  });
+
   it('treats a tie for first as no podium at all', () => {
     const tied = recap({ memberFacts: [facts('jen', 'Jen', 300), facts('paul', 'Paul', 300)] });
     const h2h = buildHeadToHead(tied, 'podium', colors);
