@@ -337,5 +337,59 @@ describe('PointsBreakdownDrawer', () => {
       const householdRow = await screen.findByTestId('points-drawer-household-row');
       expect(householdRow).toHaveTextContent('-20');
     });
+
+    describe('submission fetch caching (perf: avoid re-fetch on every habit toggle)', () => {
+      // This drawer is reachable from the always-mounted TopToolbar, so a
+      // habits snapshot on ANY habit toggle (a fresh array identity, since
+      // Firestore listeners never hand back the same array) previously
+      // re-issued a `getHabitSubmissions` query per `hasSubmissionTracking`
+      // habit even when nothing the fetch depends on had actually changed.
+      // See `submissionCacheKey`'s doc comment in
+      // utils/habitSubmissionTotals.ts for the fingerprint this cache keys on.
+      const trackedHabit = (lastUpdated: string) =>
+        makeHabit({
+          id: 'h-tracked',
+          type: 'positive',
+          scoringType: 'incremental',
+          basePoints: 10,
+          hasSubmissionTracking: true,
+          completedDates: ['2026-07-28'],
+          completedBy: { '2026-07-28': { paul: 1 } },
+          lastUpdated,
+        });
+
+      it('does not re-fetch when re-rendered with a new habits array identity but an unchanged fingerprint', async () => {
+        const getHabitSubmissions = vi.fn(async () => []);
+        setup({ habits: [trackedHabit('2026-07-28T12:00:00.000Z')], getHabitSubmissions });
+        const { rerender } = renderDrawer();
+        await act(async () => {});
+        expect(getHabitSubmissions).toHaveBeenCalledTimes(1);
+
+        // A fresh array/object identity (as every Firestore snapshot has)
+        // but the SAME tracked habit's lastUpdated — nothing that could have
+        // touched a submission.
+        setup({ habits: [trackedHabit('2026-07-28T12:00:00.000Z')], getHabitSubmissions });
+        rerender(<PointsBreakdownDrawer open={true} onClose={vi.fn()} />);
+        await act(async () => {});
+
+        expect(getHabitSubmissions).toHaveBeenCalledTimes(1);
+      });
+
+      it('re-fetches once a tracked habit\'s lastUpdated actually changes', async () => {
+        const getHabitSubmissions = vi.fn(async () => []);
+        setup({ habits: [trackedHabit('2026-07-28T12:00:00.000Z')], getHabitSubmissions });
+        const { rerender } = renderDrawer();
+        await act(async () => {});
+        expect(getHabitSubmissions).toHaveBeenCalledTimes(1);
+
+        // A submission mutation stamps the habit doc's lastUpdated, which
+        // arrives on the live listener as a new snapshot.
+        setup({ habits: [trackedHabit('2026-07-28T18:00:00.000Z')], getHabitSubmissions });
+        rerender(<PointsBreakdownDrawer open={true} onClose={vi.fn()} />);
+        await act(async () => {});
+
+        expect(getHabitSubmissions).toHaveBeenCalledTimes(2);
+      });
+    });
   });
 });

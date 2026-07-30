@@ -408,5 +408,68 @@ describe('ScoreboardWidget', () => {
       // to guarantee.
       expect(44 + 17 + -20).toBe(total);
     });
+
+    describe('submission fetch caching (perf: avoid re-fetch on every habit toggle)', () => {
+      // The Dashboard (and hence this always-mounted widget) re-renders on
+      // every Firestore habits snapshot, which arrives with a fresh array
+      // identity on every single habit toggle. Without a fingerprint cache,
+      // that snapshot alone was enough to re-issue a `getHabitSubmissions`
+      // query per `hasSubmissionTracking` habit — see
+      // `submissionCacheKey`'s doc comment in utils/habitSubmissionTotals.ts.
+      //
+      // `ScoreboardWidget` is wrapped in `React.memo` with no props, so a
+      // parent-driven `rerender()` is a no-op; these tests force a genuine
+      // re-render via a real user interaction (opening the week menu) that
+      // flips internal state, then swap the mocked `habits` return value in
+      // between clicks to simulate a fresh snapshot.
+      const trackedHabit = (lastUpdated: string) =>
+        makeHabit({
+          id: 'h-tracked',
+          type: 'positive',
+          scoringType: 'incremental',
+          basePoints: 10,
+          hasSubmissionTracking: true,
+          completedDates: ['2026-07-28'],
+          completedBy: { '2026-07-28': { paul: 1 } },
+          lastUpdated,
+        });
+
+      beforeEach(() => {
+        mockMembers.mockReturnValue([
+          makeMember({ uid: 'paul', displayName: 'Paul', points: { daily: 5, weekly: 44, total: 44 } }),
+        ]);
+      });
+
+      it('does not re-fetch when re-rendered with a new habits array identity but an unchanged fingerprint', async () => {
+        mockHabits.mockReturnValue([trackedHabit('2026-07-28T12:00:00.000Z')]);
+        render(<ScoreboardWidget />);
+        await act(async () => {});
+        expect(mockGetHabitSubmissions).toHaveBeenCalledTimes(1);
+
+        // A fresh array/object identity (as every Firestore snapshot has)
+        // but the SAME tracked habit's lastUpdated — nothing that could have
+        // touched a submission.
+        mockHabits.mockReturnValue([trackedHabit('2026-07-28T12:00:00.000Z')]);
+        fireEvent.click(screen.getByRole('button', { name: /Select week/ }));
+        await act(async () => {});
+
+        expect(mockGetHabitSubmissions).toHaveBeenCalledTimes(1);
+      });
+
+      it('re-fetches once a tracked habit\'s lastUpdated actually changes', async () => {
+        mockHabits.mockReturnValue([trackedHabit('2026-07-28T12:00:00.000Z')]);
+        render(<ScoreboardWidget />);
+        await act(async () => {});
+        expect(mockGetHabitSubmissions).toHaveBeenCalledTimes(1);
+
+        // A submission mutation stamps the habit doc's lastUpdated, which
+        // arrives on the live listener as a new snapshot.
+        mockHabits.mockReturnValue([trackedHabit('2026-07-28T18:00:00.000Z')]);
+        fireEvent.click(screen.getByRole('button', { name: /Select week/ }));
+        await act(async () => {});
+
+        expect(mockGetHabitSubmissions).toHaveBeenCalledTimes(2);
+      });
+    });
   });
 });

@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Crown, Gift, TrendingDown, TrendingUp, X } from 'lucide-react';
 import { format, parseISO, startOfWeek, endOfWeek } from 'date-fns';
@@ -14,7 +14,7 @@ import HouseholdBadge from '@/components/ui/HouseholdBadge';
 import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 import { getAdultStandings, computePointsTrend, type PointsDrawerPeriod } from '@/utils/pointsDrawer';
 import { calculateHouseholdShareForDateRange } from '@/utils/scoreboardWidget';
-import { fetchSubmissionTotals } from '@/utils/habitSubmissionTotals';
+import { fetchSubmissionTotals, submissionCacheKey } from '@/utils/habitSubmissionTotals';
 import type { SubmissionTotalsByHabitDate } from '@/utils/habitLogic';
 
 interface PointsBreakdownDrawerProps {
@@ -83,27 +83,46 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
   // Household row structurally disagree with the total it exists to explain.
   // Fetched via the same `fetchSubmissionTotals` helper `usePointsSync` uses.
   //
-  // Stored alongside the window (`key`) it was fetched for — read at render
-  // time by `householdShare` below, rather than eagerly reset with a
-  // synchronous setState at the top of the effect (a react-hooks/
+  // `key` is `submissionCacheKey(habits, householdShareStart)` — the window
+  // PLUS the fingerprint of every tracked habit's `lastUpdated` — rather than
+  // just the window, so a habits snapshot that can't have touched a
+  // submission (any toggle on a habit without `hasSubmissionTracking`, which
+  // is most of them) doesn't re-fetch. `fetchedShareCacheRef` mirrors this
+  // same {key, totals} shape but is read (not a dependency) by the effect
+  // below purely to gate the fetch — putting the state itself in the
+  // dependency array would retry a persistently-failing fetch on every
+  // render instead of only on the next real habits/window change.
+  //
+  // Read at render time by `householdShare` below, rather than eagerly reset
+  // with a synchronous setState at the top of the effect (a react-hooks/
   // set-state-in-effect footgun) — so a period switch (Day ↔ Week) can't
   // render the OTHER period's stale figure under the new period's label: the
   // memo below treats a `key` mismatch exactly like "not fetched yet" and
   // hides the row (see the `householdShare !== undefined` render guards).
+  const fetchedShareCacheRef =
+    useRef<{ key: string; totals: SubmissionTotalsByHabitDate } | null>(null);
   const [fetchedShare, setFetchedShare] =
     useState<{ key: string; totals: SubmissionTotalsByHabitDate } | undefined>(undefined);
 
   useEffect(() => {
+    const cacheKey = submissionCacheKey(habits, householdShareStart);
+    if (fetchedShareCacheRef.current?.key === cacheKey) return;
+
     let cancelled = false;
     (async () => {
       try {
         const today = getLocalDateString();
         const totals = await fetchSubmissionTotals(habits, householdShareStart, today, getHabitSubmissions);
-        if (!cancelled) setFetchedShare({ key: householdShareStart, totals });
+        if (!cancelled) {
+          const entry = { key: cacheKey, totals };
+          fetchedShareCacheRef.current = entry;
+          setFetchedShare(entry);
+        }
       } catch {
         // A transient failure leaves the row hidden rather than showing a
-        // stale/incomplete figure; the next habits snapshot or period switch
-        // re-fires this effect and retries.
+        // stale/incomplete figure; the cache isn't updated on failure, so
+        // the next habits snapshot or period switch re-fires this effect
+        // and retries.
         if (!cancelled) setFetchedShare(undefined);
       }
     })();
@@ -111,7 +130,8 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
   }, [habits, householdShareStart, getHabitSubmissions]);
 
   const householdShare = useMemo(() => {
-    if (!fetchedShare || fetchedShare.key !== householdShareStart) return undefined;
+    const cacheKey = submissionCacheKey(habits, householdShareStart);
+    if (!fetchedShare || fetchedShare.key !== cacheKey) return undefined;
     const today = getLocalDateString();
     return calculateHouseholdShareForDateRange(habits, householdShareStart, today, today, fetchedShare.totals);
   }, [habits, householdShareStart, fetchedShare]);

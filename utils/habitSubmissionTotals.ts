@@ -68,3 +68,26 @@ export const fetchSubmissionTotals = async (
   );
   return buildSubmissionTotals(entries);
 };
+
+/**
+ * Fingerprint of everything that can change the submissions in `scope`: the
+ * scored window (and, for callers that fold in more context, e.g. the
+ * household id), plus each tracked habit's identity and last write. Every
+ * submission mutation (add/update/delete, and the transaction-fire batch)
+ * stamps the habit doc's `lastUpdated`, which arrives on the live listener —
+ * so an unchanged fingerprint means the previously fetched totals are still
+ * current, and a caller can skip re-fetching entirely.
+ *
+ * `habits` gets a fresh array identity on every Firestore snapshot (a
+ * snapshot fires on every habit toggle), so gating a `fetchSubmissionTotals`
+ * call on array identity alone re-fetches far more often than the underlying
+ * data actually changes. Callers that read submission totals in a component
+ * that stays mounted across habit toggles (the Dashboard's ScoreboardWidget,
+ * PointsBreakdownDrawer) should key their cache off this fingerprint instead.
+ */
+export const submissionCacheKey = (habits: Habit[], scope: string): string =>
+  habits
+    .filter(h => h.hasSubmissionTracking)
+    .map(h => `${h.id}@${h.lastUpdated}`)
+    .sort()
+    .join(',') + `|${scope}`;

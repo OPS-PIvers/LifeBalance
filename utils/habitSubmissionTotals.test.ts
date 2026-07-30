@@ -1,6 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Habit, HabitSubmission } from '@/types/schema';
-import { buildSubmissionTotals, fetchSubmissionTotals, type GetHabitSubmissions } from './habitSubmissionTotals';
+import {
+  buildSubmissionTotals,
+  fetchSubmissionTotals,
+  submissionCacheKey,
+  type GetHabitSubmissions,
+} from './habitSubmissionTotals';
 
 const habit = (id: string, overrides: Partial<Habit> = {}): Habit =>
   ({
@@ -107,5 +112,47 @@ describe('fetchSubmissionTotals', () => {
 
     expect(totals.get('h1')?.get('2026-06-01')).toEqual({ count: 2, points: 20 });
     expect(totals.has('h2')).toBe(false);
+  });
+});
+
+// Moved here from hooks/usePointsSync.ts (it was module-private there) so
+// ScoreboardWidget/PointsBreakdownDrawer can reuse the same cache-fingerprint
+// logic instead of re-fetching submission totals on every habit toggle (a
+// fresh `habits` array identity arrives on every Firestore snapshot). See the
+// exported function's own doc comment for the soundness argument.
+describe('submissionCacheKey', () => {
+  it('is stable across a new array identity when no tracked habit changed', () => {
+    const habitsA = [habit('h1', { hasSubmissionTracking: true })];
+    const habitsB = [habit('h1', { hasSubmissionTracking: true })]; // fresh objects/array
+    expect(submissionCacheKey(habitsA, 'scope')).toBe(submissionCacheKey(habitsB, 'scope'));
+  });
+
+  it('changes when a tracked habit\'s lastUpdated changes', () => {
+    const before = [habit('h1', { hasSubmissionTracking: true, lastUpdated: '2026-06-01T00:00:00.000Z' })];
+    const after = [habit('h1', { hasSubmissionTracking: true, lastUpdated: '2026-06-01T06:00:00.000Z' })];
+    expect(submissionCacheKey(before, 'scope')).not.toBe(submissionCacheKey(after, 'scope'));
+  });
+
+  it('ignores habits that are not flagged hasSubmissionTracking', () => {
+    const withUntracked = [
+      habit('h1', { hasSubmissionTracking: true }),
+      habit('h2', { hasSubmissionTracking: false, lastUpdated: '2026-01-01T00:00:00.000Z' }),
+    ];
+    const untrackedChanged = [
+      habit('h1', { hasSubmissionTracking: true }),
+      habit('h2', { hasSubmissionTracking: false, lastUpdated: '2099-01-01T00:00:00.000Z' }),
+    ];
+    expect(submissionCacheKey(withUntracked, 'scope')).toBe(submissionCacheKey(untrackedChanged, 'scope'));
+  });
+
+  it('differs by scope, so different windows/households never collide', () => {
+    const habits = [habit('h1', { hasSubmissionTracking: true })];
+    expect(submissionCacheKey(habits, 'scope-a')).not.toBe(submissionCacheKey(habits, 'scope-b'));
+  });
+
+  it('is order-independent across tracked habits (sorted before joining)', () => {
+    const h1 = habit('h1', { hasSubmissionTracking: true });
+    const h2 = habit('h2', { hasSubmissionTracking: true });
+    expect(submissionCacheKey([h1, h2], 'scope')).toBe(submissionCacheKey([h2, h1], 'scope'));
   });
 });

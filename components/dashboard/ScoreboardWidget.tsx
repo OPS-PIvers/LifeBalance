@@ -15,7 +15,7 @@ import {
   type ScoreboardWeekStanding,
 } from '@/utils/scoreboardWidget';
 import { calculateHouseholdPointsForDateRange, calculateMemberPointsForDateRange } from '@/utils/habitAttribution';
-import { fetchSubmissionTotals } from '@/utils/habitSubmissionTotals';
+import { fetchSubmissionTotals, submissionCacheKey } from '@/utils/habitSubmissionTotals';
 import type { SubmissionTotalsByHabitDate } from '@/utils/habitLogic';
 import { cn } from '@/utils/cn';
 import { Section, SurfaceList } from '@/components/ui/Section';
@@ -106,11 +106,28 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
   const [currentWeekSubmissionTotals, setCurrentWeekSubmissionTotals] =
     useState<SubmissionTotalsByHabitDate | undefined>(undefined);
 
+  // Last-fetched fingerprint + totals for the current-week window, read via a
+  // ref rather than folded into the effect's own dependency array — a ref
+  // write doesn't retrigger the effect, so a failed fetch retries only on the
+  // next real habits snapshot/week change instead of looping tightly (see
+  // `submissionCacheKey`'s doc comment in utils/habitSubmissionTotals.ts for
+  // why an unchanged fingerprint means the previously fetched totals are
+  // still current — `usePointsSync` uses the exact same cache shape).
+  const currentWeekSubmissionCacheRef =
+    useRef<{ key: string; totals: SubmissionTotalsByHabitDate } | null>(null);
+
   useEffect(() => {
     if (!currentWeek) {
       setCurrentWeekSubmissionTotals(undefined);
       return;
     }
+    const cacheKey = submissionCacheKey(habits, `${currentWeek.weekStart}..${getLocalDateString()}`);
+    // The always-mounted Dashboard re-renders this effect on every habits
+    // snapshot (a fresh array identity on every habit toggle). Bail out
+    // before issuing a query when no tracked habit's `lastUpdated` — and
+    // hence no submission — could have changed since the last fetch.
+    if (currentWeekSubmissionCacheRef.current?.key === cacheKey) return;
+
     let cancelled = false;
     (async () => {
       try {
@@ -120,20 +137,19 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
           getLocalDateString(),
           getHabitSubmissions,
         );
-        if (!cancelled) setCurrentWeekSubmissionTotals(totals);
+        if (!cancelled) {
+          currentWeekSubmissionCacheRef.current = { key: cacheKey, totals };
+          setCurrentWeekSubmissionTotals(totals);
+        }
       } catch {
         // A transient failure leaves the row hidden (per the doc comment
-        // above) rather than showing a stale/incomplete figure; the next
-        // habits snapshot re-fires this effect and retries.
+        // above) rather than showing a stale/incomplete figure; the cache
+        // isn't updated on failure, so the next habits snapshot or week
+        // change re-fires this effect and retries.
         if (!cancelled) setCurrentWeekSubmissionTotals(undefined);
       }
     })();
     return () => { cancelled = true; };
-    // Only habits flagged `hasSubmissionTracking` are actually read
-    // (`fetchSubmissionTotals`'s own bound), so this re-fires on every
-    // habits snapshot but issues zero Firestore reads for a household that
-    // has never used the submissions path — same cost trade-off the
-    // past-week fetch below already accepts over caching.
   }, [habits, currentWeek, getHabitSubmissions]);
 
   const currentWeekHouseholdShare = useMemo(
