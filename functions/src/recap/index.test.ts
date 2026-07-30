@@ -9,8 +9,10 @@
  * the subset of the query API this module uses: `.where(field, op, value)` chains,
  * `.get()`, `.doc()`, `.update()`, and `db.batch()`.
  *
- * Time is pinned via fake timers to a known Sunday 17:00 instant in a known IANA
- * timezone so `isTimeToSend`/`isoWeekId` behave deterministically.
+ * Time is pinned via fake timers to a known MONDAY 07:00 instant in a known IANA
+ * timezone — the ceremony's generation moment — so `isTimeToSend`/`isoWeekId`
+ * behave deterministically. The week the run DESCRIBES is the one that closed
+ * the day before; see `CLOSED_WEEK` / `CURRENT_WEEK` below.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -230,8 +232,17 @@ vi.mock("firebase-admin", () => {
 import { sendweeklyrecap } from "./index";
 
 const HOUSEHOLD_ID = "hh1";
-// Sunday 2026-07-05, 17:00 in America/New_York = 21:00 UTC.
-const PINNED_INSTANT = new Date("2026-07-05T21:00:00Z");
+// MONDAY 2026-07-06, 07:00 in America/New_York = 11:00 UTC — the ceremony's
+// generation moment (stage 5). The week it describes is the one that just
+// CLOSED: Mon 2026-06-29 → Sun 2026-07-05, i.e. ISO week 2026-W27. Every
+// expectation below is anchored to that week, never to the week the pinned
+// instant itself falls in (2026-W28) — naming the recap after "now" is exactly
+// the off-by-one the Monday move introduced.
+const PINNED_INSTANT = new Date("2026-07-06T11:00:00Z");
+/** The ISO week the pinned instant's run describes. */
+const CLOSED_WEEK = "2026-W27";
+/** The ISO week the pinned instant itself falls in — must never be used as an id. */
+const CURRENT_WEEK = "2026-W28";
 
 function freshMember(overrides: DocData = {}): DocData {
   return {
@@ -411,5 +422,100 @@ describe("sendweeklyrecap", () => {
 
     const member = store.getRaw(`households/${HOUSEHOLD_ID}/members/u1`) as { lastRecapSentWeek?: string };
     expect(member.lastRecapSentWeek).toBeUndefined();
+  });
+
+  // -------------------------------------------------------------------------
+  // Monday-morning generation (per-member points, stage 5)
+  // -------------------------------------------------------------------------
+
+  it("names the recap after the week that CLOSED, not the week the run falls in", async () => {
+    seedHousehold(store);
+    store.seedCollection("app_config", { global: { billingEnabled: false } });
+
+    await run();
+
+    expect(store.getRaw(`households/${HOUSEHOLD_ID}/recaps/${CLOSED_WEEK}`)).toBeDefined();
+    expect(store.getRaw(`households/${HOUSEHOLD_ID}/recaps/${CURRENT_WEEK}`)).toBeUndefined();
+    const household = store.getRaw(`households/${HOUSEHOLD_ID}`) as { lastRecapWeek?: string };
+    expect(household.lastRecapWeek).toBe(CLOSED_WEEK);
+    expect(sendEachForMulticastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ url: `/?recap=${CLOSED_WEEK}` }),
+      })
+    );
+  });
+
+  it("does NOT fire at the old Sunday 17:00 slot", async () => {
+    // Sunday 2026-07-05, 17:00 America/New_York = 21:00 UTC — the pre-stage-5
+    // trigger. The week is not closed yet, so nothing may be generated.
+    vi.setSystemTime(new Date("2026-07-05T21:00:00Z"));
+    seedHousehold(store);
+    store.seedCollection("app_config", { global: { billingEnabled: false } });
+
+    await run();
+
+    expect(store.getRaw(`households/${HOUSEHOLD_ID}/recaps/${CLOSED_WEEK}`)).toBeUndefined();
+    expect(sendEachForMulticastMock).not.toHaveBeenCalled();
+  });
+
+  it("does NOT fire at a non-Monday morning", async () => {
+    // Tuesday 2026-07-07, 07:00 America/New_York = 11:00 UTC.
+    vi.setSystemTime(new Date("2026-07-07T11:00:00Z"));
+    seedHousehold(store);
+    store.seedCollection("app_config", { global: { billingEnabled: false } });
+
+    await run();
+
+    expect(store.getRaw(`households/${HOUSEHOLD_ID}`)).toEqual({});
+    expect(sendEachForMulticastMock).not.toHaveBeenCalled();
+  });
+
+  it("writes the household's ceremonyTone onto the recap and frames the template with it", async () => {
+    seedHousehold(store, { ceremonyTone: "podium", subscription: { status: "canceled" } });
+    store.seedCollection("app_config", { global: { billingEnabled: true } });
+    store.seedCollection(`households/${HOUSEHOLD_ID}/habits`, {
+      h1: {
+        title: "Morning walk",
+        period: "daily",
+        type: "positive",
+        basePoints: 10,
+        scoringType: "threshold",
+        targetCount: 1,
+        streakDays: 7,
+        completedDates: ["2026-06-29", "2026-06-30", "2026-07-01", "2026-07-02"],
+        completedBy: {
+          "2026-06-29": { u1: 1, u2: 1 },
+          "2026-06-30": { u1: 1 },
+          "2026-07-01": { u1: 1 },
+          "2026-07-02": { u1: 1 },
+        },
+      },
+    });
+
+    await run();
+
+    const recap = store.getRaw(`households/${HOUSEHOLD_ID}/recaps/${CLOSED_WEEK}`) as {
+      ceremonyTone: string;
+      memberFacts: Array<{ memberId: string; points: number }>;
+      dailyPoints: Array<{ date: string; total: number }>;
+      totalPoints: number;
+    };
+    expect(recap.ceremonyTone).toBe("podium");
+    expect(recap.dailyPoints).toHaveLength(7);
+    expect(recap.dailyPoints[0]?.date).toBe("2026-06-29");
+    expect(recap.memberFacts.map((f) => f.memberId)).toEqual(["u1"]);
+    expect(recap.totalPoints).toBeGreaterThan(0);
+  });
+
+  it("defaults an absent ceremonyTone to household_first on the written doc", async () => {
+    seedHousehold(store);
+    store.seedCollection("app_config", { global: { billingEnabled: false } });
+
+    await run();
+
+    const recap = store.getRaw(`households/${HOUSEHOLD_ID}/recaps/${CLOSED_WEEK}`) as {
+      ceremonyTone: string;
+    };
+    expect(recap.ceremonyTone).toBe("household_first");
   });
 });

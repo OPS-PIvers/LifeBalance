@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Lock, Flame, TrendingDown, TrendingUp, Share2 } from 'lucide-react';
 import { Drawer } from '@/components/ui/Drawer';
@@ -11,18 +11,28 @@ import { cn } from '@/utils/cn';
 import { DEFAULT_CURRENCY } from '@/utils/formatCurrency';
 import { shareRecapCard } from '@/utils/recapShareCard';
 import { track } from '@/services/analytics';
+import { RecapDeck } from '@/components/dashboard/RecapDeck';
+import { buildRecapDeck, hasCeremonyData } from '@/utils/recapDeck';
+import { resolveCeremonyTone } from '@/utils/freezeSettings';
 import type { WeeklyRecap } from '@/types/schema';
 
 /**
- * WeeklyRecapDrawer — bottom-sheet detail view of one weekly recap (Plan 02).
+ * WeeklyRecapDrawer — bottom-sheet detail view of one weekly recap (Plan 02),
+ * and, since the ceremony landed (per-member points, stage 5), the host of the
+ * weekly story deck.
  *
- * Renders every recap section from the pre-computed server numbers: spend vs
- * prior week, top category deltas, habit completions + points per member,
- * streaks at risk, upcoming bills, and the narrative (blurred behind a small
- * upsell row when `premium: false`). Statically imported by the Dashboard-only
- * WeeklyRecapCard — the Dashboard page is itself lazy-loaded, so the Drawer/
- * framer-motion dependency stays off the boot bundle (same rationale as other
- * page-mounted drawers; only always-mounted shells must use LazyMount).
+ * 🛡️ ONE ARTIFACT. The ceremony EVOLVED this drawer rather than adding a second
+ * surface: same recap document, same card entry point, same `/?recap=<isoWeek>`
+ * push deep link, same `recap.premium` gate on the narrative. A recap that
+ * carries the per-member ceremony fields opens as the 4-card deck with the
+ * money/habit sections tucked into a "Week details" disclosure beneath it; a
+ * recap WITHOUT them (every one written before stage 5) renders exactly the
+ * pre-deck layout it always did. `hasCeremonyData` is the only gate.
+ *
+ * Statically imported by the Dashboard-only WeeklyRecapCard — the Dashboard
+ * page is itself lazy-loaded, so the Drawer/framer-motion dependency stays off
+ * the boot bundle (same rationale as other page-mounted drawers; only
+ * always-mounted shells must use LazyMount).
  */
 
 interface WeeklyRecapDrawerProps {
@@ -30,6 +40,13 @@ interface WeeklyRecapDrawerProps {
   isOpen: boolean;
   onClose: () => void;
 }
+
+/**
+ * Neutral used for the chart's "household" (unattributed) series — a hex, not
+ * a class, because the chart's segments are inline `backgroundColor`s like
+ * every other member-colored surface. Reads as `brand-300` in both themes.
+ */
+const UNATTRIBUTED_COLOR = '#a19b8c';
 
 const SectionBlock: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
   <div>
@@ -40,8 +57,27 @@ const SectionBlock: React.FC<{ label: string; children: React.ReactNode }> = ({ 
 
 export const WeeklyRecapDrawer: React.FC<WeeklyRecapDrawerProps> = ({ recap, isOpen, onClose }) => {
   const fmt = useFormatCurrency();
-  const { householdSettings } = useHouseholdCore();
+  const { householdSettings, members, currentUser, recaps } = useHouseholdCore();
   const [isSharing, setIsSharing] = useState(false);
+
+  // The deck is built only when the recap actually carries the ceremony
+  // fields; `null` here IS the graceful degrade to the pre-deck layout.
+  const deck = useMemo(() => {
+    if (!recap || !hasCeremonyData(recap)) return null;
+    return buildRecapDeck({
+      recap,
+      recaps,
+      members,
+      viewerId: currentUser?.uid,
+      tone: resolveCeremonyTone(householdSettings),
+      unattributedColor: UNATTRIBUTED_COLOR,
+    });
+  }, [recap, recaps, members, currentUser?.uid, householdSettings]);
+
+  const handleDeckComplete = useCallback(() => {
+    if (!recap) return;
+    track('recap_deck_completed', { isoWeek: recap.isoWeek, tone: deck?.tone ?? 'household_first' });
+  }, [recap, deck?.tone]);
 
   const handleShare = useCallback(async () => {
     if (!recap) return;
@@ -68,22 +104,12 @@ export const WeeklyRecapDrawer: React.FC<WeeklyRecapDrawerProps> = ({ recap, isO
   const spentLess = diff < 0;
   const DiffIcon = spentLess ? TrendingDown : TrendingUp;
 
-  return (
-    <Drawer isOpen={isOpen} onClose={onClose} title={`Week in review · ${recap.isoWeek}`}>
-      <div className="space-y-6 pb-2">
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          leftIcon={<Share2 size={15} aria-hidden="true" />}
-          isLoading={isSharing}
-          onClick={handleShare}
-          className="w-full"
-        >
-          Share your recap
-        </Button>
-
-        {/* Spend vs prior week */}
+  // The money/habit sections. In deck mode they move BELOW the deck into a
+  // collapsed "Week details" disclosure — the ceremony must not cost anyone the
+  // spend, bills and streak detail this drawer has always carried.
+  const detailSections = (
+    <>
+      {/* Spend vs prior week */}
         <SectionBlock label="Spending">
           <div className="flex items-baseline gap-3">
             <span className="stat-num text-3xl font-bold text-accent-700 dark:text-accent-300">
@@ -206,7 +232,9 @@ export const WeeklyRecapDrawer: React.FC<WeeklyRecapDrawerProps> = ({ recap, isO
           </SectionBlock>
         )}
 
-        {/* Narrative — the premium-gated section */}
+      {/* Narrative — the premium-gated section. In deck mode it lives on the
+          finish card instead, so it is rendered here only without a deck. */}
+      {!deck && (
         <SectionBlock label="Your recap">
           {recap.premium ? (
             <p className="text-sm leading-relaxed text-brand-700 dark:text-brand-200">
@@ -227,6 +255,46 @@ export const WeeklyRecapDrawer: React.FC<WeeklyRecapDrawerProps> = ({ recap, isO
             </div>
           )}
         </SectionBlock>
+      )}
+    </>
+  );
+
+  return (
+    <Drawer isOpen={isOpen} onClose={onClose} title={`Week in review · ${recap.isoWeek}`}>
+      <div className="space-y-6 pb-2">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          leftIcon={<Share2 size={15} aria-hidden="true" />}
+          isLoading={isSharing}
+          onClick={handleShare}
+          className="w-full"
+        >
+          Share your recap
+        </Button>
+
+        {deck ? (
+          <>
+            <RecapDeck
+              deck={deck}
+              recap={recap}
+              householdName={householdSettings?.name || 'Your household'}
+              onComplete={handleDeckComplete}
+            />
+            <details className="group">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center text-sm font-semibold text-accent-700 dark:text-accent-300 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-btn">
+                Week details
+                <span className="ml-1.5 transition-transform group-open:rotate-90" aria-hidden="true">
+                  ›
+                </span>
+              </summary>
+              <div className="mt-2 space-y-6">{detailSections}</div>
+            </details>
+          </>
+        ) : (
+          detailSections
+        )}
       </div>
     </Drawer>
   );

@@ -17,7 +17,7 @@ import type { WeeklyRecap } from '@/types/schema';
  * WeeklyRecapCard — Dashboard surface for the server-generated weekly recap
  * (Plan 02, `households/{id}/recaps/{isoWeek}`).
  *
- * Shows the LATEST recap for a few days after it lands (Sunday → Wednesday),
+ * Shows the LATEST recap for a few days after it lands (Monday → Thursday),
  * dismissible per ISO week (localStorage). Headline numbers render for every
  * plan; the AI narrative is blurred behind a small upsell row when the recap
  * was generated for a free household (`premium: false`). Tapping the card —

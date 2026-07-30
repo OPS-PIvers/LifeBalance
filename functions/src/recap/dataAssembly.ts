@@ -1,3 +1,4 @@
+import { assembleCeremony, weekPointsTotal, type RecapScoringHabit } from "./memberFacts";
 import { WeeklyRecap } from "./types";
 
 /**
@@ -16,18 +17,36 @@ export interface RecapTransaction {
   status: "verified" | "pending_review";
 }
 
-/** Minimal habit shape this module needs (subset of `types/schema.ts`'s `Habit`). */
-export interface RecapHabit {
-  title: string;
-  completedDates: string[]; // YYYY-MM-DD
+/**
+ * Minimal habit shape this module needs (subset of `types/schema.ts`'s `Habit`).
+ *
+ * The scoring half (`period`, `basePoints`, `completedBy`, …) is inherited from
+ * `RecapScoringHabit` and is entirely OPTIONAL: the money/streak sections below
+ * only ever read `title`/`completedDates`/`streakDays`, so a habit carrying
+ * none of the ceremony fields assembles exactly as it did before stage 5.
+ */
+export interface RecapHabit extends RecapScoringHabit {
   streakDays: number;
 }
 
-/** Minimal member shape this module needs (subset of `types/schema.ts`'s `HouseholdMember`). */
+/**
+ * Minimal member shape this module needs (subset of `types/schema.ts`'s
+ * `HouseholdMember`).
+ *
+ * 🛡️ NO `points` FIELD, ON PURPOSE. The recap once read
+ * `HouseholdMember.points.weekly` as its `pointsByMember` source, which was
+ * safe while generation ran Sunday 17:00 — mid-week. Generation now runs MONDAY
+ * 07:00, after the client's midnight weekly rollover, so that field describes
+ * the brand-new week and structurally cannot describe the week being recapped.
+ * Every per-member figure is derived from habit data instead (see
+ * `memberFacts.ts`); not loading the stored points is what keeps that
+ * enforceable rather than merely intended.
+ */
 export interface RecapMember {
   uid: string;
   displayName: string;
-  points: { daily: number; weekly: number; total: number };
+  /** A login-less managed kid profile — excluded from standings/podium. */
+  isManaged?: boolean;
 }
 
 /** Minimal calendar item shape this module needs (subset of `types/schema.ts`'s `CalendarItem`). */
@@ -60,7 +79,8 @@ export type AssembledRecap = Pick<
   | "streaksAtRisk"
   | "pointsByMember"
   | "upcomingBills"
->;
+> &
+  Required<Pick<WeeklyRecap, "memberFacts" | "dailyPoints" | "totalPoints" | "priorWeekPoints">>;
 
 /** Converts decimal dollars to integer cents, rounding to the nearest cent. */
 function toCents(dollars: number): number {
@@ -171,10 +191,23 @@ export function assembleWeeklyRecap(input: DataAssemblyInput): AssembledRecap {
     .filter((h) => h.streakDays >= 3 && !h.completedDates.includes(weekEnd))
     .map((h) => ({ habitTitle: h.title, streakDays: h.streakDays }));
 
-  const pointsByMember = members.map((m) => ({
-    memberId: m.uid,
-    name: m.displayName,
-    points: m.points.weekly,
+  // --- Ceremony (per-member points, stage 5) ------------------------------
+  // Every per-member figure is DERIVED from habit completions over the closed
+  // week — attribution for shared habits plus each member's assigned chores.
+  // See memberFacts.ts for why `points.weekly` can no longer be read now that
+  // generation runs after the weekly rollover.
+  const ceremony = assembleCeremony({ habits, members, weekStart, weekEnd });
+  const priorWeekPoints = weekPointsTotal(habits, members, priorWeekStart, priorWeekEnd);
+
+  // ONE source, no fallback: `pointsByMember` is the same derivation the
+  // ceremony's facts are, so the two can never disagree. `memberFacts` is empty
+  // exactly when no member holds a completion for the week, and this list is
+  // then empty too — an honest "nothing per-member to report" rather than a row
+  // of zeroes that reads like a real, silent week.
+  const pointsByMember = ceremony.memberFacts.map((f) => ({
+    memberId: f.memberId,
+    name: f.name,
+    points: f.points,
   }));
 
   const billsStart = addDays(weekEnd, 1);
@@ -191,5 +224,9 @@ export function assembleWeeklyRecap(input: DataAssemblyInput): AssembledRecap {
     streaksAtRisk,
     pointsByMember,
     upcomingBills,
+    memberFacts: ceremony.memberFacts,
+    dailyPoints: ceremony.dailyPoints,
+    totalPoints: ceremony.totalPoints,
+    priorWeekPoints,
   };
 }

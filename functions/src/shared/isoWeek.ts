@@ -26,3 +26,24 @@ export function isoWeekId(date: Date, timezone: string): string {
 
   return `${weekYear}-W${String(week).padStart(2, "0")}`;
 }
+
+/**
+ * The ISO week identifier of a plain `yyyy-MM-dd` LOCAL date string.
+ *
+ * The timezone-aware `isoWeekId` above answers "which week is it right now
+ * over there?"; this answers "which week does this calendar day belong to?",
+ * which is what the weekly ceremony needs once generation moved to Monday
+ * morning: the recap covers the week that ENDED on the previous Sunday, and
+ * naming it after the generating instant would label it with the brand-new
+ * week instead of the one it describes.
+ *
+ * Parsed with an explicit midnight time component so the string is read as a
+ * LOCAL date (a bare "2026-07-05" is parsed as UTC), which is what date-fns'
+ * ISO-week helpers then read the fields of.
+ */
+export function isoWeekIdForDate(localDate: string): string {
+  const date = new Date(`${localDate}T00:00:00`);
+  const week = getISOWeek(date);
+  const weekYear = getISOWeekYear(date);
+  return `${weekYear}-W${String(week).padStart(2, "0")}`;
+}
