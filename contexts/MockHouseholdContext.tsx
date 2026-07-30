@@ -3333,10 +3333,14 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
           for (const c of applied) {
             const bank = banks.get(c.memberId);
             if (!bank) continue;
+            // Accumulate from `next`, not `prev`: two candidates can target the
+            // SAME member in one run (two habits, two tokens), and reading from
+            // `prev` on every iteration would let the second write clobber the
+            // first history entry this very loop just added.
             next[c.memberId] = {
               ...bank,
               history: [
-                ...(prev[c.memberId]?.history ?? []),
+                ...(next[c.memberId]?.history ?? prev[c.memberId]?.history ?? []),
                 {
                   id: generateId(),
                   type: 'used' as const,

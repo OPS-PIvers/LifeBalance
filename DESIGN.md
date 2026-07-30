@@ -258,6 +258,19 @@ capture/review) and **filtering/browsing views**; they never stand in for a
 form field with exactly one answer. Consistency comes from this role split,
 not from one control everywhere.
 
+**Exception — described radio-group (r6.1):** a pick-one field whose options
+are *not* self-explanatory, and each carries a one-line description that
+makes the choice legible ("A bank each" vs. "Shared bank, freeze us both" is
+meaningless without it), may use a two-line radio-row group instead of
+`Select` — a bare `<option>` can't carry that second line. Still not chips:
+each row is `role="radio"` + `aria-checked` + a trailing check on the
+selected row, quiet chrome (no tint), read-only (no disabled controls) for a
+viewer who can't edit it. A **bare** pick-one — no per-option explanation
+needed — still always uses `Select`; this exception does not license radio
+rows as a general `Select` alternative. Canonical instance: the freeze-mode
+and ceremony-tone rows in Settings → Household → Habits
+([`DescribedRadioGroup` in components/settings/HabitPlaySettings.tsx](components/settings/HabitPlaySettings.tsx)).
+
 ### Inputs
 
 `w-full p-3 rounded-btn bg-brand-50 border border-brand-200 focus:ring-2

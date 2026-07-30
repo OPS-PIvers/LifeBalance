@@ -20,6 +20,7 @@ import { getMultiplier, signedHabitPoints, isHabitPaused, isHabitStale } from '@
 import {
   attributionFingerprint,
   habitFeedsMemberAttribution,
+  memberFrozenDates,
   memberMostRecentUnitDateInPeriod,
   memberUnitsForPeriod,
 } from '@/utils/habitAttribution';
@@ -121,7 +122,17 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
   // span midnight via useMidnightScheduler), so memoizing per mount would
   // leave this pointing at the pre-rollover day.
   const yesterday = getLocalDateString(subDays(new Date(), 1));
-  const isProtectedByFreeze = (habit.frozenDates ?? []).includes(yesterday);
+  // Stage 6 (`freezeMode: 'per_member'`): a per-member freeze token bridges
+  // only the spending member's own chain in `Habit.frozenDatesBy`, never the
+  // household-wide `frozenDates` — so the badge must also consult the VIEWER's
+  // own entry there, or a per-member freeze spends a real token with no
+  // visible confirmation for the frozen member. `memberFrozenDates` returns
+  // `[]` when the field is absent (shared/freeze_both households), so this is
+  // a no-op everywhere except per-member mode.
+  const isProtectedByFreeze =
+    (habit.frozenDates ?? []).includes(yesterday) ||
+    (!!attribution?.currentUserId &&
+      memberFrozenDates(habit, attribution.currentUserId).includes(yesterday));
 
   // F-HABITS-01: while paused, the toggle is disabled and a badge shows the break.
   const isPaused = isHabitPaused(habit);
@@ -653,6 +664,9 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
   // Content compare (the provider rebuilds arrays each snapshot): drives the
   // "Protected" freeze badge.
   (prev.habit.frozenDates ?? []).join(',') === (next.habit.frozenDates ?? []).join(',') &&
+  // Same, for the per-member freeze bridge (stage 6, `freezeMode: 'per_member'`)
+  // that also drives the "Protected" badge for the viewer's own frozen dates.
+  JSON.stringify(prev.habit.frozenDatesBy ?? {}) === JSON.stringify(next.habit.frozenDatesBy ?? {}) &&
   // Drives the "Paused" badge, disabled toggle, and Resume action (F-HABITS-01).
   prev.habit.pausedUntil === next.habit.pausedUntil &&
   // Per-member points (stage 2): drives whether the picker is offered at all.

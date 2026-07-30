@@ -1,12 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import React from 'react';
 import { renderHook, act } from '@testing-library/react';
+import { subDays } from 'date-fns';
 import { MockHouseholdProvider } from './MockHouseholdContext';
 import { useFinance, useGamification, useHousehold } from './FirebaseHouseholdContext';
 import { calculateSafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { DEFAULT_TODO_POINTS } from '@/utils/todoPoints';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import type { Habit } from '@/types/schema';
 
 // Finding 4.4: MockHouseholdContext must expose a well-formed
 // `safeToSpendBreakdown` so the Test Mode finance slice is in parity with the
@@ -969,5 +971,76 @@ describe('MockHouseholdContext habit points routing (assigned vs shared)', () =>
     expect(after.completedBy?.[today]).toBeUndefined();
     expect(result.current.totalPoints).toBe(poolBefore);
     expect(pointsOf(result, 'test-user-id')).toEqual(userBefore);
+  });
+});
+
+// Per-member habit points (stage 6): `freezeMode: 'per_member'` auto-apply.
+describe('MockHouseholdContext autoApplyFreezes — per-member mode (stage 6)', () => {
+  const captureHousehold = () => renderHook(() => useHousehold(), { wrapper });
+  const d = (n: number) => getLocalDateString(subDays(new Date(), n));
+  const MEMBER = 'test-user-id'; // the seeded household's only non-managed adult
+
+  // A positive daily habit with the member's OWN 3-day completed streak ending
+  // the day before yesterday, and yesterday missed — a per-member auto-apply
+  // candidate identical in shape to the Firebase suite's `protectable`.
+  // `id: ''` is a placeholder; `addHabit` assigns the real id (see the
+  // pattern above), which is why the parameter is typed `Habit`, not
+  // `Omit<Habit, 'id'>`.
+  const protectableFor = (title: string): Habit => ({
+    id: '',
+    title,
+    category: 'Health',
+    type: 'positive',
+    period: 'daily',
+    scoringType: 'threshold',
+    basePoints: 10,
+    targetCount: 1,
+    count: 0,
+    totalCount: 3,
+    completedDates: [d(2), d(3), d(4)],
+    completedBy: {
+      [d(2)]: { [MEMBER]: 1 },
+      [d(3)]: { [MEMBER]: 1 },
+      [d(4)]: { [MEMBER]: 1 },
+    },
+    streakDays: 0,
+    lastUpdated: new Date().toISOString(),
+  });
+
+  // 🔒 Regression for the finding: `setFreezeBanksByMember`'s per-candidate
+  // update used to read `history` off the SAME `prev` snapshot for every
+  // candidate in the run, so two habits frozen for the same member in one
+  // pass kept only the LAST history entry (the first write was clobbered).
+  it('records a history entry for EACH of two habits frozen in one run for one member, not just the last', async () => {
+    const { result } = captureHousehold();
+
+    let idA = '';
+    let idB = '';
+    await act(async () => {
+      idA = await result.current.addHabit(protectableFor('Read'));
+      idB = await result.current.addHabit(protectableFor('Meditate'));
+    });
+
+    await act(async () => {
+      await result.current.setFreezeMode('per_member');
+    });
+
+    await act(async () => {
+      await result.current.autoApplyFreezes();
+    });
+
+    // Both habits recorded a per-member freeze for the member on yesterday.
+    const habitA = result.current.habits.find(h => h.id === idA)!;
+    const habitB = result.current.habits.find(h => h.id === idB)!;
+    expect(habitA.frozenDatesBy?.[d(1)]).toEqual([MEMBER]);
+    expect(habitB.frozenDatesBy?.[d(1)]).toEqual([MEMBER]);
+
+    // The member's bank recorded BOTH history entries — the bug dropped the
+    // first one — and both tokens were spent (fresh bank starts at 2).
+    const bank = result.current.householdSettings?.freezeBanksByMember?.[MEMBER];
+    expect(bank).toBeDefined();
+    expect(bank!.tokens).toBe(0);
+    expect(bank!.history).toHaveLength(2);
+    expect(bank!.history.map(h => h.habitId).sort()).toEqual([idA, idB].sort());
   });
 });

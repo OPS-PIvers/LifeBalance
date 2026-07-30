@@ -28,15 +28,19 @@ import {
  * absent onto today's behaviour, so this whole surface is inert on every
  * existing household until it is touched.
  *
- * Why radio ROWS rather than a `Select` (DESIGN.md §6's pick-one rule): each
- * option needs a one-line explanation to be choosable at all — "A bank each"
- * versus "Shared bank, freeze us both" is meaningless without it, and an
- * `<option>` cannot carry a second line. The checked-row pattern here is the
- * one already used by `TabSubViewMenu` (role=radio + aria-checked + a trailing
- * check), kept quiet: no tint, no chrome, the check is the only state marker.
+ * Why radio ROWS rather than a `Select`: this is DESIGN.md §6's named
+ * "described radio-group" exception (r6.1) to the pick-one-uses-Select rule —
+ * each option needs a one-line explanation to be choosable at all ("A bank
+ * each" versus "Shared bank, freeze us both" is meaningless without it), and
+ * an `<option>` cannot carry a second line. `DescribedRadioGroup` below is
+ * r6.1's canonical/named instance; don't reach for it for a bare pick-one
+ * that doesn't need per-option explanations — that still always uses
+ * `Select`. The checked-row pattern here is the one already used by
+ * `TabSubViewMenu` (role=radio + aria-checked + a trailing check), kept
+ * quiet: no tint, no chrome, the check is the only state marker.
  */
 
-interface ChoiceGroupProps<T extends string> {
+interface DescribedRadioGroupProps<T extends string> {
   /** Accessible name for the radiogroup (the visible heading's text). */
   label: string;
   choices: readonly SettingChoice<T>[];
@@ -45,13 +49,13 @@ interface ChoiceGroupProps<T extends string> {
   onChange: (value: T) => void;
 }
 
-const ChoiceGroup = <T extends string>({
+const DescribedRadioGroup = <T extends string>({
   label,
   choices,
   value,
   canEdit,
   onChange,
-}: ChoiceGroupProps<T>) => {
+}: DescribedRadioGroupProps<T>) => {
   // Read-only view for a non-admin: the household's answer, stated once. A
   // disabled radio list would be three rows of controls nobody can use — this
   // mirrors how the admin-only ActivityLogCard simply isn't offered, while
@@ -147,7 +151,7 @@ const HabitPlaySettings: React.FC<HabitPlaySettingsProps> = ({
         >
           Streak freezes
         </SectionHeading>
-        <ChoiceGroup
+        <DescribedRadioGroup
           label="Streak freezes"
           choices={FREEZE_MODE_CHOICES}
           value={resolveFreezeMode(settings)}
@@ -168,7 +172,7 @@ const HabitPlaySettings: React.FC<HabitPlaySettingsProps> = ({
         >
           Weekly wrap-up
         </SectionHeading>
-        <ChoiceGroup
+        <DescribedRadioGroup
           label="Weekly wrap-up"
           choices={CEREMONY_TONE_CHOICES}
           value={resolveCeremonyTone(settings)}
