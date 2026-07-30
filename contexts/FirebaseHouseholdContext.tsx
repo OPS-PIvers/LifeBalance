@@ -2578,9 +2578,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // describing the tokens actually being spent without any of those components
   // learning that the setting exists. The mutations above deliberately keep
   // reading the raw household `freezeBank` — they own both modes.
+  // Depends on the UID SCALAR, not the member object: a new `currentUser`
+  // reference (a points write, a profile edit) would otherwise recompute this
+  // and hand the gamification slice a fresh bank reference for no reason.
   const visibleFreezeBankValue = useMemo(
     () => visibleFreezeBank(householdSettings, freezeBank, currentUser?.uid),
-    [householdSettings, freezeBank, currentUser],
+    [householdSettings, freezeBank, currentUser?.uid],
   );
 
   // Show skeletons only while a household is set but its first snapshot hasn't
