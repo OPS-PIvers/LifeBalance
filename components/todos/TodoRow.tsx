@@ -11,7 +11,9 @@ import { SwipeActionRow } from '@/components/ui/SwipeActionRow';
 import { Row } from '@/components/ui/Section';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import { UndoToast } from '@/components/ui/UndoToast';
+import MemberAvatar from '@/components/ui/MemberAvatar';
 import { cn } from '@/utils/cn';
+import { buildMemberColorMap, memberColorFor, type MemberColorMap } from '@/utils/memberColors';
 import { type SectionColor, dateColorMap } from './todoDisplay';
 import { formatDueTime } from '@/utils/todoTime';
 import { subtaskProgress } from '@/utils/subtasks';
@@ -19,22 +21,30 @@ import { subtaskProgress } from '@/utils/subtasks';
 // Small per-subtask assignee chip — read-only here (assignment happens in the
 // edit drawer). Mirrors ActionQueueItem's renderAssigneeChip styling at a
 // slightly smaller size to fit the subtask row. `className` lets the
-// household cluster below layer on stacking/ring styles.
-function SubtaskAssigneeChip({ assignee, className }: { assignee: HouseholdMember | undefined; className?: string }) {
+// household cluster below layer on stacking/ring styles. `colors` is the
+// TodoRow-level MemberColorMap (see its own comment) so a fallback initial is
+// tinted the SAME color this member's badge uses everywhere else, instead of
+// a neutral grey nobody else uses.
+function SubtaskAssigneeChip({
+  assignee,
+  colors,
+  className,
+}: {
+  assignee: HouseholdMember | undefined;
+  colors: MemberColorMap;
+  className?: string;
+}) {
   if (!assignee) return null;
-  return assignee.photoURL ? (
-    <img
-      src={assignee.photoURL}
+  return (
+    <MemberAvatar
+      name={assignee.displayName ?? '?'}
+      photoURL={assignee.photoURL}
+      color={memberColorFor(colors, assignee.uid)}
       alt={assignee.displayName ?? 'Assigned member'}
-      className={cn('w-4 h-4 rounded-full object-cover shrink-0', className)}
-    />
-  ) : (
-    <span
       title={assignee.displayName ?? 'Assigned member'}
-      className={cn('w-4 h-4 rounded-full bg-brand-200 dark:bg-brand-500/30 flex items-center justify-center text-[8px] font-bold text-brand-600 dark:text-brand-200 shrink-0', className)}
-    >
-      {assignee.displayName?.charAt(0) || '?'}
-    </span>
+      size={16}
+      className={className}
+    />
   );
 }
 
@@ -43,7 +53,7 @@ function SubtaskAssigneeChip({ assignee, className }: { assignee: HouseholdMembe
 // assistive tech rather than N separately-announced avatars.
 const HOUSEHOLD_CLUSTER_VISIBLE = 3;
 
-function HouseholdAssigneeCluster({ members }: { members: HouseholdMember[] }) {
+function HouseholdAssigneeCluster({ members, colors }: { members: HouseholdMember[]; colors: MemberColorMap }) {
   if (members.length === 0) return null;
   const visible = members.slice(0, HOUSEHOLD_CLUSTER_VISIBLE);
   const extra = members.length - visible.length;
@@ -57,6 +67,7 @@ function HouseholdAssigneeCluster({ members }: { members: HouseholdMember[] }) {
         <SubtaskAssigneeChip
           key={member.uid}
           assignee={member}
+          colors={colors}
           className={cn('ring-2 ring-white dark:ring-brand-800', i > 0 && '-ml-1.5')}
         />
       ))}
@@ -167,6 +178,17 @@ export const TodoRow = React.memo(function TodoRow({
   // reference to a since-removed member — key off `item.assignedTo` itself.
   const isHouseholdAssignment = !item.assignedTo;
   const householdMembers = memberMap ? Array.from(memberMap.values()) : [];
+
+  // Built from the SAME roster (`memberMap`, which ToDosPage builds straight
+  // from `useHouseholdCore().members`, same order) as ScoreboardWidget/
+  // PointsBreakdownDrawer/ActionQueueItem build theirs from — so an assignee
+  // chip's fallback color matches that member's badge on every other surface.
+  // Falls back to just the one known assignee when no `memberMap` was passed
+  // (existing callers/tests that render without it), which still colors that
+  // single chip rather than leaving it uncolored. Not memoized, matching
+  // `householdMembers` above — both are cheap per-render derivations of the
+  // same map/assignee props, not large collections.
+  const colors = buildMemberColorMap(memberMap ? householdMembers : assignee ? [assignee] : []);
 
   // Inline subtask access (owner-approved): ephemeral per-row expand state.
   // Multiple rows may be open at once; collapsed by default.
@@ -483,7 +505,7 @@ export const TodoRow = React.memo(function TodoRow({
                 {sub.text}
               </span>
               {sub.assigneeId && (
-                <SubtaskAssigneeChip assignee={memberMap?.get(sub.assigneeId)} />
+                <SubtaskAssigneeChip assignee={memberMap?.get(sub.assigneeId)} colors={colors} />
               )}
             </label>
           </SwipeActionRow>
@@ -564,9 +586,9 @@ export const TodoRow = React.memo(function TodoRow({
         // list below (paper cut #5) — a specific assignee and "everyone"
         // render with the identical avatar look, not two different
         // photo-or-fallback implementations that could drift apart.
-        <SubtaskAssigneeChip assignee={assignee} />
+        <SubtaskAssigneeChip assignee={assignee} colors={colors} />
       ) : (
-        isHouseholdAssignment && <HouseholdAssigneeCluster members={householdMembers} />
+        isHouseholdAssignment && <HouseholdAssigneeCluster members={householdMembers} colors={colors} />
       )}
     </span>
   );

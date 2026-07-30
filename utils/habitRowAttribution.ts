@@ -26,8 +26,10 @@ import {
 export interface RowMember {
   uid: string;
   displayName: string;
-  /** Hex, from the shared member-color map. */
+  /** Hex, from the shared member-color map — the fallback when there's no photo. */
   color: string;
+  /** Google/Firebase profile photo, when the member has one. */
+  photoURL?: string;
 }
 
 /** Everything a habit row needs to render + edit attribution. */
@@ -50,13 +52,15 @@ export interface RowCompletionSegment {
   memberId: string;
   displayName: string;
   color: string;
+  /** Google/Firebase profile photo, when the member has one. */
+  photoURL?: string;
   /** Attributed completions in the row's current period. */
   units: number;
   /** That member's OWN streak, in the habit's cadence (days / ISO weeks). */
   streak: number;
 }
 
-type RosterMember = Pick<HouseholdMember, 'uid' | 'displayName' | 'avatarColor' | 'isManaged'>;
+type RosterMember = Pick<HouseholdMember, 'uid' | 'displayName' | 'avatarColor' | 'isManaged' | 'photoURL'>;
 
 /** Build the per-row member context from the household roster. Memoize the result. */
 export const buildHabitRowMemberContext = (
@@ -71,6 +75,7 @@ export const buildHabitRowMemberContext = (
       uid: member.uid,
       displayName: member.displayName,
       color: memberColorFor(colors, member.uid),
+      photoURL: member.photoURL,
     };
     byUid[member.uid] = row;
     if (isAdultMember(member)) adults.push(row);
@@ -87,7 +92,7 @@ export const buildHabitRowMemberContext = (
  * `members/{uid}.points`, which re-fires the members listener and hands the page
  * a brand-new array — so an identity check would re-render every card in the
  * list on every toggle. None of the fields a row actually reads (uid, name,
- * color) move when points do, so compare those.
+ * color, photo) move when points do, so compare those.
  */
 export const sameHabitRowMemberContext = (
   a: HabitRowMemberContext | undefined,
@@ -103,7 +108,8 @@ export const sameHabitRowMemberContext = (
     if (
       left?.uid !== right?.uid ||
       left?.displayName !== right?.displayName ||
-      left?.color !== right?.color
+      left?.color !== right?.color ||
+      left?.photoURL !== right?.photoURL
     ) {
       return false;
     }
@@ -113,7 +119,12 @@ export const sameHabitRowMemberContext = (
   for (const uid of uids) {
     const left = a.byUid[uid];
     const right = b.byUid[uid];
-    if (!right || left?.displayName !== right.displayName || left?.color !== right.color) {
+    if (
+      !right ||
+      left?.displayName !== right.displayName ||
+      left?.color !== right.color ||
+      left?.photoURL !== right.photoURL
+    ) {
       return false;
     }
   }
@@ -152,6 +163,7 @@ export const rowCompletionSegments = (
       // label rather than an empty avatar.
       displayName: member?.displayName ?? 'Former member',
       color: member?.color ?? memberColorFor({}, uid),
+      photoURL: member?.photoURL,
       units: units[uid] ?? 0,
       streak: streakForMember(habit, uid, date),
     };

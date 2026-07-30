@@ -48,7 +48,7 @@ describe('ScoreboardWidget', () => {
 
     expect(screen.getByText('Scoreboard')).toBeInTheDocument();
     expect(screen.getByTestId('scoreboard-total')).toHaveTextContent('0');
-    expect(screen.getByText('pts together')).toBeInTheDocument();
+    expect(screen.getByText('household total')).toBeInTheDocument();
     expect(screen.getByText('Paul')).toBeInTheDocument();
     expect(screen.getByText('Jen')).toBeInTheDocument();
     // No crown when nobody has led — queried via the sr-only "Leading" marker.

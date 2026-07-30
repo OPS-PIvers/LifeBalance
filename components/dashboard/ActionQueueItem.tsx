@@ -21,7 +21,9 @@ import { haptic } from '@/utils/haptics';
 import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
 import { SwipeActionRow } from '@/components/ui/SwipeActionRow';
+import MemberAvatar from '@/components/ui/MemberAvatar';
 import TransactionReviewForm from '@/components/transactions/TransactionReviewForm';
+import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 
 /** Hold duration (ms) before a press on a row enters multi-select mode. */
 const LONG_PRESS_MS = 500;
@@ -277,20 +279,25 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
     return map;
   }, [members]);
 
+  // Same MemberColorMap ScoreboardWidget/PointsBreakdownDrawer build (same
+  // `members` roster source, `useHouseholdCore().members`, passed down as a
+  // prop) — so this chip's fallback color always matches the member's badge
+  // on those other surfaces instead of a neutral grey nobody else uses.
+  const colors = useMemo(() => buildMemberColorMap(members), [members]);
+
   const renderAssigneeChip = (assignedTo: string) => {
     const assignee = memberMap.get(assignedTo);
     if (!assignee) return null;
 
-    return assignee.photoURL ? (
-      <img
-        src={assignee.photoURL}
+    return (
+      <MemberAvatar
+        name={assignee.displayName ?? '?'}
+        photoURL={assignee.photoURL}
+        color={memberColorFor(colors, assignee.uid)}
         alt={assignee.displayName ?? 'Assigned member'}
-        className="w-4 h-4 rounded-full border border-white object-cover shrink-0"
+        size={16}
+        className="border border-white dark:border-brand-700"
       />
-    ) : (
-      <div className="w-4 h-4 rounded-full bg-brand-200 dark:bg-brand-500/30 flex items-center justify-center text-[8px] font-bold text-brand-600 dark:text-brand-200 border border-white dark:border-brand-700 shrink-0">
-        {assignee.displayName?.charAt(0) || '?'}
-      </div>
     );
   };
 
@@ -613,8 +620,11 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                  </div>
                )}
                {isTodoQueueItem(item) && isBefore(parseISO(item.date), startOfToday()) && (
+                 // Solid alert-yellow fill + white glyph (owner paper cut): the
+                 // old warm-200/30%-tint read as smaller/quieter than the
+                 // member badge beside it purely from color weight, not size.
                  <span
-                   className="w-4 h-4 rounded-full bg-warm-200 dark:bg-warm-500/30 border border-white dark:border-brand-700 flex items-center justify-center ml-1 text-warm-600 dark:text-warm-300 shrink-0"
+                   className="w-4 h-4 rounded-full bg-warm-500 border border-white dark:border-brand-700 flex items-center justify-center ml-1 text-white shrink-0"
                    title="Overdue"
                  >
                    <AlertCircle size={10} />

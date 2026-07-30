@@ -27,6 +27,8 @@ export interface MemberStanding {
    * other surfaces.
    */
   avatarColor: string | undefined;
+  /** Google/Firebase profile photo, when the member has one. */
+  photoURL: string | undefined;
   /**
    * True only when this member is the SOLE strictly-highest scorer among 2+
    * adults with a NONZERO score — a single member (nothing to lead over), an
@@ -39,7 +41,7 @@ export interface MemberStanding {
 }
 
 /** Member shape `getAdultStandings` needs — narrower than a full `HouseholdMember`. */
-type StandingMember = Pick<HouseholdMember, 'uid' | 'displayName' | 'isManaged' | 'points' | 'avatarColor'>;
+type StandingMember = Pick<HouseholdMember, 'uid' | 'displayName' | 'isManaged' | 'points' | 'avatarColor' | 'photoURL'>;
 
 /**
  * Adults-only standings for the Points Breakdown drawer, sorted highest first
@@ -58,6 +60,7 @@ export const getAdultStandings = (
       name: member.displayName,
       points: period === 'day' ? member.points.daily : member.points.weekly,
       avatarColor: member.avatarColor,
+      photoURL: member.photoURL,
     }))
     .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
 

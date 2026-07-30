@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Star, TrendingUp, User } from 'lucide-react';
 import { useFinance, useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -8,6 +8,8 @@ import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { LazyMount } from '@/components/ui/LazyMount';
 import { preloadOnIdle } from '@/utils/preloadOnIdle';
 import { track } from '@/services/analytics';
+import MemberAvatar from '@/components/ui/MemberAvatar';
+import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 import ProfileMenu from './ProfileMenu';
 
 // Lazy-loaded so this drawer (and framer-motion via Drawer) stays out of the
@@ -52,10 +54,26 @@ const TopToolbar: React.FC = () => {
   // toolbar's prior initial render with the raw `safeToSpend` field).
   const safeToSpend = safeToSpendBreakdown?.safeToSpend ?? 0;
   const { dailyPoints, weeklyPoints } = useGamification();
-  const { unreadNotificationCount } = useHouseholdCore();
-  const { currentUser } = useAuth();
+  // `currentUser` here is the household MEMBER record (not the Firebase Auth
+  // user below) — it's what carries the uid a MemberColorMap is keyed on, so
+  // this chip resolves to the SAME color as this person's badge everywhere
+  // else (Scoreboard, Points drawer, Action Queue, to-dos). Auth's `photoURL`
+  // stays a fallback image source for the (rare) case the member doc hasn't
+  // synced one yet.
+  const { unreadNotificationCount, currentUser: currentMember, members } = useHouseholdCore();
+  const { currentUser: authUser } = useAuth();
   const { isModuleEnabled } = useModuleVisibility();
   const fmt = useFormatCurrency();
+
+  const colors = useMemo(() => buildMemberColorMap(members), [members]);
+  // `||`, not `??`: the member doc is seeded with `photoURL: user.photoURL || ''`
+  // at household create/join and is never refreshed afterwards, so an EMPTY
+  // STRING is the normal "no picture stored" value — not a real one. With `??`
+  // that empty string would win over a Google photo the auth account has since
+  // gained, and the chip would stop rendering a picture it used to show.
+  const profileIdentityUid = currentMember?.uid || authUser?.uid || null;
+  const profileDisplayName = currentMember?.displayName || authUser?.displayName || null;
+  const profilePhotoURL = currentMember?.photoURL || authUser?.photoURL || null;
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
@@ -202,12 +220,14 @@ const TopToolbar: React.FC = () => {
               aria-haspopup="menu"
             >
               <span className="w-9 h-9 rounded-full bg-brand-700 flex items-center justify-center text-brand-200 border border-brand-600 overflow-hidden active:bg-brand-600 transition-colors duration-(--duration-fast) ease-(--ease-standard)">
-                {currentUser?.photoURL ? (
-                  <img src={currentUser.photoURL} alt={currentUser.displayName ? `${currentUser.displayName}'s profile picture` : 'Profile picture'} className="w-full h-full rounded-full object-cover" />
-                ) : currentUser?.displayName ? (
-                  <span className="font-bold text-sm">
-                    {currentUser.displayName.charAt(0)}
-                  </span>
+                {profileIdentityUid || profileDisplayName || profilePhotoURL ? (
+                  <MemberAvatar
+                    name={profileDisplayName ?? '?'}
+                    photoURL={profilePhotoURL}
+                    color={profileIdentityUid ? memberColorFor(colors, profileIdentityUid) : 'var(--color-brand-600)'}
+                    alt={profileDisplayName ? `${profileDisplayName}'s profile picture` : 'Profile picture'}
+                    size={36}
+                  />
                 ) : (
                   <User className="w-5 h-5" />
                 )}

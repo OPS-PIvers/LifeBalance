@@ -1,4 +1,5 @@
 import React, { useId } from 'react';
+import MemberAvatar from '@/components/ui/MemberAvatar';
 
 /**
  * Badge-row "done by" avatars with flame streak rings — HABITS-PAGE ONLY.
@@ -64,8 +65,10 @@ const TIER: Record<RingTier, { stops: { offset: number; color: string }[]; width
 export interface DoneByEntry {
   memberId: string;
   displayName: string;
-  /** Hex, from the shared member-color map. */
+  /** Hex, from the shared member-color map — the fallback when there's no photo. */
   color: string;
+  /** Google/Firebase profile photo, when the member has one. */
+  photoURL?: string;
   /** Attributed completions in the row's current period. */
   units: number;
   /** That member's own streak, in the habit's cadence. */
@@ -154,13 +157,7 @@ const FlameRingAvatar: React.FC<{
           </g>
         </svg>
       )}
-      <span
-        aria-hidden="true"
-        className="flex h-full w-full items-center justify-center rounded-full font-bold text-white"
-        style={{ backgroundColor: entry.color, fontSize: Math.round(size * 0.44) }}
-      >
-        {entry.displayName.charAt(0).toUpperCase()}
-      </span>
+      <MemberAvatar name={entry.displayName} photoURL={entry.photoURL} color={entry.color} size={size} />
       <span className="sr-only">{label}</span>
     </span>
   );

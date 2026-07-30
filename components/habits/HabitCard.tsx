@@ -262,7 +262,27 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
   // money-neg), not from a per-card border/shadow.
   // Extends ListRow's base anatomy classes (cn merges px/py overrides).
   const containerClasses = cn(
-    "px-4 py-3.5 transition-[transform,background-color] duration-(--duration-base) ease-(--ease-standard) has-[.main-overlay:active]:scale-[0.99] select-none group/card",
+    "px-4 py-3.5 duration-(--duration-base) ease-(--ease-standard) select-none group/card",
+    // `transform` leaves the transition list the instant the picker opens, so
+    // the scale below snaps back to none rather than ANIMATING back over
+    // --duration-base. A transform mid-transition is still a live stacking
+    // context, so transitioning it out would keep the panel trapped for the
+    // first frames it is visible — the same paper cut, just briefer.
+    isPickerOpen ? "transition-[background-color]" : "transition-[transform,background-color]",
+    // Tap-press affordance — suppressed while the attribution picker is open.
+    // This row IS the Popover's positioned ancestor (Popover is deliberately
+    // not portalled — it anchors to the nearest `relative` ancestor), and
+    // `:active` fires for the whole duration of a long-press hold. Applying a
+    // `transform` here while held creates a NEW STACKING CONTEXT on the row,
+    // which traps the popover panel's z-dropdown inside it — its z-index then
+    // only competes against the row's own (unset, so effectively 0) stacking
+    // level, which paints BEHIND the page's sticky tab strip (z-30) until the
+    // press releases and the transform (and the stacking context with it)
+    // disappears. That is the "renders behind, then jumps to the front on
+    // release" paper cut. Dropping the transform for the duration the picker
+    // is open keeps the row un-transformed, so the panel's absolute z-index
+    // resolves against the page like normal, with no re-layer flash.
+    !isPickerOpen && "has-[.main-overlay:active]:scale-[0.99]",
     !isActive && "bg-white dark:bg-brand-800 hover:bg-brand-50 dark:hover:bg-brand-700/40",
     isActive && isPositive && "bg-money-bgPos dark:bg-money-pos/10",
     isActive && !isPositive && "bg-money-bgNeg dark:bg-money-neg/10",
