@@ -1262,6 +1262,43 @@ describe('habitAttribution — incremental reversals are order-independent', () 
       expect(reversal.perMember.get(JEN)).toEqual({ daily: 0, weekly: -10, total: -10 });
     }
   });
+
+  it('gates `daily` by EACH cleared date’s own day, not by the anchor, when today itself is a cleared date that is NOT the anchor', () => {
+    // Every test above fixes "today" at Thursday and clears PAST dates, so none
+    // of them exercise `daily` for a same-day reset. Here Monday is the anchor
+    // (the first date in the clear order), but "today" is Friday — a cleared
+    // date, but never the anchor. Wednesday is Jen's own tap; Friday is Paul's
+    // own tap PLUS the week's unattributed remainder (it parks on the period's
+    // LATEST completed day regardless of which day is passed as the anchor —
+    // see `householdUndoDateInPeriod`'s docstring in habitRowAttribution.ts).
+    const today = d(4);
+    const threeDayWeek = (completedDates: string[]): Habit => habit({
+      period: 'weekly',
+      scoringType: 'incremental',
+      targetCount: 1,
+      count: 3,
+      totalCount: 3,
+      completedDates,
+      completedBy: { [d(2)]: { [JEN]: 1 }, [d(4)]: { [PAUL]: 1 } },
+    });
+
+    for (const order of [[d(0), d(2), d(4)], [d(4), d(2), d(0)]]) {
+      const reversal = attributionReversalForDates(threeDayWeek([d(0), d(2), d(4)]), order, today, 0);
+
+      // Friday (today) alone carries Paul's own -10 plus the -10 remainder: its
+      // own delta (-20) is neither 0 nor the whole week's -30, which is exactly
+      // what distinguishes "gated by today's own date" from "gated by the
+      // anchor's date" (Monday, which never equals `today` here).
+      expect(reversal.household).toEqual({ daily: -20, weekly: -30, total: -30 });
+      expect(reversal.perMember.get(JEN)).toEqual({ daily: 0, weekly: -10, total: -10 });
+      expect(reversal.perMember.get(PAUL)).toEqual({ daily: -10, weekly: -10, total: -10 });
+      // Both attributed dates get cleared regardless of which order the caller
+      // passed them in — only the array's own order (not the amounts) differs.
+      expect(new Set(reversal.clearPaths)).toEqual(
+        new Set([completedByDatePath(d(2)), completedByDatePath(d(4))]),
+      );
+    }
+  });
 });
 
 describe('habitAttribution — household period points (pool delta)', () => {

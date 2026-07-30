@@ -1443,6 +1443,15 @@ export const attributionReversalForDates = (
       count: countAfter,
     };
 
+    // One anchor per PERIOD, not per date — the anchor only tells
+    // `periodPointsMove` which period to score (any date in it resolves the
+    // same `habitPeriodStart`), it does NOT limit which date gets gated.
+    // `periodPointsMove` → `periodScoredDates` still enumerates every date in
+    // that period and gates each one by ITS OWN date via `applyGatedDelta`, so
+    // a cleared date other than the anchor still lands its own `daily` delta
+    // when that date is today. Read this loop as "one move per period touched",
+    // never as "only the anchor date is gated" — the latter reading is what the
+    // order-dependent bug above looked like from the outside.
     const anchorByPeriod = new Map<string, string>();
     for (const date of uniqueDates) {
       const periodStart = habitPeriodStart(habit.period, date);

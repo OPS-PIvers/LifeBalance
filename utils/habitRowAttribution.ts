@@ -246,6 +246,16 @@ export const dayPickerMembers = (
  *
  * Falls back to `today` when the period holds no completion date — the un-credit
  * is then a deliberate no-op rather than a write against an unrelated day.
+ *
+ * DOCUMENTED LIMITATION: "latest completed day" is not always the day the
+ * household unit itself landed on. If the household tapped Monday and a member
+ * tapped Tuesday, this returns Tuesday — not because the household's unit moved,
+ * but because `householdPointsForHabitOnDate` parks the week's unattributed
+ * remainder on the period's latest completed day regardless of which date
+ * produced it, so the pool's -10 is still found there. The undo still nets the
+ * pool correctly; what it does NOT do is remove Monday from `completedDates` —
+ * Monday orphans as a dateless completion, the same acknowledged gap as the
+ * member-uncredit path.
  */
 export const householdUndoDateInPeriod = (
   habit: Pick<Habit, 'completedDates' | 'period'>,
