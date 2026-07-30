@@ -605,8 +605,18 @@ export const periodHasAttribution = (habit: Habit, date: string): boolean => {
   return false;
 };
 
-/** Every member uid holding attribution in the period containing `date`. */
-const periodMemberIds = (habit: Habit, date: string): string[] => {
+/**
+ * Every member uid holding attribution in the period containing `date`.
+ *
+ * EXPORTED because it is the exact scope `householdPeriodPoints` sums over, and
+ * a mutation's per-member writes have to cover the SAME set or the two disagree.
+ * A threshold period spanning several days (a weekly habit) can flip an EARLIER
+ * member's award from 0 to a full one as a side effect of a LATER member's
+ * credit completing the period — so a path that wrote only the uids it was
+ * handed would move the pool by more than the sum of its member writes. See
+ * `queueMemberPeriodPoints` in `hooks/useHabitActions.tsx`.
+ */
+export const periodMemberIds = (habit: Habit, date: string): string[] => {
   const periodStart = habitPeriodStart(habit.period, date);
   const out = new Set<string>();
   for (const [d, day] of Object.entries(habit.completedBy ?? {})) {

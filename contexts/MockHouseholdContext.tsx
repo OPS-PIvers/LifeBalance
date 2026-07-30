@@ -22,6 +22,7 @@ import {
   legacyPeriodPoints,
   memberCompletionCount,
   memberPeriodPointsDelta,
+  periodMemberIds,
   resolveReversalSources,
   wholePeriodClearDates,
   withAttributionDelta,
@@ -410,6 +411,24 @@ const SEED_HABITS: Habit[] = [
 /** The signed-in principal in Test Mode (mirrors MockAuthContext). */
 const MOCK_USER_UID = 'test-user-id';
 
+/**
+ * Every member whose PERIOD award may have moved — the mock twin of
+ * `queueMemberPeriodPoints` in [hooks/useHabitActions.tsx](../hooks/useHabitActions.tsx).
+ *
+ * A multi-day threshold period (a weekly habit) hands an award to EVERY holder
+ * the moment it completes, so crediting only the uids a call was handed would
+ * show Test Mode a household whose member totals don't add up to the pool —
+ * i.e. it would reproduce the bug rather than the fix.
+ */
+const affectedPeriodMembers = (
+  before: Habit,
+  after: Habit,
+  date: string,
+  actors: readonly string[],
+): string[] => [
+  ...new Set([...actors, ...periodMemberIds(before, date), ...periodMemberIds(after, date)]),
+];
+
 const SEED_MEMBERS: HouseholdMember[] = [
   {
     uid: 'test-user-id', displayName: 'Test User', email: 'test@example.com',
@@ -555,6 +574,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     isFresh ? {} : SEED_TRANSACTION_COMMENTS
   );
   const [habits, setHabits] = useState<Habit[]>(isFresh ? [] : SEED_HABITS);
+  // In-memory stand-in for the `submissions` subcollection. Only the past-day
+  // surfaces write here (addHabitSubmission / deleteHabitSubmission), and
+  // getHabitSubmissions reads it back so the day editor's undo path can find
+  // the doc it just wrote.
+  const [habitSubmissions, setHabitSubmissions] = useState<HabitSubmission[]>([]);
   // Empty by default (several specs count Action-Queue rows); the 'bill-merge'
   // variant is the one that seeds bills, so the 2H merge is walkable.
   const [calendarItems, setCalendarItems] = useState<CalendarItem[]>(
@@ -2175,6 +2199,213 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Completion un-credited');
   }, [habits, creditMemberPoints]);
 
+  /**
+   * Past-day attribution parity — log `count` units of `habitId` on the
+   * submission's own date, ONE submission doc per credited member.
+   *
+   * Deliberately NOT a full port of `useHabitActions.addHabitSubmission`: the
+   * habit-level `pointsEarned` ladder is skipped. What it DOES reproduce is
+   * everything the day editor renders — `completedBy.<date>.<uid>`, the day's
+   * submission totals (so the row counter moves), `completedDates`/`totalCount`,
+   * and the member + pool point moves — so the picker's credited state, the
+   * counter and undo all behave in Test Mode instead of silently doing nothing
+   * (this was `noOp` before).
+   *
+   * 🛡️ The stored `pointsEarned` here is ALWAYS the member-level award. It does
+   * NOT reproduce production's `pointsEarned` semantics fork (the habit-level
+   * figure when `attributeTo` is omitted, the member-level one when it is
+   * explicit), so never read Test Mode's stored value as authoritative for that
+   * distinction — `hooks/useHabitActions.test.tsx` is where that is pinned.
+   */
+  const addHabitSubmission = useCallback(async (
+    habitId: string,
+    count: number,
+    timestamp?: string,
+    note?: string,
+    mood?: HabitSubmission['mood'],
+    attributeTo?: readonly string[],
+  ) => {
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit) return;
+
+    const submissionTimestamp = timestamp || new Date().toISOString();
+    const submissionDate = submissionTimestamp.slice(0, 10);
+    const today = getLocalDateString();
+    const actors = attributeTo && attributeTo.length > 0
+      ? [...new Set(attributeTo)]
+      : [habit.assignedTo ?? MOCK_USER_UID];
+    const addedUnits = count * actors.length;
+    const inLivePeriod =
+      habitPeriodStart(habit.period, submissionDate) === habitPeriodStart(habit.period, today) &&
+      !isHabitStale(habit);
+
+    const target = Math.max(habit.targetCount, 1);
+    // 🛡️ PERIOD-scoped, never day-scoped. Production decides completion from
+    // `priorPeriodCount` — the live counter for the current period, else the sum
+    // of that period's stored submissions — so a weekly `targetCount: 2` habit
+    // completes on the SECOND day of the week. Checking only the submission's
+    // own day meant the mock never completed a multi-day period at all, and a
+    // mock that lies about the decision under test is worse than one that no-ops.
+    const periodStart = habitPeriodStart(habit.period, submissionDate);
+    const priorPeriodCount = inLivePeriod
+      ? habit.count
+      : habitSubmissions
+          .filter(s => s.habitId === habitId && habitPeriodStart(habit.period, s.date) === periodStart)
+          .reduce((sum, s) => sum + s.count, 0);
+    const marksComplete =
+      habit.scoringType === 'incremental' || priorPeriodCount + addedUnits >= target;
+    const dateNewlyCompleted = marksComplete && !habit.completedDates.includes(submissionDate);
+    const nextCompletedDates = dateNewlyCompleted
+      ? [...habit.completedDates, submissionDate]
+      : habit.completedDates;
+
+    let after: Habit = {
+      ...habit,
+      count: inLivePeriod ? habit.count + addedUnits : habit.count,
+      totalCount: habit.totalCount + addedUnits,
+      completedDates: nextCompletedDates,
+      hasSubmissionTracking: true,
+      streakDays: streakForHabit({
+        period: habit.period,
+        completedDates: nextCompletedDates,
+        frozenDates: habit.frozenDates,
+        pausedUntil: habit.pausedUntil,
+      }),
+      lastUpdated: new Date().toISOString(),
+    };
+    for (const actor of actors) {
+      after = withAttributionDelta(after, submissionDate, actor, count);
+    }
+
+    const isToday = submissionDate === today;
+    const gate = (amount: number) => ({
+      daily: isToday ? amount : 0,
+      weekly:
+        habitPeriodStart('weekly', submissionDate) === habitPeriodStart('weekly', today)
+          ? amount
+          : 0,
+      total: amount,
+    });
+
+    const feedsAttribution = habitFeedsMemberAttribution(habit);
+    setHabitSubmissions(prev => [
+      ...prev,
+      ...actors.map(actor => ({
+        id: generateId(),
+        habitId,
+        habitTitle: habit.title,
+        timestamp: submissionTimestamp,
+        date: submissionDate,
+        count,
+        pointsEarned: feedsAttribution
+          ? memberPeriodPointsDelta(habit, after, actor, submissionDate, today)
+          : 0,
+        streakDaysAtTime: after.streakDays,
+        multiplierApplied: 1,
+        createdBy: MOCK_USER_UID,
+        attributedTo: actor,
+        createdAt: new Date().toISOString(),
+        ...(note ? { note } : {}),
+        ...(mood ? { mood } : {}),
+      })),
+    ]);
+    setHabits(prev => prev.map(h => (h.id === habitId ? after : h)));
+
+    const poolDelta = feedsAttribution
+      ? householdPeriodPointsDelta(habit, after, submissionDate, today)
+      : legacyPeriodPoints(after, submissionDate, today) -
+        legacyPeriodPoints(habit, submissionDate, today);
+    creditHabitPool(habit, gate(poolDelta));
+    if (feedsAttribution) {
+      for (const uid of affectedPeriodMembers(habit, after, submissionDate, actors)) {
+        creditMemberPoints(
+          uid,
+          gate(memberPeriodPointsDelta(habit, after, uid, submissionDate, today)),
+        );
+      }
+    }
+    toast.success(`Mock: Logged +${addedUnits} submission(s)`);
+  }, [habits, habitSubmissions, creditHabitPool, creditMemberPoints]);
+
+  /**
+   * Past-day attribution parity — delete ONE submission doc, reversing the
+   * units and points it recorded. Bounded by stored attribution exactly as
+   * production is (`resolveReversalSources`), so it can never take back more
+   * than `completedBy` holds.
+   */
+  const deleteHabitSubmission = useCallback(async (habitId: string, submissionId: string) => {
+    const submission = habitSubmissions.find(s => s.id === submissionId && s.habitId === habitId);
+    if (!submission) return;
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit) return;
+
+    const today = getLocalDateString();
+    const creditedUid = submission.attributedTo ?? submission.createdBy;
+    const moves = resolveReversalSources(habit, creditedUid, submission.date, submission.count);
+    const inLivePeriod =
+      habitPeriodStart(habit.period, submission.date) === habitPeriodStart(habit.period, today) &&
+      !isHabitStale(habit);
+    const isLastForDate =
+      habitSubmissions.filter(s => s.habitId === habitId && s.date === submission.date).length === 1;
+
+    let after: Habit = {
+      ...habit,
+      count: inLivePeriod ? Math.max(0, habit.count - submission.count) : habit.count,
+      totalCount: Math.max(0, habit.totalCount - submission.count),
+      lastUpdated: new Date().toISOString(),
+    };
+    for (const move of moves) {
+      after = withAttributionDelta(after, submission.date, move.memberId, -move.units);
+    }
+    // The date leaves the completion set once this was its last record AND
+    // nobody still holds an attributed unit on it.
+    if (isLastForDate && attributedUnitsOnDate(after, submission.date) === 0) {
+      const nextCompletedDates = habit.completedDates.filter(d => d !== submission.date);
+      after = {
+        ...after,
+        completedDates: nextCompletedDates,
+        streakDays: streakForHabit({
+          period: habit.period,
+          completedDates: nextCompletedDates,
+          frozenDates: habit.frozenDates,
+          pausedUntil: habit.pausedUntil,
+        }),
+      };
+    }
+
+    const isToday = submission.date === today;
+    const gate = (amount: number) => ({
+      daily: isToday ? amount : 0,
+      weekly:
+        habitPeriodStart('weekly', submission.date) === habitPeriodStart('weekly', today)
+          ? amount
+          : 0,
+      total: amount,
+    });
+
+    setHabitSubmissions(prev => prev.filter(s => s.id !== submissionId));
+    setHabits(prev => prev.map(h => (h.id === habitId ? after : h)));
+
+    const feedsAttribution = habitFeedsMemberAttribution(habit);
+    // An ATTRIBUTED doc reverses through the attribution-bounded path only —
+    // never through its stored `pointsEarned` (production's A2 rule).
+    const attributed = submission.attributedTo != null || moves.length > 0;
+    const poolDelta = feedsAttribution && attributed
+      ? householdPeriodPointsDelta(habit, after, submission.date, today)
+      : -submission.pointsEarned;
+    creditHabitPool(habit, gate(poolDelta));
+    if (feedsAttribution) {
+      const touched = moves.map(m => m.memberId);
+      for (const uid of affectedPeriodMembers(habit, after, submission.date, touched)) {
+        creditMemberPoints(
+          uid,
+          gate(memberPeriodPointsDelta(habit, after, uid, submission.date, today)),
+        );
+      }
+    }
+    toast.success('Mock: Submission deleted');
+  }, [habits, habitSubmissions, creditHabitPool, creditMemberPoints]);
+
   // Calendar operations
   const addCalendarItem = useCallback(async (item: Omit<CalendarItem, 'id'>) => {
     const newItem = { ...item, id: generateId() } as CalendarItem;
@@ -2946,11 +3177,19 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     });
   }, []);
 
-  // Special no-op that returns empty array (for getHabitSubmissions)
-
-  const getHabitSubmissions = useCallback(async (_habitId: string, _startDate?: string, _endDate?: string): Promise<HabitSubmission[]> => {
-    return [];
-  }, []);
+  // Reads back the in-memory submissions store (see `habitSubmissions`), so the
+  // day editor's undo path finds the doc the picker just wrote.
+  const getHabitSubmissions = useCallback(async (
+    habitId: string,
+    startDate?: string,
+    endDate?: string,
+  ): Promise<HabitSubmission[]> =>
+    habitSubmissions
+      .filter(s => s.habitId === habitId)
+      .filter(s => (startDate ? s.date >= startDate : true))
+      .filter(s => (endDate ? s.date <= endDate : true))
+      .sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1)),
+  [habitSubmissions]);
 
   // Computed/derived state to match interface
   const currentPeriodId = MOCK_PAY_PERIOD_ID;
@@ -3220,12 +3459,12 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     resetHabit,
     setHabitPause,
     updateHabitCategories,
-    addHabitSubmission: noOp,
+    addHabitSubmission,
     resetHabitDay: noOp,
     creditHabitCompletion,
     uncreditHabitCompletion,
     updateHabitSubmission: noOp,
-    deleteHabitSubmission: noOp,
+    deleteHabitSubmission,
     getHabitSubmissions,
     addMeal,
     updateMeal,

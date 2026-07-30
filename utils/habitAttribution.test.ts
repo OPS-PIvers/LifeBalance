@@ -1479,3 +1479,44 @@ describe('resolveReversalSources', () => {
     expect(resolveReversalSources(h, PAUL, d(1), 1)).toEqual([]);
   });
 });
+
+describe('habitAttribution — the two-member PAST day the day-editor picker writes', () => {
+  // "Both of us" on a past incremental day writes TWO submission docs of one
+  // unit each, so the day carries `{ count: 2, points: 20 }` in submission
+  // totals AND two attributed units. Pinned as EQUALITIES so a future change to
+  // either scorer trips this rather than drifting silently.
+  const D = d(-4); // outside the fixture week, so no weekly bucket is involved
+  const TODAY = d(2);
+
+  const twoMemberDay = habit({
+    count: 0,
+    totalCount: 2,
+    completedDates: [D],
+    completedBy: { [D]: { [PAUL]: 1, [JEN]: 1 } },
+  });
+  const stored = new Map([[twoMemberDay.id, new Map([[D, { count: 2, points: 20 }]])]]);
+  const storedForHabit = stored.get(twoMemberDay.id);
+
+  it('agrees across all three scorers, with a zero grandfathering remainder', () => {
+    // Each member earns a full award at their own 1.0x streak.
+    expect(memberPointsForHabitOnDate(twoMemberDay, PAUL, D, TODAY)).toBe(10);
+    expect(memberPointsForHabitOnDate(twoMemberDay, JEN, D, TODAY)).toBe(10);
+
+    // The legacy per-day figure reconciles the two stored docs to +20…
+    expect(pointsForHabitOnDate(twoMemberDay, D, TODAY, storedForHabit)).toBe(20);
+    // …and the two member awards ABSORB the legacy unit rather than adding to
+    // it (a past day counts as one legacy unit; 2 attributed units floor it).
+    expect(unattributedPointsForHabitOnDate(twoMemberDay, D, TODAY, storedForHabit)).toBe(0);
+
+    // household = Σ members + remainder = the calendar cell's own figure.
+    expect(householdPointsForHabitOnDate(twoMemberDay, D, TODAY, storedForHabit)).toBe(20);
+    expect(householdPointsForHabitOnDate(twoMemberDay, D, TODAY, storedForHabit)).toBe(
+      pointsForHabitOnDate(twoMemberDay, D, TODAY, storedForHabit),
+    );
+  });
+
+  it('is exactly the pool delta the write emitted — no login-time correction jump', () => {
+    const before = habit({ count: 0, totalCount: 0, completedDates: [] });
+    expect(householdPeriodPointsDelta(before, twoMemberDay, D, TODAY)).toBe(20);
+  });
+});

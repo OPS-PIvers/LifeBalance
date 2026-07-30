@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useGamification } from '@/contexts/FirebaseHouseholdContext';
+import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { format, isSameMonth, isToday, addMonths, subMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight, Snowflake } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -7,6 +7,7 @@ import { useCalendarGrid } from '@/hooks/useCalendarGrid';
 import { useHabitCalendarData } from '@/hooks/useHabitCalendarData';
 import DayHabitEditor from '@/components/habits/DayHabitEditor';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { buildHabitRowMemberContext } from '@/utils/habitRowAttribution';
 import { Habit } from '@/types/schema';
 import { cn } from '@/utils/cn';
 
@@ -66,10 +67,19 @@ CalendarDay.displayName = 'CalendarDay';
 
 const HabitHistoryCalendar: React.FC = () => {
   const { habits } = useGamification();
+  const { members, currentUser } = useHouseholdCore();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
 
   const today = getLocalDateString();
+
+  // The History tab is a standalone surface with no parent to inherit the
+  // roster from, so it builds its own (memoized on the roster, exactly as the
+  // Habits page does for HabitCard).
+  const rowMemberContext = useMemo(
+    () => buildHabitRowMemberContext(members, currentUser?.uid),
+    [members, currentUser?.uid]
+  );
 
   // Calendar Grid Logic
   const { monthStart, days } = useCalendarGrid(currentDate);
@@ -110,7 +120,17 @@ const HabitHistoryCalendar: React.FC = () => {
   const selectedLabel = selectedDateStr === today ? 'Today' : format(selectedDate, 'EEEE, MMMM d');
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-(--duration-base)">
+    // 🛡️ NO entrance animation on this wrapper. `DayHabitEditor`'s "who did
+    // this?" picker is a non-portalled Popover anchored on a row INSIDE here,
+    // and both an animating opacity and `slide-in-from-bottom-4`'s transform
+    // create a stacking context on this element for the animation's whole
+    // duration — which traps the picker's z-dropdown panel behind the Habits
+    // page's sticky tab strip (z-30). The trailing "Who did …?" button opens
+    // the picker on a plain click with no 500ms floor, so a tap landing inside
+    // that window would silently paint the panel behind the strip. There is
+    // nothing to gate the animation on here (unlike HabitCard, whose transform
+    // is gated on its own picker state), so it simply goes.
+    <div className="space-y-6">
       {/* Calendar Card */}
       <div className="surface-section p-4">
         {/* Header */}
@@ -205,6 +225,7 @@ const HabitHistoryCalendar: React.FC = () => {
         selectedLabel={selectedLabel}
         countForHabitOnDate={countForHabitOnDate}
         onMutated={refresh}
+        attribution={rowMemberContext}
       />
     </div>
   );

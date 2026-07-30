@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import HabitHistoryCalendar from './HabitHistoryCalendar';
-import { Habit, HabitSubmission } from '@/types/schema';
+import { Habit, HabitSubmission, HouseholdMember } from '@/types/schema';
 
 // Mock Lucide icons (calendar chrome + DayHabitEditor row icons)
 vi.mock('lucide-react', () => ({
@@ -12,6 +12,7 @@ vi.mock('lucide-react', () => ({
   CalendarDays: () => <span data-testid="icon-calendar-days" />,
   Plus: () => <span data-testid="icon-plus" />,
   Star: () => <span data-testid="icon-star" />,
+  Users: () => <span data-testid="icon-users" />,
   X: () => <span data-testid="icon-x" />,
 }));
 
@@ -23,12 +24,29 @@ const mockGetHabitSubmissions = vi.fn(async (): Promise<HabitSubmission[]> => []
 
 // Mock the context — HabitHistoryCalendar + DayHabitEditor + useHabitCalendarData
 // all read useGamification; alias every hook to one fn.
+const mockDeleteHabitSubmission = vi.fn().mockResolvedValue(undefined);
+const mockUncreditHabitCompletion = vi.fn().mockResolvedValue(undefined);
 const mockContextValue = {
   habits: [] as Habit[],
+  // `useHouseholdCore` is aliased to the same fn below, so the roster the
+  // attribution picker reads lives here too.
+  members: [] as HouseholdMember[],
+  currentUser: undefined as HouseholdMember | undefined,
   addHabitSubmission: mockAddHabitSubmission,
   resetHabitDay: mockResetHabitDay,
   getHabitSubmissions: mockGetHabitSubmissions,
+  deleteHabitSubmission: mockDeleteHabitSubmission,
+  uncreditHabitCompletion: mockUncreditHabitCompletion,
 };
+
+const adult = (uid: string, displayName: string): HouseholdMember => ({
+  uid,
+  displayName,
+  email: `${uid}@example.com`,
+  role: 'admin',
+  points: { daily: 0, weekly: 0, total: 0 },
+  joinedAt: '2024-01-01T00:00:00Z',
+} as HouseholdMember);
 
 vi.mock('@/contexts/FirebaseHouseholdContext', () => {
   const value = vi.fn(() => mockContextValue);
@@ -88,6 +106,8 @@ describe('HabitHistoryCalendar', () => {
 
     // Reset mock data
     mockContextValue.habits = [...mockHabits];
+    mockContextValue.members = [];
+    mockContextValue.currentUser = undefined;
     mockAddHabitSubmission.mockClear();
     mockResetHabitDay.mockClear();
     mockGetHabitSubmissions.mockClear();
@@ -168,7 +188,20 @@ describe('HabitHistoryCalendar', () => {
     await user.click(screen.getByRole('button', { name: /Jan 16/ }));
     await user.click(screen.getByRole('button', { name: /Log Read for/ }));
 
-    expect(mockAddHabitSubmission).toHaveBeenCalledWith('habit-2', 1, '2024-01-16T12:00:00');
+    expect(mockAddHabitSubmission).toHaveBeenCalledWith(
+      'habit-2', 1, '2024-01-16T12:00:00', undefined, undefined, undefined,
+    );
+  });
+
+  it('threads the roster into the day editor so the "who did this?" control renders', async () => {
+    // The second host, wired independently of PastDayLogModal.
+    const user = userEvent.setup();
+    mockContextValue.members = [adult('user-1', 'Paul'), adult('jen-uid', 'Jen')];
+    mockContextValue.currentUser = adult('user-1', 'Paul');
+    render(<HabitHistoryCalendar />);
+
+    await user.click(screen.getByRole('button', { name: /Jan 16/ }));
+    expect(screen.getByRole('button', { name: /Who did Read on/ })).toBeInTheDocument();
   });
 
   it('clears a logged day via the × control', async () => {

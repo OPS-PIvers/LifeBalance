@@ -25,6 +25,8 @@ import {
   memberUnitsForPeriod,
 } from '@/utils/habitAttribution';
 import {
+  LONG_PRESS_MS,
+  LONG_PRESS_SLOP,
   rowCompletionSegments,
   sameHabitRowMemberContext,
   type HabitRowMemberContext,
@@ -33,16 +35,6 @@ import HabitPieCounter from './HabitPieCounter';
 import HabitDoneByAvatars from './HabitDoneByAvatars';
 import HabitAttributionPicker, { type AttributionPickerMember } from './HabitAttributionPicker';
 import CountUp from './CountUp';
-
-/** How long the toggle must be held before the "who did this?" picker opens. */
-const LONG_PRESS_MS = 500;
-/**
- * Movement (px) that turns a press into a scroll and cancels the long-press.
- * 16px, not 10: a finger wanders during a deliberate half-second hold, and a
- * hold that silently fails is worse than a scroll that also opened the picker
- * (a real scroll leaves this far behind within the same 500ms).
- */
-const LONG_PRESS_SLOP = 16;
 
 interface HabitCardProps {
   habit: Habit;

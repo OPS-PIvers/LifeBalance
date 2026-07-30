@@ -198,9 +198,11 @@ describe('useHabitActions.addHabitSubmission', () => {
       expect(hh!.data['points.weekly']).toBeUndefined();
     }
 
-    // A back-dated submission must not bump today's live counter — only the
-    // lifetime total absorbs the count.
-    expect(habitUpdate()!.data['count']).toBe(0);
+    // A back-dated submission must not touch today's live counter at all — the
+    // key is OMITTED rather than re-written from the client cache (which would
+    // clobber a concurrent credit from another device). Only the lifetime total
+    // absorbs the count.
+    expect('count' in habitUpdate()!.data).toBe(false);
     expect(habitUpdate()!.data['totalCount']).toBe(1);
   });
 
@@ -309,7 +311,8 @@ describe('useHabitActions.addHabitSubmission (threshold completion gating)', () 
     // (stale-cache clobber guard: never the locally-computed array).
     expect(hu!.data['completedDates']).toBeUndefined();
     expect(hu!.data['streakDays']).toBe(0);
-    expect(hu!.data['count']).toBe(1);
+    // Current period → a server-side delta, never an absolute client value.
+    expect(hu!.data['count']).toEqual({ __increment: 1 });
   });
 
   it('marks the date complete and awards points when the submission reaches target', async () => {
@@ -327,7 +330,7 @@ describe('useHabitActions.addHabitSubmission (threshold completion gating)', () 
     expect(hu).toBeDefined();
     // arrayUnion delta, not a locally-computed array (stale-cache clobber guard).
     expect(hu!.data['completedDates']).toEqual({ __arrayUnion: [today] });
-    expect(hu!.data['count']).toBe(2);
+    expect(hu!.data['count']).toEqual({ __increment: 1 });
     expect(householdUpdate()!.data['points.total']).toEqual({ __increment: 10 });
   });
 });
@@ -360,7 +363,7 @@ describe('useHabitActions.addHabitSubmission (back-dated submissions)', () => {
 
     const hu = habitUpdate();
     expect(hu).toBeDefined();
-    expect(hu!.data['count']).toBe(0);
+    expect('count' in hu!.data).toBe(false);
     expect(hu!.data['totalCount']).toBe(1);
     // arrayUnion delta, not a locally-computed array (stale-cache clobber guard).
     expect(hu!.data['completedDates']).toEqual({ __arrayUnion: [yesterday()] });
@@ -395,7 +398,7 @@ describe('useHabitActions.addHabitSubmission (back-dated submissions)', () => {
     expect(hh!.data['points.total']).toEqual({ __increment: 10 });
 
     const hu = habitUpdate();
-    expect(hu!.data['count']).toBe(1);
+    expect('count' in hu!.data).toBe(false);
     // Only the newly-completed day is unioned; today was already present.
     expect(hu!.data['completedDates']).toEqual({ __arrayUnion: [yesterday()] });
     expect(hu!.data['streakDays']).toBe(2);
@@ -441,7 +444,7 @@ describe('useHabitActions.addHabitSubmission (back-dated submissions)', () => {
     expect(hh!.data['points.total']).toEqual({ __increment: 10 });
     // arrayUnion delta, not a locally-computed array (stale-cache clobber guard).
     expect(habitUpdate()!.data['completedDates']).toEqual({ __arrayUnion: [yesterday()] });
-    expect(habitUpdate()!.data['count']).toBe(0);
+    expect('count' in habitUpdate()!.data).toBe(false);
   });
 });
 
@@ -1247,12 +1250,18 @@ describe('useHabitActions.uncreditHabitCompletion (weekly threshold, multiple co
     expect(paulWrite!.data['points.daily']).toBeUndefined();
     expect(paulWrite!.data['points.weekly']).toEqual({ __increment: expectedPaulDelta });
 
-    // Jen's own member doc is untouched by THIS un-credit — only the targeted
-    // member (Paul) gets a write. Any drift in Jen's stored figure (the
-    // shared threshold no longer being met household-wide zeroes her period
-    // award too, in `expectedPoolDelta`) is left to the corrective recompute,
-    // exactly like every other reversal path in this file.
-    expect(memberWrites().some(u => u.ref.__path.endsWith('jen-uid'))).toBe(false);
+    // Jen IS debited too, even though she is not the un-credited member: taking
+    // Paul's unit out drops the week below target, which zeroes HER period award
+    // as a side effect. Leaving that to the corrective recompute was the F1 bug
+    // — `points.total` is a lifetime counter `computeMemberPointsSync` never
+    // rebuilds, so the drift would have been permanent.
+    const expectedJenDelta = memberPeriodPointsDelta(habit, after, 'jen-uid', targetDate!, today);
+    expect(expectedJenDelta).toBe(-10);
+    const jenWrite = memberWrites().find(u => u.ref.__path.endsWith('jen-uid'));
+    expect(jenWrite).toBeDefined();
+    expect(jenWrite!.data['points.total']).toEqual({ __increment: expectedJenDelta });
+    expect(jenWrite!.data['points.weekly']).toEqual({ __increment: expectedJenDelta });
+    expect(jenWrite!.data['points.daily']).toBeUndefined();
 
     // --- Household pool debit matches the shared formula exactly.
     const hh = householdUpdate();
@@ -1260,6 +1269,15 @@ describe('useHabitActions.uncreditHabitCompletion (weekly threshold, multiple co
     expect(hh!.data['points.total']).toEqual({ __increment: expectedPoolDelta });
     expect(hh!.data['points.weekly']).toEqual({ __increment: expectedPoolDelta });
     expect(hh!.data['points.daily']).toBeUndefined();
+
+    // 🏁 THE INVARIANT: pool = Σ member awards + unattributed (0 for a fully
+    // attributed threshold week), so the two sides of this batch must agree.
+    expect(expectedPaulDelta + expectedJenDelta).toBe(expectedPoolDelta);
+    expect(
+      memberWrites().reduce(
+        (sum, u) => sum + (u.data['points.total'] as { __increment: number }).__increment, 0,
+      )
+    ).toBe(expectedPoolDelta);
 
     expect(commitCount).toBe(1);
   });
@@ -2355,5 +2373,645 @@ describe('useHabitActions.resetHabit (below-target incremental periods)', () => 
     expect(capturedUpdates.filter(u => u.ref.__path.includes('/members/'))).toEqual([]);
     expect(Object.keys(habitUpdate()!.data).some(k => k.startsWith('completedBy.'))).toBe(false);
     expect(householdUpdate()!.data['points.total']).toEqual({ __increment: -20 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Past-day attribution: `addHabitSubmission` with an explicit member set.
+// ---------------------------------------------------------------------------
+
+describe('useHabitActions.addHabitSubmission (explicit attributeTo — past-day picker)', () => {
+  const roster = (...uids: string[]) => uids.map(uid => ({ uid })) as HouseholdMember[];
+  const memberUpdate = (uid: string) =>
+    capturedUpdates.find(u => u.ref.__path === `${householdPath}/members/${uid}`);
+
+  /** A date far enough back to sit outside the current Monday week, always. */
+  const pastDate = () => format(subDays(new Date(), 10), 'yyyy-MM-dd');
+  const pastStamp = () => `${pastDate()}T12:00:00`;
+
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    capturedDeletes.length = 0;
+    commitCount = 0;
+    nextCommitError = null;
+    incrementMock.mockClear();
+    getDocsMock.mockReset();
+    getDocsMock.mockResolvedValue(submissionsSnap([]));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('credits the NAMED member, never the signed-in one (the mis-attribution bug)', async () => {
+    // Back-filling a day your partner did used to credit YOU, silently and with
+    // no way to say otherwise. The 6th argument is what makes it correctable.
+    const D = pastDate();
+    const habit = baseHabit({ completedDates: [] });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.addHabitSubmission('h1', 1, pastStamp(), undefined, undefined, ['jen-uid']);
+    });
+
+    expect(capturedSets).toHaveLength(1);
+    expect(capturedSets[0]!.data['attributedTo']).toBe('jen-uid');
+    // The operator stays on the doc — that is the audit trail.
+    expect(capturedSets[0]!.data['createdBy']).toBe('user1');
+
+    const hu = habitUpdate()!;
+    expect(hu.data[`completedBy.${D}.jen-uid`]).toEqual({ __increment: 1 });
+    expect(hu.data[`completedBy.${D}.user1`]).toBeUndefined();
+
+    expect(memberUpdate('jen-uid')!.data['points.total']).toEqual({ __increment: 10 });
+    expect(memberUpdate('user1')).toBeUndefined();
+  });
+
+  it('writes ONE submission doc per member for a two-person back-dated log, in one batch', async () => {
+    const D = pastDate();
+    const habit = baseHabit({ completedDates: [] });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.addHabitSubmission(
+        'h1', 1, pastStamp(), undefined, undefined, ['user1', 'jen-uid'],
+      );
+    });
+
+    expect(capturedSets).toHaveLength(2);
+    expect(capturedSets.map(s => s.data['attributedTo'])).toEqual(['user1', 'jen-uid']);
+    // One doc = one member = one unit bundle (never one doc of count 2).
+    expect(capturedSets.every(s => s.data['count'] === 1)).toBe(true);
+
+    const hu = habitUpdate()!;
+    expect(hu.data[`completedBy.${D}.user1`]).toEqual({ __increment: 1 });
+    expect(hu.data[`completedBy.${D}.jen-uid`]).toEqual({ __increment: 1 });
+    expect(hu.data['totalCount']).toBe(2);
+    // A1: a genuinely past-dated log writes NO `count` key at all.
+    expect('count' in hu.data).toBe(false);
+
+    expect(commitCount).toBe(1);
+  });
+
+  it("stores each doc's own member award, summing to the pool increment", async () => {
+    const habit = baseHabit({ completedDates: [] });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.addHabitSubmission(
+        'h1', 1, pastStamp(), undefined, undefined, ['user1', 'jen-uid'],
+      );
+    });
+
+    expect(capturedSets[0]!.data['pointsEarned']).toBe(10);
+    expect(capturedSets[1]!.data['pointsEarned']).toBe(10);
+    const summed = capturedSets.reduce((n, s) => n + (s.data['pointsEarned'] as number), 0);
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: summed });
+  });
+
+  it('moves TOTAL only for a past-dated two-member log — pool and both member docs', async () => {
+    const habit = baseHabit({ completedDates: [] });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.addHabitSubmission(
+        'h1', 1, pastStamp(), undefined, undefined, ['user1', 'jen-uid'],
+      );
+    });
+
+    for (const upd of [householdUpdate()!, memberUpdate('user1')!, memberUpdate('jen-uid')!]) {
+      expect(upd.data['points.daily']).toBeUndefined();
+      expect(upd.data['points.weekly']).toBeUndefined();
+      expect(upd.data['points.total']).toBeDefined();
+    }
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: 20 });
+    expect(memberUpdate('user1')!.data['points.total']).toEqual({ __increment: 10 });
+    expect(memberUpdate('jen-uid')!.data['points.total']).toEqual({ __increment: 10 });
+  });
+
+  it("moves daily+weekly+total for TODAY's two-member log, and increments the live counter", async () => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const habit = baseHabit({ completedDates: [], count: 0 });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.addHabitSubmission(
+        'h1', 1, `${today}T12:00:00`, undefined, undefined, ['user1', 'jen-uid'],
+      );
+    });
+
+    const hh = householdUpdate()!;
+    expect(hh.data['points.total']).toEqual({ __increment: 20 });
+    expect(hh.data['points.daily']).toEqual({ __increment: 20 });
+    expect(hh.data['points.weekly']).toEqual({ __increment: 20 });
+    // The race fix: a server-side delta, not an absolute client-cached value.
+    expect(habitUpdate()!.data['count']).toEqual({ __increment: 2 });
+  });
+
+  it('gives a second member a FULL award on a threshold day another member already completed', async () => {
+    // The locked competition model: both members completing the same threshold
+    // day each earn a full award, and the grandfathering remainder is 0 — so
+    // nothing is double-counted.
+    const D = pastDate();
+    const habit = baseHabit({
+      scoringType: 'threshold',
+      targetCount: 1,
+      count: 0,
+      totalCount: 1,
+      completedDates: [D],
+      completedBy: { [D]: { 'user1': 1 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.addHabitSubmission('h1', 1, pastStamp(), undefined, undefined, ['jen-uid']);
+    });
+
+    expect(capturedSets[0]!.data['pointsEarned']).toBe(10);
+    expect(memberUpdate('jen-uid')!.data['points.total']).toEqual({ __increment: 10 });
+    // user1 already holds their award; nothing about it moves.
+    expect(memberUpdate('user1')).toBeUndefined();
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: 10 });
+  });
+
+  it('is bit-for-bit the old behaviour when attributeTo is omitted', async () => {
+    const D = pastDate();
+    const habit = baseHabit({ completedDates: [] });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.addHabitSubmission('h1', 1, pastStamp());
+    });
+
+    expect(capturedSets).toHaveLength(1);
+    expect(capturedSets[0]!.data['attributedTo']).toBe('user1');
+    // The HABIT-level figure, not the member award (identical here, but this is
+    // the branch that must not change shape).
+    expect(capturedSets[0]!.data['pointsEarned']).toBe(10);
+    const hu = habitUpdate()!;
+    expect(Object.keys(hu.data).filter(k => k.startsWith('completedBy.'))).toEqual([
+      `completedBy.${D}.user1`,
+    ]);
+  });
+
+  it('feeds pausedUntil into the streak recompute (parity with creditHabitCompletion)', async () => {
+    // Monday 2026-07-13 completed, then a planned break through Thursday
+    // 2026-07-16. Logging Friday must BRIDGE the break (streak 2), not restart
+    // it (streak 1) — which is what omitting pausedUntil produced.
+    vi.useFakeTimers({ now: new Date('2026-07-17T09:00:00') });
+    const habit = baseHabit({
+      completedDates: ['2026-07-13'],
+      pausedUntil: '2026-07-16',
+      count: 0,
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1'))
+    );
+
+    await act(async () => {
+      await result.current.addHabitSubmission('h1', 1, '2026-07-17T12:00:00');
+    });
+
+    expect(habitUpdate()!.data['streakDays']).toBe(2);
+    expect(habitUpdate()!.data['streakDays']).toBe(
+      streakForHabit({
+        period: 'daily',
+        completedDates: ['2026-07-17', '2026-07-13'],
+        pausedUntil: '2026-07-16',
+      })
+    );
+  });
+
+  it('accepts a later-day credit in an already-complete weekly threshold period WITHOUT paying twice', async () => {
+    // ACCEPTED AS DESIGNED. The day editor's `credited` state is DAY-scoped, so
+    // a weekly habit whose week was already completed can take a credit on a
+    // different day of that week. The week is the completion unit: the date does
+    // NOT join `completedDates`, the household pool does not move at all, and
+    // the credited member simply takes over the week's (previously
+    // grandfathered) award.
+    vi.useFakeTimers({ now: new Date('2026-07-24T09:00:00') }); // Fri, week of 07-20
+    const habit = baseHabit({
+      period: 'weekly',
+      scoringType: 'threshold',
+      targetCount: 3,
+      count: 0,
+      totalCount: 3,
+      completedDates: ['2026-07-13'], // Mon of the PREVIOUS week — target met by toggling
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.addHabitSubmission(
+        'h1', 1, '2026-07-15T12:00:00', undefined, undefined, ['jen-uid'],
+      );
+    });
+
+    const hu = habitUpdate()!;
+    expect(hu.data['completedBy.2026-07-15.jen-uid']).toEqual({ __increment: 1 });
+    // Below target for the week, so the date never enters completedDates…
+    expect('completedDates' in hu.data).toBe(false);
+    // …and a past period never touches the live counter.
+    expect('count' in hu.data).toBe(false);
+    // NO DOUBLE AWARD: the week already paid the household; attributing it to
+    // Jen moves it from the grandfathered remainder onto her, net zero.
+    expect(householdUpdate()).toBeUndefined();
+    expect(memberUpdate('jen-uid')!.data['points.total']).toEqual({ __increment: 10 });
+    expect(memberUpdate('jen-uid')!.data['points.weekly']).toBeUndefined();
+  });
+});
+
+describe('useHabitActions.deleteHabitSubmission (past-day undo)', () => {
+  const roster = (...uids: string[]) => uids.map(uid => ({ uid })) as HouseholdMember[];
+  const memberUpdate = (uid: string) =>
+    capturedUpdates.find(u => u.ref.__path === `${householdPath}/members/${uid}`);
+  const submissionDoc = (data: Record<string, unknown>) =>
+    ({ exists: () => true, data: () => data }) as unknown as Awaited<ReturnType<typeof getDoc>>;
+  const dateQuerySnap = (size: number) =>
+    ({ size, empty: size === 0, docs: [] }) as unknown as Awaited<ReturnType<typeof getDocs>>;
+
+  const pastDate = () => format(subDays(new Date(), 10), 'yyyy-MM-dd');
+
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    capturedDeletes.length = 0;
+    commitCount = 0;
+    nextCommitError = null;
+    incrementMock.mockClear();
+    getDocsMock.mockReset();
+    getDocMock.mockReset();
+  });
+
+  it('leaves the live counter ALONE when the deleted submission is past-dated', async () => {
+    // The counter belongs to a period that reset days ago; shrinking it here
+    // silently un-did a completion still on screen.
+    const D = pastDate();
+    getDocMock.mockResolvedValue(submissionDoc({
+      habitId: 'h1', date: D, count: 1, pointsEarned: 10,
+      createdBy: 'user1', attributedTo: 'user1',
+      streakDaysAtTime: 1, multiplierApplied: 1,
+    }));
+    getDocsMock.mockResolvedValue(dateQuerySnap(1));
+
+    const habit = baseHabit({
+      completedDates: [D],
+      count: 3, // today's live progress, untouched by this delete
+      totalCount: 4,
+      completedBy: { [D]: { 'user1': 1 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1'))
+    );
+
+    await act(async () => {
+      await result.current.deleteHabitSubmission('h1', 's1');
+    });
+
+    expect('count' in habitUpdate()!.data).toBe(false);
+    expect(habitUpdate()!.data['totalCount']).toBe(3);
+    expect(commitCount).toBe(1);
+  });
+
+  it('does NOT debit the pool twice when an attributed doc has already been un-credited', async () => {
+    // The exact no-race sequence: credit Jen on a past day from the day editor
+    // (doc + completedBy + pool), un-credit her from the Habits-page picker
+    // (which zeroes completedBy and debits the pool but never touches the doc),
+    // then delete the now-orphaned doc. Falling back to `legacyDelta` here
+    // debited the pool a SECOND time — and computeHouseholdPointsSync only ever
+    // RAISES the stored total, so that drift is permanent.
+    const D = pastDate();
+    getDocMock.mockResolvedValue(submissionDoc({
+      habitId: 'h1', date: D, count: 1, pointsEarned: 10,
+      createdBy: 'user1', attributedTo: 'jen-uid',
+      streakDaysAtTime: 1, multiplierApplied: 1,
+    }));
+    getDocsMock.mockResolvedValue(dateQuerySnap(1));
+
+    const habit = baseHabit({
+      // The un-credit already removed D from completedDates and zeroed Jen's node.
+      completedDates: [],
+      count: 0,
+      totalCount: 1,
+      completedBy: { [D]: { 'jen-uid': 0 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.deleteHabitSubmission('h1', 's1');
+    });
+
+    // Stored attribution says there is nothing left to reverse → reverse NOTHING.
+    expect(householdUpdate()).toBeUndefined();
+    expect(memberUpdate('jen-uid')).toBeUndefined();
+    expect(Object.keys(habitUpdate()!.data).some(k => k.startsWith('completedBy.'))).toBe(false);
+    expect(commitCount).toBe(1);
+  });
+
+  it('reverses the WHOLE doc when a pre-feature multi-unit log holds the day', async () => {
+    // ACCEPTED AS DESIGNED: "un-credit this person for this day" takes back the
+    // doc that recorded the day, units and all — there is no per-unit split of a
+    // single submission.
+    const D = pastDate();
+    getDocMock.mockResolvedValue(submissionDoc({
+      habitId: 'h1', date: D, count: 3, pointsEarned: 30,
+      createdBy: 'jen-uid', attributedTo: 'jen-uid',
+      streakDaysAtTime: 1, multiplierApplied: 1,
+    }));
+    getDocsMock.mockResolvedValue(dateQuerySnap(1));
+
+    const habit = baseHabit({
+      completedDates: [D],
+      count: 0,
+      totalCount: 3,
+      completedBy: { [D]: { 'jen-uid': 3 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.deleteHabitSubmission('h1', 's1');
+    });
+
+    expect(habitUpdate()!.data[`completedBy.${D}.jen-uid`]).toEqual({ __increment: -3 });
+    expect(habitUpdate()!.data['totalCount']).toBe(0);
+    expect(memberUpdate('jen-uid')!.data['points.total']).toEqual({ __increment: -30 });
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: -30 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 🏁 THE MEMBER RULE: the member docs a path writes must cover the same
+// PERIOD-WIDE scope its pool delta was computed over.
+//
+// On a THRESHOLD period spanning several days (a weekly habit) one member's own
+// award flips from 0 to a full award as a SIDE EFFECT of a different member's
+// later-day credit completing the period. Writing only the uids the CALL was
+// handed moved the pool by more than the sum of the member writes — and nothing
+// self-heals it: `computeMemberPointsSync` rebuilds only daily/weekly (`total`
+// is a lifetime counter it never touches), and a closed week's `weekly` is
+// never revisited either.
+//
+// Every test here asserts BOTH member docs move AND `Σ member deltas === the
+// pool delta` — the invariant `household = Σ member awards + unattributed`,
+// whose unattributed term is 0 for a fully-attributed threshold period.
+// ---------------------------------------------------------------------------
+
+describe('useHabitActions — period-wide member point writes (household = Σ members)', () => {
+  const roster = (...uids: string[]) => uids.map(uid => ({ uid })) as HouseholdMember[];
+  const memberUpdate = (uid: string) =>
+    capturedUpdates.find(u => u.ref.__path === `${householdPath}/members/${uid}`);
+  const memberWrites = () => capturedUpdates.filter(u => u.ref.__path.includes('/members/'));
+  const totalOf = (u: CapturedUpdate | undefined) =>
+    (u?.data['points.total'] as { __increment: number } | undefined)?.__increment;
+  /** Σ of every member doc's `points.total` move in this batch. */
+  const summedMemberTotals = () =>
+    memberWrites().reduce((sum, u) => sum + (totalOf(u) ?? 0), 0);
+
+  const submissionDoc = (data: Record<string, unknown>) =>
+    ({ exists: () => true, data: () => data }) as unknown as Awaited<ReturnType<typeof getDoc>>;
+  const dateQuerySnap = (size: number) =>
+    ({ size, empty: size === 0, docs: [] }) as unknown as Awaited<ReturnType<typeof getDocs>>;
+
+  // A fixture anchored to its OWN week, never to an offset from `new Date()`.
+  // Friday 2026-07-24 sits in the week of Mon 2026-07-20, so the week of Mon
+  // 2026-07-13 is fully CLOSED — which is the case no recompute revisits.
+  const NOW = new Date('2026-07-24T09:00:00');
+  const MON = '2026-07-13';
+  const WED = '2026-07-15';
+
+  /** Weekly threshold, target 2 — the shape where the side-effect award lives. */
+  const weeklyPair = (overrides: Partial<Habit>) => baseHabit({
+    period: 'weekly',
+    scoringType: 'threshold',
+    targetCount: 2,
+    basePoints: 10,
+    lastUpdated: '2026-07-24T08:00:00',
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    capturedDeletes.length = 0;
+    commitCount = 0;
+    nextCommitError = null;
+    incrementMock.mockClear();
+    getDocsMock.mockReset();
+    getDocMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('addHabitSubmission: a later-day credit that COMPLETES the week pays the earlier member too', async () => {
+    // Step 1 (already applied to the fixture): user1 credited for Monday →
+    // period 1/2, nobody scored. Step 2: Jen credited for Wednesday → the week
+    // reaches 2/2 and BOTH members' awards land. Writing only Jen left user1
+    // permanently 10 points short of the pool.
+    vi.useFakeTimers({ now: NOW });
+    const habit = weeklyPair({
+      count: 0,
+      totalCount: 1,
+      completedDates: [],
+      completedBy: { [MON]: { 'user1': 1 } },
+    });
+    // The Monday submission written by step 1 — production's prior-period read.
+    getDocsMock.mockResolvedValue(submissionsSnap([1]));
+
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.addHabitSubmission(
+        'h1', 1, `${WED}T12:00:00`, undefined, undefined, ['jen-uid'],
+      );
+    });
+
+    // The week completes, so Wednesday enters completedDates…
+    expect(habitUpdate()!.data['completedDates']).toEqual({ __arrayUnion: [WED] });
+    // …and BOTH member docs are written, not just the one this call named.
+    expect(totalOf(memberUpdate('jen-uid'))).toBe(10);
+    expect(totalOf(memberUpdate('user1'))).toBe(10);
+    // A closed week: total only — which is exactly why nothing would have
+    // corrected the missing write later.
+    expect(memberUpdate('user1')!.data['points.weekly']).toBeUndefined();
+    expect(memberUpdate('user1')!.data['points.daily']).toBeUndefined();
+
+    expect(totalOf(householdUpdate())).toBe(20);
+    expect(summedMemberTotals()).toBe(totalOf(householdUpdate()));
+    expect(commitCount).toBe(1);
+  });
+
+  it('deleteHabitSubmission: un-completing the week reverses BOTH members', async () => {
+    // The mirror. Deleting Jen's Wednesday doc drops the week below target,
+    // which zeroes user1's Monday award too — bounding the reversal to the
+    // deleted doc's single uid left user1 holding points the pool gave back.
+    vi.useFakeTimers({ now: NOW });
+    getDocMock.mockResolvedValue(submissionDoc({
+      habitId: 'h1', date: WED, count: 1, pointsEarned: 10,
+      createdBy: 'user1', attributedTo: 'jen-uid',
+      streakDaysAtTime: 1, multiplierApplied: 1,
+    }));
+    getDocsMock.mockResolvedValue(dateQuerySnap(1));
+
+    const habit = weeklyPair({
+      count: 0,
+      totalCount: 2,
+      completedDates: [WED],
+      completedBy: { [MON]: { 'user1': 1 }, [WED]: { 'jen-uid': 1 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.deleteHabitSubmission('h1', 's1');
+    });
+
+    expect(totalOf(memberUpdate('jen-uid'))).toBe(-10);
+    expect(totalOf(memberUpdate('user1'))).toBe(-10);
+    // Only Jen's attributed unit comes off the habit doc — user1 keeps his
+    // Monday UNIT; it is only his period AWARD that goes away.
+    expect(habitUpdate()!.data[`completedBy.${WED}.jen-uid`]).toEqual({ __increment: -1 });
+    expect(habitUpdate()!.data[`completedBy.${MON}.user1`]).toBeUndefined();
+
+    expect(totalOf(householdUpdate())).toBe(-20);
+    expect(summedMemberTotals()).toBe(totalOf(householdUpdate()));
+    expect(commitCount).toBe(1);
+  });
+
+  it('creditHabitCompletion: picking "Me" then separately "Jen" pays both, not just Jen', async () => {
+    // The Habits-page shape of the same bug: two single-member picks on a
+    // weekly threshold habit. The fixture is the state after the first pick.
+    vi.useFakeTimers({ now: new Date('2026-07-15T09:00:00') });
+    const habit = weeklyPair({
+      count: 1,
+      totalCount: 1,
+      completedDates: [],
+      completedBy: { [WED]: { 'user1': 1 } },
+      lastUpdated: '2026-07-15T08:00:00',
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.creditHabitCompletion('h1', ['jen-uid']);
+    });
+
+    expect(totalOf(memberUpdate('jen-uid'))).toBe(10);
+    expect(totalOf(memberUpdate('user1'))).toBe(10);
+    expect(totalOf(householdUpdate())).toBe(20);
+    expect(summedMemberTotals()).toBe(totalOf(householdUpdate()));
+    expect(commitCount).toBe(1);
+  });
+
+  it('uncreditHabitCompletion: dropping the week below target reverses both members', async () => {
+    vi.useFakeTimers({ now: new Date('2026-07-15T09:00:00') });
+    const habit = weeklyPair({
+      count: 2,
+      totalCount: 2,
+      completedDates: [WED],
+      completedBy: { [WED]: { 'user1': 1, 'jen-uid': 1 } },
+      lastUpdated: '2026-07-15T08:00:00',
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.uncreditHabitCompletion('h1', 'jen-uid', WED);
+    });
+
+    expect(totalOf(memberUpdate('jen-uid'))).toBe(-10);
+    expect(totalOf(memberUpdate('user1'))).toBe(-10);
+    expect(totalOf(householdUpdate())).toBe(-20);
+    expect(summedMemberTotals()).toBe(totalOf(householdUpdate()));
+    expect(commitCount).toBe(1);
+  });
+
+  it('REGRESSION PIN: the ordinary single-member incremental day still writes exactly ONE member doc', async () => {
+    // The period-wide scan must not manufacture writes. Jen already holds a
+    // unit on this day, but an incremental award depends only on the member's
+    // OWN units and streak — so her delta is 0 and her doc is left alone.
+    vi.useFakeTimers({ now: NOW });
+    getDocsMock.mockResolvedValue(submissionsSnap([]));
+    const habit = baseHabit({
+      scoringType: 'incremental',
+      period: 'daily',
+      basePoints: 10,
+      count: 0,
+      totalCount: 1,
+      completedDates: [WED],
+      completedBy: { [WED]: { 'jen-uid': 1 } },
+      lastUpdated: '2026-07-24T08:00:00',
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.addHabitSubmission(
+        'h1', 1, `${WED}T12:00:00`, undefined, undefined, ['user1'],
+      );
+    });
+
+    expect(memberWrites()).toHaveLength(1);
+    expect(totalOf(memberUpdate('user1'))).toBe(10);
+    expect(memberUpdate('jen-uid')).toBeUndefined();
+    expect(totalOf(householdUpdate())).toBe(10);
+    expect(summedMemberTotals()).toBe(totalOf(householdUpdate()));
   });
 });

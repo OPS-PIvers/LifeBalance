@@ -1,13 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { format, isSameMonth, isToday, addMonths, subMonths, subDays, parseISO } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useGamification } from '@/contexts/FirebaseHouseholdContext';
+import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import DayHabitEditor from '@/components/habits/DayHabitEditor';
 import { useCalendarGrid } from '@/hooks/useCalendarGrid';
 import { useHabitCalendarData } from '@/hooks/useHabitCalendarData';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { buildHabitRowMemberContext } from '@/utils/habitRowAttribution';
 import { cn } from '@/utils/cn';
 
 interface PastDayLogModalProps {
@@ -39,6 +40,15 @@ const WEEK_DAYS: { abbr: string; full: string }[] = [
  */
 const PastDayLogModal: React.FC<PastDayLogModalProps> = ({ isOpen, onClose }) => {
   const { habits } = useGamification();
+  const { members, currentUser } = useHouseholdCore();
+
+  // Built here rather than threaded from Habits.tsx: this modal is lazy-mounted,
+  // and a prop that exists only to be forwarded is a worse contract than one
+  // extra slice subscription on a surface that is open at most one at a time.
+  const rowMemberContext = useMemo(
+    () => buildHabitRowMemberContext(members, currentUser?.uid),
+    [members, currentUser?.uid]
+  );
 
   const today = getLocalDateString();
   // Default to yesterday — the day people most often forgot to log.
@@ -153,6 +163,7 @@ const PastDayLogModal: React.FC<PastDayLogModalProps> = ({ isOpen, onClose }) =>
           selectedLabel={selectedLabel}
           countForHabitOnDate={countForHabitOnDate}
           onMutated={refresh}
+          attribution={rowMemberContext}
         />
       </div>
     </Drawer>
