@@ -399,7 +399,13 @@ const SEED_MEMBERS: HouseholdMember[] = [
   // to the identical `MEMBER_DEFAULT_HIDDEN_KEYS` default).
   {
     uid: 'test-partner-id', displayName: 'Jordan', email: 'jordan@example.com',
-    role: 'member', points: { daily: 0, weekly: 0, total: 0 },
+    role: 'member',
+    // Distinct + nonzero from Test User's (30/150/500) so the per-member
+    // scoreboard widget (PR 4/6) has two real standings to demo — Test User
+    // stays the leader, keeping every OTHER surface keyed off members[0]
+    // (dailyPoints/weeklyPoints, TopToolbar, etc. — see the toggleHabit
+    // comment below) unchanged.
+    points: { daily: 20, weekly: 95, total: 310 },
     hiddenKeys: [...DEFAULT_HIDDEN_DASHBOARD_WIDGETS, 'trends', 'subscriptions']
   },
   // Plan 080 (Kid Mode) Test-Mode harness: one managed kid so the dormant kid

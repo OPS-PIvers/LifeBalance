@@ -93,6 +93,9 @@ vi.mock('@/components/dashboard/ActivityFeedWidget', () => ({
 vi.mock('@/components/dashboard/KidsChoresWidget', () => ({
   KidsChoresWidget: () => null,
 }));
+vi.mock('@/components/dashboard/ScoreboardWidget', () => ({
+  ScoreboardWidget: () => null,
+}));
 // Stubbed to identifiable text (rather than null) so the queue-reordering
 // tests below can assert its position relative to the Action Queue section.
 vi.mock('@/components/dashboard/CreditCardActivityWidget', () => ({
