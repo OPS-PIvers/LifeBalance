@@ -223,4 +223,12 @@ describe('deriveScoreboardTrend', () => {
     // If the kid's 500 leaked in, this would incorrectly read false.
     expect(deriveScoreboardTrend(recaps, 100, membersWithKid).isBestWeek).toBe(true);
   });
+
+  it('handles a recap with an EMPTY pointsByMember without crashing or inventing a trend', () => {
+    // The server now writes `[]` for a week no member holds a completion in
+    // (and every pre-feature recap predates the field's per-member meaning),
+    // so this shape reaches the widget on real data.
+    const recaps: WeeklyRecap[] = [recap({ isoWeek: '2026-W30', pointsByMember: [] })];
+    expect(deriveScoreboardTrend(recaps, 610, adults).trendPct).toBeNull();
+  });
 });

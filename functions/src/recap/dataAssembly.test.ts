@@ -57,14 +57,14 @@ describe("assembleWeeklyRecap", () => {
     const habits: RecapHabit[] = [
       { title: "Read", completedDates: [], streakDays: 0 },
     ];
-    const members: RecapMember[] = [
-      { uid: "u1", displayName: "Alex", points: { daily: 0, weekly: 0, total: 0 } },
-    ];
+    const members: RecapMember[] = [{ uid: "u1", displayName: "Alex" }];
     const result = assembleWeeklyRecap(baseInput({ habits, members }));
     expect(result.totalSpend).toBe(0);
     expect(result.priorWeekSpend).toBe(0);
     expect(result.habitCompletions).toBe(0);
-    expect(result.pointsByMember).toEqual([{ memberId: "u1", name: "Alex", points: 0 }]);
+    // No completions anywhere ⇒ no per-member data to report, so the list is
+    // empty rather than a row of zeroes (see the ceremony gate below).
+    expect(result.pointsByMember).toEqual([]);
   });
 
   it("only counts verified, non-income transactions within the week window", () => {
@@ -186,16 +186,17 @@ describe("assembleWeeklyRecap", () => {
     expect(result.streaksAtRisk).toEqual([]);
   });
 
-  it("falls back to stored weekly points for pointsByMember when the week has NO attribution", () => {
+  it("reports NO pointsByMember for a week with no per-member data — never stored weekly points", () => {
+    // There is nowhere left for a stored figure to leak in from: `RecapMember`
+    // has no `points` field, precisely because a Monday-morning run would read
+    // it after the client's weekly rollover.
     const members: RecapMember[] = [
-      { uid: "u1", displayName: "Alex", points: { daily: 1, weekly: 30, total: 500 } },
-      { uid: "u2", displayName: "Sam", points: { daily: 0, weekly: 10, total: 100 } },
+      { uid: "u1", displayName: "Alex" },
+      { uid: "u2", displayName: "Sam" },
     ];
     const result = assembleWeeklyRecap(baseInput({ members }));
-    expect(result.pointsByMember).toEqual([
-      { memberId: "u1", name: "Alex", points: 30 },
-      { memberId: "u2", name: "Sam", points: 10 },
-    ]);
+    expect(result.pointsByMember).toEqual([]);
+    expect(result.memberFacts).toEqual([]);
   });
 
   it("collects upcoming expense calendar items in the 7 days after the recap week", () => {
@@ -236,15 +237,12 @@ describe("assembleWeeklyRecap — ceremony fields", () => {
     },
   ];
   const members: RecapMember[] = [
-    { uid: "u1", displayName: "Jen", points: { daily: 0, weekly: 999, total: 999 } },
-    { uid: "u2", displayName: "Paul", points: { daily: 0, weekly: 999, total: 999 } },
+    { uid: "u1", displayName: "Jen" },
+    { uid: "u2", displayName: "Paul" },
   ];
 
-  it("DERIVES pointsByMember from attribution, ignoring the (already rolled over) stored weekly points", () => {
+  it("DERIVES pointsByMember from completions, with no stored-points source to fall back to", () => {
     const result = assembleWeeklyRecap(baseInput({ habits: attributedHabits, members }));
-    // The stored 999s are what a Monday-morning run would read AFTER the
-    // weekly rollover — never the truth about the week that just closed.
-    expect(result.pointsByMember.every((p) => p.points !== 999)).toBe(true);
     expect(result.pointsByMember.map((p) => p.memberId)).toEqual(["u1", "u2"]);
     expect(result.pointsByMember[0]?.points).toBeGreaterThan(
       result.pointsByMember[1]?.points ?? 0
@@ -282,5 +280,100 @@ describe("assembleWeeklyRecap — ceremony fields", () => {
     const result = assembleWeeklyRecap(baseInput({ habits: priorHabits, members }));
     expect(result.totalPoints).toBe(0);
     expect(result.priorWeekPoints).toBe(10);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Managed kids: chores are PERSONAL, never household (review fix on stage 5)
+// ---------------------------------------------------------------------------
+
+describe("assembleWeeklyRecap — a chore-heavy kid week", () => {
+  const roster: RecapMember[] = [
+    { uid: "u1", displayName: "Jen" },
+    { uid: "u2", displayName: "Paul" },
+    { uid: "kid_leo", displayName: "Leo", isManaged: true },
+  ];
+  /** Leo does the dishes every day; the adults log nothing at all. */
+  const choreHabits: RecapHabit[] = [
+    {
+      title: "Dishes",
+      streakDays: 7,
+      period: "daily",
+      type: "positive",
+      basePoints: 10,
+      scoringType: "threshold",
+      targetCount: 1,
+      assignedTo: "kid_leo",
+      completedDates: [...WEEK_DATES],
+    },
+  ];
+
+  it("leaves the household aggregates untouched by the kid's chore points", () => {
+    const result = assembleWeeklyRecap(baseInput({ habits: choreHabits, members: roster }));
+    expect(result.totalPoints).toBe(0);
+    expect(result.priorWeekPoints).toBe(0);
+    for (const day of result.dailyPoints) {
+      expect(day.total).toBe(0);
+      expect(day.byMember).toEqual({});
+    }
+  });
+
+  it("still carries the kid's own figure, flagged isManaged so no standing crowns them", () => {
+    const result = assembleWeeklyRecap(baseInput({ habits: choreHabits, members: roster }));
+    const leoFacts = result.memberFacts.find((f) => f.memberId === "kid_leo");
+    expect(leoFacts?.points).toBe(100);
+    expect(leoFacts?.isManaged).toBe(true);
+    expect(result.pointsByMember).toContainEqual({
+      memberId: "kid_leo",
+      name: "Leo",
+      points: 100,
+    });
+  });
+
+  it("counts an assigned chore in the week's raw habitCompletions (a household DID them)", () => {
+    const result = assembleWeeklyRecap(baseInput({ habits: choreHabits, members: roster }));
+    expect(result.habitCompletions).toBe(7);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Assigned chores never leak into the household total alongside shared habits
+// ---------------------------------------------------------------------------
+
+describe("assembleWeeklyRecap — chores mixed with shared habits", () => {
+  const roster: RecapMember[] = [
+    { uid: "u1", displayName: "Jen" },
+    { uid: "kid_leo", displayName: "Leo", isManaged: true },
+  ];
+
+  it("counts only the shared habit toward totalPoints", () => {
+    const mixed: RecapHabit[] = [
+      {
+        title: "Morning walk",
+        streakDays: 1,
+        period: "daily",
+        type: "positive",
+        basePoints: 10,
+        scoringType: "threshold",
+        targetCount: 1,
+        completedDates: ["2026-06-29"],
+        completedBy: { "2026-06-29": { u1: 1 } },
+      },
+      {
+        title: "Dishes",
+        streakDays: 1,
+        period: "daily",
+        type: "positive",
+        basePoints: 40,
+        scoringType: "threshold",
+        targetCount: 1,
+        assignedTo: "kid_leo",
+        completedDates: ["2026-06-29"],
+      },
+    ];
+    const result = assembleWeeklyRecap(baseInput({ habits: mixed, members: roster }));
+    expect(result.totalPoints).toBe(10);
+    expect(result.dailyPoints[0]?.byMember).toEqual({ u1: 10 });
+    expect(result.memberFacts.find((f) => f.memberId === "kid_leo")?.points).toBe(40);
   });
 });

@@ -925,6 +925,17 @@ describe('weeklyRecapConverter', () => {
           topStreak: { habitTitle: 'Read 30 mins', days: 9, period: 'daily' },
           perfectHabits: ['Read 30 mins'],
         },
+        {
+          memberId: 'kid_leo',
+          name: 'Leo',
+          points: 60,
+          completions: 6,
+          // Adults carry no `isManaged` key at all; a managed kid carries true.
+          isManaged: true,
+          bestDay: null,
+          topStreak: null,
+          perfectHabits: [],
+        },
       ],
       dailyPoints: [
         { date: '2026-06-29', byMember: { 'user-1': 25 }, unattributed: 5, total: 30 },
@@ -935,6 +946,8 @@ describe('weeklyRecapConverter', () => {
     };
     const result = weeklyRecapConverter.fromFirestore(fakeSnap('2026-W27', ceremony));
     expect(result.memberFacts?.[0]?.perfectHabits).toEqual(['Read 30 mins']);
+    expect(result.memberFacts?.[0]?.isManaged).toBeUndefined();
+    expect(result.memberFacts?.[1]?.isManaged).toBe(true);
     expect(result.dailyPoints?.[0]).toEqual({
       date: '2026-06-29',
       byMember: { 'user-1': 25 },

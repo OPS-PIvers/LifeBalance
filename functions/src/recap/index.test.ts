@@ -9,8 +9,10 @@
  * the subset of the query API this module uses: `.where(field, op, value)` chains,
  * `.get()`, `.doc()`, `.update()`, and `db.batch()`.
  *
- * Time is pinned via fake timers to a known Sunday 17:00 instant in a known IANA
- * timezone so `isTimeToSend`/`isoWeekId` behave deterministically.
+ * Time is pinned via fake timers to a known MONDAY 07:00 instant in a known IANA
+ * timezone — the ceremony's generation moment — so `isTimeToSend`/`isoWeekId`
+ * behave deterministically. The week the run DESCRIBES is the one that closed
+ * the day before; see `CLOSED_WEEK` / `CURRENT_WEEK` below.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";

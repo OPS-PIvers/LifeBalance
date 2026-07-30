@@ -4,9 +4,9 @@ import {
   buildDailyPoints,
   memberAttributedPointsOnDate,
   memberDatesFor,
+  memberPointsOnDate,
   unattributedPointsOnDate,
   weekDates,
-  weekHasAttribution,
   weekPointsTotal,
   type CeremonyMember,
   type RecapScoringHabit,
@@ -33,6 +33,7 @@ const [MON, TUE, WED, THU, FRI, SAT, SUN] = DAYS as [
 
 const JEN: CeremonyMember = { uid: "u1", displayName: "Jen" };
 const PAUL: CeremonyMember = { uid: "u2", displayName: "Paul" };
+const LEO: CeremonyMember = { uid: "kid_leo", displayName: "Leo", isManaged: true };
 const MEMBERS = [JEN, PAUL];
 
 function habit(overrides: Partial<RecapScoringHabit> = {}): RecapScoringHabit {
@@ -235,11 +236,18 @@ describe("buildDailyPoints", () => {
     expect(days[1]?.byMember).toEqual({});
   });
 
-  it("routes an assigned chore to its assignee and never to the unattributed series", () => {
-    const habits = [habit({ title: "Dishes", assignedTo: "u2", completedDates: [MON, TUE] })];
-    const days = buildDailyPoints(habits, MEMBERS, WEEK_START, WEEK_END);
-    expect(days[0]?.byMember).toEqual({ u2: 10 });
+  it("keeps an assigned chore OUT of the household series entirely", () => {
+    // A chore credits its assignee's own member doc, never the household pool
+    // (the client's `calculateHouseholdPointsForDate` skips `assignedTo`
+    // outright), so it belongs to neither the stacked members nor the
+    // grandfathering remainder.
+    const habits = [habit({ title: "Dishes", assignedTo: "kid_leo", completedDates: [MON, TUE] })];
+    const days = buildDailyPoints(habits, [...MEMBERS, LEO], WEEK_START, WEEK_END);
+    expect(days[0]?.byMember).toEqual({});
     expect(days[0]?.unattributed).toBe(0);
+    expect(days[0]?.total).toBe(0);
+    // It still counts, in full, as the assignee's own score.
+    expect(memberPointsOnDate(habits, "kid_leo", MON, WEEK_END)).toBe(10);
   });
 });
 
@@ -256,23 +264,51 @@ describe("weekPointsTotal", () => {
   });
 });
 
-describe("weekHasAttribution", () => {
-  it("is false for a fully grandfathered week and true once anyone is credited", () => {
-    expect(weekHasAttribution([habit({ completedDates: [MON] })], WEEK_START)).toBe(false);
-    expect(
-      weekHasAttribution(
-        [habit({ completedDates: [MON], completedBy: attribution({ [MON]: { u1: 1 } }) })],
-        WEEK_START
-      )
-    ).toBe(true);
+describe("assigned chores vs the household aggregates", () => {
+  /** A chore-heavy kid week: Leo scrubs every day, the adults do nothing. */
+  const choreWeek = [habit({ title: "Dishes", assignedTo: "kid_leo", completedDates: [...DAYS] })];
+  const roster = [...MEMBERS, LEO];
+
+  it("excludes kid chore points from the household week total", () => {
+    expect(weekPointsTotal(choreWeek, roster, WEEK_START, WEEK_END)).toBe(0);
   });
 
-  it("ignores attribution OUTSIDE the week", () => {
-    const h = habit({
-      completedDates: ["2026-06-22"],
-      completedBy: attribution({ "2026-06-22": { u1: 1 } }),
+  it("still gives the kid their full personal figure", () => {
+    const { memberFacts } = assembleCeremony({
+      habits: choreWeek,
+      members: roster,
+      weekStart: WEEK_START,
+      weekEnd: WEEK_END,
     });
-    expect(weekHasAttribution([h], WEEK_START)).toBe(false);
+    const leo = memberFacts.find((f) => f.memberId === "kid_leo");
+    // 7 daily completions: 10 + 10 + 15 (3-day streak → 1.5x) ×4 + 20 (7th day → 2x).
+    expect(leo?.points).toBe(10 + 10 + 15 + 15 + 15 + 15 + 20);
+    expect(leo?.completions).toBe(7);
+    expect(leo?.isManaged).toBe(true);
+  });
+
+  it("never crowns the kid — their points never enter another member's row", () => {
+    const { memberFacts, dailyPoints, totalPoints } = assembleCeremony({
+      habits: choreWeek,
+      members: roster,
+      weekStart: WEEK_START,
+      weekEnd: WEEK_END,
+    });
+    expect(totalPoints).toBe(0);
+    for (const day of dailyPoints) expect(day.byMember).toEqual({});
+    expect(memberFacts.find((f) => f.memberId === "u1")?.points).toBe(0);
+    expect(memberFacts.find((f) => f.memberId === "u2")?.points).toBe(0);
+  });
+
+  it("marks adults with no `isManaged` key at all (Firestore rejects undefined)", () => {
+    const { memberFacts } = assembleCeremony({
+      habits: choreWeek,
+      members: roster,
+      weekStart: WEEK_START,
+      weekEnd: WEEK_END,
+    });
+    const jen = memberFacts.find((f) => f.memberId === "u1");
+    expect(jen && "isManaged" in jen).toBe(false);
   });
 });
 
@@ -360,17 +396,51 @@ describe("assembleCeremony", () => {
     expect(assembleCeremony(input)).toEqual(assembleCeremony(input));
   });
 
-  it("produces zeroes, not nulls, for a household that did nothing", () => {
-    const { memberFacts, totalPoints } = assembleCeremony({
+  it("emits NO memberFacts for a household with no per-member data at all", () => {
+    // An idle week (and, identically, a household whose entire history predates
+    // the attribution layer) must not fabricate a deck of confident zeroes —
+    // `hasCeremonyData` reads false and the client shows its pre-deck layout.
+    const { memberFacts, dailyPoints, totalPoints } = assembleCeremony({
       habits: [],
       members: MEMBERS,
       weekStart: WEEK_START,
       weekEnd: WEEK_END,
     });
+    expect(memberFacts).toEqual([]);
     expect(totalPoints).toBe(0);
-    expect(memberFacts).toEqual([
-      { memberId: "u1", name: "Jen", points: 0, completions: 0, bestDay: null, topStreak: null, perfectHabits: [] },
-      { memberId: "u2", name: "Paul", points: 0, completions: 0, bestDay: null, topStreak: null, perfectHabits: [] },
+    // The household series is still emitted in full — 7 honest zero days.
+    expect(dailyPoints).toHaveLength(7);
+  });
+
+  it("emits NO memberFacts for a fully GRANDFATHERED week, but keeps its household points", () => {
+    // Completions with no `completedBy` anywhere: nobody holds them, so there
+    // is no personal card or head-to-head to draw — yet the points are real and
+    // stay visible through the `unattributed` series.
+    const grandfathered = [habit({ title: "Read", completedDates: [MON, TUE] })];
+    const { memberFacts, dailyPoints, totalPoints } = assembleCeremony({
+      habits: grandfathered,
+      members: MEMBERS,
+      weekStart: WEEK_START,
+      weekEnd: WEEK_END,
+    });
+    expect(memberFacts).toEqual([]);
+    expect(totalPoints).toBe(20);
+    expect(dailyPoints[0]?.unattributed).toBe(10);
+  });
+
+  it("keeps a member who scored nothing as a legitimate zero once ANYONE has data", () => {
+    const someData = [
+      habit({ completedDates: [MON], completedBy: attribution({ [MON]: { u1: 1 } }) }),
+    ];
+    const { memberFacts } = assembleCeremony({
+      habits: someData,
+      members: MEMBERS,
+      weekStart: WEEK_START,
+      weekEnd: WEEK_END,
+    });
+    expect(memberFacts.map((f) => [f.memberId, f.points])).toEqual([
+      ["u1", 10],
+      ["u2", 0],
     ]);
   });
 });

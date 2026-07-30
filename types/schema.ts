@@ -97,8 +97,9 @@ export interface NotificationPreferences {
     snoozedUntil?: string;
   };
 
-  // Weekly recap push (Plan 02). Sent server-side Sundays ~17:00 in the
-  // member's timezone; no time selection needed, so it's a bare toggle.
+  // Weekly recap push (Plan 02). Sent server-side Mondays ~07:00 in the
+  // member's timezone — the recap describes the week that just CLOSED — with
+  // no time selection needed, so it's a bare toggle.
   // Optional so legacy docs deserialize — treat absent as enabled (default ON).
   weeklyRecap?: {
     enabled: boolean;
@@ -1559,9 +1560,10 @@ export interface HabitInsightsDoc {
 
 /**
  * Weekly recap (Plan 02) — one doc per ISO week at
- * `households/{id}/recaps/{isoWeek}`, written server-side Sundays by the
- * scheduled recap function (Admin SDK; clients only read). The synthetic `id`
- * equals the doc id, which equals `isoWeek`. Money fields are decimal dollars.
+ * `households/{id}/recaps/{isoWeek}`, written server-side on MONDAY MORNING by
+ * the scheduled recap function (Admin SDK; clients only read), describing the
+ * week that just CLOSED. The synthetic `id` equals the doc id, which equals
+ * `isoWeek`. Money fields are decimal dollars.
  */
 /**
  * One member's ceremony facts for a recap week (per-member points, stage 5).
@@ -1572,10 +1574,21 @@ export interface RecapMemberFacts {
   memberId: string;
   /** Display name at generation time (the recap is a snapshot, not a join). */
   name: string;
-  /** Signed points this member earned during the recap week. */
+  /**
+   * Signed points this member earned during the recap week — their OWN score,
+   * including any chores assigned to them, so it is deliberately WIDER than
+   * their share of the household figure (chore points credit the assignee
+   * alone, never the household pool).
+   */
   points: number;
   /** Attributed habit completions (units) this member logged during the week. */
   completions: number;
+  /**
+   * True for a login-less managed kid profile; absent means adult. Standings,
+   * podium and head-to-head are ADULTS ONLY (see `buildHeadToHead`), matching
+   * `selectAdultStandings` / `getAdultStandings`.
+   */
+  isManaged?: boolean;
   /** The member's highest-scoring day, or null when they scored none. */
   bestDay: { date: string; points: number } | null;
   /** The member's longest live streak at week end, in the habit's own cadence. */
@@ -1586,8 +1599,11 @@ export interface RecapMemberFacts {
 
 /**
  * One day of the ceremony's 7-day stacked chart (Monday-first).
- * `total = Σ byMember + unattributed`; `unattributed` is the grandfathering
- * series (completions recorded before attribution shipped belong to nobody).
+ * `total = Σ byMember + unattributed` and that total IS the household figure,
+ * so `byMember` holds each member's SHARED-habit share only (chores assigned to
+ * a member credit them alone, never the household pool). `unattributed` is the
+ * grandfathering series (completions recorded before attribution shipped belong
+ * to nobody).
  */
 export interface RecapDayPoints {
   date: string; // yyyy-MM-dd

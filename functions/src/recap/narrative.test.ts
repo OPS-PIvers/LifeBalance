@@ -200,6 +200,50 @@ describe("selectNarrativeFraming", () => {
     expect(framing.leader?.name).toBe("Paul");
     expect(framing.margin).toBe(400);
   });
+
+  it("NEVER crowns a managed kid, however chore-heavy their week was", () => {
+    // Leo's points come from chores credited to his own member doc — an
+    // allowance ledger, not a competitive score. Adults only, matching
+    // `selectAdultStandings` / `getAdultStandings` on the client.
+    const recap: RecapNumericFields = {
+      ...contest(0, 0),
+      memberFacts: [
+        {
+          memberId: "kid_leo",
+          name: "Leo",
+          points: 900,
+          completions: 30,
+          isManaged: true,
+          bestDay: null,
+          topStreak: null,
+          perfectHabits: [],
+        },
+        {
+          memberId: "u1",
+          name: "Jen",
+          points: 120,
+          completions: 6,
+          bestDay: null,
+          topStreak: null,
+          perfectHabits: [],
+        },
+        {
+          memberId: "u2",
+          name: "Paul",
+          points: 40,
+          completions: 3,
+          bestDay: null,
+          topStreak: null,
+          perfectHabits: [],
+        },
+      ],
+    };
+    const framing = selectNarrativeFraming(recap, "podium");
+    expect(framing.leader?.name).toBe("Jen");
+    expect(framing.runnerUp?.name).toBe("Paul");
+    expect(framing.margin).toBe(80);
+    expect(buildTemplateNarrative(recap, "podium")).not.toContain("Leo");
+  });
 });
 
 describe("buildTemplateNarrative — tone", () => {

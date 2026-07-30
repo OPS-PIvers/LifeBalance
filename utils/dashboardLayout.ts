@@ -44,7 +44,10 @@ export const DASHBOARD_WIDGETS: readonly DashboardWidgetDef[] = [
   { id: 'dailyHabits', label: "Today's Habits", description: 'Smart-ranked habit tracker' },
   { id: 'scoreboard', label: 'Scoreboard', description: 'Household points total + per-member standings' },
   { id: 'creditCardActivity', label: 'Credit Card Activity', description: 'Charges vs. paydowns this period' },
-  { id: 'weeklyRecap', label: 'Weekly Recap', description: 'Sunday summary card' },
+  // Schedule-neutral on purpose: generation moved from Sunday evening to Monday
+  // morning when the ceremony landed, and a widget label shouldn't have to move
+  // with it.
+  { id: 'weeklyRecap', label: 'Weekly Recap', description: 'Weekly spending + habits summary' },
   { id: 'moneyRecap', label: 'Monthly Money Recap', description: 'Budget-vs-actual close-out' },
   { id: 'kidsChores', label: "Kids' Chores", description: 'Managed-profile chore overview' },
   { id: 'insight', label: 'AI Insight', description: 'One rotating insight card' },

@@ -176,6 +176,41 @@ describe('buildHeadToHead', () => {
     const belowRatio = recap({ memberFacts: [facts('jen', 'Jen', 1000), facts('paul', 'Paul', 900)] });
     expect(buildHeadToHead(belowRatio, 'adaptive', colors).runaway).toBe(false);
   });
+
+  it('excludes a managed kid from the standings — a chore week never crowns them', () => {
+    // Leo's points come from chores credited to his own member doc, not the
+    // household pool, so they are an allowance ledger rather than a
+    // competitive score (same population as `selectAdultStandings`).
+    const withKid = recap({
+      memberFacts: [
+        facts('kid_leo', 'Leo', 900, { isManaged: true }),
+        facts('jen', 'Jen', 410),
+        facts('paul', 'Paul', 385),
+      ],
+    });
+    const h2h = buildHeadToHead(withKid, 'podium', colors);
+    expect(h2h.standings.map(s => s.name)).toEqual(['Jen', 'Paul']);
+    expect(h2h.leader?.name).toBe('Jen');
+    expect(h2h.margin).toBe(25);
+  });
+
+  it('still gives a managed kid their own personal card as the viewer', () => {
+    const withKid = recap({
+      memberFacts: [
+        facts('kid_leo', 'Leo', 900, { isManaged: true }),
+        facts('jen', 'Jen', 410),
+      ],
+    });
+    const deck = buildRecapDeck({
+      recap: withKid,
+      recaps: [withKid],
+      members: MEMBERS,
+      viewerId: 'kid_leo',
+      unattributedColor: '#a19b8c',
+    });
+    expect(deck.viewer?.memberId).toBe('kid_leo');
+    expect(deck.cards.map(c => c.kind)).toContain('personal');
+  });
 });
 
 describe('buildRecapChart', () => {

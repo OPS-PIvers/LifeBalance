@@ -703,24 +703,27 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // moved to Monday morning and the recap describes the week that just CLOSED
   // — with a fresh `generatedAt` so the card's 4-day freshness window passes.
   //
-  // The per-member numbers are deliberately coherent with `SEED_MEMBERS`: the
-  // two adults' weekly points (150 / 95) and their sum (245), so the deck's
-  // "Together" figure, the scoreboard widget and the Points Breakdown drawer
-  // all tell the same story in one walkthrough.
+  // The per-member numbers are deliberately coherent — and deliberately BELOW
+  // the live week. `SEED_MEMBERS`' two adults hold 150 / 95 = 245 for the
+  // IN-PROGRESS week; this closed week seeds 120 / 76 = 196, so the scoreboard
+  // widget's trend chip actually renders (+25%) instead of computing a 0% delta
+  // and hiding itself. The internal invariants still hold for the recap's own
+  // week: household `totalPoints` = Σ adults, `pointsByMember` = `memberFacts`
+  // points, and the day split sums to each member's weekly figure.
   const [recaps] = useState<WeeklyRecap[]>(() => {
     const closedWeek = new Date(Date.now() - 7 * 86400000);
     const isoWeek = format(closedWeek, "RRRR-'W'II");
     const monday = startOfWeek(closedWeek, { weekStartsOn: 1 });
     const day = (i: number) => getLocalDateString(new Date(monday.getTime() + i * 86400000));
-    // Mon–Sun, Test User then Jordan: sums to 150 / 95 (245 together).
+    // Mon–Sun, Test User then Jordan: sums to 120 / 76 (196 together).
     const split: Array<[number, number]> = [
-      [25, 10],
-      [20, 20],
-      [15, 5],
-      [25, 15],
-      [20, 10],
-      [30, 25],
-      [15, 10],
+      [20, 8],
+      [16, 16],
+      [12, 4],
+      [20, 12],
+      [16, 8],
+      [24, 20],
+      [12, 8],
     ];
     return [{
       id: isoWeek,
@@ -736,8 +739,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       habitCompletions: 9,
       streaksAtRisk: [{ habitTitle: 'Exercise 30min', streakDays: 5 }],
       pointsByMember: [
-        { memberId: 'test-user-id', name: 'Test User', points: 150 },
-        { memberId: 'test-partner-id', name: 'Jordan', points: 95 },
+        { memberId: 'test-user-id', name: 'Test User', points: 120 },
+        { memberId: 'test-partner-id', name: 'Jordan', points: 76 },
       ],
       upcomingBills: [
         { title: 'Rent', amount: 1200, date: getLocalDateString(new Date(Date.now() + 3 * 86400000)) },
@@ -752,18 +755,18 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         {
           memberId: 'test-user-id',
           name: 'Test User',
-          points: 150,
+          points: 120,
           completions: 12,
-          bestDay: { date: day(5), points: 30 },
+          bestDay: { date: day(5), points: 24 },
           topStreak: { habitTitle: 'Read 30 minutes', days: 9, period: 'daily' },
           perfectHabits: ['Read 30 minutes'],
         },
         {
           memberId: 'test-partner-id',
           name: 'Jordan',
-          points: 95,
+          points: 76,
           completions: 8,
-          bestDay: { date: day(5), points: 25 },
+          bestDay: { date: day(5), points: 20 },
           topStreak: { habitTitle: 'Exercise 30min', days: 4, period: 'daily' },
           perfectHabits: [],
         },
@@ -774,8 +777,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         unattributed: 0,
         total: mine + theirs,
       })),
-      totalPoints: 245,
-      priorWeekPoints: 219,
+      totalPoints: 196,
+      // 196 vs 175 → the deck's own trend band reads +12%.
+      priorWeekPoints: 175,
       ceremonyTone: 'household_first',
     }];
   });

@@ -1,9 +1,4 @@
-import {
-  assembleCeremony,
-  weekHasAttribution,
-  weekPointsTotal,
-  type RecapScoringHabit,
-} from "./memberFacts";
+import { assembleCeremony, weekPointsTotal, type RecapScoringHabit } from "./memberFacts";
 import { WeeklyRecap } from "./types";
 
 /**
@@ -34,11 +29,24 @@ export interface RecapHabit extends RecapScoringHabit {
   streakDays: number;
 }
 
-/** Minimal member shape this module needs (subset of `types/schema.ts`'s `HouseholdMember`). */
+/**
+ * Minimal member shape this module needs (subset of `types/schema.ts`'s
+ * `HouseholdMember`).
+ *
+ * 🛡️ NO `points` FIELD, ON PURPOSE. The recap once read
+ * `HouseholdMember.points.weekly` as its `pointsByMember` source, which was
+ * safe while generation ran Sunday 17:00 — mid-week. Generation now runs MONDAY
+ * 07:00, after the client's midnight weekly rollover, so that field describes
+ * the brand-new week and structurally cannot describe the week being recapped.
+ * Every per-member figure is derived from habit data instead (see
+ * `memberFacts.ts`); not loading the stored points is what keeps that
+ * enforceable rather than merely intended.
+ */
 export interface RecapMember {
   uid: string;
   displayName: string;
-  points: { daily: number; weekly: number; total: number };
+  /** A login-less managed kid profile — excluded from standings/podium. */
+  isManaged?: boolean;
 }
 
 /** Minimal calendar item shape this module needs (subset of `types/schema.ts`'s `CalendarItem`). */
@@ -184,22 +192,22 @@ export function assembleWeeklyRecap(input: DataAssemblyInput): AssembledRecap {
     .map((h) => ({ habitTitle: h.title, streakDays: h.streakDays }));
 
   // --- Ceremony (per-member points, stage 5) ------------------------------
-  // Every per-member figure is DERIVED from habit attribution over the closed
-  // week. See memberFacts.ts for why `points.weekly` can no longer be read now
-  // that generation runs after the weekly rollover.
+  // Every per-member figure is DERIVED from habit completions over the closed
+  // week — attribution for shared habits plus each member's assigned chores.
+  // See memberFacts.ts for why `points.weekly` can no longer be read now that
+  // generation runs after the weekly rollover.
   const ceremony = assembleCeremony({ habits, members, weekStart, weekEnd });
   const priorWeekPoints = weekPointsTotal(habits, members, priorWeekStart, priorWeekEnd);
 
-  // A household with NO attribution anywhere in the week is fully
-  // grandfathered: nothing was ever attributed to anyone, so the derived
-  // figures would report a household of zeroes. Fall back to the pre-stage-5
-  // source (each member's stored weekly points) verbatim for that case only.
-  const derivedByMember = new Map(ceremony.memberFacts.map((f) => [f.memberId, f.points]));
-  const attributed = weekHasAttribution(habits, weekStart);
-  const pointsByMember = members.map((m) => ({
-    memberId: m.uid,
-    name: m.displayName,
-    points: attributed ? (derivedByMember.get(m.uid) ?? 0) : m.points.weekly,
+  // ONE source, no fallback: `pointsByMember` is the same derivation the
+  // ceremony's facts are, so the two can never disagree. `memberFacts` is empty
+  // exactly when no member holds a completion for the week, and this list is
+  // then empty too — an honest "nothing per-member to report" rather than a row
+  // of zeroes that reads like a real, silent week.
+  const pointsByMember = ceremony.memberFacts.map((f) => ({
+    memberId: f.memberId,
+    name: f.name,
+    points: f.points,
   }));
 
   const billsStart = addDays(weekEnd, 1);

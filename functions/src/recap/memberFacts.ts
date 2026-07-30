@@ -26,7 +26,7 @@
  *
  * The scoring rules mirror the client's `utils/habitAttribution.ts`:
  *
- *     household(date) = Σ_members memberPoints(m, date) + unattributed(date)
+ *     household(date) = Σ_members memberSharedPoints(m, date) + unattributed(date)
  *
  * where `unattributed` is the grandfathering term — completions recorded before
  * the attribution layer shipped belong to nobody but still happened, so they
@@ -34,6 +34,24 @@
  * from its own recap. functions/ is a separate pnpm package from the root app,
  * so (like `quickAdd/streakLogic.ts`) the logic is ported rather than imported;
  * the streak/multiplier primitives themselves ARE shared, from that module.
+ *
+ * 🛡️ ASSIGNED CHORES ARE PERSONAL, NEVER HOUSEHOLD. An `assignedTo` habit
+ * (a kid's chore, Plan 080c) credits the assignee's OWN member doc and is
+ * excluded from the household pool everywhere else in this codebase — the
+ * client's `calculateHouseholdPointsForDate` skips it outright, and
+ * `habitPointsTargets` never routes it to the household. The ceremony obeys the
+ * same split:
+ *
+ *   - `buildDailyPoints` (the household series, `totalPoints`,
+ *     `priorWeekPoints`, the "together" number) sums only SHARED-habit
+ *     attribution + the unattributed remainder — `memberSharedPointsOnDate`;
+ *   - a member's OWN `RecapMemberFacts.points` is their full personal figure,
+ *     chores included — `memberPointsOnDate` — because that IS their score on
+ *     the personal card and on every kid surface.
+ *
+ * Folding chores into the household aggregate would let a chore-heavy kid week
+ * inflate the household's number and crown a managed kid the week's winner.
+ * (Standings/podium are additionally adults-only; see `RecapMemberFacts.isManaged`.)
  */
 import {
   effectiveFrozenDates,
@@ -73,6 +91,8 @@ export interface RecapScoringHabit {
 export interface CeremonyMember {
   uid: string;
   displayName: string;
+  /** A login-less managed kid profile — excluded from standings/podium. */
+  isManaged?: boolean;
 }
 
 export interface CeremonyInput {
@@ -331,8 +351,14 @@ export function unattributedPointsOnDate(
   return Math.max(baseUnits - held, 0) * perUnit;
 }
 
-/** Signed points `memberId` earned from ALL habits on one (closed) date. */
-export function memberPointsOnDate(
+/**
+ * Signed points `memberId` earned from SHARED (non-assigned) habits on one
+ * (closed) date — the HOUSEHOLD-contributing half of their score.
+ *
+ * This is what the day series stacks, so `total = Σ byMember + unattributed`
+ * describes the same pool the client's `calculateHouseholdPointsForDate` does.
+ */
+export function memberSharedPointsOnDate(
   habits: RecapScoringHabit[],
   memberId: string,
   date: string,
@@ -340,13 +366,43 @@ export function memberPointsOnDate(
 ): number {
   let total = 0;
   for (const habit of habits) {
-    if (habit.assignedTo) {
-      if (habit.assignedTo === memberId) total += assignedChorePointsOnDate(habit, date, anchor);
-      continue;
-    }
+    if (habit.assignedTo) continue;
     total += memberAttributedPointsOnDate(habit, memberId, date, anchor);
   }
   return total;
+}
+
+/** Signed points the chores ASSIGNED to `memberId` earned on one (closed) date. */
+export function memberChorePointsOnDate(
+  habits: RecapScoringHabit[],
+  memberId: string,
+  date: string,
+  anchor: string
+): number {
+  let total = 0;
+  for (const habit of habits) {
+    if (habit.assignedTo === memberId) total += assignedChorePointsOnDate(habit, date, anchor);
+  }
+  return total;
+}
+
+/**
+ * A member's OWN signed score for one (closed) date: their shared-habit
+ * attribution PLUS the chores assigned to them.
+ *
+ * The personal figure, never the household one — see the module header's
+ * assigned-chore rule.
+ */
+export function memberPointsOnDate(
+  habits: RecapScoringHabit[],
+  memberId: string,
+  date: string,
+  anchor: string
+): number {
+  return (
+    memberSharedPointsOnDate(habits, memberId, date, anchor) +
+    memberChorePointsOnDate(habits, memberId, date, anchor)
+  );
 }
 
 /** Signed points on one date that no member holds (assigned chores excluded). */
@@ -370,7 +426,11 @@ function unattributedPointsForDate(
 /**
  * The Monday-first, member-stacked day series for a closed week.
  *
- * `total = Σ byMember + unattributed` by construction. Members who scored
+ * `total = Σ byMember + unattributed` by construction, and that total IS the
+ * household figure — so `byMember` carries each member's SHARED-habit share
+ * only. A chore assigned to someone credits their own member doc, never the
+ * household pool, and so appears in neither this map nor the day's total (it
+ * still lands in that member's `RecapMemberFacts.points`). Members who scored
  * nothing on a day are omitted from that day's map, so an untouched week
  * produces seven all-zero rows rather than a dense matrix of zeroes.
  */
@@ -384,7 +444,7 @@ export function buildDailyPoints(
     const byMember: Record<string, number> = {};
     let memberSum = 0;
     for (const member of members) {
-      const points = memberPointsOnDate(habits, member.uid, date, anchor);
+      const points = memberSharedPointsOnDate(habits, member.uid, date, anchor);
       if (points !== 0) {
         byMember[member.uid] = points;
         memberSum += points;
@@ -485,20 +545,37 @@ function memberPerfectHabits(
  * The week's last day (`weekEnd`) is the anchor for every streak walk and pause
  * bridge, so the result depends only on the week being described — regenerating
  * the same week on a later day produces the same document.
+ *
+ * 🛡️ NO PER-MEMBER DATA ⇒ NO CEREMONY. When not one member holds a completion
+ * of their own during the week — a household whose whole history predates the
+ * attribution layer, or a genuinely idle week — `memberFacts` comes back EMPTY
+ * rather than as a row of confident zeroes. `hasCeremonyData` then reads false
+ * and the client renders its pre-deck layout, which is the honest answer: there
+ * is no personal card and no head-to-head to draw. The household series
+ * (`dailyPoints` / `totalPoints`) is still emitted in full — a grandfathered
+ * week's points live in the `unattributed` series and are perfectly real.
+ *
+ * There is deliberately NO fallback to `HouseholdMember.points.weekly` here.
+ * Generation runs Monday 07:00, after the client's midnight weekly rollover,
+ * so that field describes the BRAND-NEW week — it structurally cannot describe
+ * the week being recapped.
  */
 export function assembleCeremony(input: CeremonyInput): AssembledCeremony {
   const { habits, members, weekStart, weekEnd } = input;
   const dates = weekDates(weekStart);
   const dailyPoints = buildDailyPoints(habits, members, weekStart, weekEnd);
 
-  const memberFacts: RecapMemberFacts[] = members.map((member) => {
+  const facts: RecapMemberFacts[] = members.map((member) => {
     let points = 0;
     let bestDay: RecapMemberFacts["bestDay"] = null;
-    for (const day of dailyPoints) {
-      const dayPoints = day.byMember[member.uid] ?? 0;
+    for (const date of dates) {
+      // The member's OWN score — deliberately NOT `dailyPoints[].byMember`,
+      // which carries only the household-contributing (shared-habit) half.
+      // Chores assigned to them count here and nowhere else.
+      const dayPoints = memberPointsOnDate(habits, member.uid, date, weekEnd);
       points += dayPoints;
       if (dayPoints > 0 && (!bestDay || dayPoints > bestDay.points)) {
-        bestDay = { date: day.date, points: dayPoints };
+        bestDay = { date, points: dayPoints };
       }
     }
     return {
@@ -509,31 +586,20 @@ export function assembleCeremony(input: CeremonyInput): AssembledCeremony {
       bestDay,
       topStreak: memberTopStreak(habits, member.uid, weekEnd),
       perfectHabits: memberPerfectHabits(habits, member.uid, dates),
+      // Written only when true: Firestore rejects `undefined` field values, and
+      // an absent flag already means "adult" to every consumer.
+      ...(member.isManaged ? { isManaged: true } : {}),
     };
   });
 
+  // "Completions" is the honest signal — attributed units plus assigned-chore
+  // completions, i.e. every per-member source there is. Points alone would
+  // read a member whose week netted exactly zero as having no data.
+  const hasMemberData = facts.some((f) => f.completions > 0);
+
   return {
-    memberFacts,
+    memberFacts: hasMemberData ? facts : [],
     dailyPoints,
     totalPoints: dailyPoints.reduce((sum, d) => sum + d.total, 0),
   };
-}
-
-/**
- * Does this week carry ANY per-member attribution?
- *
- * The switch that keeps a fully-grandfathered household whole: with no
- * attribution at all, `pointsByMember` keeps its pre-stage-5 source (each
- * member's stored `points.weekly`) rather than reporting a household of zeroes
- * derived from history that predates the attribution layer.
- */
-export function weekHasAttribution(habits: RecapScoringHabit[], weekStart: string): boolean {
-  const dates = new Set(weekDates(weekStart));
-  for (const habit of habits) {
-    for (const [date, day] of Object.entries(habit.completedBy ?? {})) {
-      if (!dates.has(date)) continue;
-      for (const count of Object.values(day)) if (count > 0) return true;
-    }
-  }
-  return false;
 }

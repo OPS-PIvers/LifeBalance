@@ -111,11 +111,21 @@ export function selectNarrativeFraming(
   };
 }
 
-/** Members sorted by weekly points, highest first (names break ties stably). */
+/**
+ * ADULT members sorted by weekly points, highest first (names break ties
+ * stably).
+ *
+ * 🛡️ ADULTS ONLY, matching `selectAdultStandings` / `getAdultStandings` on the
+ * client. A managed kid's points come from chores that credit the kid's own
+ * member doc — they are an allowance ledger, not a competitive score — so a
+ * chore-heavy kid week must never crown the kid the household's winner. The
+ * `pointsByMember` branch carries no `isManaged`, but it is only ever reached
+ * when `memberFacts` is empty, which now also means `pointsByMember` is empty.
+ */
 function standings(recap: RecapNumericFields): Array<{ name: string; points: number }> {
   const source: Array<{ name: string; points: number }> =
     recap.memberFacts && recap.memberFacts.length > 0
-      ? recap.memberFacts.map((f) => ({ name: f.name, points: f.points }))
+      ? recap.memberFacts.filter((f) => !f.isManaged).map((f) => ({ name: f.name, points: f.points }))
       : recap.pointsByMember.map((p) => ({ name: p.name, points: p.points }));
   return [...source].sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
 }

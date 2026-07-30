@@ -62,4 +62,17 @@ describe("buildRecapHeadline", () => {
     const headline = buildRecapHeadline(makeRecap());
     expect(headline).toBe("See how your spending, habits, and points stacked up this week.");
   });
+
+  it("handles an EMPTY pointsByMember gracefully (a week with no per-member data)", () => {
+    // The assembly now emits `[]` rather than a row of zeroes for a week no
+    // member holds a completion in — this must degrade to the generic copy,
+    // never crash the push.
+    expect(buildRecapHeadline(makeRecap({ pointsByMember: [] }))).toBe(
+      "See how your spending, habits, and points stacked up this week."
+    );
+    // ...and the money/habit signals still win when they exist.
+    expect(buildRecapHeadline(makeRecap({ pointsByMember: [], habitCompletions: 3 }))).toBe(
+      "3 habit completions logged this week."
+    );
+  });
 });

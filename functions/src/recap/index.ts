@@ -76,8 +76,11 @@ interface RecapMemberDoc extends HouseholdMember {
   /** ISO week (e.g. "2026-W27") this member was last sent a recap push for —
    *  the per-member delivery dedupe (independent of household generation). */
   lastRecapSentWeek?: string;
-  /** Shared per-member points snapshot (see `types/schema.ts`'s `HouseholdMember.points`). */
-  points?: { daily: number; weekly: number; total: number };
+  /** A login-less managed kid profile (`HouseholdMember.isManaged`). */
+  isManaged?: boolean;
+  // NOTE: `points` is deliberately absent. A Monday-morning run reads it AFTER
+  // the client's weekly rollover, so it describes the new week, not the one
+  // being recapped — every per-member figure is derived instead (memberFacts.ts).
 }
 
 /** Adds/subtracts whole days from a yyyy-MM-dd local date string. */
@@ -350,7 +353,7 @@ async function generateRecap(
       // Member docs are keyed by uid; fall back to the doc id if the field is absent.
       uid: data.uid ?? d.id,
       displayName: data.displayName,
-      points: data.points ?? { daily: 0, weekly: 0, total: 0 },
+      isManaged: data.isManaged === true,
     };
   });
 

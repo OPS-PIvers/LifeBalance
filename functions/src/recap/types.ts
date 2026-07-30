@@ -12,10 +12,25 @@ export interface RecapMemberFacts {
   memberId: string;
   /** Display name at generation time (the doc is a snapshot, not a join). */
   name: string;
-  /** Signed points this member earned during the recap week. */
+  /**
+   * Signed points this member earned during the recap week — their OWN score,
+   * including any chores assigned to them. That makes it deliberately WIDER
+   * than their share of the household figure: chore points credit the assignee
+   * alone and never the household pool, so `Σ memberFacts[].points` is not
+   * `totalPoints` in a household with assigned chores.
+   */
   points: number;
   /** Attributed habit completions (units) this member logged during the week. */
   completions: number;
+  /**
+   * True for a login-less managed kid profile. Absent means adult.
+   *
+   * Standings, podium and head-to-head are ADULTS ONLY (matching
+   * `selectAdultStandings` / `getAdultStandings` on the client) — a managed
+   * kid's chore points are their own, not a competitive score, and must never
+   * crown them the week's winner. The kid still gets their own personal card.
+   */
+  isManaged?: boolean;
   /** The member's highest-scoring day of the week, or null when they scored none. */
   bestDay: { date: string; points: number } | null;
   /** The member's longest live streak at week end, in the habit's own cadence. */
@@ -27,10 +42,13 @@ export interface RecapMemberFacts {
 /**
  * One day of the ceremony's 7-day stacked chart (Monday-first).
  *
- * `total = Σ byMember + unattributed`, by construction. `unattributed` is the
- * grandfathering series: completions recorded before the attribution layer
- * shipped belong to no member but still happened, so they stay visible as a
- * neutral segment rather than vanishing from the household's own week.
+ * `total = Σ byMember + unattributed`, by construction, and that total IS the
+ * household figure — so `byMember` holds each member's SHARED-habit share only
+ * (chores assigned to a member credit them alone, never the household pool).
+ * `unattributed` is the grandfathering series: completions recorded before the
+ * attribution layer shipped belong to no member but still happened, so they
+ * stay visible as a neutral segment rather than vanishing from the household's
+ * own week.
  */
 export interface RecapDayPoints {
   /** yyyy-MM-dd, local to the generating timezone. */
@@ -72,7 +90,12 @@ export interface WeeklyRecap {
   /** Habits with a streak of 3+ that did NOT complete on the week's last day. */
   streaksAtRisk: Array<{ habitTitle: string; streakDays: number }>;
 
-  /** Points earned per household member during the recap week. */
+  /**
+   * Points earned per household member during the recap week, DERIVED from
+   * habit completions (attribution + assigned chores) — never read from
+   * `HouseholdMember.points.weekly`, which Monday-morning generation would find
+   * already rolled over. Empty when the week carries no per-member data at all.
+   */
   pointsByMember: Array<{ memberId: string; name: string; points: number }>;
 
   /** Expense calendar items due in the 7 days following the recap week. */

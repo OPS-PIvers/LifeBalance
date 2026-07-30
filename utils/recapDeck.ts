@@ -186,13 +186,24 @@ function monthOf(recap: WeeklyRecap): string | null {
   return `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`;
 }
 
-/** Standings + the head-to-head verdict for one recap under one tone. */
+/**
+ * Standings + the head-to-head verdict for one recap under one tone.
+ *
+ * 🛡️ ADULTS ONLY — the same population `selectAdultStandings` (scoreboard) and
+ * `getAdultStandings` (points drawer) show, and the same one the server's
+ * narrative frames. A managed kid's points come from chores credited to the
+ * kid's own member doc rather than the household pool, so they are an allowance
+ * ledger and not a competitive score: a chore-heavy kid week must never crown
+ * the kid. The kid's own personal card is unaffected — `buildRecapDeck` finds
+ * the viewer in the unfiltered facts.
+ */
 export function buildHeadToHead(
   recap: WeeklyRecap,
   tone: CeremonyTone,
   colors: Record<string, string>
 ): RecapHeadToHead {
   const standings: RecapStanding[] = (recap.memberFacts ?? [])
+    .filter(f => !f.isManaged)
     .map(f => ({
       memberId: f.memberId,
       name: f.name,
