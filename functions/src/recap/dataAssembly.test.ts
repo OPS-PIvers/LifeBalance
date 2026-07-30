@@ -11,6 +11,16 @@ import {
 // Recap week: Mon 2026-06-29 through Sun 2026-07-05.
 const WEEK_START = "2026-06-29";
 const WEEK_END = "2026-07-05";
+/** The recap week's seven days, Monday first (the ceremony chart's x-axis). */
+const WEEK_DATES = [
+  "2026-06-29",
+  "2026-06-30",
+  "2026-07-01",
+  "2026-07-02",
+  "2026-07-03",
+  "2026-07-04",
+  "2026-07-05",
+];
 
 function baseInput(overrides: Partial<DataAssemblyInput> = {}): DataAssemblyInput {
   return {
@@ -35,6 +45,11 @@ describe("assembleWeeklyRecap", () => {
       streaksAtRisk: [],
       pointsByMember: [],
       upcomingBills: [],
+      // Ceremony fields (stage 5) — always present, always empty/zero here.
+      memberFacts: [],
+      dailyPoints: WEEK_DATES.map(date => ({ date, byMember: {}, unattributed: 0, total: 0 })),
+      totalPoints: 0,
+      priorWeekPoints: 0,
     });
   });
 
@@ -171,7 +186,7 @@ describe("assembleWeeklyRecap", () => {
     expect(result.streaksAtRisk).toEqual([]);
   });
 
-  it("maps pointsByMember from each member's stored weekly points", () => {
+  it("falls back to stored weekly points for pointsByMember when the week has NO attribution", () => {
     const members: RecapMember[] = [
       { uid: "u1", displayName: "Alex", points: { daily: 1, weekly: 30, total: 500 } },
       { uid: "u2", displayName: "Sam", points: { daily: 0, weekly: 10, total: 100 } },
@@ -195,5 +210,77 @@ describe("assembleWeeklyRecap", () => {
       { title: "Rent", amount: 1500, date: "2026-07-06" },
       { title: "In window edge", amount: 40, date: "2026-07-12" },
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Ceremony wiring (per-member points, stage 5)
+// ---------------------------------------------------------------------------
+
+describe("assembleWeeklyRecap — ceremony fields", () => {
+  /** An attributed daily habit: Jen every day, Paul on Mon/Tue only. */
+  const attributedHabits: RecapHabit[] = [
+    {
+      title: "Morning walk",
+      streakDays: 7,
+      period: "daily",
+      type: "positive",
+      basePoints: 10,
+      scoringType: "threshold",
+      targetCount: 1,
+      completedDates: [...WEEK_DATES],
+      completedBy: WEEK_DATES.reduce<Record<string, Record<string, number>>>((acc, date, i) => {
+        acc[date] = i < 2 ? { u1: 1, u2: 1 } : { u1: 1 };
+        return acc;
+      }, {}),
+    },
+  ];
+  const members: RecapMember[] = [
+    { uid: "u1", displayName: "Jen", points: { daily: 0, weekly: 999, total: 999 } },
+    { uid: "u2", displayName: "Paul", points: { daily: 0, weekly: 999, total: 999 } },
+  ];
+
+  it("DERIVES pointsByMember from attribution, ignoring the (already rolled over) stored weekly points", () => {
+    const result = assembleWeeklyRecap(baseInput({ habits: attributedHabits, members }));
+    // The stored 999s are what a Monday-morning run would read AFTER the
+    // weekly rollover — never the truth about the week that just closed.
+    expect(result.pointsByMember.every((p) => p.points !== 999)).toBe(true);
+    expect(result.pointsByMember.map((p) => p.memberId)).toEqual(["u1", "u2"]);
+    expect(result.pointsByMember[0]?.points).toBeGreaterThan(
+      result.pointsByMember[1]?.points ?? 0
+    );
+  });
+
+  it("emits 7 Monday-first days whose totals sum to totalPoints", () => {
+    const result = assembleWeeklyRecap(baseInput({ habits: attributedHabits, members }));
+    expect(result.dailyPoints.map((d) => d.date)).toEqual(WEEK_DATES);
+    expect(result.dailyPoints.reduce((s, d) => s + d.total, 0)).toBe(result.totalPoints);
+  });
+
+  it("keeps memberFacts and pointsByMember in agreement", () => {
+    const result = assembleWeeklyRecap(baseInput({ habits: attributedHabits, members }));
+    for (const fact of result.memberFacts) {
+      const entry = result.pointsByMember.find((p) => p.memberId === fact.memberId);
+      expect(entry?.points).toBe(fact.points);
+    }
+  });
+
+  it("computes priorWeekPoints from the SAME habits over the preceding week", () => {
+    const priorHabits: RecapHabit[] = [
+      {
+        title: "Read",
+        streakDays: 1,
+        period: "daily",
+        type: "positive",
+        basePoints: 10,
+        scoringType: "threshold",
+        targetCount: 1,
+        completedDates: ["2026-06-24"],
+        completedBy: { "2026-06-24": { u1: 1 } },
+      },
+    ];
+    const result = assembleWeeklyRecap(baseInput({ habits: priorHabits, members }));
+    expect(result.totalPoints).toBe(0);
+    expect(result.priorWeekPoints).toBe(10);
   });
 });

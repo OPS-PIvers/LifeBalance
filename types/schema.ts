@@ -1563,6 +1563,42 @@ export interface HabitInsightsDoc {
  * scheduled recap function (Admin SDK; clients only read). The synthetic `id`
  * equals the doc id, which equals `isoWeek`. Money fields are decimal dollars.
  */
+/**
+ * One member's ceremony facts for a recap week (per-member points, stage 5).
+ * Mirrors `functions/src/recap/types.ts` — functions/ is a separate pnpm
+ * package, so the shape is duplicated rather than imported; change both.
+ */
+export interface RecapMemberFacts {
+  memberId: string;
+  /** Display name at generation time (the recap is a snapshot, not a join). */
+  name: string;
+  /** Signed points this member earned during the recap week. */
+  points: number;
+  /** Attributed habit completions (units) this member logged during the week. */
+  completions: number;
+  /** The member's highest-scoring day, or null when they scored none. */
+  bestDay: { date: string; points: number } | null;
+  /** The member's longest live streak at week end, in the habit's own cadence. */
+  topStreak: { habitTitle: string; days: number; period: 'daily' | 'weekly' } | null;
+  /** Titles of DAILY habits this member completed on all 7 days of the week. */
+  perfectHabits: string[];
+}
+
+/**
+ * One day of the ceremony's 7-day stacked chart (Monday-first).
+ * `total = Σ byMember + unattributed`; `unattributed` is the grandfathering
+ * series (completions recorded before attribution shipped belong to nobody).
+ */
+export interface RecapDayPoints {
+  date: string; // yyyy-MM-dd
+  /** memberId → signed points that member earned that day. */
+  byMember: Record<string, number>;
+  /** Signed points that day that no member holds attribution for. */
+  unattributed: number;
+  /** Signed household points for the day. */
+  total: number;
+}
+
 export interface WeeklyRecap {
   id: string;
   isoWeek: string; // e.g. '2026-W27'
@@ -1577,6 +1613,22 @@ export interface WeeklyRecap {
   narrative: string;
   narrativeSource: 'ai' | 'template';
   premium: boolean;
+
+  // --- Ceremony fields (per-member points, stage 5) -----------------------
+  // ALL OPTIONAL: absent on every recap written before the ceremony shipped.
+  // The drawer falls back to its pre-deck layout when they are missing, so a
+  // household's older recaps stay readable forever — never make these required.
+
+  /** Per-member ceremony facts, one entry per household member. */
+  memberFacts?: RecapMemberFacts[];
+  /** Exactly 7 entries, Monday → Sunday of the recap week. */
+  dailyPoints?: RecapDayPoints[];
+  /** Signed household points for the recap week (`Σ dailyPoints[].total`). */
+  totalPoints?: number;
+  /** Signed household points for the week BEFORE the recap week (trend base). */
+  priorWeekPoints?: number;
+  /** The household's ceremony tone at generation time (drives the deck order). */
+  ceremonyTone?: CeremonyTone;
 }
 
 /**

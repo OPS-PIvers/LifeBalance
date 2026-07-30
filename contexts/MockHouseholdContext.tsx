@@ -1,7 +1,7 @@
 import React, { useState, ReactNode, useCallback, useMemo, useRef } from 'react';
 import { Info, PartyPopper, Gift, Sparkles } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
-import { format, addDays, subDays } from 'date-fns';
+import { format, addDays, subDays, startOfWeek } from 'date-fns';
 import { HouseholdContextType, HouseholdSliceProviders } from './FirebaseHouseholdContext';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { rollRecurringAnchorForward, isRecurringId, parseRecurringId } from '@/utils/calendarRecurrence';
@@ -697,36 +697,88 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       };
     });
   });
-  // One canned weekly recap (Plan 02) so Test Mode renders the Dashboard recap
-  // card + drawer. Anchored to the CURRENT ISO week with a fresh generatedAt so
-  // the card's 4-day freshness window always passes. Numbers stay consistent
-  // with the seed data (checking spend, 2 seeded members, the Read habit).
-  const [recaps] = useState<WeeklyRecap[]>(() => [{
-    id: format(new Date(), "RRRR-'W'II"),
-    isoWeek: format(new Date(), "RRRR-'W'II"),
-    generatedAt: new Date().toISOString(),
-    totalSpend: 187.45,
-    priorWeekSpend: 243.1,
-    topCategoryDeltas: [
-      { category: 'Groceries', current: 92.5, prior: 128.2 },
-      { category: 'Entertainment', current: 45.0, prior: 62.4 },
-      { category: 'Gas', current: 49.95, prior: 52.5 },
-    ],
-    habitCompletions: 9,
-    streaksAtRisk: [{ habitTitle: 'Exercise 30min', streakDays: 5 }],
-    pointsByMember: [
-      { memberId: 'test-user-id', name: 'Test User', points: 120 },
-      { memberId: 'kid_leo', name: 'Leo', points: 35 },
-    ],
-    upcomingBills: [
-      { title: 'Rent', amount: 1200, date: getLocalDateString(new Date(Date.now() + 3 * 86400000)) },
-      { title: 'Internet', amount: 65, date: getLocalDateString(new Date(Date.now() + 5 * 86400000)) },
-    ],
-    narrative:
-      'Test Mode: You spent 23% less than last week — groceries did the heavy lifting. Keep the exercise streak alive tonight to lock in your multiplier.',
-    narrativeSource: 'template',
-    premium: true,
-  }]);
+  // One canned weekly recap (Plan 02, ceremony stage 5) so Test Mode renders
+  // the Dashboard recap card AND the full 4-card story deck. Anchored to the
+  // PREVIOUS ISO week — which is what the server now writes, since generation
+  // moved to Monday morning and the recap describes the week that just CLOSED
+  // — with a fresh `generatedAt` so the card's 4-day freshness window passes.
+  //
+  // The per-member numbers are deliberately coherent with `SEED_MEMBERS`: the
+  // two adults' weekly points (150 / 95) and their sum (245), so the deck's
+  // "Together" figure, the scoreboard widget and the Points Breakdown drawer
+  // all tell the same story in one walkthrough.
+  const [recaps] = useState<WeeklyRecap[]>(() => {
+    const closedWeek = new Date(Date.now() - 7 * 86400000);
+    const isoWeek = format(closedWeek, "RRRR-'W'II");
+    const monday = startOfWeek(closedWeek, { weekStartsOn: 1 });
+    const day = (i: number) => getLocalDateString(new Date(monday.getTime() + i * 86400000));
+    // Mon–Sun, Test User then Jordan: sums to 150 / 95 (245 together).
+    const split: Array<[number, number]> = [
+      [25, 10],
+      [20, 20],
+      [15, 5],
+      [25, 15],
+      [20, 10],
+      [30, 25],
+      [15, 10],
+    ];
+    return [{
+      id: isoWeek,
+      isoWeek,
+      generatedAt: new Date().toISOString(),
+      totalSpend: 187.45,
+      priorWeekSpend: 243.1,
+      topCategoryDeltas: [
+        { category: 'Groceries', current: 92.5, prior: 128.2 },
+        { category: 'Entertainment', current: 45.0, prior: 62.4 },
+        { category: 'Gas', current: 49.95, prior: 52.5 },
+      ],
+      habitCompletions: 9,
+      streaksAtRisk: [{ habitTitle: 'Exercise 30min', streakDays: 5 }],
+      pointsByMember: [
+        { memberId: 'test-user-id', name: 'Test User', points: 150 },
+        { memberId: 'test-partner-id', name: 'Jordan', points: 95 },
+      ],
+      upcomingBills: [
+        { title: 'Rent', amount: 1200, date: getLocalDateString(new Date(Date.now() + 3 * 86400000)) },
+        { title: 'Internet', amount: 65, date: getLocalDateString(new Date(Date.now() + 5 * 86400000)) },
+      ],
+      narrative:
+        'Test Mode: You spent 23% less than last week — groceries did the heavy lifting. Keep the exercise streak alive tonight to lock in your multiplier.',
+      narrativeSource: 'template',
+      premium: true,
+      // --- Ceremony fields (stage 5) ---
+      memberFacts: [
+        {
+          memberId: 'test-user-id',
+          name: 'Test User',
+          points: 150,
+          completions: 12,
+          bestDay: { date: day(5), points: 30 },
+          topStreak: { habitTitle: 'Read 30 minutes', days: 9, period: 'daily' },
+          perfectHabits: ['Read 30 minutes'],
+        },
+        {
+          memberId: 'test-partner-id',
+          name: 'Jordan',
+          points: 95,
+          completions: 8,
+          bestDay: { date: day(5), points: 25 },
+          topStreak: { habitTitle: 'Exercise 30min', days: 4, period: 'daily' },
+          perfectHabits: [],
+        },
+      ],
+      dailyPoints: split.map(([mine, theirs], i) => ({
+        date: day(i),
+        byMember: { 'test-user-id': mine, 'test-partner-id': theirs },
+        unattributed: 0,
+        total: mine + theirs,
+      })),
+      totalPoints: 245,
+      priorWeekPoints: 219,
+      ceremonyTone: 'household_first',
+    }];
+  });
   // F-NOTIF-02 (in-app notification inbox) — a few canned entries, mixed
   // read/unread, so Test Mode renders the bell badge + inbox drawer. Mirrors
   // the real provider's shape: newest first, `readBy` accumulates member uids.

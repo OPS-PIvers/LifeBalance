@@ -906,6 +906,48 @@ describe('weeklyRecapConverter', () => {
     const result = weeklyRecapConverter.fromFirestore(fakeSnap('2026-W26', partial));
     expect(result.id).toBe('2026-W26');
     expect(result.premium).toBe(false);
+    // A pre-ceremony recap (stage 5) carries none of the deck fields, which is
+    // exactly what the drawer's graceful degrade keys off.
+    expect(result.memberFacts).toBeUndefined();
+    expect(result.dailyPoints).toBeUndefined();
+  });
+
+  it('(a) round-trips the ceremony fields (per-member points, stage 5)', () => {
+    const ceremony = {
+      ...wellFormed,
+      memberFacts: [
+        {
+          memberId: 'user-1',
+          name: 'Test User',
+          points: 150,
+          completions: 12,
+          bestDay: { date: '2026-07-04', points: 30 },
+          topStreak: { habitTitle: 'Read 30 mins', days: 9, period: 'daily' },
+          perfectHabits: ['Read 30 mins'],
+        },
+      ],
+      dailyPoints: [
+        { date: '2026-06-29', byMember: { 'user-1': 25 }, unattributed: 5, total: 30 },
+      ],
+      totalPoints: 245,
+      priorWeekPoints: 219,
+      ceremonyTone: 'podium',
+    };
+    const result = weeklyRecapConverter.fromFirestore(fakeSnap('2026-W27', ceremony));
+    expect(result.memberFacts?.[0]?.perfectHabits).toEqual(['Read 30 mins']);
+    expect(result.dailyPoints?.[0]).toEqual({
+      date: '2026-06-29',
+      byMember: { 'user-1': 25 },
+      unattributed: 5,
+      total: 30,
+    });
+    expect(result.totalPoints).toBe(245);
+    expect(result.priorWeekPoints).toBe(219);
+    expect(result.ceremonyTone).toBe('podium');
+
+    const out = callToFirestore(weeklyRecapConverter, { ...ceremony, id: '2026-W27' });
+    expect('id' in out).toBe(false);
+    expect(out['totalPoints']).toBe(245);
   });
 });
 

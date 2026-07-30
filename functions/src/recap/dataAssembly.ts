@@ -1,3 +1,9 @@
+import {
+  assembleCeremony,
+  weekHasAttribution,
+  weekPointsTotal,
+  type RecapScoringHabit,
+} from "./memberFacts";
 import { WeeklyRecap } from "./types";
 
 /**
@@ -16,10 +22,15 @@ export interface RecapTransaction {
   status: "verified" | "pending_review";
 }
 
-/** Minimal habit shape this module needs (subset of `types/schema.ts`'s `Habit`). */
-export interface RecapHabit {
-  title: string;
-  completedDates: string[]; // YYYY-MM-DD
+/**
+ * Minimal habit shape this module needs (subset of `types/schema.ts`'s `Habit`).
+ *
+ * The scoring half (`period`, `basePoints`, `completedBy`, …) is inherited from
+ * `RecapScoringHabit` and is entirely OPTIONAL: the money/streak sections below
+ * only ever read `title`/`completedDates`/`streakDays`, so a habit carrying
+ * none of the ceremony fields assembles exactly as it did before stage 5.
+ */
+export interface RecapHabit extends RecapScoringHabit {
   streakDays: number;
 }
 
@@ -60,7 +71,8 @@ export type AssembledRecap = Pick<
   | "streaksAtRisk"
   | "pointsByMember"
   | "upcomingBills"
->;
+> &
+  Required<Pick<WeeklyRecap, "memberFacts" | "dailyPoints" | "totalPoints" | "priorWeekPoints">>;
 
 /** Converts decimal dollars to integer cents, rounding to the nearest cent. */
 function toCents(dollars: number): number {
@@ -171,10 +183,23 @@ export function assembleWeeklyRecap(input: DataAssemblyInput): AssembledRecap {
     .filter((h) => h.streakDays >= 3 && !h.completedDates.includes(weekEnd))
     .map((h) => ({ habitTitle: h.title, streakDays: h.streakDays }));
 
+  // --- Ceremony (per-member points, stage 5) ------------------------------
+  // Every per-member figure is DERIVED from habit attribution over the closed
+  // week. See memberFacts.ts for why `points.weekly` can no longer be read now
+  // that generation runs after the weekly rollover.
+  const ceremony = assembleCeremony({ habits, members, weekStart, weekEnd });
+  const priorWeekPoints = weekPointsTotal(habits, members, priorWeekStart, priorWeekEnd);
+
+  // A household with NO attribution anywhere in the week is fully
+  // grandfathered: nothing was ever attributed to anyone, so the derived
+  // figures would report a household of zeroes. Fall back to the pre-stage-5
+  // source (each member's stored weekly points) verbatim for that case only.
+  const derivedByMember = new Map(ceremony.memberFacts.map((f) => [f.memberId, f.points]));
+  const attributed = weekHasAttribution(habits, weekStart);
   const pointsByMember = members.map((m) => ({
     memberId: m.uid,
     name: m.displayName,
-    points: m.points.weekly,
+    points: attributed ? (derivedByMember.get(m.uid) ?? 0) : m.points.weekly,
   }));
 
   const billsStart = addDays(weekEnd, 1);
@@ -191,5 +216,9 @@ export function assembleWeeklyRecap(input: DataAssemblyInput): AssembledRecap {
     streaksAtRisk,
     pointsByMember,
     upcomingBills,
+    memberFacts: ceremony.memberFacts,
+    dailyPoints: ceremony.dailyPoints,
+    totalPoints: ceremony.totalPoints,
+    priorWeekPoints,
   };
 }
