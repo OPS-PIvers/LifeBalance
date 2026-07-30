@@ -43,11 +43,14 @@ import {
   attributionReversalForDates,
   completedByPath,
   habitFeedsMemberAttribution,
-  householdPeriodPoints,
+  householdPeriodPointsDelta,
+  legacyPeriodPoints,
   memberCompletionCount,
   memberPeriodPointsDelta,
+  prospectiveMultiplierForMember,
   resolveReversalSources,
   withAttributionDelta,
+  type PointsBuckets,
 } from '@/utils/habitAttribution';
 import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
 import toast from 'react-hot-toast';
@@ -211,6 +214,45 @@ const reversalMoves = (
     memberId: source.memberId,
     delta: -source.units,
   }));
+
+/**
+ * 🏁 STAGE 1.5 — THE POOL RULE. One function, every points-writing path.
+ *
+ * The signed delta a habit's POOL document receives when the habit moves from
+ * `before` to `after` around `date`.
+ *
+ * **Shared habits** are scored by the locked competition model: the pool figure
+ * is `Σ member awards + the unattributed remainder` (`householdPeriodPoints`),
+ * so a completion pays the pool the SUM of what the credited members earned at
+ * THEIR OWN prospective streak multipliers — never the habit-level multiplier
+ * that `processToggleHabit`/`calculateResetPoints` compute. Two members
+ * completing the same threshold habit therefore pay the pool twice, which is the
+ * whole point of the model.
+ *
+ * **Assigned chores** (Plan 080c) are deliberately untouched: their "pool" IS a
+ * member doc, they are excluded from attribution scoring
+ * (`habitFeedsMemberAttribution`), and they keep the legacy habit-level figure.
+ *
+ * **Grandfathered work** (`attributionMoved === false` — a down-toggle or
+ * submission delete on a completion that predates attribution, so
+ * `resolveReversalSources` found nothing to take back) also keeps the path's own
+ * `legacyDelta`. That is what makes pre-feature history reverse at EXACTLY the
+ * points it was credited — a stored `submission.pointsEarned`, or
+ * `calculateResetPoints`' pre/post-threshold multiplier split — rather than at a
+ * re-derived approximation of it.
+ */
+const poolPointsDelta = (args: {
+  habit: Habit;
+  before: Habit;
+  after: Habit;
+  date: string;
+  today: string;
+  attributionMoved: boolean;
+  legacyDelta: number;
+}): number =>
+  args.attributionMoved && habitFeedsMemberAttribution(args.habit)
+    ? householdPeriodPointsDelta(args.before, args.after, args.date, args.today)
+    : args.legacyDelta;
 
 /**
  * Queue the per-member points reversals produced by clearing attribution for a
@@ -499,10 +541,20 @@ export const useHabitActions = (
         // they earned there reversed.
         const staleReversal = habitFeedsMemberAttribution(habit)
           ? attributionReversalForDates(habit, staleResult.datesToRemove)
-          : { perMember: new Map(), clearPaths: [] };
+          : null;
+        const staleClearPaths = staleReversal?.clearPaths ?? [];
+        const stalePerMember = staleReversal?.perMember ?? new Map<string, PointsBuckets>();
+        // Stage 1.5: when the erased dates carried attribution the pool loses
+        // exactly what those dates contributed under the competition model
+        // (Σ member awards + remainder); an entirely grandfathered stale
+        // deselect keeps `processStaleDownToggle`'s own date-gated figure.
+        const stalePoolDelta: PointsBuckets =
+          staleClearPaths.length > 0 && staleReversal
+            ? staleReversal.household
+            : staleResult.pointsDelta;
 
         staleBatch.update(doc(db, `households/${householdId}/habits`, id), {
-          ...Object.fromEntries(staleReversal.clearPaths.map(path => [path, deleteField()])),
+          ...Object.fromEntries(staleClearPaths.map(path => [path, deleteField()])),
           count: 0,
           // Reversing the prior period's completion also disavows its counted
           // actions from the lifetime counter (mirrors resetHabitDay).
@@ -518,7 +570,7 @@ export const useHabitActions = (
           lastUpdated: serverTimestamp(),
         });
 
-        const { daily, weekly, total } = staleResult.pointsDelta;
+        const { daily, weekly, total } = stalePoolDelta;
         const stalePoolRef = habitPointsTargets(householdId, habit.assignedTo, isLiveMember).poolRef;
         if (stalePoolRef && (daily !== 0 || weekly !== 0 || total !== 0)) {
           staleBatch.update(stalePoolRef, {
@@ -527,7 +579,7 @@ export const useHabitActions = (
             ...(total !== 0 ? { 'points.total': increment(total) } : {}),
           });
         }
-        queueAttributionReversal(staleBatch, householdId, staleReversal.perMember, isLiveMember);
+        queueAttributionReversal(staleBatch, householdId, stalePerMember, isLiveMember);
 
         // A failed commit here used to surface as an unhandled rejection — the
         // user saw the "undone" toast for a write that never landed. Degrade
@@ -652,11 +704,35 @@ export const useHabitActions = (
       lastUpdated: serverTimestamp(),
     });
 
+    // Stage 1.5: the pool figure for a SHARED habit is now the competition model
+    // (Σ member awards + the unattributed remainder), not `result.pointsChange`'s
+    // habit-level multiplier. `result.pointsChange` survives as the toast figure
+    // (below) and as the pool figure for assigned chores and for a grandfathered
+    // down-toggle that took no attribution back. See `poolPointsDelta`.
+    const poolDelta = poolPointsDelta({
+      habit,
+      before: effectiveHabit,
+      after: habitAfter,
+      date: today,
+      today,
+      attributionMoved: attributionMoves.length > 0,
+      legacyDelta: result.pointsChange,
+    });
+    // The multiplier the points toast reports. An 'up' on a shared habit earns
+    // the ACTING member's own prospective streak multiplier (the locked model),
+    // so on flip day a long-standing 2.0x habit correctly reads 1.0x until that
+    // member's personal chain rebuilds. Everything else keeps the habit-level
+    // figure `processToggleHabit` computed.
+    const toastMultiplier =
+      direction === 'up' && habitFeedsMemberAttribution(habit)
+        ? prospectiveMultiplierForMember(effectiveHabit, attributedTo, today, today)
+        : result.multiplier;
+
     // Include points update in the same batch (only when points actually change).
     // Plan 080c: an assigned (per-member/kid chore) habit credits the assignee's OWN
     // member.points — their personal balance for rewards/allowance — instead of the
     // shared household pool. Unassigned/shared habits keep crediting the household,
-    // and only those feed the household-points recompute (see habitLogic.ts).
+    // and only those feed the household-points recompute (see habitAttribution.ts).
     // Date-awareness invariant: on this NON-STALE path, processToggleHabit only
     // ever adds/removes TODAY from completedDates (a stale habit — whose counter
     // could reference a prior period — was either lazily zeroed above for 'up'
@@ -670,11 +746,11 @@ export const useHabitActions = (
     // shared reward pool must not absorb a departed member's chore points. (This
     // hazard predates the per-member feature — `habitPointsTargetRef` has always
     // routed `assignedTo` straight at a member doc.)
-    if (result.pointsChange !== 0 && targets.poolRef) {
+    if (poolDelta !== 0 && targets.poolRef) {
       batch.update(targets.poolRef, {
-        'points.daily': increment(result.pointsChange),
-        'points.weekly': increment(result.pointsChange),
-        'points.total': increment(result.pointsChange),
+        'points.daily': increment(poolDelta),
+        'points.weekly': increment(poolDelta),
+        'points.total': increment(poolDelta),
       });
     }
 
@@ -788,11 +864,18 @@ export const useHabitActions = (
     // the SAME habit fold into one running total (accumulate()) so the toast
     // updates in place — via the stable `habit-points-${id}` id, react-hot-toast
     // upserts rather than stacks — instead of piling up a toast per tap.
-    if (result.pointsChange !== 0) {
+    //
+    // Stage 1.5: the toast reports `poolDelta` and the MEMBER's multiplier, not
+    // `result.pointsChange`/`result.multiplier` — the habit-level figures are no
+    // longer what a shared habit credits, and showing "+20 pts (2.0x)" while 10
+    // points land would be a lie. (An assigned chore and a grandfathered
+    // down-toggle still credit the legacy figure, and `poolPointsDelta` hands
+    // exactly that back, so their toast is unchanged.)
+    if (poolDelta !== 0) {
       const { net, count } = accumulate(
         pointsToastAccumulatorRef.current,
         id,
-        result.pointsChange,
+        poolDelta,
         Date.now(),
         POINTS_TOAST_WINDOW_MS
       );
@@ -812,7 +895,7 @@ export const useHabitActions = (
           <div className="flex min-w-0 items-center gap-2">
             <span className="font-bold">{sign}{net} pts</span>
             <span className="text-sm opacity-80">
-              {count === 1 ? `(${result.multiplier}x)` : `(${count} changes)`}
+              {count === 1 ? `(${toastMultiplier}x)` : `(${count} changes)`}
             </span>
             {/* Habit Automations (PRD #1065): an automated fire's attribution
                 ("via location: Target") rides along on the same toast a manual
@@ -910,11 +993,23 @@ export const useHabitActions = (
     // reversed at the multiplier that applied on the date they earned them.
     const resetReversal = habitFeedsMemberAttribution(habit)
       ? attributionReversalForDates(habit, datesToRemove, today)
-      : { perMember: new Map<string, { daily: number; weekly: number; total: number }>(), clearPaths: [] };
+      : null;
+    const resetClearPaths = resetReversal?.clearPaths ?? [];
+    const resetPerMember = resetReversal?.perMember ?? new Map<string, PointsBuckets>();
+    // Stage 1.5: once the cleared dates carry attribution the pool loses the
+    // competition figure those dates contributed (Σ member awards + remainder),
+    // bucket-gated by each date — so resetting a weekly habit can no longer
+    // drive TODAY's daily bucket down by points earned earlier in the week. A
+    // fully grandfathered reset keeps `calculateResetPoints`' figure verbatim,
+    // including its pre/post-threshold multiplier split.
+    const resetPoolDelta: PointsBuckets =
+      resetClearPaths.length > 0 && resetReversal
+        ? resetReversal.household
+        : { daily: -pointsToRemove, weekly: -pointsToRemove, total: -pointsToRemove };
 
     resetBatch.update(doc(db, `households/${householdId}/habits`, id), {
       count: 0,
-      ...Object.fromEntries(resetReversal.clearPaths.map(path => [path, deleteField()])),
+      ...Object.fromEntries(resetClearPaths.map(path => [path, deleteField()])),
       // Server-side delta: remove ONLY this period's dates. Writing the
       // locally-computed array here lets a device with a stale offline cache
       // wholesale-overwrite (wipe) the habit's completion history. streakDays
@@ -929,14 +1024,17 @@ export const useHabitActions = (
     // A null poolRef = assigned to a since-removed member (see HabitPointsTargets):
     // skip their points reversal rather than fail the whole batch with NOT_FOUND.
     const resetPoolRef = habitPointsTargets(householdId, habit.assignedTo, isLiveMember).poolRef;
-    if (pointsToRemove !== 0 && resetPoolRef) {
-      resetBatch.update(resetPoolRef, {
-        'points.daily': increment(-pointsToRemove),
-        'points.weekly': increment(-pointsToRemove),
-        'points.total': increment(-pointsToRemove),
-      });
+    if (resetPoolRef) {
+      const { daily, weekly, total } = resetPoolDelta;
+      if (daily !== 0 || weekly !== 0 || total !== 0) {
+        resetBatch.update(resetPoolRef, {
+          ...(daily !== 0 ? { 'points.daily': increment(daily) } : {}),
+          ...(weekly !== 0 ? { 'points.weekly': increment(weekly) } : {}),
+          ...(total !== 0 ? { 'points.total': increment(total) } : {}),
+        });
+      }
     }
-    queueAttributionReversal(resetBatch, householdId, resetReversal.perMember, isLiveMember);
+    queueAttributionReversal(resetBatch, householdId, resetPerMember, isLiveMember);
 
     // Degrade visibly rather than as an unhandled rejection (project
     // error-toast convention) — the reset toast must not claim a write landed.
@@ -1140,10 +1238,23 @@ export const useHabitActions = (
           : {}),
       });
 
+      // Stage 1.5: a submission credits the pool the SUM of what its credited
+      // member earned (their own multiplier), not `pointsEarned`'s habit-level
+      // figure. `count === 0` is a note/mood-only reflection: it attributes
+      // nothing and earns nothing either way.
+      const submissionPoolDelta = poolPointsDelta({
+        habit,
+        before: habit,
+        after: submissionAfter,
+        date: submissionDate,
+        today,
+        attributionMoved: count !== 0,
+        legacyDelta: pointsEarned,
+      });
       // A null poolRef = assigned to a since-removed member (see
       // HabitPointsTargets): skip rather than fail the batch with NOT_FOUND.
-      if (pointsEarned !== 0 && submissionTargets.poolRef) {
-        addBatch.update(submissionTargets.poolRef, gatedPointUpdates(pointsEarned));
+      if (submissionPoolDelta !== 0 && submissionTargets.poolRef) {
+        addBatch.update(submissionTargets.poolRef, gatedPointUpdates(submissionPoolDelta));
       }
       const submissionMemberRef = submissionTargets.memberRef(submissionActor);
       if (submissionMemberPoints !== 0 && submissionMemberRef) {
@@ -1291,10 +1402,23 @@ export const useHabitActions = (
           : {}),
       });
 
+      // Stage 1.5: an ATTRIBUTED submission's deletion debits the pool the sum
+      // of the member awards it is taking back; a PRE-attribution one still
+      // reverses its stored `pointsEarned` exactly, which is the only record of
+      // what it was actually credited.
+      const deletePoolDelta = poolPointsDelta({
+        habit,
+        before: habit,
+        after: deleteAfter,
+        date: submission.date,
+        today,
+        attributionMoved: deleteMoves.length > 0,
+        legacyDelta: -submission.pointsEarned,
+      });
       // A null poolRef = assigned to a since-removed member (see
       // HabitPointsTargets): skip rather than fail the batch with NOT_FOUND.
-      if (deleteTargets.poolRef) {
-        deleteBatch.update(deleteTargets.poolRef, gatedPointUpdates(-submission.pointsEarned));
+      if (deletePoolDelta !== 0 && deleteTargets.poolRef) {
+        deleteBatch.update(deleteTargets.poolRef, gatedPointUpdates(deletePoolDelta));
       }
       // These uids are HISTORICAL (snapshotted on the submission or read off the
       // stored attribution map), so they may name a since-removed member —
@@ -1403,29 +1527,40 @@ export const useHabitActions = (
       // has exactly what they earned that day reversed.
       const dayReversal = habitFeedsMemberAttribution(habit)
         ? attributionReversalForDates(habit, [date], today)
-        : { perMember: new Map<string, { daily: number; weekly: number; total: number }>(), clearPaths: [] };
-      for (const path of dayReversal.clearPaths) habitUpdates[path] = deleteField();
+        : null;
+      const dayClearPaths = dayReversal?.clearPaths ?? [];
+      const dayPerMember = dayReversal?.perMember ?? new Map<string, PointsBuckets>();
+      for (const path of dayClearPaths) habitUpdates[path] = deleteField();
 
       batch.update(doc(db, `households/${householdId}/habits`, habitId), habitUpdates);
-      queueAttributionReversal(batch, householdId, dayReversal.perMember, isLiveMember);
+      queueAttributionReversal(batch, householdId, dayPerMember, isLiveMember);
 
       // Reverse points with the same period gating as deleteHabitSubmission:
       // total always, daily only for today, weekly only inside the current week.
+      //
+      // Stage 1.5: an ATTRIBUTED day loses the competition figure it contributed
+      // (Σ member awards + remainder, already bucket-gated by the cleared date);
+      // an un-attributed day still reverses `pointsToReverse` — the exact stored
+      // `pointsEarned` of that day's submissions, or `calculateResetPoints`.
+      const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      const dayPoolDelta: PointsBuckets =
+        dayClearPaths.length > 0 && dayReversal
+          ? dayReversal.household
+          : {
+              total: -pointsToReverse,
+              daily: date === today ? -pointsToReverse : 0,
+              weekly: date >= weekStart && date <= today ? -pointsToReverse : 0,
+            };
       // A null poolRef = assigned to a since-removed member (see
       // HabitPointsTargets) — skip rather than fail the batch with NOT_FOUND.
       const dayPoolRef = habitPointsTargets(householdId, habit.assignedTo, isLiveMember).poolRef;
-      if (pointsToReverse !== 0 && dayPoolRef) {
-        const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      if (dayPoolRef) {
         const pointUpdates: Record<string, unknown> = {
-          'points.total': increment(-pointsToReverse),
+          ...(dayPoolDelta.total !== 0 ? { 'points.total': increment(dayPoolDelta.total) } : {}),
+          ...(dayPoolDelta.daily !== 0 ? { 'points.daily': increment(dayPoolDelta.daily) } : {}),
+          ...(dayPoolDelta.weekly !== 0 ? { 'points.weekly': increment(dayPoolDelta.weekly) } : {}),
         };
-        if (date === today) {
-          pointUpdates['points.daily'] = increment(-pointsToReverse);
-        }
-        if (date >= weekStart && date <= today) {
-          pointUpdates['points.weekly'] = increment(-pointsToReverse);
-        }
-        batch.update(dayPoolRef, pointUpdates);
+        if (Object.keys(pointUpdates).length > 0) batch.update(dayPoolRef, pointUpdates);
       }
 
       await batch.commit();
@@ -1539,10 +1674,22 @@ export const useHabitActions = (
           : {}),
       });
 
+      // Stage 1.5: a count edit moves the pool by the credited member's own
+      // award delta; an edit that touched no attribution keeps the legacy
+      // habit-level figure.
+      const editPoolDelta = poolPointsDelta({
+        habit,
+        before: habit,
+        after: editAfter,
+        date: submissionDate,
+        today,
+        attributionMoved: editMoves.length > 0,
+        legacyDelta: pointsDelta,
+      });
       // A null poolRef = assigned to a since-removed member (see
       // HabitPointsTargets): skip rather than fail the batch with NOT_FOUND.
-      if (pointsDelta !== 0 && editTargets.poolRef) {
-        updateBatch.update(editTargets.poolRef, gatedPointUpdates(pointsDelta));
+      if (editPoolDelta !== 0 && editTargets.poolRef) {
+        updateBatch.update(editTargets.poolRef, gatedPointUpdates(editPoolDelta));
       }
       // Historical uids off the stored submission / attribution map — each may
       // name a since-removed member whose doc no longer exists, for which
@@ -1665,16 +1812,26 @@ export const useHabitActions = (
           : {}),
       });
 
-      // The pool delta is a before/after difference of the UNCHANGED household
-      // scorer, so it is exactly what the corrective recompute will derive.
-      const poolDelta =
-        householdPeriodPoints(after, targetDate, today) -
-        householdPeriodPoints(habit, targetDate, today);
+      // The pool delta is a before/after difference of the household scorer, so
+      // it is exactly what the corrective recompute will derive. Stage 1.5: for
+      // a shared habit that scorer is now Σ member awards + remainder, so a
+      // "Both of us" credit pays the pool BOTH awards.
+      const creditPoolDelta = poolPointsDelta({
+        habit,
+        before: habit,
+        after,
+        date: targetDate,
+        today,
+        attributionMoved: true,
+        legacyDelta:
+          legacyPeriodPoints(after, targetDate, today) -
+          legacyPeriodPoints(habit, targetDate, today),
+      });
       // A null poolRef = assigned to a since-removed member (see
       // HabitPointsTargets): skip rather than fail the batch with NOT_FOUND.
       const creditPoolRef = habitPointsTargets(householdId, habit.assignedTo, isLiveMember).poolRef;
-      if (poolDelta !== 0 && creditPoolRef) {
-        batch.update(creditPoolRef, gatedPointUpdates(poolDelta));
+      if (creditPoolDelta !== 0 && creditPoolRef) {
+        batch.update(creditPoolRef, gatedPointUpdates(creditPoolDelta));
       }
 
       if (habitFeedsMemberAttribution(habit)) {
@@ -1777,14 +1934,25 @@ export const useHabitActions = (
           : {}),
       });
 
-      const poolDelta =
-        householdPeriodPoints(after, targetDate, today) -
-        householdPeriodPoints(habit, targetDate, today);
+      // Stage 1.5: un-crediting reverses exactly the member award this
+      // completion originally granted (recomputed at that member's streak
+      // ending on `targetDate`), and the pool loses the same amount.
+      const uncreditPoolDelta = poolPointsDelta({
+        habit,
+        before: habit,
+        after,
+        date: targetDate,
+        today,
+        attributionMoved: true,
+        legacyDelta:
+          legacyPeriodPoints(after, targetDate, today) -
+          legacyPeriodPoints(habit, targetDate, today),
+      });
       // A null poolRef = assigned to a since-removed member (see
       // HabitPointsTargets): skip rather than fail the batch with NOT_FOUND.
       const uncreditPoolRef = habitPointsTargets(householdId, habit.assignedTo, isLiveMember).poolRef;
-      if (poolDelta !== 0 && uncreditPoolRef) {
-        batch.update(uncreditPoolRef, gatedPointUpdates(poolDelta));
+      if (uncreditPoolDelta !== 0 && uncreditPoolRef) {
+        batch.update(uncreditPoolRef, gatedPointUpdates(uncreditPoolDelta));
       }
 
       // A removed member can still hold attribution on the habit doc, so the

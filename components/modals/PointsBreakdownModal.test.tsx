@@ -29,6 +29,7 @@ vi.mock('firebase/firestore', () => ({
     __path: id ? `${path}/${id}` : (path ?? '__autoId'),
   })),
   increment: (n: number) => incrementMock(n),
+  deleteField: vi.fn(() => '__deleteField'),
   serverTimestamp: vi.fn(() => '__serverTimestamp'),
   writeBatch: vi.fn(() => ({
     update: (ref: { __path: string }, data: Record<string, unknown>) => {
@@ -59,6 +60,8 @@ import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdC
 
 const HOUSEHOLD_ID = 'house1';
 const householdPath = `households/${HOUSEHOLD_ID}`;
+const PAUL = 'paul-uid';
+const JEN = 'jen-uid';
 
 // Pin "today" to Sunday 2024-01-21 (local noon) so the current ISO week is the
 // full Mon 2024-01-15 .. Sun 2024-01-21 and the weekly edit panel renders all
@@ -122,7 +125,10 @@ describe('PointsBreakdownModal — toggleDate uses the date-anchored historical 
     mockToggleHabit.mockClear();
     mockUpdateHabit.mockClear();
 
-    (useHouseholdCore as unknown as Mock).mockReturnValue({ householdId: HOUSEHOLD_ID });
+    (useHouseholdCore as unknown as Mock).mockReturnValue({
+      householdId: HOUSEHOLD_ID,
+      members: [{ uid: PAUL }, { uid: JEN }],
+    });
   });
 
   afterEach(() => {
@@ -226,6 +232,45 @@ describe('PointsBreakdownModal — toggleDate uses the date-anchored historical 
     expect(hh!.data['points.daily']).toBeUndefined();
     // It must NOT be the buggy +20 (current 2.0x).
     expect(hh!.data['points.total']).not.toEqual({ __increment: 20 });
+  });
+
+  it('REMOVE: an ATTRIBUTED day takes its attribution — and the member awards — with it', async () => {
+    // 🏁 Stage 1.5: the household figure is built FROM member awards, so removing
+    // a completion has to strip `completedBy` in the same batch and debit the
+    // members who held it — otherwise a stranded award keeps paying the pool
+    // forever on the next recompute.
+    const completed = ['2024-01-15', '2024-01-16', '2024-01-17', '2024-01-18', '2024-01-19', '2024-01-20', '2024-01-21'];
+    const habit = baseHabit({
+      completedDates: [...completed],
+      streakDays: 7,
+      completedBy: { [MON]: { [PAUL]: 1, [JEN]: 1 } },
+    });
+
+    (useGamification as unknown as Mock).mockReturnValue({
+      toggleHabit: mockToggleHabit,
+      updateHabit: mockUpdateHabit,
+    });
+
+    render(<PointsBreakdownModal isOpen onClose={() => {}} view="weekly" habits={[habit]} />);
+    await clickDayAndFlush(openEditAndGetDayButton('Mon'));
+
+    expect(commitCount).toBe(1);
+
+    // The habit doc clears exactly that date's attribution node (never the map).
+    const habitUpdate = capturedUpdates.find(u => u.ref.__path === `${householdPath}/habits/h1`)!;
+    expect(habitUpdate.data[`completedBy.${MON}`]).toBeDefined();
+
+    // Both members earned a full 1.0x award on their own first day, so the pool
+    // gives back BOTH — not the single habit-level unit the legacy path debited.
+    for (const uid of [PAUL, JEN]) {
+      const memberUpdate = capturedUpdates.find(
+        u => u.ref.__path === `${householdPath}/members/${uid}`,
+      );
+      expect(memberUpdate!.data['points.total']).toEqual({ __increment: -10 });
+    }
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: -20 });
+    expect(householdUpdate()!.data['points.weekly']).toEqual({ __increment: -20 });
+    expect(householdUpdate()!.data['points.daily']).toBeUndefined();
   });
 
   it('threshold habits never adjust points when a date is toggled (preserved behavior)', async () => {

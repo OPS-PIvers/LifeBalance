@@ -4,10 +4,15 @@ import { toastIcon } from '@/components/ui/toastIcon';
 import { Habit } from '@/types/schema';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { streakForHabit, streakEndingOnForHabit, getMultiplier, signedHabitPoints } from '@/utils/habitLogic';
+import {
+  attributionReversalForDates,
+  habitFeedsMemberAttribution,
+  type PointsBuckets,
+} from '@/utils/habitAttribution';
 import { format, startOfWeek, eachDayOfInterval } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import toast from 'react-hot-toast';
-import { doc, increment, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { deleteField, doc, increment, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { db } from '@/firebase.config';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
@@ -29,7 +34,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
   habits,
 }) => {
   const { toggleHabit, updateHabit } = useGamification();
-  const { householdId } = useHouseholdCore();
+  const { householdId, members } = useHouseholdCore();
   const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
 
   // Stable date strings derived once per render cycle — avoids repeated new Date()/format
@@ -210,6 +215,29 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
         pointsChange = isCompleted ? -pointsPerCompletion : pointsPerCompletion;
     }
 
+    // Per-member points (stage 1.5): REMOVING a date must take its attribution
+    // with it — leaving `completedBy` behind would strand a member award that no
+    // longer has a completion, and the household figure is now built FROM those
+    // awards. When the date carries attribution the pool debit becomes the
+    // competition figure (Σ member awards + remainder, already bucket-gated by
+    // the date) instead of the habit-level `pointsChange`, matching what the
+    // corrective recompute will derive. RESTORING a date attributes nothing —
+    // there is no record of who earned it — so it stays grandfathered and the
+    // habit-level credit above is exactly right.
+    const today = getLocalDateString();
+    const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    const reversal = isCompleted && habitFeedsMemberAttribution(habit)
+        ? attributionReversalForDates(habit, [dateStr], today)
+        : null;
+    const attributed = (reversal?.clearPaths.length ?? 0) > 0;
+    const poolDelta: PointsBuckets = attributed && reversal
+        ? reversal.household
+        : {
+            total: pointsChange,
+            daily: dateStr === today ? pointsChange : 0,
+            weekly: dateStr >= weekStart && dateStr <= today ? pointsChange : 0,
+          };
+
     try {
         // Commit the habit date change and the household points adjustment in a
         // SINGLE writeBatch so they can never partially apply (e.g. the date moves
@@ -219,30 +247,36 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
 
         // Update habit
         batch.update(doc(db, `households/${householdId}/habits`, habit.id), {
+            ...Object.fromEntries((reversal?.clearPaths ?? []).map(path => [path, deleteField()])),
             completedDates: newCompletedDates,
             streakDays: newStreak, // already computed from streakForHabit above
             lastUpdated: serverTimestamp()
         });
 
         // Update household points
-        if (pointsChange !== 0) {
-            const updates: Record<string, unknown> = {
-                'points.total': increment(pointsChange)
-            };
+        if (poolDelta.total !== 0 || poolDelta.daily !== 0 || poolDelta.weekly !== 0) {
+            batch.update(doc(db, `households/${householdId}`), {
+                ...(poolDelta.total !== 0 ? { 'points.total': increment(poolDelta.total) } : {}),
+                ...(poolDelta.daily !== 0 ? { 'points.daily': increment(poolDelta.daily) } : {}),
+                ...(poolDelta.weekly !== 0 ? { 'points.weekly': increment(poolDelta.weekly) } : {}),
+            });
+        }
 
-            // If modified date is today
-            const today = getLocalDateString();
-            if (dateStr === today) {
-                updates['points.daily'] = increment(pointsChange);
-            }
-
-            // If modified date is this week
-            const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-            if (dateStr >= weekStart && dateStr <= today) {
-                updates['points.weekly'] = increment(pointsChange);
-            }
-
-            batch.update(doc(db, `households/${householdId}`), updates);
+        // Each credited member's own reversal. A member removed from the
+        // household can still hold attribution on the habit doc, and updating
+        // their deleted doc would reject NOT_FOUND and fail the WHOLE batch — so
+        // the points write is skipped for them while the habit-doc clear above
+        // still strips their stale attribution (mirrors `queueAttributionReversal`
+        // in useHabitActions). An empty roster means "not loaded yet", so it
+        // fails OPEN rather than silently dropping every reversal.
+        for (const [memberId, delta] of reversal?.perMember ?? []) {
+            if (delta.daily === 0 && delta.weekly === 0 && delta.total === 0) continue;
+            if (members.length > 0 && !members.some(m => m.uid === memberId)) continue;
+            batch.update(doc(db, `households/${householdId}/members`, memberId), {
+                ...(delta.daily !== 0 ? { 'points.daily': increment(delta.daily) } : {}),
+                ...(delta.weekly !== 0 ? { 'points.weekly': increment(delta.weekly) } : {}),
+                ...(delta.total !== 0 ? { 'points.total': increment(delta.total) } : {}),
+            });
         }
 
         await batch.commit();

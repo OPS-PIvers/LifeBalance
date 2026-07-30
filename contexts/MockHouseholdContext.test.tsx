@@ -878,4 +878,40 @@ describe('MockHouseholdContext habit points routing (assigned vs shared)', () =>
     expect(after['jen-uid'] ?? 0).toBe(0);
     expect(after['test-user-id']).toBeUndefined();
   });
+
+  it('pays the pool a SECOND award when a second member is credited (stage 1.5)', async () => {
+    // 🔒 Locked: "Both of us" credits every selected member a full award and the
+    // pool receives the SUM. Test Mode must model that too, or the stage-2
+    // picker would look right in the mock and wrong in production.
+    const { result } = captureHousehold();
+
+    await act(async () => {
+      await result.current.creditHabitCompletion(SHARED, ['jen-uid']);
+    });
+    const afterFirst = result.current.totalPoints;
+
+    await act(async () => {
+      await result.current.creditHabitCompletion(SHARED, ['test-user-id']);
+    });
+    const secondAward = result.current.totalPoints - afterFirst;
+    expect(secondAward).toBeGreaterThan(0);
+  });
+
+  it('is pool-neutral across credit → un-credit (reversal symmetry)', async () => {
+    const { result } = captureHousehold();
+    const poolBefore = result.current.totalPoints;
+    const kidBefore = { ...pointsOf(result, 'kid_leo') };
+
+    await act(async () => {
+      await result.current.creditHabitCompletion(SHARED, ['kid_leo']);
+    });
+    expect(result.current.totalPoints).toBeGreaterThan(poolBefore);
+    expect(pointsOf(result, 'kid_leo')).not.toEqual(kidBefore);
+
+    await act(async () => {
+      await result.current.uncreditHabitCompletion(SHARED, 'kid_leo');
+    });
+    expect(result.current.totalPoints).toBe(poolBefore);
+    expect(pointsOf(result, 'kid_leo')).toEqual(kidBefore);
+  });
 });

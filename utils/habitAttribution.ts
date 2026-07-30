@@ -1,22 +1,32 @@
 /**
- * Per-member habit points — stage 1 (the silent attribution data layer).
+ * Per-member habit points — the attribution layer AND the household scorer it
+ * now drives (stages 1 and 1.5).
  *
  * This module is the SINGLE source of truth for everything derived from
- * `Habit.completedBy` (per-date, per-member completion counts). It is purely
- * additive: nothing here feeds the household-level scoring in `habitLogic.ts`,
- * which keeps computing `points.daily/weekly/total` from `completedDates` alone
- * exactly as it did before this feature existed.
+ * `Habit.completedBy` (per-date, per-member completion counts).
  *
  * The two layers and how they relate
  * ----------------------------------
  *   household(date) = Σ_members memberPoints(m, date) + unattributed(date)
  *
+ * Stage 1 shipped the right-hand side while the household figure was still the
+ * unchanged habit-level scorer, so `unattributed` was a mere bookkeeping
+ * remainder. **Stage 1.5 makes that equation the definition**: the household
+ * daily/weekly figures — and the pool delta every mutation writes — are now
+ * PRODUCED by summing the member awards and adding the unattributed remainder,
+ * rather than by applying the habit-level streak multiplier. That is the locked
+ * competition model (handoff §1): each credited member earns a full award at
+ * THEIR OWN prospective streak multiplier, and the household receives the sum,
+ * so a habit both members complete pays the household twice.
+ *
  * `unattributed` is the grandfathering term: every completion recorded before
  * this feature shipped has no `completedBy` entry, so it contributes to the
- * household number and to NOBODY's member score. On transition day the whole
- * household total IS the remainder and every member score is 0 — which is what
- * makes stage 1 provably invisible (see `decomposeDayPoints` and the parity
- * tests in habitAttribution.test.ts).
+ * household number at the LEGACY habit-level multiplier and to NOBODY's member
+ * score. Pre-feature history therefore keeps counting for the household exactly
+ * as it always did, while every new completion is scored per member.
+ *
+ * The habit-level streak (`Habit.streakDays`, the flame) is untouched — only
+ * points CREDITING moved to member multipliers.
  *
  * Per-member streaks reuse the existing period-aware primitives verbatim: a
  * member's completion-date set (the dates where their count > 0) is fed to the
@@ -56,7 +66,11 @@ import {
   habitSign,
   pointsForHabitOnDate,
   streakEndingOn,
+  streakEndingOnForHabit,
   streakEndingOnWeek,
+  type DaySubmissionTotals,
+  type HouseholdPoints,
+  type PointsSyncResult,
   type SubmissionTotalsByHabitDate,
 } from '@/utils/habitLogic';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -407,15 +421,15 @@ export const memberPeriodPoints = (
 };
 
 /**
- * Signed HOUSEHOLD points a habit contributes across the whole period
- * containing `date`, scored by the unchanged household attribution
- * (`pointsForHabitOnDate`).
+ * Signed points a habit contributes across the whole period containing `date`
+ * under the LEGACY (pre-competition) household scorer — the habit-level streak
+ * multiplier applied to `completedDates`, with no member awareness at all.
  *
- * The credit/un-credit mutations take a before/after difference of this for the
- * pool write, so the pool delta is by construction whatever the corrective
- * recompute would derive — no login-time correction jump.
+ * Still the correct figure for an ASSIGNED chore (Plan 080c), whose points route
+ * to the assignee's own member doc and are deliberately untouched by the
+ * competition flip. Shared habits use `householdPeriodPoints` below.
  */
-export const householdPeriodPoints = (
+export const legacyPeriodPoints = (
   habit: Habit,
   date: string,
   today: string = getLocalDateString(),
@@ -428,6 +442,200 @@ export const householdPeriodPoints = (
   }
   return total;
 };
+
+// ---------------------------------------------------------------------------
+// The unattributed (grandfathering) remainder
+// ---------------------------------------------------------------------------
+
+/** Does ANY member hold attribution anywhere in the period containing `date`? */
+export const periodHasAttribution = (habit: Habit, date: string): boolean => {
+  const periodStart = habitPeriodStart(habit.period, date);
+  for (const [d, day] of Object.entries(habit.completedBy ?? {})) {
+    if (habitPeriodStart(habit.period, d) !== periodStart) continue;
+    for (const count of Object.values(day)) if (count > 0) return true;
+  }
+  return false;
+};
+
+/** Every member uid holding attribution in the period containing `date`. */
+const periodMemberIds = (habit: Habit, date: string): string[] => {
+  const periodStart = habitPeriodStart(habit.period, date);
+  const out = new Set<string>();
+  for (const [d, day] of Object.entries(habit.completedBy ?? {})) {
+    if (habitPeriodStart(habit.period, d) !== periodStart) continue;
+    for (const [uid, count] of Object.entries(day)) if (count > 0) out.add(uid);
+  }
+  return [...out];
+};
+
+/** Attributed units summed across the whole period containing `date`. */
+const attributedUnitsInPeriod = (habit: Habit, date: string): number => {
+  const periodStart = habitPeriodStart(habit.period, date);
+  let units = 0;
+  for (const d of Object.keys(habit.completedBy ?? {})) {
+    if (habitPeriodStart(habit.period, d) !== periodStart) continue;
+    units += attributedUnitsOnDate(habit, d);
+  }
+  return units;
+};
+
+/**
+ * The SIGNED points-per-unit the legacy habit-level scorer applies on `date` —
+ * `pointsForHabitOnDate`'s own `sign × floor(magnitude × multiplier)`, computed
+ * from the habit's streak ENDING ON that date (never today's streak).
+ */
+const legacyPerUnitPoints = (habit: Habit, date: string): number =>
+  habitSign(habit) *
+  Math.floor(
+    habitPointsMagnitude(habit) *
+      getMultiplier(streakEndingOnForHabit(habit, date), habit.type === 'positive', habit.period),
+  );
+
+/**
+ * How many of the units the LEGACY scorer counted on `date` belong to nobody.
+ *
+ * Daily habits compare per date, because that IS the period. Weekly habits
+ * compare at WEEK level and park the whole remainder on the same day the legacy
+ * scorer parks its own remainder (the week's latest completed day): a weekly
+ * habit's `count` accumulates across the week and `pointsForHabitOnDate` splits
+ * it "one per completed day, the rest on the latest", which a naive per-day
+ * comparison would both over- and under-shoot on the same week (the per-day
+ * errors do NOT cancel once the max(…, 0) floor bites). Comparing per week makes
+ * the days sum to the week's truth.
+ */
+const unattributedUnitsOnDate = (habit: Habit, date: string, today: string): number => {
+  if (habit.period === 'weekly') {
+    const periodStart = habitPeriodStart('weekly', date);
+    const sameWeek = habit.completedDates.filter(
+      d => habitPeriodStart('weekly', d) === periodStart,
+    );
+    if (sameWeek.length === 0) return 0;
+    const latest = sameWeek.reduce((a, b) => (a > b ? a : b));
+    if (date !== latest) return 0;
+    // Current week: the live counter covers every completion made this week.
+    // Past weeks: no per-week counters are stored, so one completion (matching
+    // `pointsForHabitOnDate` / `calculatePointsForDateRange`).
+    const weekUnits = periodStart === habitPeriodStart('weekly', today) ? habit.count : 1;
+    return Math.max(weekUnits - attributedUnitsInPeriod(habit, date), 0);
+  }
+  const dayUnits = date === today ? habit.count : 1;
+  return Math.max(dayUnits - attributedUnitsOnDate(habit, date), 0);
+};
+
+/**
+ * Signed household points on `date` that belong to NOBODY — the grandfathering
+ * term of `household = Σ members + unattributed`.
+ *
+ * Three cases, in order:
+ *
+ *  1. **Nothing in the period is attributed** → the legacy figure stands
+ *     VERBATIM, submissions reconciliation and all. This is the case that
+ *     matters: every completion recorded before this feature shipped keeps
+ *     counting for the household at exactly the points it always earned.
+ *  2. **Threshold with attribution in the period** → 0. The period earns ONE
+ *     award and the credited member(s) now carry it (each at their own
+ *     multiplier — which is how two members on the same threshold day pay the
+ *     household twice).
+ *  3. **Incremental with attribution** → the units nobody holds, at the legacy
+ *     per-unit rate. That is what keeps a TRANSITION day whole: two pre-feature
+ *     increments plus one freshly attributed tap scores two legacy units plus
+ *     one member award, and the running pool and the recompute agree.
+ *
+ * KNOWN NARROWING (case 3 only): once a date carries attribution, its stored
+ * submissions are scored by units rather than by their recorded `pointsEarned`.
+ * A submission written AFTER this feature carries attribution itself and is
+ * covered by the member award; the narrowing therefore only reaches a
+ * pre-feature submission on a date that later gained a tap.
+ */
+export const unattributedPointsForHabitOnDate = (
+  habit: Habit,
+  date: string,
+  today: string = getLocalDateString(),
+  storedByDate?: Map<string, DaySubmissionTotals>,
+): number => {
+  const legacy = pointsForHabitOnDate(habit, date, today, storedByDate);
+  if (!periodHasAttribution(habit, date)) return legacy;
+  if (legacy === 0) return 0;
+  if (habit.scoringType === 'threshold') return 0;
+  const perUnit = legacyPerUnitPoints(habit, date);
+  if (perUnit === 0) return 0;
+  return unattributedUnitsOnDate(habit, date, today) * perUnit;
+};
+
+/** Unattributed points across the whole period containing `date`. */
+export const unattributedPeriodPoints = (
+  habit: Habit,
+  date: string,
+  today: string = getLocalDateString(),
+): number => {
+  const periodStart = habitPeriodStart(habit.period, date);
+  let total = 0;
+  for (const d of new Set(habit.completedDates)) {
+    if (habitPeriodStart(habit.period, d) !== periodStart) continue;
+    total += unattributedPointsForHabitOnDate(habit, d, today);
+  }
+  return total;
+};
+
+// ---------------------------------------------------------------------------
+// The household figure — Σ member awards + the unattributed remainder
+// ---------------------------------------------------------------------------
+
+/**
+ * Signed HOUSEHOLD points one habit contributed on ONE date, under the locked
+ * competition model: every member credited on that date earns a full award at
+ * their OWN streak multiplier, and whatever the legacy scorer counted that
+ * nobody holds is added on top.
+ *
+ * Only members attributed ON `date` are summed — `memberPointsForHabitOnDate`
+ * is zero for anyone else, and a threshold period's award lands on the member's
+ * own first attributed day, so no award is missed and none is counted twice.
+ */
+export const householdPointsForHabitOnDate = (
+  habit: Habit,
+  date: string,
+  today: string = getLocalDateString(),
+  storedByDate?: Map<string, DaySubmissionTotals>,
+): number => {
+  let total = unattributedPointsForHabitOnDate(habit, date, today, storedByDate);
+  for (const memberId of memberIdsOnDate(habit, date)) {
+    total += memberPointsForHabitOnDate(habit, memberId, date, today);
+  }
+  return total;
+};
+
+/**
+ * Signed HOUSEHOLD points a habit contributes across the whole period
+ * containing `date` — `Σ_m memberPeriodPoints(m) + unattributedPeriodPoints`.
+ *
+ * Every pool-writing mutation takes a before/after difference of this, so the
+ * pool delta is by construction whatever the corrective recompute would derive:
+ * no login-time correction jump. Assigned chores do NOT come through here (see
+ * `legacyPeriodPoints`).
+ */
+export const householdPeriodPoints = (
+  habit: Habit,
+  date: string,
+  today: string = getLocalDateString(),
+): number => {
+  let total = unattributedPeriodPoints(habit, date, today);
+  for (const memberId of periodMemberIds(habit, date)) {
+    total += memberPeriodPoints(habit, memberId, date, today);
+  }
+  return total;
+};
+
+/**
+ * The signed pool delta a habit going from `before` to `after` around `date`
+ * should write — the household twin of `memberPeriodPointsDelta`.
+ */
+export const householdPeriodPointsDelta = (
+  before: Habit,
+  after: Habit,
+  date: string,
+  today: string = getLocalDateString(),
+): number =>
+  householdPeriodPoints(after, date, today) - householdPeriodPoints(before, date, today);
 
 /**
  * The signed points delta a member should be credited when a habit goes from
@@ -491,37 +699,186 @@ export const calculateMemberPointsForDateRange = (
 };
 
 // ---------------------------------------------------------------------------
+// Household recompute (the corrective / rollover scorers)
+// ---------------------------------------------------------------------------
+
+/**
+ * Every date inside `[startDate, endDate]` on which `habit` could contribute.
+ *
+ * The union of its completion dates, its ATTRIBUTED dates (a threshold period
+ * below target carries attribution without entering `completedDates`, and its
+ * award lands on the member's first attributed day once the period completes)
+ * and any dates carrying stored submissions (which can outlive a completion).
+ */
+const scoredDatesInRange = (
+  habit: Habit,
+  startDate: string,
+  endDate: string,
+  storedByDate?: Map<string, DaySubmissionTotals>,
+): string[] => {
+  const dates = new Set<string>();
+  for (const d of habit.completedDates) if (d >= startDate && d <= endDate) dates.add(d);
+  for (const d of Object.keys(habit.completedBy ?? {})) {
+    if (d >= startDate && d <= endDate && attributedUnitsOnDate(habit, d) > 0) dates.add(d);
+  }
+  if (storedByDate) {
+    for (const d of storedByDate.keys()) if (d >= startDate && d <= endDate) dates.add(d);
+  }
+  return [...dates];
+};
+
+/**
+ * Household points for ONE date under the competition model — the replacement
+ * for `calculatePointsForDate` on the shared pool.
+ *
+ * Assigned chores are skipped for the same reason `calculatePointsForDate`
+ * skips them by default: their points belong to the assignee's own balance and
+ * counting them here would double-credit.
+ */
+export const calculateHouseholdPointsForDate = (
+  habits: Habit[],
+  date: string,
+  today: string = getLocalDateString(),
+  submissionTotals?: SubmissionTotalsByHabitDate,
+): number => {
+  let total = 0;
+  for (const habit of habits) {
+    if (habit.assignedTo) continue;
+    total += householdPointsForHabitOnDate(habit, date, today, submissionTotals?.get(habit.id));
+  }
+  return total;
+};
+
+/**
+ * Household points across an inclusive date range under the competition model —
+ * the replacement for `calculatePointsForDateRange` on the shared pool.
+ *
+ * Scored one date at a time rather than by the legacy per-ISO-week collapse.
+ * The two agree for un-attributed data (`pointsForHabitOnDate` already spreads a
+ * weekly habit's single award across the week so the per-date figures sum to the
+ * week's total — the invariant `calculatePointsForDateRange`'s own
+ * submission-aware branch relies on), and per-date is the only granularity at
+ * which attribution can be read. Callers pass Monday-anchored `weekStart..today`
+ * windows, so no ISO week is ever clipped.
+ */
+export const calculateHouseholdPointsForDateRange = (
+  habits: Habit[],
+  startDate: string,
+  endDate: string,
+  today: string = getLocalDateString(),
+  submissionTotals?: SubmissionTotalsByHabitDate,
+): number => {
+  let total = 0;
+  for (const habit of habits) {
+    if (habit.assignedTo) continue;
+    const storedByDate = submissionTotals?.get(habit.id);
+    for (const date of scoredDatesInRange(habit, startDate, endDate, storedByDate)) {
+      total += householdPointsForHabitOnDate(habit, date, today, storedByDate);
+    }
+  }
+  return total;
+};
+
+/**
+ * Pure recompute of the corrective household-points sync.
+ *
+ * Derives the canonical daily and weekly totals from actual habit completions —
+ * now as `Σ member awards + unattributed remainder` — then decides the
+ * cumulative total:
+ *   - if every completion falls within the current week (and at least one
+ *     completion exists), the total equals the weekly total;
+ *   - otherwise the total is the larger of the stored total and the weekly
+ *     total, so an existing cumulative total is never clamped downward.
+ *
+ * Lives here rather than in habitLogic.ts because the competition model is
+ * defined by attribution: there is deliberately ONE household sync function, so
+ * no call site can accidentally keep the pre-flip habit-level scorer.
+ *
+ * @param habits - All habits to score
+ * @param currentPoints - The points currently stored on the household doc
+ * @param now - "Now" (injected for deterministic tests)
+ * @param submissionTotals - Optional stored submissions covering `weekStart..today`
+ * @returns The corrected points plus whether they differ from `currentPoints`
+ */
+export const computeHouseholdPointsSync = (
+  habits: Habit[],
+  currentPoints: HouseholdPoints,
+  now: Date,
+  submissionTotals?: SubmissionTotalsByHabitDate,
+): PointsSyncResult => {
+  const today = format(now, 'yyyy-MM-dd');
+  const weekStartStr = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+
+  const correctDaily = calculateHouseholdPointsForDate(habits, today, today, submissionTotals);
+  const correctWeekly = calculateHouseholdPointsForDateRange(
+    habits,
+    weekStartStr,
+    today,
+    today,
+    submissionTotals,
+  );
+
+  // If every completion is within the current week, the cumulative total equals
+  // the weekly total; otherwise keep the stored total (don't clamp it down).
+  const allDatesThisWeek = habits.every(habit =>
+    habit.completedDates.every(date => date >= weekStartStr),
+  );
+  const correctTotal =
+    allDatesThisWeek && habits.some(h => h.completedDates.length > 0)
+      ? correctWeekly
+      : Math.max(currentPoints.total, correctWeekly);
+
+  const points: HouseholdPoints = {
+    daily: correctDaily,
+    weekly: correctWeekly,
+    total: correctTotal,
+  };
+
+  const needsUpdate =
+    currentPoints.daily !== correctDaily ||
+    currentPoints.weekly !== correctWeekly ||
+    currentPoints.total !== correctTotal;
+
+  return { points, needsUpdate };
+};
+
+// ---------------------------------------------------------------------------
 // Household ↔ member decomposition (the grandfathering invariant)
 // ---------------------------------------------------------------------------
 
 /** How one date's household points split across members plus the legacy remainder. */
 export interface PointsDecomposition {
-  /** The household figure — computed by the UNCHANGED household scorer. */
+  /** The household figure: `Σ byMember + unattributed`, by construction. */
   household: number;
   /** Per-member attributed points, keyed by member uid. */
   byMember: Record<string, number>;
   /**
-   * The grandfathering remainder: `household − Σ byMember`. Pre-feature
-   * completions land here and are attributed to nobody. It can go negative once
-   * several members are credited on the same threshold day (each earns a full
-   * award while the household formula still scores one) — that is the intended
-   * signal, not a bug.
+   * The grandfathering remainder — what the LEGACY habit-level scorer counted
+   * that no member holds. Pre-feature completions land here and are attributed
+   * to nobody; on the day this feature shipped the whole household figure IS the
+   * remainder and every member score is 0.
    */
   unattributed: number;
+  /**
+   * What the pre-competition household scorer would have produced for this date.
+   * Kept for parity assertions and diagnostics — it equals `household` for
+   * fully-grandfathered data and diverges the moment attribution exists (which
+   * is the visible consequence of the flip, not a bug).
+   */
+  legacy: number;
 }
 
 /**
  * Decompose one date's household points into per-member shares plus the
  * unattributed remainder.
  *
- * `household` is produced by `calculatePointsForDate` — byte-for-byte the same
- * call the app already made — so **adding attribution data can never move a
- * household number**. That is the stage-1 invisibility guarantee, and it is what
- * habitAttribution.test.ts pins.
+ * `household = Σ byMember + unattributed` holds whenever `memberIds` covers
+ * every member with attribution on `date` — pass the full roster.
  *
- * NOTE: `today` parameterises the MEMBER half only; `calculatePointsForDate`
- * reads the local date itself (it takes no `today`). In the app the two are the
- * same value; in a test, inject a `today` that matches the date under test.
+ * NOTE: `today` parameterises everything except `legacy`;
+ * `calculatePointsForDate` reads the local date itself (it takes no `today`).
+ * In the app the two are the same value; in a test, inject a `today` that
+ * matches the date under test.
  */
 export const decomposeDayPoints = (
   habits: Habit[],
@@ -530,15 +887,26 @@ export const decomposeDayPoints = (
   submissionTotals?: SubmissionTotalsByHabitDate,
   today: string = getLocalDateString(),
 ): PointsDecomposition => {
-  const household = calculatePointsForDate(habits, date, undefined, submissionTotals);
   const byMember: Record<string, number> = {};
-  let attributed = 0;
   for (const memberId of memberIds) {
-    const points = calculateMemberPointsForDate(habits, memberId, date, today);
-    byMember[memberId] = points;
-    attributed += points;
+    byMember[memberId] = calculateMemberPointsForDate(habits, memberId, date, today);
   }
-  return { household, byMember, unattributed: household - attributed };
+  let unattributed = 0;
+  for (const habit of habits) {
+    if (habit.assignedTo) continue;
+    unattributed += unattributedPointsForHabitOnDate(
+      habit,
+      date,
+      today,
+      submissionTotals?.get(habit.id),
+    );
+  }
+  return {
+    household: calculateHouseholdPointsForDate(habits, date, today, submissionTotals),
+    byMember,
+    unattributed,
+    legacy: calculatePointsForDate(habits, date, undefined, submissionTotals),
+  };
 };
 
 // ---------------------------------------------------------------------------
@@ -639,39 +1007,71 @@ export const computeMemberPointsSync = (
 // Reversal helper (reset / clear-day paths)
 // ---------------------------------------------------------------------------
 
+/** The daily/weekly/total triple a points write moves. */
+export interface PointsBuckets {
+  daily: number;
+  weekly: number;
+  total: number;
+}
+
 /** Signed points buckets to APPLY (already negated) plus the paths to clear. */
 export interface AttributionReversal {
   /** memberUid → the deltas to apply to that member's points. */
-  perMember: Map<string, { daily: number; weekly: number; total: number }>;
+  perMember: Map<string, PointsBuckets>;
+  /**
+   * The POOL debit for the same clear: `Σ reversed member awards + the
+   * unattributed remainder those dates carried`, bucket-gated per date.
+   *
+   * Covers EVERY date passed in, not just the attributed ones — a
+   * fully-grandfathered date still has to leave the household figure, and it
+   * leaves at exactly the legacy points the recompute credited it.
+   */
+  household: PointsBuckets;
   /** Dot paths to `deleteField()` — one per cleared date. */
   clearPaths: string[];
 }
 
 /**
- * Reverse ALL attribution on the given dates: what each credited member loses,
- * bucket-gated by the DATE being cleared (total always, weekly only inside the
- * current Monday-anchored week, daily only for today) — the same gating
- * `deleteHabitSubmission` / `resetHabitDay` already use for the household.
+ * Reverse ALL attribution on the given dates: what each credited member loses
+ * and what the pool loses, bucket-gated by the DATE being cleared (total always,
+ * weekly only inside the current Monday-anchored week, daily only for today) —
+ * the same gating `deleteHabitSubmission` / `resetHabitDay` already use.
+ *
+ * The caller strips the same dates from `completedDates` in the SAME batch, so
+ * each date's whole household contribution — member awards and remainder alike —
+ * goes away: `household` is the negated `householdPointsForHabitOnDate` of every
+ * date. Callers that must preserve a legacy figure exactly (an untouched,
+ * fully-grandfathered reset) check `clearPaths.length === 0` and keep their own.
  */
 export const attributionReversalForDates = (
   habit: Habit,
   dates: string[],
   today: string = getLocalDateString(),
 ): AttributionReversal => {
-  const perMember = new Map<string, { daily: number; weekly: number; total: number }>();
+  const perMember = new Map<string, PointsBuckets>();
   const clearPaths: string[] = [];
-  if (dates.length === 0 || !habit.completedBy) return { perMember, clearPaths };
+  const household: PointsBuckets = { daily: 0, weekly: 0, total: 0 };
+  // Deduplicated (order-preserving): a repeated date would otherwise debit the
+  // pool twice for one clear.
+  const uniqueDates = [...new Set(dates)];
+  if (uniqueDates.length === 0) return { perMember, household, clearPaths };
 
   const weekStart = format(startOfWeek(parseISO(today), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-  const clearable = dates.filter(date => habit.completedBy?.[date] !== undefined);
-  if (clearable.length === 0) return { perMember, clearPaths };
 
   // Clear one date at a time and score the delta each removal actually causes,
   // so every reversal is bucket-gated by ITS OWN date. (Scoring all dates at
   // once would have to pick a single date to gate the whole reversal by, which
   // is wrong the moment a cleared range straddles today or a week boundary.)
   let current = habit;
-  for (const date of clearable) {
+  for (const date of uniqueDates) {
+    const earned = householdPointsForHabitOnDate(current, date, today);
+    if (earned !== 0) {
+      household.total -= earned;
+      if (date >= weekStart && date <= today) household.weekly -= earned;
+      if (date === today) household.daily -= earned;
+    }
+
+    if (current.completedBy?.[date] === undefined) continue;
     clearPaths.push(completedByDatePath(date));
     const next = withDatesUnattributed(current, [date]);
     for (const memberId of memberIdsOnDate(current, date)) {
@@ -687,5 +1087,5 @@ export const attributionReversalForDates = (
     current = next;
   }
 
-  return { perMember, clearPaths };
+  return { perMember, household, clearPaths };
 };
