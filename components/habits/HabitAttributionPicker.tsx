@@ -1,7 +1,7 @@
 import React from 'react';
 import { Popover } from '@/components/ui/Popover';
 import MemberAvatar from '@/components/ui/MemberAvatar';
-import type { RowMember } from '@/utils/habitRowAttribution';
+import type { AttributionPickerMember, RowMember } from '@/utils/habitRowAttribution';
 
 /**
  * The stateful "who did this?" picker, anchored on a habit row's toggle.
@@ -13,7 +13,8 @@ import type { RowMember } from '@/utils/habitRowAttribution';
  * menu in the app uses.
  *
  * It is STATEFUL, not a fire-and-forget action list: a member already credited
- * today renders checked with a "tap to undo" hint, and tapping them un-credits
+ * on the date being edited renders checked with a "tap to undo" hint, and
+ * tapping them un-credits
  * (reversing exactly the points that completion earned). That is why the rows
  * are `menuitemcheckbox` — their checked state is the day's attribution.
  *
@@ -22,12 +23,10 @@ import type { RowMember } from '@/utils/habitRowAttribution';
  * question, not a rewrite.
  */
 
-export interface AttributionPickerMember extends RowMember {
-  /** Credited at least once TODAY — drives the checkmark and the undo path. */
-  credited: boolean;
-  /** The signed-in member, labelled "Me". */
-  isSelf: boolean;
-}
+// The row view model lives with the other row derivations in
+// `utils/habitRowAttribution.ts` (this file is presentational). Re-exported so
+// existing importers keep reaching it here.
+export type { AttributionPickerMember };
 
 interface HabitAttributionPickerProps {
   isOpen: boolean;

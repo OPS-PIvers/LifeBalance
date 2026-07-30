@@ -385,7 +385,18 @@ export interface HouseholdContextType {
   updateHabitCategories: (categories: string[]) => Promise<void>;
 
   // Habit Submission Actions
-  addHabitSubmission: (habitId: string, count: number, timestamp?: string, note?: string, mood?: HabitSubmission['mood']) => Promise<void>;
+  addHabitSubmission: (
+    habitId: string,
+    count: number,
+    timestamp?: string,
+    note?: string,
+    mood?: HabitSubmission['mood'],
+    /** Member uids this log is FOR. One submission doc of `count` units per
+     *  uid, so a two-person log adds `count × uids.length` units. Omit for the
+     *  legacy behaviour: a single doc attributed to the assignee, else the
+     *  signed-in member. */
+    attributeTo?: readonly string[],
+  ) => Promise<void>;
   updateHabitSubmission: (habitId: string, submissionId: string, updates: Partial<HabitSubmission>) => Promise<void>;
   deleteHabitSubmission: (habitId: string, submissionId: string) => Promise<void>;
   getHabitSubmissions: (habitId: string, startDate?: string, endDate?: string) => Promise<HabitSubmission[]>;

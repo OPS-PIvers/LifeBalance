@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { format, subDays } from 'date-fns';
 import PastDayLogModal from './PastDayLogModal';
-import { Habit, HabitSubmission } from '@/types/schema';
+import { Habit, HabitSubmission, HouseholdMember } from '@/types/schema';
 
 // Framer-motion's AnimatePresence/portal machinery isn't needed to test the
 // modal's logic — Drawer renders through a portal which testing-library sees.
@@ -12,12 +12,29 @@ vi.mock('@/services/analytics', () => ({ track: vi.fn() }));
 const mockAddHabitSubmission = vi.fn().mockResolvedValue(undefined);
 const mockResetHabitDay = vi.fn().mockResolvedValue(undefined);
 const mockGetHabitSubmissions = vi.fn(async (): Promise<HabitSubmission[]> => []);
+const mockDeleteHabitSubmission = vi.fn().mockResolvedValue(undefined);
+const mockUncreditHabitCompletion = vi.fn().mockResolvedValue(undefined);
+// `useHouseholdCore` is aliased to the same fn below, so the roster the
+// attribution picker reads lives here too.
 const mockContextValue = {
   habits: [] as Habit[],
+  members: [] as HouseholdMember[],
+  currentUser: undefined as HouseholdMember | undefined,
   addHabitSubmission: mockAddHabitSubmission,
   resetHabitDay: mockResetHabitDay,
   getHabitSubmissions: mockGetHabitSubmissions,
+  deleteHabitSubmission: mockDeleteHabitSubmission,
+  uncreditHabitCompletion: mockUncreditHabitCompletion,
 };
+
+const adult = (uid: string, displayName: string): HouseholdMember => ({
+  uid,
+  displayName,
+  email: `${uid}@example.com`,
+  role: 'admin',
+  points: { daily: 0, weekly: 0, total: 0 },
+  joinedAt: new Date().toISOString(),
+} as HouseholdMember);
 
 vi.mock('@/contexts/FirebaseHouseholdContext', () => {
   const value = vi.fn(() => mockContextValue);
@@ -56,6 +73,8 @@ describe('PastDayLogModal', () => {
   beforeEach(() => {
     yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
     mockContextValue.habits = [baseHabit];
+    mockContextValue.members = [];
+    mockContextValue.currentUser = undefined;
     mockAddHabitSubmission.mockClear();
     mockResetHabitDay.mockClear();
     mockGetHabitSubmissions.mockClear();
@@ -81,7 +100,7 @@ describe('PastDayLogModal', () => {
     await user.click(screen.getByRole('button', { name: /Log Read 30 mins/ }));
 
     expect(mockAddHabitSubmission).toHaveBeenCalledTimes(1);
-    expect(mockAddHabitSubmission).toHaveBeenCalledWith('habit-1', 1, `${yesterday}T12:00:00`);
+    expect(mockAddHabitSubmission).toHaveBeenCalledWith('habit-1', 1, `${yesterday}T12:00:00`, undefined, undefined, undefined);
   });
 
   it('logs one count per tap for incremental habits', async () => {
@@ -91,7 +110,7 @@ describe('PastDayLogModal', () => {
 
     await user.click(screen.getByRole('button', { name: /Log Read 30 mins/ }));
 
-    expect(mockAddHabitSubmission).toHaveBeenCalledWith('habit-1', 1, `${yesterday}T12:00:00`);
+    expect(mockAddHabitSubmission).toHaveBeenCalledWith('habit-1', 1, `${yesterday}T12:00:00`, undefined, undefined, undefined);
   });
 
   it('shows the day count and a clear control for a day already logged', () => {
@@ -168,5 +187,22 @@ describe('PastDayLogModal', () => {
     render(<PastDayLogModal isOpen={true} onClose={() => {}} />);
     expect(screen.getByText('Read 30 mins')).toBeInTheDocument();
     expect(screen.queryByText('Feed the dog')).not.toBeInTheDocument();
+  });
+
+  it('threads the roster into the day editor so the "who did this?" control renders', async () => {
+    // Proves this host wires `useHouseholdCore` independently of the History
+    // tab: with two adults the row carries the picker affordance, and the tap
+    // then credits the signed-in member explicitly.
+    const user = userEvent.setup();
+    mockContextValue.members = [adult('user-1', 'Paul'), adult('jen-uid', 'Jen')];
+    mockContextValue.currentUser = adult('user-1', 'Paul');
+    render(<PastDayLogModal isOpen={true} onClose={() => {}} />);
+
+    expect(screen.getByRole('button', { name: /Who did Read 30 mins on/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^Log Read 30 mins for/ }));
+    expect(mockAddHabitSubmission).toHaveBeenCalledWith(
+      'habit-1', 1, `${yesterday}T12:00:00`, undefined, undefined, ['user-1'],
+    );
   });
 });

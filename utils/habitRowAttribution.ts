@@ -12,6 +12,7 @@
 import type { Habit, HouseholdMember } from '@/types/schema';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import {
+  memberCompletionCount,
   memberUnitsForPeriod,
   streakForMember,
 } from '@/utils/habitAttribution';
@@ -22,6 +23,20 @@ import {
   type ColorableMember,
 } from '@/utils/memberColors';
 
+/**
+ * How long a row must be held before the "who did this?" picker opens.
+ * Shared by every surface that carries the gesture (the Track tab's HabitCard,
+ * the day editor's history rows) so one hold feels the same everywhere.
+ */
+export const LONG_PRESS_MS = 500;
+/**
+ * Movement (px) that turns a press into a scroll and cancels the long-press.
+ * 16px, not 10: a finger wanders during a deliberate half-second hold, and a
+ * hold that silently fails is worse than a scroll that also opened the picker
+ * (a real scroll leaves this far behind within the same 500ms).
+ */
+export const LONG_PRESS_SLOP = 16;
+
 /** One member as a habit row needs them. */
 export interface RowMember {
   uid: string;
@@ -30,6 +45,23 @@ export interface RowMember {
   color: string;
   /** Google/Firebase profile photo, when the member has one. */
   photoURL?: string;
+}
+
+/**
+ * One row of the "who did this?" picker. A view model, so it lives here with
+ * the other row derivations rather than in the presentational component that
+ * renders it (which re-exports the type for its existing importers).
+ */
+export interface AttributionPickerMember extends RowMember {
+  /**
+   * Credited on the date this picker is editing — which is TODAY (period-scoped,
+   * see `memberUnitsForPeriod`) for the habit row, and the selected day
+   * (day-scoped, see `dayPickerMembers`) for the history day editor. Drives the
+   * checkmark and the undo path.
+   */
+  credited: boolean;
+  /** The signed-in member, labelled "Me". */
+  isSelf: boolean;
 }
 
 /** Everything a habit row needs to render + edit attribution. */
@@ -169,3 +201,33 @@ export const rowCompletionSegments = (
     };
   });
 };
+
+/**
+ * The picker's member rows for ONE DATE (the day editor's scope).
+ *
+ * DAY-scoped, not period-scoped — deliberately unlike HabitCard, which uses
+ * `memberUnitsForPeriod(habit, today)`. The day editor's own badge is
+ * `countForHabitOnDate(habit, selectedDate)`, and its undo target is
+ * `selectedDate`; deriving `credited` from anything wider would let the sheet
+ * show a checkmark for a unit that lives on a different day, and
+ * `uncreditHabitCompletion` NO-OPS when the member holds nothing on the date it
+ * is given — that dead tap is impossible when the checkmark and the undo target
+ * are the same date by construction.
+ *
+ * DOCUMENTED DEVIATION: on a WEEKLY habit a member already holding Monday can
+ * be credited again on Wednesday from the day editor, where the Habits page
+ * would show them checked and refuse. That is safe — a threshold period awards
+ * a member only on their FIRST attributed day, so the second unit earns zero
+ * extra points, and on an incremental habit a second unit on a different day is
+ * a genuine second action.
+ */
+export const dayPickerMembers = (
+  habit: Habit,
+  context: HabitRowMemberContext,
+  date: string,
+): AttributionPickerMember[] =>
+  context.adults.map(member => ({
+    ...member,
+    credited: memberCompletionCount(habit, member.uid, date) > 0,
+    isSelf: member.uid === context.currentUserId,
+  }));

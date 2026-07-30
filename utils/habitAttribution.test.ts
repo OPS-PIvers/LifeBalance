@@ -30,6 +30,7 @@ import {
   memberPeriodPointsDelta,
   memberPointsForHabitOnDate,
   memberUnitsForPeriod,
+  periodPointsMove,
   prospectiveMultiplierForMember,
   resolveReversalSources,
   streakEndingOnForMember,
@@ -1477,5 +1478,150 @@ describe('resolveReversalSources', () => {
     expect(resolveReversalSources(h, PAUL, d(0), 0)).toEqual([]);
     expect(resolveReversalSources(h, PAUL, d(0), -1)).toEqual([]);
     expect(resolveReversalSources(h, PAUL, d(1), 1)).toEqual([]);
+  });
+});
+
+describe('habitAttribution — the two-member PAST day the day-editor picker writes', () => {
+  // "Both of us" on a past incremental day writes TWO submission docs of one
+  // unit each, so the day carries `{ count: 2, points: 20 }` in submission
+  // totals AND two attributed units. Pinned as EQUALITIES so a future change to
+  // either scorer trips this rather than drifting silently.
+  const D = d(-4); // outside the fixture week, so no weekly bucket is involved
+  const TODAY = d(2);
+
+  const twoMemberDay = habit({
+    count: 0,
+    totalCount: 2,
+    completedDates: [D],
+    completedBy: { [D]: { [PAUL]: 1, [JEN]: 1 } },
+  });
+  const stored = new Map([[twoMemberDay.id, new Map([[D, { count: 2, points: 20 }]])]]);
+  const storedForHabit = stored.get(twoMemberDay.id);
+
+  it('agrees across all three scorers, with a zero grandfathering remainder', () => {
+    // Each member earns a full award at their own 1.0x streak.
+    expect(memberPointsForHabitOnDate(twoMemberDay, PAUL, D, TODAY)).toBe(10);
+    expect(memberPointsForHabitOnDate(twoMemberDay, JEN, D, TODAY)).toBe(10);
+
+    // The legacy per-day figure reconciles the two stored docs to +20…
+    expect(pointsForHabitOnDate(twoMemberDay, D, TODAY, storedForHabit)).toBe(20);
+    // …and the two member awards ABSORB the legacy unit rather than adding to
+    // it (a past day counts as one legacy unit; 2 attributed units floor it).
+    expect(unattributedPointsForHabitOnDate(twoMemberDay, D, TODAY, storedForHabit)).toBe(0);
+
+    // household = Σ members + remainder = the calendar cell's own figure.
+    expect(householdPointsForHabitOnDate(twoMemberDay, D, TODAY, storedForHabit)).toBe(20);
+    expect(householdPointsForHabitOnDate(twoMemberDay, D, TODAY, storedForHabit)).toBe(
+      pointsForHabitOnDate(twoMemberDay, D, TODAY, storedForHabit),
+    );
+  });
+
+  it('is exactly the pool delta the write emitted — no login-time correction jump', () => {
+    const before = habit({ count: 0, totalCount: 0, completedDates: [] });
+    expect(householdPeriodPointsDelta(before, twoMemberDay, D, TODAY)).toBe(20);
+  });
+});
+
+describe('habitAttribution — periodPointsMove (per-date gating, one decomposition)', () => {
+  // Wednesday of the fixture week is "today"; Monday is an earlier day of the
+  // SAME live week — the only window where the awarding day and a caller's
+  // triggering day disagree on `daily` while both still move `weekly`.
+  const TODAY = d(2);
+  /**
+   * Weekly threshold, target 2. Paul banked Monday (period 1/2 — nothing
+   * awarded yet); Jen's Wednesday unit crosses the target, which flips PAUL's
+   * award from 0 to a full one as a SIDE EFFECT on HIS OWN Monday.
+   */
+  const before = habit({
+    period: 'weekly',
+    scoringType: 'threshold',
+    targetCount: 2,
+    count: 1,
+    totalCount: 1,
+    completedDates: [],
+    completedBy: { [d(0)]: { [PAUL]: 1 } },
+  });
+  const after: Habit = {
+    ...withAttributionDelta(before, TODAY, JEN, 1),
+    count: 2,
+    totalCount: 2,
+    completedDates: [TODAY],
+  };
+
+  it('gates each award by the date it MOVED on, not by the triggering date', () => {
+    const move = periodPointsMove(before, after, TODAY, TODAY);
+
+    // Paul's award lands on Monday: lifetime + this week, never today's daily.
+    expect(move.perMember.get(PAUL)).toEqual({ total: 10, weekly: 10, daily: 0 });
+    // Jen acted today, so all three of her buckets move.
+    expect(move.perMember.get(JEN)).toEqual({ total: 10, weekly: 10, daily: 10 });
+  });
+
+  it('gates the POOL identically — household = Σ members, bucket for bucket', () => {
+    const move = periodPointsMove(before, after, TODAY, TODAY);
+    const summed = { total: 0, weekly: 0, daily: 0 };
+    for (const b of move.perMember.values()) {
+      summed.total += b.total;
+      summed.weekly += b.weekly;
+      summed.daily += b.daily;
+    }
+    // The week is fully attributed, so the grandfathering remainder is 0 and the
+    // pool IS the sum of the member awards — in every bucket. Deriving the two
+    // sides separately, or gating one by the caller's date, is what made
+    // `points.total` drift permanently.
+    expect(move.household).toEqual(summed);
+    expect(move.household).toEqual({ total: 20, weekly: 20, daily: 10 });
+  });
+
+  it('agrees with the recompute: daily is what calculateHouseholdPointsForDate moves by', () => {
+    const move = periodPointsMove(before, after, TODAY, TODAY);
+    expect(move.household.daily).toBe(
+      calculateHouseholdPointsForDate([after], TODAY, TODAY) -
+        calculateHouseholdPointsForDate([before], TODAY, TODAY),
+    );
+    expect(move.perMember.get(PAUL)!.daily).toBe(
+      calculateMemberPointsForDate([after], PAUL, TODAY, TODAY) -
+        calculateMemberPointsForDate([before], PAUL, TODAY, TODAY),
+    );
+  });
+
+  it('leaves the period TOTALS exactly as the period-level scorers compute them', () => {
+    const move = periodPointsMove(before, after, TODAY, TODAY);
+    // Only the daily/weekly gating changed; the lifetime figures are unchanged.
+    expect(move.household.total).toBe(householdPeriodPointsDelta(before, after, TODAY, TODAY));
+    for (const uid of [PAUL, JEN]) {
+      expect(move.perMember.get(uid)!.total).toBe(
+        memberPeriodPointsDelta(before, after, uid, TODAY, TODAY),
+      );
+    }
+  });
+
+  it('omits a member whose award did not move (no manufactured writes)', () => {
+    // An ordinary incremental day: Jen already holds a unit, but an incremental
+    // award depends only on the member's OWN units, so her delta is 0.
+    const base = habit({
+      completedDates: [TODAY],
+      count: 1,
+      totalCount: 1,
+      completedBy: { [TODAY]: { [JEN]: 1 } },
+    });
+    const next: Habit = {
+      ...withAttributionDelta(base, TODAY, PAUL, 1),
+      count: 2,
+      totalCount: 2,
+    };
+    const move = periodPointsMove(base, next, TODAY, TODAY);
+    expect([...move.perMember.keys()]).toEqual([PAUL]);
+    expect(move.perMember.get(PAUL)).toEqual({ total: 10, weekly: 10, daily: 10 });
+  });
+
+  it('keeps a CLOSED week on `total` alone, for the pool and every member', () => {
+    // Both awards sit in the week before the fixture's "today", which no
+    // recompute revisits — precisely why a missed write there is permanent.
+    const laterToday = d(9); // the following Wednesday
+    const move = periodPointsMove(before, after, TODAY, laterToday);
+    expect(move.household).toEqual({ total: 20, weekly: 0, daily: 0 });
+    expect(move.perMember.get(PAUL)).toEqual({ total: 10, weekly: 0, daily: 0 });
+    expect(move.perMember.get(JEN)).toEqual({ total: 10, weekly: 0, daily: 0 });
   });
 });

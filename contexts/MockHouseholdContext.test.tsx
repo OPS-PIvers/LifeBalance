@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import React from 'react';
 import { renderHook, act } from '@testing-library/react';
-import { subDays } from 'date-fns';
+import { addDays, startOfWeek, subDays } from 'date-fns';
 import { MockHouseholdProvider } from './MockHouseholdContext';
 import { useFinance, useGamification, useHousehold } from './FirebaseHouseholdContext';
 import { calculateSafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
@@ -1091,5 +1091,74 @@ describe('MockHouseholdContext household points = Σ of adult members (stage 1.5
     // The household headline (what ScoreboardWidget renders as "N pts
     // together") must track Jordan's own figure 1:1, not sit frozen.
     expect(result.current.weeklyPoints).toBe(weeklyBefore + 40);
+  });
+});
+
+// 🛡️ Test Mode is where CLAUDE.md tells agents (and the owner) to verify a
+// feature in a browser, so the mock's `addHabitSubmission` must decide period
+// completion the way production's `priorPeriodCount` does — across the WHOLE
+// period, not just the submission's own day. A DAY-scoped check never completed
+// a multi-day threshold period at all, so replaying the two-step past-day flow
+// scored nobody where production scores both members.
+describe('MockHouseholdContext addHabitSubmission (period-scoped threshold completion)', () => {
+  const captureHousehold = () => renderHook(() => useHousehold(), { wrapper });
+  const pointsOf = (result: ReturnType<typeof captureHousehold>['result'], uid: string) =>
+    result.current.members.find((m) => m.uid === uid)!.points;
+
+  const PAUL = 'test-user-id';
+  const JORDAN = 'test-partner-id';
+  /** Monday/Wednesday of the LAST fully-closed week — never an offset from a live weekday. */
+  const MON = getLocalDateString(startOfWeek(subDays(new Date(), 7), { weekStartsOn: 1 }));
+  const WED = getLocalDateString(addDays(startOfWeek(subDays(new Date(), 7), { weekStartsOn: 1 }), 2));
+
+  const weeklyPairHabit = {
+    title: 'Long run', category: 'Fitness', type: 'positive',
+    basePoints: 10, scoringType: 'threshold', period: 'weekly', targetCount: 2,
+    totalCount: 0, count: 0, completedDates: [], streakDays: 0,
+    createdBy: PAUL, lastUpdated: new Date().toISOString(),
+  } as unknown as Omit<Habit, 'id'>;
+
+  it('completes the week on the SECOND day and pays both credited members', async () => {
+    const { result } = captureHousehold();
+
+    let habitId = '';
+    await act(async () => { habitId = await result.current.addHabit(weeklyPairHabit as Habit); });
+
+    const paulBefore = { ...pointsOf(result, PAUL) };
+    const jordanBefore = { ...pointsOf(result, JORDAN) };
+    const poolBefore = result.current.totalPoints;
+
+    // Step 1: Paul's Monday → 1 of 2. Nothing completes, nobody scores.
+    await act(async () => {
+      await result.current.addHabitSubmission(habitId, 1, `${MON}T12:00:00`, undefined, undefined, [PAUL]);
+    });
+    expect(result.current.habits.find((h) => h.id === habitId)!.completedDates).not.toContain(MON);
+    expect(pointsOf(result, PAUL).total).toBe(paulBefore.total);
+    expect(result.current.totalPoints).toBe(poolBefore);
+
+    // Step 2: Jordan's Wednesday → the WEEK reaches 2 of 2 and completes. The
+    // day-scoped check saw only Wednesday's single unit and never got here.
+    await act(async () => {
+      await result.current.addHabitSubmission(habitId, 1, `${WED}T12:00:00`, undefined, undefined, [JORDAN]);
+    });
+    expect(result.current.habits.find((h) => h.id === habitId)!.completedDates).toContain(WED);
+
+    // Both awards reach the pool — Paul's Monday one included, even though this
+    // call only named Jordan. Paying only the named member is the F1 bug.
+    const poolDelta = result.current.totalPoints - poolBefore;
+    expect(poolDelta).toBe(20);
+
+    const paulDelta = pointsOf(result, PAUL).total - paulBefore.total;
+    const jordanDelta = pointsOf(result, JORDAN).total - jordanBefore.total;
+    expect(jordanDelta).toBe(10);
+    // 🛡️ Paul is MOCK_USER_UID, and `creditHouseholdPool` deliberately credits
+    // the test user's own member figure alongside the pool (a long-standing mock
+    // conflation, documented on that helper). So his member total moves by the
+    // POOL delta plus his own award — that +10 award is what this test is about.
+    expect(paulDelta).toBe(poolDelta + 10);
+
+    // A closed week: only the lifetime counter moves.
+    expect(pointsOf(result, JORDAN).weekly).toBe(jordanBefore.weekly);
+    expect(pointsOf(result, JORDAN).daily).toBe(jordanBefore.daily);
   });
 });
