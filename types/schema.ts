@@ -719,6 +719,13 @@ export const DEFAULT_LOCATION_RADIUS_METERS = 150;
  */
 export type HabitCompletedBy = Record<string, Record<string, number>>;
 
+/**
+ * Per-member freeze attribution: date (yyyy-MM-dd) → the member uids whose own
+ * streak chain that date's freeze bridges. Only written when the household runs
+ * `freezeMode: 'per_member'` — see `Habit.frozenDatesBy`.
+ */
+export type HabitFrozenDatesBy = Record<string, string[]>;
+
 export interface Habit {
   id: string;
   title: string;
@@ -782,6 +789,21 @@ export interface Habit {
   // only by the midnight/login auto-apply path. Mirrored in
   // functions/src/quickAdd/habitProcessor.ts.
   frozenDates?: string[];
+
+  // Per-member habit points (stage 6, `Household.freezeMode === 'per_member'`):
+  // WHICH MEMBERS a freeze token was spent for, per date —
+  // `frozenDatesBy[yyyy-MM-dd] = [uid, …]`. A uid listed here bridges ONLY that
+  // member's own streak chain; `frozenDates` above stays the household-wide
+  // bridge (it bridges everyone, which is exactly what the 'shared' /
+  // 'freeze_both' modes and ALL legacy data want).
+  //
+  // 🛡️ WRITE DISCIPLINE — identical to `completedBy`: only ever written via a
+  // dot-path `arrayUnion()` at `frozenDatesBy.<date>` so a device holding a
+  // stale offline cache can never wipe another date's (or another member's)
+  // freeze. NEVER a whole-map write. Absent on every habit until an admin picks
+  // the per-member freeze mode, and inert when absent — see
+  // utils/habitAttribution.ts `memberFrozenDates`.
+  frozenDatesBy?: HabitFrozenDatesBy;
 
   // F-HABITS-01 (habit pause / vacation mode): a planned break end date
   // (YYYY-MM-DD, local). While `pausedUntil >= today` the habit is excluded from
@@ -1011,6 +1033,33 @@ export interface FreezeBank {
   history: FreezeBankHistoryEntry[]; // Audit trail
 }
 
+/**
+ * Per-member habit points (stage 6) — how a household spends freeze tokens.
+ * ABSENT means `'shared'`, which is byte-for-byte the pre-setting behaviour, so
+ * an untouched household is unaffected. See utils/freezeSettings.ts (the single
+ * source of truth for resolution + copy).
+ *
+ * - `'shared'`      — one household bank; a freeze bridges EVERY member's chain.
+ * - `'freeze_both'` — the same mechanics, pinned deliberately rather than by
+ *                     default, so "one token covers us both" is a stated choice.
+ * - `'per_member'`  — each adult holds their own bank (`Household
+ *                     .freezeBanksByMember`) and their own frozen dates
+ *                     (`Habit.frozenDatesBy`); a freeze bridges only its owner.
+ */
+export type FreezeMode = 'shared' | 'freeze_both' | 'per_member';
+
+/**
+ * Per-member habit points (stage 6) — how the weekly ceremony frames the week.
+ * ABSENT means `'household_first'` (the Ivers default). Stage 5 (the ceremony)
+ * is the only consumer; this stage ships the field, the resolution helper and
+ * the admin control so the setting exists before the surface that reads it.
+ *
+ * - `'podium'`          — lead with the head-to-head standings.
+ * - `'household_first'` — lead with the together-total, standings underneath.
+ * - `'adaptive'`        — pick per week from how close the scores were.
+ */
+export type CeremonyTone = 'podium' | 'household_first' | 'adaptive';
+
 export interface MealIngredient {
   name: string;
   quantity?: string; // Amount needed
@@ -1125,6 +1174,21 @@ export interface Household {
   lastDailyPointsReset?: string; // YYYY-MM-DD format
   lastWeeklyPointsReset?: string; // YYYY-MM-DD format
   freezeBank: FreezeBank | { current: number; accrued: number; lastMonth: string }; // Support both old and new format
+
+  // Per-member habit points (stage 6) — household admin settings. BOTH are
+  // absent on every existing household and absent means "exactly what happens
+  // today" (see utils/freezeSettings.ts), so this stage is provably inert until
+  // an admin picks a mode in Settings → Habits.
+  freezeMode?: FreezeMode;
+  ceremonyTone?: CeremonyTone;
+
+  // Per-member freeze banks, keyed by member uid. Only read/written while
+  // `freezeMode === 'per_member'`; the shared `freezeBank` above is untouched by
+  // that mode so flipping back restores the old behaviour with the old balance.
+  // 🛡️ Written ONLY via dot paths under `freezeBanksByMember.<uid>` (tokens
+  // absolute, history via arrayUnion) so one member's spend can never clobber
+  // another's — see utils/freezeSettings.ts `memberFreezeBankPatch`.
+  freezeBanksByMember?: Record<string, FreezeBank>;
   accounts: Account[];
   rewardsInventory: RewardItem[];
   coreTemplates: {

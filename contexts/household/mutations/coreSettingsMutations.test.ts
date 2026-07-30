@@ -104,6 +104,32 @@ describe('makeHouseholdSettingsMutations — household settings single-doc write
     expect(capturedUpdates[0]?.data).toEqual({ kidModePinHash: DELETE_FIELD_SENTINEL });
   });
 
+  it('setFreezeMode writes each of the three modes to the household doc (stage 6)', async () => {
+    const { setFreezeMode } = makeHouseholdSettingsMutations({ db, householdId: 'h1' });
+    for (const mode of ['shared', 'freeze_both', 'per_member'] as const) {
+      capturedUpdates = [];
+      await setFreezeMode(mode);
+      expect(capturedUpdates[0]?.ref.__path).toBe('households/h1');
+      expect(capturedUpdates[0]?.data).toEqual({ freezeMode: mode });
+    }
+  });
+
+  it('setCeremonyTone writes each of the three tones to the household doc (stage 6)', async () => {
+    const { setCeremonyTone } = makeHouseholdSettingsMutations({ db, householdId: 'h1' });
+    for (const tone of ['household_first', 'podium', 'adaptive'] as const) {
+      capturedUpdates = [];
+      await setCeremonyTone(tone);
+      expect(capturedUpdates[0]?.data).toEqual({ ceremonyTone: tone });
+    }
+  });
+
+  it('both stage-6 setters are no-ops without a household id', async () => {
+    const { setFreezeMode, setCeremonyTone } = makeHouseholdSettingsMutations({ db, householdId: null });
+    await setFreezeMode('per_member');
+    await setCeremonyTone('podium');
+    expect(capturedUpdates).toHaveLength(0);
+  });
+
   it('completeOnboarding and setHouseholdCurrency write their fields', async () => {
     const { completeOnboarding, setHouseholdCurrency } = makeHouseholdSettingsMutations({ db, householdId: 'h1' });
     await completeOnboarding();

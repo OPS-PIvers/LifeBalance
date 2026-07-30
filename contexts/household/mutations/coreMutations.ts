@@ -15,7 +15,7 @@ import toast from 'react-hot-toast';
 import { describeError } from '@/utils/errorMessages';
 import { Sparkles } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
-import { CaptureReviewMode, CaptureType, DietaryProfile, Habit, HabitSubmission, Insight, ModuleKey, Transaction } from '@/types/schema';
+import { CaptureReviewMode, CaptureType, CeremonyTone, DietaryProfile, FreezeMode, Habit, HabitSubmission, Insight, ModuleKey, Transaction } from '@/types/schema';
 import { hashKidPin } from '@/utils/kidPin';
 import { track } from '@/services/analytics';
 import { selectRecentReflections } from '@/utils/habitReflections';
@@ -33,8 +33,8 @@ import { selectRecentReflections } from '@/utils/habitReflections';
 
 /**
  * completeOnboarding / setHouseholdCurrency / setModuleVisibility /
- * setCaptureReviewMode / setKidModePin — original closures captured only
- * `householdId`.
+ * setCaptureReviewMode / setKidModePin / setFreezeMode / setCeremonyTone —
+ * original closures captured only `householdId`.
  */
 export function makeHouseholdSettingsMutations(deps: {
   db: Firestore;
@@ -68,6 +68,20 @@ export function makeHouseholdSettingsMutations(deps: {
   const setCaptureReviewMode = async (type: CaptureType, mode: CaptureReviewMode) => {
     if (!householdId) return;
     await updateDoc(doc(db, 'households', householdId), { [`captureReview.${type}`]: mode });
+  };
+
+  // Per-member habit points (stage 6) — the two household admin settings. Each
+  // is a single top-level scalar, so a plain field write is enough (no dotted
+  // merge to protect siblings). Absent means "today's behaviour", so there is
+  // deliberately no clear/delete path: an admin picks one of the three values.
+  const setFreezeMode = async (mode: FreezeMode) => {
+    if (!householdId) return;
+    await updateDoc(doc(db, 'households', householdId), { freezeMode: mode });
+  };
+
+  const setCeremonyTone = async (tone: CeremonyTone) => {
+    if (!householdId) return;
+    await updateDoc(doc(db, 'households', householdId), { ceremonyTone: tone });
   };
 
   // Plan 080b: set/clear the Kid Mode exit PIN. A raw PIN is salted+hashed here
@@ -113,7 +127,7 @@ export function makeHouseholdSettingsMutations(deps: {
     await updateDoc(doc(db, 'households', householdId), dottedPatch);
   };
 
-  return { completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setCaptureReviewMode, setKidModePin, setDietaryProfile, setMealCookedHabitId };
+  return { completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setCaptureReviewMode, setKidModePin, setDietaryProfile, setMealCookedHabitId, setFreezeMode, setCeremonyTone };
 }
 
 /**

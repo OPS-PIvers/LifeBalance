@@ -23,7 +23,11 @@
  * same `calculateStreak`/`calculateWeeklyStreak` walk the habit-level streak
  * uses, with the habit's `frozenDates` (and any planned-pause bridge) applied
  * unchanged — so a habit-level freeze bridges EVERY member's chain, exactly as
- * it bridges the habit's own. Per-member freeze banks are a later stage.
+ * it bridges the habit's own. Stage 6 adds a SECOND, narrower bridge on top:
+ * `Habit.frozenDatesBy` (written only under `freezeMode: 'per_member'`) lists
+ * the uids a given date's freeze was spent for, and bridges only those members.
+ * It is absent everywhere else, so `memberFrozenDates` returns `[]` and the walk
+ * is unchanged.
  *
  * 🛡️ WRITE DISCIPLINE — `completedBy` is only ever written through
  * `completedByPath()` / `completedByDatePath()` dot paths. Never write the whole
@@ -79,6 +83,13 @@ export const completedByPath = (date: string, memberId: string): string =>
 
 /** Firestore field path for a whole day's attribution (used to clear a day). */
 export const completedByDatePath = (date: string): string => `completedBy.${date}`;
+
+/**
+ * Firestore field path for one date's per-member freeze list
+ * (`Habit.frozenDatesBy`, stage 6). Only ever written with `arrayUnion(uid)` —
+ * same dot-path discipline, same reason, as `completedByPath`.
+ */
+export const frozenDatesByPath = (date: string): string => `frozenDatesBy.${date}`;
 
 // ---------------------------------------------------------------------------
 // Readers
@@ -253,10 +264,47 @@ export const withDatesUnattributed = <T extends Habit>(habit: T, dates: string[]
 // Per-member streaks (period-aware, frozen/pause-bridged)
 // ---------------------------------------------------------------------------
 
-/** The bridging dates a member's streak walk uses: the HABIT's freezes + pause. */
-const bridgeFor = (habit: Habit, dates: string[], today: string): string[] =>
+/**
+ * The dates a PER-MEMBER freeze token was spent on for `memberId`
+ * (`Habit.frozenDatesBy`, written only under `freezeMode: 'per_member'`).
+ *
+ * Absent on every habit in a shared-bank household, so this returns `[]` and
+ * every streak walk below is bit-for-bit its pre-stage-6 self.
+ */
+export const memberFrozenDates = (
+  habit: Pick<Habit, 'frozenDatesBy'>,
+  memberId: string,
+): string[] => {
+  const out: string[] = [];
+  for (const [date, uids] of Object.entries(habit.frozenDatesBy ?? {})) {
+    if (Array.isArray(uids) && uids.includes(memberId)) out.push(date);
+  }
+  return out.sort();
+};
+
+/**
+ * The bridging dates a member's streak walk uses: the HABIT's freezes + pause,
+ * plus this member's OWN per-member freezes.
+ *
+ * The two layers coexist by design. `habit.frozenDates` is the household-wide
+ * bridge — every legacy freeze lives there, and the 'shared'/'freeze_both' modes
+ * keep writing there — so it bridges EVERYONE's chain. `extraFrozen` carries
+ * only the dates this member personally spent a token on, which is what makes
+ * "member A frozen, member B not" possible.
+ */
+const bridgeFor = (
+  habit: Habit,
+  dates: string[],
+  today: string,
+  extraFrozen: string[] = [],
+): string[] =>
   effectiveFrozenDates(
-    { completedDates: dates, frozenDates: habit.frozenDates, pausedUntil: habit.pausedUntil },
+    {
+      completedDates: dates,
+      frozenDates:
+        extraFrozen.length > 0 ? [...(habit.frozenDates ?? []), ...extraFrozen] : habit.frozenDates,
+      pausedUntil: habit.pausedUntil,
+    },
     today,
   );
 
@@ -270,15 +318,27 @@ export const streakForMember = (
   habit: Habit,
   memberId: string,
   today: string = getLocalDateString(),
-): number => streakForMemberDates(habit, memberCompletionDates(habit, memberId), today);
+): number =>
+  streakForMemberDates(
+    habit,
+    memberCompletionDates(habit, memberId),
+    today,
+    memberFrozenDates(habit, memberId),
+  );
 
-/** `streakForMember` against an explicit (e.g. prospective) date set. */
+/**
+ * `streakForMember` against an explicit (e.g. prospective) date set.
+ *
+ * @param memberFrozen - that member's own per-member freeze dates. Omit for a
+ *   member with none (the shared-bank case), which is the pre-stage-6 walk.
+ */
 export const streakForMemberDates = (
   habit: Habit,
   dates: string[],
   today: string = getLocalDateString(),
+  memberFrozen: string[] = [],
 ): number => {
-  const bridged = bridgeFor(habit, dates, today);
+  const bridged = bridgeFor(habit, dates, today, memberFrozen);
   return habit.period === 'weekly'
     ? calculateWeeklyStreak(dates, today, bridged)
     : calculateStreak(dates, today, bridged);
@@ -296,7 +356,7 @@ export const streakEndingOnForMember = (
   today: string = getLocalDateString(),
 ): number => {
   const dates = memberCompletionDates(habit, memberId);
-  const bridged = bridgeFor(habit, dates, today);
+  const bridged = bridgeFor(habit, dates, today, memberFrozenDates(habit, memberId));
   return habit.period === 'weekly'
     ? streakEndingOnWeek(dates, date, bridged)
     : streakEndingOn(dates, date, bridged);
@@ -316,7 +376,7 @@ export const prospectiveMultiplierForMember = (
   const dates = memberCompletionDates(habit, memberId);
   const prospective = dates.includes(date) ? dates : [...dates, date];
   return getMultiplier(
-    streakForMemberDates(habit, prospective, today),
+    streakForMemberDates(habit, prospective, today, memberFrozenDates(habit, memberId)),
     habit.type === 'positive',
     habit.period,
   );

@@ -63,11 +63,14 @@ import {
   SavingsGoal,
   NetWorthSnapshot,
   DietaryProfile,
+  FreezeMode,
+  CeremonyTone,
   NotificationLogEntry
 } from '@/types/schema';
 import { calculateSafeToSpendBreakdownFromExpanded, calculateSafeToSpendExpansionStart } from '@/utils/safeToSpendCalculator';
 import { calculatePointsForDate, calculatePointsForDateRange, isHabitStale, getHabitResetUpdate } from '@/utils/habitLogic';
 import { completedByDatePath, computeMemberPointsReset, type MemberPointsSyncUpdate } from '@/utils/habitAttribution';
+import { visibleFreezeBank } from '@/utils/freezeSettings';
 import { fetchSubmissionTotals } from '@/utils/habitSubmissionTotals';
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { mergeQuantity, resolveNewQuantityField } from '@/utils/grocerySmartDefaults';
@@ -2081,13 +2084,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }, [householdId]);
 
   // Plan 25: auto-applied freeze protection (replaces the manual patch flow).
+  // Stage 6 adds `householdSettings`/`members`, read only to resolve
+  // `freezeMode` and (in 'per_member') each adult's own bank — see
+  // utils/freezeSettings.ts. Outside that mode both are ignored entirely.
   const autoApplyFreezes = useCallback(async () => {
-    await makeAutoApplyFreezes({ db, householdId, freezeBank, habits }).autoApplyFreezes();
-  }, [householdId, freezeBank, habits]);
+    await makeAutoApplyFreezes({ db, householdId, freezeBank, habits, householdSettings, members }).autoApplyFreezes();
+  }, [householdId, freezeBank, habits, householdSettings, members]);
 
   const rolloverFreezeBankTokens = useCallback(async () => {
-    await makeRolloverFreezeBankTokens({ db, householdId, freezeBank }).rolloverFreezeBankTokens();
-  }, [householdId, freezeBank]);
+    await makeRolloverFreezeBankTokens({ db, householdId, freezeBank, householdSettings, members }).rolloverFreezeBankTokens();
+  }, [householdId, freezeBank, householdSettings, members]);
 
   // --- ACTIONS: MEMBER MANAGEMENT ---
 
@@ -2212,6 +2218,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // F-MEALS-04: set/clear the habit auto-credited when a meal is marked cooked.
   const setMealCookedHabitId = useCallback(async (habitId: string | null): Promise<void> => {
     await makeHouseholdSettingsMutations({ db, householdId }).setMealCookedHabitId(habitId);
+  }, [householdId]);
+
+  // Per-member habit points (stage 6): the two household admin settings.
+  const setFreezeMode = useCallback(async (mode: FreezeMode): Promise<void> => {
+    await makeHouseholdSettingsMutations({ db, householdId }).setFreezeMode(mode);
+  }, [householdId]);
+
+  const setCeremonyTone = useCallback(async (tone: CeremonyTone): Promise<void> => {
+    await makeHouseholdSettingsMutations({ db, householdId }).setCeremonyTone(tone);
   }, [householdId]);
 
   // --- ACTIONS: MERCHANT RULES (F-MONEY-14) ---
@@ -2546,6 +2561,18 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // Use midnight scheduler to check for rollover with a delay to avoid conflicts
   useMidnightScheduler(checkFreezeBankRollover, !!(householdId && freezeBank), { initialDelayMs: 500 });
 
+  // Per-member habit points (stage 6): what the freeze-bank SURFACES show. In
+  // every shared mode — including the absent default — this IS the household
+  // bank, so those surfaces are byte-identical to before. Under 'per_member' it
+  // becomes the acting member's own bank, so "2 / 2 freezes available" keeps
+  // describing the tokens actually being spent without any of those components
+  // learning that the setting exists. The mutations above deliberately keep
+  // reading the raw household `freezeBank` — they own both modes.
+  const visibleFreezeBankValue = useMemo(
+    () => visibleFreezeBank(householdSettings, freezeBank, currentUser?.uid),
+    [householdSettings, freezeBank, currentUser],
+  );
+
   // Show skeletons only while a household is set but its first snapshot hasn't
   // arrived yet (or a different household is still loading). No household
   // (pre-setup) is not a "loading" state.
@@ -2642,7 +2669,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     activeYearlyGoals,
     primaryYearlyGoal,
     rewardsInventory: rewards,
-    freezeBank,
+    freezeBank: visibleFreezeBankValue,
     habitPatterns,
     isGeneratingHabitPatterns,
     refreshHabitPatterns,
@@ -2666,7 +2693,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     rolloverFreezeBankTokens,
   }), [
     dailyPoints, weeklyPoints, totalPoints, habits, habitCategories, activeChallenge, challenges, yearlyGoals, activeYearlyGoals,
-    primaryYearlyGoal, rewards, freezeBank, habitPatterns, isGeneratingHabitPatterns, refreshHabitPatterns, habitActions,
+    primaryYearlyGoal, rewards, visibleFreezeBankValue, habitPatterns, isGeneratingHabitPatterns, refreshHabitPatterns, habitActions,
     updateHabitCategories, updateChallenge, addChallenge, markChallengeComplete, redeemReward,
     addReward, updateReward, deleteReward,
     requestRedemption, approveRedemption, denyRedemption,
@@ -2784,6 +2811,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setKidModePin,
     setDietaryProfile,
     setMealCookedHabitId,
+    setFreezeMode,
+    setCeremonyTone,
     addMerchantRule,
     updateMerchantRule,
     deleteMerchantRule,
@@ -2808,6 +2837,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     pendingItemsCount, apiKeys,
     householdId, householdSettings, refreshInsight, rateInsight, addMember, updateMember, removeMember, deleteHousehold,
     completeOnboarding, setHouseholdCurrency, setModuleVisibility, updateModuleVisibility, setCaptureReviewMode, setKidModePin, setDietaryProfile, setMealCookedHabitId,
+    setFreezeMode, setCeremonyTone,
     addMerchantRule, updateMerchantRule, deleteMerchantRule,
     addKidProfile, updateKidProfile, removeKidProfile, activeMemberId, actAs, exitToParent,
     recaps,

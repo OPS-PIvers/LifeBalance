@@ -335,6 +335,50 @@ describe('habitConverter', () => {
     const result = habitConverter.fromFirestore(fakeSnap('habit-8', { ...wellFormed, completedBy: 'nope' }));
     expect(result.completedBy).toEqual({});
   });
+
+  // --- Per-member freeze (stage 6): frozenDatesBy round-trip ----------------
+  it('(a) round-trips a well-formed frozenDatesBy map', () => {
+    const frozenDatesBy = { '2026-06-15': ['paul-uid', 'jen-uid'], '2026-06-18': ['paul-uid'] };
+    const result = habitConverter.fromFirestore(fakeSnap('habit-9', { ...wellFormed, frozenDatesBy }));
+    expect(result.frozenDatesBy).toEqual(frozenDatesBy);
+
+    const out = callToFirestore(habitConverter, { ...wellFormed, id: 'habit-9', frozenDatesBy });
+    expect(out['frozenDatesBy']).toEqual(frozenDatesBy);
+  });
+
+  it('(b) a habit outside per-member freeze mode reads as an empty map', () => {
+    // Every existing habit takes this path — and an empty map means every
+    // member's streak bridges exactly as it did before stage 6.
+    const result = habitConverter.fromFirestore(fakeSnap('habit-10', wellFormed));
+    expect(result.frozenDatesBy).toEqual({});
+  });
+
+  it('(b) drops non-array days, non-string uids, and emptied days; dedupes uids', () => {
+    const result = habitConverter.fromFirestore(fakeSnap('habit-11', {
+      ...wellFormed,
+      frozenDatesBy: {
+        '2026-06-15': ['paul-uid', 'paul-uid', '', 7, null],
+        '2026-06-16': 'not-an-array',
+        '2026-06-17': [],
+        '2026-06-18': [42],
+      },
+    }));
+    expect(result.frozenDatesBy).toEqual({ '2026-06-15': ['paul-uid'] });
+  });
+
+  it('(b) a non-object frozenDatesBy degrades to an empty map instead of throwing', () => {
+    const result = habitConverter.fromFirestore(fakeSnap('habit-12', { ...wellFormed, frozenDatesBy: ['nope'] }));
+    expect(result.frozenDatesBy).toEqual({});
+  });
+
+  it('(b) frozenDates (the household-wide bridge) is passed through untouched', () => {
+    const result = habitConverter.fromFirestore(fakeSnap('habit-13', {
+      ...wellFormed,
+      frozenDates: ['2026-06-16'],
+    }));
+    expect(result.frozenDates).toEqual(['2026-06-16']);
+    expect(result.frozenDatesBy).toEqual({});
+  });
 });
 
 // ---------------------------------------------------------------------------

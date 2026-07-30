@@ -31,7 +31,14 @@ import { setSubtaskDone, subtaskProgress } from '@/utils/subtasks';
 import type { TodoSubtaskToggleResult, TodoCompletionOptions } from '@/contexts/household/mutations/todoMutations';
 import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
 import { attributionString, type TriggerSource } from '@/utils/habitTriggers';
-import { selectAutoFreezeCandidates } from '@/utils/freezeBank';
+import { selectAutoFreezeCandidates, selectMemberAutoFreezeCandidates } from '@/utils/freezeBank';
+import {
+  freezeBankMemberIds,
+  isPerMemberFreeze,
+  newMemberFreezeBank,
+  resolveFreezeMode,
+  visibleFreezeBank,
+} from '@/utils/freezeSettings';
 import { accountImpactOf, effectiveAccountImpact, isBankSyncTransaction, resolveTargetAccount, shouldSkipBankSyncDelta } from '@/utils/accountImpact';
 import { findSettledBill, settledBillRefusal, touchesSettledBillFields } from '@/utils/settledBillGuard';
 import { mergeTransactions as buildMergeUpdates } from '@/utils/transactionMerge';
@@ -75,7 +82,9 @@ import {
   ModuleVisibilityMap,
   CaptureType,
   CaptureReviewMode,
+  CeremonyTone,
   DietaryProfile,
+  FreezeMode,
   WeeklyRecap,
   MonthlyMoneyRecap,
   NotificationLogEntry,
@@ -843,6 +852,14 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [dietaryProfile, setDietaryProfileState] = useState<DietaryProfile | undefined>(undefined);
   // F-MEALS-04 — habit auto-credited when a meal-plan item is marked cooked.
   const [mealCookedHabitId, setMealCookedHabitIdState] = useState<string | undefined>(undefined);
+  // Per-member habit points (stage 6) — both household settings start ABSENT,
+  // mirroring a legacy household: `resolveFreezeMode`/`resolveCeremonyTone` then
+  // report 'shared'/'household_first', which is exactly what shipped before, so
+  // Test Mode reproduces the inert default before anything is picked.
+  const [freezeMode, setFreezeModeState] = useState<FreezeMode | undefined>(undefined);
+  const [ceremonyTone, setCeremonyToneState] = useState<CeremonyTone | undefined>(undefined);
+  // Per-member freeze banks, only touched while freezeMode === 'per_member'.
+  const [freezeBanksByMember, setFreezeBanksByMember] = useState<Record<string, FreezeBank>>({});
   // F-MONEY-14 — merchant rules are STATE (not the frozen MOCK_MERCHANT_RULES
   // constant) so the Settings editor's add/edit/delete round-trip is walkable in
   // Test Mode and the display-time renaming visibly follows it.
@@ -940,6 +957,17 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const setDietaryProfile = useCallback(async (profile: DietaryProfile) => {
     setDietaryProfileState(profile);
     toast.success('Mock: Dietary profile updated');
+  }, []);
+
+  // Per-member habit points (stage 6) — the two household admin settings.
+  const setFreezeMode = useCallback(async (mode: FreezeMode) => {
+    setFreezeModeState(mode);
+    toast.success(`Mock: freeze mode set to ${mode}`);
+  }, []);
+
+  const setCeremonyTone = useCallback(async (tone: CeremonyTone) => {
+    setCeremonyToneState(tone);
+    toast.success(`Mock: wrap-up tone set to ${tone}`);
   }, []);
 
   const updateModuleVisibility = useCallback(async (patch: Partial<Record<ModuleKey, boolean>>) => {
@@ -2873,6 +2901,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     inviteCode: 'TEST-1234',
     members: members,
     freezeBank,
+    // Stage 6: both undefined until picked, so the household doc shape matches
+    // a legacy household exactly (absent, not explicitly defaulted).
+    freezeMode,
+    ceremonyTone,
+    freezeBanksByMember,
     accounts: accounts,
     rewardsInventory: rewards,
     coreTemplates: { expenses: [], buckets: [] },
@@ -2936,7 +2969,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     activeYearlyGoals,
     primaryYearlyGoal,
     rewardsInventory,
-    freezeBank,
+    // Stage 6 parity: the SURFACES see the household bank in every shared mode
+    // (the absent default included) and the acting member's own bank under
+    // 'per_member' — same swap the real provider makes.
+    freezeBank: visibleFreezeBank(householdSettings, freezeBank, currentUser?.uid) ?? freezeBank,
     habitPatterns,
     isGeneratingHabitPatterns,
     refreshHabitPatterns,
@@ -3192,10 +3228,69 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     // Plan 25: in-memory auto-apply mirroring the real mutation — consumes one
     // token per protected habit (highest streak first), records yesterday in
     // frozenDates, recomputes the frozen-aware streak, and NEVER credits points.
+    //
+    // Stage 6: the same mode dispatch as production. 'per_member' spends each
+    // adult's OWN in-memory bank and records the uid in `frozenDatesBy` (which
+    // bridges only that member's chain); every other mode — including the absent
+    // default — runs the shared path below unchanged.
     autoApplyFreezes: useCallback(async () => {
-      if (freezeBank.tokens <= 0) return;
       const today = getLocalDateString();
       const yesterday = getLocalDateString(subDays(new Date(), 1));
+
+      if (isPerMemberFreeze(resolveFreezeMode({ freezeMode }))) {
+        const memberIds = freezeBankMemberIds(members);
+        const banks = new Map<string, FreezeBank>(
+          memberIds.map(uid => [uid, freezeBanksByMember[uid] ?? newMemberFreezeBank()]),
+        );
+        const applied = selectMemberAutoFreezeCandidates(habits, memberIds, today).filter(c => {
+          const bank = banks.get(c.memberId);
+          if (!bank || bank.tokens <= 0) return false;
+          banks.set(c.memberId, { ...bank, tokens: bank.tokens - 1 });
+          return true;
+        });
+        if (applied.length === 0) return;
+
+        setHabits(prev => prev.map(h => {
+          const uids = applied.filter(c => c.habit.id === h.id).map(c => c.memberId);
+          if (uids.length === 0) return h;
+          const day = h.frozenDatesBy?.[yesterday] ?? [];
+          return {
+            ...h,
+            frozenDatesBy: {
+              ...(h.frozenDatesBy ?? {}),
+              [yesterday]: [...new Set([...day, ...uids])],
+            },
+          };
+        }));
+        setFreezeBanksByMember(prev => {
+          const next = { ...prev };
+          for (const c of applied) {
+            const bank = banks.get(c.memberId);
+            if (!bank) continue;
+            next[c.memberId] = {
+              ...bank,
+              history: [
+                ...(prev[c.memberId]?.history ?? []),
+                {
+                  id: generateId(),
+                  type: 'used' as const,
+                  amount: -1,
+                  date: today,
+                  habitId: c.habit.id,
+                  habitDate: yesterday,
+                  notes: `Freeze auto-applied: protected the ${c.protectedStreak}-day streak on ${c.habit.title} (${yesterday})`,
+                  createdAt: new Date().toISOString(),
+                },
+              ],
+            };
+          }
+          return next;
+        });
+        toast.success(`Mock: ${applied.length} per-member freeze(s) auto-applied`);
+        return;
+      }
+
+      if (freezeBank.tokens <= 0) return;
       const toApply = selectAutoFreezeCandidates(habits, today).slice(0, freezeBank.tokens);
       if (toApply.length === 0) return;
       const idSet = new Set(toApply.map(c => c.habit.id));
@@ -3226,7 +3321,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         ],
       }));
       toast.success(`Mock: ${toApply.length} freeze(s) auto-applied`);
-    }, [habits, freezeBank.tokens]),
+    }, [habits, freezeBank.tokens, freezeMode, members, freezeBanksByMember]),
     rolloverFreezeBankTokens: noOp,
     addMember: noOp,
     updateMember: useCallback(async (memberId: string, updates: Partial<HouseholdMember>) => {
@@ -3242,6 +3337,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     setKidModePin,
     setDietaryProfile,
     setMealCookedHabitId,
+    setFreezeMode,
+    setCeremonyTone,
     addMerchantRule,
     updateMerchantRule,
     deleteMerchantRule,

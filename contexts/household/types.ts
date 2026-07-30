@@ -34,6 +34,8 @@ import {
   TransactionComment,
   SplitParticipant,
   DietaryProfile,
+  FreezeMode,
+  CeremonyTone,
   NotificationLogEntry
 } from '@/types/schema';
 import { type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
@@ -498,6 +500,12 @@ export interface HouseholdContextType {
   /** F-MEALS-04: set (habit id) or clear (null) the habit auto-credited when a meal is marked cooked. */
   setMealCookedHabitId: (habitId: string | null) => Promise<void>;
 
+  /** Per-member habit points (stage 6): how the household spends freeze tokens. See utils/freezeSettings.ts. */
+  setFreezeMode: (mode: FreezeMode) => Promise<void>;
+
+  /** Per-member habit points (stage 6): how the weekly ceremony frames the week. Consumed by stage 5. */
+  setCeremonyTone: (tone: CeremonyTone) => Promise<void>;
+
   // Merchant rule actions (F-MONEY-14). `Household.merchantRules` is a bounded
   // array on the household settings doc, so these sit on the CORE slice
   // alongside the other household-doc writers — every consumer of the rules
@@ -688,6 +696,7 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'householdId' | 'householdSettings' | 'household'
   | 'refreshInsight' | 'rateInsight' | 'addMember' | 'updateMember' | 'removeMember' | 'deleteHousehold'
   | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'updateModuleVisibility' | 'setCaptureReviewMode' | 'setKidModePin' | 'setDietaryProfile' | 'setMealCookedHabitId'
+  | 'setFreezeMode' | 'setCeremonyTone'
   | 'addMerchantRule' | 'updateMerchantRule' | 'deleteMerchantRule'
   | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
   | 'activeMemberId' | 'actAs' | 'exitToParent'

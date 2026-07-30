@@ -2,6 +2,11 @@ import { Habit } from '@/types/schema';
 import { format, subDays, parseISO } from 'date-fns';
 import { calculateStreak, isHabitPaused } from '@/utils/habitLogic';
 import { getMissedHabitDates } from '@/utils/freezeBankValidator';
+import {
+  memberCompletionDates,
+  memberFrozenDates,
+  streakForMemberDates,
+} from '@/utils/habitAttribution';
 
 /**
  * Plan 25 — auto-applied freeze protection.
@@ -70,6 +75,76 @@ export function selectAutoFreezeCandidates(
 
   candidates.sort(
     (a, b) => b.protectedStreak - a.protectedStreak || a.habit.id.localeCompare(b.habit.id)
+  );
+  return candidates;
+}
+
+/** One (member, habit) pair a per-member freeze token would protect. */
+export interface MemberAutoFreezeCandidate extends AutoFreezeCandidate {
+  /** Whose bank pays, and whose chain the freeze bridges. */
+  memberId: string;
+}
+
+/**
+ * Per-member candidate selection — the `freezeMode: 'per_member'` twin of
+ * `selectAutoFreezeCandidates`.
+ *
+ * The habit-level gates are identical (positive, daily, not paused). Everything
+ * else is asked of the MEMBER's own chain, read from `Habit.completedBy`:
+ *
+ *  - the member missed yesterday (their attributed count for it is zero),
+ *  - the member has a chain to protect at all — at least one attributed
+ *    completion strictly before yesterday. This is the per-member analogue of
+ *    `getMissedHabitDates`' floor at the habit's first completion: a member who
+ *    has never completed this habit has no streak, so their "miss" is not one,
+ *  - neither bridge already covers yesterday — not the household-wide
+ *    `frozenDates` (which would bridge them for free, so spending a personal
+ *    token would be waste) and not their own `frozenDatesBy` entry (the
+ *    idempotency guard, exactly like the shared path's),
+ *  - freezing yesterday preserves >= 3 completed days of THEIR chain.
+ *
+ * Ordering is deterministic across devices: highest protected streak, then habit
+ * id, then member uid.
+ */
+export function selectMemberAutoFreezeCandidates(
+  habits: Habit[],
+  memberIds: string[],
+  today: string,
+): MemberAutoFreezeCandidate[] {
+  const yesterday = format(subDays(parseISO(today), 1), 'yyyy-MM-dd');
+  const candidates: MemberAutoFreezeCandidate[] = [];
+
+  for (const habit of habits) {
+    if (habit.type !== 'positive' || habit.period !== 'daily') continue;
+    if (isHabitPaused(habit, today)) continue;
+
+    // A household-wide freeze on yesterday already bridges every member.
+    const householdFrozen = habit.frozenDates ?? [];
+    if (householdFrozen.includes(yesterday)) continue;
+
+    for (const memberId of memberIds) {
+      const memberFrozen = memberFrozenDates(habit, memberId);
+      if (memberFrozen.includes(yesterday)) continue; // idempotency guard
+
+      const dates = memberCompletionDates(habit, memberId);
+      if (dates.includes(yesterday)) continue; // they did it — nothing missed
+      if (!dates.some(d => d < yesterday)) continue; // no chain to protect yet
+
+      const protectedStreak = streakForMemberDates(habit, dates, today, [
+        ...memberFrozen,
+        yesterday,
+      ]);
+      if (protectedStreak < 3) continue;
+
+      candidates.push({ habit, memberId, protectedStreak });
+    }
+  }
+
+  candidates.sort(
+    (a, b) =>
+      b.protectedStreak - a.protectedStreak ||
+      a.habit.id.localeCompare(b.habit.id) ||
+      a.memberId.localeCompare(b.memberId)
   );
   return candidates;
 }
