@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { HouseholdMember, WeeklyRecap } from '@/types/schema';
+import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 import { ScoreboardWidget } from './ScoreboardWidget';
 
 // The widget reads members + recaps (useHouseholdCore) and weeklyPoints
@@ -110,6 +111,28 @@ describe('ScoreboardWidget', () => {
 
     expect(screen.getByText('12% vs last week')).toBeInTheDocument();
     expect(screen.getByText('Best week this month')).toBeInTheDocument();
+  });
+
+  it('colors each standing row through the shared MemberColorMap (memberColorFor), not a uid-hashed resolveAvatarColor', () => {
+    const members = [
+      makeMember({ uid: 'paul', displayName: 'Paul', points: { daily: 45, weekly: 285, total: 900 } }),
+      makeMember({ uid: 'jen', displayName: 'Jen', points: { daily: 60, weekly: 325, total: 950 } }),
+    ];
+    mockMembers.mockReturnValue(members);
+    mockWeeklyPoints.mockReturnValue(610);
+
+    render(<ScoreboardWidget />);
+
+    const colors = buildMemberColorMap(members);
+    const paulAvatar = screen.getByTestId('scoreboard-avatar-paul');
+    const jenAvatar = screen.getByTestId('scoreboard-avatar-jen');
+    expect(paulAvatar).toHaveStyle({ backgroundColor: memberColorFor(colors, 'paul') });
+    expect(jenAvatar).toHaveStyle({ backgroundColor: memberColorFor(colors, 'jen') });
+    // Pin against the palette's known assignment order so a regression to
+    // uid-hashing (which would swap these two) is caught concretely, not just
+    // "matches whatever the util says today".
+    expect(memberColorFor(colors, 'paul')).toBe('#285742'); // first adult — evergreen
+    expect(memberColorFor(colors, 'jen')).toBe('#b87a29'); // second adult — amber
   });
 
   it('excludes managed kids from the standings even when they have points', () => {

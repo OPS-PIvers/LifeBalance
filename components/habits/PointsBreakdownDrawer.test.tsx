@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import PointsBreakdownDrawer from './PointsBreakdownDrawer';
 import type { HouseholdMember, WeeklyRecap } from '@/types/schema';
+import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 
 const mockUseGamification = vi.fn();
 const mockUseHouseholdCore = vi.fn();
@@ -136,6 +137,22 @@ describe('PointsBreakdownDrawer', () => {
     setup({ members: [JEN, PAUL, LEO] });
     renderDrawer();
     expect(screen.queryByText('Leo')).not.toBeInTheDocument();
+  });
+
+  it('colors each standing row through the shared MemberColorMap (memberColorFor), not a uid-hashed resolveAvatarColor', () => {
+    setup({});
+    renderDrawer();
+
+    const colors = buildMemberColorMap([JEN, PAUL]);
+    const jenAvatar = screen.getByTestId('points-drawer-avatar-jen');
+    const paulAvatar = screen.getByTestId('points-drawer-avatar-paul');
+    expect(jenAvatar).toHaveStyle({ backgroundColor: memberColorFor(colors, 'jen') });
+    expect(paulAvatar).toHaveStyle({ backgroundColor: memberColorFor(colors, 'paul') });
+    // Pin against the palette's known assignment order (roster order: Jen
+    // first, Paul second) so a regression to uid-hashing — which swapped
+    // these two colors in Test Mode before this fix — is caught concretely.
+    expect(memberColorFor(colors, 'jen')).toBe('#285742'); // first adult — evergreen
+    expect(memberColorFor(colors, 'paul')).toBe('#b87a29'); // second adult — amber
   });
 
   it('never crowns a tied field', () => {

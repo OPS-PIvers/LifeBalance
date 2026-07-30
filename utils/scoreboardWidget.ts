@@ -14,6 +14,7 @@
  * competitive standings row.
  */
 import type { HouseholdMember, WeeklyRecap } from '@/types/schema';
+import { findLeaderId } from '@/utils/pointsLeader';
 
 export interface ScoreboardStanding {
   memberId: string;
@@ -47,16 +48,16 @@ export function selectAdultStandings(members: readonly HouseholdMember[]): Score
     return a.displayName.localeCompare(b.displayName);
   });
 
-  const leader = sorted[0];
-  const runnerUp = sorted[1];
-  const leaderWeekly = leader?.points.weekly ?? 0;
+  const leaderWeekly = sorted[0]?.points.weekly ?? 0;
   // A crown means an actual competition was won: at least two adults, a
   // nonzero score for the leader, and no tie for first. A strict leader still
   // wins even in a net-negative week (someone lost the least) — the gate is
-  // "not a zero-zero non-competition," not "must be positive."
-  const hasLeader = sorted.length > 1 && leaderWeekly !== 0 && leaderWeekly > (runnerUp?.points.weekly ?? 0);
+  // "not a zero-zero non-competition," not "must be positive." This is the
+  // shared crown rule — see `utils/pointsLeader.ts` — that the Points
+  // Breakdown drawer and the ceremony deck's head-to-head also route through.
+  const leaderId = findLeaderId(sorted.map(m => ({ memberId: m.uid, points: m.points.weekly })));
 
-  return sorted.map((m, i) => ({
+  return sorted.map((m) => ({
     memberId: m.uid,
     name: m.displayName,
     avatarColor: m.avatarColor,
@@ -67,7 +68,7 @@ export function selectAdultStandings(members: readonly HouseholdMember[]): Score
     // negative leader itself) must never produce a negative CSS width — that's
     // an invalid length browsers drop, rendering a FULL bar instead of empty.
     barPct: leaderWeekly > 0 ? Math.max(0, Math.round((m.points.weekly / leaderWeekly) * 100)) : 0,
-    isLeader: hasLeader && i === 0,
+    isLeader: m.uid === leaderId,
   }));
 }
 

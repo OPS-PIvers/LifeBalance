@@ -21,6 +21,7 @@
  */
 import type { CeremonyTone, RecapDayPoints, RecapMemberFacts, WeeklyRecap } from '@/types/schema';
 import { buildMemberColorMap, memberColorFor, type ColorableMember } from '@/utils/memberColors';
+import { findLeaderId } from '@/utils/pointsLeader';
 import { isoWeekStartDate } from '@/utils/dateHelpers';
 import { resolveCeremonyTone } from '@/utils/freezeSettings';
 
@@ -196,6 +197,14 @@ function monthOf(recap: WeeklyRecap): string | null {
  * ledger and not a competitive score: a chore-heavy kid week must never crown
  * the kid. The kid's own personal card is unaffected — `buildRecapDeck` finds
  * the viewer in the unfiltered facts.
+ *
+ * 🛡️ CROWN RULE lives in `utils/pointsLeader.ts` and is shared verbatim with
+ * the Scoreboard widget and the Points Breakdown drawer: a strict leader
+ * still wins in a net-negative week (someone lost the least) — the gate is
+ * "not a zero-zero non-competition, and not a tie," not "must be positive."
+ * Filtering standings to `points > 0` before finding a leader (the old
+ * behavior here) silently un-crowned exactly that net-negative week while the
+ * other two surfaces still crowned it — don't reintroduce that filter.
  */
 export function buildHeadToHead(
   recap: WeeklyRecap,
@@ -212,11 +221,10 @@ export function buildHeadToHead(
     }))
     .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
 
-  const scorers = standings.filter(s => s.points > 0);
-  const leader = scorers[0] ?? null;
-  const runnerUp = scorers[1] ?? null;
-  // A tie for first is not a podium — nobody won.
-  const contested = leader !== null && runnerUp !== null && leader.points > runnerUp.points;
+  const leaderId = findLeaderId(standings);
+  const leader = leaderId !== null ? standings[0] ?? null : null;
+  const runnerUp = leaderId !== null ? standings[1] ?? null : null;
+  const contested = leader !== null && runnerUp !== null;
   const margin = contested && leader && runnerUp ? leader.points - runnerUp.points : 0;
   const runaway =
     contested && margin >= RUNAWAY_MIN_MARGIN && margin >= (runnerUp?.points ?? 0) * RUNAWAY_MARGIN_RATIO;

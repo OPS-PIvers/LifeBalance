@@ -8,7 +8,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import { cn } from '@/utils/cn';
-import { resolveAvatarColor } from '@/utils/avatarColor';
+import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 import { getAdultStandings, computePointsTrend, type PointsDrawerPeriod } from '@/utils/pointsDrawer';
 
 interface PointsBreakdownDrawerProps {
@@ -43,6 +43,10 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
   const [period, setPeriod] = useState<PointsDrawerPeriod>('week');
 
   const standings = useMemo(() => getAdultStandings(members, period), [members, period]);
+  // Same MemberColorMap habitRowAttribution.ts/recapDeck.ts build — a plain
+  // `resolveAvatarColor(avatarColor, uid)` call uid-hashes into a DIFFERENT
+  // palette and swaps a member's color against those other surfaces.
+  const colors = useMemo(() => buildMemberColorMap(members), [members]);
 
   const householdTotal = period === 'day' ? dailyPoints : weeklyPoints;
 
@@ -145,8 +149,9 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
             {standings.map((row) => (
               <Row key={row.memberId} className="gap-3">
                 <span
+                  data-testid={`points-drawer-avatar-${row.memberId}`}
                   className="flex-none w-[30px] h-[30px] rounded-full flex items-center justify-center text-sm font-bold text-white"
-                  style={{ backgroundColor: resolveAvatarColor(row.avatarColor, row.memberId) }}
+                  style={{ backgroundColor: memberColorFor(colors, row.memberId) }}
                   aria-hidden="true"
                 >
                   {row.name.trim().charAt(0).toUpperCase() || '?'}

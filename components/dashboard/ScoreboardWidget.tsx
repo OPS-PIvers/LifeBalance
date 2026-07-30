@@ -3,7 +3,7 @@ import { format, parseISO, startOfWeek, endOfWeek } from 'date-fns';
 import { Sparkle, Crown, TrendingUp, TrendingDown } from 'lucide-react';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { getLocalDateString } from '@/utils/dateHelpers';
-import { resolveAvatarColor } from '@/utils/avatarColor';
+import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 import { selectAdultStandings, deriveScoreboardTrend } from '@/utils/scoreboardWidget';
 import { cn } from '@/utils/cn';
 import Eyebrow from '@/components/ui/Eyebrow';
@@ -27,6 +27,10 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
   const { weeklyPoints } = useGamification();
 
   const standings = useMemo(() => selectAdultStandings(members), [members]);
+  // Same MemberColorMap habitRowAttribution.ts/recapDeck.ts build — a plain
+  // `resolveAvatarColor(avatarColor, uid)` call uid-hashes into a DIFFERENT
+  // palette and swaps a member's color against those other surfaces.
+  const colors = useMemo(() => buildMemberColorMap(members), [members]);
   const trend = useMemo(
     () => deriveScoreboardTrend(recaps, weeklyPoints, members),
     [recaps, weeklyPoints, members]
@@ -101,8 +105,9 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
         {standings.map(s => (
           <div key={s.memberId} className="flex items-center gap-[11px] py-[5px]">
             <div
+              data-testid={`scoreboard-avatar-${s.memberId}`}
               className="w-[30px] h-[30px] rounded-full flex items-center justify-center text-[13px] font-bold text-white shrink-0"
-              style={{ backgroundColor: resolveAvatarColor(s.avatarColor, s.memberId) }}
+              style={{ backgroundColor: memberColorFor(colors, s.memberId) }}
               aria-hidden="true"
             >
               {s.avatarEmoji ?? s.name.charAt(0).toUpperCase()}
@@ -127,7 +132,7 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
                   className="h-full rounded-full"
                   style={{
                     width: `${s.barPct}%`,
-                    backgroundColor: resolveAvatarColor(s.avatarColor, s.memberId),
+                    backgroundColor: memberColorFor(colors, s.memberId),
                   }}
                 />
               </div>

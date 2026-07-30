@@ -58,6 +58,20 @@ describe('getAdultStandings', () => {
     expect(rows.map((r) => r.memberId)).toEqual(['jen', 'paul']);
   });
 
+  it('crowns the strict leader even in a net-negative week — lost the least still wins', () => {
+    // Paul -5, Jen -20: matches the Scoreboard widget's crown rule (nonzero,
+    // strictly higher, no tie) via the shared `findLeaderId` predicate — this
+    // drawer must not fall back to the old "topPoints > 0" gate that would
+    // silently un-crown a net-negative week the Scoreboard still crowns.
+    const members = [
+      member({ uid: 'paul', displayName: 'Paul', points: { daily: -5, weekly: -5, total: 200 } }),
+      member({ uid: 'jen', displayName: 'Jen', points: { daily: -20, weekly: -20, total: 200 } }),
+    ];
+    const rows = getAdultStandings(members, 'week');
+    expect(findRow(rows, 'paul')?.isLeader).toBe(true);
+    expect(findRow(rows, 'jen')?.isLeader).toBe(false);
+  });
+
   it('never crowns an all-zero field', () => {
     const members = [
       member({ uid: 'jen', displayName: 'Jen' }),

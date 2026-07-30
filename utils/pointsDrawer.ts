@@ -7,6 +7,7 @@
  * re-expand habits in render (see PER_MEMBER_POINTS_HANDOFF.md §4, PR3).
  */
 import { HouseholdMember, WeeklyRecap } from '@/types/schema';
+import { findLeaderId } from '@/utils/pointsLeader';
 
 export type PointsDrawerPeriod = 'day' | 'week';
 
@@ -15,12 +16,24 @@ export interface MemberStanding {
   memberId: string;
   name: string;
   points: number;
-  /** Stored `avatarColor` (if any) — pass through to `resolveAvatarColor` for the plain avatar. */
+  /**
+   * Stored `avatarColor` (if any). Callers should NOT feed this to
+   * `resolveAvatarColor` directly — build a `MemberColorMap` via
+   * `buildMemberColorMap(members)` (from `utils/memberColors.ts`) over the
+   * full household roster and look this member's color up with
+   * `memberColorFor(colors, memberId)`, exactly like `habitRowAttribution.ts`
+   * and `recapDeck.ts` do. Calling `resolveAvatarColor` straight from this
+   * field uid-hashes into a different palette and swaps colors against those
+   * other surfaces.
+   */
   avatarColor: string | undefined;
   /**
    * True only when this member is the SOLE strictly-highest scorer among 2+
-   * adults with a positive score — a single member (nothing to lead over) or
-   * an all-zero / tied field never crowns anyone.
+   * adults with a NONZERO score — a single member (nothing to lead over), an
+   * all-zero field, or a tie never crowns anyone. A strict leader still wins
+   * in a net-negative week (someone lost the least); see the shared crown
+   * rule in `utils/pointsLeader.ts`, which this and the Scoreboard widget and
+   * the ceremony deck's head-to-head all route through identically.
    */
   isLeader: boolean;
 }
@@ -48,11 +61,9 @@ export const getAdultStandings = (
     }))
     .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
 
-  const topPoints = rows[0]?.points ?? 0;
-  const leaders = rows.filter((row) => row.points === topPoints);
-  const hasLeader = rows.length > 1 && topPoints > 0 && leaders.length === 1;
+  const leaderId = findLeaderId(rows.map((row) => ({ memberId: row.memberId, points: row.points })));
 
-  return rows.map((row) => ({ ...row, isLeader: hasLeader && row.points === topPoints }));
+  return rows.map((row) => ({ ...row, isLeader: row.memberId === leaderId }));
 };
 
 /** The household's week-over-week points trend, or `null` when there's nothing to compare. */
