@@ -275,6 +275,24 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
     haptic('light');
     // Period-scoped checkmark, date-scoped mutation — see
     // householdUndoDateInPeriod. Daily habits resolve straight to today.
+    //
+    // 🛡️ ATTRIBUTION-ONLY, exactly like `handleUncreditMember` above — this row
+    // deliberately does NOT hunt for a submission doc to delete first, the way
+    // `DayHabitEditor` does. That lookup is an async `getHabitSubmissions`
+    // query, and this component is a memoized list row on the habits page that
+    // holds no submission data and issues no reads (see `useHabitCalendarData`,
+    // which exists precisely because the CALENDAR surfaces need that fetch and
+    // this one does not).
+    //
+    // The cost is a known, narrow orphan: log a household completion for TODAY
+    // from the past-day editor, then undo it from this row, and the submission
+    // doc outlives the completion — a corrective recompute then re-credits it
+    // from `fetchSubmissionTotals`. That is the pre-existing behaviour of the
+    // member path on this same row (`uncreditHabitCompletion` never touches
+    // docs either), so household credit is CONSISTENT with it rather than
+    // introducing a new class of drift; the day editor's × still clears both.
+    // Fixing it means giving the habit row a submissions read, which is a
+    // separate change to make for BOTH paths at once, not for this one alone.
     void uncreditHouseholdCompletion(habit.id, householdUndoDateInPeriod(habit, today)).catch(() => {});
   };
 
