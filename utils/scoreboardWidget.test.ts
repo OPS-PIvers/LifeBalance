@@ -8,6 +8,7 @@ import {
   calculateHouseholdShareForDateRange,
 } from '@/utils/scoreboardWidget';
 import type { Habit, HouseholdMember, WeeklyRecap } from '@/types/schema';
+import type { SubmissionTotalsByHabitDate } from '@/utils/habitLogic';
 
 function member(overrides: Partial<HouseholdMember> & Pick<HouseholdMember, 'uid' | 'displayName'>): HouseholdMember {
   return {
@@ -359,6 +360,31 @@ describe('calculateHouseholdShareForDateRange', () => {
 
   it('is 0 with no habits at all', () => {
     expect(calculateHouseholdShareForDateRange([], start, end, today)).toBe(0);
+  });
+
+  it('includes a stored submission that OUTLIVES its completion date once submissionTotals is passed (household-points-visibility, finding 1)', () => {
+    // A legacy incremental habit whose completion was reverted — the date is
+    // gone from `completedDates` — but its submission doc (-20) still stands
+    // (a down-toggle removes the completion date but never deletes the
+    // submission; see `pointsForHabitOnDate`'s doc comment in
+    // utils/habitLogic.ts). Without `submissionTotals`, `pointsForHabitOnDate`
+    // has nothing to fall back on for a non-completion date and reports 0.
+    const habits = [
+      makeHabit({
+        id: 'h-reverted',
+        type: 'negative',
+        scoringType: 'incremental',
+        basePoints: 20,
+        completedDates: [],
+        completedBy: undefined,
+      }),
+    ];
+    const submissionTotals: SubmissionTotalsByHabitDate = new Map([
+      ['h-reverted', new Map([['2026-07-22', { count: 1, points: -20 }]])],
+    ]);
+
+    expect(calculateHouseholdShareForDateRange(habits, start, end, today)).toBe(0);
+    expect(calculateHouseholdShareForDateRange(habits, start, end, today, submissionTotals)).toBe(-20);
   });
 });
 

@@ -229,9 +229,19 @@ const WeekCard: React.FC<{ deck: RecapDeckModel }> = ({ deck }) => {
             </span>
           ))}
           {hasUnattributed && (
+            // Label only — deliberately NO figure here. `buildRecapChart`
+            // clamps every segment to its positive share (`Math.max(0, ...)`,
+            // `points > 0`), so a week with a net-negative unattributed total
+            // draws no household segment at all while the swatch's number
+            // would still show the signed total — a legend that contradicts
+            // its own chart. The member legend entries above carry no figure
+            // either (just `{s.name}`), so this stays consistent with them:
+            // the legend is a series LABEL, not a second place to read the
+            // number. The signed total lives on `householdShare` below,
+            // where no chart sits beside it to disagree with.
             <span className="inline-flex items-center gap-1.5">
               <span className="inline-block h-2 w-2 rounded-[2px] bg-brand-300" aria-hidden="true" />
-              Household · {deck.householdSharePoints} pts
+              Household
             </span>
           )}
         </div>
@@ -241,6 +251,19 @@ const WeekCard: React.FC<{ deck: RecapDeckModel }> = ({ deck }) => {
               {weekdayNameOf(deck.bestDay.date)}
             </b>{' '}
             was your best day together · {deck.bestDay.total} pts
+          </p>
+        )}
+        {/* The household's OWN (signed) share of the week — `unattributed`
+            summed across all 7 days, which can legitimately be negative (a
+            net-negative unattributed day, e.g. a legacy penalty habit).
+            Placed here, on the household card, rather than on the chart
+            legend above: nothing here draws a bar for it, so a negative
+            figure can't contradict anything the way it would next to the
+            chart's positive-only segments. */}
+        {deck.householdSharePoints !== 0 && (
+          <p className="mt-1.5 text-[11.5px] text-brand-450 dark:text-brand-400" data-testid="recap-household-share">
+            <b className="font-semibold text-brand-600 dark:text-brand-200">{deck.householdSharePoints}</b>{' '}
+            earned together, credited to no one member
           </p>
         )}
       </div>

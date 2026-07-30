@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import PointsBreakdownDrawer from './PointsBreakdownDrawer';
-import type { Habit, HouseholdMember, WeeklyRecap } from '@/types/schema';
+import type { Habit, HabitSubmission, HouseholdMember, WeeklyRecap } from '@/types/schema';
 import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 
 const mockUseGamification = vi.fn();
@@ -105,12 +105,14 @@ const setup = (config: {
   totalPoints?: number;
   kidModeEnabled?: boolean;
   habits?: Habit[];
+  getHabitSubmissions?: (habitId: string, startDate?: string, endDate?: string) => Promise<HabitSubmission[]>;
 }) => {
   mockUseGamification.mockReturnValue({
     dailyPoints: config.dailyPoints ?? 60,
     weeklyPoints: config.weeklyPoints ?? 610,
     totalPoints: config.totalPoints ?? 12480,
     habits: config.habits ?? [],
+    getHabitSubmissions: config.getHabitSubmissions ?? (async () => []),
   });
   mockUseHouseholdCore.mockReturnValue({
     members: config.members ?? [JEN, PAUL],
@@ -253,25 +255,33 @@ describe('PointsBreakdownDrawer', () => {
   });
 
   describe('Household row (household-points-visibility)', () => {
-    it('shows a Household row for a legacy (pre-attribution) completion this week', () => {
+    // The Household row's figure is now sourced from an async
+    // `submissionTotals` fetch (see PointsBreakdownDrawer.tsx), so every test
+    // here awaits it settling — `findByTestId` polls until the row appears;
+    // `act(async () => {})` flushes the fetch before asserting an ABSENCE, so
+    // that assertion can't pass vacuously just because the fetch hasn't
+    // resolved yet.
+    it('shows a Household row for a legacy (pre-attribution) completion this week', async () => {
       const habits = [makeHabit({ completedDates: ['2026-07-28'], completedBy: undefined })];
       setup({ habits });
       renderDrawer();
 
-      const householdRow = screen.getByTestId('points-drawer-household-row');
+      const householdRow = await screen.findByTestId('points-drawer-household-row');
       expect(householdRow).toHaveTextContent('Household');
       // Threshold habit, basePoints 10, no streak — 10 points, attributed to nobody.
       expect(householdRow).toHaveTextContent('10');
     });
 
-    it('omits the Household row when there is no unattributed remainder', () => {
+    it('omits the Household row when there is no unattributed remainder', async () => {
       setup({ habits: [] });
       renderDrawer();
+      // Let the submission fetch settle before asserting an absence.
+      await act(async () => {});
       expect(screen.queryByTestId('points-drawer-household-row')).not.toBeInTheDocument();
       expect(screen.queryByText('Household')).not.toBeInTheDocument();
     });
 
-    it('switches the Household value between Day and Week the same as the standings do', () => {
+    it('switches the Household value between Day and Week the same as the standings do', async () => {
       // A legacy completion TODAY counts in both Day and Week windows. `count:
       // 1` matters — a same-day 0 counter reads as "reset back off" rather
       // than "still completed" (see `pointsForHabitOnDate`'s current-period
@@ -280,10 +290,52 @@ describe('PointsBreakdownDrawer', () => {
       setup({ habits });
       renderDrawer();
 
-      expect(screen.getByTestId('points-drawer-household-row')).toHaveTextContent('10');
+      expect(await screen.findByTestId('points-drawer-household-row')).toHaveTextContent('10');
 
       fireEvent.click(screen.getByRole('radio', { name: 'Day' }));
-      expect(screen.getByTestId('points-drawer-household-row')).toHaveTextContent('10');
+      expect(await screen.findByTestId('points-drawer-household-row')).toHaveTextContent('10');
+    });
+
+    it('threads submissionTotals through the CURRENT window so a submission that OUTLIVES its completion date still counts toward the Household row (finding 1)', async () => {
+      // A legacy incremental habit whose completion was reverted — the date
+      // is gone from `completedDates` — but its submission doc (worth -20)
+      // still stands (a down-toggle removes the completion date but never
+      // deletes the submission; see `pointsForHabitOnDate`'s doc comment in
+      // utils/habitLogic.ts).
+      const habits = [
+        makeHabit({
+          id: 'h-reverted',
+          type: 'negative',
+          scoringType: 'incremental',
+          basePoints: 20,
+          hasSubmissionTracking: true,
+          completedDates: [],
+          completedBy: undefined,
+        }),
+      ];
+      const getHabitSubmissions = async (habitId: string): Promise<HabitSubmission[]> => {
+        if (habitId !== 'h-reverted') return [];
+        return [
+          {
+            id: 's-reverted',
+            habitId: 'h-reverted',
+            habitTitle: 'Workout',
+            timestamp: '2026-07-28T20:00:00.000Z',
+            date: '2026-07-28',
+            count: 1,
+            pointsEarned: -20,
+            streakDaysAtTime: 1,
+            multiplierApplied: 1,
+            createdBy: 'paul',
+            createdAt: '2026-07-28T20:00:00.000Z',
+          },
+        ];
+      };
+      setup({ habits, getHabitSubmissions });
+      renderDrawer();
+
+      const householdRow = await screen.findByTestId('points-drawer-household-row');
+      expect(householdRow).toHaveTextContent('-20');
     });
   });
 });

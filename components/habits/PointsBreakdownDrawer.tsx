@@ -1,4 +1,4 @@
-import React, { useId, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Crown, Gift, TrendingDown, TrendingUp, X } from 'lucide-react';
 import { format, parseISO, startOfWeek, endOfWeek } from 'date-fns';
@@ -14,6 +14,8 @@ import HouseholdBadge from '@/components/ui/HouseholdBadge';
 import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 import { getAdultStandings, computePointsTrend, type PointsDrawerPeriod } from '@/utils/pointsDrawer';
 import { calculateHouseholdShareForDateRange } from '@/utils/scoreboardWidget';
+import { fetchSubmissionTotals } from '@/utils/habitSubmissionTotals';
+import type { SubmissionTotalsByHabitDate } from '@/utils/habitLogic';
 
 interface PointsBreakdownDrawerProps {
   open: boolean;
@@ -48,7 +50,7 @@ interface PointsBreakdownDrawerProps {
  */
 const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onClose }) => {
   const titleId = useId();
-  const { dailyPoints, weeklyPoints, totalPoints, habits } = useGamification();
+  const { dailyPoints, weeklyPoints, totalPoints, habits, getHabitSubmissions } = useGamification();
   const { members, household, recaps } = useHouseholdCore();
   const kidModeEnabled = useKidModeEnabled();
   const navigate = useNavigate();
@@ -62,16 +64,57 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
 
   const householdTotal = period === 'day' ? dailyPoints : weeklyPoints;
 
-  // The Household row — see the module doc comment's "ONE exception" above.
-  // Anchored on `getLocalDateString()` (never a bare `new Date()`) so it's
-  // deterministic under the same mock the rest of the per-member-points
-  // surfaces use in tests.
-  const householdShare = useMemo(() => {
+  // The Household row's date window — Anchored on `getLocalDateString()`
+  // (never a bare `new Date()`) so it's deterministic under the same mock the
+  // rest of the per-member-points surfaces use in tests.
+  const householdShareStart = useMemo(() => {
     const today = getLocalDateString();
-    const start =
-      period === 'day' ? today : format(startOfWeek(parseISO(today), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-    return calculateHouseholdShareForDateRange(habits, start, today);
-  }, [habits, period]);
+    return period === 'day' ? today : format(startOfWeek(parseISO(today), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+  }, [period]);
+
+  // Stored submissions covering the Household row's window — see the module
+  // doc comment's "ONE exception" above. A submission can OUTLIVE its
+  // completion date (a reverted toggle removes the date from
+  // `completedDates` but never deletes the submission doc — see
+  // `pointsForHabitOnDate`'s doc comment in utils/habitLogic.ts), and without
+  // this map `decomposeDayPoints` would collapse that day to 0 while
+  // `dailyPoints`/`weeklyPoints` (written by `usePointsSync`'s corrective
+  // recompute, which DOES fold submissions in) still counts it — making the
+  // Household row structurally disagree with the total it exists to explain.
+  // Fetched via the same `fetchSubmissionTotals` helper `usePointsSync` uses.
+  //
+  // Stored alongside the window (`key`) it was fetched for — read at render
+  // time by `householdShare` below, rather than eagerly reset with a
+  // synchronous setState at the top of the effect (a react-hooks/
+  // set-state-in-effect footgun) — so a period switch (Day ↔ Week) can't
+  // render the OTHER period's stale figure under the new period's label: the
+  // memo below treats a `key` mismatch exactly like "not fetched yet" and
+  // hides the row (see the `householdShare !== undefined` render guards).
+  const [fetchedShare, setFetchedShare] =
+    useState<{ key: string; totals: SubmissionTotalsByHabitDate } | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const today = getLocalDateString();
+        const totals = await fetchSubmissionTotals(habits, householdShareStart, today, getHabitSubmissions);
+        if (!cancelled) setFetchedShare({ key: householdShareStart, totals });
+      } catch {
+        // A transient failure leaves the row hidden rather than showing a
+        // stale/incomplete figure; the next habits snapshot or period switch
+        // re-fires this effect and retries.
+        if (!cancelled) setFetchedShare(undefined);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [habits, householdShareStart, getHabitSubmissions]);
+
+  const householdShare = useMemo(() => {
+    if (!fetchedShare || fetchedShare.key !== householdShareStart) return undefined;
+    const today = getLocalDateString();
+    return calculateHouseholdShareForDateRange(habits, householdShareStart, today, today, fetchedShare.totals);
+  }, [habits, householdShareStart, fetchedShare]);
 
   const trend = useMemo(
     () => (period === 'week' ? computePointsTrend(weeklyPoints, recaps, members) : null),
@@ -168,10 +211,11 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
 
         {/* Per-member standings — adults only — plus the Household row, the
             `unattributed` remainder of `household = Σ members + unattributed`
-            (pre-attribution legacy history today). Shown only when nonzero so
-            an ordinary household with none sees exactly what it saw before
-            this row existed. */}
-        {(standings.length > 0 || householdShare !== 0) && (
+            (pre-attribution legacy history today). Shown only when nonzero
+            (and only once its submission-aware figure has loaded — see
+            `householdShare`'s doc comment) so an ordinary household with none
+            sees exactly what it saw before this row existed. */}
+        {(standings.length > 0 || (householdShare !== undefined && householdShare !== 0)) && (
           <SurfaceList>
             {standings.map((row) => (
               <Row key={row.memberId} className="gap-3">
@@ -204,7 +248,7 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
                 </span>
               </Row>
             ))}
-            {householdShare !== 0 && (
+            {householdShare !== undefined && householdShare !== 0 && (
               <Row className="gap-3" data-testid="points-drawer-household-row">
                 <HouseholdBadge size={30} className="flex-none" data-testid="points-drawer-household-badge" />
                 <span className="min-w-0 flex-1 flex items-center gap-1.5">

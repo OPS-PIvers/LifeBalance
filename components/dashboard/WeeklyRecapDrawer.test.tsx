@@ -198,6 +198,38 @@ describe('WeeklyRecapDrawer', () => {
     await advance([WEEK_CARD, 'Your week, Jen']);
   });
 
+  it('never lets the "Household" legend contradict the chart on a MIXED-SIGN week — the signed total moves to the household card instead (household-points-visibility, finding 2)', async () => {
+    // Monday +15 (legacy history), Wednesday -20 (e.g. a legacy penalty habit
+    // whose completion reverted but whose submission still stands). The chart
+    // (buildRecapChart, unchanged by this fix) clamps segments to their
+    // POSITIVE share, so it draws only Monday's +15 household segment and
+    // drops Wednesday's -20 entirely — a legend printing the signed net (-5)
+    // beside that chart would contradict what's actually drawn.
+    const mixedSignRecap = ceremonyRecap({
+      dailyPoints: DAYS.map((date, i) => {
+        const byMember = { jen: 50, paul: 45 };
+        const unattributed = i === 0 ? 15 : i === 2 ? -20 : 0;
+        return { date, byMember, unattributed, total: byMember.jen + byMember.paul + unattributed };
+      }),
+    });
+    render(<WeeklyRecapDrawer recap={mixedSignRecap} isOpen onClose={() => {}} />);
+
+    await advance([WEEK_CARD]);
+
+    // The legend shows the plain "Household" label — no figure that could
+    // disagree with the chart.
+    const legendEntry = screen.getByText('Household');
+    expect(legendEntry).toHaveTextContent('Household');
+    expect(legendEntry.textContent).toBe('Household');
+    expect(screen.queryByText(/Household ·/)).not.toBeInTheDocument();
+
+    // The signed net (15 + -20 = -5) instead shows on the household card, as
+    // its own "earned together" figure.
+    const householdShare = screen.getByTestId('recap-household-share');
+    expect(householdShare).toHaveTextContent('-5');
+    expect(householdShare).toHaveTextContent('earned together');
+  });
+
   it('leads the week card with the head-to-head under the podium tone', async () => {
     mockCore.householdSettings = { name: 'The Ivers Household', ceremonyTone: 'podium' };
     render(<WeeklyRecapDrawer recap={ceremonyRecap()} isOpen onClose={() => {}} />);

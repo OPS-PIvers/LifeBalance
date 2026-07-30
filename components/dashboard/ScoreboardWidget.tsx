@@ -16,6 +16,7 @@ import {
 } from '@/utils/scoreboardWidget';
 import { calculateHouseholdPointsForDateRange, calculateMemberPointsForDateRange } from '@/utils/habitAttribution';
 import { fetchSubmissionTotals } from '@/utils/habitSubmissionTotals';
+import type { SubmissionTotalsByHabitDate } from '@/utils/habitLogic';
 import { cn } from '@/utils/cn';
 import { Section, SurfaceList } from '@/components/ui/Section';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
@@ -86,13 +87,67 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
   const currentWeek = weekOptions[0] ?? null;
 
   // The household's own share of the CURRENT week's total — the unattributed
-  // remainder (pre-attribution legacy history today). Derived the same way
-  // `calculateHouseholdShareForDateRange` is derived for a past week below,
-  // so the Household row and `weeklyPoints` can never structurally disagree —
-  // see the util's own doc comment for why this is never a subtraction.
+  // remainder (pre-attribution legacy history today, OR a stored submission
+  // that OUTLIVES its completion date: a reverted toggle removes the date
+  // from `completedDates` but never deletes the submission doc, so its
+  // points still stand on their own — see `pointsForHabitOnDate`'s doc
+  // comment in utils/habitLogic.ts). Without threading `submissionTotals`
+  // through, `decomposeDayPoints` collapses such a day to 0, while the
+  // canonical `weeklyPoints` figure (written by `usePointsSync`'s corrective
+  // recompute, which DOES fold submissions in) still counts it — so the
+  // Household row would silently disagree with the total it's supposed to
+  // help explain. Fetched the same way the past-week path below already
+  // does, via the same `fetchSubmissionTotals` helper `usePointsSync` uses.
+  //
+  // `undefined` means "not fetched yet for this week" — the Household row
+  // stays hidden (see the `!!householdShare` render guard) rather than
+  // flashing a submission-less, possibly-wrong figure while the fetch is in
+  // flight; render nothing, never a wrong number.
+  const [currentWeekSubmissionTotals, setCurrentWeekSubmissionTotals] =
+    useState<SubmissionTotalsByHabitDate | undefined>(undefined);
+
+  useEffect(() => {
+    if (!currentWeek) {
+      setCurrentWeekSubmissionTotals(undefined);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const totals = await fetchSubmissionTotals(
+          habits,
+          currentWeek.weekStart,
+          getLocalDateString(),
+          getHabitSubmissions,
+        );
+        if (!cancelled) setCurrentWeekSubmissionTotals(totals);
+      } catch {
+        // A transient failure leaves the row hidden (per the doc comment
+        // above) rather than showing a stale/incomplete figure; the next
+        // habits snapshot re-fires this effect and retries.
+        if (!cancelled) setCurrentWeekSubmissionTotals(undefined);
+      }
+    })();
+    return () => { cancelled = true; };
+    // Only habits flagged `hasSubmissionTracking` are actually read
+    // (`fetchSubmissionTotals`'s own bound), so this re-fires on every
+    // habits snapshot but issues zero Firestore reads for a household that
+    // has never used the submissions path — same cost trade-off the
+    // past-week fetch below already accepts over caching.
+  }, [habits, currentWeek, getHabitSubmissions]);
+
   const currentWeekHouseholdShare = useMemo(
-    () => calculateHouseholdShareForDateRange(habits, currentWeek?.weekStart ?? getLocalDateString(), getLocalDateString()),
-    [habits, currentWeek]
+    () =>
+      currentWeekSubmissionTotals === undefined
+        ? undefined
+        : calculateHouseholdShareForDateRange(
+            habits,
+            currentWeek?.weekStart ?? getLocalDateString(),
+            getLocalDateString(),
+            getLocalDateString(),
+            currentWeekSubmissionTotals,
+          ),
+    [habits, currentWeek, currentWeekSubmissionTotals]
   );
 
   // null = current week. Component state only, never written to storage.
