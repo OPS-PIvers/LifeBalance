@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { format, startOfWeek } from 'date-fns';
-import { Habit } from '@/types/schema';
+import { Habit, HouseholdMember } from '@/types/schema';
 import {
   computeHouseholdPointsSync,
   type HouseholdPoints,
   type PointsSyncResult,
   type SubmissionTotalsByHabitDate,
 } from '@/utils/habitLogic';
+import {
+  computeMemberPointsSync,
+  type MemberPointsSyncUpdate,
+} from '@/utils/habitAttribution';
 import { fetchSubmissionTotals, type GetHabitSubmissions } from '@/utils/habitSubmissionTotals';
 import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
 
@@ -22,6 +26,17 @@ interface UsePointsSyncParams {
   habits: Habit[];
   /** Persists the corrected points + reset markers. Only called when needed. */
   writePoints: (update: PointsSyncUpdate) => void | Promise<void>;
+  /**
+   * Per-member points (stage 1): the household members to correct alongside the
+   * household figure. Defaults to none, which keeps this hook's behaviour
+   * byte-for-byte what it was before the feature.
+   */
+  members?: Pick<HouseholdMember, 'uid' | 'points'>[];
+  /**
+   * Persists per-member corrections. Only called with the members that actually
+   * drifted, so a household with no attribution and no chores never writes.
+   */
+  writeMemberPoints?: (updates: MemberPointsSyncUpdate[]) => void | Promise<void>;
   /**
    * Reads one habit's stored submissions. Supplied by the household context; the
    * default reads nothing, which degrades to the derived attribution (the
@@ -94,6 +109,8 @@ export const usePointsSync = ({
   points,
   habits,
   writePoints,
+  members,
+  writeMemberPoints,
   getHabitSubmissions = noSubmissions,
   computePoints = computeHouseholdPointsSync,
   now = defaultNow,
@@ -105,10 +122,12 @@ export const usePointsSync = ({
   // render) and declared before the consumers below so they read fresh values.
   const habitsRef = useRef(habits);
   const pointsRef = useRef(points);
+  const membersRef = useRef(members);
   useEffect(() => {
     habitsRef.current = habits;
     pointsRef.current = points;
-  }, [habits, points]);
+    membersRef.current = members;
+  }, [habits, points, members]);
 
   // Last fetched submission totals + the fingerprint they were fetched for, so
   // the 5-minute scheduler tick re-reads Firestore only when a tracked habit has
@@ -138,6 +157,21 @@ export const usePointsSync = ({
       submissionCacheRef.current = { key: cacheKey, totals: submissionTotals };
     }
 
+    // Per-member points (stage 1): the member twin of the household recompute,
+    // run off the SAME tick and the SAME submission window. It returns only the
+    // members whose stored daily/weekly drifted, so a household with no
+    // attribution and no assigned chores produces no member writes at all.
+    const currentMembers = membersRef.current;
+    if (writeMemberPoints && currentMembers && currentMembers.length > 0) {
+      const memberUpdates = computeMemberPointsSync(
+        currentMembers,
+        currentHabits,
+        when,
+        submissionTotals,
+      );
+      if (memberUpdates.length > 0) await writeMemberPoints(memberUpdates);
+    }
+
     const { points: corrected, needsUpdate } = computePoints(
       currentHabits,
       currentPoints,
@@ -147,7 +181,7 @@ export const usePointsSync = ({
     if (!needsUpdate) return; // keeps periodic ticks write-free when nothing drifted
 
     await writePoints({ ...corrected, today });
-  }, [householdId, writePoints, getHabitSubmissions, computePoints, now]);
+  }, [householdId, writePoints, writeMemberPoints, getHabitSubmissions, computePoints, now]);
 
   // (a) Run once per household load. The guard ref keyed on householdId means a
   //     new household / re-login re-triggers the sync without resetting state.

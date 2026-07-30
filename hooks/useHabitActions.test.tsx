@@ -795,6 +795,245 @@ describe('useHabitActions.toggleHabit (T1: single points write path)', () => {
   });
 });
 
+// Per-member habit points (stage 1): the dual write. A toggle must, in ONE
+// batch, (a) bump `completedBy.<date>.<uid>` by a dot-path increment,
+// (b) credit the household pool exactly what it always did, and (c) credit the
+// acting member's own doc at THEIR streak multiplier.
+describe('useHabitActions.toggleHabit (per-member attribution dual-write)', () => {
+  const memberPath = `${householdPath}/members/${currentUser.uid}`;
+  const memberUpdate = () => capturedUpdates.find(u => u.ref.__path === memberPath);
+  const today = () => format(new Date(), 'yyyy-MM-dd');
+
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    commitCount = 0;
+    incrementMock.mockClear();
+  });
+
+  it('increments attribution by dot path and credits the member, in ONE commit', async () => {
+    const habit = baseHabit({ completedDates: [], count: 0 });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'up');
+    });
+
+    // (a) Dot-path increment — NEVER a whole `completedBy` map write.
+    expect(habitUpdate()!.data[`completedBy.${today()}.${currentUser.uid}`])
+      .toEqual({ __increment: 1 });
+    expect(habitUpdate()!.data['completedBy']).toBeUndefined();
+
+    // (b) The household pool is credited exactly what it was before this
+    //     feature: the habit-level delta. This is the invisibility guarantee.
+    expect(householdUpdate()!.data['points.daily']).toEqual({ __increment: 10 });
+
+    // (c) The acting member's own score moves too, at their own multiplier
+    //     (a first completion → 1.0× → 10).
+    expect(memberUpdate()).toBeDefined();
+    expect(memberUpdate()!.data['points.daily']).toEqual({ __increment: 10 });
+    expect(memberUpdate()!.data['points.weekly']).toEqual({ __increment: 10 });
+    expect(memberUpdate()!.data['points.total']).toEqual({ __increment: 10 });
+
+    // Still exactly ONE batch (project atomicity rule).
+    expect(commitCount).toBe(1);
+  });
+
+  it('deletes the member’s day key when a down-toggle empties it', async () => {
+    const habit = baseHabit({
+      completedDates: [today()],
+      count: 1,
+      totalCount: 1,
+      completedBy: { [today()]: { [currentUser.uid]: 1 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'down');
+    });
+
+    expect(habitUpdate()!.data[`completedBy.${today()}.${currentUser.uid}`])
+      .toEqual({ __deleteField: true });
+    expect(memberUpdate()!.data['points.total']).toEqual({ __increment: -10 });
+  });
+
+  it('decrements rather than deletes when the member has units left', async () => {
+    const habit = baseHabit({
+      completedDates: [today()],
+      count: 2,
+      totalCount: 2,
+      completedBy: { [today()]: { [currentUser.uid]: 2 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'down');
+    });
+
+    expect(habitUpdate()!.data[`completedBy.${today()}.${currentUser.uid}`])
+      .toEqual({ __increment: -1 });
+  });
+
+  it('never writes negative attribution for a GRANDFATHERED completion', async () => {
+    // A completion recorded before this feature has no `completedBy` entry.
+    // Down-toggling it must leave attribution untouched (and debit nobody)
+    // while the household pool is reversed exactly as it always was.
+    const habit = baseHabit({ completedDates: [today()], count: 1, totalCount: 1 });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'down');
+    });
+
+    expect(habitUpdate()!.data[`completedBy.${today()}.${currentUser.uid}`]).toBeUndefined();
+    expect(memberUpdate()).toBeUndefined();
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: -10 });
+  });
+
+  it('credits the member at THEIR streak multiplier, not the habit’s', async () => {
+    // The habit has a 6-day streak (2.0× on the 7th day) but the acting member
+    // has never been credited, so their own first completion earns 1.0×. The
+    // household still gets its habit-level 20 — nothing visible moved.
+    const dates = Array.from({ length: 6 }, (_, i) => format(subDays(new Date(), i + 1), 'yyyy-MM-dd'));
+    const habit = baseHabit({ completedDates: dates, count: 0, totalCount: 6 });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'up');
+    });
+
+    expect(householdUpdate()!.data['points.daily']).toEqual({ __increment: 20 });
+    expect(memberUpdate()!.data['points.daily']).toEqual({ __increment: 10 });
+  });
+
+  it('does NOT double-credit an assigned chore’s assignee', async () => {
+    // An assigned chore already routes its points to the assignee's member doc
+    // (Plan 080c), so the attribution layer must not credit a second time —
+    // exactly one member write, carrying the habit-level delta.
+    const habit = baseHabit({ completedDates: [], count: 0, assignedTo: 'kid_leo' });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'up');
+    });
+
+    const memberWrites = capturedUpdates.filter(u => u.ref.__path.includes('/members/'));
+    expect(memberWrites).toHaveLength(1);
+    expect(memberWrites[0]!.ref.__path).toBe(`${householdPath}/members/kid_leo`);
+    expect(memberWrites[0]!.data['points.total']).toEqual({ __increment: 10 });
+    // Attribution is still RECORDED (stage 2's pie counter reads it).
+    expect(habitUpdate()!.data[`completedBy.${today()}.${currentUser.uid}`])
+      .toEqual({ __increment: 1 });
+  });
+});
+
+describe('useHabitActions.creditHabitCompletion / uncreditHabitCompletion', () => {
+  const today = () => format(new Date(), 'yyyy-MM-dd');
+  const memberWrites = () => capturedUpdates.filter(u => u.ref.__path.includes('/members/'));
+
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    commitCount = 0;
+    incrementMock.mockClear();
+  });
+
+  it('credits EVERY selected member a full completion in one batch', async () => {
+    const habit = baseHabit({ completedDates: [], count: 0 });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.creditHabitCompletion('h1', ['paul-uid', 'jen-uid']);
+    });
+
+    expect(habitUpdate()!.data[`completedBy.${today()}.paul-uid`]).toEqual({ __increment: 1 });
+    expect(habitUpdate()!.data[`completedBy.${today()}.jen-uid`]).toEqual({ __increment: 1 });
+    // Two members => two units on the counters (the pie counter reads "2").
+    expect(habitUpdate()!.data['totalCount']).toEqual({ __increment: 2 });
+    expect(habitUpdate()!.data['count']).toEqual({ __increment: 2 });
+
+    const paths = memberWrites().map(u => u.ref.__path).sort();
+    expect(paths).toEqual([
+      `${householdPath}/members/jen-uid`,
+      `${householdPath}/members/paul-uid`,
+    ]);
+    for (const write of memberWrites()) {
+      expect(write.data['points.total']).toEqual({ __increment: 10 });
+    }
+    expect(commitCount).toBe(1);
+  });
+
+  it('un-credits one member: decrements, reverses their points, keeps the day', async () => {
+    const habit = baseHabit({
+      completedDates: [today()],
+      count: 2,
+      totalCount: 2,
+      completedBy: { [today()]: { 'paul-uid': 1, 'jen-uid': 1 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.uncreditHabitCompletion('h1', 'jen-uid');
+    });
+
+    expect(habitUpdate()!.data[`completedBy.${today()}.jen-uid`]).toEqual({ __deleteField: true });
+    // Paul is still credited, so the day stays completed.
+    expect(habitUpdate()!.data['completedDates']).toBeUndefined();
+
+    const jen = memberWrites().find(u => u.ref.__path.endsWith('jen-uid'));
+    expect(jen!.data['points.total']).toEqual({ __increment: -10 });
+    expect(memberWrites().some(u => u.ref.__path.endsWith('paul-uid'))).toBe(false);
+  });
+
+  it('drops the date once the last attributed unit is un-credited', async () => {
+    const habit = baseHabit({
+      completedDates: [today()],
+      count: 1,
+      totalCount: 1,
+      completedBy: { [today()]: { 'jen-uid': 1 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.uncreditHabitCompletion('h1', 'jen-uid');
+    });
+
+    expect(habitUpdate()!.data['completedDates']).toEqual({ __arrayRemove: [today()] });
+  });
+
+  it('is a NO-OP on an unattributed (pre-feature) completion', async () => {
+    const habit = baseHabit({ completedDates: [today()], count: 1, totalCount: 1 });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.uncreditHabitCompletion('h1', 'jen-uid');
+    });
+
+    expect(capturedUpdates).toHaveLength(0);
+    expect(commitCount).toBe(0);
+  });
+});
+
 describe('useHabitActions.toggleHabit (Plan 080c: assigned chores credit the assignee)', () => {
   beforeEach(() => {
     capturedUpdates.length = 0;

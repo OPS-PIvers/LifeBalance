@@ -13,7 +13,17 @@ import { buildToDosFromTemplate } from '@/utils/taskTemplates';
 import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
 import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
-import { processToggleHabit, processStaleDownToggle, isHabitStale, calculateResetPoints, streakForHabit } from '@/utils/habitLogic';
+import { processToggleHabit, processStaleDownToggle, isHabitStale, calculateResetPoints, streakForHabit, habitPeriodStart } from '@/utils/habitLogic';
+import {
+  attributedUnitsOnDate,
+  attributionReversalForDates,
+  habitFeedsMemberAttribution,
+  householdPeriodPoints,
+  memberCompletionCount,
+  memberPeriodPointsDelta,
+  withAttributionDelta,
+  withDatesUnattributed,
+} from '@/utils/habitAttribution';
 import { computeBackdatedHabitFire, computeHabitTriggerFire, computeHabitTriggerReverse } from '@/utils/habitTriggerFire';
 import { evaluateTodoSubtaskGate, TodoSubtasksIncompleteError } from '@/utils/todoSubtaskGate';
 import { setSubtaskDone, subtaskProgress } from '@/utils/subtasks';
@@ -370,6 +380,9 @@ const SEED_HABITS: Habit[] = [
     createdBy: 'test-user-id', lastUpdated: new Date().toISOString()
   },
 ];
+
+/** The signed-in principal in Test Mode (mirrors MockAuthContext). */
+const MOCK_USER_UID = 'test-user-id';
 
 const SEED_MEMBERS: HouseholdMember[] = [
   {
@@ -1607,10 +1620,29 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   // the real context's habit writeBatch applies to household points.
   const creditPoints = useCallback((delta: number) => {
     if (delta === 0) return;
-    setMembers(prev => prev.map(m => m.uid === 'test-user-id'
+    setMembers(prev => prev.map(m => m.uid === MOCK_USER_UID
       ? { ...m, points: { daily: m.points.daily + delta, weekly: m.points.weekly + delta, total: m.points.total + delta } }
       : m));
     setTotalPoints(prev => prev + delta);
+  }, []);
+
+  /**
+   * Per-member points (stage 1): move ONE member's own score, without touching
+   * the household pool — the member half of the two-layer model. Buckets are
+   * pre-gated by the caller (a back-dated credit moves total only).
+   */
+  const creditMemberPoints = useCallback((
+    memberId: string,
+    delta: { daily: number; weekly: number; total: number },
+  ) => {
+    if (delta.daily === 0 && delta.weekly === 0 && delta.total === 0) return;
+    setMembers(prev => prev.map(m => m.uid === memberId
+      ? { ...m, points: {
+          daily: m.points.daily + delta.daily,
+          weekly: m.points.weekly + delta.weekly,
+          total: m.points.total + delta.total,
+        } }
+      : m));
   }, []);
 
   // Habit Automations (PRD #1065): fire (or reverse) the habit a to-do is linked
@@ -1717,7 +1749,26 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
 
     const result = processToggleHabit(effectiveHabit, direction);
     if (!result) return; // e.g. decrement below 0
-    setHabits(prev => prev.map(h => h.id === id ? { ...h, ...result.updatedHabit } : h));
+
+    // Per-member points (stage 1) parity: a tap attributes one unit to the
+    // signed-in member (or withdraws one on a 'down'), so Test Mode carries the
+    // same `completedBy` shape production does.
+    //
+    // NOTE: no SEPARATE member-points credit is applied here, because this mock
+    // deliberately derives `dailyPoints`/`weeklyPoints` from `members[0]` —
+    // `creditPoints` below already moves the test user's member score. Stage 2
+    // untangles that conflation when the scoreboard needs true per-member
+    // numbers; the credit/un-credit mutations below already keep them separate.
+    const toggleDate = getLocalDateString();
+    const attributionDelta =
+      direction === 'up'
+        ? 1
+        : memberCompletionCount(effectiveHabit, MOCK_USER_UID, toggleDate) > 0
+          ? -1
+          : 0;
+    setHabits(prev => prev.map(h => h.id === id
+      ? withAttributionDelta({ ...h, ...result.updatedHabit }, toggleDate, MOCK_USER_UID, attributionDelta)
+      : h));
     creditPoints(result.pointsChange);
     toast.success(
       `Mock: Habit ${direction === 'up' ? 'incremented' : 'decremented'}${attribution ? ` (${attribution})` : ''}`
@@ -1752,11 +1803,16 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const resetHabit = useCallback(async (id: string) => {
     const habit = habits.find(h => h.id === id);
     if (!habit) return;
+    const today = getLocalDateString();
     const pointsToRemove = calculateResetPoints(habit);
-    const newCompletedDates = habit.completedDates.filter(d => d !== getLocalDateString());
+    const newCompletedDates = habit.completedDates.filter(d => d !== today);
+    // Per-member points (stage 1) parity: a reset clears the day for everyone,
+    // so today's attribution goes with the completion date, and each credited
+    // member has exactly their own earned points reversed.
+    const reversal = attributionReversalForDates(habit, [today], today);
     setHabits(prev => prev.map(h => h.id === id
       ? {
-          ...h,
+          ...withDatesUnattributed(h, [today]),
           count: 0,
           completedDates: newCompletedDates,
           streakDays: streakForHabit({ period: h.period, completedDates: newCompletedDates, frozenDates: h.frozenDates }),
@@ -1764,8 +1820,153 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         }
       : h));
     creditPoints(-pointsToRemove);
+    for (const [memberId, delta] of reversal.perMember) {
+      if (memberId !== MOCK_USER_UID) creditMemberPoints(memberId, delta);
+    }
     toast.success('Mock: Habit reset');
-  }, [habits, creditPoints]);
+  }, [habits, creditPoints, creditMemberPoints]);
+
+  /**
+   * Per-member points (stage 1) parity — credit ONE completion of `habitId` to
+   * each of `memberIds`. Mirrors `useHabitActions.creditHabitCompletion`: the
+   * habit's counters move one unit per member, each member is credited at their
+   * OWN streak multiplier, and the pool delta is a before/after difference of
+   * the unchanged household scorer.
+   */
+  const creditHabitCompletion = useCallback(async (
+    habitId: string,
+    memberIds: string[],
+    date?: string,
+  ) => {
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit || memberIds.length === 0 || habit.archivedAt) return;
+
+    const today = getLocalDateString();
+    const targetDate = date ?? today;
+    const isStale = isHabitStale(habit);
+    const inLivePeriod =
+      habitPeriodStart(habit.period, targetDate) === habitPeriodStart(habit.period, today);
+    const liveCount = isStale ? 0 : habit.count;
+    const addedUnits = memberIds.length;
+    const target = Math.max(habit.targetCount, 1);
+    const periodUnits = inLivePeriod
+      ? liveCount
+      : habit.completedDates
+          .filter(d => habitPeriodStart(habit.period, d) === habitPeriodStart(habit.period, targetDate))
+          .reduce((sum, d) => sum + attributedUnitsOnDate(habit, d), 0);
+    const marksComplete =
+      habit.scoringType === 'incremental' || periodUnits + addedUnits >= target;
+    const dateNewlyCompleted = marksComplete && !habit.completedDates.includes(targetDate);
+    const nextCompletedDates = dateNewlyCompleted
+      ? [...habit.completedDates, targetDate]
+      : habit.completedDates;
+
+    let after: Habit = {
+      ...habit,
+      count: inLivePeriod ? liveCount + addedUnits : liveCount,
+      totalCount: habit.totalCount + addedUnits,
+      completedDates: nextCompletedDates,
+      streakDays: streakForHabit({
+        period: habit.period,
+        completedDates: nextCompletedDates,
+        frozenDates: habit.frozenDates,
+        pausedUntil: habit.pausedUntil,
+      }),
+      lastUpdated: new Date().toISOString(),
+    };
+    for (const memberId of memberIds) {
+      after = withAttributionDelta(after, targetDate, memberId, 1);
+    }
+
+    const isToday = targetDate === today;
+    const gate = (amount: number) => ({
+      daily: isToday ? amount : 0,
+      weekly: habitPeriodStart('weekly', targetDate) === habitPeriodStart('weekly', today) ? amount : 0,
+      total: amount,
+    });
+
+    setHabits(prev => prev.map(h => (h.id === habitId ? after : h)));
+    const poolDelta =
+      householdPeriodPoints(after, targetDate, today) -
+      householdPeriodPoints(habit, targetDate, today);
+    if (poolDelta !== 0) setTotalPoints(prev => prev + poolDelta);
+    if (habitFeedsMemberAttribution(habit)) {
+      for (const memberId of memberIds) {
+        creditMemberPoints(
+          memberId,
+          gate(memberPeriodPointsDelta(habit, after, memberId, targetDate, today)),
+        );
+      }
+    }
+    toast.success('Mock: Completion credited');
+  }, [habits, creditMemberPoints]);
+
+  /**
+   * Per-member points (stage 1) parity — un-credit ONE of `memberId`'s
+   * completions. A no-op on an unattributed (pre-feature) completion.
+   */
+  const uncreditHabitCompletion = useCallback(async (
+    habitId: string,
+    memberId: string,
+    date?: string,
+  ) => {
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit) return;
+
+    const today = getLocalDateString();
+    const targetDate = date ?? today;
+    if (memberCompletionCount(habit, memberId, targetDate) <= 0) return;
+
+    const inLivePeriod =
+      habitPeriodStart(habit.period, targetDate) === habitPeriodStart(habit.period, today) &&
+      !isHabitStale(habit);
+    const target = Math.max(habit.targetCount, 1);
+    const stripped = withAttributionDelta(habit, targetDate, memberId, -1);
+    const nextCount = inLivePeriod ? Math.max(0, habit.count - 1) : habit.count;
+    const stillCompleted = inLivePeriod
+      ? habit.scoringType === 'incremental'
+        ? nextCount >= 1
+        : nextCount >= target
+      : attributedUnitsOnDate(stripped, targetDate) > 0;
+    const nextCompletedDates =
+      habit.completedDates.includes(targetDate) && !stillCompleted
+        ? habit.completedDates.filter(d => d !== targetDate)
+        : habit.completedDates;
+
+    const after: Habit = {
+      ...stripped,
+      count: nextCount,
+      totalCount: Math.max(0, habit.totalCount - 1),
+      completedDates: nextCompletedDates,
+      streakDays: streakForHabit({
+        period: habit.period,
+        completedDates: nextCompletedDates,
+        frozenDates: habit.frozenDates,
+        pausedUntil: habit.pausedUntil,
+      }),
+      lastUpdated: new Date().toISOString(),
+    };
+
+    const isToday = targetDate === today;
+    const gate = (amount: number) => ({
+      daily: isToday ? amount : 0,
+      weekly: habitPeriodStart('weekly', targetDate) === habitPeriodStart('weekly', today) ? amount : 0,
+      total: amount,
+    });
+
+    setHabits(prev => prev.map(h => (h.id === habitId ? after : h)));
+    const poolDelta =
+      householdPeriodPoints(after, targetDate, today) -
+      householdPeriodPoints(habit, targetDate, today);
+    if (poolDelta !== 0) setTotalPoints(prev => prev + poolDelta);
+    if (habitFeedsMemberAttribution(habit)) {
+      creditMemberPoints(
+        memberId,
+        gate(memberPeriodPointsDelta(habit, after, memberId, targetDate, today)),
+      );
+    }
+    toast.success('Mock: Completion un-credited');
+  }, [habits, creditMemberPoints]);
 
   // Calendar operations
   const addCalendarItem = useCallback(async (item: Omit<CalendarItem, 'id'>) => {
@@ -2803,6 +3004,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateHabitCategories,
     addHabitSubmission: noOp,
     resetHabitDay: noOp,
+    creditHabitCompletion,
+    uncreditHabitCompletion,
     updateHabitSubmission: noOp,
     deleteHabitSubmission: noOp,
     getHabitSubmissions,

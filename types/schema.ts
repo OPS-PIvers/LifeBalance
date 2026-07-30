@@ -712,6 +712,13 @@ export interface HabitTriggers {
 // store-sized bubble that tolerates GPS drift without covering neighbours.
 export const DEFAULT_LOCATION_RADIUS_METERS = 150;
 
+/**
+ * Per-member habit completion attribution: date (yyyy-MM-dd) → member uid →
+ * how many completions that member logged that day. Absent/partial by design —
+ * see `Habit.completedBy`.
+ */
+export type HabitCompletedBy = Record<string, Record<string, number>>;
+
 export interface Habit {
   id: string;
   title: string;
@@ -737,6 +744,22 @@ export interface Habit {
   count: number;
   totalCount: number; // Lifetime count
   completedDates: string[]; // YYYY-MM-DD
+  // Per-member habit points (stage 1): who completed this habit, on which date,
+  // how many times. `completedBy[yyyy-MM-dd][memberUid] = count`. This is an
+  // ADDITIVE overlay on `completedDates` — the flat date list keeps its exact
+  // existing meaning (the habit was completed that day, by anyone) and every
+  // household-level number is still derived from it alone. A date present in
+  // `completedDates` with NO `completedBy` entry is a pre-feature ("grandfathered")
+  // completion: it still counts for the household and is deliberately attributed
+  // to nobody.
+  //
+  // 🛡️ WRITE DISCIPLINE: this map is only ever written via dot-path
+  // `increment()` / `deleteField()` at `completedBy.<date>.<uid>` (or
+  // `completedBy.<date>` for a whole-day clear) — NEVER as a whole-map write.
+  // A whole-map write from a device holding a stale offline cache would wipe
+  // other days'/members' attribution, the exact class of bug that erased
+  // completion history on 2026-07-15. See utils/habitAttribution.ts.
+  completedBy?: HabitCompletedBy;
   streakDays: number;
   lastUpdated: string; // To handle resets
 

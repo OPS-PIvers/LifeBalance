@@ -392,6 +392,20 @@ export interface HouseholdContextType {
    *  were credited, and recomputes streaks — all in one atomic batch. */
   resetHabitDay: (habitId: string, date: string) => Promise<void>;
 
+  // Per-member habit points (stage 1) — the attribution write API. Nothing in
+  // the UI calls these yet; the stage-2 long-press picker will.
+  /** Credit ONE completion to each of `memberIds` on `date` (default today).
+   *  Member-set based, so "Me" / "Jen" / "Both of us" are the same call with a
+   *  different set. Each member is credited a full completion at their OWN
+   *  streak multiplier; the habit's counters move one unit per member. */
+  creditHabitCompletion: (habitId: string, memberIds: string[], date?: string) => Promise<void>;
+  /** Un-credit ONE of `memberId`'s completions on `date` (default today):
+   *  decrements their count, drops the date from their completion set once it
+   *  hits zero, and reverses exactly the points that completion earned (their
+   *  own streak multiplier AT that date). A no-op on an unattributed
+   *  (pre-feature) completion. */
+  uncreditHabitCompletion: (habitId: string, memberId: string, date?: string) => Promise<void>;
+
   // Challenge & Reward Actions
   updateChallenge: (challenge: Challenge) => Promise<void>;
   // Plan 080e — create a NEW family challenge, decoupled from yearly goals (no
@@ -633,7 +647,7 @@ export type GamificationContextValue = Pick<HouseholdContextType,
   | 'habitPatterns' | 'isGeneratingHabitPatterns' | 'refreshHabitPatterns'
   | 'addHabit' | 'updateHabit' | 'deleteHabit' | 'archiveHabit' | 'unarchiveHabit' | 'reorderHabits' | 'toggleHabit' | 'resetHabit' | 'setHabitPause' | 'updateHabitCategories'
   | 'addHabitSubmission' | 'updateHabitSubmission' | 'deleteHabitSubmission' | 'getHabitSubmissions'
-  | 'resetHabitDay'
+  | 'resetHabitDay' | 'creditHabitCompletion' | 'uncreditHabitCompletion'
   | 'updateChallenge' | 'addChallenge' | 'markChallengeComplete' | 'redeemReward'
   | 'addReward' | 'updateReward' | 'deleteReward'
   | 'requestRedemption' | 'approveRedemption' | 'denyRedemption'

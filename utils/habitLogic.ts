@@ -1,4 +1,4 @@
-import { Habit, HouseholdMember } from '@/types/schema';
+import { Habit } from '@/types/schema';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import {
   format,
@@ -1246,47 +1246,9 @@ export const computeHouseholdPointsSync = (
   return { points, needsUpdate };
 };
 
-/** One managed member's recomputed daily/weekly points (Plan 080c-2). */
-export interface ManagedMemberPointsReset {
-  memberUid: string;
-  daily: number;
-  weekly: number;
-}
-
-/**
- * Plan 080c-2: recompute each managed (kid) member's daily/weekly points from the
- * chores assigned to THEM, for the reset that rolls over their balance on a
- * day/week boundary (see `checkPointsReset`). Mirrors the household recompute but
- * scoped per member via `calculatePointsForDate`/`Range`'s `assignedTo` argument.
- *
- * Only members that are `isManaged` AND actually have an assigned chore are
- * returned — so for households not using Kid Mode this is an empty array and the
- * caller writes nothing. `total` is intentionally omitted: it is a lifetime
- * counter and never resets (only daily/weekly roll over).
- *
- * @param members - The household members (managed kids are filtered in)
- * @param habits - All habits (each kid's assigned chores are selected per member)
- * @param weekStartStr - Monday of the current week (YYYY-MM-DD)
- * @param today - Today (YYYY-MM-DD), caller's local timezone
- * @param submissionTotals - Optional stored submissions covering `weekStart..today`
- *   (a kid's chore can be back-dated/transaction-fired like any other habit)
- */
-export const computeManagedMemberPointsReset = (
-  members: Pick<HouseholdMember, 'uid' | 'isManaged'>[],
-  habits: Habit[],
-  weekStartStr: string,
-  today: string,
-  submissionTotals?: SubmissionTotalsByHabitDate,
-): ManagedMemberPointsReset[] => {
-  const out: ManagedMemberPointsReset[] = [];
-  for (const member of members) {
-    if (!member.isManaged) continue;
-    if (!habits.some(h => h.assignedTo === member.uid)) continue;
-    out.push({
-      memberUid: member.uid,
-      daily: calculatePointsForDate(habits, today, member.uid, submissionTotals),
-      weekly: calculatePointsForDateRange(habits, weekStartStr, today, member.uid, submissionTotals),
-    });
-  }
-  return out;
-};
+// NOTE (per-member points, stage 1): `computeManagedMemberPointsReset` used to
+// live here. It only knew ONE per-member points source — the chores assigned to
+// a managed kid — and is superseded by `computeMemberPointsReset` in
+// utils/habitAttribution.ts, which sums that source together with a member's
+// attributed share of shared habits. There is deliberately one per-member
+// recompute, not two.

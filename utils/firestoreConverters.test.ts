@@ -300,6 +300,41 @@ describe('habitConverter', () => {
     const partial = { title: 'Read', category: 'Learning', type: 'positive', basePoints: 5, period: 'daily', targetCount: 1, count: 0, totalCount: 0, completedDates: [], streakDays: 0, lastUpdated: '2024-01-01' };
     expect(() => habitConverter.fromFirestore(fakeSnap('habit-4', partial))).not.toThrow();
   });
+
+  // --- Per-member points (stage 1): completedBy round-trip ------------------
+  it('(a) round-trips a well-formed completedBy map', () => {
+    const completedBy = { '2026-06-15': { 'paul-uid': 2, 'jen-uid': 1 } };
+    const result = habitConverter.fromFirestore(fakeSnap('habit-5', { ...wellFormed, completedBy }));
+    expect(result.completedBy).toEqual(completedBy);
+
+    const out = callToFirestore(habitConverter, { ...wellFormed, id: 'habit-5', completedBy });
+    expect(out['completedBy']).toEqual(completedBy);
+  });
+
+  it('(b) a pre-feature habit with NO completedBy reads as an empty map', () => {
+    // Every existing habit takes this path. An empty map (not undefined) lets
+    // every reader index it without a guard, and scores identically to a habit
+    // that simply has never been credited.
+    const result = habitConverter.fromFirestore(fakeSnap('habit-6', wellFormed));
+    expect(result.completedBy).toEqual({});
+  });
+
+  it('(b) drops malformed days, non-numeric and non-positive counts', () => {
+    const result = habitConverter.fromFirestore(fakeSnap('habit-7', {
+      ...wellFormed,
+      completedBy: {
+        '2026-06-15': { 'paul-uid': 1, 'jen-uid': 0, 'ghost-uid': -3, 'bad-uid': 'lots' },
+        '2026-06-16': 'not-a-map',
+        '2026-06-17': { 'nan-uid': Number.NaN },
+      },
+    }));
+    expect(result.completedBy).toEqual({ '2026-06-15': { 'paul-uid': 1 } });
+  });
+
+  it('(b) a non-object completedBy degrades to an empty map instead of throwing', () => {
+    const result = habitConverter.fromFirestore(fakeSnap('habit-8', { ...wellFormed, completedBy: 'nope' }));
+    expect(result.completedBy).toEqual({});
+  });
 });
 
 // ---------------------------------------------------------------------------

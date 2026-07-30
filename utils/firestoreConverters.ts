@@ -41,6 +41,7 @@ import type {
   BucketPeriodSnapshot,
   CalendarItem,
   Habit,
+  HabitCompletedBy,
   HabitSubmission,
   Challenge,
   YearlyGoal,
@@ -140,6 +141,34 @@ export const calendarItemConverter: FirestoreDataConverter<CalendarItem> = {
   },
 };
 
+/**
+ * Per-member points (stage 1): normalise `Habit.completedBy` on read.
+ *
+ * Absent (every pre-feature habit) or malformed → `{}`, so every reader can do
+ * `habit.completedBy[date]` without a guard and a grandfathered habit scores
+ * identically to one that has simply never been credited. Non-object days and
+ * non-positive/non-numeric counts are dropped rather than trusted, since this
+ * map is written by dot-path increments from several clients.
+ *
+ * This is a READ-side normalisation only — attribution is never written back as
+ * a whole map (see `Habit.completedBy`).
+ */
+const normalizeCompletedBy = (raw: unknown): HabitCompletedBy => {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out: HabitCompletedBy = {};
+  for (const [date, day] of Object.entries(raw as Record<string, unknown>)) {
+    if (!day || typeof day !== 'object' || Array.isArray(day)) continue;
+    const counts: Record<string, number> = {};
+    for (const [memberId, count] of Object.entries(day as Record<string, unknown>)) {
+      if (typeof count === 'number' && Number.isFinite(count) && count > 0) {
+        counts[memberId] = count;
+      }
+    }
+    if (Object.keys(counts).length > 0) out[date] = counts;
+  }
+  return out;
+};
+
 // ---------------------------------------------------------------------------
 // Habit — preserves existing default: scoringType defaults to 'threshold'
 //          and lastUpdated Timestamp→ISO normalisation.
@@ -154,6 +183,7 @@ export const habitConverter: FirestoreDataConverter<Habit> = {
       ...d,
       id: snapshot.id,
       scoringType: d['scoringType'] || 'threshold',
+      completedBy: normalizeCompletedBy(d['completedBy']),
       lastUpdated:
         d['lastUpdated'] instanceof Timestamp
           ? d['lastUpdated'].toDate().toISOString()

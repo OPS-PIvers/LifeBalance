@@ -15,6 +15,7 @@ import {
   deleteField,
   arrayUnion,
   arrayRemove,
+  type DocumentReference,
 } from 'firebase/firestore';
 import { db } from '@/firebase.config';
 import {
@@ -31,11 +32,22 @@ import {
   streakForHabit,
   streakEndingOnForHabit,
   isHabitStale,
+  habitPeriodStart,
   getMultiplier,
   normalizeHabitTitle,
   signedHabitPoints,
   pointsForHabitOnDate
 } from '@/utils/habitLogic';
+import {
+  attributedUnitsOnDate,
+  attributionReversalForDates,
+  completedByPath,
+  habitFeedsMemberAttribution,
+  householdPeriodPoints,
+  memberCompletionCount,
+  memberPeriodPointsDelta,
+  withAttributionDelta,
+} from '@/utils/habitAttribution';
 import { crossedMilestone, rewardMilestoneSatisfied } from '@/utils/habitMilestones';
 import toast from 'react-hot-toast';
 import { describeError } from '@/utils/errorMessages';
@@ -60,17 +72,88 @@ import { softDeleteDoc } from '@/contexts/household/mutations/trashMutations';
  */
 const POINTS_TOAST_WINDOW_MS = 5000;
 
+/** One member's points document. */
+const memberPointsRef = (householdId: string, memberId: string) =>
+  doc(db, `households/${householdId}/members`, memberId);
+
+/** The document(s) a habit's points are written to. */
+interface HabitPointsTargets {
+  /**
+   * Plan 080c: the doc that receives the habit's OWN (household-level) points.
+   * An assigned (per-member / kid chore) habit credits the assignee's own
+   * `members/{uid}.points`; an unassigned/shared habit credits the shared
+   * household doc. This figure is unchanged by the per-member points feature —
+   * it is still derived from `completedDates` alone.
+   */
+  poolRef: DocumentReference;
+  /**
+   * Per-member points (stage 1): the ACTING member's own member doc, which
+   * receives their attributed share on top of the pool credit above.
+   *
+   * `null` for an ASSIGNED chore — `poolRef` already IS a member doc there, so
+   * crediting again would double-count the assignee (matching
+   * `habitFeedsMemberAttribution`, which keeps assigned habits out of the
+   * attribution scorer for the same reason).
+   */
+  memberRef: DocumentReference | null;
+}
+
 /**
- * Plan 080c: the doc that receives a habit's points. An assigned (per-member /
- * kid chore) habit credits the assignee's own `members/{uid}.points`; an
- * unassigned/shared habit credits the shared household doc. Every points-writing
- * path (toggle, reset, submission add/edit/delete) routes through this so an
- * assigned chore's points never leak into the shared pool.
+ * The single routing function every points-writing path (toggle, reset,
+ * submission add/edit/delete, credit/un-credit) goes through, so an assigned
+ * chore's points can never leak into the shared pool and a shared habit's
+ * per-member credit can never be written twice.
  */
-const habitPointsTargetRef = (householdId: string, assignedTo: string | undefined) =>
-  assignedTo
-    ? doc(db, `households/${householdId}/members`, assignedTo)
-    : doc(db, `households/${householdId}`);
+const habitPointsTargets = (
+  householdId: string,
+  assignedTo: string | undefined,
+  actorUid: string | null,
+): HabitPointsTargets => ({
+  poolRef: assignedTo
+    ? memberPointsRef(householdId, assignedTo)
+    : doc(db, `households/${householdId}`),
+  memberRef: !assignedTo && actorUid ? memberPointsRef(householdId, actorUid) : null,
+});
+
+/**
+ * The habit-doc update fragment that applies `delta` to one member's
+ * attribution count on one date.
+ *
+ * 🛡️ Always a DOT-PATH `increment()` (or a targeted `deleteField()` when the
+ * count reaches zero) — never a whole-map write, which a stale offline cache
+ * would use to wipe other days'/members' attribution.
+ */
+const attributionUpdate = (
+  habit: Habit,
+  date: string,
+  memberId: string,
+  delta: number,
+): Record<string, unknown> => {
+  if (delta === 0) return {};
+  const path = completedByPath(date, memberId);
+  const prior = memberCompletionCount(habit, memberId, date);
+  return prior + delta <= 0 ? { [path]: deleteField() } : { [path]: increment(delta) };
+};
+
+/**
+ * Queue the per-member points reversals produced by clearing attribution for a
+ * set of dates (reset / clear-day / stale-deselect). Each member's deltas are
+ * already bucket-gated by the date they were earned on.
+ */
+const queueAttributionReversal = (
+  batch: ReturnType<typeof writeBatch>,
+  householdId: string,
+  perMember: Map<string, { daily: number; weekly: number; total: number }>,
+): void => {
+  for (const [memberId, delta] of perMember) {
+    if (delta.daily === 0 && delta.weekly === 0 && delta.total === 0) continue;
+    batch.update(memberPointsRef(householdId, memberId), {
+      ...(delta.daily !== 0 ? { 'points.daily': increment(delta.daily) } : {}),
+      ...(delta.weekly !== 0 ? { 'points.weekly': increment(delta.weekly) } : {}),
+      ...(delta.total !== 0 ? { 'points.total': increment(delta.total) } : {}),
+    });
+  }
+};
 
 export const useHabitActions = (
   householdId: string | null,
@@ -287,7 +370,17 @@ export const useHabitActions = (
         const staleResult = processStaleDownToggle(habit);
         const staleBatch = writeBatch(db);
 
+        // Per-member points (stage 1): the prior period's completion dates are
+        // being erased, so their attribution goes with them — keeping
+        // `completedBy` and `completedDates` mutually consistent in the SAME
+        // batch — and every member credited on those dates has exactly what
+        // they earned there reversed.
+        const staleReversal = habitFeedsMemberAttribution(habit)
+          ? attributionReversalForDates(habit, staleResult.datesToRemove)
+          : { perMember: new Map(), clearPaths: [] };
+
         staleBatch.update(doc(db, `households/${householdId}/habits`, id), {
+          ...Object.fromEntries(staleReversal.clearPaths.map(path => [path, deleteField()])),
           count: 0,
           // Reversing the prior period's completion also disavows its counted
           // actions from the lifetime counter (mirrors resetHabitDay).
@@ -305,12 +398,13 @@ export const useHabitActions = (
 
         const { daily, weekly, total } = staleResult.pointsDelta;
         if (daily !== 0 || weekly !== 0 || total !== 0) {
-          staleBatch.update(habitPointsTargetRef(householdId, habit.assignedTo), {
+          staleBatch.update(habitPointsTargets(householdId, habit.assignedTo, currentUser.uid).poolRef, {
             ...(daily !== 0 ? { 'points.daily': increment(daily) } : {}),
             ...(weekly !== 0 ? { 'points.weekly': increment(weekly) } : {}),
             ...(total !== 0 ? { 'points.total': increment(total) } : {}),
           });
         }
+        queueAttributionReversal(staleBatch, householdId, staleReversal.perMember);
 
         await staleBatch.commit();
 
@@ -367,7 +461,34 @@ export const useHabitActions = (
     const nextTotalCount = result.updatedHabit.totalCount ?? effectiveHabit.totalCount;
     const countDelta = nextCount - habit.count;
     const totalCountDelta = nextTotalCount - habit.totalCount;
+
+    // --- Per-member points (stage 1) -------------------------------------
+    // A tap credits the SIGNED-IN member. Attribution mirrors `count`: +1 unit
+    // per 'up', −1 per 'down' — clamped at zero, so a legacy completion nobody
+    // is credited for stays unattributed rather than going negative.
+    //
+    // The member's own points delta is derived by scoring the habit's PERIOD
+    // before and after the write with the very function the corrective
+    // recompute uses (`memberPeriodPoints`), so the two can never disagree.
+    // That also means the multiplier comes from the member's OWN prospective
+    // streak, not the habit's — the locked product decision — and a
+    // grandfathered habit (no `completedBy`) starts every member at streak 0.
+    const today = getLocalDateString();
+    const attributionDelta =
+      direction === 'up' ? 1 : memberCompletionCount(effectiveHabit, currentUser.uid, today) > 0 ? -1 : 0;
+    const habitAfter: Habit = withAttributionDelta(
+      { ...effectiveHabit, ...result.updatedHabit } as Habit,
+      today,
+      currentUser.uid,
+      attributionDelta,
+    );
+    const targets = habitPointsTargets(householdId, habit.assignedTo, currentUser.uid);
+    const memberPointsChange = habitFeedsMemberAttribution(habit)
+      ? memberPeriodPointsDelta(effectiveHabit, habitAfter, currentUser.uid, today, today)
+      : 0;
+
     batch.update(doc(db, `households/${householdId}/habits`, id), {
+      ...attributionUpdate(effectiveHabit, today, currentUser.uid, attributionDelta),
       ...(isStale
         ? { count: nextCount }
         : countDelta !== 0
@@ -391,10 +512,23 @@ export const useHabitActions = (
     // or diverted to the processStaleDownToggle branch for 'down'), so the flat
     // daily+weekly+total increment is always attributing to the correct date.
     if (result.pointsChange !== 0) {
-      batch.update(habitPointsTargetRef(householdId, habit.assignedTo), {
+      batch.update(targets.poolRef, {
         'points.daily': increment(result.pointsChange),
         'points.weekly': increment(result.pointsChange),
         'points.total': increment(result.pointsChange),
+      });
+    }
+
+    // The acting member's own share, in the SAME batch (same date, so all three
+    // buckets move together exactly like the pool write above). Deliberately
+    // independent of `result.pointsChange`: on a threshold habit already
+    // completed by someone else the household earns nothing while the second
+    // member still earns their own full award.
+    if (memberPointsChange !== 0 && targets.memberRef) {
+      batch.update(targets.memberRef, {
+        'points.daily': increment(memberPointsChange),
+        'points.weekly': increment(memberPointsChange),
+        'points.total': increment(memberPointsChange),
       });
     }
 
@@ -600,8 +734,18 @@ export const useHabitActions = (
     // succeed together or neither does (prevents points/habit desync on crash).
     const resetBatch = writeBatch(db);
 
+    // Per-member points (stage 1): the reset clears the whole period for
+    // EVERYONE (that is what the card's × has always meant), so every date it
+    // strips from `completedDates` also loses its attribution — in the same
+    // batch — and each credited member has exactly their own earned points
+    // reversed at the multiplier that applied on the date they earned them.
+    const resetReversal = habitFeedsMemberAttribution(habit)
+      ? attributionReversalForDates(habit, datesToRemove, today)
+      : { perMember: new Map<string, { daily: number; weekly: number; total: number }>(), clearPaths: [] };
+
     resetBatch.update(doc(db, `households/${householdId}/habits`, id), {
       count: 0,
+      ...Object.fromEntries(resetReversal.clearPaths.map(path => [path, deleteField()])),
       // Server-side delta: remove ONLY this period's dates. Writing the
       // locally-computed array here lets a device with a stale offline cache
       // wholesale-overwrite (wipe) the habit's completion history. streakDays
@@ -614,17 +758,18 @@ export const useHabitActions = (
     });
 
     if (pointsToRemove !== 0) {
-      resetBatch.update(habitPointsTargetRef(householdId, habit.assignedTo), {
+      resetBatch.update(habitPointsTargets(householdId, habit.assignedTo, currentUser?.uid ?? null).poolRef, {
         'points.daily': increment(-pointsToRemove),
         'points.weekly': increment(-pointsToRemove),
         'points.total': increment(-pointsToRemove),
       });
     }
+    queueAttributionReversal(resetBatch, householdId, resetReversal.perMember);
 
     await resetBatch.commit();
 
     toast('Reset', { icon: toastIcon(RotateCcw) });
-  }, [householdId]);
+  }, [householdId, currentUser]);
 
   const addHabitSubmission = useCallback(async (
     habitId: string,
@@ -755,7 +900,26 @@ export const useHabitActions = (
       const submissionRef = doc(collection(db, `households/${householdId}/habits/${habitId}/submissions`));
       addBatch.set(submissionRef, submission);
 
+      // Per-member points (stage 1): a submission is a completion record, so it
+      // attributes its units to the member who logged it (`createdBy`) on the
+      // submission's OWN date — a back-dated log credits that date, not today.
+      const submissionAfter: Habit = withAttributionDelta(
+        {
+          ...habit,
+          count: isCurrentPeriod ? liveCount + count : liveCount,
+          totalCount: habit.totalCount + count,
+          completedDates: updatedCompletedDates,
+        },
+        submissionDate,
+        currentUser.uid,
+        count,
+      );
+      const submissionMemberPoints = habitFeedsMemberAttribution(habit)
+        ? memberPeriodPointsDelta(habit, submissionAfter, currentUser.uid, submissionDate, today)
+        : 0;
+
       addBatch.update(doc(db, `households/${householdId}/habits`, habitId), {
+        ...attributionUpdate(habit, submissionDate, currentUser.uid, count),
         // Only a current-period submission bumps the live counter (a stale
         // counter is lazily reset first); totalCount is lifetime so it always
         // absorbs the count.
@@ -775,20 +939,22 @@ export const useHabitActions = (
       // submission doesn't inflate today's daily / this week's weekly totals —
       // mirroring deleteHabitSubmission / updateHabitSubmission. Total is always
       // adjusted (lifetime).
+      const submissionTargets = habitPointsTargets(householdId, habit.assignedTo, currentUser.uid);
+      const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      /** Date-gated point buckets, shared by the pool and per-member writes. */
+      const gatedPointUpdates = (amount: number): Record<string, unknown> => ({
+        'points.total': increment(amount),
+        ...(submissionDate === today ? { 'points.daily': increment(amount) } : {}),
+        ...(submissionDate >= weekStart && submissionDate <= today
+          ? { 'points.weekly': increment(amount) }
+          : {}),
+      });
+
       if (pointsEarned !== 0) {
-        const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-
-        const pointUpdates: Record<string, unknown> = {
-          'points.total': increment(pointsEarned),
-        };
-        if (submissionDate === today) {
-          pointUpdates['points.daily'] = increment(pointsEarned);
-        }
-        if (submissionDate >= weekStart && submissionDate <= today) {
-          pointUpdates['points.weekly'] = increment(pointsEarned);
-        }
-
-        addBatch.update(habitPointsTargetRef(householdId, habit.assignedTo), pointUpdates);
+        addBatch.update(submissionTargets.poolRef, gatedPointUpdates(pointsEarned));
+      }
+      if (submissionMemberPoints !== 0 && submissionTargets.memberRef) {
+        addBatch.update(submissionTargets.memberRef, gatedPointUpdates(submissionMemberPoints));
       }
 
       await addBatch.commit();
@@ -886,28 +1052,49 @@ export const useHabitActions = (
         habitUpdates['streakDays'] = streakForHabit({ period: habit.period, completedDates: updatedCompletedDates, frozenDates: habit.frozenDates });
       }
 
+      // Per-member points (stage 1): withdraw exactly the units this submission
+      // attributed to its author, and reverse what THEY earned for them.
+      const today = getLocalDateString();
+      const deleteAfter: Habit = withAttributionDelta(
+        {
+          ...habit,
+          count: Math.max(0, habit.count - submission.count),
+          totalCount: Math.max(0, habit.totalCount - submission.count),
+          completedDates: updatedCompletedDates,
+        },
+        submission.date,
+        submission.createdBy,
+        -submission.count,
+      );
+      const deleteMemberPoints = habitFeedsMemberAttribution(habit)
+        ? memberPeriodPointsDelta(habit, deleteAfter, submission.createdBy, submission.date, today)
+        : 0;
+      Object.assign(
+        habitUpdates,
+        attributionUpdate(habit, submission.date, submission.createdBy, -submission.count),
+      );
+
       deleteBatch.update(doc(db, `households/${householdId}/habits`, habitId), habitUpdates);
 
       // Submission delete (step 4)
       deleteBatch.delete(submissionRef);
 
       // Points reversal (step 5)
-      const today = getLocalDateString();
       const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      const deleteTargets = habitPointsTargets(householdId, habit.assignedTo, submission.createdBy);
+      /** Date-gated point buckets, shared by the pool and per-member writes. */
+      const gatedPointUpdates = (amount: number): Record<string, unknown> => ({
+        'points.total': increment(amount),
+        ...(submission.date === today ? { 'points.daily': increment(amount) } : {}),
+        ...(submission.date >= weekStart && submission.date <= today
+          ? { 'points.weekly': increment(amount) }
+          : {}),
+      });
 
-      const pointUpdates: Record<string, unknown> = {
-        'points.total': increment(-submission.pointsEarned),
-      };
-
-      if (submission.date === today) {
-        pointUpdates['points.daily'] = increment(-submission.pointsEarned);
+      deleteBatch.update(deleteTargets.poolRef, gatedPointUpdates(-submission.pointsEarned));
+      if (deleteMemberPoints !== 0 && deleteTargets.memberRef) {
+        deleteBatch.update(deleteTargets.memberRef, gatedPointUpdates(deleteMemberPoints));
       }
-
-      if (submission.date >= weekStart && submission.date <= today) {
-        pointUpdates['points.weekly'] = increment(-submission.pointsEarned);
-      }
-
-      deleteBatch.update(habitPointsTargetRef(householdId, habit.assignedTo), pointUpdates);
 
       await deleteBatch.commit();
 
@@ -995,7 +1182,17 @@ export const useHabitActions = (
       if (inLivePeriod) {
         habitUpdates['count'] = Math.max(0, habit.count - unitsRemoved);
       }
+
+      // Per-member points (stage 1): clearing a day clears it for EVERYONE, so
+      // the day's whole attribution map goes with it and each credited member
+      // has exactly what they earned that day reversed.
+      const dayReversal = habitFeedsMemberAttribution(habit)
+        ? attributionReversalForDates(habit, [date], today)
+        : { perMember: new Map<string, { daily: number; weekly: number; total: number }>(), clearPaths: [] };
+      for (const path of dayReversal.clearPaths) habitUpdates[path] = deleteField();
+
       batch.update(doc(db, `households/${householdId}/habits`, habitId), habitUpdates);
+      queueAttributionReversal(batch, householdId, dayReversal.perMember);
 
       // Reverse points with the same period gating as deleteHabitSubmission:
       // total always, daily only for today, weekly only inside the current week.
@@ -1010,7 +1207,7 @@ export const useHabitActions = (
         if (date >= weekStart && date <= today) {
           pointUpdates['points.weekly'] = increment(-pointsToReverse);
         }
-        batch.update(habitPointsTargetRef(householdId, habit.assignedTo), pointUpdates);
+        batch.update(habitPointsTargets(householdId, habit.assignedTo, currentUser?.uid ?? null).poolRef, pointUpdates);
       }
 
       await batch.commit();
@@ -1020,7 +1217,7 @@ export const useHabitActions = (
       console.error('[resetHabitDay] Failed:', error);
       toast.error(describeError(error, 'clear the day'));
     }
-  }, [householdId]);
+  }, [householdId, currentUser]);
 
   const updateHabitSubmission = useCallback(async (
     habitId: string,
@@ -1069,37 +1266,55 @@ export const useHabitActions = (
         updatedAt: new Date().toISOString(),
       });
 
+      // Per-member points (stage 1): a count edit moves the author's attributed
+      // units on the submission's own date by the same delta the habit counters
+      // move by, and their points follow at their OWN historical multiplier.
+      const submissionDate = updates.date || originalSubmission.date;
+      const today = getLocalDateString();
+      const countDelta = updates.count !== undefined ? updates.count - originalSubmission.count : 0;
+      const editAfter: Habit = withAttributionDelta(
+        {
+          ...habit,
+          count: habit.count + countDelta,
+          totalCount: habit.totalCount + countDelta,
+        },
+        submissionDate,
+        originalSubmission.createdBy,
+        countDelta,
+      );
+      const editMemberPoints = habitFeedsMemberAttribution(habit)
+        ? memberPeriodPointsDelta(habit, editAfter, originalSubmission.createdBy, submissionDate, today)
+        : 0;
+
       // Step 4: Update habit aggregate counts
       if (updates.count !== undefined) {
-        const countDelta = updates.count - originalSubmission.count;
         updateBatch.update(doc(db, `households/${householdId}/habits`, habitId), {
+          ...attributionUpdate(habit, submissionDate, originalSubmission.createdBy, countDelta),
           count: habit.count + countDelta,
           totalCount: habit.totalCount + countDelta,
           lastUpdated: serverTimestamp(),
         });
       }
 
-      // Step 5: Update household points
+      // Step 5: Update the pool's and the author's points
+      const editTargets = habitPointsTargets(householdId, habit.assignedTo, originalSubmission.createdBy);
+      const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      /** Date-gated point buckets, shared by the pool and per-member writes. */
+      const gatedPointUpdates = (amount: number): Record<string, unknown> => ({
+        'points.total': increment(amount),
+        // Only move daily/weekly when the edited submission is from today /
+        // this week, mirroring add + delete.
+        ...(submissionDate === today ? { 'points.daily': increment(amount) } : {}),
+        ...(submissionDate >= weekStart && submissionDate <= today
+          ? { 'points.weekly': increment(amount) }
+          : {}),
+      });
+
       if (pointsDelta !== 0) {
-        const submissionDate = updates.date || originalSubmission.date;
-        const today = getLocalDateString();
-        const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-
-        const pointUpdates: Record<string, unknown> = {
-          'points.total': increment(pointsDelta),
-        };
-
-        // Only update daily if edited submission is from today
-        if (submissionDate === today) {
-          pointUpdates['points.daily'] = increment(pointsDelta);
-        }
-
-        // Only update weekly if edited submission is from this week
-        if (submissionDate >= weekStart && submissionDate <= today) {
-          pointUpdates['points.weekly'] = increment(pointsDelta);
-        }
-
-        updateBatch.update(habitPointsTargetRef(householdId, habit.assignedTo), pointUpdates);
+        updateBatch.update(editTargets.poolRef, gatedPointUpdates(pointsDelta));
+      }
+      if (editMemberPoints !== 0 && editTargets.memberRef) {
+        updateBatch.update(editTargets.memberRef, gatedPointUpdates(editMemberPoints));
       }
 
       await updateBatch.commit();
@@ -1108,6 +1323,238 @@ export const useHabitActions = (
     } catch (error) {
       console.error('[updateHabitSubmission] Failed:', error);
       toast.error(describeError(error, 'update the submission'));
+    }
+  }, [householdId]);
+
+  /**
+   * Per-member points (stage 1) — credit ONE completion of `habitId` to each of
+   * `memberIds` on `date` (default: today).
+   *
+   * This is the member-set-based primitive the stage-2 long-press picker will
+   * drive ("Me" / "Jen" / "Both of us" are just different member sets). Every
+   * selected member is credited a FULL completion at their OWN streak
+   * multiplier, and the habit's counters move by one unit per member — so a
+   * two-person credit reads as a count of 2 in the pie counter.
+   *
+   * Nothing calls this yet; it ships now so the data layer is complete.
+   */
+  const creditHabitCompletion = useCallback(async (
+    habitId: string,
+    memberIds: string[],
+    date?: string,
+  ) => {
+    if (!householdId || !currentUser) return;
+    const habit = habitsRef.current.find(h => h.id === habitId);
+    if (!habit || memberIds.length === 0) return;
+    // Archived-habit guard, matching toggleHabit: an archived habit never fires
+    // forward (un-crediting one stays allowed).
+    if (habit.archivedAt) return;
+
+    try {
+      const today = getLocalDateString();
+      const targetDate = date ?? today;
+      const isStale = isHabitStale(habit);
+      const inLivePeriod =
+        habitPeriodStart(habit.period, targetDate) === habitPeriodStart(habit.period, today);
+
+      // Lazy-reset parity with toggleHabit: a stale counter belongs to a
+      // previous period, so the live period effectively starts from 0 — and the
+      // counter is then written ABSOLUTELY (a reset-then-add), because routing
+      // it through increment() would add to the value we mean to throw away.
+      const liveCount = isStale ? 0 : habit.count;
+      const addedUnits = memberIds.length;
+      const target = Math.max(habit.targetCount, 1);
+
+      // Does this credit complete the date? Incremental habits complete on any
+      // action; threshold habits need the period's counter at target. For a
+      // PAST period there is no live counter, so the attribution itself is the
+      // evidence (mirrors addHabitSubmission's back-dated branch).
+      const periodUnits = inLivePeriod
+        ? liveCount
+        : habit.completedDates
+            .filter(d => habitPeriodStart(habit.period, d) === habitPeriodStart(habit.period, targetDate))
+            .reduce((sum, d) => sum + attributedUnitsOnDate(habit, d), 0);
+      const marksComplete =
+        habit.scoringType === 'incremental' || periodUnits + addedUnits >= target;
+      const dateNewlyCompleted = marksComplete && !habit.completedDates.includes(targetDate);
+
+      const nextCompletedDates = dateNewlyCompleted
+        ? [...habit.completedDates, targetDate]
+        : habit.completedDates;
+
+      let after: Habit = {
+        ...habit,
+        count: inLivePeriod ? liveCount + addedUnits : liveCount,
+        totalCount: habit.totalCount + addedUnits,
+        completedDates: nextCompletedDates,
+      };
+      for (const memberId of memberIds) {
+        after = withAttributionDelta(after, targetDate, memberId, 1);
+      }
+
+      const batch = writeBatch(db);
+
+      // 🛡️ Attribution rides dot-path increments and completedDates an
+      // arrayUnion delta — both server-side, in ONE batch, so they stay
+      // mutually consistent and no stale cache can clobber either.
+      batch.update(doc(db, `households/${householdId}/habits`, habitId), {
+        ...Object.fromEntries(
+          memberIds.map(memberId => [completedByPath(targetDate, memberId), increment(1)]),
+        ),
+        ...(inLivePeriod
+          ? { count: isStale ? liveCount + addedUnits : increment(addedUnits) }
+          : {}),
+        totalCount: increment(addedUnits),
+        ...(dateNewlyCompleted ? { completedDates: arrayUnion(targetDate) } : {}),
+        streakDays: streakForHabit({
+          period: habit.period,
+          completedDates: nextCompletedDates,
+          frozenDates: habit.frozenDates,
+          pausedUntil: habit.pausedUntil,
+        }),
+        lastUpdated: serverTimestamp(),
+      });
+
+      const weekStart = format(startOfWeek(parseISO(today), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      const gatedPointUpdates = (amount: number): Record<string, unknown> => ({
+        'points.total': increment(amount),
+        ...(targetDate === today ? { 'points.daily': increment(amount) } : {}),
+        ...(targetDate >= weekStart && targetDate <= today
+          ? { 'points.weekly': increment(amount) }
+          : {}),
+      });
+
+      // The pool delta is a before/after difference of the UNCHANGED household
+      // scorer, so it is exactly what the corrective recompute will derive.
+      const poolDelta =
+        householdPeriodPoints(after, targetDate, today) -
+        householdPeriodPoints(habit, targetDate, today);
+      if (poolDelta !== 0) {
+        batch.update(
+          habitPointsTargets(householdId, habit.assignedTo, currentUser.uid).poolRef,
+          gatedPointUpdates(poolDelta),
+        );
+      }
+
+      if (habitFeedsMemberAttribution(habit)) {
+        for (const memberId of memberIds) {
+          const delta = memberPeriodPointsDelta(habit, after, memberId, targetDate, today);
+          if (delta === 0) continue;
+          batch.update(memberPointsRef(householdId, memberId), gatedPointUpdates(delta));
+        }
+      }
+
+      await batch.commit();
+    } catch (error) {
+      console.error('[creditHabitCompletion] Failed:', error);
+      toast.error(describeError(error, 'credit the completion'));
+      throw error;
+    }
+  }, [householdId, currentUser]);
+
+  /**
+   * Per-member points (stage 1) — un-credit ONE of `memberId`'s completions of
+   * `habitId` on `date` (default: today).
+   *
+   * Decrements their count, drops the date from their completion set once it
+   * reaches zero (a targeted `deleteField()`, never a map rewrite), and reverses
+   * EXACTLY the points that completion earned — recomputed from that member's
+   * own streak ending on `date`, so an old completion is undone at the
+   * multiplier that applied then, not today's.
+   *
+   * A date nobody is attributed for (a grandfathered completion) is a no-op:
+   * there is nothing to un-credit and nobody to debit.
+   */
+  const uncreditHabitCompletion = useCallback(async (
+    habitId: string,
+    memberId: string,
+    date?: string,
+  ) => {
+    if (!householdId) return;
+    const habit = habitsRef.current.find(h => h.id === habitId);
+    if (!habit) return;
+
+    try {
+      const today = getLocalDateString();
+      const targetDate = date ?? today;
+      if (memberCompletionCount(habit, memberId, targetDate) <= 0) return;
+
+      // A stale counter belongs to a previous period, so it must not shrink here
+      // (mirrors resetHabitDay's `inLivePeriod`).
+      const inLivePeriod =
+        habitPeriodStart(habit.period, targetDate) === habitPeriodStart(habit.period, today) &&
+        !isHabitStale(habit);
+      const target = Math.max(habit.targetCount, 1);
+
+      const stripped = withAttributionDelta(habit, targetDate, memberId, -1);
+      const nextCount = inLivePeriod ? Math.max(0, habit.count - 1) : habit.count;
+      // Does the date stay completed? In the live period the counter decides
+      // (exactly as a 'down' toggle does). For a past date the attribution is
+      // the only evidence available, so the date leaves `completedDates` once
+      // its last attributed unit is gone.
+      const stillCompleted = inLivePeriod
+        ? habit.scoringType === 'incremental'
+          ? nextCount >= 1
+          : nextCount >= target
+        : attributedUnitsOnDate(stripped, targetDate) > 0;
+      const dateRemoved = habit.completedDates.includes(targetDate) && !stillCompleted;
+      const nextCompletedDates = dateRemoved
+        ? habit.completedDates.filter(d => d !== targetDate)
+        : habit.completedDates;
+
+      const after: Habit = {
+        ...stripped,
+        count: nextCount,
+        totalCount: Math.max(0, habit.totalCount - 1),
+        completedDates: nextCompletedDates,
+      };
+
+      const batch = writeBatch(db);
+      batch.update(doc(db, `households/${householdId}/habits`, habitId), {
+        ...attributionUpdate(habit, targetDate, memberId, -1),
+        ...(inLivePeriod && habit.count > 0 ? { count: increment(-1) } : {}),
+        ...(habit.totalCount > 0 ? { totalCount: increment(-1) } : {}),
+        ...(dateRemoved ? { completedDates: arrayRemove(targetDate) } : {}),
+        streakDays: streakForHabit({
+          period: habit.period,
+          completedDates: nextCompletedDates,
+          frozenDates: habit.frozenDates,
+          pausedUntil: habit.pausedUntil,
+        }),
+        lastUpdated: serverTimestamp(),
+      });
+
+      const weekStart = format(startOfWeek(parseISO(today), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      const gatedPointUpdates = (amount: number): Record<string, unknown> => ({
+        'points.total': increment(amount),
+        ...(targetDate === today ? { 'points.daily': increment(amount) } : {}),
+        ...(targetDate >= weekStart && targetDate <= today
+          ? { 'points.weekly': increment(amount) }
+          : {}),
+      });
+
+      const poolDelta =
+        householdPeriodPoints(after, targetDate, today) -
+        householdPeriodPoints(habit, targetDate, today);
+      if (poolDelta !== 0) {
+        batch.update(
+          habitPointsTargets(householdId, habit.assignedTo, memberId).poolRef,
+          gatedPointUpdates(poolDelta),
+        );
+      }
+
+      if (habitFeedsMemberAttribution(habit)) {
+        const memberDelta = memberPeriodPointsDelta(habit, after, memberId, targetDate, today);
+        if (memberDelta !== 0) {
+          batch.update(memberPointsRef(householdId, memberId), gatedPointUpdates(memberDelta));
+        }
+      }
+
+      await batch.commit();
+    } catch (error) {
+      console.error('[uncreditHabitCompletion] Failed:', error);
+      toast.error(describeError(error, 'un-credit the completion'));
+      throw error;
     }
   }, [householdId]);
 
@@ -1143,7 +1590,9 @@ export const useHabitActions = (
     updateHabitSubmission,
     deleteHabitSubmission,
     getHabitSubmissions,
-    resetHabitDay
+    resetHabitDay,
+    creditHabitCompletion,
+    uncreditHabitCompletion
   }), [
     addHabit,
     updateHabit,
@@ -1158,6 +1607,8 @@ export const useHabitActions = (
     updateHabitSubmission,
     deleteHabitSubmission,
     getHabitSubmissions,
-    resetHabitDay
+    resetHabitDay,
+    creditHabitCompletion,
+    uncreditHabitCompletion
   ]);
 };

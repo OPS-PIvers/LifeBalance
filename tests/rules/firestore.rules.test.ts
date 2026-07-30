@@ -608,27 +608,16 @@ describe('member self-update allowlist (2G.1 — dashboard/notification fields)'
     );
   });
 
-  it('a non-admin still cannot write a genuinely forbidden key (points)', async () => {
-    await assertFails(
-      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
-        points: { daily: 999, weekly: 999, total: 999 },
-      }),
-    );
-  });
-
   // Escalation regressions: BOB's seeded doc is exactly { displayName, role } (see seed()
   // above), so each of these keys is ABSENT — a first-time ADD. Under changedKeys(), an add
   // of an absent key produces an EMPTY changed-keys set, so hasOnly() passed vacuously and the
   // write was allowed regardless of the allowlist. affectedKeys() closes that hole: the add is
   // now governed by the same allowlist as a change. These must all still fail post-fix.
-  it('a non-admin cannot ADD points for the first time (escalation regression)', async () => {
-    await assertFails(
-      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
-        points: { daily: 999, weekly: 999, total: 999 },
-      }),
-    );
-  });
-
+  //
+  // NOTE: 'points' USED to be one of these cases. Per-member habit points added a
+  // deliberate, tightly-bounded exception (Case 4 in firestore.rules) — see the
+  // dedicated describe block below, which pins both what it now allows and every
+  // escalation it must still refuse.
   it('a non-admin cannot ADD allowanceCents for the first time (escalation regression)', async () => {
     await assertFails(
       updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
@@ -661,6 +650,178 @@ describe('member self-update allowlist (2G.1 — dashboard/notification fields)'
     await assertFails(
       updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
         role: deleteField(),
+      }),
+    );
+  });
+});
+
+// Per-member habit points (stage 1). A completion is credited by whoever taps, on
+// whichever phone, so ANY member must be able to move ANY member's points — and
+// the midnight rollover writes every member's daily/weekly from whichever device
+// is awake. Case 4 in firestore.rules grants exactly that and nothing else.
+//
+// Every test here runs as BOB, a PLAIN (non-admin) member: ALICE is an admin and
+// Case 2 (isAdminOf) is a blanket bypass, so testing as her would prove nothing.
+describe('per-member points writes (non-admin)', () => {
+  it('a member can credit their OWN points', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        points: { daily: 10, weekly: 10, total: 10 },
+      }),
+    );
+  });
+
+  it("a member can credit ANOTHER member's points (Paul's phone credits Jen)", async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', ALICE), {
+        points: { daily: 10, weekly: 10, total: 10 },
+      }),
+    );
+  });
+
+  it('a member can stamp the per-member reset markers alongside points', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', ALICE), {
+        points: { daily: 0, weekly: 25, total: 100 },
+        lastDailyPointsReset: FIXED_DATE,
+        lastWeeklyPointsReset: FIXED_DATE,
+      }),
+    );
+  });
+
+  it('a member of ANOTHER household still cannot touch these points', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(CAROL), 'households', H1, 'members', BOB), {
+        points: { daily: 999, weekly: 999, total: 999 },
+      }),
+    );
+  });
+
+  it('rejects a non-numeric points bucket', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', ALICE), {
+        points: { daily: 'lots', weekly: 1, total: 1 },
+      }),
+    );
+  });
+
+  it('rejects a non-map points value', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', ALICE), {
+        points: 999,
+      }),
+    );
+  });
+
+  it('rejects an oversized reset marker', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', ALICE), {
+        points: { daily: 1, weekly: 1, total: 1 },
+        lastDailyPointsReset: 'x'.repeat(11),
+      }),
+    );
+  });
+
+  // The grant is bounded by the KEY SET, so smuggling a privileged field into the
+  // same write must fail even though 'points' itself is now allowed. Each of these
+  // keys is ABSENT from BOB's seeded doc, so they are first-time ADDs — the exact
+  // shape that slipped through changedKeys() before affectedKeys() replaced it.
+  it('cannot smuggle role into a points write', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        points: { daily: 1, weekly: 1, total: 1 },
+        role: 'admin',
+      }),
+    );
+  });
+
+  it('cannot smuggle allowanceCents into a points write', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', ALICE), {
+        points: { daily: 1, weekly: 1, total: 1 },
+        allowanceCents: 100000,
+      }),
+    );
+  });
+
+  it('cannot smuggle isManaged/managedByUid into a points write', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', ALICE), {
+        points: { daily: 1, weekly: 1, total: 1 },
+        isManaged: true,
+        managedByUid: BOB,
+      }),
+    );
+  });
+
+  it('cannot smuggle an arbitrary junk key into a points write', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', ALICE), {
+        points: { daily: 1, weekly: 1, total: 1 },
+        someUnknownField: 'x'.repeat(1000),
+      }),
+    );
+  });
+
+  it('cannot remove a privileged field alongside a points write', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        points: { daily: 1, weekly: 1, total: 1 },
+        role: deleteField(),
+      }),
+    );
+  });
+});
+
+// `completedBy` (date → member uid → count) rides the SAME habit writes
+// `completedDates` always has, so the habits rule needs no new grant — only a
+// type guard so the field can't be turned into something no reader survives.
+describe('habit completedBy attribution', () => {
+  const habitDoc = {
+    title: 'Exercise',
+    category: 'Health',
+    count: 1,
+    totalCount: 1,
+    completedDates: ['2026-06-22'],
+  };
+
+  it('a member can write attribution alongside completedDates', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'habits', 'habit-attr'), {
+        ...habitDoc,
+        completedBy: { '2026-06-22': { [BOB]: 1, [ALICE]: 2 } },
+      }),
+    );
+  });
+
+  it('a member can credit another member on an existing habit', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(
+        doc(asFirestore(ctx.firestore()), 'households', H1, 'habits', 'habit-attr2'),
+        habitDoc,
+      );
+    });
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'habits', 'habit-attr2'), {
+        [`completedBy.2026-06-22.${ALICE}`]: 1,
+      }),
+    );
+  });
+
+  it('rejects a non-map completedBy', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'habits', 'habit-attr3'), {
+        ...habitDoc,
+        completedBy: 'nope',
+      }),
+    );
+  });
+
+  it('a member of another household still cannot write attribution', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(CAROL), 'households', H1, 'habits', 'habit-attr4'), {
+        ...habitDoc,
+        completedBy: { '2026-06-22': { [CAROL]: 1 } },
       }),
     );
   });
