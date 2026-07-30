@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { render, act } from '@testing-library/react';
 import { format, subDays } from 'date-fns';
+import toast from 'react-hot-toast';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import type {
   Account,
@@ -1472,8 +1473,9 @@ describe('FirebaseHouseholdContext — cross-mutation invariant', () => {
 // (failed) batch. The only write path for each of these mutations is the batch
 // itself, so a rejected commit means nothing landed. We assert:
 //   (a) the mutation's promise rejects (or swallows-and-returns, per its
-//       contract — toggleHabit/updateTransactionCategory
-//       re-throw; payCalendarItem/addMember re-throw after a toast),
+//       contract — updateTransactionCategory re-throws;
+//       payCalendarItem/addMember re-throw after a toast; toggleHabit
+//       toasts-and-returns since #1152 round 2, matching resetHabit),
 //   (b) the batch was NOT marked committed, and
 //   (c) NO single-doc write API (updateDoc/setDoc/addDoc/deleteDoc) was called —
 //       i.e. nothing leaked outside the atomic batch.
@@ -1492,7 +1494,7 @@ describe('FirebaseHouseholdContext — batch commit REJECTION (atomic rollback)'
     }
   }
 
-  it('toggleHabit: a rejected commit propagates and writes nothing outside the batch', async () => {
+  it('toggleHabit: a rejected commit surfaces an error toast and writes nothing outside the batch', async () => {
     renderProvider();
     emitCollection(`${householdPath}/members`, [
       docSnap('user1', { uid: 'user1', points: { daily: 0, weekly: 0, total: 0 } }),
@@ -1505,12 +1507,20 @@ describe('FirebaseHouseholdContext — batch commit REJECTION (atomic rollback)'
       points: { daily: 0, weekly: 0, total: 0 },
     });
 
+    // #1152 round 2: toggleHabit degrades a commit failure into an error toast
+    // + early return (matching the resetHabit/stale-down paths) instead of an
+    // unhandled rejection, so the promise RESOLVES and the success/points toast
+    // never fires. The atomicity half of the contract is unchanged. The toast
+    // mocks carry calls from earlier tests in this file (no global clear), so
+    // reset them here before asserting.
+    vi.mocked(toast.error).mockClear();
+    vi.mocked(toast.success).mockClear();
     commitController.failNextCommit = true;
     await act(async () => {
-      await expect(captured.value!.gamification.toggleHabit('hb1', 'up')).rejects.toThrow(
-        'commit rejected',
-      );
+      await captured.value!.gamification.toggleHabit('hb1', 'up');
     });
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('update the habit'));
+    expect(toast.success).not.toHaveBeenCalled();
 
     // Exactly one batch was opened (the toggle's), and it failed.
     expect(batches).toHaveLength(1);

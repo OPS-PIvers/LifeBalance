@@ -7,6 +7,7 @@ import {
   addDoc,
   updateDoc,
   arrayRemove,
+  deleteField,
   serverTimestamp,
   writeBatch,
   getDoc,
@@ -65,7 +66,8 @@ import {
   NotificationLogEntry
 } from '@/types/schema';
 import { calculateSafeToSpendBreakdownFromExpanded, calculateSafeToSpendExpansionStart } from '@/utils/safeToSpendCalculator';
-import { calculatePointsForDate, calculatePointsForDateRange, computeManagedMemberPointsReset, isHabitStale, getHabitResetUpdate } from '@/utils/habitLogic';
+import { calculatePointsForDate, calculatePointsForDateRange, isHabitStale, getHabitResetUpdate } from '@/utils/habitLogic';
+import { completedByDatePath, computeMemberPointsReset, type MemberPointsSyncUpdate } from '@/utils/habitAttribution';
 import { fetchSubmissionTotals } from '@/utils/habitSubmissionTotals';
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { mergeQuantity, resolveNewQuantityField } from '@/utils/grocerySmartDefaults';
@@ -658,8 +660,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const householdSettingsRef = useRef<Household | null>(householdSettings);
   useEffect(() => { householdSettingsRef.current = householdSettings; }, [householdSettings]);
 
-  // Habit Actions Hook
-  const habitActions = useHabitActions(householdId, currentUser, habits, householdSettings, rewards);
+  // Habit Actions Hook. `members` is passed so the per-member points writes can
+  // be filtered to members whose doc still EXISTS — attribution outlives
+  // membership (a removed member's uid stays in `Habit.completedBy`), and a
+  // batch.update() on a deleted doc would fail the whole batch with NOT_FOUND.
+  const habitActions = useHabitActions(householdId, currentUser, habits, householdSettings, rewards, members);
 
   // Derived state (Optimized to prevent extra re-renders)
   const currentPeriodId = householdSettings?.lastPaycheckDate || '';
@@ -1405,6 +1410,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           count: 0,
           streakDays,
           completedDates: arrayRemove(today),
+          // Per-member points (stage 1): `getHabitResetUpdate` needs no change —
+          // it only derives habit-level scalars — but today's attribution must
+          // ride the same arrayRemove(today) so `completedBy` and
+          // `completedDates` stay mutually consistent. A targeted deleteField()
+          // at ONE date path (never a map write), and a no-op on the normal
+          // new-day reset where today was never completed.
+          [completedByDatePath(today)]: deleteField(),
           lastUpdated: serverTimestamp(),
         }).catch(error => {
           console.error(`[checkHabitResets] Failed to reset habit ${habit.id}:`, error);
@@ -1468,19 +1480,27 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       householdUpdates['lastWeeklyPointsReset'] = today;
     }
 
-    // Plan 080c-2: roll over each managed kid's daily/weekly from THEIR assigned
-    // chores on the same boundary (empty for non-Kid-Mode households → no member
-    // writes, so this is a no-op there).
-    const kidResets = computeManagedMemberPointsReset(membersRef.current, currentHabits, weekStartStr, today, submissionTotals);
+    // Roll over each MEMBER's daily/weekly on the same boundary, from both
+    // per-member sources: the chores assigned to them (Plan 080c-2) and their
+    // attributed share of shared habits (per-member points, stage 1). A member
+    // with neither is skipped entirely, so a household with no chores and no
+    // attribution still writes nothing here — the transition-day no-op.
+    const memberResets = computeMemberPointsReset(membersRef.current, currentHabits, weekStartStr, today, submissionTotals);
 
     try {
       const batch = writeBatch(db);
       batch.update(doc(db, `households/${householdId}`), householdUpdates);
-      for (const kid of kidResets) {
-        const kidUpdates: Record<string, number> = {};
-        if (dayRolled) kidUpdates['points.daily'] = kid.daily;
-        if (weekRolled) kidUpdates['points.weekly'] = kid.weekly;
-        batch.update(doc(db, `households/${householdId}/members`, kid.memberUid), kidUpdates);
+      for (const member of memberResets) {
+        const memberUpdates: Record<string, number | string> = {};
+        if (dayRolled) {
+          memberUpdates['points.daily'] = member.daily;
+          memberUpdates['lastDailyPointsReset'] = today;
+        }
+        if (weekRolled) {
+          memberUpdates['points.weekly'] = member.weekly;
+          memberUpdates['lastWeeklyPointsReset'] = today;
+        }
+        batch.update(doc(db, `households/${householdId}/members`, member.memberUid), memberUpdates);
       }
       await batch.commit();
     } catch (error) {
@@ -1666,6 +1686,27 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   }, [householdId]);
 
+  // Per-member points (stage 1): persist the corrected per-member daily/weekly
+  // and their reset markers. One batch for the whole correction so members can't
+  // half-update. Only ever called with members that actually drifted.
+  const writeSyncedMemberPoints = useCallback(async (updates: MemberPointsSyncUpdate[]) => {
+    if (!householdId || updates.length === 0) return;
+    try {
+      const batch = writeBatch(db);
+      for (const update of updates) {
+        batch.update(doc(db, `households/${householdId}/members`, update.memberUid), {
+          'points.daily': update.daily,
+          'points.weekly': update.weekly,
+          'lastDailyPointsReset': update.today,
+          'lastWeeklyPointsReset': update.today,
+        });
+      }
+      await batch.commit();
+    } catch (error) {
+      console.error('[PointsSync] Failed to sync member points:', error);
+    }
+  }, [householdId]);
+
   // Sync daily/weekly/total points from actual habit completions. This corrects
   // any drift between the per-toggle deltas (written atomically by useHabitActions,
   // the source of truth between recalcs) and the canonical recomputation.
@@ -1680,6 +1721,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     points: householdSettings?.points,
     habits,
     writePoints: writeSyncedPoints,
+    members,
+    writeMemberPoints: writeSyncedMemberPoints,
     getHabitSubmissions: habitActions.getHabitSubmissions,
   });
 

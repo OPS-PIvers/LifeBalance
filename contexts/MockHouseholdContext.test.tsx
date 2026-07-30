@@ -782,3 +782,100 @@ describe('MockHouseholdContext saveCeremonyChanges (ceremony balances + budgets 
     expect(result.current.accounts.find((a) => a.id === 'acc2')).toEqual(savingsBefore);
   });
 });
+
+// 🛡️ ROUND-2 REVIEW — Test Mode must route habit points the way production's
+// `habitPointsTargets` does (Plan 080c): an ASSIGNED chore credits its
+// assignee's own member doc and the shared household pool receives NOTHING.
+// The mock sent every habit — kid chores included — through `creditPoints`,
+// which paid the test user and inflated the redeemable pool, so Test Mode
+// disagreed with production on exactly the path Kid Mode exercises.
+describe('MockHouseholdContext habit points routing (assigned vs shared)', () => {
+  const captureHousehold = () => renderHook(() => useHousehold(), { wrapper });
+  const pointsOf = (result: ReturnType<typeof captureHousehold>['result'], uid: string) =>
+    result.current.members.find((m) => m.uid === uid)!.points;
+
+  // Seeded fixtures: h3 = 'Clear the Dinner Table', threshold, 5 pts, assigned
+  // to the managed kid `kid_leo`. h2 = 'Exercise 30min', a SHARED threshold
+  // habit with targetCount 1, so one tap completes it and scores.
+  const KID_CHORE = 'h3';
+  const SHARED = 'h2';
+
+  it('credits the ASSIGNEE, never the test user or the reward pool, for a kid chore', async () => {
+    const { result } = captureHousehold();
+    const chore = result.current.habits.find((h) => h.id === KID_CHORE)!;
+    expect(chore.assignedTo).toBe('kid_leo');
+
+    const kidBefore = { ...pointsOf(result, 'kid_leo') };
+    const userBefore = { ...pointsOf(result, 'test-user-id') };
+    const poolBefore = result.current.totalPoints;
+
+    await act(async () => {
+      await result.current.toggleHabit(KID_CHORE, 'up');
+    });
+
+    const kidAfter = pointsOf(result, 'kid_leo');
+    expect(kidAfter.total).toBe(kidBefore.total + chore.basePoints);
+    expect(kidAfter.daily).toBe(kidBefore.daily + chore.basePoints);
+    expect(kidAfter.weekly).toBe(kidBefore.weekly + chore.basePoints);
+    // The parent who tapped earns nothing, and the redeemable pool is untouched.
+    expect(pointsOf(result, 'test-user-id')).toEqual(userBefore);
+    expect(result.current.totalPoints).toBe(poolBefore);
+  });
+
+  it('reverses the ASSIGNEE on a reset — complete→reset is points-neutral for everyone', async () => {
+    const { result } = captureHousehold();
+    const kidBefore = { ...pointsOf(result, 'kid_leo') };
+    const userBefore = { ...pointsOf(result, 'test-user-id') };
+    const poolBefore = result.current.totalPoints;
+
+    await act(async () => {
+      await result.current.toggleHabit(KID_CHORE, 'up');
+    });
+    await act(async () => {
+      await result.current.resetHabit(KID_CHORE);
+    });
+
+    expect(pointsOf(result, 'kid_leo')).toEqual(kidBefore);
+    expect(pointsOf(result, 'test-user-id')).toEqual(userBefore);
+    expect(result.current.totalPoints).toBe(poolBefore);
+  });
+
+  it('still credits the household pool for a SHARED habit (the control case)', async () => {
+    const { result } = captureHousehold();
+    const shared = result.current.habits.find((h) => h.id === SHARED)!;
+    expect(shared.assignedTo).toBeUndefined();
+
+    const kidBefore = { ...pointsOf(result, 'kid_leo') };
+    const poolBefore = result.current.totalPoints;
+
+    await act(async () => {
+      await result.current.toggleHabit(SHARED, 'up');
+    });
+
+    expect(result.current.totalPoints).toBeGreaterThan(poolBefore);
+    expect(pointsOf(result, 'kid_leo')).toEqual(kidBefore);
+  });
+
+  it('down-toggles the unit off the member who HOLDS the attribution', async () => {
+    // 🛡️ Reversal parity with production: a 'down' is bounded by stored
+    // attribution, so crediting Jen and then tapping down as the test user
+    // takes the unit off JEN — not off whoever happens to be tapping.
+    const { result } = captureHousehold();
+    const today = getLocalDateString();
+
+    await act(async () => {
+      await result.current.creditHabitCompletion(SHARED, ['jen-uid']);
+    });
+    expect(result.current.habits.find((h) => h.id === SHARED)!.completedBy?.[today])
+      .toEqual({ 'jen-uid': 1 });
+
+    await act(async () => {
+      await result.current.toggleHabit(SHARED, 'down');
+    });
+
+    // Jen's unit is withdrawn; the tapping user never gains a phantom entry.
+    const after = result.current.habits.find((h) => h.id === SHARED)!.completedBy?.[today] ?? {};
+    expect(after['jen-uid'] ?? 0).toBe(0);
+    expect(after['test-user-id']).toBeUndefined();
+  });
+});

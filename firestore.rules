@@ -252,6 +252,21 @@ service cloud.firestore {
           (isMemberOf(householdId) && isValidManagedKidCreate())
         );
 
+        // 🛡️ Per-member habit points (stage 1). The points map is written by
+        // dot-path increments (`points.daily` etc.), so `request.resource.data.points`
+        // is the MERGED result. Validate the three known buckets are numbers
+        // when present, and deliberately do NOT `hasOnly()` the inner keys — a
+        // key an admin/server added elsewhere on the map would otherwise
+        // permanently lock every later points write out of this document.
+        function isValidPointsMap(p) {
+          return p == null || (
+            p is map &&
+            p.get('daily', 0) is number &&
+            p.get('weekly', 0) is number &&
+            p.get('total', 0) is number
+          );
+        }
+
         // Security Fix: Prevent IDOR (Insecure Direct Object Reference)
         // Previous rule allowed ANY member to update ANY other member's non-role fields.
         // New rule restricts updates to:
@@ -399,7 +414,46 @@ service cloud.firestore {
               isValidOptionalString(request.resource.data.get('avatarColor', null), 30) &&
               isValidOptionalString(request.resource.data.get('avatarEmoji', null), 30) &&
               isValidOptionalNumber(request.resource.data.get('allowanceCents', null)) &&
-              (request.resource.data.get('points', null) == null || request.resource.data.points is map)
+              isValidPointsMap(request.resource.data.get('points', null))
+            ) ||
+            // Case 4 (per-member habit points, stage 1): ANY household member may
+            // move ANY member's POINTS — and nothing else.
+            //
+            // WHY this branch has to exist: a completion is credited by whoever
+            // taps, on whichever phone. Paul's phone crediting Jen ("Both of us")
+            // writes Jen's member doc, and the midnight rollover / corrective
+            // recompute likewise write every member's daily/weekly from whichever
+            // device happens to be awake. Case 1 only covers a member's OWN doc
+            // and deliberately excludes 'points'; Case 2 needs admin; Case 3 only
+            // covers managed kids. Without this branch the feature simply cannot
+            // write, and with a blanket relaxation of Case 1 every member could
+            // grant themselves 'role', 'isManaged' or 'allowanceCents'.
+            //
+            // 🛡️ SECURITY: the grant is bounded by the KEY SET, not by the
+            // principal. affectedKeys() (never changedKeys(), which ignores keys
+            // being ADDED for the first time and is exactly how a first-time
+            // 'points' add escalated in the past) must contain ONLY these three
+            // fields, so this branch can never add 'role', 'isManaged',
+            // 'managedByUid', 'allowanceCents', 'uid' or an arbitrary key — each
+            // of those still requires Case 2/3. isMemberOf(householdId) on the
+            // outer `allow update` keeps it inside the household.
+            //
+            // Threat accepted, deliberately: a member can inflate any member's
+            // points (their own included). Rules cannot verify a habit completion,
+            // and the household's shared `points.total` pool — the actual
+            // redeemable balance — has always been freely writable by any member
+            // on the household document. This is parity with that, not a new
+            // class of exposure; a kid's redemption still requires a parent's
+            // approval. The three fields are all score bookkeeping: no role, no
+            // money, no identity.
+            (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+                ['points', 'lastDailyPointsReset', 'lastWeeklyPointsReset']
+              ) &&
+              isValidPointsMap(request.resource.data.get('points', null)) &&
+              // Reset markers are yyyy-MM-dd date strings (10 chars).
+              isValidOptionalString(request.resource.data.get('lastDailyPointsReset', null), 10) &&
+              isValidOptionalString(request.resource.data.get('lastWeeklyPointsReset', null), 10)
             )
           )
         );
@@ -421,7 +475,19 @@ service cloud.firestore {
                               isValidString(request.resource.data.get('title', null), 100) &&
                               isValidString(request.resource.data.get('category', null), 50) &&
                               isValidOptionalString(request.resource.data.get('telegramAlias', null), 50) &&
-                              isValidOptionalString(request.resource.data.get('presetId', null), 50);
+                              isValidOptionalString(request.resource.data.get('presetId', null), 50) &&
+                              // 🛡️ Per-member habit points (stage 1): `completedBy`
+                              // (date → member uid → count) is written by the same
+                              // members, in the same batches, as `completedDates` —
+                              // which this rule has always allowed with no field
+                              // allowlist — so no new grant is needed here. This is
+                              // a type guard only: reject a non-map so a client
+                              // can't turn the attribution field into a string/array
+                              // and break every reader. Its CONTENTS are not
+                              // enumerable in rules (arbitrary date/uid keys), and
+                              // the converter re-validates counts on read.
+                              (request.resource.data.get('completedBy', null) == null ||
+                               request.resource.data.completedBy is map);
 
         allow delete: if isMemberOf(householdId);
 

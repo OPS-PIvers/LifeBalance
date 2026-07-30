@@ -17,6 +17,12 @@ const capturedUpdates: CapturedUpdate[] = [];
 const capturedSets: CapturedUpdate[] = [];
 const capturedDeletes: { __path: string }[] = [];
 let commitCount = 0;
+/**
+ * Set to make the NEXT batch.commit() reject — how the tests exercise the
+ * error-toast paths (a real NOT_FOUND from a ghost member doc would reject the
+ * whole all-or-nothing batch exactly like this). Cleared on consumption.
+ */
+let nextCommitError: Error | null = null;
 
 // increment() returns a tagged sentinel so we can read back the numeric delta.
 const incrementMock = vi.fn((n: number) => ({ __increment: n }));
@@ -51,6 +57,11 @@ vi.mock('firebase/firestore', () => {
         capturedDeletes.push(ref);
       },
       commit: vi.fn(async () => {
+        if (nextCommitError) {
+          const error = nextCommitError;
+          nextCommitError = null;
+          throw error;
+        }
         commitCount++;
       }),
     })),
@@ -77,11 +88,14 @@ import { streakForHabit } from '@/utils/habitLogic';
 // The mocked updateDoc — updateHabit writes via updateDoc(ref, data), not a batch,
 // so we read its captured call args to assert on the whitelisted update payload.
 // getDocs backs the prior-submissions lookup for back-dated threshold submissions.
-import { updateDoc, getDocs } from 'firebase/firestore';
+import { updateDoc, getDocs, getDoc } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 
 const updateDocMock = vi.mocked(updateDoc);
 const getDocsMock = vi.mocked(getDocs);
+// getDoc backs the stored-submission read in deleteHabitSubmission /
+// updateHabitSubmission — the source of the snapshotted `attributedTo`.
+const getDocMock = vi.mocked(getDoc);
 
 // Minimal QuerySnapshot stand-in: one doc per prior submission count.
 const submissionsSnap = (counts: number[]) =>
@@ -795,6 +809,413 @@ describe('useHabitActions.toggleHabit (T1: single points write path)', () => {
   });
 });
 
+// Per-member habit points (stage 1): the dual write. A toggle must, in ONE
+// batch, (a) bump `completedBy.<date>.<uid>` by a dot-path increment,
+// (b) credit the household pool exactly what it always did, and (c) credit the
+// acting member's own doc at THEIR streak multiplier.
+describe('useHabitActions.toggleHabit (per-member attribution dual-write)', () => {
+  const memberPath = `${householdPath}/members/${currentUser.uid}`;
+  const memberUpdate = () => capturedUpdates.find(u => u.ref.__path === memberPath);
+  const today = () => format(new Date(), 'yyyy-MM-dd');
+
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    commitCount = 0;
+    incrementMock.mockClear();
+  });
+
+  it('increments attribution by dot path and credits the member, in ONE commit', async () => {
+    const habit = baseHabit({ completedDates: [], count: 0 });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'up');
+    });
+
+    // (a) Dot-path increment — NEVER a whole `completedBy` map write.
+    expect(habitUpdate()!.data[`completedBy.${today()}.${currentUser.uid}`])
+      .toEqual({ __increment: 1 });
+    expect(habitUpdate()!.data['completedBy']).toBeUndefined();
+
+    // (b) The household pool is credited exactly what it was before this
+    //     feature: the habit-level delta. This is the invisibility guarantee.
+    expect(householdUpdate()!.data['points.daily']).toEqual({ __increment: 10 });
+
+    // (c) The acting member's own score moves too, at their own multiplier
+    //     (a first completion → 1.0× → 10).
+    expect(memberUpdate()).toBeDefined();
+    expect(memberUpdate()!.data['points.daily']).toEqual({ __increment: 10 });
+    expect(memberUpdate()!.data['points.weekly']).toEqual({ __increment: 10 });
+    expect(memberUpdate()!.data['points.total']).toEqual({ __increment: 10 });
+
+    // Still exactly ONE batch (project atomicity rule).
+    expect(commitCount).toBe(1);
+  });
+
+  it('DECREMENTS (never deletes) the member’s day key when a down-toggle empties it', async () => {
+    // 🛡️ Clobber guard: choosing deleteField() at zero would have to read the
+    // client-cached prior count, and a stale offline cache would then delete a
+    // node another device had just incremented. The write is an unconditional
+    // increment(-1) in every case; the harmless 0 residue reads as absent.
+    const habit = baseHabit({
+      completedDates: [today()],
+      count: 1,
+      totalCount: 1,
+      completedBy: { [today()]: { [currentUser.uid]: 1 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'down');
+    });
+
+    expect(habitUpdate()!.data[`completedBy.${today()}.${currentUser.uid}`])
+      .toEqual({ __increment: -1 });
+    expect(memberUpdate()!.data['points.total']).toEqual({ __increment: -10 });
+  });
+
+  it('treats a ZERO residue count as absent (no negative attribution)', async () => {
+    // A previous down-toggle left `{uid: 0}` behind. Down-toggling again must
+    // read that as "nothing attributed" and write no further decrement, exactly
+    // as it does for a grandfathered completion with no entry at all.
+    const habit = baseHabit({
+      completedDates: [today()],
+      count: 1,
+      totalCount: 1,
+      completedBy: { [today()]: { [currentUser.uid]: 0 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'down');
+    });
+
+    expect(habitUpdate()!.data[`completedBy.${today()}.${currentUser.uid}`]).toBeUndefined();
+    expect(memberUpdate()).toBeUndefined();
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: -10 });
+  });
+
+  it('decrements rather than deletes when the member has units left', async () => {
+    const habit = baseHabit({
+      completedDates: [today()],
+      count: 2,
+      totalCount: 2,
+      completedBy: { [today()]: { [currentUser.uid]: 2 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'down');
+    });
+
+    expect(habitUpdate()!.data[`completedBy.${today()}.${currentUser.uid}`])
+      .toEqual({ __increment: -1 });
+  });
+
+  it('never writes negative attribution for a GRANDFATHERED completion', async () => {
+    // A completion recorded before this feature has no `completedBy` entry.
+    // Down-toggling it must leave attribution untouched (and debit nobody)
+    // while the household pool is reversed exactly as it always was.
+    const habit = baseHabit({ completedDates: [today()], count: 1, totalCount: 1 });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'down');
+    });
+
+    expect(habitUpdate()!.data[`completedBy.${today()}.${currentUser.uid}`]).toBeUndefined();
+    expect(memberUpdate()).toBeUndefined();
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: -10 });
+  });
+
+  it('credits the member at THEIR streak multiplier, not the habit’s', async () => {
+    // The habit has a 6-day streak (2.0× on the 7th day) but the acting member
+    // has never been credited, so their own first completion earns 1.0×. The
+    // household still gets its habit-level 20 — nothing visible moved.
+    const dates = Array.from({ length: 6 }, (_, i) => format(subDays(new Date(), i + 1), 'yyyy-MM-dd'));
+    const habit = baseHabit({ completedDates: dates, count: 0, totalCount: 6 });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'up');
+    });
+
+    expect(householdUpdate()!.data['points.daily']).toEqual({ __increment: 20 });
+    expect(memberUpdate()!.data['points.daily']).toEqual({ __increment: 10 });
+  });
+
+  it('attributes an assigned chore to the ASSIGNEE, and still does not double-credit them', async () => {
+    // A managed kid has no auth session of their own — a parent taps the chore
+    // for them — so `completedBy` must record the ASSIGNEE, not the signed-in
+    // adult ("who the completion belongs to", not "who held the phone").
+    // Scoring is unchanged: an assigned chore already routes its points to the
+    // assignee's member doc (Plan 080c) and is excluded from the attribution
+    // scorer, so there is still exactly ONE member write.
+    const habit = baseHabit({ completedDates: [], count: 0, assignedTo: 'kid_leo' });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'up');
+    });
+
+    const memberWrites = capturedUpdates.filter(u => u.ref.__path.includes('/members/'));
+    expect(memberWrites).toHaveLength(1);
+    expect(memberWrites[0]!.ref.__path).toBe(`${householdPath}/members/kid_leo`);
+    expect(memberWrites[0]!.data['points.total']).toEqual({ __increment: 10 });
+    // Attribution lands on the kid (stage 2's pie counter reads it)...
+    expect(habitUpdate()!.data[`completedBy.${today()}.kid_leo`]).toEqual({ __increment: 1 });
+    // ...and never on the acting adult.
+    expect(habitUpdate()!.data[`completedBy.${today()}.${currentUser.uid}`]).toBeUndefined();
+  });
+});
+
+describe('useHabitActions.creditHabitCompletion / uncreditHabitCompletion', () => {
+  const today = () => format(new Date(), 'yyyy-MM-dd');
+  const memberWrites = () => capturedUpdates.filter(u => u.ref.__path.includes('/members/'));
+
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    commitCount = 0;
+    incrementMock.mockClear();
+  });
+
+  it('credits EVERY selected member a full completion in one batch', async () => {
+    const habit = baseHabit({ completedDates: [], count: 0 });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.creditHabitCompletion('h1', ['paul-uid', 'jen-uid']);
+    });
+
+    expect(habitUpdate()!.data[`completedBy.${today()}.paul-uid`]).toEqual({ __increment: 1 });
+    expect(habitUpdate()!.data[`completedBy.${today()}.jen-uid`]).toEqual({ __increment: 1 });
+    // Two members => two units on the counters (the pie counter reads "2").
+    expect(habitUpdate()!.data['totalCount']).toEqual({ __increment: 2 });
+    expect(habitUpdate()!.data['count']).toEqual({ __increment: 2 });
+
+    const paths = memberWrites().map(u => u.ref.__path).sort();
+    expect(paths).toEqual([
+      `${householdPath}/members/jen-uid`,
+      `${householdPath}/members/paul-uid`,
+    ]);
+    for (const write of memberWrites()) {
+      expect(write.data['points.total']).toEqual({ __increment: 10 });
+    }
+    expect(commitCount).toBe(1);
+  });
+
+  it('un-credits one member: decrements, reverses their points, keeps the day', async () => {
+    const habit = baseHabit({
+      completedDates: [today()],
+      count: 2,
+      totalCount: 2,
+      completedBy: { [today()]: { 'paul-uid': 1, 'jen-uid': 1 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.uncreditHabitCompletion('h1', 'jen-uid');
+    });
+
+    // Unconditional decrement, never a cache-decided delete (clobber guard).
+    expect(habitUpdate()!.data[`completedBy.${today()}.jen-uid`]).toEqual({ __increment: -1 });
+    // Paul is still credited, so the day stays completed.
+    expect(habitUpdate()!.data['completedDates']).toBeUndefined();
+
+    const jen = memberWrites().find(u => u.ref.__path.endsWith('jen-uid'));
+    expect(jen!.data['points.total']).toEqual({ __increment: -10 });
+    expect(memberWrites().some(u => u.ref.__path.endsWith('paul-uid'))).toBe(false);
+  });
+
+  it('drops the date once the last attributed unit is un-credited', async () => {
+    const habit = baseHabit({
+      completedDates: [today()],
+      count: 1,
+      totalCount: 1,
+      completedBy: { [today()]: { 'jen-uid': 1 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.uncreditHabitCompletion('h1', 'jen-uid');
+    });
+
+    expect(habitUpdate()!.data['completedDates']).toEqual({ __arrayRemove: [today()] });
+  });
+
+  it('is a NO-OP on an unattributed (pre-feature) completion', async () => {
+    const habit = baseHabit({ completedDates: [today()], count: 1, totalCount: 1 });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.uncreditHabitCompletion('h1', 'jen-uid');
+    });
+
+    expect(capturedUpdates).toHaveLength(0);
+    expect(commitCount).toBe(0);
+  });
+});
+
+// 🛡️ Attribution OUTLIVES membership: `removeMember()` deletes the member doc
+// but leaves that uid inside `Habit.completedBy`. A batch.update() against a
+// deleted doc rejects NOT_FOUND, and a Firestore batch is all-or-nothing — so
+// queuing a points reversal for a departed member would permanently break
+// resetHabit / resetHabitDay / the stale-down toggle for every habit+date they
+// were credited on. Every per-member write is filtered against the live roster;
+// the habit-doc clear is NOT (it is always a valid write), so the stale
+// attribution self-heals on the next successful clear.
+describe('useHabitActions — per-member writes skip members who no longer exist', () => {
+  const today = () => format(new Date(), 'yyyy-MM-dd');
+  const yesterday = () => format(subDays(new Date(), 1), 'yyyy-MM-dd');
+  const roster = (...uids: string[]) => uids.map(uid => ({ uid })) as HouseholdMember[];
+  const memberPaths = () =>
+    capturedUpdates.filter(u => u.ref.__path.includes('/members/')).map(u => u.ref.__path);
+
+  const daySubmissionsSnap = () =>
+    ({ empty: true, docs: [] }) as unknown as Awaited<ReturnType<typeof getDocs>>;
+
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    capturedDeletes.length = 0;
+    commitCount = 0;
+    incrementMock.mockClear();
+    getDocsMock.mockReset();
+  });
+
+  it('resetHabit: reverses only the LIVE member, still clearing the ghost’s attribution', async () => {
+    const habit = baseHabit({
+      scoringType: 'threshold',
+      count: 2,
+      totalCount: 2,
+      completedDates: [today()],
+      completedBy: { [today()]: { 'user1': 1, 'ghost-uid': 1 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1'))
+    );
+
+    await act(async () => {
+      await result.current.resetHabit('h1');
+    });
+
+    // The habit doc still drops the WHOLE day's attribution, ghost included.
+    expect(habitUpdate()!.data[`completedBy.${today()}`]).toEqual({ __deleteField: true });
+    expect(memberPaths()).toEqual([`${householdPath}/members/user1`]);
+    expect(commitCount).toBe(1);
+  });
+
+  it('resetHabit: with a full roster, every credited member is still reversed', async () => {
+    // The control case — the filter must not silently drop live members.
+    const habit = baseHabit({
+      scoringType: 'threshold',
+      count: 2,
+      totalCount: 2,
+      completedDates: [today()],
+      completedBy: { [today()]: { 'user1': 1, 'jen-uid': 1 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.resetHabit('h1');
+    });
+
+    expect(memberPaths().sort()).toEqual([
+      `${householdPath}/members/jen-uid`,
+      `${householdPath}/members/user1`,
+    ]);
+    for (const uid of ['user1', 'jen-uid']) {
+      const m = capturedUpdates.find(u => u.ref.__path === `${householdPath}/members/${uid}`)!;
+      expect(m.data['points.total']).toEqual({ __increment: -10 });
+      expect(m.data['points.daily']).toEqual({ __increment: -10 });
+    }
+  });
+
+  it('resetHabitDay: skips the ghost’s reversal and still commits', async () => {
+    getDocsMock.mockResolvedValue(daySubmissionsSnap());
+    const habit = baseHabit({
+      scoringType: 'threshold',
+      totalCount: 2,
+      completedDates: [yesterday()],
+      completedBy: { [yesterday()]: { 'user1': 1, 'ghost-uid': 1 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1'))
+    );
+
+    await act(async () => {
+      await result.current.resetHabitDay('h1', yesterday());
+    });
+
+    expect(habitUpdate()!.data[`completedBy.${yesterday()}`]).toEqual({ __deleteField: true });
+    expect(memberPaths()).toEqual([`${householdPath}/members/user1`]);
+    expect(commitCount).toBe(1);
+  });
+
+  it('uncreditHabitCompletion: strips the ghost’s attribution with no member write', async () => {
+    const habit = baseHabit({
+      completedDates: [today()],
+      count: 1,
+      totalCount: 1,
+      completedBy: { [today()]: { 'ghost-uid': 1 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1'))
+    );
+
+    await act(async () => {
+      await result.current.uncreditHabitCompletion('h1', 'ghost-uid');
+    });
+
+    expect(habitUpdate()!.data[`completedBy.${today()}.ghost-uid`]).toEqual({ __increment: -1 });
+    expect(memberPaths()).toEqual([]);
+    expect(commitCount).toBe(1);
+  });
+
+  it('creditHabitCompletion: records attribution for a ghost but never writes their points', async () => {
+    const habit = baseHabit({ completedDates: [], count: 0 });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1'))
+    );
+
+    await act(async () => {
+      await result.current.creditHabitCompletion('h1', ['user1', 'ghost-uid']);
+    });
+
+    expect(habitUpdate()!.data[`completedBy.${today()}.ghost-uid`]).toEqual({ __increment: 1 });
+    expect(memberPaths()).toEqual([`${householdPath}/members/user1`]);
+    expect(commitCount).toBe(1);
+  });
+});
+
 describe('useHabitActions.toggleHabit (Plan 080c: assigned chores credit the assignee)', () => {
   beforeEach(() => {
     capturedUpdates.length = 0;
@@ -1085,6 +1506,83 @@ describe('useHabitActions.toggleHabit (stale deselect — date-aware reversal)',
     expect(householdUpdate()).toBeUndefined();
   });
 
+  it("clears the removed dates' attribution and reverses each credited member, in one batch", async () => {
+    // Wednesday 2026-07-15; Tuesday's completion was credited to two members
+    // and never auto-reset. Undoing it must strip the whole day's attribution
+    // (a deleteField on the `completedBy.<date>` node — absolute by design,
+    // mirroring the completedDates arrayRemove in the same batch) and reverse
+    // exactly what each member earned there.
+    vi.useFakeTimers({ now: new Date('2026-07-15T09:00:00') });
+    const habit = baseHabit({
+      scoringType: 'threshold',
+      count: 2,
+      totalCount: 2,
+      completedDates: ['2026-07-14'],
+      completedBy: { '2026-07-14': { 'user1': 1, 'jen-uid': 1 } },
+      lastUpdated: '2026-07-14T20:00:00',
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], [
+        { uid: 'user1' },
+        { uid: 'jen-uid' },
+      ] as HouseholdMember[])
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'down');
+    });
+
+    const hu = habitUpdate()!;
+    expect(hu.data['completedBy.2026-07-14']).toEqual({ __deleteField: true });
+    expect(hu.data['completedDates']).toEqual({ __arrayRemove: ['2026-07-14'] });
+
+    // Both credited members lose their own award, gated by the date it was
+    // earned on: yesterday is in this week (weekly + total), never today's daily.
+    for (const uid of ['user1', 'jen-uid']) {
+      const m = capturedUpdates.find(u => u.ref.__path === `${householdPath}/members/${uid}`);
+      expect(m, uid).toBeDefined();
+      expect(m!.data['points.total']).toEqual({ __increment: -10 });
+      expect(m!.data['points.weekly']).toEqual({ __increment: -10 });
+      expect(m!.data['points.daily']).toBeUndefined();
+    }
+    expect(commitCount).toBe(1);
+  });
+
+  it('SKIPS the points write for a member who has since been removed, but still strips their attribution', async () => {
+    // 🛡️ A removed member's uid outlives their member doc inside `completedBy`.
+    // batch.update() on a deleted doc rejects NOT_FOUND, and a batch is
+    // all-or-nothing — so queuing that write would permanently break this
+    // habit's stale deselect. The habit-doc clear still runs, so the poisoned
+    // attribution self-heals.
+    vi.useFakeTimers({ now: new Date('2026-07-15T09:00:00') });
+    const habit = baseHabit({
+      scoringType: 'threshold',
+      count: 2,
+      totalCount: 2,
+      completedDates: ['2026-07-14'],
+      completedBy: { '2026-07-14': { 'user1': 1, 'ghost-uid': 1 } },
+      lastUpdated: '2026-07-14T20:00:00',
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], [
+        { uid: 'user1' },
+      ] as HouseholdMember[])
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'down');
+    });
+
+    // The habit doc still clears the whole day, ghost included.
+    expect(habitUpdate()!.data['completedBy.2026-07-14']).toEqual({ __deleteField: true });
+
+    const memberPaths = capturedUpdates
+      .filter(u => u.ref.__path.includes('/members/'))
+      .map(u => u.ref.__path);
+    expect(memberPaths).toEqual([`${householdPath}/members/user1`]);
+    expect(commitCount).toBe(1);
+  });
+
   it("an assigned chore's stale deselect debits the assignee's member doc, not the household", async () => {
     vi.useFakeTimers({ now: new Date('2026-07-15T09:00:00') });
     const habit = baseHabit({
@@ -1157,5 +1655,358 @@ describe('useHabitActions.toggleHabit (points toast Undo action)', () => {
     // ... and the completion date is removed again (a true reversal).
     const lastHabit = capturedUpdates.filter(u => u.ref.__path === `${householdPath}/habits/h1`).at(-1);
     expect(lastHabit!.data['completedDates']).toEqual({ __arrayRemove: [today] });
+  });
+});
+
+// 🛡️ ROUND-2 REVIEW — a chore assigned to a member who has since been REMOVED.
+// `removeMember()` never clears `Habit.assignedTo`, and `habitPointsTargets`
+// has always routed an assigned habit's points straight at that member's doc —
+// so every ordinary tap of such a habit queued a `batch.update()` on a deleted
+// doc. That rejects NOT_FOUND, and a Firestore batch is all-or-nothing, so the
+// habit became permanently un-tappable (silently: the forward path had no
+// try/catch). This predates the per-member feature; it is a live production
+// hazard, fixed here by skipping the points write for a ghost pool target.
+describe('useHabitActions.toggleHabit (ghost assignee cannot poison the batch)', () => {
+  const roster = (...uids: string[]) => uids.map(uid => ({ uid })) as HouseholdMember[];
+  const today = () => format(new Date(), 'yyyy-MM-dd');
+  const memberPaths = () =>
+    capturedUpdates.filter(u => u.ref.__path.includes('/members/')).map(u => u.ref.__path);
+
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    capturedDeletes.length = 0;
+    commitCount = 0;
+    nextCommitError = null;
+    incrementMock.mockClear();
+    vi.mocked(toast).mockClear();
+    vi.mocked(toast.error).mockClear();
+  });
+
+  it('writes NO points for a chore assigned to a removed member, and still commits', async () => {
+    const habit = baseHabit({ completedDates: [], count: 0, assignedTo: 'ghost-uid' });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1'))
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'up');
+    });
+
+    // No member write at all — the ghost's doc is gone and the shared pool must
+    // NOT absorb a departed member's chore points either.
+    expect(memberPaths()).toEqual([]);
+    expect(capturedUpdates.find(u => u.ref.__path === householdPath)).toBeUndefined();
+    // The habit itself still toggles, attribution residue included (harmless —
+    // every reader treats an unknown uid's counts as ordinary stored data).
+    expect(habitUpdate()).toBeDefined();
+    expect(habitUpdate()!.data[`completedBy.${today()}.ghost-uid`]).toEqual({ __increment: 1 });
+    expect(habitUpdate()!.data['completedDates']).toEqual({ __arrayUnion: [today()] });
+    expect(commitCount).toBe(1);
+  });
+
+  it('still credits a LIVE assignee (the control case)', async () => {
+    const habit = baseHabit({ completedDates: [], count: 0, assignedTo: 'kid_leo' });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'kid_leo'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'up');
+    });
+
+    expect(memberPaths()).toEqual([`${householdPath}/members/kid_leo`]);
+    const kid = capturedUpdates.find(u => u.ref.__path === `${householdPath}/members/kid_leo`)!;
+    expect(kid.data['points.total']).toEqual({ __increment: 10 });
+    expect(commitCount).toBe(1);
+  });
+
+  it('surfaces an error toast (and no celebration) when the forward commit fails', async () => {
+    // Before this round the forward path had a bare `await batch.commit()`: a
+    // rejection surfaced as an unhandled promise while the points toast still
+    // told the user "+10 pts" for a write that never landed.
+    const habit = baseHabit({ completedDates: [], count: 0 });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1'))
+    );
+
+    nextCommitError = new Error('NOT_FOUND: no document to update');
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'up');
+    });
+
+    expect(vi.mocked(toast.error)).toHaveBeenCalledTimes(1);
+    expect(commitCount).toBe(0);
+    // The points toast is a plain toast() call — it must not fire for a failed write.
+    expect(vi.mocked(toast)).not.toHaveBeenCalled();
+  });
+});
+
+// 🛡️ ROUND-2 REVIEW — every reversal is bounded by STORED attribution.
+//
+// `attributionActor()` answers "who gets CREDITED going forward"; it reads the
+// habit's CURRENT `assignedTo`, which can change after the fact. Using it to
+// decide what to REVERSE debits a member who was never credited (they go
+// negative) while the member who actually earned the points keeps them forever.
+// The stored `Habit.completedBy` map is the only record of who was credited, so
+// it — via `resolveReversalSources` — is the authority for every reversal.
+describe('useHabitActions — reversals follow stored attribution, not current assignment', () => {
+  const today = () => format(new Date(), 'yyyy-MM-dd');
+  const roster = (...uids: string[]) => uids.map(uid => ({ uid })) as HouseholdMember[];
+  const memberUpdate = (uid: string) =>
+    capturedUpdates.find(u => u.ref.__path === `${householdPath}/members/${uid}`);
+
+  /** getDoc stand-in for one stored submission doc. */
+  const submissionDoc = (data: Record<string, unknown>) =>
+    ({ exists: () => true, data: () => data }) as unknown as Awaited<ReturnType<typeof getDoc>>;
+  /** getDocs stand-in for the "is this the last submission for the date" query. */
+  const dateQuerySnap = (size: number) =>
+    ({ size, empty: size === 0, docs: [] }) as unknown as Awaited<ReturnType<typeof getDocs>>;
+
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    capturedDeletes.length = 0;
+    commitCount = 0;
+    nextCommitError = null;
+    incrementMock.mockClear();
+    getDocsMock.mockReset();
+    getDocMock.mockReset();
+  });
+
+  it('down-toggle takes the unit back from the member who HOLDS it, not the tapper', async () => {
+    // Jen is the credited member on today's completion; user1 taps 'down'.
+    // Keying the reversal off the tapper found no units for user1, so it wrote
+    // nothing — leaving Jen's credit stranded permanently.
+    const habit = baseHabit({
+      completedDates: [today()],
+      count: 1,
+      totalCount: 1,
+      completedBy: { [today()]: { 'jen-uid': 1 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'down');
+    });
+
+    expect(habitUpdate()!.data[`completedBy.${today()}.jen-uid`]).toEqual({ __increment: -1 });
+    expect(habitUpdate()!.data[`completedBy.${today()}.user1`]).toBeUndefined();
+    expect(memberUpdate('jen-uid')!.data['points.total']).toEqual({ __increment: -10 });
+    expect(memberUpdate('user1')).toBeUndefined();
+    // The household pool reversal is unchanged by any of this.
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: -10 });
+  });
+
+  it('addHabitSubmission SNAPSHOTS the credited uid on the submission', async () => {
+    const shared = baseHabit({ completedDates: [] });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [shared], householdSettings, [], roster('user1'))
+    );
+    await act(async () => {
+      await result.current.addHabitSubmission('h1', 1);
+    });
+    expect(capturedSets[0]!.data['attributedTo']).toBe('user1');
+
+    capturedSets.length = 0;
+    const chore = baseHabit({ completedDates: [], assignedTo: 'kid_leo' });
+    const { result: choreResult } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [chore], householdSettings, [], roster('user1', 'kid_leo'),
+      )
+    );
+    await act(async () => {
+      await choreResult.current.addHabitSubmission('h1', 1);
+    });
+    // The completion belongs to the kid, not to the parent who tapped.
+    expect(capturedSets[0]!.data['createdBy']).toBe('user1');
+    expect(capturedSets[0]!.data['attributedTo']).toBe('kid_leo');
+  });
+
+  it('deleteHabitSubmission debits the ORIGINAL credited member after a reassignment', async () => {
+    // Jen logged the submission while the habit was shared. It has since been
+    // reassigned to kid_leo. Re-deriving the actor from `assignedTo` decremented
+    // kid_leo — a member who never earned these units.
+    const date = today();
+    getDocMock.mockResolvedValue(submissionDoc({
+      habitId: 'h1', date, count: 1, pointsEarned: 10,
+      createdBy: 'jen-uid', attributedTo: 'jen-uid',
+      streakDaysAtTime: 1, multiplierApplied: 1,
+    }));
+    getDocsMock.mockResolvedValue(dateQuerySnap(1));
+
+    const habit = baseHabit({
+      completedDates: [date],
+      count: 1,
+      totalCount: 1,
+      completedBy: { [date]: { 'jen-uid': 1 } },
+      assignedTo: 'kid_leo',
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [],
+        roster('user1', 'jen-uid', 'kid_leo'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.deleteHabitSubmission('h1', 's1');
+    });
+
+    // The stored holder's units come back...
+    expect(habitUpdate()!.data[`completedBy.${date}.jen-uid`]).toEqual({ __increment: -1 });
+    // ...and the new assignee's attribution is never touched.
+    expect(habitUpdate()!.data[`completedBy.${date}.kid_leo`]).toBeUndefined();
+    expect(commitCount).toBe(1);
+  });
+
+  it('deleteHabitSubmission debits the snapshotted member, never the current one', async () => {
+    // Same shape, but the habit stays SHARED so the member-points half is live:
+    // Jen holds the attribution and must be the one debited, even though the
+    // submission was filed by user1.
+    const date = today();
+    getDocMock.mockResolvedValue(submissionDoc({
+      habitId: 'h1', date, count: 1, pointsEarned: 10,
+      createdBy: 'user1', attributedTo: 'jen-uid',
+      streakDaysAtTime: 1, multiplierApplied: 1,
+    }));
+    getDocsMock.mockResolvedValue(dateQuerySnap(1));
+
+    const habit = baseHabit({
+      completedDates: [date],
+      count: 1,
+      totalCount: 1,
+      completedBy: { [date]: { 'jen-uid': 1 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.deleteHabitSubmission('h1', 's1');
+    });
+
+    expect(habitUpdate()!.data[`completedBy.${date}.jen-uid`]).toEqual({ __increment: -1 });
+    expect(memberUpdate('jen-uid')!.data['points.total']).toEqual({ __increment: -10 });
+    expect(memberUpdate('user1')).toBeUndefined();
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: -10 });
+  });
+
+  it('deleting a LEGACY submission reverses the pool only — zero member writes', async () => {
+    // Pre-stage-1 data: no `attributedTo` on the submission, no `completedBy` on
+    // the habit. The credit predates member scoring, so there is nothing
+    // member-level to reverse — debiting anyone would invent a loss, and writing
+    // a decrement would push a member's count negative.
+    const date = today();
+    getDocMock.mockResolvedValue(submissionDoc({
+      habitId: 'h1', date, count: 1, pointsEarned: 10,
+      createdBy: 'user1', streakDaysAtTime: 1, multiplierApplied: 1,
+    }));
+    getDocsMock.mockResolvedValue(dateQuerySnap(1));
+
+    const habit = baseHabit({ completedDates: [date], count: 1, totalCount: 1 });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1'))
+    );
+
+    await act(async () => {
+      await result.current.deleteHabitSubmission('h1', 's1');
+    });
+
+    expect(capturedUpdates.filter(u => u.ref.__path.includes('/members/'))).toEqual([]);
+    expect(Object.keys(habitUpdate()!.data).some(k => k.startsWith('completedBy.'))).toBe(false);
+    // The household reversal is untouched — exactly the pre-feature behaviour.
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: -10 });
+    expect(commitCount).toBe(1);
+  });
+
+  it('updateHabitSubmission shrinks the ORIGINAL credited member, not the new assignee', async () => {
+    const date = today();
+    getDocMock.mockResolvedValue(submissionDoc({
+      habitId: 'h1', date, count: 2, pointsEarned: 20,
+      createdBy: 'user1', attributedTo: 'jen-uid',
+      streakDaysAtTime: 1, multiplierApplied: 1,
+    }));
+
+    const habit = baseHabit({
+      completedDates: [date],
+      count: 2,
+      totalCount: 2,
+      completedBy: { [date]: { 'jen-uid': 2 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.updateHabitSubmission('h1', 's1', { count: 1 });
+    });
+
+    expect(habitUpdate()!.data[`completedBy.${date}.jen-uid`]).toEqual({ __increment: -1 });
+    expect(habitUpdate()!.data[`completedBy.${date}.user1`]).toBeUndefined();
+    expect(memberUpdate('jen-uid')!.data['points.total']).toEqual({ __increment: -10 });
+    expect(memberUpdate('user1')).toBeUndefined();
+  });
+
+  it('editing a LEGACY submission down writes no attribution and debits no member', async () => {
+    const date = today();
+    getDocMock.mockResolvedValue(submissionDoc({
+      habitId: 'h1', date, count: 2, pointsEarned: 20,
+      createdBy: 'user1', streakDaysAtTime: 1, multiplierApplied: 1,
+    }));
+
+    const habit = baseHabit({ completedDates: [date], count: 2, totalCount: 2 });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1'))
+    );
+
+    await act(async () => {
+      await result.current.updateHabitSubmission('h1', 's1', { count: 1 });
+    });
+
+    expect(Object.keys(habitUpdate()!.data).some(k => k.startsWith('completedBy.'))).toBe(false);
+    expect(capturedUpdates.filter(u => u.ref.__path.includes('/members/'))).toEqual([]);
+    // The pool still loses the one unit's worth of points, as it always did.
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: -10 });
+  });
+
+  it('editing a submission UP still credits the snapshotted member forward', async () => {
+    // Bounding applies to reversals only — an increase is a forward credit and
+    // lands on the member the submission belongs to.
+    const date = today();
+    getDocMock.mockResolvedValue(submissionDoc({
+      habitId: 'h1', date, count: 1, pointsEarned: 10,
+      createdBy: 'user1', attributedTo: 'jen-uid',
+      streakDaysAtTime: 1, multiplierApplied: 1,
+    }));
+
+    const habit = baseHabit({
+      completedDates: [date],
+      count: 1,
+      totalCount: 1,
+      completedBy: { [date]: { 'jen-uid': 1 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.updateHabitSubmission('h1', 's1', { count: 2 });
+    });
+
+    expect(habitUpdate()!.data[`completedBy.${date}.jen-uid`]).toEqual({ __increment: 1 });
+    expect(memberUpdate('jen-uid')!.data['points.total']).toEqual({ __increment: 10 });
   });
 });

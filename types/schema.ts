@@ -712,6 +712,13 @@ export interface HabitTriggers {
 // store-sized bubble that tolerates GPS drift without covering neighbours.
 export const DEFAULT_LOCATION_RADIUS_METERS = 150;
 
+/**
+ * Per-member habit completion attribution: date (yyyy-MM-dd) → member uid →
+ * how many completions that member logged that day. Absent/partial by design —
+ * see `Habit.completedBy`.
+ */
+export type HabitCompletedBy = Record<string, Record<string, number>>;
+
 export interface Habit {
   id: string;
   title: string;
@@ -737,6 +744,34 @@ export interface Habit {
   count: number;
   totalCount: number; // Lifetime count
   completedDates: string[]; // YYYY-MM-DD
+  // Per-member habit points (stage 1): who completed this habit, on which date,
+  // how many times. `completedBy[yyyy-MM-dd][memberUid] = count`. This is an
+  // ADDITIVE overlay on `completedDates` — the flat date list keeps its exact
+  // existing meaning (the habit was completed that day, by anyone) and every
+  // household-level number is still derived from it alone. A date present in
+  // `completedDates` with NO `completedBy` entry is a pre-feature ("grandfathered")
+  // completion: it still counts for the household and is deliberately attributed
+  // to nobody.
+  //
+  // SEMANTIC: the uid is WHO THE COMPLETION BELONGS TO, never "which device
+  // operator tapped". An ASSIGNED habit (a kid chore) is attributed to
+  // `assignedTo`, because a managed kid has no auth session of their own and
+  // every Kid-Mode completion is physically performed by a parent — recording
+  // the signed-in adult there would credit the wrong person for every chore.
+  // This mirrors how the habit's POINTS are already routed to the assignee.
+  //
+  // 🛡️ WRITE DISCIPLINE: this map is only ever written via dot-path
+  // `increment()` at `completedBy.<date>.<uid>` (or a `deleteField()` on the
+  // whole `completedBy.<date>` node when a day is cleared for everyone) — NEVER
+  // as a whole-map write, and never a per-member `deleteField()` decided from a
+  // client-cached prior count. A whole-map write (or a delete-at-zero chosen off
+  // a stale cache) from a device holding a stale offline cache would wipe other
+  // days'/members' attribution, the exact class of bug that erased completion
+  // history on 2026-07-15. Consequently a member's count may legitimately sit at
+  // 0 (or, after concurrent decrements, below it); readers treat `count <= 0` as
+  // ABSENT and the converter drops such nodes on read. See
+  // utils/habitAttribution.ts.
+  completedBy?: HabitCompletedBy;
   streakDays: number;
   lastUpdated: string; // To handle resets
 
@@ -803,6 +838,20 @@ export interface HabitSubmission {
   streakDaysAtTime: number; // Snapshot of streak when submitted
   multiplierApplied: number; // 1.0, 1.5, or 2.0
   createdBy: string; // uid of member who submitted
+  /**
+   * Per-member habit points (stage 1): a SNAPSHOT of the uid this submission's
+   * completion was credited to, taken at add time.
+   *
+   * `createdBy` is who pressed the button; this is who the completion belongs
+   * to — the two differ for an assigned chore (a managed kid never taps for
+   * themselves). It is snapshotted rather than re-derived on read because
+   * `Habit.assignedTo` can be REASSIGNED between an add and its delete/edit:
+   * re-deriving would debit whoever holds the chore today for points the
+   * previous assignee actually earned. Absent on every submission written
+   * before this field shipped — readers fall back to `createdBy` and then, per
+   * `resolveReversalSources`, to whatever `Habit.completedBy` actually records.
+   */
+  attributedTo?: string;
   createdAt: string; // ISO timestamp
   updatedAt?: string; // ISO timestamp if edited
   // F-HABITS-06: optional lightweight journal attached to a completion.
