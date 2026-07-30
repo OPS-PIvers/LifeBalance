@@ -38,6 +38,8 @@ import { TodoPhotoImportDrawer } from '@/components/modals/TodoPhotoImportDrawer
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import PageHeader from '@/components/ui/PageHeader';
 import { TodoRow } from '@/components/todos/TodoRow';
+import MemberAvatar from '@/components/ui/MemberAvatar';
+import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 import { type SectionColor } from '@/components/todos/todoDisplay';
 import { EisenhowerGridView } from '@/components/todos/EisenhowerGridView';
 import { TaskTemplateDrawer } from '@/components/todos/TaskTemplateDrawer';
@@ -152,6 +154,11 @@ const SubtaskEditorRow: React.FC<SubtaskEditorRowProps> = ({
 }) => {
   const dragControls = useDragControls();
   const assignee = sub.assigneeId ? members.find(m => m.uid === sub.assigneeId) : undefined;
+  // `members` is the full household roster as passed down from ToDosPage
+  // (`useHouseholdCore().members`, unsorted) — never a filtered/reordered
+  // copy — so this chip's fallback color matches the same member's badge on
+  // TodoRow's read-only assignee chip and every other member-badge surface.
+  const colors = buildMemberColorMap(members);
   const assigneeMenuItems: MenuItem[] = [
     {
       key: 'unassigned',
@@ -231,9 +238,12 @@ const SubtaskEditorRow: React.FC<SubtaskEditorRowProps> = ({
           className="flex items-center justify-center w-6 h-6 rounded-full text-brand-400 hover:text-accent-600 dark:text-brand-500 dark:hover:text-accent-300"
         >
           {assignee ? (
-            <span className="w-5 h-5 rounded-full bg-brand-200 dark:bg-brand-600 flex items-center justify-center text-[9px] font-bold text-brand-700 dark:text-brand-100">
-              {assignee.displayName?.charAt(0) || '?'}
-            </span>
+            <MemberAvatar
+              name={assignee.displayName ?? '?'}
+              photoURL={assignee.photoURL}
+              color={memberColorFor(colors, assignee.uid)}
+              size={20}
+            />
           ) : (
             <UserPlus size={16} aria-hidden="true" />
           )}
@@ -1782,7 +1792,7 @@ const ToDosPage: React.FC = () => {
               aria-checked={categoryFilter.length === 0}
               onClick={() => setCategoryFilter([])}
               className={cn(
-                'w-full min-h-[44px] px-4 py-2 flex items-center justify-between gap-2 text-left text-sm transition-colors hover:bg-brand-50 dark:hover:bg-brand-700/50 focus:outline-hidden focus:bg-brand-50 dark:focus:bg-brand-700/50',
+                'w-full min-h-[44px] px-4 py-2 flex items-center justify-between gap-2 text-left text-sm transition-colors hover:bg-brand-50 dark:hover:bg-brand-600/50 focus:outline-hidden focus:bg-brand-50 dark:focus:bg-brand-600/50',
                 categoryFilter.length === 0
                   ? 'text-accent-600 font-medium dark:text-accent-300'
                   : 'text-brand-700 dark:text-brand-300'
@@ -1805,7 +1815,7 @@ const ToDosPage: React.FC = () => {
                   // one visit is the whole point of a multi-select filter.
                   onClick={() => setCategoryFilter(prev => toggleCategoryFilterEntry(prev, entry))}
                   className={cn(
-                    'w-full min-h-[44px] px-4 py-2 flex items-center justify-between gap-2 text-left text-sm transition-colors hover:bg-brand-50 dark:hover:bg-brand-700/50 focus:outline-hidden focus:bg-brand-50 dark:focus:bg-brand-700/50',
+                    'w-full min-h-[44px] px-4 py-2 flex items-center justify-between gap-2 text-left text-sm transition-colors hover:bg-brand-50 dark:hover:bg-brand-600/50 focus:outline-hidden focus:bg-brand-50 dark:focus:bg-brand-600/50',
                     selected
                       ? 'text-accent-600 font-medium dark:text-accent-300'
                       : 'text-brand-700 dark:text-brand-300'

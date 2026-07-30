@@ -3,10 +3,11 @@ import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdC
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { isHabitCompletedInCurrentPeriod } from '@/utils/habitLogic';
 import { getLocalDateString } from '@/utils/dateHelpers';
-import { resolveAvatarColor } from '@/utils/avatarColor';
+import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 import type { Habit, HouseholdMember } from '@/types/schema';
 import { Star, Sparkles } from 'lucide-react';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
+import MemberAvatar from '@/components/ui/MemberAvatar';
 
 /**
  * KidsChoresWidget — a compact, read-only glass summary card that gives a parent
@@ -41,6 +42,12 @@ export const KidsChoresWidget: React.FC = React.memo(() => {
     [members, habits]
   );
 
+  // Full, unfiltered roster (not `kidsWithChores` above) — colors are assigned
+  // positionally over the whole household (utils/memberColors.ts), so a map
+  // built from a filtered list would hand out different colors than every
+  // other surface sharing this map.
+  const memberColors = useMemo(() => buildMemberColorMap(members), [members]);
+
   if (!kidModeEnabled || kidsWithChores.length === 0) return null;
 
   return (
@@ -63,13 +70,13 @@ export const KidsChoresWidget: React.FC = React.memo(() => {
             <Row key={kid.uid} className="justify-between">
               <div className="flex items-center gap-3 min-w-0">
                 {/* Avatar */}
-                <div
-                  className="w-9 h-9 rounded-card flex items-center justify-center text-sm font-extrabold text-white shrink-0"
-                  style={{ backgroundColor: resolveAvatarColor(kid.avatarColor, kid.uid) }}
-                  aria-hidden="true"
-                >
-                  {kid.avatarEmoji ?? kid.displayName.charAt(0).toUpperCase()}
-                </div>
+                <MemberAvatar
+                  name={kid.displayName}
+                  color={memberColorFor(memberColors, kid.uid)}
+                  fallbackGlyph={kid.avatarEmoji}
+                  shape="rounded-card"
+                  size={36}
+                />
 
                 {/* Name + today's completion */}
                 <div className="min-w-0">

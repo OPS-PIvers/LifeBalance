@@ -132,7 +132,7 @@ export const TabSubViewMenu = <T extends string>({
                 // ONLY the checkmark — a painted row would read as a stuck
                 // pre-selection. Keyboard roving (ArrowUp/Down moves real
                 // focus) still qualifies as :focus-visible and paints it.
-                'hover:bg-brand-50 dark:hover:bg-brand-700/40 focus-visible:bg-brand-50 dark:focus-visible:bg-brand-700/40 active:bg-brand-50 dark:active:bg-brand-700/40',
+                'hover:bg-brand-50 dark:hover:bg-brand-600/40 focus-visible:bg-brand-50 dark:focus-visible:bg-brand-600/40 active:bg-brand-50 dark:active:bg-brand-600/40',
                 checked ? toneStyles.checkedText : 'text-brand-700 dark:text-brand-200'
               )}
             >

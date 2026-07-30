@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, ArrowLeft, Bell, LogOut, Plus, Search, Settings, User, Users } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Bell, LogOut, Plus, Search, Settings, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { HouseholdMember } from '@/types/schema';
 import { useAuth } from '@/contexts/AuthContext';
@@ -8,8 +8,10 @@ import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Popover } from '@/components/ui/Popover';
 import CountBadge from '@/components/ui/CountBadge';
 import { LazyMount } from '@/components/ui/LazyMount';
+import MemberAvatar from '@/components/ui/MemberAvatar';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
-import { pickAvatarColor, resolveAvatarColor } from '@/utils/avatarColor';
+import { pickAvatarColor } from '@/utils/avatarColor';
+import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 
 // The SAME kid-aware modal Settings opens to edit a kid profile, so creating
 // and editing share one on-design surface (this replaced the app's last
@@ -55,6 +57,12 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({
     addKidProfile,
   } = useHouseholdCore();
   const kidModeEnabled = useKidModeEnabled();
+
+  // Built from the FULL, unfiltered roster (not `kids` below) — colors are
+  // assigned positionally over the whole household, so a map built from a
+  // filtered list hands out different colors than every other surface that
+  // shares this map (utils/memberColors.ts module doc).
+  const memberColors = useMemo(() => buildMemberColorMap(members), [members]);
 
   const kids = kidModeEnabled ? members.filter((m) => m.isManaged === true) : [];
   const activeKid = activeMemberId ? kids.find((k) => k.uid === activeMemberId) : undefined;
@@ -103,15 +111,14 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({
         className="w-64 overflow-hidden origin-top-right"
       >
         {/* User Info Header */}
-        <div className="bg-brand-50 dark:bg-brand-700/50 p-4 border-b border-brand-200 dark:border-brand-700">
+        <div className="bg-brand-50 dark:bg-brand-600/50 p-4 border-b border-brand-200 dark:border-brand-600">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-brand-200 dark:bg-brand-700 flex items-center justify-center text-brand-700 dark:text-brand-200 font-bold text-lg">
-              {currentUser?.displayName ? (
-                <span>{currentUser.displayName.charAt(0)}</span>
-              ) : (
-                <User className="w-5 h-5" />
-              )}
-            </div>
+            <MemberAvatar
+              name={currentUser?.displayName || 'User'}
+              photoURL={currentUser?.photoURL}
+              color={memberColorFor(memberColors, currentUser?.uid ?? '')}
+              size={40}
+            />
             <div className="flex-1 min-w-0">
               <p className="font-display font-semibold text-brand-900 dark:text-brand-100 truncate">
                 {currentUser?.displayName || 'User'}
@@ -120,7 +127,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({
             </div>
           </div>
           {household && (
-            <div className="mt-3 text-xs font-medium text-brand-600 dark:text-brand-300 bg-brand-100 dark:bg-brand-700/60 py-1 px-2 rounded-sm truncate">
+            <div className="mt-3 text-xs font-medium text-brand-600 dark:text-brand-300 bg-brand-100 dark:bg-brand-600/60 py-1 px-2 rounded-sm truncate">
               Household: {household.name}
             </div>
           )}
@@ -128,8 +135,8 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({
 
         {/* Profiles section — only visible when Kid Mode is enabled (Plan 080, dormant by default) */}
         {kidModeEnabled && (
-          <div className="p-2 border-b border-brand-200 dark:border-brand-700">
-            <div className="px-3 py-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-brand-400 dark:text-brand-450">
+          <div className="p-2 border-b border-brand-200 dark:border-brand-600">
+            <div className="px-3 py-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-brand-400 dark:text-brand-400">
               <Users className="w-3.5 h-3.5" />
               Profiles
             </div>
@@ -161,11 +168,14 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({
 
             {/* Parent row (active when no kid is selected) */}
             <div
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-btn text-sm font-medium text-brand-700 dark:text-brand-300 ${activeMemberId === null ? 'bg-brand-50 dark:bg-brand-700/40' : ''}`}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-btn text-sm font-medium text-brand-700 dark:text-brand-300 ${activeMemberId === null ? 'bg-brand-50 dark:bg-brand-600/40' : ''}`}
             >
-              <div className="w-6 h-6 rounded-full bg-brand-200 dark:bg-brand-700 flex items-center justify-center text-brand-700 dark:text-brand-200 text-xs font-bold shrink-0">
-                {currentUser?.displayName ? currentUser.displayName.charAt(0) : <User className="w-3.5 h-3.5" />}
-              </div>
+              <MemberAvatar
+                name={currentUser?.displayName || 'Parent'}
+                photoURL={currentUser?.photoURL}
+                color={memberColorFor(memberColors, currentUser?.uid ?? '')}
+                size={24}
+              />
               <span className="truncate">
                 {currentUser?.displayName ?? 'Parent'}{activeMemberId === null ? ' (you)' : ''}
               </span>
@@ -179,22 +189,16 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({
                   actAs(kid.uid);
                   onClose();
                 }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-700 hover:text-warm-700 dark:hover:text-warm-300 rounded-btn transition-colors text-left"
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-600 hover:text-warm-700 dark:hover:text-warm-300 rounded-btn transition-colors text-left"
                 role="menuitem"
                 tabIndex={-1}
               >
-                {kid.avatarColor ? (
-                  <div
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 text-white"
-                    style={{ backgroundColor: resolveAvatarColor(kid.avatarColor, kid.uid) }}
-                  >
-                    {kid.avatarEmoji ?? kid.displayName.charAt(0)}
-                  </div>
-                ) : (
-                  <div className="w-6 h-6 rounded-full bg-warm-100 dark:bg-warm-900/30 flex items-center justify-center shrink-0">
-                    <User className="w-3.5 h-3.5 text-warm-500 dark:text-warm-300" />
-                  </div>
-                )}
+                <MemberAvatar
+                  name={kid.displayName}
+                  color={memberColorFor(memberColors, kid.uid)}
+                  fallbackGlyph={kid.avatarEmoji}
+                  size={24}
+                />
                 <span className="truncate">{kid.displayName}</span>
               </button>
             ))}
@@ -202,7 +206,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({
             {/* Add kid profile */}
             <button
               onClick={handleAddKidProfile}
-              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-brand-500 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-700 hover:text-warm-700 dark:hover:text-warm-300 rounded-btn transition-colors text-left"
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-brand-500 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-600 hover:text-warm-700 dark:hover:text-warm-300 rounded-btn transition-colors text-left"
               role="menuitem"
               tabIndex={-1}
             >
@@ -219,7 +223,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({
               onOpenSearch?.();
               onClose();
             }}
-            className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-700 hover:text-accent-700 dark:hover:text-accent-300 rounded-btn transition-colors text-left"
+            className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-600 hover:text-accent-700 dark:hover:text-accent-300 rounded-btn transition-colors text-left"
             role="menuitem"
             tabIndex={-1}
           >
@@ -232,13 +236,13 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({
               onOpenNotifications?.();
               onClose();
             }}
-            className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-700 hover:text-accent-700 dark:hover:text-accent-300 rounded-btn transition-colors text-left"
+            className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-600 hover:text-accent-700 dark:hover:text-accent-300 rounded-btn transition-colors text-left"
             role="menuitem"
             tabIndex={-1}
           >
             <span className="relative flex items-center">
               <Bell className="w-4 h-4" />
-              <CountBadge count={unreadNotificationCount} className="-top-2 -right-2 ring-white dark:ring-brand-800" />
+              <CountBadge count={unreadNotificationCount} className="-top-2 -right-2 ring-white dark:ring-brand-700" />
             </span>
             Notifications
             {unreadNotificationCount > 0 && (
@@ -246,14 +250,14 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({
             )}
           </button>
 
-          <hr className="my-1 border-brand-200 dark:border-brand-700" />
+          <hr className="my-1 border-brand-200 dark:border-brand-600" />
 
           <button
             onClick={() => {
               onSendFeedback?.();
               onClose();
             }}
-            className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-700 hover:text-accent-700 dark:hover:text-accent-300 rounded-btn transition-colors text-left"
+            className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-600 hover:text-accent-700 dark:hover:text-accent-300 rounded-btn transition-colors text-left"
             role="menuitem"
             tabIndex={-1}
           >
@@ -266,7 +270,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({
               navigate('/settings');
               onClose();
             }}
-            className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-700 hover:text-accent-700 dark:hover:text-accent-300 rounded-btn transition-colors text-left"
+            className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-600 hover:text-accent-700 dark:hover:text-accent-300 rounded-btn transition-colors text-left"
             role="menuitem"
             tabIndex={-1}
           >
@@ -274,7 +278,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({
             Settings
           </button>
 
-          <hr className="my-1 border-brand-200 dark:border-brand-700" />
+          <hr className="my-1 border-brand-200 dark:border-brand-600" />
 
           <button
             onClick={handleLogout}

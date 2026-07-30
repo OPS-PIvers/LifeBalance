@@ -62,4 +62,28 @@ describe('MemberAvatar', () => {
     render(<MemberAvatar name="Paul" color="#285742" size={22} data-testid="avatar" />);
     expect(screen.getByTestId('avatar')).toHaveStyle({ width: '22px', height: '22px' });
   });
+
+  it('renders a squircle instead of a circle when shape is not "circle", on both the photo and fallback branches', () => {
+    const { rerender } = render(
+      <MemberAvatar name="Kid" color="#b87a29" size={36} shape="rounded-card" data-testid="avatar" />
+    );
+    let avatar = screen.getByTestId('avatar');
+    expect(avatar).toHaveClass('rounded-card');
+    expect(avatar).not.toHaveClass('rounded-full');
+
+    rerender(
+      <MemberAvatar
+        name="Kid"
+        photoURL="https://example.com/kid.jpg"
+        color="#b87a29"
+        size={48}
+        shape="rounded-2xl"
+        data-testid="avatar"
+      />
+    );
+    avatar = screen.getByTestId('avatar');
+    expect(avatar.tagName).toBe('IMG');
+    expect(avatar).toHaveClass('rounded-2xl');
+    expect(avatar).not.toHaveClass('rounded-full');
+  });
 });

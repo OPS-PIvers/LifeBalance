@@ -378,6 +378,20 @@ html.app-shell body {
   @apply bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-card;
 }
 
+@utility surface-overlay {
+  /* ELEVATED surface — popovers/menus that float ABOVE a page of
+     `surface-section` panels. Same anatomy, one step lighter in dark mode.
+     In dark mode a shadow is nearly invisible (there is no light to occlude
+     on a near-black page), so `shadow-raised` alone left an overlay reading
+     as the same plane as the content beneath it — the panel was literally
+     `bg-brand-800`, the exact fill of the rows behind it. Elevation there
+     has to come from SURFACE LIGHTNESS, which is what this adds; the shadow
+     still does the work in light mode, where it is visible.
+     Note for consumers: on this lighter fill a `dark:border-brand-700`
+     hairline disappears — dividers inside an overlay step to brand-600. */
+  @apply bg-white dark:bg-brand-700 border border-brand-200 dark:border-brand-600 rounded-card;
+}
+
 @utility hairline-divider {
   /* The 1px separator between rows inside a section. */
   @apply border-t border-brand-200 dark:border-brand-700;

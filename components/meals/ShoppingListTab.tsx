@@ -64,7 +64,7 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({ filterStore, stores, on
           role="menuitemradio"
           aria-checked={!filterStore}
           onClick={() => onSelect(null)}
-          className={`w-full text-left px-4 py-2 min-h-[44px] text-sm hover:bg-brand-50 dark:hover:bg-brand-700/50 flex items-center justify-between focus:outline-hidden focus:bg-brand-50 dark:focus:bg-brand-700/50 ${!filterStore ? 'text-accent-600 font-medium bg-accent-50 dark:text-accent-300 dark:bg-accent-900/30' : 'text-brand-700 dark:text-brand-300'}`}
+          className={`w-full text-left px-4 py-2 min-h-[44px] text-sm hover:bg-brand-50 dark:hover:bg-brand-600/50 flex items-center justify-between focus:outline-hidden focus:bg-brand-50 dark:focus:bg-brand-600/50 ${!filterStore ? 'text-accent-600 font-medium bg-accent-50 dark:text-accent-300 dark:bg-accent-900/30' : 'text-brand-700 dark:text-brand-300'}`}
         >
           All items
           {!filterStore && <Filter size={14} />}
@@ -75,14 +75,14 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({ filterStore, stores, on
             role="menuitemradio"
             aria-checked={filterStore === store.name}
             onClick={() => onSelect(store.name)}
-            className={`w-full text-left px-4 py-2 min-h-[44px] text-sm hover:bg-brand-50 dark:hover:bg-brand-700/50 flex items-center justify-between focus:outline-hidden focus:bg-brand-50 dark:focus:bg-brand-700/50 ${filterStore === store.name ? 'text-accent-600 font-medium bg-accent-50 dark:text-accent-300 dark:bg-accent-900/30' : 'text-brand-700 dark:text-brand-300'}`}
+            className={`w-full text-left px-4 py-2 min-h-[44px] text-sm hover:bg-brand-50 dark:hover:bg-brand-600/50 flex items-center justify-between focus:outline-hidden focus:bg-brand-50 dark:focus:bg-brand-600/50 ${filterStore === store.name ? 'text-accent-600 font-medium bg-accent-50 dark:text-accent-300 dark:bg-accent-900/30' : 'text-brand-700 dark:text-brand-300'}`}
           >
             {store.name}
             {filterStore === store.name && <Filter size={14} />}
           </button>
         ))}
         {stores.length === 0 && (
-          <div className="px-4 py-2 text-xs text-brand-400 dark:text-brand-450 italic">No stores configured</div>
+          <div className="px-4 py-2 text-xs text-brand-400 dark:text-brand-400 italic">No stores configured</div>
         )}
       </div>
     </Popover>
@@ -113,7 +113,7 @@ const SortDropdown: React.FC<SortDropdownProps> = ({ sortMode, onSelect, onClose
           role="menuitemradio"
           aria-checked={sortMode === mode}
           onClick={() => onSelect(mode)}
-          className={`w-full text-left px-4 py-2 min-h-[44px] text-sm hover:bg-brand-50 dark:hover:bg-brand-700/50 flex items-center justify-between focus:outline-hidden focus:bg-brand-50 dark:focus:bg-brand-700/50 ${sortMode === mode ? 'text-accent-600 font-medium bg-accent-50 dark:text-accent-300 dark:bg-accent-900/30' : 'text-brand-700 dark:text-brand-300'}`}
+          className={`w-full text-left px-4 py-2 min-h-[44px] text-sm hover:bg-brand-50 dark:hover:bg-brand-600/50 flex items-center justify-between focus:outline-hidden focus:bg-brand-50 dark:focus:bg-brand-600/50 ${sortMode === mode ? 'text-accent-600 font-medium bg-accent-50 dark:text-accent-300 dark:bg-accent-900/30' : 'text-brand-700 dark:text-brand-300'}`}
         >
           {SHOPPING_SORT_LABELS[mode]}
           {sortMode === mode && <Check size={14} />}

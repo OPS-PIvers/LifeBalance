@@ -132,7 +132,7 @@ export const Popover: React.FC<PopoverProps> = ({
         className={twMerge(
           'absolute z-dropdown outline-hidden animate-in fade-in zoom-in-95 duration-(--duration-fast)',
           position,
-          !unstyled && 'surface-section shadow-raised',
+          !unstyled && 'surface-overlay shadow-raised',
           className
         )}
       >
