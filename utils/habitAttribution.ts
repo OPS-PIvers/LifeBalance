@@ -142,6 +142,78 @@ export const memberCompletionDates = (habit: AttributedHabit, memberId: string):
 };
 
 /**
+ * One member's share of a bounded reversal: take `units` attributed completions
+ * off `memberId`. `units` is always > 0.
+ */
+export interface ReversalSource {
+  memberId: string;
+  units: number;
+}
+
+/**
+ * 🛡️ THE REVERSAL RULE — which member(s) may a reversal of `units` units on
+ * `date` actually come out of?
+ *
+ * Only ever the ones `habit.completedBy` records. The "who is credited going
+ * forward" question (`attributionActor` in useHabitActions — the habit's
+ * CURRENT `assignedTo`, or the acting/logging uid) is a different question, and
+ * answering the reversal question with it is how a member who was never
+ * credited gets debited:
+ *
+ *   - reassign a chore between a submission's add and its delete, and the NEW
+ *     assignee is debited while the member who actually earned the points keeps
+ *     them forever;
+ *   - down-toggle a completion someone else was credited for, and the reversal
+ *     computes a 0 delta against the wrong uid while the original credit
+ *     survives;
+ *   - delete a PRE-STAGE-1 submission and there is no member attribution at
+ *     all, so debiting anyone invents a loss.
+ *
+ * So: clamp to what the preferred uid actually holds. When they hold nothing,
+ * fall back to the uid(s) that DO hold attribution on that date, largest count
+ * first (uid-ascending to break ties, so the choice is deterministic). When
+ * nobody holds any, return `[]` — the caller then writes NO member-points
+ * reversal at all, which is exactly right for grandfathered history: the credit
+ * predates member scoring, so there is nothing member-level to reverse. The
+ * household/pool reversal is a separate, unchanged computation.
+ */
+export const resolveReversalSources = (
+  habit: AttributedHabit,
+  preferredMemberId: string,
+  date: string,
+  units: number,
+): ReversalSource[] => {
+  if (units <= 0) return [];
+
+  // Preferred uid holds attribution → clamp to what they hold and stop. We
+  // deliberately do NOT spill the shortfall onto other members: taking units
+  // off someone the caller never named is only justified when the preferred
+  // uid holds nothing at all.
+  const preferred = memberCompletionCount(habit, preferredMemberId, date);
+  if (preferred > 0) {
+    return [{ memberId: preferredMemberId, units: Math.min(preferred, units) }];
+  }
+
+  const day = habit.completedBy?.[date];
+  if (!day) return [];
+  const holders = Object.entries(day)
+    .filter(([, count]) => count > 0)
+    .sort(([aUid, aCount], [bUid, bCount]) =>
+      bCount - aCount || (aUid < bUid ? -1 : aUid > bUid ? 1 : 0),
+    );
+
+  const sources: ReversalSource[] = [];
+  let remaining = units;
+  for (const [memberId, count] of holders) {
+    if (remaining <= 0) break;
+    const take = Math.min(count, remaining);
+    sources.push({ memberId, units: take });
+    remaining -= take;
+  }
+  return sources;
+};
+
+/**
  * Apply a delta to one member's count on one date, returning a NEW habit object.
  *
  * Used to build the "after" view a write path scores against (see

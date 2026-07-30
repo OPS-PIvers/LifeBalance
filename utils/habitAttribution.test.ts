@@ -21,6 +21,7 @@ import {
   memberPeriodPointsDelta,
   memberPointsForHabitOnDate,
   prospectiveMultiplierForMember,
+  resolveReversalSources,
   streakEndingOnForMember,
   streakForMember,
   withAttributionDelta,
@@ -632,5 +633,80 @@ describe('habitAttribution — per-member recompute', () => {
       parseISO(`${d(0)}T12:00:00`),
     );
     expect(updates).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveReversalSources — 🛡️ reversals are bounded by STORED attribution
+// ---------------------------------------------------------------------------
+// The rule this pins: a member-points debit or a `completedBy` decrement may
+// only ever take back units the map ACTUALLY records for that uid+date. "Who is
+// credited going forward" (a habit's CURRENT `assignedTo`, or the tapping uid)
+// is a different question, and using it to decide what to REVERSE debits members
+// who were never credited while stranding the credit of the member who was.
+describe('resolveReversalSources', () => {
+  const MIA = 'mia-uid';
+
+  it('clamps to what the preferred member actually holds', () => {
+    const h = habit({ completedBy: { [d(0)]: { [PAUL]: 2 } } });
+    // Asking for 5 back can only take the 2 that are stored.
+    expect(resolveReversalSources(h, PAUL, d(0), 5)).toEqual([{ memberId: PAUL, units: 2 }]);
+    // Asking for fewer than stored takes only what was asked.
+    expect(resolveReversalSources(h, PAUL, d(0), 1)).toEqual([{ memberId: PAUL, units: 1 }]);
+  });
+
+  it('does NOT spill a shortfall onto other members when the preferred uid holds some', () => {
+    // Paul holds 1, Jen holds 3. Reversing 3 "Paul units" must take Paul's ONE
+    // and stop — helping itself to Jen's would debit a member the caller never
+    // named, for units she genuinely earned.
+    const h = habit({ completedBy: { [d(0)]: { [PAUL]: 1, [JEN]: 3 } } });
+    expect(resolveReversalSources(h, PAUL, d(0), 3)).toEqual([{ memberId: PAUL, units: 1 }]);
+  });
+
+  it('falls back to whoever DOES hold attribution when the preferred uid holds none', () => {
+    // The reassignment case: the habit names Mia today, but Jen is the member
+    // the completion was actually credited to, so the reversal comes out of Jen.
+    const h = habit({ completedBy: { [d(0)]: { [JEN]: 1 } } });
+    expect(resolveReversalSources(h, MIA, d(0), 1)).toEqual([{ memberId: JEN, units: 1 }]);
+  });
+
+  it('spends the fallback largest-count-first and stops at `units`', () => {
+    const h = habit({ completedBy: { [d(0)]: { [JEN]: 1, [PAUL]: 3 } } });
+    expect(resolveReversalSources(h, MIA, d(0), 4)).toEqual([
+      { memberId: PAUL, units: 3 },
+      { memberId: JEN, units: 1 },
+    ]);
+    // Bounded by the request, not by the stored total.
+    expect(resolveReversalSources(h, MIA, d(0), 2)).toEqual([{ memberId: PAUL, units: 2 }]);
+  });
+
+  it('breaks equal-count ties deterministically by uid', () => {
+    const h = habit({ completedBy: { [d(0)]: { [PAUL]: 1, [JEN]: 1 } } });
+    // jen-uid sorts before paul-uid, so Jen is taken first — same answer every run.
+    expect(resolveReversalSources(h, MIA, d(0), 1)).toEqual([{ memberId: JEN, units: 1 }]);
+  });
+
+  it('returns NOTHING for a fully grandfathered date (nobody holds attribution)', () => {
+    // The transition-day rule: a completion recorded before member scoring
+    // shipped has no member credit to take back, so deleting it must debit
+    // nobody. The household/pool reversal is a separate, unchanged computation.
+    const legacy = habit({ count: 1, completedDates: [d(0)] });
+    expect(resolveReversalSources(legacy, PAUL, d(0), 1)).toEqual([]);
+    expect(resolveReversalSources(legacy, JEN, d(0), 3)).toEqual([]);
+  });
+
+  it('treats a zero/negative residue node as absent on both the preferred and fallback paths', () => {
+    // Decrements are unconditional increments, so a node can rest at 0 or dip
+    // below it. `count <= 0` means ABSENT everywhere in this module.
+    const residue = habit({ completedBy: { [d(0)]: { [PAUL]: 0, [JEN]: -1 } } });
+    expect(resolveReversalSources(residue, PAUL, d(0), 1)).toEqual([]);
+    expect(resolveReversalSources(residue, MIA, d(0), 1)).toEqual([]);
+  });
+
+  it('returns nothing for a non-positive request or an untouched date', () => {
+    const h = habit({ completedBy: { [d(0)]: { [PAUL]: 2 } } });
+    expect(resolveReversalSources(h, PAUL, d(0), 0)).toEqual([]);
+    expect(resolveReversalSources(h, PAUL, d(0), -1)).toEqual([]);
+    expect(resolveReversalSources(h, PAUL, d(1), 1)).toEqual([]);
   });
 });

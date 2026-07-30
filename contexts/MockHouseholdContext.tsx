@@ -21,6 +21,7 @@ import {
   householdPeriodPoints,
   memberCompletionCount,
   memberPeriodPointsDelta,
+  resolveReversalSources,
   withAttributionDelta,
   withDatesUnattributed,
 } from '@/utils/habitAttribution';
@@ -1615,15 +1616,22 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Habits reordered');
   }, []);
 
-  // Credit (or debit, negative delta) the test user's points across all three
-  // windows plus the redeemable lifetime total — the same three-window update
-  // the real context's habit writeBatch applies to household points.
-  const creditPoints = useCallback((delta: number) => {
-    if (delta === 0) return;
+  // Credit (or debit, negative delta) the HOUSEHOLD pool: the redeemable
+  // lifetime total plus — by this mock's deliberate conflation, which Stage 2
+  // untangles — the test user's own three point windows. The same three-window
+  // update the real context's habit writeBatch applies to household points.
+  const creditHouseholdPool = useCallback((
+    delta: { daily: number; weekly: number; total: number },
+  ) => {
+    if (delta.daily === 0 && delta.weekly === 0 && delta.total === 0) return;
     setMembers(prev => prev.map(m => m.uid === MOCK_USER_UID
-      ? { ...m, points: { daily: m.points.daily + delta, weekly: m.points.weekly + delta, total: m.points.total + delta } }
+      ? { ...m, points: {
+          daily: m.points.daily + delta.daily,
+          weekly: m.points.weekly + delta.weekly,
+          total: m.points.total + delta.total,
+        } }
       : m));
-    setTotalPoints(prev => prev + delta);
+    setTotalPoints(prev => prev + delta.total);
   }, []);
 
   /**
@@ -1644,6 +1652,22 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         } }
       : m));
   }, []);
+
+  /**
+   * Route a habit's POOL points exactly as production's `habitPointsTargets`
+   * does (Plan 080c): an ASSIGNED chore credits its assignee's own member doc
+   * and the shared household pool receives nothing; a shared habit credits the
+   * pool. Test Mode previously sent every habit — assigned chores included — to
+   * `creditPoints`, so a kid's chore silently paid the test user and inflated
+   * the redeemable pool, which production never does.
+   */
+  const creditHabitPool = useCallback((
+    habit: Pick<Habit, 'assignedTo'>,
+    delta: { daily: number; weekly: number; total: number },
+  ) => {
+    if (habit.assignedTo) creditMemberPoints(habit.assignedTo, delta);
+    else creditHouseholdPool(delta);
+  }, [creditHouseholdPool, creditMemberPoints]);
 
   // Habit Automations (PRD #1065): fire (or reverse) the habit a to-do is linked
   // to, mirroring the real fireLinkedHabitInBatch — same pure scoring helper
@@ -1684,21 +1708,13 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         lastUpdated: new Date().toISOString(),
       };
     }));
-    if (delta.pointsChange !== 0) {
-      if (habit.assignedTo) {
-        setMembers(prev => prev.map(m => m.uid === habit.assignedTo
-          ? { ...m, points: {
-              daily: m.points.daily + delta.pointsChange,
-              weekly: m.points.weekly + delta.pointsChange,
-              total: m.points.total + delta.pointsChange,
-            } }
-          : m));
-      } else {
-        creditPoints(delta.pointsChange);
-      }
-    }
+    creditHabitPool(habit, {
+      daily: delta.pointsChange,
+      weekly: delta.pointsChange,
+      total: delta.pointsChange,
+    });
     return habit.title;
-  }, [creditPoints]);
+  }, [creditHabitPool]);
 
   // Full scoring parity with the real toggle path: reuse the SAME pure,
   // unit-tested logic (streaks, period-aware multiplier, threshold vs
@@ -1742,13 +1758,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
               lastUpdated: new Date().toISOString(),
             }
           : h));
-        const { daily, weekly, total } = staleResult.pointsDelta;
-        if (daily !== 0 || weekly !== 0 || total !== 0) {
-          setMembers(prev => prev.map(m => m.uid === MOCK_USER_UID
-            ? { ...m, points: { daily: m.points.daily + daily, weekly: m.points.weekly + weekly, total: m.points.total + total } }
-            : m));
-          setTotalPoints(prev => prev + total);
-        }
+        // Pool routing parity: an assigned chore reverses on the ASSIGNEE's doc,
+        // a shared habit on the household pool (creditHabitPool).
+        creditHabitPool(habit, staleResult.pointsDelta);
         // The test user's own score already moved with the pool above (this
         // mock deliberately conflates the two — see the toggle note below), so
         // only OTHER members' reversals are applied here, exactly as resetHabit
@@ -1773,21 +1785,36 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     //
     // NOTE: no SEPARATE member-points credit is applied here, because this mock
     // deliberately derives `dailyPoints`/`weeklyPoints` from `members[0]` —
-    // `creditPoints` below already moves the test user's member score. Stage 2
-    // untangles that conflation when the scoreboard needs true per-member
-    // numbers; the credit/un-credit mutations below already keep them separate.
+    // `creditHabitPool` below already moves the test user's member score for a
+    // shared habit. Stage 2 untangles that conflation when the scoreboard needs
+    // true per-member numbers; the credit/un-credit mutations below already keep
+    // them separate.
+    //
+    // 🛡️ Reversal parity with production: a 'down' takes its unit back from
+    // whoever STORED attribution records (`resolveReversalSources`), not from
+    // whoever `assignedTo` names today — a reassignment between the up-tap and
+    // the down-tap would otherwise leave the original credit stranded.
     const toggleDate = getLocalDateString();
     const attributedTo = habit.assignedTo ?? MOCK_USER_UID;
-    const attributionDelta =
+    const attributionMoves: { memberId: string; delta: number }[] =
       direction === 'up'
-        ? 1
-        : memberCompletionCount(effectiveHabit, attributedTo, toggleDate) > 0
-          ? -1
-          : 0;
-    setHabits(prev => prev.map(h => h.id === id
-      ? withAttributionDelta({ ...h, ...result.updatedHabit }, toggleDate, attributedTo, attributionDelta)
-      : h));
-    creditPoints(result.pointsChange);
+        ? [{ memberId: attributedTo, delta: 1 }]
+        : resolveReversalSources(effectiveHabit, attributedTo, toggleDate, 1)
+            .map(source => ({ memberId: source.memberId, delta: -source.units }));
+    setHabits(prev => prev.map(h => {
+      if (h.id !== id) return h;
+      let next: Habit = { ...h, ...result.updatedHabit };
+      for (const move of attributionMoves) {
+        next = withAttributionDelta(next, toggleDate, move.memberId, move.delta);
+      }
+      return next;
+    }));
+    // Plan 080c parity: an assigned chore pays its ASSIGNEE, never the pool.
+    creditHabitPool(habit, {
+      daily: result.pointsChange,
+      weekly: result.pointsChange,
+      total: result.pointsChange,
+    });
     toast.success(
       `Mock: Habit ${direction === 'up' ? 'incremented' : 'decremented'}${attribution ? ` (${attribution})` : ''}`
     );
@@ -1813,7 +1840,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         });
       }
     }
-  }, [habits, creditPoints, creditMemberPoints, rewards, unlockedRewardIds]);
+  }, [habits, creditHabitPool, creditMemberPoints, rewards, unlockedRewardIds]);
 
   // Manual reset (the card's X button): zero the period counter, drop today
   // from completedDates, and reverse today's awarded points — mirroring the
@@ -1827,22 +1854,35 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     // Per-member points (stage 1) parity: a reset clears the day for everyone,
     // so today's attribution goes with the completion date, and each credited
     // member has exactly their own earned points reversed.
-    const reversal = attributionReversalForDates(habit, [today], today);
+    //
+    // 🛡️ Gated on `habitFeedsMemberAttribution` exactly as production's
+    // resetHabit is: an ASSIGNED chore's points already reverse on the
+    // assignee's doc through `creditHabitPool` above, so also applying the
+    // per-member reversal would debit them twice.
+    const reversal = habitFeedsMemberAttribution(habit)
+      ? attributionReversalForDates(habit, [today], today)
+      : { perMember: new Map<string, { daily: number; weekly: number; total: number }>(), clearPaths: [] };
     setHabits(prev => prev.map(h => h.id === id
       ? {
-          ...withDatesUnattributed(h, [today]),
+          ...(reversal.clearPaths.length > 0 ? withDatesUnattributed(h, [today]) : h),
           count: 0,
           completedDates: newCompletedDates,
           streakDays: streakForHabit({ period: h.period, completedDates: newCompletedDates, frozenDates: h.frozenDates }),
           lastUpdated: new Date().toISOString(),
         }
       : h));
-    creditPoints(-pointsToRemove);
+    // Plan 080c parity: an assigned chore's reset debits the ASSIGNEE, not the
+    // shared pool (creditHabitPool).
+    creditHabitPool(habit, {
+      daily: -pointsToRemove,
+      weekly: -pointsToRemove,
+      total: -pointsToRemove,
+    });
     for (const [memberId, delta] of reversal.perMember) {
       if (memberId !== MOCK_USER_UID) creditMemberPoints(memberId, delta);
     }
     toast.success('Mock: Habit reset');
-  }, [habits, creditPoints, creditMemberPoints]);
+  }, [habits, creditHabitPool, creditMemberPoints]);
 
   /**
    * Per-member points (stage 1) parity — credit ONE completion of `habitId` to

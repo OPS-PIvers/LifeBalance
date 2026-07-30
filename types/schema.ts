@@ -838,6 +838,20 @@ export interface HabitSubmission {
   streakDaysAtTime: number; // Snapshot of streak when submitted
   multiplierApplied: number; // 1.0, 1.5, or 2.0
   createdBy: string; // uid of member who submitted
+  /**
+   * Per-member habit points (stage 1): a SNAPSHOT of the uid this submission's
+   * completion was credited to, taken at add time.
+   *
+   * `createdBy` is who pressed the button; this is who the completion belongs
+   * to — the two differ for an assigned chore (a managed kid never taps for
+   * themselves). It is snapshotted rather than re-derived on read because
+   * `Habit.assignedTo` can be REASSIGNED between an add and its delete/edit:
+   * re-deriving would debit whoever holds the chore today for points the
+   * previous assignee actually earned. Absent on every submission written
+   * before this field shipped — readers fall back to `createdBy` and then, per
+   * `resolveReversalSources`, to whatever `Habit.completedBy` actually records.
+   */
+  attributedTo?: string;
   createdAt: string; // ISO timestamp
   updatedAt?: string; // ISO timestamp if edited
   // F-HABITS-06: optional lightweight journal attached to a completion.
