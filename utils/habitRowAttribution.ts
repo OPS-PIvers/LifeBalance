@@ -79,6 +79,48 @@ export const buildHabitRowMemberContext = (
 };
 
 /**
+ * Do two contexts describe the same roster? The habit row's `React.memo`
+ * comparator asks this instead of comparing identity.
+ *
+ * 🛡️ Identity is NOT enough, and the difference is a real regression: the page
+ * memoizes this context on `members`, but EVERY habit toggle writes
+ * `members/{uid}.points`, which re-fires the members listener and hands the page
+ * a brand-new array — so an identity check would re-render every card in the
+ * list on every toggle. None of the fields a row actually reads (uid, name,
+ * color) move when points do, so compare those.
+ */
+export const sameHabitRowMemberContext = (
+  a: HabitRowMemberContext | undefined,
+  b: HabitRowMemberContext | undefined,
+): boolean => {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.currentUserId !== b.currentUserId) return false;
+  if (a.adults.length !== b.adults.length) return false;
+  for (let i = 0; i < a.adults.length; i += 1) {
+    const left = a.adults[i];
+    const right = b.adults[i];
+    if (
+      left?.uid !== right?.uid ||
+      left?.displayName !== right?.displayName ||
+      left?.color !== right?.color
+    ) {
+      return false;
+    }
+  }
+  const uids = Object.keys(a.byUid);
+  if (uids.length !== Object.keys(b.byUid).length) return false;
+  for (const uid of uids) {
+    const left = a.byUid[uid];
+    const right = b.byUid[uid];
+    if (!right || left?.displayName !== right.displayName || left?.color !== right.color) {
+      return false;
+    }
+  }
+  return true;
+};
+
+/**
  * The row's attribution segments for the period containing `date`, ordered:
  * roster adults first (so the first adult always owns 12 o'clock), then any
  * other credited uid — a managed kid on an assigned chore, or a member who has

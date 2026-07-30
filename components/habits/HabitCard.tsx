@@ -22,7 +22,11 @@ import {
   habitFeedsMemberAttribution,
   memberCompletionCount,
 } from '@/utils/habitAttribution';
-import { rowCompletionSegments, type HabitRowMemberContext } from '@/utils/habitRowAttribution';
+import {
+  rowCompletionSegments,
+  sameHabitRowMemberContext,
+  type HabitRowMemberContext,
+} from '@/utils/habitRowAttribution';
 import HabitPieCounter from './HabitPieCounter';
 import HabitDoneByAvatars from './HabitDoneByAvatars';
 import HabitAttributionPicker, { type AttributionPickerMember } from './HabitAttributionPicker';
@@ -625,9 +629,11 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
   prev.habit.pausedUntil === next.habit.pausedUntil &&
   // Per-member points (stage 2): drives whether the picker is offered at all.
   prev.habit.assignedTo === next.habit.assignedTo &&
-  // The roster/color context is memoized by the Habits page, so identity is the
-  // right compare here.
-  prev.attribution === next.attribution &&
+  // CONTENT, not identity: the page memoizes this context on `members`, and
+  // every toggle writes `members/{uid}.points`, which re-fires the members
+  // listener with a fresh array — an identity check would therefore re-render
+  // every card in the list on every toggle (see sameHabitRowMemberContext).
+  sameHabitRowMemberContext(prev.attribution, next.attribution) &&
   // Attribution content, scoped to the CURRENT period (see
   // attributionFingerprint): a credit or un-credit by the other member arrives
   // as a habit-doc snapshot that may move nothing else on this row, so without

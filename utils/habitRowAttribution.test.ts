@@ -4,6 +4,7 @@ import type { Habit, HouseholdMember } from '@/types/schema';
 import {
   buildHabitRowMemberContext,
   rowCompletionSegments,
+  sameHabitRowMemberContext,
 } from '@/utils/habitRowAttribution';
 
 // 🛡️ Anchored to the FIXTURE's own Monday, never to "today" — a suite that
@@ -62,6 +63,49 @@ describe('buildHabitRowMemberContext', () => {
   it('tolerates an unknown signed-in member', () => {
     expect(buildHabitRowMemberContext(ROSTER, undefined).currentUserId).toBe('');
     expect(buildHabitRowMemberContext([], null).adults).toEqual([]);
+  });
+});
+
+describe('sameHabitRowMemberContext', () => {
+  it('is true across a rebuild that only moved points', () => {
+    // The page memoizes the context on `members`, and every habit toggle writes
+    // members/{uid}.points — which hands it a brand-new array. The row must not
+    // re-render for that.
+    const before = buildHabitRowMemberContext(ROSTER, PAUL);
+    const afterPointsWrite = buildHabitRowMemberContext(
+      ROSTER.map(m => ({ ...m, points: { daily: 10, weekly: 20, total: 30 } })),
+      PAUL
+    );
+    expect(before).not.toBe(afterPointsWrite);
+    expect(sameHabitRowMemberContext(before, afterPointsWrite)).toBe(true);
+  });
+
+  it('is false when anything a row actually reads changes', () => {
+    const base = buildHabitRowMemberContext(ROSTER, PAUL);
+    expect(sameHabitRowMemberContext(base, buildHabitRowMemberContext(ROSTER, JEN))).toBe(false);
+    expect(
+      sameHabitRowMemberContext(
+        base,
+        buildHabitRowMemberContext(ROSTER.map(m => (m.uid === JEN ? { ...m, displayName: 'Jenny' } : m)), PAUL)
+      )
+    ).toBe(false);
+    expect(
+      sameHabitRowMemberContext(
+        base,
+        buildHabitRowMemberContext(ROSTER.map(m => (m.uid === JEN ? { ...m, avatarColor: '#197478' } : m)), PAUL)
+      )
+    ).toBe(false);
+    // A member joining or leaving.
+    expect(
+      sameHabitRowMemberContext(base, buildHabitRowMemberContext(ROSTER.slice(0, 2), PAUL))
+    ).toBe(false);
+  });
+
+  it('handles the absent context (a card rendered off the Habits page)', () => {
+    const base = buildHabitRowMemberContext(ROSTER, PAUL);
+    expect(sameHabitRowMemberContext(undefined, undefined)).toBe(true);
+    expect(sameHabitRowMemberContext(base, undefined)).toBe(false);
+    expect(sameHabitRowMemberContext(undefined, base)).toBe(false);
   });
 });
 
