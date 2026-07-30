@@ -13,8 +13,10 @@
  * per the locked UI decision — Kid Mode is dormant and kids don't get a
  * competitive standings row.
  */
-import type { HouseholdMember, WeeklyRecap } from '@/types/schema';
+import { format, parseISO, subWeeks } from 'date-fns';
+import type { Habit, HouseholdMember, WeeklyRecap } from '@/types/schema';
 import { findLeaderId } from '@/utils/pointsLeader';
+import { getWeekRange } from '@/utils/listenerWindows';
 
 export interface ScoreboardStanding {
   memberId: string;
@@ -132,4 +134,141 @@ export function deriveScoreboardTrend(
   const isBestWeek = currentWeekTotal > 0 && currentWeekTotal >= maxCompletedTotal;
 
   return { trendPct, isBestWeek };
+}
+
+// ---------------------------------------------------------------------------
+// Week selector (Cut #3): "This week" becomes a tappable button offering a
+// popover of recent weeks. Picking one re-derives that week's figures from
+// habit history rather than any stored field — see the doc comments below on
+// why that's the only option.
+// ---------------------------------------------------------------------------
+
+export interface ScoreboardWeekOption {
+  /** Monday, yyyy-MM-dd (inclusive). */
+  weekStart: string;
+  /** Sunday, yyyy-MM-dd (inclusive). */
+  weekEnd: string;
+  /** "Jun 29 – Jul 5". */
+  label: string;
+  isCurrent: boolean;
+}
+
+const weekRangeLabel = (start: string, end: string): string =>
+  `${format(parseISO(start), 'MMM d')} – ${format(parseISO(end), 'MMM d')}`;
+
+/**
+ * Weeks to offer in the Scoreboard's week-selector popover: the live current
+ * week (always first, always offered even with zero completions — mirrors
+ * the widget's own "quiet zero state, never hides" rule for a brand-new
+ * household) plus up to `maxPastWeeks` PRIOR weeks that actually contain at
+ * least one habit completion.
+ *
+ * This is a pure client-side walk over the already-loaded `habits` — the
+ * habits listener is unwindowed (see contexts/household/listeners/
+ * gamificationListeners.ts), so widening `maxPastWeeks` costs zero extra
+ * Firestore reads. The DATA gate, not the week-count gate, is what actually
+ * bounds the list in practice: a past week with no completions — because it
+ * predates the household's history, or predates the 2026-07-15
+ * completedDates-wipe incident (see utils/migrations/habitHistoryRepair.ts)
+ * — is simply never offered, rather than resolving to a wall of zeroes.
+ */
+export function listScoreboardWeekOptions(
+  habits: readonly Pick<Habit, 'completedDates'>[],
+  today: Date,
+  maxPastWeeks: number = 12,
+): ScoreboardWeekOption[] {
+  const options: ScoreboardWeekOption[] = [];
+  for (let i = 0; i <= maxPastWeeks; i++) {
+    const { start, end } = getWeekRange(subWeeks(today, i));
+    const isCurrent = i === 0;
+    if (!isCurrent && !habits.some(h => h.completedDates.some(d => d >= start && d <= end))) {
+      continue;
+    }
+    options.push({ weekStart: start, weekEnd: end, label: weekRangeLabel(start, end), isCurrent });
+  }
+  return options;
+}
+
+/**
+ * Does any habit carry per-member attribution (`completedBy`) inside
+ * `[start, end]`? False for a "grandfathered" week — completions recorded
+ * before per-member points shipped have `completedDates` entries with no
+ * `completedBy` counterpart (see the field's doc comment on `Habit.completedBy`
+ * in types/schema.ts). The Scoreboard must not render a row of confident
+ * member zeroes for such a week; callers fall back to a household-total-only
+ * view, mirroring how `hasCeremonyData` (utils/recapDeck.ts) degrades the
+ * recap deck when a week has no member facts.
+ *
+ * Assigned (chore) habits are excluded, same as `habitFeedsMemberAttribution`
+ * in utils/habitAttribution.ts — their attribution routes straight to the
+ * assignee and was never meant to gate the shared standings.
+ */
+export function weekHasMemberAttribution(
+  habits: readonly Pick<Habit, 'completedBy' | 'assignedTo'>[],
+  start: string,
+  end: string,
+): boolean {
+  return habits.some(h => {
+    if (h.assignedTo || !h.completedBy) return false;
+    return Object.entries(h.completedBy).some(
+      ([date, byMember]) => date >= start && date <= end && Object.values(byMember).some(count => count > 0)
+    );
+  });
+}
+
+export interface ScoreboardWeekStanding {
+  memberId: string;
+  name: string;
+  avatarColor?: string;
+  avatarEmoji?: string;
+  photoURL?: string;
+  /** This member's derived points for the selected week. */
+  points: number;
+  /** 0-100, relative to the leader's points (0 when the leader has 0). */
+  barPct: number;
+  isLeader: boolean;
+}
+
+type StandingMember = Pick<HouseholdMember, 'uid' | 'displayName' | 'avatarColor' | 'avatarEmoji' | 'photoURL'>;
+
+/**
+ * The past-week twin of `selectAdultStandings`: identical sort/crown/bar
+ * rules, but sourced from a `memberId -> points` map the caller derives via
+ * `calculateMemberPointsForDateRange` (utils/habitAttribution.ts) instead of
+ * a member's live `points.weekly` — the only figure that exists once a week
+ * has rolled over (see the module doc comment above on why `points.weekly`
+ * can't serve history). Callers must pre-filter `adults` to non-managed
+ * members and should only call this once `weekHasMemberAttribution` is true
+ * for the same range — this function has no way to distinguish "nobody
+ * scored" from "nobody attributed" and will happily return an all-zero,
+ * uncrowned list for either.
+ */
+export function buildWeekStandings(
+  adults: readonly StandingMember[],
+  pointsByMemberId: ReadonlyMap<string, number>,
+): ScoreboardWeekStanding[] {
+  const pointsOf = (uid: string): number => pointsByMemberId.get(uid) ?? 0;
+
+  const sorted = [...adults].sort((a, b) => {
+    const diff = pointsOf(b.uid) - pointsOf(a.uid);
+    if (diff !== 0) return diff;
+    return a.displayName.localeCompare(b.displayName);
+  });
+
+  const leaderPoints = sorted[0] ? pointsOf(sorted[0].uid) : 0;
+  const leaderId = findLeaderId(sorted.map(m => ({ memberId: m.uid, points: pointsOf(m.uid) })));
+
+  return sorted.map(m => {
+    const points = pointsOf(m.uid);
+    return {
+      memberId: m.uid,
+      name: m.displayName,
+      avatarColor: m.avatarColor,
+      avatarEmoji: m.avatarEmoji,
+      photoURL: m.photoURL,
+      points,
+      barPct: leaderPoints > 0 ? Math.max(0, Math.round((points / leaderPoints) * 100)) : 0,
+      isLeader: m.uid === leaderId,
+    };
+  });
 }

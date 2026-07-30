@@ -6,8 +6,9 @@ import { useFinance, useTodos, useHouseholdCore, useGamification, useShopping } 
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { useMerchantRules } from '@/hooks/useMerchantRules';
 import { AccountPicker } from '@/components/budget/AccountPicker';
-import { TrendingUp, Check, Clock, Eye, Trash2, X } from 'lucide-react';
+import { TrendingUp, Check, Clock, Eye, Trash2, X, ListChecks, CheckCircle2 } from 'lucide-react';
 import { toastIcon } from '@/components/ui/toastIcon';
+import { sectionHeadingClasses } from '@/components/ui/SectionHeading';
 // Lazy-loaded so their heavy dependencies (e.g. recharts) stay out of the
 // initial Dashboard bundle and only load when a modal is actually opened.
 // The Analytics modal is retired: its Wallet charts now live in Money → Trends
@@ -647,32 +648,39 @@ const Dashboard: React.FC = () => {
   }
 
   // --- TIER 1: the page's single focal point (impeccable r6) ---
-  // The hero slot always leads the page in the editorial register (Besley
-  // heading set directly on the canvas, no card) so ONE thing wins the eye:
-  // the Action Queue when there's something to act on, otherwise a "today at
-  // a glance" moment. Everything below demotes to the quieter, denser widget
-  // stack. The hero heading sits between the page masthead (`text-xl`) and
-  // the section register (`text-sm`) on the type scale.
-  const heroHeadingClasses =
-    'font-display text-lg font-semibold tracking-tight text-brand-900 dark:text-brand-50';
+  // The hero slot always leads the page: the Action Queue when there's
+  // something to act on, otherwise a "today at a glance" moment. Both faces
+  // now render in the SAME section register as every other dashboard header
+  // (icon + `sectionHeadingClasses`, matching CreditCardActivityWidget) — they
+  // are one slot showing two states, so they must not sit at two different
+  // type scales. They previously used a larger editorial `text-lg` heading;
+  // what still marks this as tier 1 is its position and the bare canvas (no
+  // card), not a bigger font.
 
   const queueHero = (
     <section aria-labelledby="action-queue-heading">
       <div className="flex items-end justify-between px-1 mb-2">
         <div className="min-w-0">
-          <h2 id="action-queue-heading" className={`${heroHeadingClasses} flex items-center gap-2`}>
-            <span
-              className="w-2 h-2 rounded-full bg-habit-streak motion-safe:animate-pulse"
-              aria-hidden="true"
-            />
-            Needs you
-          </h2>
-          {/* Keeps the "Action Queue" product name visible here — toasts and
-              capture copy all say "Check your Action Queue", so the hero's
-              warmer headline must not orphan that term. */}
-          <p className="mt-0.5 text-sm text-brand-500 dark:text-brand-400">
+          {/* Matches the CreditCardActivityWidget/Section header spec exactly
+              (same sectionHeadingClasses, same inline icon-in-heading shape).
+              The `Section` primitive itself still can't render this: it always
+              owns its own `<h2>`, which can't carry the `action-queue-heading`
+              id the outer `aria-labelledby` depends on. Reusing the shared
+              class constant keeps this in sync with `Section`/`SectionHeading`
+              without forking the spec. The old pulsing dot is dropped — it was
+              a second "needs attention" signal competing with the icon, and
+              the reference has no dot. */}
+          {/* The COUNT is the heading (owner call): every other header on this
+              page NAMES its content — "Credit card activity", "Scoreboard",
+              "This week (so far)" — whereas "Needs you" was a mood, which
+              pushed the only informative line down into a subtitle. This also
+              keeps the "Action Queue" product term visible, which toast and
+              capture copy both refer to ("Check your Action Queue"). One line,
+              like the reference, so nothing competes with it underneath. */}
+          <h2 id="action-queue-heading" className={`${sectionHeadingClasses} flex items-center gap-2`}>
+            <ListChecks size={14} className="text-warm-600 dark:text-warm-300" aria-hidden="true" />
             {actionQueue.length} item{actionQueue.length === 1 ? '' : 's'} in your Action Queue
-          </p>
+          </h2>
         </div>
         {selectionMode ? (
           <button
@@ -735,13 +743,10 @@ const Dashboard: React.FC = () => {
   // is just the reassurance line.
   const glanceHero = (
     <section aria-labelledby="today-glance-heading" className="px-1">
-      <h2 id="today-glance-heading" className={`${heroHeadingClasses} flex items-center gap-2`}>
-        <span className="w-2 h-2 rounded-full bg-money-pos" aria-hidden="true" />
+      <h2 id="today-glance-heading" className={`${sectionHeadingClasses} flex items-center gap-2`}>
+        <CheckCircle2 size={14} className="text-money-pos dark:text-money-posDark" aria-hidden="true" />
         All caught up
       </h2>
-      <p className="mt-0.5 text-sm text-brand-500 dark:text-brand-400">
-        Nothing needs your review.
-      </p>
       {(isModuleEnabled('habits') && habitsToday.total > 0) || isModuleEnabled('money') ? (
         // StatGroup is the house wrapper for Stat rows; justify-start + the
         // wider gap keep the hero's left-set editorial alignment (the default

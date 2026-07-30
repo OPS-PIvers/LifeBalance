@@ -1,19 +1,34 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import type { HouseholdMember, WeeklyRecap } from '@/types/schema';
+import { render, screen, fireEvent } from '@testing-library/react';
+import type { Habit, HouseholdMember, WeeklyRecap } from '@/types/schema';
 import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
+import { calculateHouseholdPointsForDateRange, calculateMemberPointsForDateRange } from '@/utils/habitAttribution';
 import { ScoreboardWidget } from './ScoreboardWidget';
 
-// The widget reads members + recaps (useHouseholdCore) and weeklyPoints
-// (useGamification) — drive each independently.
+// The widget reads members + recaps (useHouseholdCore) and weeklyPoints/
+// habits/getHabitSubmissions (useGamification) — drive each independently.
 const mockMembers = vi.fn<() => HouseholdMember[]>(() => []);
 const mockRecaps = vi.fn<() => WeeklyRecap[]>(() => []);
 const mockWeeklyPoints = vi.fn<() => number>(() => 0);
+const mockHabits = vi.fn<() => Habit[]>(() => []);
+const mockGetHabitSubmissions = vi.fn(async () => []);
+// Thursday inside the "current" Jul 27 - Aug 2 week — fixed so the week
+// selector's options/boundaries are deterministic regardless of wall-clock date.
+const mockToday = vi.fn(() => '2026-07-30');
 
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useHouseholdCore: () => ({ members: mockMembers(), recaps: mockRecaps() }),
-  useGamification: () => ({ weeklyPoints: mockWeeklyPoints() }),
+  useGamification: () => ({
+    weeklyPoints: mockWeeklyPoints(),
+    habits: mockHabits(),
+    getHabitSubmissions: mockGetHabitSubmissions,
+  }),
 }));
+
+vi.mock('@/utils/dateHelpers', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/utils/dateHelpers')>();
+  return { ...actual, getLocalDateString: () => mockToday() };
+});
 
 const makeMember = (overrides: Partial<HouseholdMember> & Pick<HouseholdMember, 'uid' | 'displayName'>): HouseholdMember => ({
   role: 'member',
@@ -21,11 +36,32 @@ const makeMember = (overrides: Partial<HouseholdMember> & Pick<HouseholdMember, 
   ...overrides,
 });
 
+const makeHabit = (overrides: Partial<Habit> = {}): Habit =>
+  ({
+    id: 'h-1',
+    title: 'Workout',
+    category: 'Health',
+    type: 'positive',
+    period: 'daily',
+    basePoints: 10,
+    scoringType: 'threshold',
+    targetCount: 1,
+    count: 0,
+    totalCount: 0,
+    completedDates: [],
+    streakDays: 0,
+    lastUpdated: '2026-07-27T00:00:00.000Z',
+    ...overrides,
+  } as unknown as Habit);
+
 describe('ScoreboardWidget', () => {
   beforeEach(() => {
     mockMembers.mockReturnValue([]);
     mockRecaps.mockReturnValue([]);
     mockWeeklyPoints.mockReturnValue(0);
+    mockHabits.mockReturnValue([]);
+    mockGetHabitSubmissions.mockClear();
+    mockToday.mockReturnValue('2026-07-30');
   });
 
   it('renders nothing when there are no adult members', () => {
@@ -145,5 +181,103 @@ describe('ScoreboardWidget', () => {
 
     expect(screen.getByText('Paul')).toBeInTheDocument();
     expect(screen.queryByText('Leo')).not.toBeInTheDocument();
+  });
+
+  describe('week selector (paper cut #3)', () => {
+    it('mounts on the current week — the trigger reads "This week" even when past weeks have data', () => {
+      mockMembers.mockReturnValue([
+        makeMember({ uid: 'paul', displayName: 'Paul', points: { daily: 5, weekly: 40, total: 40 } }),
+        makeMember({ uid: 'jen', displayName: 'Jen', points: { daily: 0, weekly: 10, total: 10 } }),
+      ]);
+      mockWeeklyPoints.mockReturnValue(50);
+      mockHabits.mockReturnValue([
+        makeHabit({ completedDates: ['2026-07-21'], completedBy: { '2026-07-21': { paul: 1 } } }),
+      ]);
+
+      render(<ScoreboardWidget />);
+
+      // Component state only, never persisted — every mount starts here.
+      expect(screen.getByRole('button', { name: /Select week/ })).toHaveTextContent('This week');
+      // Still the LIVE current-week figures, not a past-week recompute.
+      expect(screen.getByTestId('scoreboard-total')).toHaveTextContent('50');
+    });
+
+    it('offers only the current week when no habit was ever completed', () => {
+      mockMembers.mockReturnValue([
+        makeMember({ uid: 'paul', displayName: 'Paul' }),
+        makeMember({ uid: 'jen', displayName: 'Jen' }),
+      ]);
+
+      render(<ScoreboardWidget />);
+      fireEvent.click(screen.getByRole('button', { name: /Select week/ }));
+
+      expect(screen.getAllByRole('menuitemradio')).toHaveLength(1);
+    });
+
+    it('computes per-member standings for a past week that has attribution', async () => {
+      mockMembers.mockReturnValue([
+        makeMember({ uid: 'paul', displayName: 'Paul' }),
+        makeMember({ uid: 'jen', displayName: 'Jen' }),
+      ]);
+      const habits = [
+        makeHabit({
+          id: 'h-past',
+          type: 'positive',
+          scoringType: 'incremental',
+          period: 'daily',
+          basePoints: 10,
+          completedDates: ['2026-07-21', '2026-07-22'],
+          completedBy: { '2026-07-21': { paul: 2 }, '2026-07-22': { jen: 1 } },
+        }),
+      ];
+      mockHabits.mockReturnValue(habits);
+
+      render(<ScoreboardWidget />);
+      fireEvent.click(screen.getByRole('button', { name: /Select week/ }));
+      fireEvent.click(screen.getByRole('menuitemradio', { name: 'Jul 20 – Jul 26' }));
+
+      // Expected figures come from the SAME production scorers the widget
+      // calls — this test is about the widget's wiring into them, not a
+      // re-derivation of the attribution math (which is unit-tested in
+      // utils/habitAttribution.test.ts).
+      const expectedTotal = calculateHouseholdPointsForDateRange(habits, '2026-07-20', '2026-07-26', '2026-07-30');
+      const expectedPaul = calculateMemberPointsForDateRange(habits, 'paul', '2026-07-20', '2026-07-26', '2026-07-30');
+      const expectedJen = calculateMemberPointsForDateRange(habits, 'jen', '2026-07-20', '2026-07-26', '2026-07-30');
+      expect(expectedPaul).toBeGreaterThan(expectedJen);
+      expect(expectedJen).toBeGreaterThan(0);
+
+      expect(await screen.findByTestId('scoreboard-total')).toHaveTextContent(String(expectedTotal));
+      // Paul strictly leads — exactly one crown.
+      expect(screen.getAllByText('Leading')).toHaveLength(1);
+      expect(screen.getByText(String(expectedPaul))).toBeInTheDocument();
+      expect(screen.getByText(String(expectedJen))).toBeInTheDocument();
+      // No "N today" sub-label — "today" isn't a meaningful concept for a
+      // week that already ended.
+      expect(screen.queryByText(/\d+ today/)).not.toBeInTheDocument();
+    });
+
+    it('shows a household total but no fabricated per-person rows for a grandfathered (pre-attribution) week', async () => {
+      mockMembers.mockReturnValue([
+        makeMember({ uid: 'paul', displayName: 'Paul' }),
+        makeMember({ uid: 'jen', displayName: 'Jen' }),
+      ]);
+      // completedDates with no completedBy counterpart at all — a completion
+      // recorded before per-member attribution existed.
+      const habits = [makeHabit({ id: 'h-grandfathered', completedDates: ['2026-07-14'], completedBy: undefined })];
+      mockHabits.mockReturnValue(habits);
+
+      render(<ScoreboardWidget />);
+      fireEvent.click(screen.getByRole('button', { name: /Select week/ }));
+      fireEvent.click(screen.getByRole('menuitemradio', { name: 'Jul 13 – Jul 19' }));
+
+      expect(await screen.findByText("Per-person scores aren't available for this week yet.")).toBeInTheDocument();
+      expect(screen.queryByTestId('scoreboard-avatar-paul')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('scoreboard-avatar-jen')).not.toBeInTheDocument();
+      expect(screen.queryByText('Leading')).not.toBeInTheDocument();
+      // The household total for this week is still real (not zeroed out).
+      const expectedTotal = calculateHouseholdPointsForDateRange(habits, '2026-07-13', '2026-07-19', '2026-07-30');
+      expect(expectedTotal).toBeGreaterThan(0);
+      expect(screen.getByTestId('scoreboard-total')).toHaveTextContent(String(expectedTotal));
+    });
   });
 });
