@@ -95,6 +95,9 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
   useEffect(() => {
     if (!isPastWeek || !selectedWeek) {
       setPastWeekData(null);
+      // Also clear the spinner: returning to the current week while a fetch is
+      // in flight would otherwise leave this stuck true.
+      setIsLoadingPastWeek(false);
       return;
     }
     const { weekStart, weekEnd } = selectedWeek;
@@ -110,20 +113,29 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
       // rare, explicit interaction, so a plain per-selection fetch — the same
       // shape useHabitCalendarData already uses for its own window — is
       // simpler and doesn't need that cache's bookkeeping.
-      const submissionTotals = await fetchSubmissionTotals(habits, weekStart, weekEnd, getHabitSubmissions);
-      if (cancelled) return;
-      const today = getLocalDateString();
-      const total = calculateHouseholdPointsForDateRange(habits, weekStart, weekEnd, today, submissionTotals);
-      const hasAttribution = weekHasMemberAttribution(habits, weekStart, weekEnd);
-      const pointsByMemberId = new Map(
-        adults.map(m => [m.uid, calculateMemberPointsForDateRange(habits, m.uid, weekStart, weekEnd, today)])
-      );
-      setPastWeekData({
-        total,
-        standings: hasAttribution ? buildWeekStandings(adults, pointsByMemberId) : [],
-        hasAttribution,
-      });
-      setIsLoadingPastWeek(false);
+      try {
+        const submissionTotals = await fetchSubmissionTotals(habits, weekStart, weekEnd, getHabitSubmissions);
+        if (cancelled) return;
+        const today = getLocalDateString();
+        const total = calculateHouseholdPointsForDateRange(habits, weekStart, weekEnd, today, submissionTotals);
+        const hasAttribution = weekHasMemberAttribution(habits, weekStart, weekEnd);
+        const pointsByMemberId = new Map(
+          adults.map(m => [m.uid, calculateMemberPointsForDateRange(habits, m.uid, weekStart, weekEnd, today)])
+        );
+        setPastWeekData({
+          total,
+          standings: hasAttribution ? buildWeekStandings(adults, pointsByMemberId) : [],
+          hasAttribution,
+        });
+      } catch {
+        // A transient Firestore failure in fetchSubmissionTotals must not leave
+        // the widget showing its loading placeholder forever. `pastWeekData`
+        // stays null, so the empty-state copy renders and re-picking the week
+        // retries.
+        if (!cancelled) setPastWeekData(null);
+      } finally {
+        if (!cancelled) setIsLoadingPastWeek(false);
+      }
     })();
     return () => { cancelled = true; };
     // `selectedWeek` is a stable object reference across re-renders (it's a
