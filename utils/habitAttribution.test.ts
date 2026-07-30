@@ -30,6 +30,7 @@ import {
   withDatesUnattributed,
 } from '@/utils/habitAttribution';
 import { calculatePointsForDate } from '@/utils/habitLogic';
+import { getLocalDateString } from '@/utils/dateHelpers';
 
 // --- Fixture calendar ------------------------------------------------------
 // 🛡️ Every date below is an offset from the FIXTURE's OWN Monday, never from
@@ -124,6 +125,21 @@ describe('habitAttribution — readers', () => {
     });
     expect(memberUnitsForPeriod(weekly, d(4))).toEqual({ [PAUL]: 2, [JEN]: 2 });
     expect(memberUnitsForPeriod(weekly, d(-3))).toEqual({ [PAUL]: 5 });
+  });
+
+  // The weekly branch derives the week's seven day-keys itself, so it has to
+  // produce the exact strings `getLocalDateString()` writes. `parseISO` on a
+  // date-only string is LOCAL midnight (unlike `new Date(string)`, which is
+  // UTC), so this holds in every timezone — pinned here because an off-by-one
+  // would silently blank the row's pie for weekly habits west of UTC.
+  it('addresses the week with the same keys getLocalDateString writes', () => {
+    const realToday = getLocalDateString();
+    const weekly = habit({
+      period: 'weekly',
+      completedDates: [realToday],
+      completedBy: { [realToday]: { [PAUL]: 1 } },
+    });
+    expect(memberUnitsForPeriod(weekly, realToday)).toEqual({ [PAUL]: 1 });
   });
 
   it('fingerprints only the current period, and is key-order independent', () => {
