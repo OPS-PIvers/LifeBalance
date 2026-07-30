@@ -971,3 +971,52 @@ describe('MockHouseholdContext habit points routing (assigned vs shared)', () =>
     expect(pointsOf(result, 'test-user-id')).toEqual(userBefore);
   });
 });
+
+// PR #1156 review fix (F4): the scoreboard widget's PR body claimed the
+// household headline and the per-member standings rows could visibly diverge
+// in Test Mode because "stage 1.5 [hadn't] landed." Stage 1.5 (#1155) landed
+// on main and MockHouseholdContext now derives household daily/weekly as the
+// Σ of the ADULT members' own points (kid chore points stay off the pool) —
+// so that rationale is stale. This pins the derivation ScoreboardWidget's
+// "N pts together" headline actually reads in Test Mode.
+describe('MockHouseholdContext household points = Σ of adult members (stage 1.5 parity)', () => {
+  const captureHousehold = () => renderHook(() => useHousehold(), { wrapper });
+  const pointsOf = (result: ReturnType<typeof captureHousehold>['result'], uid: string) =>
+    result.current.members.find((m) => m.uid === uid)!.points;
+
+  it('exposes dailyPoints/weeklyPoints as the sum of the seeded adults, excluding the managed kid', () => {
+    const { result } = captureHousehold();
+    const adults = result.current.members.filter((m) => !m.isManaged);
+    const kids = result.current.members.filter((m) => m.isManaged);
+
+    expect(adults.length).toBeGreaterThanOrEqual(2); // Test User + Jordan
+    expect(kids.length).toBeGreaterThanOrEqual(1); // Leo
+
+    const expectedDaily = adults.reduce((sum, m) => sum + m.points.daily, 0);
+    const expectedWeekly = adults.reduce((sum, m) => sum + m.points.weekly, 0);
+
+    expect(result.current.dailyPoints).toBe(expectedDaily);
+    expect(result.current.weeklyPoints).toBe(expectedWeekly);
+    // A kid's points must never leak into the household headline the
+    // scoreboard widget reads.
+    const kidWeeklyTotal = kids.reduce((sum, m) => sum + m.points.weekly, 0);
+    expect(kidWeeklyTotal).toBeGreaterThan(0);
+    expect(result.current.weeklyPoints).not.toBe(expectedWeekly + kidWeeklyTotal);
+  });
+
+  it('moves the household weeklyPoints total when Jordan (a seeded adult) earns points — the scoreboard headline is NOT frozen against member figures', async () => {
+    const { result } = captureHousehold();
+    const jordanBefore = { ...pointsOf(result, 'test-partner-id') };
+    const weeklyBefore = result.current.weeklyPoints;
+
+    await act(async () => {
+      await result.current.updateMember('test-partner-id', {
+        points: { ...jordanBefore, weekly: jordanBefore.weekly + 40 },
+      });
+    });
+
+    // The household headline (what ScoreboardWidget renders as "N pts
+    // together") must track Jordan's own figure 1:1, not sit frozen.
+    expect(result.current.weeklyPoints).toBe(weeklyBefore + 40);
+  });
+});

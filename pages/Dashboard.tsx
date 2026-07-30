@@ -65,6 +65,7 @@ import { getLocalDateString } from '@/utils/dateHelpers';
 import { Button } from '@/components/ui/Button';
 import { InsightWidget } from '@/components/dashboard/InsightWidget';
 import { DailyHabitsWidget } from '@/components/dashboard/DailyHabitsWidget';
+import { ScoreboardWidget } from '@/components/dashboard/ScoreboardWidget';
 import { HabitCoachWidget } from '@/components/dashboard/HabitCoachWidget';
 import { KidsChoresWidget } from '@/components/dashboard/KidsChoresWidget';
 import { ActivityFeedWidget } from '@/components/dashboard/ActivityFeedWidget';
@@ -829,6 +830,11 @@ const Dashboard: React.FC = () => {
               // Today's Habits — smart-ranked compact tracker (habits
               // domain — Plan 090).
               return isModuleEnabled('habits') ? <DailyHabitsWidget key={id} /> : null;
+            case 'scoreboard':
+              // Household points scoreboard (per-member points, PR 4/6) —
+              // habits domain (points come from habit completions), so it
+              // shares dailyHabits' gate.
+              return isModuleEnabled('habits') ? <ScoreboardWidget key={id} /> : null;
             case 'creditCardActivity':
               // Credit card activity — charges vs. paydowns this period so
               // balances don't balloon (money domain). Self-nulls without
