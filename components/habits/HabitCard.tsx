@@ -171,7 +171,12 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
     // unless the row is too close to the top of the viewport for the sheet to
     // fit, in which case flip below rather than render it off-screen.
     const rect = toggleRef.current?.getBoundingClientRect();
-    const estimatedHeight = (pickerMembers.length + 1) * 44 + 16;
+    // Mirrors the picker's own row set: the compound "Both of us" row only
+    // exists with two or more adults (see HabitAttributionPicker), so counting
+    // it in a single-adult household would flip placement for a row that had
+    // room above after all.
+    const rows = pickerMembers.length + (pickerMembers.length > 1 ? 1 : 0);
+    const estimatedHeight = rows * 44 + 16;
     setPickerPlacement(rect && rect.top < estimatedHeight ? 'below' : 'above');
     setIsPickerOpen(true);
   }, [pickerMembers.length]);
@@ -627,6 +632,10 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
   // attributionFingerprint): a credit or un-credit by the other member arrives
   // as a habit-doc snapshot that may move nothing else on this row, so without
   // this the pie and the avatars would silently go stale.
+  // The reference check is only a fast path for a genuinely unchanged object —
+  // the provider rebuilds habits on every snapshot, so the fingerprint is what
+  // normally decides. That is why the fingerprint is period-scoped rather than
+  // a walk of the habit's whole history.
   (prev.habit.completedBy === next.habit.completedBy ||
     attributionFingerprint(prev.habit, getLocalDateString()) ===
       attributionFingerprint(next.habit, getLocalDateString()))

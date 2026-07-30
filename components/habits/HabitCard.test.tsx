@@ -492,10 +492,13 @@ describe('HabitCard - pie attribution counter', () => {
   });
 
   it('shows nothing for a stale row, whose counter belongs to a previous period', () => {
-    const yesterdayIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    // A fixed past timestamp, not clock arithmetic: `Date.now() - 86_400_000`
+    // near local midnight in a UTC+X zone can still land on TODAY's local date,
+    // at which point the habit isn't stale and this assertion flips (the
+    // getLocalDateString rule in CLAUDE.md, same family of bug).
     const { container } = render(
       <HabitCard
-        habit={attributedHabit({ [PAUL]: 1 }, { lastUpdated: yesterdayIso })}
+        habit={attributedHabit({ [PAUL]: 1 }, { lastUpdated: '2024-02-09T12:00:00.000Z' })}
         attribution={ROSTER}
       />
     );
