@@ -896,6 +896,36 @@ describe('HabitCard - attribution picker', () => {
     expect(screen.queryByRole('menuitemcheckbox', { name: /Leo/ })).not.toBeInTheDocument();
   });
 
+  it('does not carry the tap-press scale transform while held and the picker is open (paper cut: popover painting behind the sticky tab strip during a held long-press)', () => {
+    vi.useFakeTimers();
+    try {
+      render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+      const toggle = screen.getByLabelText('Toggle habit: Morning walk, current count: 1');
+      // The button's DOM parent is the ListRow root (`leading` is a fragment,
+      // so it contributes no wrapper element) — the same element the Popover
+      // anchors to via `position: relative`.
+      const row = toggle.parentElement as HTMLElement;
+
+      // Baseline: the row normally carries the has-active scale utility.
+      expect(row.className).toMatch(/has-\[\.main-overlay:active\]:scale-/);
+
+      fireEvent.pointerDown(toggle, { clientX: 10, clientY: 10, button: 0 });
+      act(() => { vi.advanceTimersByTime(600); });
+
+      // The picker is now open and the pointer is still down (:active would
+      // still match). The row must NOT carry the scale utility here, or the
+      // transform it would apply creates a stacking context that traps the
+      // (non-portalled) popover panel below the page's sticky tab strip for as
+      // long as the press is held.
+      expect(screen.getByRole('menu', { name: 'Who completed Morning walk?' })).toBeInTheDocument();
+      expect(row.className).not.toMatch(/has-\[\.main-overlay:active\]:scale-/);
+
+      fireEvent.pointerUp(toggle);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('is not offered for an ASSIGNED chore, whose points route to the assignee', async () => {
     const user = userEvent.setup();
     render(

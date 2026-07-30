@@ -7,12 +7,13 @@ import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 import { selectAdultStandings, deriveScoreboardTrend } from '@/utils/scoreboardWidget';
 import { cn } from '@/utils/cn';
 import Eyebrow from '@/components/ui/Eyebrow';
+import MemberAvatar from '@/components/ui/MemberAvatar';
 
 /**
  * ScoreboardWidget — home-feed points scoreboard (per-member points, PR 4/6).
  *
  * Household-first (mock `scoreboard-v3.png` / `.claude/mocks/per-member-points/
- * r3-scoreboard.html`): the household's live "N pts together" total leads,
+ * r3-scoreboard.html`): the household's live "N household total" total leads,
  * with a best-week sub-label + trend chip; adult standings rows (weekly bar,
  * today's points, crown on a strict leader) follow underneath. Plain avatars —
  * NO flame rings, which are habits-page-only UI per the locked decision.
@@ -76,7 +77,7 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
               {weeklyPoints}
             </span>
             <span className="font-display text-[15px] font-semibold text-warm-600 dark:text-warm-300">
-              pts together
+              household total
             </span>
           </div>
           {trend.isBestWeek && (
@@ -104,14 +105,14 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
       <div className="border-t border-brand-200 dark:border-brand-700 pt-1">
         {standings.map(s => (
           <div key={s.memberId} className="flex items-center gap-[11px] py-[5px]">
-            <div
+            <MemberAvatar
               data-testid={`scoreboard-avatar-${s.memberId}`}
-              className="w-[30px] h-[30px] rounded-full flex items-center justify-center text-[13px] font-bold text-white shrink-0"
-              style={{ backgroundColor: memberColorFor(colors, s.memberId) }}
-              aria-hidden="true"
-            >
-              {s.avatarEmoji ?? s.name.charAt(0).toUpperCase()}
-            </div>
+              name={s.name}
+              photoURL={s.photoURL}
+              color={memberColorFor(colors, s.memberId)}
+              fallbackGlyph={s.avatarEmoji}
+              size={30}
+            />
             <div className="flex-1 min-w-0">
               <div className="flex items-baseline gap-1.5">
                 <span className="text-[13.5px] font-semibold text-brand-900 dark:text-brand-50 tracking-tight truncate">

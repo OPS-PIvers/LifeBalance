@@ -21,6 +21,8 @@ export interface ScoreboardStanding {
   name: string;
   avatarColor?: string;
   avatarEmoji?: string;
+  /** Google/Firebase profile photo, when the member has one. */
+  photoURL?: string;
   /** This member's `points.daily`. */
   today: number;
   /** This member's `points.weekly`. */
@@ -62,6 +64,7 @@ export function selectAdultStandings(members: readonly HouseholdMember[]): Score
     name: m.displayName,
     avatarColor: m.avatarColor,
     avatarEmoji: m.avatarEmoji,
+    photoURL: m.photoURL,
     today: m.points.daily,
     weekly: m.points.weekly,
     // Clamped to >= 0: a negative weekly (relative to a positive leader, or a

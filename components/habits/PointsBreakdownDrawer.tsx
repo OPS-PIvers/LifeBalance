@@ -8,6 +8,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import { cn } from '@/utils/cn';
+import MemberAvatar from '@/components/ui/MemberAvatar';
 import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 import { getAdultStandings, computePointsTrend, type PointsDrawerPeriod } from '@/utils/pointsDrawer';
 
@@ -22,7 +23,7 @@ interface PointsBreakdownDrawerProps {
  * Rewards deep-link; Rewards is now one tap deeper via the row at the bottom).
  *
  * Household-first stack, locked: grab handle → title + Day/Week toggle →
- * household together-total (with a "vs last week" trend chip, derived from the
+ * household total (with a "vs last week" trend chip, derived from the
  * newest WeeklyRecap) → adults-only per-member standings (plain avatars, crown
  * on the sole leader) → Reward pool row (lifetime pool total + the
  * pending-redemption count, absorbed from the header, + a Rewards deep-link).
@@ -109,7 +110,7 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
       }
     >
       <div className="flex flex-col gap-2.5 px-4 pt-4 pb-4">
-        {/* Household together-total. */}
+        {/* Household total. */}
         <SurfaceList>
           <Row className="items-end justify-between gap-3">
             <div className="min-w-0">
@@ -118,7 +119,7 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
                   {householdTotal}
                 </span>
                 <span className="font-display text-sm font-semibold text-warm-600 dark:text-warm-300">
-                  pts together
+                  household total
                 </span>
               </div>
               <p className="mt-1 text-xxs text-brand-450 dark:text-brand-450">{dateLabel}</p>
@@ -148,14 +149,14 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
           <SurfaceList>
             {standings.map((row) => (
               <Row key={row.memberId} className="gap-3">
-                <span
+                <MemberAvatar
                   data-testid={`points-drawer-avatar-${row.memberId}`}
-                  className="flex-none w-[30px] h-[30px] rounded-full flex items-center justify-center text-sm font-bold text-white"
-                  style={{ backgroundColor: memberColorFor(colors, row.memberId) }}
-                  aria-hidden="true"
-                >
-                  {row.name.trim().charAt(0).toUpperCase() || '?'}
-                </span>
+                  name={row.name}
+                  photoURL={row.photoURL}
+                  color={memberColorFor(colors, row.memberId)}
+                  size={30}
+                  className="flex-none"
+                />
                 <span className="min-w-0 flex-1 flex items-center gap-1.5">
                   <span className="truncate text-sm font-semibold tracking-tight text-brand-900 dark:text-brand-50">
                     {row.name}

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Popover } from '@/components/ui/Popover';
+import MemberAvatar from '@/components/ui/MemberAvatar';
 import type { RowMember } from '@/utils/habitRowAttribution';
 
 /**
@@ -58,13 +59,7 @@ const CheckGlyph: React.FC = () => (
 );
 
 const PickerAvatar: React.FC<{ member: RowMember; size?: number }> = ({ member, size = 22 }) => (
-  <span
-    aria-hidden="true"
-    className="flex shrink-0 items-center justify-center rounded-full font-bold text-white"
-    style={{ width: size, height: size, backgroundColor: member.color, fontSize: Math.round(size * 0.44) }}
-  >
-    {member.displayName.charAt(0).toUpperCase()}
-  </span>
+  <MemberAvatar name={member.displayName} photoURL={member.photoURL} color={member.color} size={size} />
 );
 
 const HabitAttributionPicker: React.FC<HabitAttributionPickerProps> = ({

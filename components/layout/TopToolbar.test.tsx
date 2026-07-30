@@ -6,10 +6,16 @@ import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import type { ModuleKey } from '@/types/schema';
 
 // Narrow context slices TopToolbar reads. Stub each with the minimal shape.
+// `currentUser`/`members` back the profile chip's MemberColorMap (paper cut:
+// the chip now resolves the SAME color as this member's badge elsewhere).
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useFinance: () => ({ safeToSpendBreakdown: { safeToSpend: 1234 } }),
   useGamification: () => ({ dailyPoints: 10, weeklyPoints: 50 }),
-  useHouseholdCore: () => ({ unreadNotificationCount: 0 }),
+  useHouseholdCore: () => ({
+    unreadNotificationCount: 0,
+    currentUser: { uid: 'user-1', displayName: 'Test User', photoURL: null },
+    members: [{ uid: 'user-1', displayName: 'Test User', photoURL: null, role: 'admin', points: { daily: 0, weekly: 0, total: 0 } }],
+  }),
 }));
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ currentUser: { displayName: 'Test User', photoURL: null } }),
