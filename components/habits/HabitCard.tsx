@@ -1,8 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Habit } from '@/types/schema';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
-import { X, Edit2, Trash2, Target, Calendar, Snowflake, Pause, Play, Archive, ArchiveRestore } from 'lucide-react';
+import { X, Edit2, Trash2, Target, Calendar, Snowflake, Pause, Play, Archive, ArchiveRestore, Users } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import HabitFormModal from '@/components/modals/HabitFormModal';
 import HabitSubmissionLogModal from '@/components/modals/HabitSubmissionLogModal';
@@ -17,20 +17,55 @@ import { subDays } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { haptic } from '@/utils/haptics';
 import { getMultiplier, signedHabitPoints, isHabitPaused, isHabitStale } from '@/utils/habitLogic';
-import StreakFlame from './StreakFlame';
+import {
+  attributionFingerprint,
+  habitFeedsMemberAttribution,
+  memberMostRecentUnitDateInPeriod,
+  memberUnitsForPeriod,
+} from '@/utils/habitAttribution';
+import {
+  rowCompletionSegments,
+  sameHabitRowMemberContext,
+  type HabitRowMemberContext,
+} from '@/utils/habitRowAttribution';
+import HabitPieCounter from './HabitPieCounter';
+import HabitDoneByAvatars from './HabitDoneByAvatars';
+import HabitAttributionPicker, { type AttributionPickerMember } from './HabitAttributionPicker';
 import CountUp from './CountUp';
+
+/** How long the toggle must be held before the "who did this?" picker opens. */
+const LONG_PRESS_MS = 500;
+/**
+ * Movement (px) that turns a press into a scroll and cancels the long-press.
+ * 16px, not 10: a finger wanders during a deliberate half-second hold, and a
+ * hold that silently fails is worse than a scroll that also opened the picker
+ * (a real scroll leaves this far behind within the same 500ms).
+ */
+const LONG_PRESS_SLOP = 16;
 
 interface HabitCardProps {
   habit: Habit;
   /** Starts the parent Reorder.Item's drag; when set, ListRow renders the standard right-rail grip. */
   onGripPointerDown?: (e: React.PointerEvent<HTMLDivElement>) => void;
+  /**
+   * Per-member attribution context (roster + colors), built once per roster
+   * change by the Habits page. Absent = no attribution UI at all: the pie
+   * counter, the flame-ring avatars and the picker are HABITS-PAGE ONLY, and a
+   * card rendered anywhere else keeps its original look.
+   */
+  attribution?: HabitRowMemberContext;
 }
 
-const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDown }) => {
-  const { toggleHabit, deleteHabit, archiveHabit, unarchiveHabit, resetHabit, setHabitPause, activeChallenge } = useGamification();
+const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDown, attribution }) => {
+  const {
+    toggleHabit, deleteHabit, archiveHabit, unarchiveHabit, resetHabit, setHabitPause,
+    activeChallenge, creditHabitCompletion, uncreditHabitCompletion,
+  } = useGamification();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [pickerPlacement, setPickerPlacement] = useState<'above' | 'below'>('above');
   const isDesktop = useMediaQuery('(min-width: 640px)');
 
   // Logic helpers
@@ -62,9 +97,9 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
   // negative habits, which store basePoints as a negative number.
   const signedPointsDisplay = signedHabitPoints(habit, totalMultiplier);
 
-  // Period-aware streak unit for the streak badge label ("Day(s)" vs "Week(s)").
+  // Period-aware streak cadence — drives the multiplier nudge's unit word and
+  // the screen-reader text on the badge row's flame-ring avatars.
   const isWeekly = habit.period === 'weekly';
-  const streakUnitLabel = isWeekly ? 'Week' : 'Day';
 
   // Period-aware "one period from the next tier" nudge. Thresholds mirror
   // getMultiplier: daily 3→1.5x / 7→2x (nudge at 2 and 6), weekly 2→1.5x / 4→2x
@@ -91,6 +126,125 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
   // F-HABITS-01: while paused, the toggle is disabled and a badge shows the break.
   const isPaused = isHabitPaused(habit);
 
+  // --- Per-member attribution (stage 2) --------------------------------------
+  // Who is credited for THIS period's completions, in roster order. A stale row
+  // renders as count 0 (its counter belongs to a period whose auto-reset hasn't
+  // landed), so it shows no attribution either — the two must agree.
+  const today = getLocalDateString();
+  const segments = attribution && !isStale ? rowCompletionSegments(habit, attribution, today) : [];
+  const attributedUnits = segments.reduce((sum, s) => sum + s.units, 0);
+  // Pie mode only once someone is actually credited: a pre-feature
+  // ("grandfathered") completion has no attribution and keeps the original
+  // solid toggle, so untouched and legacy rows look exactly as they did.
+  const showPie = isActive && attributedUnits > 0;
+
+  // The picker edits per-member attribution, which an ASSIGNED chore does not
+  // have (its points route to the assignee, not to the attribution layer), and
+  // a paused/archived habit does not accept new completions.
+  const canPickAttribution =
+    !!attribution &&
+    attribution.adults.length > 0 &&
+    habitFeedsMemberAttribution(habit) &&
+    !isPaused &&
+    !habit.archivedAt;
+
+  // Credited state is PERIOD-scoped (see memberUnitsForPeriod), matching the
+  // pie's own span: a weekly habit completed by Jen on Monday must still show
+  // her checked on Wednesday, or a second tap double-credits a unit she
+  // already holds this week. For a daily habit the period IS the day, so this
+  // degrades to exactly the old day-scoped behavior — no change there.
+  const periodUnitsByMember = canPickAttribution ? memberUnitsForPeriod(habit, today) : {};
+  const pickerMembers: AttributionPickerMember[] = canPickAttribution && attribution
+    ? attribution.adults.map(member => ({
+        ...member,
+        credited: (periodUnitsByMember[member.uid] ?? 0) > 0,
+        isSelf: member.uid === attribution.currentUserId,
+      }))
+    : [];
+
+  const toggleRef = useRef<HTMLDivElement>(null);
+  const longPressTimerRef = useRef<number | null>(null);
+  const longPressOriginRef = useRef<{ x: number; y: number } | null>(null);
+  // Set when the long-press actually opened the picker, so the click that
+  // follows the release doesn't ALSO increment the habit.
+  const suppressClickRef = useRef(false);
+
+  const clearLongPress = useCallback(() => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    longPressOriginRef.current = null;
+  }, []);
+
+  // A card is long-lived (memoized list rows); never leave a timer behind.
+  useEffect(() => clearLongPress, [clearLongPress]);
+
+  const openPicker = useCallback(() => {
+    // Open upward (the mock's anchoring — the finger is below the toggle)
+    // unless the row is too close to the top of the viewport for the sheet to
+    // fit, in which case flip below rather than render it off-screen.
+    const rect = toggleRef.current?.getBoundingClientRect();
+    // Mirrors the picker's own row set: the compound "Both of us" row only
+    // exists with two or more adults (see HabitAttributionPicker), so counting
+    // it in a single-adult household would flip placement for a row that had
+    // room above after all.
+    const rows = pickerMembers.length + (pickerMembers.length > 1 ? 1 : 0);
+    const estimatedHeight = rows * 44 + 16;
+    setPickerPlacement(rect && rect.top < estimatedHeight ? 'below' : 'above');
+    setIsPickerOpen(true);
+    // Depends on the COUNT, not on `pickerMembers` itself: all this callback
+    // needs is the sheet's height. The member list reaches the picker through
+    // JSX props, so it is always current at render time — no stale closure to
+    // fix with a useMemo here.
+  }, [pickerMembers.length]);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    // Start every gesture from a clean slate: a touch long-press does not
+    // always emit the trailing click, and a flag left standing would swallow
+    // the NEXT tap (or a keyboard Enter, which fires click with no pointerdown).
+    suppressClickRef.current = false;
+    if (!canPickAttribution) return;
+    // Secondary buttons (right-click, stylus barrel) never start a long-press.
+    if (e.button !== 0) return;
+    clearLongPress();
+    longPressOriginRef.current = { x: e.clientX, y: e.clientY };
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressTimerRef.current = null;
+      suppressClickRef.current = true;
+      haptic('light');
+      openPicker();
+    }, LONG_PRESS_MS);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const origin = longPressOriginRef.current;
+    if (!origin) return;
+    if (Math.abs(e.clientX - origin.x) > LONG_PRESS_SLOP || Math.abs(e.clientY - origin.y) > LONG_PRESS_SLOP) {
+      clearLongPress();
+    }
+  };
+
+  const handleCreditMembers = (memberIds: string[]) => {
+    if (memberIds.length === 0) return;
+    haptic('success');
+    // The mutation surfaces its own error toast before rejecting; swallowing
+    // here only avoids an unhandled rejection.
+    void creditHabitCompletion(habit.id, memberIds).catch(() => {});
+  };
+
+  const handleUncreditMember = (memberId: string) => {
+    haptic('light');
+    // Reverse the member's MOST RECENT attributed unit in the current period
+    // (see memberMostRecentUnitDateInPeriod) — for a daily habit that is always
+    // today, but for a weekly habit checked-from-Wednesday the unit may live on
+    // Monday. `?? today` only matters if the row somehow renders a checkmark
+    // for a member holding nothing this period, which canPickAttribution/the
+    // picker's own `credited` derivation never allows.
+    const targetDate = memberMostRecentUnitDateInPeriod(habit, memberId, today) ?? today;
+    void uncreditHabitCompletion(habit.id, memberId, targetDate).catch(() => {});
+  };
+
   // Grouped-flat ROW: borderless and hairline-separated by the parent
   // SurfaceList (HabitCategoryList) — never a floating, individually-bordered
   // card. Hierarchy comes from spacing + a quiet active tint (money-pos /
@@ -100,7 +254,10 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
     "px-4 py-3.5 transition-[transform,background-color] duration-(--duration-base) ease-(--ease-standard) has-[.main-overlay:active]:scale-[0.99] select-none group/card",
     !isActive && "bg-white dark:bg-brand-800 hover:bg-brand-50 dark:hover:bg-brand-700/40",
     isActive && isPositive && "bg-money-bgPos dark:bg-money-pos/10",
-    isActive && !isPositive && "bg-money-bgNeg dark:bg-money-neg/10"
+    isActive && !isPositive && "bg-money-bgNeg dark:bg-money-neg/10",
+    // While the picker is up this row is the one being edited; the neutral
+    // "pressed" fill says so without dimming everything else.
+    isPickerOpen && "bg-brand-100 dark:bg-brand-700/60"
   );
 
   const buttonClasses = cn(
@@ -113,10 +270,21 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
     isActive && isPositive && "bg-money-pos text-white border-0",
     isActive && !isPositive && "bg-money-neg text-white border-0",
     // Threshold visual overrides — in-progress positive threshold uses an evergreen tint
-    isActive && isThreshold && !isCompleted && isPositive && "bg-accent-100 dark:bg-accent-800/40 text-accent-700 dark:text-accent-200 border border-accent-200 dark:border-accent-700"
+    isActive && isThreshold && !isCompleted && isPositive && "bg-accent-100 dark:bg-accent-800/40 text-accent-700 dark:text-accent-200 border border-accent-200 dark:border-accent-700",
+    // Pie mode: the tile turns neutral so the member-colored disc inside it
+    // carries ALL the color. It must not sit on the money-pos fill, which would
+    // read as a second, competing state.
+    showPie && "bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-600 text-white dark:text-white"
   );
 
   const handleCardClick = () => {
+    clearLongPress();
+    // The press that just opened the picker also fires a click on release; that
+    // click must not credit anybody.
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
     // F-HABITS-01: a paused habit is inert — taps don't increment it.
     if (isPaused) return;
     // Fire tactile feedback based on whether this tap completes the habit.
@@ -165,7 +333,17 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
   // and read — "View Log" below opens HabitSubmissionLogModal, which edits and
   // renders `HabitSubmission.note`/`.mood` — and no stored reflection data was
   // touched. Only the one-tap shortcut is gone.
+  const handleWhoDidThis = () => {
+    setIsMenuOpen(false);
+    openPicker();
+  };
+
   const menuItems: MenuItem[] = [
+    // Long-press is a discoverability shortcut, never the only path: the picker
+    // must be reachable by keyboard and screen reader too.
+    ...(canPickAttribution
+      ? [{ key: 'attribution', label: 'Who did this?', icon: <Users size={14} />, onSelect: handleWhoDidThis } as MenuItem]
+      : []),
     { key: 'edit', label: 'Edit', icon: <Edit2 size={14} />, onSelect: handleEdit },
     ...(isPaused
       ? [{ key: 'resume', label: 'Resume', icon: <Play size={14} />, onSelect: handleResume } as MenuItem]
@@ -191,6 +369,14 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
                 (z-10), so grip/kebab taps never increment the habit. */}
             <button
               onClick={handleCardClick}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={clearLongPress}
+              onPointerCancel={clearLongPress}
+              onPointerLeave={clearLongPress}
+              // A long-press on a button raises the platform callout menu on
+              // touch; suppress it so the attribution picker owns the gesture.
+              onContextMenu={(e) => { if (canPickAttribution) e.preventDefault(); }}
               className="main-overlay absolute inset-0 w-full h-full cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900 rounded-card"
               aria-label={`Toggle habit: ${habit.title}, current count: ${count}`}
               tabIndex={0}
@@ -198,9 +384,14 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
             />
 
             {/* ACTION INDICATOR */}
-            <div className="shrink-0 relative group pointer-events-none" style={{ zIndex: 2 }}>
+            <div ref={toggleRef} className="shrink-0 relative group pointer-events-none" style={{ zIndex: 2 }}>
               <div className={buttonClasses}>
-                {isThreshold && !isCompleted ? (
+                {showPie ? (
+                  <HabitPieCounter
+                    segments={segments.map(s => ({ key: s.memberId, color: s.color, units: s.units }))}
+                    count={count}
+                  />
+                ) : isThreshold && !isCompleted ? (
                   <span className="text-lg font-bold font-mono">{count}</span>
                 ) : isActive ? (
                   <span className="text-xl font-bold font-mono">{count}</span>
@@ -208,13 +399,15 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
                   <div className="w-6 h-6 rounded-full border-2 border-current opacity-40" />
                 )}
 
-                {/* Progress Ring for Threshold */}
-                {isThreshold && (
+                {/* Progress Ring for Threshold. In pie mode it is dropped once
+                    the target is met — the full disc already says "done", and a
+                    completed ring around it is noise. */}
+                {isThreshold && !(showPie && isCompleted) && (
                   <ProgressRing
                     percent={(count / habit.targetCount) * 100}
                     strokeWidth={3}
-                    trackClassName={isActive && !isCompleted ? 'text-brand-900/10 dark:text-white/10' : 'text-white/20'}
-                    barClassName={isCompleted ? 'text-white' : 'text-accent-600 dark:text-accent-300'}
+                    trackClassName={showPie || (isActive && !isCompleted) ? 'text-brand-900/10 dark:text-white/10' : 'text-white/20'}
+                    barClassName={isCompleted && !showPie ? 'text-white' : 'text-accent-600 dark:text-accent-300'}
                     className="absolute inset-0 w-full h-full p-0.5 pointer-events-none"
                   />
                 )}
@@ -278,19 +471,21 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
               <CountUp value={signedPointsDisplay} suffix=" pts" />
             </Badge>
 
-            {/* Streak (Positive Only) - Show only if streak is at least 2 days (Approaching) */}
-            {isPositive && habit.streakDays >= 2 && (
-              // "Hot" tier color once the bonus multiplier (>=1.5x) is actually
-              // earned — period-aware via streakMultiplier rather than a fixed
-              // 3-day threshold (weekly hits 1.5x at 2 weeks, not 3).
-              <Badge
-                variant={streakMultiplier >= 1.5 ? 'warning' : 'neutral'}
-                size="sm"
-                className="gap-1 transition-colors"
-              >
-                <StreakFlame streakDays={habit.streakDays} period={habit.period} size={10} className="text-habit-streak" />
-                {habit.streakDays} {streakUnitLabel}{habit.streakDays !== 1 ? 's' : ''}
-              </Badge>
+            {/* Per-member points (stage 2): the streak PILL is gone from this
+                row. Streak now reads as flame-ring intensity around each
+                credited member's avatar — per-member, not per-habit — and the
+                exact number lives in the habit's log ("View Log" → Current
+                Streak). The multiplier it earns is still visible: it is baked
+                into the points badge above. */}
+            {segments.length > 0 && (
+              <HabitDoneByAvatars
+                entries={segments}
+                streakUnit={isWeekly ? 'week' : 'day'}
+                // Positive habits only — a ring around a run of the thing you
+                // are trying to STOP would be a celebration of it. The pill
+                // this replaced carried the same gate.
+                showStreakRings={isPositive}
+              />
             )}
 
             {/* F-HABITS-01: planned break in effect */}
@@ -336,6 +531,27 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
           className="min-w-[140px]"
           stopPropagation
         />
+
+        {/* Attribution picker — anchored on the row (the nearest positioned
+            ancestor is the ListRow container), left-aligned with the toggle it
+            belongs to, exactly like the approved mock. */}
+        {canPickAttribution && (
+          <HabitAttributionPicker
+            isOpen={isPickerOpen}
+            onClose={() => {
+              // Safety net for the touch path above: by the time the picker
+              // closes, any click the long-press could have produced has long
+              // since been handled.
+              suppressClickRef.current = false;
+              setIsPickerOpen(false);
+            }}
+            habitTitle={habit.title}
+            members={pickerMembers}
+            placement={pickerPlacement}
+            onCredit={handleCreditMembers}
+            onUncredit={handleUncreditMember}
+          />
+        )}
       </ListRow>
 
       {/* Mobile Drawer Actions */}
@@ -345,6 +561,18 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
         title="Habit Options"
       >
         <div className="space-y-2">
+          {/* Keyboard/screen-reader (and simply discoverable) equivalent of the
+              toggle's long-press — see menuItems. */}
+          {canPickAttribution && (
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-lg py-4"
+              leftIcon={<Users className="text-brand-400" />}
+              onClick={handleWhoDidThis}
+            >
+              Who did this?
+            </Button>
+          )}
           <Button
             variant="ghost"
             className="w-full justify-start text-lg py-4"
@@ -426,7 +654,25 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
   // "Protected" freeze badge.
   (prev.habit.frozenDates ?? []).join(',') === (next.habit.frozenDates ?? []).join(',') &&
   // Drives the "Paused" badge, disabled toggle, and Resume action (F-HABITS-01).
-  prev.habit.pausedUntil === next.habit.pausedUntil
+  prev.habit.pausedUntil === next.habit.pausedUntil &&
+  // Per-member points (stage 2): drives whether the picker is offered at all.
+  prev.habit.assignedTo === next.habit.assignedTo &&
+  // CONTENT, not identity: the page memoizes this context on `members`, and
+  // every toggle writes `members/{uid}.points`, which re-fires the members
+  // listener with a fresh array — an identity check would therefore re-render
+  // every card in the list on every toggle (see sameHabitRowMemberContext).
+  sameHabitRowMemberContext(prev.attribution, next.attribution) &&
+  // Attribution content, scoped to the CURRENT period (see
+  // attributionFingerprint): a credit or un-credit by the other member arrives
+  // as a habit-doc snapshot that may move nothing else on this row, so without
+  // this the pie and the avatars would silently go stale.
+  // The reference check is only a fast path for a genuinely unchanged object —
+  // the provider rebuilds habits on every snapshot, so the fingerprint is what
+  // normally decides. It stays cheap because it addresses the period by date
+  // key (see memberUnitsForPeriod), never by scanning the habit's history.
+  (prev.habit.completedBy === next.habit.completedBy ||
+    attributionFingerprint(prev.habit, getLocalDateString()) ===
+      attributionFingerprint(next.habit, getLocalDateString()))
 );
 
 HabitCard.displayName = 'HabitCard';

@@ -4,6 +4,7 @@ import type { Habit } from '@/types/schema';
 import {
   attributedMemberIds,
   attributedUnitsOnDate,
+  attributionFingerprint,
   attributionReversalForDates,
   calculateHouseholdPointsForDate,
   calculateHouseholdPointsForDateRange,
@@ -23,9 +24,11 @@ import {
   memberCompletionCount,
   memberCompletionDates,
   memberIdsOnDate,
+  memberMostRecentUnitDateInPeriod,
   memberPeriodPoints,
   memberPeriodPointsDelta,
   memberPointsForHabitOnDate,
+  memberUnitsForPeriod,
   prospectiveMultiplierForMember,
   resolveReversalSources,
   streakEndingOnForMember,
@@ -41,6 +44,7 @@ import {
   calculateResetPoints,
   pointsForHabitOnDate,
 } from '@/utils/habitLogic';
+import { getLocalDateString } from '@/utils/dateHelpers';
 
 // --- Fixture calendar ------------------------------------------------------
 // 🛡️ Every date below is an offset from the FIXTURE's OWN Monday, never from
@@ -111,6 +115,104 @@ describe('habitAttribution — readers', () => {
   it('lists every member ever credited on the habit', () => {
     expect(attributedMemberIds(h).sort()).toEqual([JEN, PAUL].sort());
     expect(attributedMemberIds(habit())).toEqual([]);
+  });
+
+  it('sums a DAILY habit’s period units from that day alone', () => {
+    expect(memberUnitsForPeriod(h, d(0))).toEqual({ [PAUL]: 2, [JEN]: 1 });
+    expect(memberUnitsForPeriod(h, d(1))).toEqual({ [JEN]: 1 });
+    expect(memberUnitsForPeriod(h, d(2))).toEqual({});
+  });
+
+  it('sums a WEEKLY habit’s period units across the whole ISO week', () => {
+    // The live counter of a weekly habit accumulates all week, so the row's pie
+    // must split the same span — splitting only today would show a 3-count disc
+    // filled by one person's single completion.
+    const weekly = habit({
+      period: 'weekly',
+      completedDates: [d(0), d(1)],
+      completedBy: {
+        [d(0)]: { [PAUL]: 2, [JEN]: 1 },
+        [d(1)]: { [JEN]: 1 },
+        // Previous week — must NOT bleed into this week's disc.
+        [d(-3)]: { [PAUL]: 5 },
+      },
+    });
+    expect(memberUnitsForPeriod(weekly, d(4))).toEqual({ [PAUL]: 2, [JEN]: 2 });
+    expect(memberUnitsForPeriod(weekly, d(-3))).toEqual({ [PAUL]: 5 });
+  });
+
+  describe('memberMostRecentUnitDateInPeriod (F2: the picker’s un-credit target)', () => {
+    it('finds the LATEST day within the period holding a unit, even when it is not "today"', () => {
+      const weekly = habit({
+        period: 'weekly',
+        completedDates: [d(0), d(2)],
+        completedBy: {
+          [d(0)]: { [PAUL]: 1 }, // Monday
+          [d(2)]: { [PAUL]: 1 }, // Wednesday
+          // Previous week — out of scope regardless of recency.
+          [d(-3)]: { [PAUL]: 9 },
+        },
+      });
+      // Viewed on Friday (d(4)): the most recent unit in THIS week is Wednesday.
+      expect(memberMostRecentUnitDateInPeriod(weekly, PAUL, d(4))).toBe(d(2));
+    });
+
+    it('degrades to exactly the daily case: the period IS the day', () => {
+      expect(memberMostRecentUnitDateInPeriod(h, PAUL, d(0))).toBe(d(0));
+      expect(memberMostRecentUnitDateInPeriod(h, PAUL, d(1))).toBe(null); // Paul holds nothing on d(1)
+    });
+
+    it('returns null when the member holds nothing in the period', () => {
+      const weekly = habit({ period: 'weekly', completedDates: [d(0)], completedBy: { [d(0)]: { [JEN]: 1 } } });
+      expect(memberMostRecentUnitDateInPeriod(weekly, PAUL, d(4))).toBe(null);
+    });
+
+    it('never looks past "today" into the rest of the ISO week', () => {
+      const weekly = habit({
+        period: 'weekly',
+        completedDates: [d(0)],
+        completedBy: {
+          [d(0)]: { [PAUL]: 1 }, // Monday
+          [d(5)]: { [PAUL]: 1 }, // Saturday — a stray future-dated fixture
+        },
+      });
+      // Viewed Wednesday (d(2)): Saturday hasn't "happened" yet from today's
+      // vantage point, so it must not be picked as the reversal target.
+      expect(memberMostRecentUnitDateInPeriod(weekly, PAUL, d(2))).toBe(d(0));
+    });
+  });
+
+  // The weekly branch derives the week's seven day-keys itself, so it has to
+  // produce the exact strings `getLocalDateString()` writes. `parseISO` on a
+  // date-only string is LOCAL midnight (unlike `new Date(string)`, which is
+  // UTC), so this holds in every timezone — pinned here because an off-by-one
+  // would silently blank the row's pie for weekly habits west of UTC.
+  it('addresses the week with the same keys getLocalDateString writes', () => {
+    const realToday = getLocalDateString();
+    const weekly = habit({
+      period: 'weekly',
+      completedDates: [realToday],
+      completedBy: { [realToday]: { [PAUL]: 1 } },
+    });
+    expect(memberUnitsForPeriod(weekly, realToday)).toEqual({ [PAUL]: 1 });
+  });
+
+  it('fingerprints only the current period, and is key-order independent', () => {
+    const reordered = habit({
+      completedDates: [d(0), d(1)],
+      completedBy: {
+        [d(1)]: { [JEN]: 1 },
+        [d(0)]: { [JEN]: 1, [PAUL]: 2 },
+      },
+    });
+    expect(attributionFingerprint(reordered, d(0))).toBe(attributionFingerprint(h, d(0)));
+    // A change on a DIFFERENT day never moves the fingerprint of this one.
+    const otherDay = habit({ ...h, completedBy: { ...h.completedBy, [d(1)]: { [JEN]: 9 } } });
+    expect(attributionFingerprint(otherDay, d(0))).toBe(attributionFingerprint(h, d(0)));
+    // A change on THIS day always does.
+    const sameDay = habit({ ...h, completedBy: { ...h.completedBy, [d(0)]: { [PAUL]: 3 } } });
+    expect(attributionFingerprint(sameDay, d(0))).not.toBe(attributionFingerprint(h, d(0)));
+    expect(attributionFingerprint(habit(), d(0))).toBe('');
   });
 
   it('derives a member’s own completion-date set, newest first', () => {

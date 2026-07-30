@@ -31,9 +31,14 @@ test.describe('Habit points (Test Mode)', () => {
     await expect(pointsCluster.getByText('50', { exact: true })).toBeVisible();
     await expect(pointsCluster.getByText('170', { exact: true })).toBeVisible();
 
-    // Reset the habit (the card's X). Exactly one habit is active, so the
-    // accessible name is unique.
-    await page.getByRole('button', { name: 'Reset habit progress' }).click();
+    // Reset the habit (the card's X). Scoped to this habit's own category list:
+    // the seed now also carries an in-progress multi-member day on the Health
+    // habit (per-member points, stage 2), so "Reset habit progress" is no
+    // longer unique page-wide.
+    await page
+      .getByRole('list', { name: 'Habit list for Fitness' })
+      .getByRole('button', { name: 'Reset habit progress' })
+      .click();
     await expect(
       page.getByRole('button', { name: 'Toggle habit: Exercise 30min, current count: 0' })
     ).toBeVisible();

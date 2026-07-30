@@ -358,7 +358,20 @@ const SEED_HABITS: Habit[] = [
   {
     id: 'h1', title: 'Drink 8 Glasses of Water', category: 'Health', type: 'positive',
     basePoints: 10, scoringType: 'threshold', period: 'daily', targetCount: 8,
-    totalCount: 0, count: 0, completedDates: [], streakDays: 0,
+    // Per-member points (stage 2) Test-Mode harness: a genuinely multi-member
+    // day, so the row's pie counter renders 2 : 1 in two member colors and the
+    // badge row shows both credited avatars — one with an ember flame ring
+    // (three consecutive attributed days), one without — without needing any
+    // interaction first. `completedDates` stays EMPTY on purpose: this is a
+    // threshold habit at 3 of 8, and the subsystem's invariant is "a date in
+    // completedDates ⟹ that day's target was met", which is exactly what
+    // production's per-tap attribution writes look like mid-progress.
+    totalCount: 3, count: 3, completedDates: [], streakDays: 0,
+    completedBy: {
+      [getLocalDateString()]: { 'test-user-id': 2, 'test-partner-id': 1 },
+      [getLocalDateString(subDays(new Date(), 1))]: { 'test-user-id': 1 },
+      [getLocalDateString(subDays(new Date(), 2))]: { 'test-user-id': 1 },
+    },
     createdBy: 'test-user-id', lastUpdated: new Date().toISOString()
   },
   {

@@ -3,13 +3,20 @@ import { Reorder, useDragControls } from 'framer-motion';
 import { Habit } from '@/types/schema';
 import HabitCard from './HabitCard';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
+import type { HabitRowMemberContext } from '@/utils/habitRowAttribution';
 
 interface HabitCategoryListProps {
   category: string;
   habits: Habit[];
+  /**
+   * Per-member attribution context, built ONCE on the Habits page and threaded
+   * down by identity — a card subscribing to the core slice itself would
+   * re-render every row on any household change.
+   */
+  attribution?: HabitRowMemberContext;
 }
 
-const HabitCategoryList: React.FC<HabitCategoryListProps> = ({ category, habits }) => {
+const HabitCategoryList: React.FC<HabitCategoryListProps> = ({ category, habits, attribution }) => {
   // Local state for immediate reorder feedback during drag only.
   // While the user is dragging we show `dragItems`; once the drag ends we
   // persist to Firestore and immediately go back to reading from props (the
@@ -82,7 +89,12 @@ const HabitCategoryList: React.FC<HabitCategoryListProps> = ({ category, habits 
       aria-label={`Habit list for ${category}`}
     >
       {items.map(habit => (
-        <ReorderableHabitItem key={habit.id} habit={habit} onSave={handleSave} />
+        <ReorderableHabitItem
+          key={habit.id}
+          habit={habit}
+          onSave={handleSave}
+          attribution={attribution}
+        />
       ))}
     </Reorder.Group>
   );
@@ -91,9 +103,10 @@ const HabitCategoryList: React.FC<HabitCategoryListProps> = ({ category, habits 
 interface ReorderableItemProps {
   habit: Habit;
   onSave: () => void;
+  attribution?: HabitRowMemberContext;
 }
 
-const ReorderableHabitItem: React.FC<ReorderableItemProps> = ({ habit, onSave }) => {
+const ReorderableHabitItem: React.FC<ReorderableItemProps> = ({ habit, onSave, attribution }) => {
   const controls = useDragControls();
 
   // Stable identity so HabitCard's memo comparator holds across re-renders
@@ -120,7 +133,7 @@ const ReorderableHabitItem: React.FC<ReorderableItemProps> = ({ habit, onSave })
       // Removed touch-none to allow vertical scrolling on the card itself.
       // Dragging is handled via the grip handle which has touch-none.
     >
-      <HabitCard habit={habit} onGripPointerDown={startDrag} />
+      <HabitCard habit={habit} onGripPointerDown={startDrag} attribution={attribution} />
     </Reorder.Item>
   );
 };
