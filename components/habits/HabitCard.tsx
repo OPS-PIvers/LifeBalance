@@ -20,7 +20,8 @@ import { getMultiplier, signedHabitPoints, isHabitPaused, isHabitStale } from '@
 import {
   attributionFingerprint,
   habitFeedsMemberAttribution,
-  memberCompletionCount,
+  memberMostRecentUnitDateInPeriod,
+  memberUnitsForPeriod,
 } from '@/utils/habitAttribution';
 import {
   rowCompletionSegments,
@@ -147,12 +148,16 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
     !isPaused &&
     !habit.archivedAt;
 
+  // Credited state is PERIOD-scoped (see memberUnitsForPeriod), matching the
+  // pie's own span: a weekly habit completed by Jen on Monday must still show
+  // her checked on Wednesday, or a second tap double-credits a unit she
+  // already holds this week. For a daily habit the period IS the day, so this
+  // degrades to exactly the old day-scoped behavior — no change there.
+  const periodUnitsByMember = canPickAttribution ? memberUnitsForPeriod(habit, today) : {};
   const pickerMembers: AttributionPickerMember[] = canPickAttribution && attribution
     ? attribution.adults.map(member => ({
         ...member,
-        // Credited TODAY — the picker always acts on today, even for a weekly
-        // habit whose pie spans the whole week.
-        credited: memberCompletionCount(habit, member.uid, today) > 0,
+        credited: (periodUnitsByMember[member.uid] ?? 0) > 0,
         isSelf: member.uid === attribution.currentUserId,
       }))
     : [];
@@ -230,7 +235,14 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
 
   const handleUncreditMember = (memberId: string) => {
     haptic('light');
-    void uncreditHabitCompletion(habit.id, memberId).catch(() => {});
+    // Reverse the member's MOST RECENT attributed unit in the current period
+    // (see memberMostRecentUnitDateInPeriod) — for a daily habit that is always
+    // today, but for a weekly habit checked-from-Wednesday the unit may live on
+    // Monday. `?? today` only matters if the row somehow renders a checkmark
+    // for a member holding nothing this period, which canPickAttribution/the
+    // picker's own `credited` derivation never allows.
+    const targetDate = memberMostRecentUnitDateInPeriod(habit, memberId, today) ?? today;
+    void uncreditHabitCompletion(habit.id, memberId, targetDate).catch(() => {});
   };
 
   // Grouped-flat ROW: borderless and hairline-separated by the parent

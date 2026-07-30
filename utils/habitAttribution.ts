@@ -153,6 +153,40 @@ export const memberUnitsForPeriod = (
 };
 
 /**
+ * The most recent date, within the PERIOD containing `today`, on which
+ * `memberId` holds at least one attributed unit — `null` when they hold none
+ * in the period.
+ *
+ * This is the un-credit TARGET for the habit row's picker (F-HABITS per-member
+ * points, stage 2): the picker's checkmark is period-scoped (see
+ * `memberUnitsForPeriod`), so for a weekly habit "tap the checked row to undo"
+ * must reverse whichever day in the week actually holds the unit — which, for
+ * a daily habit, is always `today` itself (the period IS the day), so this
+ * degrades to exactly the old day-scoped behavior there.
+ *
+ * Scans newest-day-first, bounded at `today` — a day after `today` cannot yet
+ * hold a completion, so there is nothing to gain (and a stray future-dated
+ * fixture nothing to trip over) by considering it.
+ */
+export const memberMostRecentUnitDateInPeriod = (
+  habit: Pick<Habit, 'completedBy' | 'period'>,
+  memberId: string,
+  today: string,
+): string | null => {
+  const periodStart = habitPeriodStart(habit.period, today);
+  const days =
+    habit.period === 'weekly'
+      ? Array.from({ length: 7 }, (_, i) => format(addDays(parseISO(periodStart), i), 'yyyy-MM-dd'))
+      : [periodStart];
+  for (let i = days.length - 1; i >= 0; i -= 1) {
+    const day = days[i];
+    if (!day || day > today) continue;
+    if ((habit.completedBy?.[day]?.[memberId] ?? 0) > 0) return day;
+  }
+  return null;
+};
+
+/**
  * A stable string summarising the period's attribution — the memo key habit
  * rows compare on.
  *
