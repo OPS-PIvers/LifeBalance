@@ -527,6 +527,24 @@ describe('HabitCard - flame-ring avatars', () => {
     render(<HabitCard habit={mockHabit} attribution={ROSTER} />);
     expect(screen.queryByText(/completed this/)).not.toBeInTheDocument();
   });
+
+  // A flame ring is a celebration; a "streak" on a negative habit is a run of
+  // the behaviour the household is trying to stop. The streak pill this
+  // replaced was gated on `isPositive`, and that gate has to survive.
+  it('credits the member on a NEGATIVE habit but never rings them', () => {
+    const { container } = render(
+      <HabitCard
+        habit={attributedHabit({ [PAUL]: 1 }, { type: 'negative', basePoints: -10, streakDays: 30 })}
+        attribution={ROSTER}
+      />
+    );
+
+    expect(screen.getByText('Paul completed this')).toBeInTheDocument();
+    expect(container.querySelectorAll('svg[viewBox="0 0 48 48"]')).toHaveLength(0);
+    expect(screen.queryByText(/streak/)).not.toBeInTheDocument();
+    // The pie still reads: who did it is the point, on a negative habit most of all.
+    expect(pieSlices(container)).toHaveLength(1);
+  });
 });
 
 describe('HabitCard - attribution picker', () => {

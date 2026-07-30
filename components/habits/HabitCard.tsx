@@ -457,7 +457,14 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
                 Streak). The multiplier it earns is still visible: it is baked
                 into the points badge above. */}
             {segments.length > 0 && (
-              <HabitDoneByAvatars entries={segments} streakUnit={isWeekly ? 'week' : 'day'} />
+              <HabitDoneByAvatars
+                entries={segments}
+                streakUnit={isWeekly ? 'week' : 'day'}
+                // Positive habits only — a ring around a run of the thing you
+                // are trying to STOP would be a celebration of it. The pill
+                // this replaced carried the same gate.
+                showStreakRings={isPositive}
+              />
             )}
 
             {/* F-HABITS-01: planned break in effect */}

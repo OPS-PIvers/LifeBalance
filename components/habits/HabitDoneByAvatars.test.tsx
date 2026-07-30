@@ -16,7 +16,7 @@ const rings = (container: HTMLElement): SVGSVGElement[] =>
 
 describe('HabitDoneByAvatars', () => {
   it('renders nothing when nobody is credited (untouched rows stay clean)', () => {
-    const { container } = render(<HabitDoneByAvatars entries={[]} streakUnit="day" />);
+    const { container } = render(<HabitDoneByAvatars entries={[]} streakUnit="day" showStreakRings />);
     expect(container).toBeEmptyDOMElement();
   });
 
@@ -25,6 +25,7 @@ describe('HabitDoneByAvatars', () => {
       <HabitDoneByAvatars
         entries={[entry(), entry({ memberId: 'jen-uid', displayName: 'Jen', color: '#b87a29' })]}
         streakUnit="day"
+        showStreakRings
       />
     );
     expect(screen.getByText('Paul completed this')).toBeInTheDocument();
@@ -32,18 +33,18 @@ describe('HabitDoneByAvatars', () => {
   });
 
   it('counts multiple completions in the screen-reader text', () => {
-    render(<HabitDoneByAvatars entries={[entry({ units: 3 })]} streakUnit="day" />);
+    render(<HabitDoneByAvatars entries={[entry({ units: 3 })]} streakUnit="day" showStreakRings />);
     expect(screen.getByText('Paul completed this 3 times')).toBeInTheDocument();
   });
 
   it('shows NO ring below the ember threshold', () => {
-    const { container } = render(<HabitDoneByAvatars entries={[entry({ streak: 2 })]} streakUnit="day" />);
+    const { container } = render(<HabitDoneByAvatars entries={[entry({ streak: 2 })]} streakUnit="day" showStreakRings />);
     expect(rings(container)).toHaveLength(0);
     expect(screen.getByText('Paul completed this')).toBeInTheDocument();
   });
 
   it('lights the ember ring at 3 and announces the streak as text', () => {
-    const { container } = render(<HabitDoneByAvatars entries={[entry({ streak: 3 })]} streakUnit="day" />);
+    const { container } = render(<HabitDoneByAvatars entries={[entry({ streak: 3 })]} streakUnit="day" showStreakRings />);
     expect(rings(container)).toHaveLength(1);
     expect(container.querySelector('circle')?.getAttribute('stroke-width')).toBe('2');
     // The ring is decoration; this is the text that carries the same meaning.
@@ -51,19 +52,37 @@ describe('HabitDoneByAvatars', () => {
   });
 
   it('steps up to flame at 7 and blaze at 30', () => {
-    const flame = render(<HabitDoneByAvatars entries={[entry({ streak: 7 })]} streakUnit="day" />);
+    const flame = render(<HabitDoneByAvatars entries={[entry({ streak: 7 })]} streakUnit="day" showStreakRings />);
     expect(flame.container.querySelector('circle')?.getAttribute('stroke-width')).toBe('2.5');
     expect(rings(flame.container)[0]?.getAttribute('style')).not.toContain('drop-shadow');
 
-    const blaze = render(<HabitDoneByAvatars entries={[entry({ streak: 30 })]} streakUnit="day" />);
+    const blaze = render(<HabitDoneByAvatars entries={[entry({ streak: 30 })]} streakUnit="day" showStreakRings />);
     expect(blaze.container.querySelector('circle')?.getAttribute('stroke-width')).toBe('3');
     // Only the top tier glows.
     expect(rings(blaze.container)[0]?.getAttribute('style')).toContain('drop-shadow');
   });
 
   it('uses the habit’s own cadence word for a weekly habit', () => {
-    render(<HabitDoneByAvatars entries={[entry({ streak: 4 })]} streakUnit="week" />);
+    render(<HabitDoneByAvatars entries={[entry({ streak: 4 })]} streakUnit="week" showStreakRings />);
     expect(screen.getByText('Paul completed this, 4 weeks streak')).toBeInTheDocument();
+  });
+
+  // A "streak" on a negative habit is a run of the thing you are trying to
+  // stop; the pill this replaced was positive-only and the gate survives the
+  // change of form. Who did it is still shown.
+  it('never rings a NEGATIVE habit, however long the run', () => {
+    const { container } = render(
+      <HabitDoneByAvatars
+        entries={[entry({ streak: 30 })]}
+        streakUnit="day"
+        showStreakRings={false}
+      />
+    );
+    expect(rings(container)).toHaveLength(0);
+    expect(screen.getByText('Paul completed this')).toBeInTheDocument();
+    // …and the streak is not announced either, so the ring's meaning is not
+    // simply relocated into the screen-reader text.
+    expect(screen.queryByText(/streak/)).not.toBeInTheDocument();
   });
 
   it('gives every avatar its own gradient ids so two rings never share a fill', () => {
@@ -74,6 +93,7 @@ describe('HabitDoneByAvatars', () => {
           entry({ memberId: 'jen-uid', displayName: 'Jen', color: '#b87a29', streak: 3 }),
         ]}
         streakUnit="day"
+        showStreakRings
       />
     );
     const ids = Array.from(container.querySelectorAll('linearGradient')).map(g => g.id);

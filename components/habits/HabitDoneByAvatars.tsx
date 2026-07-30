@@ -76,22 +76,33 @@ interface HabitDoneByAvatarsProps {
   entries: readonly DoneByEntry[];
   /** Streak cadence word, for the screen-reader text. */
   streakUnit: 'day' | 'week';
+  /**
+   * Whether a streak may light a ring at all — POSITIVE habits only.
+   *
+   * 🛡️ A flame ring is a celebration, and a "streak" on a negative habit is a
+   * run of the thing you're trying to stop: ringing it would congratulate three
+   * days of late-night snacking. The pill this replaced was gated on
+   * `isPositive` for exactly this reason, and the gate has to survive the
+   * change of form. Who did it is still shown — the avatars render either way.
+   */
+  showStreakRings: boolean;
   /** Avatar diameter in px (the ring adds ~5px around it). */
   size?: number;
 }
 
 const RING_PAD = 2.5;
 
-const FlameRingAvatar: React.FC<{ entry: DoneByEntry; streakUnit: 'day' | 'week'; size: number }> = ({
-  entry,
-  streakUnit,
-  size,
-}) => {
+const FlameRingAvatar: React.FC<{
+  entry: DoneByEntry;
+  streakUnit: 'day' | 'week';
+  showStreakRing: boolean;
+  size: number;
+}> = ({ entry, streakUnit, showStreakRing, size }) => {
   // Gradient ids must be unique per instance — two avatars sharing an id would
   // both paint whichever `<defs>` mounted last. Colons are stripped so the id
   // is also a legal CSS identifier.
   const gradientId = `flame-ring-${useId().replace(/:/g, '')}`;
-  const tier = tierFor(entry.streak);
+  const tier = showStreakRing ? tierFor(entry.streak) : null;
   const spec = tier ? TIER[tier] : null;
 
   // The ring is decoration; this is the text that carries the same meaning.
@@ -155,7 +166,12 @@ const FlameRingAvatar: React.FC<{ entry: DoneByEntry; streakUnit: 'day' | 'week'
   );
 };
 
-const HabitDoneByAvatars: React.FC<HabitDoneByAvatarsProps> = ({ entries, streakUnit, size = 15 }) => {
+const HabitDoneByAvatars: React.FC<HabitDoneByAvatarsProps> = ({
+  entries,
+  streakUnit,
+  showStreakRings,
+  size = 15,
+}) => {
   if (entries.length === 0) return null;
   return (
     // Spaced, never overlapped: overlapping avatars would collide their flame
@@ -166,6 +182,7 @@ const HabitDoneByAvatars: React.FC<HabitDoneByAvatarsProps> = ({ entries, streak
           key={entry.memberId}
           entry={entry}
           streakUnit={streakUnit}
+          showStreakRing={showStreakRings}
           size={size}
         />
       ))}
