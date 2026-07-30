@@ -431,7 +431,9 @@ const SEED_MEMBERS: HouseholdMember[] = [
     // household `dailyPoints`/`weeklyPoints` are derived as the Σ of the ADULT
     // members' scores, so Jordan's points DO feed the toolbar figures
     // (30+18=48 / 150+95=245) — the drawer's "together" number and the member
-    // standings must agree, that Σ being the whole point of the model.
+    // standings must agree, that Σ being the whole point of the model. The
+    // per-member scoreboard widget (PR 4/6) also demos off this pair: Test
+    // User stays the leader (30/150 > 18/95).
     points: { daily: 18, weekly: 95, total: 310 },
     hiddenKeys: [...DEFAULT_HIDDEN_DASHBOARD_WIDGETS, 'trends', 'subscriptions']
   },
