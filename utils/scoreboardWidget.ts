@@ -5,12 +5,12 @@
  * Household-first (locked decision, see .claude/PER_MEMBER_POINTS_HANDOFF.md
  * §1): the widget's headline is the household's own `weeklyPoints`/`dailyPoints`
  * figures READ AS STORED — this file never re-derives a household total from
- * per-member figures. Today those are computed independently of per-member
- * attribution (stage 1.5 of the plan is what makes household weekly/daily an
- * actual Σ of member figures); until then, summing members here would silently
- * diverge from the number the rest of the app shows for the same household
- * total (TopToolbar, the Points Breakdown drawer). Standings rows are adults
- * only per the locked UI decision — Kid Mode is dormant and kids don't get a
+ * per-member figures. Since stage 1.5 landed, the household `weeklyPoints`/
+ * `dailyPoints` figures ARE the Σ of the ADULT members' scores (managed kids'
+ * chore points route to the kid's own member doc, never the household pool) —
+ * so any comparison against a household total must filter to the same
+ * adults-only population or it mixes scopes. Standings rows are adults only
+ * per the locked UI decision — Kid Mode is dormant and kids don't get a
  * competitive standings row.
  */
 import type { HouseholdMember, WeeklyRecap } from '@/types/schema';
@@ -51,8 +51,10 @@ export function selectAdultStandings(members: readonly HouseholdMember[]): Score
   const runnerUp = sorted[1];
   const leaderWeekly = leader?.points.weekly ?? 0;
   // A crown means an actual competition was won: at least two adults, a
-  // nonzero score, and no tie for first.
-  const hasLeader = sorted.length > 1 && leaderWeekly > 0 && leaderWeekly > (runnerUp?.points.weekly ?? 0);
+  // nonzero score for the leader, and no tie for first. A strict leader still
+  // wins even in a net-negative week (someone lost the least) — the gate is
+  // "not a zero-zero non-competition," not "must be positive."
+  const hasLeader = sorted.length > 1 && leaderWeekly !== 0 && leaderWeekly > (runnerUp?.points.weekly ?? 0);
 
   return sorted.map((m, i) => ({
     memberId: m.uid,
@@ -61,7 +63,10 @@ export function selectAdultStandings(members: readonly HouseholdMember[]): Score
     avatarEmoji: m.avatarEmoji,
     today: m.points.daily,
     weekly: m.points.weekly,
-    barPct: leaderWeekly > 0 ? Math.round((m.points.weekly / leaderWeekly) * 100) : 0,
+    // Clamped to >= 0: a negative weekly (relative to a positive leader, or a
+    // negative leader itself) must never produce a negative CSS width — that's
+    // an invalid length browsers drop, rendering a FULL bar instead of empty.
+    barPct: leaderWeekly > 0 ? Math.max(0, Math.round((m.points.weekly / leaderWeekly) * 100)) : 0,
     isLeader: hasLeader && i === 0,
   }));
 }
@@ -83,10 +88,22 @@ export interface ScoreboardTrend {
   isBestWeek: boolean;
 }
 
-/** Sum a completed week's per-member points into one household figure — the
- *  same scope (all members) as the live `weeklyPoints` this is compared against. */
-const recapWeekTotal = (recap: WeeklyRecap): number =>
-  recap.pointsByMember.reduce((sum, p) => sum + p.points, 0);
+/** Member shape `deriveScoreboardTrend` needs to identify adults — narrower than a full `HouseholdMember`. */
+type TrendMember = Pick<HouseholdMember, 'uid' | 'isManaged'>;
+
+/**
+ * Sum a completed week's per-member points into one household figure, scoped
+ * to `adultUids` — the same adults-only population the live `weeklyPoints`
+ * this is compared against is built from (managed kids' points route to the
+ * kid's own member doc, never the household pool; see `getAdultStandings` in
+ * `utils/pointsDrawer.ts` for the identical fix applied to the Points
+ * Breakdown drawer's trend). Summing every recap entry unfiltered mixes
+ * scopes and produces a bogus percentage/best-week verdict.
+ */
+const recapWeekTotal = (recap: WeeklyRecap, adultUids: ReadonlySet<string>): number =>
+  recap.pointsByMember
+    .filter((p) => adultUids.has(p.memberId))
+    .reduce((sum, p) => sum + p.points, 0);
 
 /**
  * Derive the scoreboard's trend chip + "best week" sub-label from the recaps
@@ -96,15 +113,18 @@ const recapWeekTotal = (recap: WeeklyRecap): number =>
  */
 export function deriveScoreboardTrend(
   recaps: readonly WeeklyRecap[],
-  currentWeekTotal: number
+  currentWeekTotal: number,
+  members: readonly TrendMember[]
 ): ScoreboardTrend {
   if (recaps.length === 0) return { trendPct: null, isBestWeek: false };
 
+  const adultUids = new Set(members.filter((m) => m.isManaged !== true).map((m) => m.uid));
+
   const lastCompleted = recaps[0];
-  const lastTotal = lastCompleted ? recapWeekTotal(lastCompleted) : 0;
+  const lastTotal = lastCompleted ? recapWeekTotal(lastCompleted, adultUids) : 0;
   const trendPct = lastTotal > 0 ? Math.round(((currentWeekTotal - lastTotal) / lastTotal) * 100) : null;
 
-  const maxCompletedTotal = Math.max(...recaps.map(recapWeekTotal));
+  const maxCompletedTotal = Math.max(...recaps.map((r) => recapWeekTotal(r, adultUids)));
   const isBestWeek = currentWeekTotal > 0 && currentWeekTotal >= maxCompletedTotal;
 
   return { trendPct, isBestWeek };

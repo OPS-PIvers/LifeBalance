@@ -95,6 +95,32 @@ describe('selectAdultStandings', () => {
     ]);
   });
 
+  it('crowns the strict leader even in a net-negative week, with both bars clamped empty', () => {
+    const members: HouseholdMember[] = [
+      member({ uid: 'paul', displayName: 'Paul', points: { daily: -5, weekly: -10, total: 200 } }),
+      member({ uid: 'jen', displayName: 'Jen', points: { daily: -20, weekly: -40, total: 200 } }),
+    ];
+
+    const standings = selectAdultStandings(members);
+
+    // Paul lost the least (-10 > -40) — a real competition was won.
+    expect(standings.map(s => s.memberId)).toEqual(['paul', 'jen']);
+    expect(standings[0]).toMatchObject({ memberId: 'paul', isLeader: true, barPct: 0 });
+    expect(standings[1]).toMatchObject({ memberId: 'jen', isLeader: false, barPct: 0 });
+  });
+
+  it('clamps a negative member weekly to a 0% bar against a positive leader (never a negative CSS width)', () => {
+    const members: HouseholdMember[] = [
+      member({ uid: 'paul', displayName: 'Paul', points: { daily: 20, weekly: 100, total: 200 } }),
+      member({ uid: 'jen', displayName: 'Jen', points: { daily: -5, weekly: -20, total: 200 } }),
+    ];
+
+    const standings = selectAdultStandings(members);
+    const jen = standings.find(s => s.memberId === 'jen');
+
+    expect(jen?.barPct).toBe(0);
+  });
+
   it('returns [] when there are no adult members', () => {
     const members: HouseholdMember[] = [
       member({ uid: 'kid_leo', displayName: 'Leo', isManaged: true }),
@@ -114,8 +140,13 @@ describe('selectAdultStandings', () => {
 });
 
 describe('deriveScoreboardTrend', () => {
+  const adults: HouseholdMember[] = [
+    member({ uid: 'a', displayName: 'A' }),
+    member({ uid: 'b', displayName: 'B' }),
+  ];
+
   it('omits gracefully with no recap history', () => {
-    expect(deriveScoreboardTrend([], 610)).toEqual({ trendPct: null, isBestWeek: false });
+    expect(deriveScoreboardTrend([], 610, adults)).toEqual({ trendPct: null, isBestWeek: false });
   });
 
   it('computes trend % vs the most recently completed week (recaps[0])', () => {
@@ -124,7 +155,7 @@ describe('deriveScoreboardTrend', () => {
     ];
 
     // 610 vs 545 -> +11.9...% -> 12
-    expect(deriveScoreboardTrend(recaps, 610)).toEqual({ trendPct: 12, isBestWeek: true });
+    expect(deriveScoreboardTrend(recaps, 610, adults)).toEqual({ trendPct: 12, isBestWeek: true });
   });
 
   it('omits the trend percent when the last completed week totalled 0', () => {
@@ -132,7 +163,7 @@ describe('deriveScoreboardTrend', () => {
       recap({ isoWeek: '2026-W30', pointsByMember: [{ memberId: 'a', name: 'A', points: 0 }] }),
     ];
 
-    expect(deriveScoreboardTrend(recaps, 50).trendPct).toBeNull();
+    expect(deriveScoreboardTrend(recaps, 50, adults).trendPct).toBeNull();
   });
 
   it('flags isBestWeek only when the live total is at least the max of the recap window', () => {
@@ -141,12 +172,55 @@ describe('deriveScoreboardTrend', () => {
       recap({ isoWeek: '2026-W29', pointsByMember: [{ memberId: 'a', name: 'A', points: 700 }] }),
     ];
 
-    expect(deriveScoreboardTrend(recaps, 610).isBestWeek).toBe(false); // below the 700 max
-    expect(deriveScoreboardTrend(recaps, 700).isBestWeek).toBe(true); // ties the max
-    expect(deriveScoreboardTrend(recaps, 701).isBestWeek).toBe(true); // beats the max
+    expect(deriveScoreboardTrend(recaps, 610, adults).isBestWeek).toBe(false); // below the 700 max
+    expect(deriveScoreboardTrend(recaps, 700, adults).isBestWeek).toBe(true); // ties the max
+    expect(deriveScoreboardTrend(recaps, 701, adults).isBestWeek).toBe(true); // beats the max
   });
 
   it('never claims a best week at 0 points, even with no recap history to beat', () => {
-    expect(deriveScoreboardTrend([], 0).isBestWeek).toBe(false);
+    expect(deriveScoreboardTrend([], 0, adults).isBestWeek).toBe(false);
+  });
+
+  it('excludes a managed kid entry from the baseline (mock repro: 120 adult + 35 kid inflating to 155)', () => {
+    const membersWithKid: HouseholdMember[] = [
+      ...adults,
+      member({ uid: 'kid_leo', displayName: 'Leo', isManaged: true }),
+    ];
+    const recaps: WeeklyRecap[] = [
+      recap({
+        isoWeek: '2026-W30',
+        pointsByMember: [
+          { memberId: 'a', name: 'A', points: 70 },
+          { memberId: 'b', name: 'B', points: 50 },
+          { memberId: 'kid_leo', name: 'Leo', points: 35 },
+        ],
+      }),
+    ];
+
+    // Unfiltered baseline would be 155 (120 adult + 35 kid), making live 150
+    // read as a -3% decline. Adults-only baseline is 120, so live 150 is the
+    // honest +25%.
+    expect(deriveScoreboardTrend(recaps, 150, membersWithKid)).toEqual({ trendPct: 25, isBestWeek: true });
+  });
+
+  it('excludes a managed kid entry when computing the best-week max across the recap window', () => {
+    const membersWithKid: HouseholdMember[] = [
+      ...adults,
+      member({ uid: 'kid_leo', displayName: 'Leo', isManaged: true }),
+    ];
+    const recaps: WeeklyRecap[] = [
+      recap({
+        isoWeek: '2026-W30',
+        pointsByMember: [
+          { memberId: 'a', name: 'A', points: 60 },
+          { memberId: 'b', name: 'B', points: 40 },
+          { memberId: 'kid_leo', name: 'Leo', points: 500 }, // would dominate the max if not filtered
+        ],
+      }),
+    ];
+
+    // Adults-only max is 100; a live total of 100 should tie it as a best week.
+    // If the kid's 500 leaked in, this would incorrectly read false.
+    expect(deriveScoreboardTrend(recaps, 100, membersWithKid).isBestWeek).toBe(true);
   });
 });

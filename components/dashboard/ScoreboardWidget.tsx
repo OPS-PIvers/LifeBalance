@@ -27,7 +27,10 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
   const { weeklyPoints } = useGamification();
 
   const standings = useMemo(() => selectAdultStandings(members), [members]);
-  const trend = useMemo(() => deriveScoreboardTrend(recaps, weeklyPoints), [recaps, weeklyPoints]);
+  const trend = useMemo(
+    () => deriveScoreboardTrend(recaps, weeklyPoints, members),
+    [recaps, weeklyPoints, members]
+  );
 
   const weekLabel = useMemo(() => {
     const anchor = parseISO(getLocalDateString());
