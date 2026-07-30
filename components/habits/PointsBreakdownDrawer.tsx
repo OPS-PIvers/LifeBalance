@@ -47,8 +47,8 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
   const householdTotal = period === 'day' ? dailyPoints : weeklyPoints;
 
   const trend = useMemo(
-    () => (period === 'week' ? computePointsTrend(weeklyPoints, recaps) : null),
-    [period, weeklyPoints, recaps],
+    () => (period === 'week' ? computePointsTrend(weeklyPoints, recaps, members) : null),
+    [period, weeklyPoints, recaps, members],
   );
 
   const dateLabel = useMemo(() => {

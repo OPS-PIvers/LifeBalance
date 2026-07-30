@@ -64,21 +64,38 @@ export interface PointsTrend {
 /** Recap shape `computePointsTrend` needs — narrower than a full `WeeklyRecap`. */
 type TrendRecap = Pick<WeeklyRecap, 'pointsByMember'>;
 
+/** Member shape `computePointsTrend` needs to identify adults — narrower than a full `HouseholdMember`. */
+type TrendMember = Pick<HouseholdMember, 'uid' | 'isManaged'>;
+
 /**
  * Derive the "vs last week" trend chip from the newest `WeeklyRecap` in the
  * `recaps` slice (assumed newest-first, matching the live listener's
  * `orderBy('isoWeek', 'desc')`). Returns `null` — chip omitted — when there is
  * no recap yet, or last week's household total was zero (nothing to divide
  * by, and "∞%" is not a useful chip).
+ *
+ * `currentWeeklyTotal` (the household `weeklyPoints` figure) structurally
+ * excludes managed kids' chore points — assigned habits route to the kid's
+ * own member doc, never the household pool. `WeeklyRecap.pointsByMember`
+ * includes every member, kids included, so the baseline must be filtered to
+ * the same adults-only population via the live `members` list (mirroring
+ * `getAdultStandings`'s `isManaged` filter) or the comparison mixes
+ * populations and produces a bogus percentage.
  */
 export const computePointsTrend = (
   currentWeeklyTotal: number,
   recaps: TrendRecap[],
+  members: TrendMember[],
 ): PointsTrend | null => {
   const latest = recaps[0];
   if (!latest) return null;
 
-  const lastWeekTotal = latest.pointsByMember.reduce((sum, member) => sum + member.points, 0);
+  const adultUids = new Set(
+    members.filter((member) => member.isManaged !== true).map((member) => member.uid),
+  );
+  const lastWeekTotal = latest.pointsByMember
+    .filter((member) => adultUids.has(member.memberId))
+    .reduce((sum, member) => sum + member.points, 0);
   if (lastWeekTotal === 0) return null;
 
   const percent = Math.round(((currentWeeklyTotal - lastWeekTotal) / lastWeekTotal) * 100);

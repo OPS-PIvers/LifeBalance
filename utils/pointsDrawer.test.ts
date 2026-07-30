@@ -90,6 +90,11 @@ describe('computePointsTrend', () => {
     premium: false,
   });
 
+  const adults = [
+    member({ uid: 'jen', displayName: 'Jen' }),
+    member({ uid: 'paul', displayName: 'Paul' }),
+  ];
+
   it('derives a positive percent vs. the newest recap', () => {
     const recaps = [
       recap([
@@ -98,12 +103,12 @@ describe('computePointsTrend', () => {
       ]),
     ];
     // last week total = 545; this week 610 → +11.9% → rounds to 12.
-    expect(computePointsTrend(610, recaps)).toEqual({ percent: 12 });
+    expect(computePointsTrend(610, recaps, adults)).toEqual({ percent: 12 });
   });
 
   it('derives a negative percent when this week is behind', () => {
     const recaps = [recap([{ memberId: 'jen', name: 'Jen', points: 400 }])];
-    expect(computePointsTrend(300, recaps)).toEqual({ percent: -25 });
+    expect(computePointsTrend(300, recaps, adults)).toEqual({ percent: -25 });
   });
 
   it('uses only the NEWEST recap (recaps are newest-first)', () => {
@@ -111,15 +116,48 @@ describe('computePointsTrend', () => {
       recap([{ memberId: 'jen', name: 'Jen', points: 100 }]), // newest
       recap([{ memberId: 'jen', name: 'Jen', points: 1000 }]), // older — ignored
     ];
-    expect(computePointsTrend(150, recaps)).toEqual({ percent: 50 });
+    expect(computePointsTrend(150, recaps, adults)).toEqual({ percent: 50 });
   });
 
   it('omits the chip when there is no recap yet', () => {
-    expect(computePointsTrend(610, [])).toBeNull();
+    expect(computePointsTrend(610, [], adults)).toBeNull();
   });
 
   it('omits the chip when last week totalled zero (nothing to divide by)', () => {
     const recaps = [recap([{ memberId: 'jen', name: 'Jen', points: 0 }])];
-    expect(computePointsTrend(50, recaps)).toBeNull();
+    expect(computePointsTrend(50, recaps, adults)).toBeNull();
+  });
+
+  it('excludes a managed kid\'s recap points from the baseline (adults-only, matching the household weekly figure)', () => {
+    const membersWithKid = [
+      member({ uid: 'jen', displayName: 'Jen' }),
+      member({ uid: 'paul', displayName: 'Paul' }),
+      member({ uid: 'kid_leo', displayName: 'Leo', isManaged: true }),
+    ];
+    const recaps = [
+      recap([
+        { memberId: 'jen', name: 'Jen', points: 150 },
+        { memberId: 'paul', name: 'Paul', points: 0 },
+        { memberId: 'kid_leo', name: 'Leo', points: 35 },
+      ]),
+    ];
+    // Adult-only baseline is 150 (Jen) + 0 (Paul) = 150. Household weekly (which
+    // never includes the kid's chore points) flat at 150 → 0% trend, not the
+    // -19% you'd get by including the kid's 35 in the 185 baseline.
+    expect(computePointsTrend(150, recaps, membersWithKid)).toEqual({ percent: 0 });
+  });
+
+  it('drops the chip when the adult-only baseline is zero even if kids scored', () => {
+    const membersWithKid = [
+      member({ uid: 'jen', displayName: 'Jen' }),
+      member({ uid: 'kid_leo', displayName: 'Leo', isManaged: true }),
+    ];
+    const recaps = [
+      recap([
+        { memberId: 'jen', name: 'Jen', points: 0 },
+        { memberId: 'kid_leo', name: 'Leo', points: 35 },
+      ]),
+    ];
+    expect(computePointsTrend(50, recaps, membersWithKid)).toBeNull();
   });
 });
