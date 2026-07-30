@@ -662,29 +662,25 @@ const Dashboard: React.FC = () => {
       <div className="flex items-end justify-between px-1 mb-2">
         <div className="min-w-0">
           {/* Matches the CreditCardActivityWidget/Section header spec exactly
-              (same sectionHeadingClasses, same inline icon-in-heading shape) —
-              the `Section` primitive itself can't render this: it has no
-              subtitle slot and always owns its own `<h2>`, which can't carry
-              the `action-queue-heading` id the outer `aria-labelledby` below
-              depends on. Reusing the shared class constant keeps this in sync
-              with `Section`/`SectionHeading` without forking the spec. The old
-              pulsing dot is dropped — it was a second "needs attention" signal
-              competing with the new icon, and the reference has no dot. */}
+              (same sectionHeadingClasses, same inline icon-in-heading shape).
+              The `Section` primitive itself still can't render this: it always
+              owns its own `<h2>`, which can't carry the `action-queue-heading`
+              id the outer `aria-labelledby` depends on. Reusing the shared
+              class constant keeps this in sync with `Section`/`SectionHeading`
+              without forking the spec. The old pulsing dot is dropped — it was
+              a second "needs attention" signal competing with the icon, and
+              the reference has no dot. */}
+          {/* The COUNT is the heading (owner call): every other header on this
+              page NAMES its content — "Credit card activity", "Scoreboard",
+              "This week (so far)" — whereas "Needs you" was a mood, which
+              pushed the only informative line down into a subtitle. This also
+              keeps the "Action Queue" product term visible, which toast and
+              capture copy both refer to ("Check your Action Queue"). One line,
+              like the reference, so nothing competes with it underneath. */}
           <h2 id="action-queue-heading" className={`${sectionHeadingClasses} flex items-center gap-2`}>
             <ListChecks size={14} className="text-warm-600 dark:text-warm-300" aria-hidden="true" />
-            Needs you
-          </h2>
-          {/* Keeps the "Action Queue" product name visible here — toasts and
-              capture copy all say "Check your Action Queue", so the hero's
-              warmer headline must not orphan that term. */}
-          {/* text-xs, matching `SectionHeading`'s own `description` slot: the
-              heading dropped to the section register (14px), so a 14px
-              subtitle underneath it would carry equal weight and leave the
-              pair with no hierarchy — the reference header this now matches
-              has no subtitle at all. */}
-          <p className="mt-0.5 text-xs text-brand-500 dark:text-brand-400">
             {actionQueue.length} item{actionQueue.length === 1 ? '' : 's'} in your Action Queue
-          </p>
+          </h2>
         </div>
         {selectionMode ? (
           <button
@@ -751,9 +747,6 @@ const Dashboard: React.FC = () => {
         <CheckCircle2 size={14} className="text-money-pos dark:text-money-posDark" aria-hidden="true" />
         All caught up
       </h2>
-      <p className="mt-0.5 text-xs text-brand-500 dark:text-brand-400">
-        Nothing needs your review.
-      </p>
       {(isModuleEnabled('habits') && habitsToday.total > 0) || isModuleEnabled('money') ? (
         // StatGroup is the house wrapper for Stat rows; justify-start + the
         // wider gap keep the hero's left-set editorial alignment (the default

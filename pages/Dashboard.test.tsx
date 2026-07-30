@@ -220,11 +220,13 @@ describe('Dashboard hero slot (impeccable r6)', () => {
     mockShoppingAwaitingReview = [];
   });
 
-  it('leads with the "Needs you" queue hero above the widgets when the queue has items', () => {
+  it('leads with the Action Queue hero above the widgets when the queue has items', () => {
     queueItems = [{ id: 'q-0' }];
     renderDashboard();
-    const queueHeading = screen.getByRole('heading', { name: /Needs you/ });
-    expect(screen.getByText('1 item in your Action Queue')).toBeInTheDocument();
+    // The COUNT is the heading — every other header on this page names its
+    // content, so the queue hero does too (it used to say "Needs you" with the
+    // count demoted to a subtitle).
+    const queueHeading = screen.getByRole('heading', { name: /1 item in your Action Queue/ });
     const creditCardWidget = screen.getByText('CREDIT_CARD_WIDGET');
     // DOCUMENT_POSITION_FOLLOWING on creditCardWidget relative to queueHeading
     // means queueHeading comes first in the DOM.
