@@ -1162,3 +1162,80 @@ describe('MockHouseholdContext addHabitSubmission (period-scoped threshold compl
     expect(pointsOf(result, JORDAN).daily).toBe(jordanBefore.daily);
   });
 });
+
+// 🏁 Household credit mode — Test Mode must model "credits the pool, credits
+// nobody" exactly as production does, or the picker's Household row would look
+// right in the mock and be wrong in the app.
+describe('MockHouseholdContext household credit mode', () => {
+  const captureHousehold = () => renderHook(() => useHousehold(), { wrapper });
+  const pointsOf = (result: ReturnType<typeof captureHousehold>['result'], uid: string) =>
+    result.current.members.find((m) => m.uid === uid)!.points;
+
+  /** Seeded fixture: h4 = 'Homemade Meal', `creditMode: 'household'`, 20 pts. */
+  const HOUSEHOLD_HABIT = 'h4';
+
+  it('a tap writes NO completedBy entry and still pays the pool', async () => {
+    const { result } = captureHousehold();
+    const today = getLocalDateString();
+    const poolBefore = result.current.totalPoints;
+    const partnerBefore = { ...pointsOf(result, 'test-partner-id') };
+
+    await act(async () => {
+      await result.current.toggleHabit(HOUSEHOLD_HABIT, 'up');
+    });
+
+    const habit = result.current.habits.find((h) => h.id === HOUSEHOLD_HABIT)!;
+    expect(habit.completedBy?.[today]).toBeUndefined();
+    expect(habit.completedDates).toContain(today);
+    expect(result.current.totalPoints).toBe(poolBefore + 20);
+    expect(pointsOf(result, 'test-partner-id')).toEqual(partnerBefore);
+  });
+
+  it('is pool-neutral across up → down, debiting no member', async () => {
+    const { result } = captureHousehold();
+    const poolBefore = result.current.totalPoints;
+    const partnerBefore = { ...pointsOf(result, 'test-partner-id') };
+
+    await act(async () => {
+      await result.current.toggleHabit(HOUSEHOLD_HABIT, 'up');
+    });
+    await act(async () => {
+      await result.current.toggleHabit(HOUSEHOLD_HABIT, 'down');
+    });
+
+    expect(result.current.totalPoints).toBe(poolBefore);
+    expect(pointsOf(result, 'test-partner-id')).toEqual(partnerBefore);
+  });
+
+  it('creditHouseholdCompletion works on a MEMBERS habit as a one-off', async () => {
+    const { result } = captureHousehold();
+    const today = getLocalDateString();
+    const poolBefore = result.current.totalPoints;
+
+    await act(async () => {
+      // h2 = 'Exercise 30min', a shared threshold habit with no creditMode.
+      await result.current.creditHouseholdCompletion('h2');
+    });
+
+    const habit = result.current.habits.find((h) => h.id === 'h2')!;
+    expect(habit.completedBy?.[today]).toBeUndefined();
+    expect(result.current.totalPoints).toBeGreaterThan(poolBefore);
+
+    await act(async () => {
+      await result.current.uncreditHouseholdCompletion('h2');
+    });
+    expect(result.current.totalPoints).toBe(poolBefore);
+  });
+
+  it('an explicit member pick still overrides the household default', async () => {
+    const { result } = captureHousehold();
+    const today = getLocalDateString();
+
+    await act(async () => {
+      await result.current.creditHabitCompletion(HOUSEHOLD_HABIT, ['test-partner-id']);
+    });
+
+    const habit = result.current.habits.find((h) => h.id === HOUSEHOLD_HABIT)!;
+    expect(habit.completedBy?.[today]).toEqual({ 'test-partner-id': 1 });
+  });
+});

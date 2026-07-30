@@ -90,6 +90,12 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
   // EDIT mode is a single-select (0 or 1 kid). We keep both states and read only
   // the relevant one at save time, so neither leaks into the other mode.
   const [assignedKidUids, setAssignedKidUids] = useState<string[]>([]);
+  // Household credit mode. Absent on every existing habit ⇒ 'members' ⇒ today's
+  // behavior, so the control seeds to 'members' and only writes something new
+  // once someone picks 'household'.
+  const [creditMode, setCreditMode] = useState<'members' | 'household'>(
+    () => editingHabit?.creditMode ?? 'members',
+  );
   // Pre-seed the EDIT single-select ONLY when the habit's existing assignee is
   // STILL a managed kid. A stale uid (the kid was removed, or the field points at
   // a non-kid) must not pre-select a now-absent chip — it would let the save path
@@ -145,6 +151,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       setReminder(getHabitReminder(currentUser?.notificationPreferences, editingHabit.id));
       setEditAssignedUid(seedEditAssignedUid(editingHabit));
       setAssignedKidUids([]);
+      setCreditMode(editingHabit.creditMode ?? 'members');
     } else {
       // Reset defaults
       setTitle('');
@@ -160,6 +167,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       setReminder(null);
       setEditAssignedUid(undefined);
       setAssignedKidUids([]);
+      setCreditMode('members');
     }
   }
 
@@ -281,6 +289,15 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
     }
   };
 
+  // Household credit is meaningless on an ASSIGNED chore: its points already
+  // route to the assignee's own member doc and bypass the household pool
+  // entirely (see `isHouseholdCreditHabit`). Hide the control — and never write
+  // the field — whenever this save will produce a chore.
+  const willBeAssignedChore = editingHabit
+    ? !!(showAssignControl ? editAssignedUid : editingHabit.assignedTo)
+    : showAssignControl && assignedKidUids.length >= 1;
+  const showCreditControl = !willBeAssignedChore;
+
   const handleSave = async () => {
     if (!title || !basePoints || !targetCount || isSaving) return;
 
@@ -337,6 +354,14 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       // key entirely (addHabit's addDoc rejects an explicit `undefined` value;
       // the automations UI isn't shown in create mode anyway).
       ...(editingHabit ? { triggers } : {}),
+      // Household credit mode. EDIT always writes the live value so flipping
+      // BACK to 'members' sticks (updateHabit's whitelist drops `undefined`, not
+      // an explicit value). CREATE omits the key unless it is actually
+      // 'household', so a new members habit writes nothing new — addDoc rejects
+      // an explicit `undefined` anyway. A chore never carries it at all.
+      ...(showCreditControl && (editingHabit || creditMode === 'household')
+        ? { creditMode }
+        : {}),
     };
 
     setIsSaving(true);
@@ -554,6 +579,30 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {/* Household credit mode — who a completion credits. Hidden entirely for
+            an assigned chore, whose points already route to the assignee. */}
+        {showCreditControl && (
+          <div>
+            <span className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase">
+              Credit
+            </span>
+            <p className="text-xxs text-brand-400 dark:text-brand-400 mt-0.5 mb-2">
+              Household habits award the household total. Nobody earns individual points.
+            </p>
+            <SegmentedControl
+              tone="warm"
+              name="Credit"
+              disabled={isSaving}
+              value={creditMode}
+              onChange={setCreditMode}
+              options={[
+                { value: 'members', label: 'Individuals' },
+                { value: 'household', label: 'Household' },
+              ]}
+            />
           </div>
         )}
 

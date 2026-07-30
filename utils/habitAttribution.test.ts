@@ -20,6 +20,7 @@ import {
   householdPeriodPoints,
   householdPeriodPointsDelta,
   householdPointsForHabitOnDate,
+  isHouseholdCreditHabit,
   legacyPeriodPoints,
   memberCompletionCount,
   memberCompletionDates,
@@ -1623,5 +1624,69 @@ describe('habitAttribution — periodPointsMove (per-date gating, one decomposit
     expect(move.household).toEqual({ total: 20, weekly: 0, daily: 0 });
     expect(move.perMember.get(PAUL)).toEqual({ total: 10, weekly: 0, daily: 0 });
     expect(move.perMember.get(JEN)).toEqual({ total: 10, weekly: 0, daily: 0 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Household credit mode
+// ---------------------------------------------------------------------------
+describe('isHouseholdCreditHabit', () => {
+  it('is false for an absent creditMode — every existing habit', () => {
+    expect(isHouseholdCreditHabit(habit())).toBe(false);
+  });
+
+  it('is false for an explicit "members"', () => {
+    expect(isHouseholdCreditHabit(habit({ creditMode: 'members' }))).toBe(false);
+  });
+
+  it('is true for "household" on an unassigned habit', () => {
+    expect(isHouseholdCreditHabit(habit({ creditMode: 'household' }))).toBe(true);
+  });
+
+  it('is false on an ASSIGNED chore — its points bypass the pool entirely', () => {
+    expect(
+      isHouseholdCreditHabit(habit({ creditMode: 'household', assignedTo: 'kid_leo' })),
+    ).toBe(false);
+  });
+});
+
+describe('household credit scores through the UNATTRIBUTED path (no new scorer)', () => {
+  // 🏁 The mechanism: a household completion is simply a completion with no
+  // `completedBy` entry — which is precisely what the grandfathering term
+  // already scores. These assertions are about the SCORER, not the flag: the
+  // flag only decides whether a write path records attribution.
+  it('pays the pool one award at the HABIT’s own flame and credits nobody', () => {
+    const h = habit({
+      creditMode: 'household',
+      count: 1,
+      completedDates: [d(0)],
+    });
+    expect(unattributedPointsForHabitOnDate(h, d(0), d(0))).toBe(10);
+    expect(householdPointsForHabitOnDate(h, d(0), d(0))).toBe(10);
+    expect(calculateMemberPointsForDate([h], PAUL, d(0), d(0))).toBe(0);
+    expect(calculateMemberPointsForDate([h], JEN, d(0), d(0))).toBe(0);
+  });
+
+  it('holds household = Σ members + unattributed on a MIXED day', () => {
+    // One household unit alongside one member override on the same date.
+    const h = habit({
+      creditMode: 'household',
+      count: 2,
+      completedDates: [d(0)],
+      completedBy: { [d(0)]: { [JEN]: 1 } },
+    });
+    const decomposed = decomposeDayPoints([h], [PAUL, JEN], d(0), undefined, d(0));
+    expect(decomposed.byMember[JEN]).toBe(10);
+    expect(decomposed.byMember[PAUL]).toBe(0);
+    expect(decomposed.unattributed).toBe(10);
+    expect(decomposed.household).toBe(20);
+  });
+
+  it('uses the habit’s flame, not a member’s — a long streak still pays 2.0x', () => {
+    // Seven consecutive days: the HABIT is at 2.0x, and nobody has a personal
+    // chain at all. That is the locked answer for a household award.
+    const dates = [0, 1, 2, 3, 4, 5, 6].map(d);
+    const h = habit({ creditMode: 'household', count: 1, completedDates: dates });
+    expect(unattributedPointsForHabitOnDate(h, d(6), d(6))).toBe(20);
   });
 });

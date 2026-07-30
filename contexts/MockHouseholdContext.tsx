@@ -19,6 +19,7 @@ import {
   attributionReversalForDates,
   habitFeedsMemberAttribution,
   householdPeriodPointsDelta,
+  isHouseholdCreditHabit,
   legacyPeriodPoints,
   memberCompletionCount,
   memberPeriodPointsDelta,
@@ -404,6 +405,18 @@ const SEED_HABITS: Habit[] = [
     basePoints: 5, scoringType: 'threshold', period: 'daily', targetCount: 1,
     totalCount: 0, count: 0, completedDates: [], streakDays: 0,
     assignedTo: 'kid_leo', isShared: false,
+    createdBy: 'test-user-id', lastUpdated: new Date().toISOString()
+  },
+  // Household credit mode Test-Mode harness: a habit whose completions credit
+  // the HOUSEHOLD and nobody individually, so the picker's Household row (which
+  // sorts FIRST here), the house badge and the editor's Credit control are all
+  // walkable without setting anything up first. Seeded untouched — tap the row
+  // and the points land on the pool with `completedBy` still empty.
+  {
+    id: 'h4', title: 'Homemade Meal', category: 'Home', type: 'positive',
+    basePoints: 20, scoringType: 'threshold', period: 'daily', targetCount: 1,
+    totalCount: 0, count: 0, completedDates: [], streakDays: 0,
+    creditMode: 'household',
     createdBy: 'test-user-id', lastUpdated: new Date().toISOString()
   },
 ];
@@ -1940,13 +1953,21 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     // whoever STORED attribution records (`resolveReversalSources`), not from
     // whoever `assignedTo` names today — a reassignment between the up-tap and
     // the down-tap would otherwise leave the original credit stranded.
+    //
+    // 🏁 Household credit parity (`Habit.creditMode === 'household'`): NO actor,
+    // so no moves in either direction. The completion is deliberately
+    // unattributed and scores through the same unattributed path production
+    // uses — one award at the habit's own flame, to the pool, to nobody.
     const toggleDate = getLocalDateString();
+    const householdCredit = isHouseholdCreditHabit(habit);
     const attributedTo = habit.assignedTo ?? MOCK_USER_UID;
     const attributionMoves: { memberId: string; delta: number }[] =
-      direction === 'up'
-        ? [{ memberId: attributedTo, delta: 1 }]
-        : resolveReversalSources(effectiveHabit, attributedTo, toggleDate, 1)
-            .map(source => ({ memberId: source.memberId, delta: -source.units }));
+      householdCredit
+        ? []
+        : direction === 'up'
+          ? [{ memberId: attributedTo, delta: 1 }]
+          : resolveReversalSources(effectiveHabit, attributedTo, toggleDate, 1)
+              .map(source => ({ memberId: source.memberId, delta: -source.units }));
     let habitAfter: Habit = { ...effectiveHabit, ...result.updatedHabit };
     for (const move of attributionMoves) {
       habitAfter = withAttributionDelta(habitAfter, toggleDate, move.memberId, move.delta);
@@ -1964,7 +1985,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     // not the habit's. An assigned chore (Plan 080c parity: pays its ASSIGNEE,
     // never the pool) and a grandfathered down-toggle keep `result.pointsChange`.
     const togglePoolDelta =
-      attributionMoves.length > 0 && habitFeedsMemberAttribution(habit)
+      (attributionMoves.length > 0 || householdCredit) && habitFeedsMemberAttribution(habit)
         ? householdPeriodPointsDelta(effectiveHabit, habitAfter, toggleDate, toggleDate)
         : result.pointsChange;
     creditHabitPool(habit, {
@@ -2060,13 +2081,13 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
    * OWN streak multiplier, and the pool delta is a before/after difference of
    * the unchanged household scorer.
    */
-  const creditHabitCompletion = useCallback(async (
+  const creditCompletion = useCallback(async (
     habitId: string,
     memberIds: string[],
     date?: string,
   ) => {
     const habit = habits.find(h => h.id === habitId);
-    if (!habit || memberIds.length === 0 || habit.archivedAt) return;
+    if (!habit || habit.archivedAt) return;
 
     const today = getLocalDateString();
     const targetDate = date ?? today;
@@ -2074,7 +2095,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     const inLivePeriod =
       habitPeriodStart(habit.period, targetDate) === habitPeriodStart(habit.period, today);
     const liveCount = isStale ? 0 : habit.count;
-    const addedUnits = memberIds.length;
+    // One unit per credited member — or a single unattributed unit for a
+    // household credit (an empty member set), which names nobody.
+    const addedUnits = Math.max(memberIds.length, 1);
     const target = Math.max(habit.targetCount, 1);
     const periodUnits = inLivePeriod
       ? liveCount
@@ -2130,13 +2153,32 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Completion credited');
   }, [habits, creditMemberPoints]);
 
+  const creditHabitCompletion = useCallback(async (
+    habitId: string,
+    memberIds: string[],
+    date?: string,
+  ) => {
+    // An empty set is a caller mistake, not a household credit (production
+    // parity) — `creditHouseholdCompletion` is the explicit door.
+    if (memberIds.length === 0) return;
+    await creditCompletion(habitId, memberIds, date);
+  }, [creditCompletion]);
+
+  /** Household credit mode parity — one completion to the pool, to nobody. */
+  const creditHouseholdCompletion = useCallback(async (habitId: string, date?: string) => {
+    await creditCompletion(habitId, [], date);
+  }, [creditCompletion]);
+
   /**
    * Per-member points (stage 1) parity — un-credit ONE of `memberId`'s
    * completions. A no-op on an unattributed (pre-feature) completion.
+   *
+   * `memberId === null` is the HOUSEHOLD un-credit: it takes back an
+   * unattributed unit, debiting nobody and leaving every member's credit alone.
    */
-  const uncreditHabitCompletion = useCallback(async (
+  const uncreditCompletion = useCallback(async (
     habitId: string,
-    memberId: string,
+    memberId: string | null,
     date?: string,
   ) => {
     const habit = habits.find(h => h.id === habitId);
@@ -2144,13 +2186,18 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
 
     const today = getLocalDateString();
     const targetDate = date ?? today;
-    if (memberCompletionCount(habit, memberId, targetDate) <= 0) return;
+    if (memberId !== null && memberCompletionCount(habit, memberId, targetDate) <= 0) return;
+    // Household parity: with no attribution to take back, a recorded completion
+    // on the date is the only evidence a unit exists — see production.
+    if (memberId === null && !habit.completedDates.includes(targetDate)) return;
 
     const inLivePeriod =
       habitPeriodStart(habit.period, targetDate) === habitPeriodStart(habit.period, today) &&
       !isHabitStale(habit);
     const target = Math.max(habit.targetCount, 1);
-    const stripped = withAttributionDelta(habit, targetDate, memberId, -1);
+    const stripped = memberId === null
+      ? habit
+      : withAttributionDelta(habit, targetDate, memberId, -1);
     const nextCount = inLivePeriod ? Math.max(0, habit.count - 1) : habit.count;
     const stillCompleted = inLivePeriod
       ? habit.scoringType === 'incremental'
@@ -2190,7 +2237,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       : legacyPeriodPoints(after, targetDate, today) -
         legacyPeriodPoints(habit, targetDate, today);
     if (poolDelta !== 0) setTotalPoints(prev => prev + poolDelta);
-    if (habitFeedsMemberAttribution(habit)) {
+    if (habitFeedsMemberAttribution(habit) && memberId !== null) {
       creditMemberPoints(
         memberId,
         gate(memberPeriodPointsDelta(habit, after, memberId, targetDate, today)),
@@ -2198,6 +2245,19 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     }
     toast.success('Mock: Completion un-credited');
   }, [habits, creditMemberPoints]);
+
+  const uncreditHabitCompletion = useCallback(async (
+    habitId: string,
+    memberId: string,
+    date?: string,
+  ) => {
+    await uncreditCompletion(habitId, memberId, date);
+  }, [uncreditCompletion]);
+
+  /** Household credit mode parity — take back one unattributed completion. */
+  const uncreditHouseholdCompletion = useCallback(async (habitId: string, date?: string) => {
+    await uncreditCompletion(habitId, null, date);
+  }, [uncreditCompletion]);
 
   /**
    * Past-day attribution parity — log `count` units of `habitId` on the
@@ -2231,10 +2291,19 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     const submissionTimestamp = timestamp || new Date().toISOString();
     const submissionDate = submissionTimestamp.slice(0, 10);
     const today = getLocalDateString();
-    const actors = attributeTo && attributeTo.length > 0
+    // Production parity: an EXPLICIT empty array — or a `creditMode: 'household'`
+    // habit with no explicit set — is HOUSEHOLD credit. One unattributed bundle,
+    // one doc carrying `creditsHousehold` instead of `attributedTo`, and no
+    // `completedBy` write.
+    const explicitActors = attributeTo !== undefined;
+    const defaultActor = isHouseholdCreditHabit(habit) ? null : habit.assignedTo ?? MOCK_USER_UID;
+    const actors = explicitActors
       ? [...new Set(attributeTo)]
-      : [habit.assignedTo ?? MOCK_USER_UID];
-    const addedUnits = count * actors.length;
+      : defaultActor === null
+        ? []
+        : [defaultActor];
+    const householdCredit = actors.length === 0;
+    const addedUnits = count * (householdCredit ? 1 : actors.length);
     const inLivePeriod =
       habitPeriodStart(habit.period, submissionDate) === habitPeriodStart(habit.period, today) &&
       !isHabitStale(habit);
@@ -2288,22 +2357,29 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     });
 
     const feedsAttribution = habitFeedsMemberAttribution(habit);
+    const docActors: (string | null)[] = householdCredit ? [null] : actors;
     setHabitSubmissions(prev => [
       ...prev,
-      ...actors.map(actor => ({
+      ...docActors.map(actor => ({
         id: generateId(),
         habitId,
         habitTitle: habit.title,
         timestamp: submissionTimestamp,
         date: submissionDate,
+        // A household doc records the POOL's own move — production stores the
+        // same figure there, so a stored-figure reversal undoes exactly it.
+        pointsEarned: actor === null
+          ? (feedsAttribution
+              ? householdPeriodPointsDelta(habit, after, submissionDate, today)
+              : 0)
+          : feedsAttribution
+            ? memberPeriodPointsDelta(habit, after, actor, submissionDate, today)
+            : 0,
         count,
-        pointsEarned: feedsAttribution
-          ? memberPeriodPointsDelta(habit, after, actor, submissionDate, today)
-          : 0,
         streakDaysAtTime: after.streakDays,
         multiplierApplied: 1,
         createdBy: MOCK_USER_UID,
-        attributedTo: actor,
+        ...(actor !== null ? { attributedTo: actor } : { creditsHousehold: true }),
         createdAt: new Date().toISOString(),
         ...(note ? { note } : {}),
         ...(mood ? { mood } : {}),
@@ -2340,8 +2416,14 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     if (!habit) return;
 
     const today = getLocalDateString();
+    // A HOUSEHOLD doc credited nobody, so it takes nothing back from any member
+    // (production parity — the holder fallback would otherwise debit whoever
+    // holds a per-completion override on this date).
+    const isHouseholdSubmission = submission.creditsHousehold === true;
     const creditedUid = submission.attributedTo ?? submission.createdBy;
-    const moves = resolveReversalSources(habit, creditedUid, submission.date, submission.count);
+    const moves = isHouseholdSubmission
+      ? []
+      : resolveReversalSources(habit, creditedUid, submission.date, submission.count);
     const inLivePeriod =
       habitPeriodStart(habit.period, submission.date) === habitPeriodStart(habit.period, today) &&
       !isHabitStale(habit);
@@ -2389,7 +2471,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     const feedsAttribution = habitFeedsMemberAttribution(habit);
     // An ATTRIBUTED doc reverses through the attribution-bounded path only —
     // never through its stored `pointsEarned` (production's A2 rule).
-    const attributed = submission.attributedTo != null || moves.length > 0;
+    const attributed =
+      isHouseholdSubmission || submission.attributedTo != null || moves.length > 0;
     const poolDelta = feedsAttribution && attributed
       ? householdPeriodPointsDelta(habit, after, submission.date, today)
       : -submission.pointsEarned;
@@ -3463,6 +3546,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     resetHabitDay: noOp,
     creditHabitCompletion,
     uncreditHabitCompletion,
+    creditHouseholdCompletion,
+    uncreditHouseholdCompletion,
     updateHabitSubmission: noOp,
     deleteHabitSubmission,
     getHabitSubmissions,

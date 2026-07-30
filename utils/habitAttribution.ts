@@ -840,6 +840,27 @@ export const memberPeriodPointsDelta = (
 export const habitFeedsMemberAttribution = (habit: Pick<Habit, 'assignedTo'>): boolean =>
   !habit.assignedTo;
 
+/**
+ * Does a completion of this habit credit the HOUSEHOLD and nobody individually?
+ *
+ * 🏁 HOUSEHOLD CREDIT IS THE UNATTRIBUTED PATH — there is no second scorer. A
+ * `creditMode: 'household'` completion writes NO `completedBy` entry, so
+ * `unattributedPointsForHabitOnDate` above scores it exactly as it has always
+ * scored a pre-attribution completion: ONE award at the habit's OWN flame, paid
+ * to the pool, credited to nobody. Everything downstream — the reversal
+ * (`attributionReversalForDates`), the recompute (`computeHouseholdPointsSync`),
+ * the decomposition (`decomposeDayPoints`) — already handles that shape.
+ *
+ * An ASSIGNED chore is excluded on purpose: its points route to the assignee's
+ * own member doc and never touch the pool (`habitPointsTargets`), so there is no
+ * household award for a mode to redirect. `creditMode` is simply inert there,
+ * and the habit editor hides the control for a chore rather than offering a
+ * setting that would do nothing.
+ */
+export const isHouseholdCreditHabit = (
+  habit: Pick<Habit, 'assignedTo' | 'creditMode'>,
+): boolean => !habit.assignedTo && habit.creditMode === 'household';
+
 /** Signed points `memberId` earned from ALL habits' attribution on one date. */
 export const calculateMemberPointsForDate = (
   habits: Habit[],

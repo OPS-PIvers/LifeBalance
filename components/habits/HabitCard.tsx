@@ -20,6 +20,7 @@ import { getMultiplier, signedHabitPoints, isHabitPaused, isHabitStale } from '@
 import {
   attributionFingerprint,
   habitFeedsMemberAttribution,
+  isHouseholdCreditHabit,
   memberFrozenDates,
   memberMostRecentUnitDateInPeriod,
   memberUnitsForPeriod,
@@ -27,6 +28,7 @@ import {
 import {
   LONG_PRESS_MS,
   LONG_PRESS_SLOP,
+  householdUndoDateInPeriod,
   rowCompletionSegments,
   sameHabitRowMemberContext,
   type HabitRowMemberContext,
@@ -53,6 +55,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
   const {
     toggleHabit, deleteHabit, archiveHabit, unarchiveHabit, resetHabit, setHabitPause,
     activeChallenge, creditHabitCompletion, uncreditHabitCompletion,
+    creditHouseholdCompletion, uncreditHouseholdCompletion,
   } = useGamification();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -165,6 +168,20 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
       }))
     : [];
 
+  // --- Household credit ------------------------------------------------------
+  // Checked when the period holds a completion NOBODY is attributed for — which
+  // is exactly the unit `uncreditHouseholdCompletion` would take back
+  // (`unattributedUnitsOnDate` computes the same `max(count − attributed, 0)`).
+  // A grandfathered row therefore reads as household-credited, which is honest:
+  // its points already go to the pool and to nobody.
+  const householdCredited = isActive && count - attributedUnits > 0;
+  // The habit's OWN default decides which row the picker leads with.
+  const householdFirst = isHouseholdCreditHabit(habit);
+  // The house badge is shown only on a habit that DECLARES household credit —
+  // never on a merely grandfathered row, which has no attribution for the same
+  // reason but was never a deliberate choice, and whose look must not change.
+  const showHouseholdBadge = householdFirst && householdCredited;
+
   const toggleRef = useRef<HTMLDivElement>(null);
   const longPressTimerRef = useRef<number | null>(null);
   const longPressOriginRef = useRef<{ x: number; y: number } | null>(null);
@@ -192,7 +209,8 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
     // exists with two or more adults (see HabitAttributionPicker), so counting
     // it in a single-adult household would flip placement for a row that had
     // room above after all.
-    const rows = pickerMembers.length + (pickerMembers.length > 1 ? 1 : 0);
+    // + 1 for the Household row, which every habit gets.
+    const rows = pickerMembers.length + (pickerMembers.length > 1 ? 1 : 0) + 1;
     const estimatedHeight = rows * 44 + 16;
     setPickerPlacement(rect && rect.top < estimatedHeight ? 'below' : 'above');
     setIsPickerOpen(true);
@@ -246,6 +264,18 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
     // picker's own `credited` derivation never allows.
     const targetDate = memberMostRecentUnitDateInPeriod(habit, memberId, today) ?? today;
     void uncreditHabitCompletion(habit.id, memberId, targetDate).catch(() => {});
+  };
+
+  const handleCreditHousehold = () => {
+    haptic('success');
+    void creditHouseholdCompletion(habit.id).catch(() => {});
+  };
+
+  const handleUncreditHousehold = () => {
+    haptic('light');
+    // Period-scoped checkmark, date-scoped mutation — see
+    // householdUndoDateInPeriod. Daily habits resolve straight to today.
+    void uncreditHouseholdCompletion(habit.id, householdUndoDateInPeriod(habit, today)).catch(() => {});
   };
 
   // Grouped-flat ROW: borderless and hairline-separated by the parent
@@ -500,7 +530,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
                 exact number lives in the habit's log ("View Log" → Current
                 Streak). The multiplier it earns is still visible: it is baked
                 into the points badge above. */}
-            {segments.length > 0 && (
+            {(segments.length > 0 || showHouseholdBadge) && (
               <HabitDoneByAvatars
                 entries={segments}
                 streakUnit={isWeekly ? 'week' : 'day'}
@@ -508,6 +538,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
                 // are trying to STOP would be a celebration of it. The pill
                 // this replaced carried the same gate.
                 showStreakRings={isPositive}
+                showHousehold={showHouseholdBadge}
               />
             )}
 
@@ -573,6 +604,10 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, onGripPointerDo
             placement={pickerPlacement}
             onCredit={handleCreditMembers}
             onUncredit={handleUncreditMember}
+            householdCredited={householdCredited}
+            householdFirst={householdFirst}
+            onCreditHousehold={handleCreditHousehold}
+            onUncreditHousehold={handleUncreditHousehold}
           />
         )}
       </ListRow>

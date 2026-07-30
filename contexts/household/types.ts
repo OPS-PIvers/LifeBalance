@@ -419,6 +419,17 @@ export interface HouseholdContextType {
    *  (pre-feature) completion. */
   uncreditHabitCompletion: (habitId: string, memberId: string, date?: string) => Promise<void>;
 
+  // Household credit mode — the attribution layer's "credits nobody" twins.
+  /** Credit ONE completion on `date` (default today) to the HOUSEHOLD and to
+   *  nobody individually. Writes no `completedBy` entry, so the completion
+   *  scores through the unattributed path: one award at the habit's OWN flame,
+   *  paid to the pool. */
+  creditHouseholdCompletion: (habitId: string, date?: string) => Promise<void>;
+  /** Take back ONE unattributed completion on `date` (default today). No member
+   *  is debited (none was credited); the pool loses exactly what the
+   *  unattributed remainder contributed. */
+  uncreditHouseholdCompletion: (habitId: string, date?: string) => Promise<void>;
+
   // Challenge & Reward Actions
   updateChallenge: (challenge: Challenge) => Promise<void>;
   // Plan 080e — create a NEW family challenge, decoupled from yearly goals (no
@@ -667,6 +678,7 @@ export type GamificationContextValue = Pick<HouseholdContextType,
   | 'addHabit' | 'updateHabit' | 'deleteHabit' | 'archiveHabit' | 'unarchiveHabit' | 'reorderHabits' | 'toggleHabit' | 'resetHabit' | 'setHabitPause' | 'updateHabitCategories'
   | 'addHabitSubmission' | 'updateHabitSubmission' | 'deleteHabitSubmission' | 'getHabitSubmissions'
   | 'resetHabitDay' | 'creditHabitCompletion' | 'uncreditHabitCompletion'
+  | 'creditHouseholdCompletion' | 'uncreditHouseholdCompletion'
   | 'updateChallenge' | 'addChallenge' | 'markChallengeComplete' | 'redeemReward'
   | 'addReward' | 'updateReward' | 'deleteReward'
   | 'requestRedemption' | 'approveRedemption' | 'denyRedemption'

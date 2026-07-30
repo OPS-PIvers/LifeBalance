@@ -89,6 +89,7 @@ import {
   memberMostRecentUnitDateInPeriod,
   memberPeriodPointsDelta,
   householdPeriodPointsDelta,
+  unattributedPeriodPoints,
   withAttributionDelta,
 } from '@/utils/habitAttribution';
 // The mocked updateDoc — updateHabit writes via updateDoc(ref, data), not a batch,
@@ -3189,5 +3190,347 @@ describe('useHabitActions — the awarding date, not the triggering date (F1 + F
     expect(bucketOf(householdUpdate(), 'points.daily')).toBe(10);
     expectPoolEqualsMembers();
     expect(commitCount).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Household credit mode (`Habit.creditMode === 'household'`)
+//
+// 🏁 THE MECHANISM UNDER TEST: a household completion writes NO `completedBy`
+// entry, so it scores through the EXISTING unattributed path — one award at the
+// habit's own flame, paid to the pool, credited to nobody. These tests pin the
+// invariant `household = Σ members + unattributed` on both sides of it.
+// ---------------------------------------------------------------------------
+describe('useHabitActions — household credit mode', () => {
+  // Wednesday, mid-week: daily/weekly/total all move, so a missing bucket is
+  // visible. Anchored to its own week, never to an offset from `new Date()`.
+  const NOW = new Date('2026-07-15T09:00:00');
+  const TODAY = '2026-07-15';
+
+  const roster = (...uids: string[]) => uids.map(uid => ({ uid })) as HouseholdMember[];
+  const memberUpdate = (uid: string) =>
+    capturedUpdates.find(u => u.ref.__path === `${householdPath}/members/${uid}`);
+  const memberWrites = () => capturedUpdates.filter(u => u.ref.__path.includes('/members/'));
+  const bucketOf = (u: CapturedUpdate | undefined, bucket: string) =>
+    (u?.data[bucket] as { __increment: number } | undefined)?.__increment ?? 0;
+  /** Every `completedBy.*` key this batch wrote to the habit doc. */
+  const attributionKeys = () =>
+    Object.keys(habitUpdate()?.data ?? {}).filter(k => k.startsWith('completedBy'));
+
+  /** Daily incremental, 10 pts, crediting the HOUSEHOLD. Not stale at NOW. */
+  const householdHabit = (overrides: Partial<Habit> = {}) => baseHabit({
+    creditMode: 'household',
+    basePoints: 10,
+    scoringType: 'incremental',
+    period: 'daily',
+    targetCount: 1,
+    lastUpdated: '2026-07-15T08:00:00',
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    capturedDeletes.length = 0;
+    commitCount = 0;
+    nextCommitError = null;
+    incrementMock.mockClear();
+    updateDocMock.mockClear();
+    getDocsMock.mockReset();
+    getDocMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('toggleHabit: a household completion writes NO completedBy and moves ONLY the pool', async () => {
+    vi.useFakeTimers({ now: NOW });
+    const habit = householdHabit({ count: 0, totalCount: 0, completedDates: [] });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'up');
+    });
+
+    // Nobody is credited — that IS household credit.
+    expect(attributionKeys()).toEqual([]);
+    expect(memberWrites()).toHaveLength(0);
+
+    // One award at the habit's own flame, to the pool.
+    expect(bucketOf(householdUpdate(), 'points.total')).toBe(10);
+    expect(bucketOf(householdUpdate(), 'points.daily')).toBe(10);
+    expect(bucketOf(householdUpdate(), 'points.weekly')).toBe(10);
+    expect(commitCount).toBe(1);
+  });
+
+  it('toggleHabit: the pool delta EQUALS the unattributed remainder for the period', async () => {
+    // 🏁 The invariant, stated as an assert, on the case that can actually break
+    // it: a period that ALREADY carries a member's per-completion override. The
+    // household unit must pay the pool exactly the unattributed remainder's own
+    // move — not the sum, and not a second copy of Jen's award.
+    vi.useFakeTimers({ now: NOW });
+    const habit = householdHabit({
+      count: 1,
+      totalCount: 1,
+      completedDates: [TODAY],
+      completedBy: { [TODAY]: { 'jen-uid': 1 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'up');
+    });
+
+    // The state this batch actually writes: one more unit, same attribution.
+    const after = { ...habit, count: 2, totalCount: 2, completedDates: [TODAY] };
+    const expectedUnattributedDelta =
+      unattributedPeriodPoints(after, TODAY, TODAY) -
+      unattributedPeriodPoints(habit, TODAY, TODAY);
+
+    expect(expectedUnattributedDelta).toBe(10);
+    expect(bucketOf(householdUpdate(), 'points.total')).toBe(expectedUnattributedDelta);
+    // household = Σ members + unattributed, and Σ members moved by nothing.
+    expect(memberWrites()).toHaveLength(0);
+    expect(attributionKeys()).toEqual([]);
+  });
+
+  it('toggleHabit down: takes back the unattributed unit, never a member’s override', async () => {
+    // 🛡️ Without the household guard, `reversalMoves` falls back to whoever
+    // HOLDS attribution on the date — so an ordinary down-tap would debit Jen
+    // for a unit it never touched, and `points.total` never self-heals.
+    vi.useFakeTimers({ now: NOW });
+    const habit = householdHabit({
+      count: 2,
+      totalCount: 2,
+      completedDates: [TODAY],
+      completedBy: { [TODAY]: { 'jen-uid': 1 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'down');
+    });
+
+    expect(memberWrites()).toHaveLength(0);
+    expect(attributionKeys()).toEqual([]);
+    expect(bucketOf(householdUpdate(), 'points.total')).toBe(-10);
+    expect(commitCount).toBe(1);
+  });
+
+  it('creditHabitCompletion: a member override on a household habit pays the pool ONCE', async () => {
+    vi.useFakeTimers({ now: NOW });
+    const habit = householdHabit({ count: 0, totalCount: 0, completedDates: [] });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.creditHabitCompletion('h1', ['jen-uid']);
+    });
+
+    // The explicit pick wins over the habit's default: Jen IS credited.
+    expect(habitUpdate()!.data[`completedBy.${TODAY}.jen-uid`]).toEqual({ __increment: 1 });
+    expect(bucketOf(memberUpdate('jen-uid'), 'points.total')).toBe(10);
+    // …and the pool receives her award ONCE — the unattributed remainder is 0
+    // because the single unit is now attributed.
+    expect(bucketOf(householdUpdate(), 'points.total')).toBe(10);
+    for (const bucket of ['points.total', 'points.weekly', 'points.daily']) {
+      expect(memberWrites().reduce((sum, u) => sum + bucketOf(u, bucket), 0)).toBe(
+        bucketOf(householdUpdate(), bucket),
+      );
+    }
+    expect(commitCount).toBe(1);
+  });
+
+  it('creditHouseholdCompletion: one unattributed unit, pool only', async () => {
+    vi.useFakeTimers({ now: NOW });
+    const habit = baseHabit({
+      basePoints: 10,
+      scoringType: 'incremental',
+      count: 0,
+      totalCount: 0,
+      completedDates: [],
+      lastUpdated: '2026-07-15T08:00:00',
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      // A one-off team effort on a habit whose DEFAULT is member credit.
+      await result.current.creditHouseholdCompletion('h1');
+    });
+
+    expect(attributionKeys()).toEqual([]);
+    expect(memberWrites()).toHaveLength(0);
+    expect(habitUpdate()!.data['completedDates']).toEqual({ __arrayUnion: [TODAY] });
+    expect(bucketOf(householdUpdate(), 'points.total')).toBe(10);
+  });
+
+  it('uncreditHouseholdCompletion: reverses the pool and debits nobody', async () => {
+    vi.useFakeTimers({ now: NOW });
+    const habit = baseHabit({
+      basePoints: 10,
+      scoringType: 'incremental',
+      count: 1,
+      totalCount: 1,
+      completedDates: [TODAY],
+      lastUpdated: '2026-07-15T08:00:00',
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.uncreditHouseholdCompletion('h1');
+    });
+
+    expect(memberWrites()).toHaveLength(0);
+    expect(attributionKeys()).toEqual([]);
+    expect(bucketOf(householdUpdate(), 'points.total')).toBe(-10);
+  });
+
+  it('addHabitSubmission with an empty attributeTo logs ONE unattributed doc', async () => {
+    vi.useFakeTimers({ now: NOW });
+    const habit = baseHabit({
+      basePoints: 10,
+      scoringType: 'incremental',
+      count: 0,
+      totalCount: 0,
+      completedDates: [],
+      lastUpdated: '2026-07-15T08:00:00',
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.addHabitSubmission('h1', 1, `${TODAY}T12:00:00`, undefined, undefined, []);
+    });
+
+    expect(capturedSets).toHaveLength(1);
+    const submissionDoc = capturedSets[0]!.data;
+    expect(submissionDoc['attributedTo']).toBeUndefined();
+    expect(submissionDoc['creditsHousehold']).toBe(true);
+    // The doc records the POOL's own move, so a stored-figure reversal undoes
+    // exactly what was credited.
+    expect(submissionDoc['pointsEarned']).toBe(bucketOf(householdUpdate(), 'points.total'));
+    expect(attributionKeys()).toEqual([]);
+    expect(memberWrites()).toHaveLength(0);
+  });
+
+  it('deleteHabitSubmission: a household doc debits nobody, even with an override on the date', async () => {
+    vi.useFakeTimers({ now: NOW });
+    const habit = baseHabit({
+      basePoints: 10,
+      scoringType: 'incremental',
+      count: 2,
+      totalCount: 2,
+      completedDates: [TODAY],
+      completedBy: { [TODAY]: { 'jen-uid': 1 } },
+      lastUpdated: '2026-07-15T08:00:00',
+    });
+    getDocMock.mockResolvedValue({
+      exists: () => true,
+      data: () => ({
+        habitId: 'h1', date: TODAY, count: 1, pointsEarned: 10,
+        createdBy: 'user1', creditsHousehold: true, createdAt: '2026-07-15T08:30:00',
+      }),
+    } as unknown as Awaited<ReturnType<typeof getDoc>>);
+    getDocsMock.mockResolvedValue(
+      { size: 2, empty: false, docs: [] } as unknown as Awaited<ReturnType<typeof getDocs>>,
+    );
+
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.deleteHabitSubmission('h1', 's1');
+    });
+
+    // 🛡️ `createdBy` is the OPERATOR, not a credit — deleting must not debit
+    // user1, and the holder fallback must not debit Jen either.
+    expect(memberWrites()).toHaveLength(0);
+    expect(attributionKeys()).toEqual([]);
+    expect(bucketOf(householdUpdate(), 'points.total')).toBe(-10);
+  });
+
+  it('an assignedTo chore ignores creditMode entirely', async () => {
+    vi.useFakeTimers({ now: NOW });
+    const habit = householdHabit({
+      assignedTo: 'kid_leo',
+      count: 0,
+      totalCount: 0,
+      completedDates: [],
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'kid_leo'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'up');
+    });
+
+    // Attribution is still recorded for the ASSIGNEE…
+    expect(habitUpdate()!.data[`completedBy.${TODAY}.kid_leo`]).toEqual({ __increment: 1 });
+    // …the points land on the kid's own doc at the legacy habit-level figure…
+    expect(bucketOf(memberUpdate('kid_leo'), 'points.total')).toBe(10);
+    // …and the shared household pool receives nothing at all.
+    expect(householdUpdate()).toBeUndefined();
+  });
+
+  it('updateHabit: changing creditMode writes the field and no points at all', async () => {
+    vi.useFakeTimers({ now: NOW });
+    const habit = householdHabit({
+      creditMode: 'members',
+      count: 1,
+      totalCount: 1,
+      completedDates: [TODAY],
+      completedBy: { [TODAY]: { 'jen-uid': 1 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.updateHabit({ ...habit, creditMode: 'household' });
+    });
+
+    const payload = updateDocMock.mock.calls[0]?.[1] as unknown as Record<string, unknown>;
+    expect(payload['creditMode']).toBe('household');
+    // No points move, and the existing attribution is not disturbed: flipping
+    // the mode is forward-looking only, and days already credited keep credit.
+    expect(capturedUpdates).toHaveLength(0);
+    expect(commitCount).toBe(0);
+    expect(Object.keys(payload).some(k => k.startsWith('points.'))).toBe(false);
+    expect(Object.keys(payload).some(k => k.startsWith('completedBy'))).toBe(false);
   });
 });

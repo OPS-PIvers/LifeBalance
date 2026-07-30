@@ -348,3 +348,72 @@ describe('HabitFormModal — per-habit reminder save path (F-HABITS-03)', () => 
     expect(screen.queryByRole('checkbox', { name: 'Remind me' })).not.toBeInTheDocument();
   });
 });
+
+// 🏁 Household credit mode — the Credit control on the habit editor.
+describe('HabitFormModal — Credit (household credit mode)', () => {
+  const mockAddHabit = vi.fn();
+  const mockUpdateHabit = vi.fn(() => Promise.resolve());
+  const mockOnClose = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (useGamification as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      addHabit: mockAddHabit,
+      updateHabit: mockUpdateHabit,
+      setHabitPause: vi.fn(() => Promise.resolve()),
+      habitCategories: [],
+      updateHabitCategories: vi.fn(),
+    });
+    (useHouseholdCore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ members: [] });
+    (useTodos as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ todos: [] });
+  });
+
+  const save = () => fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+  it('shows the control with its helper copy, defaulting to Individuals', () => {
+    render(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={baseHabit()} />);
+
+    expect(
+      screen.getByText('Household habits award the household total. Nobody earns individual points.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Individuals' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('seeds from the stored creditMode and persists a flip to household', async () => {
+    render(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={baseHabit()} />);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Household' }));
+    save();
+
+    await waitFor(() => expect(mockUpdateHabit).toHaveBeenCalledTimes(1));
+    const payload = (mockUpdateHabit.mock.calls as unknown[][])[0]![0] as Habit;
+    expect(payload.creditMode).toBe('household');
+  });
+
+  it('writes an explicit "members" when flipping BACK, so the change sticks', async () => {
+    render(
+      <HabitFormModal isOpen onClose={mockOnClose} editingHabit={baseHabit({ creditMode: 'household' })} />,
+    );
+    expect(screen.getByRole('radio', { name: 'Household' })).toHaveAttribute('aria-checked', 'true');
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Individuals' }));
+    save();
+
+    await waitFor(() => expect(mockUpdateHabit).toHaveBeenCalledTimes(1));
+    const payload = (mockUpdateHabit.mock.calls as unknown[][])[0]![0] as Habit;
+    // An explicit value, not `undefined` — updateHabit's whitelist drops
+    // undefined, which would leave the stored 'household' in place.
+    expect(payload.creditMode).toBe('members');
+  });
+
+  it('CREATE omits the key entirely for a plain members habit (no migration, nothing new written)', async () => {
+    render(<HabitFormModal isOpen onClose={mockOnClose} />);
+
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Homemade meal' } });
+    fireEvent.click(screen.getByRole('button', { name: /create habit/i }));
+
+    await waitFor(() => expect(mockAddHabit).toHaveBeenCalledTimes(1));
+    const payload = (mockAddHabit.mock.calls as unknown[][])[0]![0] as Habit;
+    expect('creditMode' in payload).toBe(false);
+  });
+});

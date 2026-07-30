@@ -827,6 +827,32 @@ export interface Habit {
   // crediting land in 080c. Absent on every existing habit (an unassigned habit).
   assignedTo?: string;
 
+  /**
+   * Household credit mode — WHO a completion of this habit credits.
+   *
+   * Absent (or `'members'`) ⇒ today's behavior byte-for-byte: a tap credits the
+   * tapper (or the assignee), each credited member earns a full award at THEIR
+   * OWN streak multiplier, and the household receives the SUM. That is right for
+   * "we each went for a run" and wrong for "we cooked dinner together", where one
+   * dinner would pay the household twice and grow two personal streaks.
+   *
+   * `'household'` ⇒ a completion writes NO `completedBy` entry at all. It then
+   * scores through the EXISTING unattributed (grandfathering) path in
+   * utils/habitAttribution.ts: ONE award at the habit's OWN flame, to the pool,
+   * to NOBODY. There is deliberately no new scorer — every reversal
+   * (`attributionReversalForDates`), recompute (`computeHouseholdPointsSync`)
+   * and decomposition (`decomposeDayPoints`) already handles an unattributed
+   * completion correctly, and household credit is exactly that.
+   *
+   * Never meaningful alongside `assignedTo`: an assigned chore's points already
+   * route to the assignee's own member doc and bypass the household pool, so
+   * `isHouseholdCreditHabit` requires `assignedTo` to be absent and the habit
+   * editor hides the control entirely for a chore.
+   *
+   * No migration: every existing habit reads as `'members'`.
+   */
+  creditMode?: 'members' | 'household';
+
   // Preset vs Custom tracking
   presetId?: string; // If from a preset, stores the preset ID
   isCustom?: boolean; // true = user-created, false/undefined = from preset
@@ -875,6 +901,20 @@ export interface HabitSubmission {
    * `resolveReversalSources`, to whatever `Habit.completedBy` actually records.
    */
   attributedTo?: string;
+  /**
+   * Household credit mode (`Habit.creditMode === 'household'`, or a one-off
+   * "Household" pick in the attribution picker): this log credits the HOUSEHOLD
+   * and nobody individually, so it deliberately carries NO `attributedTo`.
+   *
+   * 🛡️ It exists to tell a DELIBERATE household credit apart from a PRE-
+   * attribution (grandfathered) submission, which also has no `attributedTo`.
+   * The two must reverse differently: a grandfathered doc reverses at its stored
+   * `pointsEarned` (the only record of what it was credited), while a household
+   * doc reverses through the same before/after decomposition that credited it,
+   * so a threshold period's side-effect member awards move with it. Absent on
+   * every submission written before this field shipped.
+   */
+  creditsHousehold?: boolean;
   createdAt: string; // ISO timestamp
   updatedAt?: string; // ISO timestamp if edited
   // F-HABITS-06: optional lightweight journal attached to a completion.

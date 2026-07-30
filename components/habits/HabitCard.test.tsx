@@ -23,6 +23,8 @@ const { mockHouseholdContext } = vi.hoisted(() => ({
     resetHabit: vi.fn(),
     creditHabitCompletion: vi.fn(() => Promise.resolve()),
     uncreditHabitCompletion: vi.fn(() => Promise.resolve()),
+    creditHouseholdCompletion: vi.fn(() => Promise.resolve()),
+    uncreditHouseholdCompletion: vi.fn(() => Promise.resolve()),
     activeChallenge: null as unknown,
   }
 }));
@@ -73,6 +75,8 @@ vi.mock('lucide-react', () => ({
   MessageSquarePlus: () => <span data-testid="icon-message-square-plus" />,
   Archive: () => <span data-testid="icon-archive" />,
   ArchiveRestore: () => <span data-testid="icon-archive-restore" />,
+  // Household credit mode: HouseholdAvatar's house glyph (picker row + badge).
+  Home: () => <span data-testid="icon-home" />,
   Users: () => <span data-testid="icon-users" />,
   Check: () => <span data-testid="icon-check" />,
 }));
@@ -863,6 +867,71 @@ describe('HabitCard - attribution picker', () => {
     // daily habit (period === day) that is always today, i.e. TODAY here.
     expect(mockHouseholdContext.uncreditHabitCompletion).toHaveBeenCalledWith('h1', PAUL, TODAY);
     expect(mockHouseholdContext.creditHabitCompletion).not.toHaveBeenCalled();
+  });
+
+  // --- Household credit mode ------------------------------------------------
+  // The Household row is a THIRD meaning, not a rename of "Both of us": one
+  // award, to the pool, to nobody — versus N awards and a pool paid N times.
+  it('offers a Household row on EVERY habit, and it credits nobody', async () => {
+    const user = userEvent.setup();
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+
+    const household = screen.getByRole('menuitemcheckbox', { name: /^Household/ });
+    // Paul's single unit IS the day's only unit, so nothing is unattributed.
+    expect(household).toHaveAttribute('aria-checked', 'false');
+    await user.click(household);
+
+    expect(mockHouseholdContext.creditHouseholdCompletion).toHaveBeenCalledWith('h1');
+    expect(mockHouseholdContext.creditHabitCompletion).not.toHaveBeenCalled();
+    expect(mockHouseholdContext.toggleHabit).not.toHaveBeenCalled();
+  });
+
+  it('checks Household when the period holds a completion nobody is credited for', async () => {
+    const user = userEvent.setup();
+    // Two units, one of them Paul's → one unattributed unit remains.
+    render(
+      <HabitCard
+        habit={attributedHabit({ [PAUL]: 1 }, { count: 2, creditMode: 'household' })}
+        attribution={ROSTER}
+      />,
+    );
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+
+    const household = screen.getByRole('menuitemcheckbox', { name: /^Household/ });
+    expect(household).toHaveAttribute('aria-checked', 'true');
+    await user.click(household);
+
+    expect(mockHouseholdContext.uncreditHouseholdCompletion).toHaveBeenCalledWith('h1', TODAY);
+  });
+
+  it('sorts Household FIRST on a household habit and LAST on a members habit', async () => {
+    const user = userEvent.setup();
+    const openPicker = async () => {
+      await user.click(screen.getByLabelText('Options for Morning walk'));
+      await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+      return screen.getAllByRole('menuitemcheckbox').map(el => el.textContent ?? '');
+    };
+
+    const { unmount } = render(
+      <HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />,
+    );
+    const membersRows = await openPicker();
+    expect(membersRows[0]).not.toContain('Household');
+    expect(membersRows[membersRows.length - 1]).toContain('Household');
+    unmount();
+
+    render(
+      <HabitCard
+        habit={attributedHabit({ [PAUL]: 1 }, { creditMode: 'household' })}
+        attribution={ROSTER}
+      />,
+    );
+    expect((await openPicker())[0]).toContain('Household');
   });
 
   it('"Both of us" credits only whoever is not credited yet', async () => {
