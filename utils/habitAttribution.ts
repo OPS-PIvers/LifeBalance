@@ -1058,6 +1058,53 @@ export interface AttributionReversal {
 }
 
 /**
+ * The dates a WHOLE-PERIOD clear (`resetHabit`'s ×, and any other caller whose
+ * intent is "wipe this period") must hand to `attributionReversalForDates` —
+ * the completion dates it is stripping, PLUS the period's orphaned attributed
+ * days.
+ *
+ * 🛡️ WHY THE COMPLETION DATES ARE NOT ENOUGH (incremental side of the same
+ * root cause the threshold period-scoping fixed). An INCREMENTAL habit with
+ * `targetCount > 1` credits points — and records attribution — on EVERY tap,
+ * but only enters `completedDates` once the counter reaches the target. So a
+ * `targetCount: 3` habit sitting at 2/3 has attribution and member points for
+ * two taps and NO completion date at all: `datesToRemove` is empty, the
+ * per-member reversal produced nothing, and yet the pool was still debited
+ * `calculateResetPoints`' two units. Member and pool diverged permanently (the
+ * corrective sync only ever raises `points.total`), and the orphaned
+ * attribution kept counting toward that member's own streak. The same shortfall
+ * hits a weekly `targetCount: 3` habit at 3/3, where Mon/Wed are attributed but
+ * only Friday is a completion.
+ *
+ * So an incremental whole-period clear reverses the union. THRESHOLD habits are
+ * returned UNCHANGED: `attributionReversalForDates` already period-scopes them
+ * internally (stripping `attributedDatesInPeriod` itself), and a threshold
+ * period below target with no completion date at all still anchors on
+ * `anchorDate` exactly as it did before.
+ *
+ * 🛡️ ORDER IS LOAD-BEARING: the completion dates come FIRST. The incremental
+ * branch scores each date against the state left by the previous ones, and a
+ * weekly habit's unattributed remainder parks on the week's latest COMPLETED
+ * day — so stripping the orphans first would inflate that day's remainder by
+ * the units just removed and debit the pool for them twice.
+ *
+ * Single-DATE clears (`resetHabitDay`, `PointsBreakdownModal`) deliberately do
+ * NOT come through here: their intent is one day, not one period.
+ */
+export const wholePeriodClearDates = (
+  habit: Habit,
+  datesToRemove: string[],
+  anchorDate: string = getLocalDateString(),
+): string[] => {
+  if (habit.scoringType !== 'incremental') {
+    return datesToRemove.length > 0 ? datesToRemove : [anchorDate];
+  }
+  const completed = new Set(habit.completedDates);
+  const orphans = attributedDatesInPeriod(habit, anchorDate).filter(d => !completed.has(d));
+  return [...datesToRemove, ...orphans];
+};
+
+/**
  * Reverse the attribution a clear of `dates` takes with it: what each credited
  * member loses and what the pool loses, bucket-gated by the DATE being cleared
  * (total always, weekly only inside the current Monday-anchored week, daily only

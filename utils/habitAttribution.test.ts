@@ -32,10 +32,15 @@ import {
   streakForMember,
   unattributedPeriodPoints,
   unattributedPointsForHabitOnDate,
+  wholePeriodClearDates,
   withAttributionDelta,
   withDatesUnattributed,
 } from '@/utils/habitAttribution';
-import { calculatePointsForDate, pointsForHabitOnDate } from '@/utils/habitLogic';
+import {
+  calculatePointsForDate,
+  calculateResetPoints,
+  pointsForHabitOnDate,
+} from '@/utils/habitLogic';
 
 // --- Fixture calendar ------------------------------------------------------
 // 🛡️ Every date below is an offset from the FIXTURE's OWN Monday, never from
@@ -751,6 +756,178 @@ describe('habitAttribution — un-credit reversal math', () => {
     const twice = attributionReversalForDates(h, [d(0), d(0)], d(0));
     expect(twice.household).toEqual(once.household);
     expect(twice.clearPaths).toEqual(once.clearPaths);
+  });
+});
+
+// 🔒 Regression (follow-up to the PR #1155 adversarial review). An INCREMENTAL
+// habit with `targetCount > 1` credits points on EVERY tap but only enters
+// `completedDates` at target, so a below-target period carries member points and
+// attribution with NO completion date. `resetHabit` reversed only the completion
+// dates, so the member kept their award while the pool was still debited by
+// `calculateResetPoints` — a permanent divergence (`points.total` is never
+// clamped downward by the corrective sync) plus attribution that kept inflating
+// that member's own streak.
+describe('habitAttribution — whole-period clears sweep incremental orphans', () => {
+  /** The pool debit a reversal produces must equal Σ members + the remainder. */
+  const assertSigmaInvariant = (
+    before: Habit,
+    reversal: ReturnType<typeof attributionReversalForDates>,
+    datesRemoved: string[],
+    date: string,
+    countAfter = 0,
+  ): void => {
+    const removed = new Set(datesRemoved);
+    const after: Habit = {
+      ...withDatesUnattributed(before, reversal.clearedDates),
+      completedDates: before.completedDates.filter(c => !removed.has(c)),
+      count: countAfter,
+    };
+    const remainderDelta =
+      unattributedPeriodPoints(after, date, date) - unattributedPeriodPoints(before, date, date);
+    const memberTotal = [...reversal.perMember.values()].reduce((sum, b) => sum + b.total, 0);
+    expect(reversal.household.total).toBe(memberTotal + remainderDelta);
+  };
+
+  it('reverses a below-target incremental period the pool was still debited for', () => {
+    // The flagged fixture: `targetCount: 3`, Paul tapped twice today (2/3).
+    // Both taps paid him 10, nothing entered `completedDates`.
+    const h = habit({
+      scoringType: 'incremental',
+      targetCount: 3,
+      count: 2,
+      totalCount: 2,
+      completedDates: [],
+      completedBy: { [d(0)]: { [PAUL]: 2 } },
+    });
+    expect(memberPointsForHabitOnDate(h, PAUL, d(0), d(0))).toBe(20);
+
+    // What `resetHabit` used to pass (its completion dates) reversed NOTHING…
+    const naive = attributionReversalForDates(h, [], d(0), 0);
+    expect(naive.perMember.size).toBe(0);
+    expect(naive.clearedDates).toEqual([]);
+
+    // …while the pool was debited `calculateResetPoints`' two units regardless.
+    expect(calculateResetPoints(h)).toBe(20);
+
+    const dates = wholePeriodClearDates(h, [], d(0));
+    expect(dates).toEqual([d(0)]);
+    const reversal = attributionReversalForDates(h, dates, d(0), 0);
+
+    expect(reversal.perMember.get(PAUL)).toEqual({ daily: -20, weekly: -20, total: -20 });
+    expect(reversal.clearedDates).toEqual([d(0)]);
+    expect(reversal.clearPaths).toEqual([completedByDatePath(d(0))]);
+    expect(attributedMemberIds(withDatesUnattributed(h, reversal.clearedDates))).toEqual([]);
+    // The pool debit is unchanged in magnitude from what `calculateResetPoints`
+    // already took — the member side simply stopped being skipped.
+    expect(reversal.household).toEqual({ daily: -20, weekly: -20, total: -20 });
+    expect(reversal.household.total).toBe(-calculateResetPoints(h));
+    assertSigmaInvariant(h, reversal, [], d(0));
+  });
+
+  it('splits a below-target incremental period across both members', () => {
+    const h = habit({
+      scoringType: 'incremental',
+      targetCount: 3,
+      count: 2,
+      totalCount: 2,
+      completedDates: [],
+      completedBy: { [d(0)]: { [PAUL]: 1, [JEN]: 1 } },
+    });
+
+    const reversal = attributionReversalForDates(
+      h, wholePeriodClearDates(h, [], d(0)), d(0), 0,
+    );
+
+    expect(reversal.perMember.get(PAUL)).toEqual({ daily: -10, weekly: -10, total: -10 });
+    expect(reversal.perMember.get(JEN)).toEqual({ daily: -10, weekly: -10, total: -10 });
+    expect(reversal.household.total).toBe(-20);
+    expect(reversal.household.total).toBe(-calculateResetPoints(h));
+    assertSigmaInvariant(h, reversal, [], d(0));
+  });
+
+  it('sweeps a weekly incremental period’s progress days alongside its completion', () => {
+    // `targetCount: 3` weekly: Mon (1/3) and Wed (2/3) are attributed but never
+    // completions, so only Friday was ever reversed — two thirds of the week's
+    // credit stayed with both the member AND the pool.
+    const h = habit({
+      period: 'weekly',
+      scoringType: 'incremental',
+      targetCount: 3,
+      count: 3,
+      totalCount: 3,
+      completedDates: [d(4)],
+      completedBy: {
+        [d(0)]: { [PAUL]: 1 },
+        [d(2)]: { [PAUL]: 1 },
+        [d(4)]: { [PAUL]: 1 },
+      },
+    });
+
+    const dates = wholePeriodClearDates(h, [d(4)], d(4));
+    // Completion day FIRST — the ordering the helper's remainder maths needs.
+    expect(dates).toEqual([d(4), d(0), d(2)]);
+
+    const reversal = attributionReversalForDates(h, dates, d(4), 0);
+    expect(reversal.clearedDates.slice().sort()).toEqual([d(0), d(2), d(4)]);
+    // All three units come back, and `daily` only absorbs today's — the earlier
+    // days' daily credit rolled over at midnight and is no longer there to take.
+    expect(reversal.perMember.get(PAUL)).toEqual({ daily: -10, weekly: -30, total: -30 });
+    expect(reversal.household).toEqual({ daily: -10, weekly: -30, total: -30 });
+    expect(reversal.household.total).toBe(-calculateResetPoints(h));
+    assertSigmaInvariant(h, reversal, [d(4)], d(4));
+  });
+
+  it('leaves an at-target incremental day exactly as it was (control)', () => {
+    // 🔒 The completion date already covers every attributed day, so the sweep
+    // adds nothing and the reversal is bit-for-bit the pre-fix one.
+    const h = habit({
+      scoringType: 'incremental',
+      targetCount: 3,
+      count: 3,
+      totalCount: 3,
+      completedDates: [d(0)],
+      completedBy: { [d(0)]: { [PAUL]: 3 } },
+    });
+
+    expect(wholePeriodClearDates(h, [d(0)], d(0))).toEqual([d(0)]);
+    const before = attributionReversalForDates(h, [d(0)], d(0), 0);
+    const after = attributionReversalForDates(
+      h, wholePeriodClearDates(h, [d(0)], d(0)), d(0), 0,
+    );
+    expect(after).toEqual(before);
+    expect(after.household).toEqual({ daily: -30, weekly: -30, total: -30 });
+    expect(after.perMember.get(PAUL)).toEqual({ daily: -30, weekly: -30, total: -30 });
+  });
+
+  it('leaves THRESHOLD date sets untouched, below target and above', () => {
+    // 🛡️ `attributionReversalForDates` period-scopes threshold habits itself;
+    // adding orphan dates here would double-visit the period.
+    const belowTarget = habit({
+      period: 'weekly',
+      scoringType: 'threshold',
+      targetCount: 3,
+      count: 2,
+      completedDates: [],
+      completedBy: { [d(0)]: { [PAUL]: 1 }, [d(2)]: { [PAUL]: 1 } },
+    });
+    expect(wholePeriodClearDates(belowTarget, [], d(2))).toEqual([d(2)]);
+
+    const atTarget = habit({
+      period: 'weekly',
+      scoringType: 'threshold',
+      targetCount: 3,
+      count: 3,
+      completedDates: [d(4)],
+      completedBy: { [d(0)]: { [PAUL]: 1 }, [d(4)]: { [PAUL]: 1 } },
+    });
+    expect(wholePeriodClearDates(atTarget, [d(4)], d(4))).toEqual([d(4)]);
+  });
+
+  it('adds nothing for a grandfathered incremental period', () => {
+    // No `completedBy` at all → no orphans → the caller keeps its own dates and
+    // the legacy `calculateResetPoints` fallback still applies.
+    const legacy = habit({ scoringType: 'incremental', targetCount: 3, count: 2 });
+    expect(wholePeriodClearDates(legacy, [], d(0))).toEqual([]);
   });
 });
 

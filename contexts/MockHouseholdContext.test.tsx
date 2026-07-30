@@ -914,4 +914,60 @@ describe('MockHouseholdContext habit points routing (assigned vs shared)', () =>
     expect(result.current.totalPoints).toBe(poolBefore);
     expect(pointsOf(result, 'kid_leo')).toEqual(kidBefore);
   });
+
+  it('resets a BELOW-target incremental period back to neutral (wholePeriodClearDates parity)', async () => {
+    // 🔒 An incremental habit with `targetCount > 1` scores on every tap but only
+    // completes at target, so 2/3 leaves points and attribution with NO
+    // completion date. Production's resetHabit reverses that period through
+    // `wholePeriodClearDates`; Test Mode must land on the same neutral state, or
+    // the mock would look balanced where production diverged.
+    const { result } = captureHousehold();
+    const today = getLocalDateString();
+    const poolBefore = result.current.totalPoints;
+    const userBefore = { ...pointsOf(result, 'test-user-id') };
+
+    let id = '';
+    await act(async () => {
+      id = await result.current.addHabit({
+        // `addHabit` takes a full Habit and assigns the real id itself (the
+        // Firestore path does the same with an auto-id), so this is a placeholder.
+        id: '',
+        title: 'Water glasses',
+        category: 'Health',
+        type: 'positive',
+        period: 'daily',
+        scoringType: 'incremental',
+        basePoints: 10,
+        targetCount: 3,
+        count: 0,
+        totalCount: 0,
+        completedDates: [],
+        streakDays: 0,
+        lastUpdated: new Date().toISOString(),
+      });
+    });
+
+    await act(async () => {
+      await result.current.toggleHabit(id, 'up');
+    });
+    await act(async () => {
+      await result.current.toggleHabit(id, 'up');
+    });
+
+    // 2/3: points were credited, nothing entered completedDates.
+    const midway = result.current.habits.find((h) => h.id === id)!;
+    expect(midway.completedDates).toEqual([]);
+    expect(midway.completedBy?.[today]).toEqual({ 'test-user-id': 2 });
+    expect(result.current.totalPoints).toBe(poolBefore + 20);
+
+    await act(async () => {
+      await result.current.resetHabit(id);
+    });
+
+    const after = result.current.habits.find((h) => h.id === id)!;
+    expect(after.count).toBe(0);
+    expect(after.completedBy?.[today]).toBeUndefined();
+    expect(result.current.totalPoints).toBe(poolBefore);
+    expect(pointsOf(result, 'test-user-id')).toEqual(userBefore);
+  });
 });

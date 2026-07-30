@@ -49,6 +49,7 @@ import {
   memberPeriodPointsDelta,
   prospectiveMultiplierForMember,
   resolveReversalSources,
+  wholePeriodClearDates,
   withAttributionDelta,
   type PointsBuckets,
 } from '@/utils/habitAttribution';
@@ -1010,12 +1011,16 @@ export const useHabitActions = (
     // period is below target (it is exactly this period's completion dates), so
     // nothing was ever awarded and the points delta is 0 — this is purely an
     // orphan sweep, and it never needs an `arrayRemove` the batch omits.
-    const reversalDates =
-      datesToRemove.length > 0
-        ? datesToRemove
-        : habit.scoringType === 'threshold'
-          ? [today]
-          : [];
+    //
+    // An INCREMENTAL habit with `targetCount > 1` has the same shape for a
+    // different reason: it credits points on EVERY tap but only completes at
+    // target, so a 2/3 day carries member points and attribution while
+    // `datesToRemove` is empty. Reversing only `datesToRemove` debited the pool
+    // (via `calculateResetPoints`) and NOT the member — a permanent divergence.
+    // `wholePeriodClearDates` unions the completion dates with the period's
+    // orphaned attributed days, completion dates first (its ordering rule is
+    // load-bearing — see the helper).
+    const reversalDates = wholePeriodClearDates(habit, datesToRemove, today);
     const resetReversal = habitFeedsMemberAttribution(habit)
       ? attributionReversalForDates(habit, reversalDates, today, 0)
       : null;

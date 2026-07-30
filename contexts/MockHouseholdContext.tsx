@@ -23,6 +23,7 @@ import {
   memberCompletionCount,
   memberPeriodPointsDelta,
   resolveReversalSources,
+  wholePeriodClearDates,
   withAttributionDelta,
   withDatesUnattributed,
   type PointsBuckets,
@@ -1884,8 +1885,14 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     // resetHabit is: an ASSIGNED chore's points already reverse on the
     // assignee's doc through `creditHabitPool` above, so also applying the
     // per-member reversal would debit them twice.
+    // `wholePeriodClearDates` parity: an INCREMENTAL habit with `targetCount > 1`
+    // records attribution (and credits points) on every tap while only entering
+    // `completedDates` at target, so today alone can leave the period's orphaned
+    // attributed days — and the member points hanging off them — behind.
     const reversal = habitFeedsMemberAttribution(habit)
-      ? attributionReversalForDates(habit, [today], today, 0)
+      ? attributionReversalForDates(
+          habit, wholePeriodClearDates(habit, [today], today), today, 0,
+        )
       : null;
     // Stage 1.5 parity (see production resetHabit): an attributed reset debits
     // the competition figure, a grandfathered one `calculateResetPoints`.
