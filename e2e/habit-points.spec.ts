@@ -5,10 +5,12 @@ import { enterTestMode, bottomNav } from './helpers';
  * Habit toggle ↔ points sync (advisor plan 07, spec 3).
  *
  * Seeded: "Exercise 30min" (threshold, targetCount 1, basePoints 20, no
- * streak) and Test User points daily 30 / weekly 150 in the toolbar cluster.
- * Completing the habit awards basePoints × multiplier (fresh streak of 1 →
- * 1.0×, so exactly +20); resetting it must reverse the award exactly — the
- * drift bug class this repo has fixed twice.
+ * streak). The toolbar cluster shows the HOUSEHOLD figures, which post-flip
+ * (stage 1.5) are the Σ of the adult members' scores: Test User 30/150 +
+ * Jordan 18/95 = 48 daily / 245 weekly. Completing the habit awards
+ * basePoints × multiplier (fresh streak of 1 → 1.0×, so exactly +20);
+ * resetting it must reverse the award exactly — the drift bug class this
+ * repo has fixed twice.
  */
 
 test.describe('Habit points (Test Mode)', () => {
@@ -16,8 +18,8 @@ test.describe('Habit points (Test Mode)', () => {
     await enterTestMode(page);
 
     const pointsCluster = page.getByRole('button', { name: /View Rewards and Points breakdown/ });
-    await expect(pointsCluster.getByText('30', { exact: true })).toBeVisible();
-    await expect(pointsCluster.getByText('150', { exact: true })).toBeVisible();
+    await expect(pointsCluster.getByText('48', { exact: true })).toBeVisible();
+    await expect(pointsCluster.getByText('245', { exact: true })).toBeVisible();
 
     await bottomNav(page).getByRole('link', { name: 'Habits', exact: true }).click();
 
@@ -28,8 +30,8 @@ test.describe('Habit points (Test Mode)', () => {
     ).toBeVisible();
 
     // +20 in both windows (multiplier 1.0 on a fresh 1-day streak).
-    await expect(pointsCluster.getByText('50', { exact: true })).toBeVisible();
-    await expect(pointsCluster.getByText('170', { exact: true })).toBeVisible();
+    await expect(pointsCluster.getByText('68', { exact: true })).toBeVisible();
+    await expect(pointsCluster.getByText('265', { exact: true })).toBeVisible();
 
     // Reset the habit (the card's X). Exactly one habit is active, so the
     // accessible name is unique.
@@ -39,7 +41,7 @@ test.describe('Habit points (Test Mode)', () => {
     ).toBeVisible();
 
     // Exact reversal — no drift.
-    await expect(pointsCluster.getByText('30', { exact: true })).toBeVisible();
-    await expect(pointsCluster.getByText('150', { exact: true })).toBeVisible();
+    await expect(pointsCluster.getByText('48', { exact: true })).toBeVisible();
+    await expect(pointsCluster.getByText('245', { exact: true })).toBeVisible();
   });
 });

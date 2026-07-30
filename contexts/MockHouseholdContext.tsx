@@ -405,11 +405,11 @@ const SEED_MEMBERS: HouseholdMember[] = [
     role: 'member',
     // Non-zero and DISTINCT from the admin's own points (stage 3 PR: the Points
     // Breakdown drawer's adults-only standings need two members with different
-    // figures to be worth looking at in Test Mode). Deliberately does NOT feed
-    // `dailyPoints`/`weeklyPoints` — this mock still derives those household
-    // figures from `members[0]` alone (see the `toggleHabit` comment below), so
-    // Jordan's own points are additive test data only and never move the
-    // household totals every OTHER surface (TopToolbar, Dashboard, …) shows.
+    // figures to be worth looking at in Test Mode). Post-flip (stage 1.5) the
+    // household `dailyPoints`/`weeklyPoints` are derived as the Σ of the ADULT
+    // members' scores, so Jordan's points DO feed the toolbar figures
+    // (30+18=48 / 150+95=245) — the drawer's "together" number and the member
+    // standings must agree, that Σ being the whole point of the model.
     points: { daily: 18, weekly: 95, total: 310 },
     hiddenKeys: [...DEFAULT_HIDDEN_DASHBOARD_WIDGETS, 'trends', 'subscriptions']
   },
@@ -1807,11 +1807,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     // shape production does.
     //
     // NOTE: no SEPARATE member-points credit is applied here, because this mock
-    // deliberately derives `dailyPoints`/`weeklyPoints` from `members[0]` —
-    // `creditHabitPool` below already moves the test user's member score for a
-    // shared habit. Stage 2 untangles that conflation when the scoreboard needs
-    // true per-member numbers; the credit/un-credit mutations below already keep
-    // them separate.
+    // derives the household `dailyPoints`/`weeklyPoints` as the Σ of adult
+    // member scores — `creditHabitPool` below already moves the credited
+    // member's own score, and the derived household figure follows (the Σ
+    // model, stage 1.5). The credit/un-credit mutations below keep per-member
+    // scores separate the same way.
     //
     // 🛡️ Reversal parity with production: a 'down' takes its unit back from
     // whoever STORED attribution records (`resolveReversalSources`), not from
@@ -2866,10 +2866,13 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     [accounts, calendarItems, currentPeriodId, transactions]
   );
   const safeToSpend = safeToSpendBreakdown.safeToSpend;
-  // Derived from the test user's member points so habit toggles/resets move
-  // the toolbar figures exactly like the real context (seeded 30/150).
-  const dailyPoints = members[0]?.points.daily ?? 0;
-  const weeklyPoints = members[0]?.points.weekly ?? 0;
+  // Post-flip (stage 1.5): household daily/weekly = Σ the ADULT members' own
+  // scores, exactly like production's competition model (managed kids' chore
+  // points route to the kid alone and never the household). Seeded
+  // 30+18=48 / 150+95=245, and a habit toggle crediting any adult's member
+  // score moves these derived figures just like the real context.
+  const dailyPoints = members.reduce((sum, m) => (m.isManaged ? sum : sum + m.points.daily), 0);
+  const weeklyPoints = members.reduce((sum, m) => (m.isManaged ? sum : sum + m.points.weekly), 0);
   const currentUser = members[0] || null;
   const activeChallenge = challenges[0] || null;
   const activeYearlyGoals: YearlyGoal[] = [];
