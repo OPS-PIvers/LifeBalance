@@ -1187,68 +1187,17 @@ export interface PointsSyncResult {
   needsUpdate: boolean;
 }
 
-/**
- * Pure recompute of the corrective household-points sync.
- *
- * Derives the canonical daily and weekly totals from actual habit completions,
- * then decides the cumulative total:
- *   - if every completion falls within the current week (and at least one
- *     completion exists), the total equals the weekly total;
- *   - otherwise the total is the larger of the stored total and the weekly
- *     total, so an existing cumulative total is never clamped downward.
- *
- * Extracted from `FirebaseHouseholdContext`'s `syncHouseholdPoints` so the
- * (otherwise inline, O(habits × completedDates)) recompute is unit-testable and
- * shared by the `usePointsSync` hook. Behaviour is identical to the previous
- * inline logic.
- *
- * @param habits - All habits to score
- * @param currentPoints - The points currently stored on the household doc
- * @param now - "Now" (injected for deterministic tests)
- * @param submissionTotals - Optional stored submissions covering `weekStart..today`,
- *   so the recompute credits back-dated/multi-unit logs at what they actually
- *   earned instead of the derived one-per-day approximation.
- * @returns The corrected points plus whether they differ from `currentPoints`
- */
-export const computeHouseholdPointsSync = (
-  habits: Habit[],
-  currentPoints: HouseholdPoints,
-  now: Date,
-  submissionTotals?: SubmissionTotalsByHabitDate,
-): PointsSyncResult => {
-  const today = format(now, 'yyyy-MM-dd');
-  const weekStartStr = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
-
-  const correctDaily = calculatePointsForDate(habits, today, undefined, submissionTotals);
-  const correctWeekly = calculatePointsForDateRange(habits, weekStartStr, today, undefined, submissionTotals);
-
-  // If every completion is within the current week, the cumulative total equals
-  // the weekly total; otherwise keep the stored total (don't clamp it down).
-  const allDatesThisWeek = habits.every(habit =>
-    habit.completedDates.every(date => date >= weekStartStr)
-  );
-  const correctTotal =
-    allDatesThisWeek && habits.some(h => h.completedDates.length > 0)
-      ? correctWeekly
-      : Math.max(currentPoints.total, correctWeekly);
-
-  const points: HouseholdPoints = {
-    daily: correctDaily,
-    weekly: correctWeekly,
-    total: correctTotal,
-  };
-
-  const needsUpdate =
-    currentPoints.daily !== correctDaily ||
-    currentPoints.weekly !== correctWeekly ||
-    currentPoints.total !== correctTotal;
-
-  return { points, needsUpdate };
-};
-
+// NOTE (per-member points, stage 1.5): `computeHouseholdPointsSync` used to live
+// here, deriving daily/weekly from `completedDates` at the HABIT-level streak
+// multiplier. The household figure is now `Σ member awards + the unattributed
+// remainder` (the locked competition model), which is defined by attribution —
+// so the one and only household sync now lives in utils/habitAttribution.ts
+// alongside the scorers it composes. Keeping a habit-level twin here would just
+// be a way for a future call site to silently un-flip the model.
+//
 // NOTE (per-member points, stage 1): `computeManagedMemberPointsReset` used to
-// live here. It only knew ONE per-member points source — the chores assigned to
-// a managed kid — and is superseded by `computeMemberPointsReset` in
+// live here too. It only knew ONE per-member points source — the chores assigned
+// to a managed kid — and is superseded by `computeMemberPointsReset` in
 // utils/habitAttribution.ts, which sums that source together with a member's
 // attributed share of shared habits. There is deliberately one per-member
 // recompute, not two.

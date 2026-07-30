@@ -31,6 +31,9 @@ vi.mock('firebase/firestore', () => ({
 vi.mock('@/firebase.config', () => ({ db: {} }));
 
 import { needsNegativePointsRepair, repairNegativePointsCorruption } from './negativePointsRepair';
+import { calculateHouseholdPointsForDate } from '@/utils/habitAttribution';
+import { calculatePointsForDate } from '@/utils/habitLogic';
+import { getLocalDateString } from '@/utils/dateHelpers';
 
 const HOUSEHOLD_ID = 'house1';
 const householdPath = `households/${HOUSEHOLD_ID}`;
@@ -128,6 +131,38 @@ describe('repairNegativePointsCorruption', () => {
     expect(hh).toBeDefined();
     expect(hh!.data['points.total']).toBeUndefined(); // no delta → no total nudge
     expect(typeof hh!.data['negativePointsRepairedAt']).toBe('string');
+  });
+
+  it('recomputes the household daily/weekly with the Σ-member scorer, not the legacy one', async () => {
+    // 🔒 Regression (adversarial review, PR #1155). This repair fires at LOGIN
+    // and writes points.daily/weekly ABSOLUTELY, so scoring with the pre-flip
+    // habit-level helpers would stamp pre-flip numbers over the Σ-model pool.
+    // A threshold habit both members completed today pays the household TWICE
+    // under the competition model and once under the legacy scorer.
+    getDocsMock.mockResolvedValue(submissionsSnap([{ pointsEarned: 2 }]));
+    const today = getLocalDateString();
+    const shared = createHabit({
+      id: 'shared1',
+      title: 'Walk the dog',
+      type: 'positive',
+      scoringType: 'threshold',
+      basePoints: 10,
+      targetCount: 1,
+      count: 1,
+      completedDates: [today],
+      completedBy: { [today]: { paul: 1, jen: 1 } },
+    });
+    const habits = [createHabit({ hasSubmissionTracking: true }), shared];
+
+    // The two models genuinely disagree on this fixture.
+    expect(calculatePointsForDate(habits, today)).toBe(10);
+    expect(calculateHouseholdPointsForDate(habits, today, today)).toBe(20);
+
+    await repairNegativePointsCorruption(HOUSEHOLD_ID, habits);
+
+    const hh = capturedUpdates.find(u => u.ref.__path === householdPath);
+    expect(hh!.data['points.daily']).toBe(20);
+    expect(hh!.data['points.weekly']).toBe(20);
   });
 
   it("corrects an assigned chore's points on the member doc, not the household pool", async () => {
