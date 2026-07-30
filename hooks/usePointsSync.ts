@@ -2,12 +2,12 @@ import { useCallback, useEffect, useRef } from 'react';
 import { format, startOfWeek } from 'date-fns';
 import { Habit, HouseholdMember } from '@/types/schema';
 import {
-  computeHouseholdPointsSync,
   type HouseholdPoints,
   type PointsSyncResult,
   type SubmissionTotalsByHabitDate,
 } from '@/utils/habitLogic';
 import {
+  computeHouseholdPointsSync,
   computeMemberPointsSync,
   type MemberPointsSyncUpdate,
 } from '@/utils/habitAttribution';
@@ -77,8 +77,10 @@ const submissionCacheKey = (habits: Habit[], scope: string): string =>
  * (written atomically by `useHabitActions`, the source of truth between recalcs)
  * with the canonical recomputation of daily/weekly/total points.
  *
- * The recompute itself is the pure, unit-tested `computeHouseholdPointsSync`.
- * This hook controls *when* it runs:
+ * The recompute itself is the pure, unit-tested `computeHouseholdPointsSync`
+ * (utils/habitAttribution.ts — since stage 1.5 the household figure is
+ * `Σ member awards + the unattributed remainder`, so it is defined by
+ * attribution). This hook controls *when* it runs:
  *
  *   (a) **Once per household load** (login / household switch) — a `ref` keyed on
  *       `householdId` ensures it runs a single time once habits + points are

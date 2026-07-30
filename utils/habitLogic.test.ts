@@ -14,7 +14,6 @@ import {
   calculatePointsForDate,
   calculatePointsForDateRange,
   getHabitResetUpdate,
-  computeHouseholdPointsSync,
   isHabitCompletedInCurrentPeriod,
   normalizeHabitTitle,
   habitSign,
@@ -1329,73 +1328,10 @@ describe('habitLogic', () => {
     });
   });
 
-  describe('computeHouseholdPointsSync', () => {
-    // Fixed Monday so `today` === start-of-week, keeping the date math simple
-    // and timezone-stable (noon local avoids day rollover at any UTC offset).
-    const now = new Date(2025, 5, 9, 12, 0, 0); // Mon 2025-06-09
-    const todayStr = '2025-06-09';
-    const lastWeek = '2025-06-02'; // a prior Monday, before this week's start
-
-    const dailyHabit: Habit = {
-      ...baseHabit,
-      scoringType: 'incremental',
-      period: 'daily',
-      basePoints: 10,
-    };
-
-    it('recomputes daily/weekly/total from completions and flags an update', () => {
-      const habits: Habit[] = [
-        { ...dailyHabit, count: 1, completedDates: [todayStr] },
-      ];
-      const result = computeHouseholdPointsSync(
-        habits,
-        { daily: 0, weekly: 0, total: 0 },
-        now
-      );
-      expect(result.needsUpdate).toBe(true);
-      expect(result.points).toEqual({ daily: 10, weekly: 10, total: 10 });
-    });
-
-    it('reports no update when stored points already match', () => {
-      const habits: Habit[] = [
-        { ...dailyHabit, count: 1, completedDates: [todayStr] },
-      ];
-      const result = computeHouseholdPointsSync(
-        habits,
-        { daily: 10, weekly: 10, total: 10 },
-        now
-      );
-      expect(result.needsUpdate).toBe(false);
-      expect(result.points).toEqual({ daily: 10, weekly: 10, total: 10 });
-    });
-
-    it('preserves the cumulative total when completions predate this week', () => {
-      // A completion from a prior week means not all completions are this week,
-      // so total must not be clamped down to the weekly figure.
-      const habits: Habit[] = [
-        { ...dailyHabit, count: 1, completedDates: [todayStr, lastWeek] },
-      ];
-      const result = computeHouseholdPointsSync(
-        habits,
-        { daily: 10, weekly: 10, total: 200 },
-        now
-      );
-      expect(result.needsUpdate).toBe(false);
-      expect(result.points.total).toBe(200);
-      expect(result.points.daily).toBe(10);
-      expect(result.points.weekly).toBe(10);
-    });
-
-    it('zeroes daily/weekly but keeps total when there are no completions', () => {
-      const result = computeHouseholdPointsSync(
-        [],
-        { daily: 5, weekly: 5, total: 100 },
-        now
-      );
-      expect(result.needsUpdate).toBe(true);
-      expect(result.points).toEqual({ daily: 0, weekly: 0, total: 100 });
-    });
-  });
+  // NOTE (per-member points, stage 1.5): `computeHouseholdPointsSync` moved to
+  // utils/habitAttribution.ts when the household figure became
+  // `Σ member awards + the unattributed remainder`. Its tests moved with it —
+  // see habitAttribution.test.ts.
 
   describe('isHabitCompletedInCurrentPeriod', () => {
     // Deterministic Monday-anchored week: 2026-06-22 (Mon) .. 2026-06-28 (Sun).

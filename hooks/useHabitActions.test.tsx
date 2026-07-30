@@ -219,7 +219,12 @@ describe('useHabitActions.addHabitSubmission', () => {
   it('uses the PROSPECTIVE streak (including the new day) for the multiplier', async () => {
     // Habit completed the previous two days. Adding today makes a 3-day streak,
     // which yields the 1.5x daily multiplier. Pre-submission streak would be 2
-    // (1.0x) — the bug. So today's submission should earn floor(10 * 1.5) = 15.
+    // (1.0x) — the bug. So the SUBMISSION records floor(10 * 1.5) = 15.
+    //
+    // Stage 1.5: the pool now receives the logging MEMBER's award instead. The
+    // habit's two prior days are grandfathered (no attribution), so the logger's
+    // own chain starts today at 1.0× → 10. The prospective-streak contract lives
+    // on in `submission.streakDaysAtTime`/`multiplierApplied`, asserted here.
     const today = new Date();
     const y1 = format(subDays(today, 1), 'yyyy-MM-dd');
     const y2 = format(subDays(today, 2), 'yyyy-MM-dd');
@@ -233,10 +238,39 @@ describe('useHabitActions.addHabitSubmission', () => {
       await result.current.addHabitSubmission('h1', 1);
     });
 
+    const submission = capturedSets[0]!.data as { streakDaysAtTime: number; multiplierApplied: number; pointsEarned: number };
+    expect(submission.streakDaysAtTime).toBe(3);
+    expect(submission.multiplierApplied).toBe(1.5);
+    expect(submission.pointsEarned).toBe(15);
+
     const hh = householdUpdate();
     expect(hh).toBeDefined();
-    expect(hh!.data['points.total']).toEqual({ __increment: 15 });
-    expect(hh!.data['points.daily']).toEqual({ __increment: 15 });
+    expect(hh!.data['points.total']).toEqual({ __increment: 10 });
+    expect(hh!.data['points.daily']).toEqual({ __increment: 10 });
+  });
+
+  it('credits the pool the LOGGER’s own award once their chain has built up', async () => {
+    // Same two prior days, but this time they are attributed to the logger — so
+    // their personal streak reaches 3 and the pool gets the 1.5× award (15),
+    // matching what the submission itself records.
+    const today = new Date();
+    const y1 = format(subDays(today, 1), 'yyyy-MM-dd');
+    const y2 = format(subDays(today, 2), 'yyyy-MM-dd');
+    const habit = baseHabit({
+      completedDates: [y1, y2],
+      count: 0,
+      completedBy: { [y1]: { [currentUser.uid]: 1 }, [y2]: { [currentUser.uid]: 1 } },
+    });
+
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.addHabitSubmission('h1', 1);
+    });
+
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: 15 });
   });
 });
 
@@ -939,10 +973,12 @@ describe('useHabitActions.toggleHabit (per-member attribution dual-write)', () =
     expect(householdUpdate()!.data['points.total']).toEqual({ __increment: -10 });
   });
 
-  it('credits the member at THEIR streak multiplier, not the habit’s', async () => {
-    // The habit has a 6-day streak (2.0× on the 7th day) but the acting member
-    // has never been credited, so their own first completion earns 1.0×. The
-    // household still gets its habit-level 20 — nothing visible moved.
+  it('credits the member — AND THE POOL — at THEIR streak multiplier, not the habit’s', async () => {
+    // 🏁 Stage 1.5, the visible consequence. The habit has a 6-day streak (2.0×
+    // on the 7th day) but the acting member has never been credited, so their
+    // own first completion earns 1.0× — and the pool now receives that SAME 10,
+    // not the habit-level 20 it used to. Long-streak habits temporarily pay 1×
+    // until each person's own chain rebuilds; that is the locked model.
     const dates = Array.from({ length: 6 }, (_, i) => format(subDays(new Date(), i + 1), 'yyyy-MM-dd'));
     const habit = baseHabit({ completedDates: dates, count: 0, totalCount: 6 });
     const { result } = renderHook(() =>
@@ -953,8 +989,33 @@ describe('useHabitActions.toggleHabit (per-member attribution dual-write)', () =
       await result.current.toggleHabit('h1', 'up');
     });
 
-    expect(householdUpdate()!.data['points.daily']).toEqual({ __increment: 20 });
+    expect(householdUpdate()!.data['points.daily']).toEqual({ __increment: 10 });
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: 10 });
     expect(memberUpdate()!.data['points.daily']).toEqual({ __increment: 10 });
+  });
+
+  it('pays the pool a SECOND full award when the other member completes too', async () => {
+    // 🔒 Locked: both members earn a full award on the same threshold day, and
+    // the pool receives the sum — where the habit-level scorer saw the day as
+    // already complete and would have credited nothing at all.
+    const habit = baseHabit({
+      scoringType: 'threshold',
+      targetCount: 1,
+      completedDates: [today()],
+      count: 1,
+      totalCount: 1,
+      completedBy: { [today()]: { 'jen-uid': 1 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'up');
+    });
+
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: 10 });
+    expect(memberUpdate()!.data['points.total']).toEqual({ __increment: 10 });
   });
 
   it('attributes an assigned chore to the ASSIGNEE, and still does not double-credit them', async () => {
@@ -1157,6 +1218,35 @@ describe('useHabitActions — per-member writes skip members who no longer exist
       expect(m.data['points.total']).toEqual({ __increment: -10 });
       expect(m.data['points.daily']).toEqual({ __increment: -10 });
     }
+    // 🏁 Stage 1.5: the pool gives back the SUM of the two member awards (−20),
+    // not the single habit-level threshold award (−10) `calculateResetPoints`
+    // would have computed.
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: -20 });
+    expect(householdUpdate()!.data['points.daily']).toEqual({ __increment: -20 });
+  });
+
+  it('resetHabit: an UNATTRIBUTED reset still debits the legacy figure exactly', async () => {
+    // 🛡️ Grandfathering: with no `completedBy`, the pool reversal is untouched
+    // by the flip — `calculateResetPoints`' figure, applied flat to all three
+    // buckets exactly as before.
+    const habit = baseHabit({
+      scoringType: 'threshold',
+      count: 1,
+      totalCount: 1,
+      completedDates: [today()],
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1'))
+    );
+
+    await act(async () => {
+      await result.current.resetHabit('h1');
+    });
+
+    expect(memberPaths()).toEqual([]);
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: -10 });
+    expect(householdUpdate()!.data['points.weekly']).toEqual({ __increment: -10 });
+    expect(householdUpdate()!.data['points.daily']).toEqual({ __increment: -10 });
   });
 
   it('resetHabitDay: skips the ghost’s reversal and still commits', async () => {
@@ -2008,5 +2098,138 @@ describe('useHabitActions — reversals follow stored attribution, not current a
 
     expect(habitUpdate()!.data[`completedBy.${date}.jen-uid`]).toEqual({ __increment: 1 });
     expect(memberUpdate('jen-uid')!.data['points.total']).toEqual({ __increment: 10 });
+  });
+});
+
+// 🔒 Regression (follow-up to the PR #1155 adversarial review). An INCREMENTAL
+// habit with `targetCount > 1` pays points on every tap but only enters
+// `completedDates` at target, so resetting a below-target period debited the
+// pool (`calculateResetPoints`) while the per-member reversal — anchored on the
+// completion dates, of which there are none — produced nothing. Member and pool
+// diverged permanently, and the orphaned attribution kept inflating that
+// member's own streak.
+describe('useHabitActions.resetHabit (below-target incremental periods)', () => {
+  const today = () => format(new Date(), 'yyyy-MM-dd');
+  const roster = (...uids: string[]) => uids.map(uid => ({ uid })) as HouseholdMember[];
+  const memberUpdate = (uid: string) =>
+    capturedUpdates.find(u => u.ref.__path === `${householdPath}/members/${uid}`);
+
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    capturedDeletes.length = 0;
+    commitCount = 0;
+    nextCommitError = null;
+    incrementMock.mockClear();
+  });
+
+  it('debits the member their own units and clears the orphaned attribution', async () => {
+    const date = today();
+    const habit = baseHabit({
+      scoringType: 'incremental',
+      targetCount: 3,
+      count: 2,
+      totalCount: 2,
+      completedDates: [], // 2/3 — the target was never reached
+      completedBy: { [date]: { 'user1': 2 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1'))
+    );
+
+    await act(async () => {
+      await result.current.resetHabit('h1');
+    });
+
+    const hu = habitUpdate()!;
+    expect(hu.data['count']).toBe(0);
+    // Nothing to arrayRemove — the period never produced a completion date.
+    expect('completedDates' in hu.data).toBe(false);
+    // …but the attribution the two taps recorded DOES go.
+    expect(hu.data[`completedBy.${date}`]).toEqual({ __deleteField: true });
+
+    // Both taps come back off user1, at their own 1.0x multiplier.
+    expect(memberUpdate('user1')!.data['points.total']).toEqual({ __increment: -20 });
+    expect(memberUpdate('user1')!.data['points.daily']).toEqual({ __increment: -20 });
+    expect(memberUpdate('user1')!.data['points.weekly']).toEqual({ __increment: -20 });
+    // The pool loses exactly what it lost before this fix — the member side
+    // simply stopped being skipped, so Σ members reconciles with it.
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: -20 });
+    expect(commitCount).toBe(1);
+  });
+
+  it('splits the reversal across both credited members', async () => {
+    const date = today();
+    const habit = baseHabit({
+      scoringType: 'incremental',
+      targetCount: 3,
+      count: 2,
+      totalCount: 2,
+      completedDates: [],
+      completedBy: { [date]: { 'user1': 1, 'jen-uid': 1 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(
+        HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+      )
+    );
+
+    await act(async () => {
+      await result.current.resetHabit('h1');
+    });
+
+    for (const uid of ['user1', 'jen-uid']) {
+      expect(memberUpdate(uid)!.data['points.total']).toEqual({ __increment: -10 });
+    }
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: -20 });
+  });
+
+  it('leaves an AT-target incremental reset unchanged (control)', async () => {
+    // The completion date already covers every attributed day, so the sweep adds
+    // nothing: same clear, same member debit, same pool debit as before.
+    const date = today();
+    const habit = baseHabit({
+      scoringType: 'incremental',
+      targetCount: 3,
+      count: 3,
+      totalCount: 3,
+      completedDates: [date],
+      completedBy: { [date]: { 'user1': 3 } },
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1'))
+    );
+
+    await act(async () => {
+      await result.current.resetHabit('h1');
+    });
+
+    expect(habitUpdate()!.data['completedDates']).toEqual({ __arrayRemove: [date] });
+    expect(habitUpdate()!.data[`completedBy.${date}`]).toEqual({ __deleteField: true });
+    expect(memberUpdate('user1')!.data['points.total']).toEqual({ __increment: -30 });
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: -30 });
+  });
+
+  it('keeps a grandfathered below-target reset on the legacy figure', async () => {
+    // 🛡️ No `completedBy` → no orphans → no member write, and the pool still
+    // takes `calculateResetPoints`' two units exactly as it always did.
+    const habit = baseHabit({
+      scoringType: 'incremental',
+      targetCount: 3,
+      count: 2,
+      totalCount: 2,
+      completedDates: [],
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1'))
+    );
+
+    await act(async () => {
+      await result.current.resetHabit('h1');
+    });
+
+    expect(capturedUpdates.filter(u => u.ref.__path.includes('/members/'))).toEqual([]);
+    expect(Object.keys(habitUpdate()!.data).some(k => k.startsWith('completedBy.'))).toBe(false);
+    expect(householdUpdate()!.data['points.total']).toEqual({ __increment: -20 });
   });
 });

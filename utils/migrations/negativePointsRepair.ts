@@ -12,6 +12,10 @@ import {
   calculatePointsForDateRange,
   habitSign,
 } from '@/utils/habitLogic';
+import {
+  calculateHouseholdPointsForDate,
+  calculateHouseholdPointsForDateRange,
+} from '@/utils/habitAttribution';
 import { format, startOfWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 
@@ -109,10 +113,19 @@ export async function repairNegativePointsCorruption(
 
     // Shared household pool: daily/weekly recomputed outright (sign-correct
     // now), total nudged by exactly the correction delta.
+    //
+    // 🛡️ The HOUSEHOLD figures must come from the Σ-member (competition) scorers
+    // in habitAttribution, not from the habit-level `calculatePointsForDate*`
+    // this file used pre-flip. These are absolute writes on a path that fires at
+    // LOGIN for any household that still qualifies, so the legacy scorers would
+    // silently stamp pre-flip numbers over the post-flip pool. The member-scoped
+    // calls below stay on the legacy scorers on purpose — an ASSIGNED chore's
+    // points are still habit-level and deliberately outside the competition
+    // model (see `habitFeedsMemberAttribution`).
     const householdDelta = deltaByTarget.get('') ?? 0;
     finalBatch.update(doc(db, `households/${householdId}`), {
-      'points.daily': calculatePointsForDate(habits, today),
-      'points.weekly': calculatePointsForDateRange(habits, weekStart, today),
+      'points.daily': calculateHouseholdPointsForDate(habits, today, today),
+      'points.weekly': calculateHouseholdPointsForDateRange(habits, weekStart, today, today),
       ...(householdDelta !== 0 ? { 'points.total': increment(householdDelta) } : {}),
       negativePointsRepairedAt: new Date().toISOString(),
     });
