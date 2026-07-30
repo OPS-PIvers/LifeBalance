@@ -68,8 +68,14 @@ import {
   NotificationLogEntry
 } from '@/types/schema';
 import { calculateSafeToSpendBreakdownFromExpanded, calculateSafeToSpendExpansionStart } from '@/utils/safeToSpendCalculator';
-import { calculatePointsForDate, calculatePointsForDateRange, isHabitStale, getHabitResetUpdate } from '@/utils/habitLogic';
-import { completedByDatePath, computeMemberPointsReset, type MemberPointsSyncUpdate } from '@/utils/habitAttribution';
+import { isHabitStale, getHabitResetUpdate } from '@/utils/habitLogic';
+import {
+  calculateHouseholdPointsForDate,
+  calculateHouseholdPointsForDateRange,
+  completedByDatePath,
+  computeMemberPointsReset,
+  type MemberPointsSyncUpdate,
+} from '@/utils/habitAttribution';
 import { visibleFreezeBank } from '@/utils/freezeSettings';
 import { fetchSubmissionTotals } from '@/utils/habitSubmissionTotals';
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
@@ -1471,15 +1477,19 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       habitActions.getHabitSubmissions,
     );
 
-    // Household pool. calculatePointsForDate/Range default-exclude assigned chores —
-    // those belong to each kid's own balance, rolled over below.
+    // Household pool. Per-member points stage 1.5: the rolled-over household
+    // figure is `Σ member awards + the unattributed remainder`
+    // (calculateHouseholdPointsForDate/Range), the same competition model every
+    // per-toggle delta now writes — so the rollover can't undo the flip. Both
+    // scorers exclude assigned chores, whose points belong to each kid's own
+    // balance and are rolled over below.
     const householdUpdates: Record<string, number | string> = {};
     if (dayRolled) {
-      householdUpdates['points.daily'] = calculatePointsForDate(currentHabits, today, undefined, submissionTotals);
+      householdUpdates['points.daily'] = calculateHouseholdPointsForDate(currentHabits, today, today, submissionTotals);
       householdUpdates['lastDailyPointsReset'] = today;
     }
     if (weekRolled) {
-      householdUpdates['points.weekly'] = calculatePointsForDateRange(currentHabits, weekStartStr, today, undefined, submissionTotals);
+      householdUpdates['points.weekly'] = calculateHouseholdPointsForDateRange(currentHabits, weekStartStr, today, today, submissionTotals);
       householdUpdates['lastWeeklyPointsReset'] = today;
     }
 
