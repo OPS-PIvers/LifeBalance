@@ -224,7 +224,7 @@ const TopToolbar: React.FC = () => {
                   <MemberAvatar
                     name={profileDisplayName ?? '?'}
                     photoURL={profilePhotoURL}
-                    color={profileIdentityUid ? memberColorFor(colors, profileIdentityUid) : '#565249'}
+                    color={profileIdentityUid ? memberColorFor(colors, profileIdentityUid) : 'var(--color-brand-600)'}
                     alt={profileDisplayName ? `${profileDisplayName}'s profile picture` : 'Profile picture'}
                     size={36}
                   />
