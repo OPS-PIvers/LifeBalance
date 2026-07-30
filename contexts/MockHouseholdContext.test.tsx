@@ -8,6 +8,7 @@ import { calculateSafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { DEFAULT_TODO_POINTS } from '@/utils/todoPoints';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { decomposeDayPoints } from '@/utils/habitAttribution';
 import type { Habit } from '@/types/schema';
 
 // Finding 4.4: MockHouseholdContext must expose a well-formed
@@ -1223,34 +1224,76 @@ describe('MockHouseholdContext household credit mode', () => {
     expect(pointsOf(result, 'test-partner-id')).toEqual(partnerBefore);
   });
 
-  // 🔒 Reconciliation invariant: the Scoreboard/Points-drawer household
-  // headline (`weeklyPoints`) is DEFINED as Σ the adult members' own
-  // `points.weekly` (see the "household points = Σ of adult members" describe
-  // block above) — Test Mode books a household-credit completion's own share
-  // to the separate redeemable pool (`totalPoints`), never to any member, the
-  // same way the picker's `creditHouseholdCompletion` already does. So after a
-  // household-credit completion: Σ member weekly is UNCHANGED, and therefore
-  // still equals the household weekly total — the invariant the bug broke by
-  // routing the pool's share through the test user's own row instead.
-  it('keeps Σ member weekly === the household weekly total after a household-credit completion', async () => {
+  // 🔒 Reconciliation invariant (rewritten, adversarial review of PR #1165).
+  //
+  // This used to assert `weeklyPoints === Σ adult members` after a
+  // household-credit completion — i.e. that the headline does NOT move. That is
+  // what Test Mode actually did, and it was the defect: production's household
+  // `points.weekly` is `Σ members + unattributed`, and a `creditMode:
+  // 'household'` completion moves ONLY the unattributed term. Σ-adults alone
+  // matched production for every prior feature only because every completion was
+  // attributed to somebody; household credit is the first one that isn't.
+  //
+  // The consequence was visible, not theoretical: a per-member scoreboard shows
+  // its "Household · N" row from the same unattributed term, so in Test Mode the
+  // rows failed to sum to the headline above them while production reconciled
+  // correctly — defeating browser verification of the invariant.
+  //
+  // So the assertion is now production's identity, both halves of it: nobody's
+  // own score moves, AND the headline moves by exactly the unattributed award.
+  it('moves the household headline by the unattributed award, crediting no member', async () => {
     const { result } = captureHousehold();
     const weeklyBefore = result.current.weeklyPoints;
+    const dailyBefore = result.current.dailyPoints;
+    const poolBefore = result.current.totalPoints;
     const adultsBefore = result.current.members
       .filter((m) => !m.isManaged)
-      .map((m) => ({ uid: m.uid, weekly: m.points.weekly }));
+      .map((m) => ({ uid: m.uid, weekly: m.points.weekly, daily: m.points.daily }));
 
     await act(async () => {
       await result.current.toggleHabit(HOUSEHOLD_HABIT, 'up');
     });
 
+    // Nobody is credited — that IS household credit.
     const adultsAfter = result.current.members.filter((m) => !m.isManaged);
     for (const before of adultsBefore) {
       const after = adultsAfter.find((m) => m.uid === before.uid)!;
       expect(after.points.weekly).toBe(before.weekly);
+      expect(after.points.daily).toBe(before.daily);
     }
-    const memberWeeklySum = adultsAfter.reduce((sum, m) => sum + m.points.weekly, 0);
-    expect(memberWeeklySum).toBe(weeklyBefore);
-    expect(result.current.weeklyPoints).toBe(memberWeeklySum);
+
+    // …and yet the household headline moved, by the award the pool received.
+    const award = result.current.totalPoints - poolBefore;
+    expect(award).toBeGreaterThan(0);
+    expect(result.current.weeklyPoints).toBe(weeklyBefore + award);
+    expect(result.current.dailyPoints).toBe(dailyBefore + award);
+
+    // 🏁 `household = Σ adults + unattributed`, read off the SAME habit state a
+    // scoreboard's "Household" row reads — so its rows sum to its headline.
+    const unattributed = decomposeDayPoints(
+      result.current.habits,
+      adultsAfter.map((m) => m.uid),
+      getLocalDateString(),
+    ).unattributed;
+    const adultDaily = adultsAfter.reduce((sum, m) => sum + m.points.daily, 0);
+    expect(unattributed).toBe(award);
+    expect(result.current.dailyPoints).toBe(adultDaily + unattributed);
+  });
+
+  it('takes the headline back on the down-tap (Σ adults + unattributed, both ways)', async () => {
+    const { result } = captureHousehold();
+    const weeklyBefore = result.current.weeklyPoints;
+    const dailyBefore = result.current.dailyPoints;
+
+    await act(async () => {
+      await result.current.toggleHabit(HOUSEHOLD_HABIT, 'up');
+    });
+    expect(result.current.dailyPoints).toBeGreaterThan(dailyBefore);
+
+    await act(async () => {
+      await result.current.toggleHabit(HOUSEHOLD_HABIT, 'down');
+    });
+    expect(result.current.dailyPoints).toBe(dailyBefore);
     expect(result.current.weeklyPoints).toBe(weeklyBefore);
   });
 

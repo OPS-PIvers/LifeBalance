@@ -940,7 +940,7 @@ describe('HabitCard - attribution picker', () => {
 
     await user.click(screen.getByLabelText('Options for Morning walk'));
     await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Both of us' }));
+    await user.click(screen.getByRole('menuitem', { name: /^Both of us/ }));
 
     expect(mockHouseholdContext.creditHabitCompletion).toHaveBeenCalledWith('h1', [JEN]);
   });
@@ -952,7 +952,58 @@ describe('HabitCard - attribution picker', () => {
     await user.click(screen.getByLabelText('Options for Morning walk'));
     await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
 
-    expect(screen.getByRole('menuitem', { name: 'Both of us' })).toBeDisabled();
+    expect(screen.getByRole('menuitem', { name: /^Both of us/ })).toBeDisabled();
+  });
+
+  // 🔒 Regression (adversarial review, PR #1165). "Both of us" and "Household"
+  // are the two most OPPOSITE outcomes on the sheet and sat adjacent, separated
+  // by a 1px hairline. Undoing a mistaken "Both of us" costs TWO taps before
+  // "Household" can even be picked, so the difference has to be legible BEFORE
+  // the tap — not merely recoverable after it.
+  it('spells out what each compound row does, and breaks Household off from the member rows', async () => {
+    const user = userEvent.setup();
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+
+    // Each compound row says what it actually does — and says it in the
+    // ACCESSIBLE NAME, so a screen reader gets the same warning.
+    expect(screen.getByRole('menuitem', { name: /^Both of us/ })).toHaveAccessibleName(
+      /2 awards — one each/,
+    );
+    expect(screen.getByRole('menuitemcheckbox', { name: /^Household/ })).toHaveAccessibleName(
+      /One award — nobody credited/,
+    );
+    // A plain member row carries no descriptor — only the compound ones do.
+    expect(screen.getByRole('menuitemcheckbox', { name: /^Jen/ })).toHaveAccessibleName('Jen');
+
+    // …and a group break sits between the member-ish rows and Household.
+    const menu = screen.getByRole('menu', { name: /Who completed Morning walk/ });
+    const separator = menu.querySelector('[role="separator"]');
+    expect(separator).not.toBeNull();
+    const rows = Array.from(
+      menu.querySelectorAll('[role="menuitem"],[role="menuitemcheckbox"],[role="separator"]'),
+    );
+    // Members habit ⇒ Household sorts LAST, so the break is immediately above it.
+    expect(rows.at(-2)).toBe(separator);
+    expect(rows.at(-1)).toHaveAccessibleName(/^Household/);
+  });
+
+  it('keeps every picker row at the 44px minimum hit target', async () => {
+    const user = userEvent.setup();
+    render(<HabitCard habit={attributedHabit({ [PAUL]: 1 })} attribution={ROSTER} />);
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+
+    const menu = screen.getByRole('menu', { name: /Who completed Morning walk/ });
+    const rows = menu.querySelectorAll('[role="menuitem"],[role="menuitemcheckbox"]');
+    expect(rows.length).toBeGreaterThan(0);
+    // jsdom has no layout, so the CONTRACT is asserted on the class that
+    // provides it (min-h-11 = 2.75rem = 44px), which is what a descriptor-driven
+    // height change could silently have dropped.
+    for (const row of rows) expect(row.className).toContain('min-h-11');
   });
 
   it('lists adults only — managed kid profiles are excluded', async () => {

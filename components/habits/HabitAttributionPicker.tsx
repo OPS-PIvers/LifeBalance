@@ -35,6 +35,16 @@ import type { AttributionPickerMember, RowMember } from '@/utils/habitRowAttribu
  * It renders on EVERY habit (any habit can be a one-off team effort) and sorts
  * FIRST on a `creditMode: 'household'` habit, LAST on a members one — so the
  * habit's own default is the row your thumb lands on.
+ *
+ * 🛡️ THE TWO COMPOUND ROWS MUST BE TELLABLE APART BEFORE THE TAP. In a
+ * two-adult household — this app's home case — `Both of us` and `Household` sit
+ * adjacent with the most OPPOSITE outcomes on the sheet, and a 1px hairline was
+ * the only thing between them. A mis-tap swaps a double member award for a
+ * zero-personal one, and undoing a mistaken `Both of us` costs TWO taps before
+ * `Household` can even be picked. So each compound row carries a one-line
+ * descriptor of what it actually does, and a thick group break separates
+ * `Household` from the member-ish rows. Both are legibility only: the rows'
+ * semantics, roles, ordering and 44px hit targets are unchanged.
  */
 
 // The row view model lives with the other row derivations in
@@ -104,12 +114,45 @@ const CreditedMark: React.FC = () => (
 /** Shared row anatomy. `active` = this row's credit is currently in force. */
 const rowClass = (active: boolean): string =>
   [
-    'flex w-full min-h-11 items-center gap-3 border-t border-brand-200 px-3.5 text-left text-sm font-semibold first:border-t-0 dark:border-brand-600',
+    'flex w-full min-h-11 items-center gap-3 border-t border-brand-200 px-3.5 py-2 text-left text-sm font-semibold first:border-t-0 dark:border-brand-600',
     'focus:outline-hidden focus-visible:bg-warm-50 dark:focus-visible:bg-warm-900/20',
     active
       ? 'bg-accent-50 text-accent-700 dark:bg-accent-900/30 dark:text-accent-200'
       : 'text-brand-700 hover:bg-brand-50 dark:text-brand-200 dark:hover:bg-brand-600/40',
   ].join(' ');
+
+/**
+ * A row's label plus, on the two COMPOUND rows, the one-line descriptor that
+ * says what picking it actually does. The descriptor is REAL row content, not
+ * `aria-hidden` decoration — a screen-reader user faces exactly the same
+ * ambiguity a sighted one does, so it belongs in the accessible name.
+ */
+const RowLabel: React.FC<{ label: string; detail?: string }> = ({ label, detail }) => (
+  <span className="flex min-w-0 flex-1 flex-col">
+    <span className="truncate">{label}</span>
+    {detail && (
+      <span className="truncate text-xxs font-medium text-brand-450 dark:text-brand-400">
+        {detail}
+      </span>
+    )}
+  </span>
+);
+
+/**
+ * The break that stops `Household` reading as one more member-ish row.
+ *
+ * A thick TINT band in the same colour as the row dividers (so it merges with
+ * the adjacent row's own `border-t` into one heavier rule) rather than a border
+ * — the panel is `overflow-hidden` + rounded, and a full-bleed child's border
+ * corners get sliced by that clip.
+ */
+const GroupBreak: React.FC = () => (
+  <div
+    role="separator"
+    aria-orientation="horizontal"
+    className="h-1 bg-brand-200 dark:bg-brand-600"
+  />
+);
 
 const HabitAttributionPicker: React.FC<HabitAttributionPickerProps> = ({
   isOpen,
@@ -163,7 +206,7 @@ const HabitAttributionPicker: React.FC<HabitAttributionPickerProps> = ({
       className={rowClass(householdCredited)}
     >
       <HouseholdAvatar size={22} />
-      <span className="flex-1 truncate">Household</span>
+      <RowLabel label="Household" detail="One award — nobody credited" />
       {householdCredited && <CreditedMark />}
     </button>
   );
@@ -186,7 +229,7 @@ const HabitAttributionPicker: React.FC<HabitAttributionPickerProps> = ({
       className={rowClass(member.credited)}
     >
       <PickerAvatar member={member} />
-      <span className="flex-1 truncate">{member.isSelf ? 'Me' : member.displayName}</span>
+      <RowLabel label={member.isSelf ? 'Me' : member.displayName} />
       {member.credited && <CreditedMark />}
     </button>
   ));
@@ -202,7 +245,7 @@ const HabitAttributionPicker: React.FC<HabitAttributionPickerProps> = ({
         onClose();
         onCredit(uncredited.map(m => m.uid));
       }}
-      className="flex w-full min-h-11 items-center gap-3 border-t border-brand-200 px-3.5 text-left text-sm font-semibold text-brand-700 hover:bg-brand-50 focus:outline-hidden focus-visible:bg-warm-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-brand-600 dark:text-brand-200 dark:hover:bg-brand-600/40 dark:focus-visible:bg-warm-900/20"
+      className="flex w-full min-h-11 items-center gap-3 border-t border-brand-200 px-3.5 py-2 text-left text-sm font-semibold text-brand-700 hover:bg-brand-50 focus:outline-hidden focus-visible:bg-warm-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-brand-600 dark:text-brand-200 dark:hover:bg-brand-600/40 dark:focus-visible:bg-warm-900/20"
     >
       {/* Stacked member avatars — deliberately NOT the household badge. This
           row means N completions and N member awards; the household one means
@@ -214,9 +257,16 @@ const HabitAttributionPicker: React.FC<HabitAttributionPickerProps> = ({
           </span>
         ))}
       </span>
-      <span className="flex-1 truncate">{everyoneLabel}</span>
+      <RowLabel
+        label={everyoneLabel}
+        detail={`${members.length} awards — one each`}
+      />
     </button>
   ) : null;
+
+  // 🛡️ The break always sits BETWEEN the household row and the member-ish
+  // rows, whichever end `householdFirst` puts it at.
+  const groupBreak = <GroupBreak key="group-break" />;
 
   return (
     <Popover
@@ -229,8 +279,8 @@ const HabitAttributionPicker: React.FC<HabitAttributionPickerProps> = ({
       className="w-56 overflow-hidden"
     >
       {householdFirst
-        ? [householdRow, ...memberRows, everyoneRow]
-        : [...memberRows, everyoneRow, householdRow]}
+        ? [householdRow, groupBreak, ...memberRows, everyoneRow]
+        : [...memberRows, everyoneRow, groupBreak, householdRow]}
     </Popover>
   );
 };

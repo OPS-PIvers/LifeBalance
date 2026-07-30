@@ -25,6 +25,7 @@ import {
   memberPeriodPointsDelta,
   periodMemberIds,
   resolveReversalSources,
+  unattributedPointsForHabitOnDate,
   wholePeriodClearDates,
   withAttributionDelta,
   withDatesUnattributed,
@@ -442,6 +443,37 @@ const affectedPeriodMembers = (
   ...new Set([...actors, ...periodMemberIds(before, date), ...periodMemberIds(after, date)]),
 ];
 
+/**
+ * The UNATTRIBUTED remainder over a set of dates — the grandfathering /
+ * household-credit term of production's `household = Σ members + unattributed`.
+ *
+ * 🏁 WITHOUT THIS THE MOCK CANNOT REPRESENT A HOUSEHOLD-CREDIT TAP. Test Mode's
+ * headline is derived as Σ ADULT members, which matched production for every
+ * prior feature only because every completion was attributed to somebody.
+ * `creditMode: 'household'` breaks that equivalence by design: it writes NO
+ * `completedBy` entry, so the pool moves and not one member's score does — and
+ * the headline sat still while the pool grew. A per-member scoreboard then
+ * renders a "Household · N" row that visibly fails to sum to the headline in
+ * Test Mode while production reconciles correctly, which defeats the whole
+ * point of walking the invariant in a browser.
+ *
+ * DERIVED from `habits`, not carried in an accumulator: the mock writes its pool
+ * total from eight separate call sites, and an accumulator threaded through all
+ * of them is exactly the kind of hand-maintained parallel counter that drifts.
+ * This is the same term `decomposeDayPoints` reports, read off the same habit
+ * state, so it cannot disagree with what a scoreboard shows. Assigned chores are
+ * skipped for the same reason production skips them: their points never reach
+ * the pool.
+ */
+const unattributedOverDates = (habits: Habit[], dates: string[], today: string): number => {
+  let total = 0;
+  for (const habit of habits) {
+    if (habit.assignedTo) continue;
+    for (const date of dates) total += unattributedPointsForHabitOnDate(habit, date, today);
+  }
+  return total;
+};
+
 const SEED_MEMBERS: HouseholdMember[] = [
   {
     uid: 'test-user-id', displayName: 'Test User', email: 'test@example.com',
@@ -461,9 +493,11 @@ const SEED_MEMBERS: HouseholdMember[] = [
     // Breakdown drawer's adults-only standings need two members with different
     // figures to be worth looking at in Test Mode). Post-flip (stage 1.5) the
     // household `dailyPoints`/`weeklyPoints` are derived as the Σ of the ADULT
-    // members' scores, so Jordan's points DO feed the toolbar figures
-    // (30+18=48 / 150+95=245) — the drawer's "together" number and the member
-    // standings must agree, that Σ being the whole point of the model. The
+    // members' scores PLUS the unattributed remainder (0 for this seed — no
+    // seeded habit carries a completion date), so Jordan's points DO feed the
+    // toolbar figures (30+18=48 / 150+95=245) — the drawer's "together" number
+    // and the member standings must agree, that Σ being the whole point of the
+    // model, and a household-credit tap has to move the headline too. The
     // per-member scoreboard widget (PR 4/6) also demos off this pair: Test
     // User stays the leader (30/150 > 18/95).
     points: { daily: 18, weekly: 95, total: 310 },
@@ -3316,12 +3350,36 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   );
   const safeToSpend = safeToSpendBreakdown.safeToSpend;
   // Post-flip (stage 1.5): household daily/weekly = Σ the ADULT members' own
-  // scores, exactly like production's competition model (managed kids' chore
-  // points route to the kid alone and never the household). Seeded
-  // 30+18=48 / 150+95=245, and a habit toggle crediting any adult's member
-  // score moves these derived figures just like the real context.
-  const dailyPoints = members.reduce((sum, m) => (m.isManaged ? sum : sum + m.points.daily), 0);
-  const weeklyPoints = members.reduce((sum, m) => (m.isManaged ? sum : sum + m.points.weekly), 0);
+  // scores PLUS the unattributed remainder, exactly like production's
+  // competition model (managed kids' chore points route to the kid alone and
+  // never the household). Seeded 30+18=48 / 150+95=245 with a remainder of 0 —
+  // every seeded habit has an empty `completedDates`, so nothing is
+  // grandfathered — and a habit toggle crediting any adult's member score moves
+  // these derived figures just like the real context.
+  //
+  // 🏁 THE REMAINDER IS NOT OPTIONAL. Σ adults alone matched production only
+  // while every completion was attributed; a `creditMode: 'household'` tap pays
+  // the pool and credits NOBODY, so without this term the Test Mode headline
+  // simply doesn't move for it — and a per-member scoreboard's "Household · N"
+  // row would not sum to the headline it sits under. See `unattributedOverDates`.
+  const pointsToday = getLocalDateString();
+  // Monday..today, the same window production's corrective sync scores its
+  // weekly bucket over — a weekly habit parks its remainder on the week's
+  // LATEST completed day, which is often not today.
+  const pointsWeekDates = useMemo(() => {
+    const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+    const dates: string[] = [];
+    for (let offset = 0; offset < 7; offset++) {
+      const date = getLocalDateString(addDays(weekStart, offset));
+      if (date > pointsToday) break;
+      dates.push(date);
+    }
+    return dates;
+  }, [pointsToday]);
+  const adultDaily = members.reduce((sum, m) => (m.isManaged ? sum : sum + m.points.daily), 0);
+  const adultWeekly = members.reduce((sum, m) => (m.isManaged ? sum : sum + m.points.weekly), 0);
+  const dailyPoints = adultDaily + unattributedOverDates(habits, [pointsToday], pointsToday);
+  const weeklyPoints = adultWeekly + unattributedOverDates(habits, pointsWeekDates, pointsToday);
   const currentUser = members[0] || null;
   const activeChallenge = challenges[0] || null;
   const activeYearlyGoals: YearlyGoal[] = [];

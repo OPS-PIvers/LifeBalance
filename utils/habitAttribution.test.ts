@@ -1128,6 +1128,142 @@ describe('habitAttribution — whole-period clears sweep incremental orphans', (
   });
 });
 
+// 🔒 Regression (adversarial review, PR #1165). An INCREMENTAL reversal used to
+// debit the pool an ABSOLUTE per-date figure computed against a habit earlier
+// iterations had already stripped. `unattributedPointsForHabitOnDate` gates on
+// `periodHasAttribution`, which is PERIOD-wide — so an UNATTRIBUTED day (a
+// household-credit tap) processed AFTER an attributed one in the same period was
+// re-scored as fully grandfathered and paid the pool a remainder that had
+// already been taken off. The answer depended on the array order of
+// `completedDates`, which `arrayUnion` APPENDS to, and a wrongly-lowered
+// `points.total` is permanent.
+describe('habitAttribution — incremental reversals are order-independent', () => {
+  /** Thursday: the fixture week is live, but "today" is none of the cleared days. */
+  const TODAY = d(3);
+
+  /**
+   * The mixed period household credit makes routine: Wednesday is Jen's (a
+   * member override), Monday belongs to nobody (a household-credit tap).
+   * `completedDates` is passed in the caller's order so a test can flip it.
+   */
+  const mixedWeek = (completedDates: string[]): Habit => habit({
+    period: 'weekly',
+    scoringType: 'incremental',
+    targetCount: 1,
+    count: 2,
+    totalCount: 2,
+    completedDates,
+    completedBy: { [d(2)]: { [JEN]: 1 } },
+  });
+
+  /** The state a whole-period clear is about to WRITE. */
+  const clearedTo = (before: Habit, dates: string[], countAfter: number): Habit => {
+    const removed = new Set(dates);
+    return {
+      ...withDatesUnattributed(before, dates),
+      completedDates: before.completedDates.filter(c => !removed.has(c)),
+      count: countAfter,
+    };
+  };
+
+  it('the pool really does hold 20 for this week (Jen’s award + one loose unit)', () => {
+    expect(householdPeriodPoints(mixedWeek([d(2), d(0)]), d(2), TODAY)).toBe(20);
+    // …and the array order of `completedDates` cannot change that figure.
+    expect(householdPeriodPoints(mixedWeek([d(0), d(2)]), d(2), TODAY)).toBe(20);
+  });
+
+  it('reverses the whole mixed week to exactly zero, not to a phantom deficit', () => {
+    // The verified repro: Jen credited Wednesday (+10 pool, +10 Jen), the
+    // household credited Monday (+10 pool). The reset must give back 20 and 10,
+    // leaving both at 0 — it used to debit the pool 30.
+    const before = mixedWeek([d(2), d(0)]);
+    const dates = wholePeriodClearDates(before, [d(2), d(0)], TODAY);
+    const reversal = attributionReversalForDates(before, dates, TODAY, 0);
+
+    expect(reversal.household).toEqual({ daily: 0, weekly: -20, total: -20 });
+    expect(reversal.perMember.get(JEN)).toEqual({ daily: 0, weekly: -10, total: -10 });
+    // Only Wednesday carries an attribution node to clear.
+    expect(reversal.clearPaths).toEqual([completedByDatePath(d(2))]);
+    // 🔒 The pool debit IS the before/after diff the corrective recompute will
+    // derive — no login-time correction jump, in either direction.
+    expect(reversal.household.total).toBe(
+      householdPeriodPointsDelta(before, clearedTo(before, dates, 0), d(2), TODAY),
+    );
+  });
+
+  it('produces identical deltas for both `completedDates` orders and both clear orders', () => {
+    const variants = [
+      attributionReversalForDates(mixedWeek([d(2), d(0)]), [d(2), d(0)], TODAY, 0),
+      attributionReversalForDates(mixedWeek([d(2), d(0)]), [d(0), d(2)], TODAY, 0),
+      attributionReversalForDates(mixedWeek([d(0), d(2)]), [d(2), d(0)], TODAY, 0),
+      attributionReversalForDates(mixedWeek([d(0), d(2)]), [d(0), d(2)], TODAY, 0),
+    ];
+    for (const variant of variants) {
+      expect(variant.household).toEqual({ daily: 0, weekly: -20, total: -20 });
+      expect(variant.perMember.get(JEN)).toEqual({ daily: 0, weekly: -10, total: -10 });
+      expect(variant.clearPaths).toEqual([completedByDatePath(d(2))]);
+    }
+  });
+
+  it('clears ONE day of a mixed week without over-debiting the day that survives', () => {
+    // `resetHabitDay`'s shape (a single date, so iteration order was never the
+    // issue): clearing Wednesday leaves Monday holding the week's remaining
+    // live unit, so the pool loses 10, not the 20 Wednesday appeared to hold.
+    const before = mixedWeek([d(2), d(0)]);
+    const countAfter = 1; // habit.count - the one unit Wednesday recorded
+    const reversal = attributionReversalForDates(before, [d(2)], TODAY, countAfter);
+
+    expect(reversal.household).toEqual({ daily: 0, weekly: -10, total: -10 });
+    expect(reversal.perMember.get(JEN)).toEqual({ daily: 0, weekly: -10, total: -10 });
+    expect(reversal.household.total).toBe(
+      householdPeriodPointsDelta(before, clearedTo(before, [d(2)], countAfter), d(2), TODAY),
+    );
+  });
+
+  it('reverses a PRIOR week’s mixed period identically in either order (stale deselect)', () => {
+    // `processStaleDownToggle` hands over the whole prior week's completion
+    // dates — several dates, one period, straight into this branch.
+    const staleWeek = (completedDates: string[]): Habit => habit({
+      period: 'weekly',
+      scoringType: 'incremental',
+      targetCount: 1,
+      count: 2,
+      totalCount: 2,
+      completedDates,
+      completedBy: { [d(0)]: { [JEN]: 1 } },
+    });
+    const nextWeek = d(7);
+    expect(householdPeriodPoints(staleWeek([d(2), d(0)]), d(0), nextWeek)).toBe(10);
+
+    for (const order of [[d(2), d(0)], [d(0), d(2)]]) {
+      const reversal = attributionReversalForDates(staleWeek([d(2), d(0)]), order, nextWeek, 0);
+      // A closed week moves `total` alone — never this week's daily or weekly.
+      expect(reversal.household).toEqual({ daily: 0, weekly: 0, total: -10 });
+      expect(reversal.perMember.get(JEN)).toEqual({ daily: 0, weekly: 0, total: -10 });
+    }
+  });
+
+  it('leaves a single-member incremental week exactly as it was (control)', () => {
+    // 🔒 No household credit, no grandfathered day — the shape every existing
+    // test covers. Both orders agreed before the fix and must still agree now.
+    const control = habit({
+      period: 'weekly',
+      scoringType: 'incremental',
+      targetCount: 1,
+      count: 2,
+      totalCount: 2,
+      completedDates: [d(2), d(0)],
+      completedBy: { [d(0)]: { [PAUL]: 1 }, [d(2)]: { [JEN]: 1 } },
+    });
+    for (const order of [[d(2), d(0)], [d(0), d(2)]]) {
+      const reversal = attributionReversalForDates(control, order, TODAY, 0);
+      expect(reversal.household).toEqual({ daily: 0, weekly: -20, total: -20 });
+      expect(reversal.perMember.get(PAUL)).toEqual({ daily: 0, weekly: -10, total: -10 });
+      expect(reversal.perMember.get(JEN)).toEqual({ daily: 0, weekly: -10, total: -10 });
+    }
+  });
+});
+
 describe('habitAttribution — household period points (pool delta)', () => {
   it('matches the legacy scorer for the period when nothing is attributed', () => {
     const h = habit({ count: 1, completedDates: [d(0)] });

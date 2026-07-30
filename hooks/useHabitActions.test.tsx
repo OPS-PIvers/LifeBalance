@@ -3534,3 +3534,206 @@ describe('useHabitActions — household credit mode', () => {
     expect(Object.keys(payload).some(k => k.startsWith('completedBy'))).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 🔒 Regression (adversarial review, PR #1165) — THE MIXED WEEK.
+//
+// Household credit makes a shape that used to be exotic routine: ONE period
+// holding both an attributed day and an unattributed one. The incremental
+// reversal branch scored each cleared date as an ABSOLUTE figure against a
+// progressively-stripped habit, and `unattributedPointsForHabitOnDate` gates on
+// `periodHasAttribution` — which is PERIOD-wide. So the unattributed day,
+// processed AFTER the attributed one, was re-scored as fully grandfathered and
+// debited the pool a remainder that had already been taken off.
+//
+// The whole sequence runs through the real hook here, because the ORDER that
+// broke it is not something a caller chooses: `arrayUnion` APPENDS, so a
+// back-dated Monday credit lands after Wednesday in `completedDates`.
+// ---------------------------------------------------------------------------
+describe('useHabitActions — a mixed household/member week resets to exactly zero', () => {
+  const NOW = new Date('2026-07-16T09:00:00'); // Thursday
+  const MON = '2026-07-13';
+  const WED = '2026-07-15';
+
+  const roster = (...uids: string[]) => uids.map(uid => ({ uid })) as HouseholdMember[];
+  const memberUpdateOf = (uid: string) =>
+    capturedUpdates.find(u => u.ref.__path === `${householdPath}/members/${uid}`);
+  const bucketOf = (u: CapturedUpdate | undefined, bucket: string) =>
+    (u?.data[bucket] as { __increment: number } | undefined)?.__increment ?? 0;
+  /** Every increment written to one doc for one bucket, summed across batches. */
+  const runningTotal = (path: string, bucket: string) =>
+    capturedUpdates
+      .filter(u => u.ref.__path === path)
+      .reduce((sum, u) => sum + bucketOf(u, bucket), 0);
+
+  /** Weekly incremental, 10 pts, crediting the HOUSEHOLD. Not stale at NOW. */
+  const weeklyHouseholdHabit = (overrides: Partial<Habit>): Habit => baseHabit({
+    creditMode: 'household',
+    period: 'weekly',
+    scoringType: 'incremental',
+    basePoints: 10,
+    targetCount: 1,
+    lastUpdated: '2026-07-13T08:00:00',
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    capturedDeletes.length = 0;
+    commitCount = 0;
+    nextCommitError = null;
+    incrementMock.mockClear();
+    updateDocMock.mockClear();
+    getDocsMock.mockReset();
+    getDocMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('credit Jen Wednesday, credit the household Monday, reset: pool and Jen both land at 0', async () => {
+    vi.useFakeTimers({ now: NOW });
+
+    const step1 = weeklyHouseholdHabit({ count: 0, totalCount: 0, completedDates: [] });
+    const { result, rerender } = renderHook(
+      ({ habits }: { habits: Habit[] }) =>
+        useHabitActions(
+          HOUSEHOLD_ID, currentUser, habits, householdSettings, [], roster('user1', 'jen-uid'),
+        ),
+      { initialProps: { habits: [step1] } },
+    );
+
+    // 1 — a member override on a household habit: pool +10, Jen +10.
+    await act(async () => {
+      await result.current.creditHabitCompletion('h1', ['jen-uid'], WED);
+    });
+    expect(bucketOf(householdUpdate(), 'points.total')).toBe(10);
+    expect(bucketOf(memberUpdateOf('jen-uid'), 'points.total')).toBe(10);
+
+    // The state that batch wrote.
+    const step2 = weeklyHouseholdHabit({
+      count: 1,
+      totalCount: 1,
+      completedDates: [WED],
+      completedBy: { [WED]: { 'jen-uid': 1 } },
+    });
+    rerender({ habits: [step2] });
+    capturedUpdates.length = 0;
+
+    // 2 — a back-dated household credit for Monday: pool +10, nobody credited.
+    await act(async () => {
+      await result.current.creditHouseholdCompletion('h1', MON);
+    });
+    expect(bucketOf(householdUpdate(), 'points.total')).toBe(10);
+    expect(capturedUpdates.filter(u => u.ref.__path.includes('/members/'))).toHaveLength(0);
+    // 🛡️ The ordering that broke this: `arrayUnion` APPENDS, so Monday lands
+    // after Wednesday in `completedDates`.
+    expect(habitUpdate()!.data['completedDates']).toEqual({ __arrayUnion: [MON] });
+
+    const step3 = weeklyHouseholdHabit({
+      count: 2,
+      totalCount: 2,
+      completedDates: [WED, MON], // Wednesday first — arrayUnion's real order
+      completedBy: { [WED]: { 'jen-uid': 1 } },
+    });
+    rerender({ habits: [step3] });
+    capturedUpdates.length = 0;
+
+    // 3 — the reset gives back exactly the 20 the pool holds and Jen's 10.
+    await act(async () => {
+      await result.current.resetHabit('h1');
+    });
+
+    expect(bucketOf(householdUpdate(), 'points.total')).toBe(-20);
+    expect(bucketOf(householdUpdate(), 'points.weekly')).toBe(-20);
+    // Neither cleared day is today, so today's bucket must not move at all.
+    expect(bucketOf(householdUpdate(), 'points.daily')).toBe(0);
+    expect(bucketOf(memberUpdateOf('jen-uid'), 'points.total')).toBe(-10);
+
+    // Only Wednesday carried attribution, so only Wednesday is cleared.
+    expect(habitUpdate()!.data[`completedBy.${WED}`]).toEqual({ __deleteField: true });
+    expect(habitUpdate()!.data[`completedBy.${MON}`]).toBeUndefined();
+  });
+
+  it('nets both counters to zero across all three writes', async () => {
+    vi.useFakeTimers({ now: NOW });
+
+    const states: Habit[] = [
+      weeklyHouseholdHabit({ count: 0, totalCount: 0, completedDates: [] }),
+      weeklyHouseholdHabit({
+        count: 1, totalCount: 1, completedDates: [WED],
+        completedBy: { [WED]: { 'jen-uid': 1 } },
+      }),
+      weeklyHouseholdHabit({
+        count: 2, totalCount: 2, completedDates: [WED, MON],
+        completedBy: { [WED]: { 'jen-uid': 1 } },
+      }),
+    ];
+    const { result, rerender } = renderHook(
+      ({ habits }: { habits: Habit[] }) =>
+        useHabitActions(
+          HOUSEHOLD_ID, currentUser, habits, householdSettings, [], roster('user1', 'jen-uid'),
+        ),
+      { initialProps: { habits: [states[0]!] } },
+    );
+
+    await act(async () => {
+      await result.current.creditHabitCompletion('h1', ['jen-uid'], WED);
+    });
+    rerender({ habits: [states[1]!] });
+    await act(async () => {
+      await result.current.creditHouseholdCompletion('h1', MON);
+    });
+    rerender({ habits: [states[2]!] });
+    await act(async () => {
+      await result.current.resetHabit('h1');
+    });
+
+    // 🏁 Nothing happened, so nothing is owed: the pool must be back where it
+    // started. It used to end at -10 — a permanent phantom deficit, because
+    // `points.total` is a lifetime counter the corrective sync never lowers.
+    for (const bucket of ['points.total', 'points.weekly', 'points.daily']) {
+      expect(runningTotal(householdPath, bucket)).toBe(0);
+      expect(runningTotal(`${householdPath}/members/jen-uid`, bucket)).toBe(0);
+    }
+    expect(commitCount).toBe(3);
+  });
+
+  it('reverses identically when `completedDates` arrives Monday-first', async () => {
+    // 🛡️ ORDER-INDEPENDENCE. The same period, the same points, the only
+    // difference being the array order the dates sit in — which no caller
+    // controls. Both must produce the same deltas.
+    vi.useFakeTimers({ now: NOW });
+
+    const deltasFor = async (completedDates: string[]) => {
+      capturedUpdates.length = 0;
+      const habit = weeklyHouseholdHabit({
+        count: 2, totalCount: 2, completedDates,
+        completedBy: { [WED]: { 'jen-uid': 1 } },
+      });
+      const { result } = renderHook(() =>
+        useHabitActions(
+          HOUSEHOLD_ID, currentUser, [habit], householdSettings, [], roster('user1', 'jen-uid'),
+        )
+      );
+      await act(async () => {
+        await result.current.resetHabit('h1');
+      });
+      return {
+        pool: ['points.total', 'points.weekly', 'points.daily']
+          .map(b => bucketOf(householdUpdate(), b)),
+        jen: ['points.total', 'points.weekly', 'points.daily']
+          .map(b => bucketOf(memberUpdateOf('jen-uid'), b)),
+      };
+    };
+
+    const wedFirst = await deltasFor([WED, MON]);
+    const monFirst = await deltasFor([MON, WED]);
+
+    expect(wedFirst).toEqual(monFirst);
+    expect(wedFirst.pool).toEqual([-20, -20, 0]);
+    expect(wedFirst.jen).toEqual([-10, -10, 0]);
+  });
+});

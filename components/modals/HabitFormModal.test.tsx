@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import HabitFormModal from './HabitFormModal';
 import { useGamification, useHouseholdCore, useTodos } from '@/contexts/FirebaseHouseholdContext';
 import { Habit } from '@/types/schema';
@@ -11,9 +11,13 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useTodos: vi.fn(),
 }));
 
-// Kid Mode off — the assign control never renders (dormant path).
+// Kid Mode off by DEFAULT — the assign control never renders (dormant path).
+// A hoisted box rather than a literal `false` so the one suite that needs the
+// assign control (the chore/creditMode interaction below) can turn it on; every
+// other suite reads the same `false` it always did.
+const { kidMode } = vi.hoisted(() => ({ kidMode: { enabled: false } }));
 vi.mock('@/hooks/useKidModeEnabled', () => ({
-  useKidModeEnabled: () => false,
+  useKidModeEnabled: () => kidMode.enabled,
 }));
 
 // F-HABITS-03: the reminder is written straight to the member doc, so the
@@ -415,5 +419,104 @@ describe('HabitFormModal — Credit (household credit mode)', () => {
     await waitFor(() => expect(mockAddHabit).toHaveBeenCalledTimes(1));
     const payload = (mockAddHabit.mock.calls as unknown[][])[0]![0] as Habit;
     expect('creditMode' in payload).toBe(false);
+  });
+});
+
+// 🔒 Regression (adversarial review, PR #1165). `handleSave` spreads
+// `...editingHabit` FIRST, so a stored `creditMode: 'household'` rode into the
+// payload even when the Credit control was HIDDEN — which is exactly what
+// assigning the habit to a kid does. `updateHabit` then persisted it. Later
+// un-assigning the kid re-opened the control ALREADY set to "Household" and
+// saved it again: a plain un-assign silently produced a habit that credits
+// nobody, from a setting the user was never shown.
+//
+// Kid Mode is dormant in production, so this is inert today — and the suite-wide
+// `useKidModeEnabled` mock is why no existing test could reach it.
+describe('HabitFormModal — a chore never carries a stale creditMode (Kid Mode ON)', () => {
+  const mockAddHabit = vi.fn();
+  const mockUpdateHabit = vi.fn(() => Promise.resolve());
+  const mockOnClose = vi.fn();
+  const KID = { uid: 'kid-1', displayName: 'Ada', isManaged: true };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    kidMode.enabled = true;
+    (useGamification as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      addHabit: mockAddHabit,
+      updateHabit: mockUpdateHabit,
+      setHabitPause: vi.fn(() => Promise.resolve()),
+      habitCategories: [],
+      updateHabitCategories: vi.fn(),
+    });
+    (useHouseholdCore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ members: [KID] });
+    (useTodos as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ todos: [] });
+  });
+
+  afterEach(() => {
+    kidMode.enabled = false;
+  });
+
+  const save = () => fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+  const lastPayload = (index = 0): Habit =>
+    (mockUpdateHabit.mock.calls as unknown[][])[index]![0] as Habit;
+  const kidChip = () => screen.getByRole('button', { name: 'Ada' });
+
+  it('the Credit control is hidden once the habit is assigned to a kid', () => {
+    render(
+      <HabitFormModal isOpen onClose={mockOnClose} editingHabit={baseHabit({ creditMode: 'household' })} />,
+    );
+    expect(screen.getByRole('radio', { name: 'Household' })).toBeInTheDocument();
+
+    fireEvent.click(kidChip());
+
+    expect(screen.queryByRole('radio', { name: 'Household' })).not.toBeInTheDocument();
+  });
+
+  it('assigning a household habit to a kid PERSISTS "members", not the stale value', async () => {
+    render(
+      <HabitFormModal isOpen onClose={mockOnClose} editingHabit={baseHabit({ creditMode: 'household' })} />,
+    );
+
+    fireEvent.click(kidChip()); // now a chore — the Credit control is gone
+    save();
+
+    await waitFor(() => expect(mockUpdateHabit).toHaveBeenCalledTimes(1));
+    expect(lastPayload().assignedTo).toBe('kid-1');
+    // An EXPLICIT 'members', so `updateHabit` overwrites the stored 'household'
+    // rather than dropping the key and leaving it in place.
+    expect(lastPayload().creditMode).toBe('members');
+  });
+
+  it('assign → save → un-assign → save does NOT resurrect Household', async () => {
+    // The full round trip, on a habit that ALREADY carries the stale field the
+    // way one saved before this fix would (there is no migration).
+    const stale = baseHabit({ assignedTo: 'kid-1', creditMode: 'household' });
+    render(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={stale} />);
+
+    // The chore's stored value must not pre-select the hidden control…
+    expect(screen.queryByRole('radio', { name: 'Household' })).not.toBeInTheDocument();
+
+    fireEvent.click(kidChip()); // un-assign
+    // …so when the control reappears it reads "Individuals", not "Household".
+    expect(screen.getByRole('radio', { name: 'Individuals' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: 'Household' })).toHaveAttribute('aria-checked', 'false');
+
+    save();
+
+    await waitFor(() => expect(mockUpdateHabit).toHaveBeenCalledTimes(1));
+    expect(lastPayload().assignedTo).toBeUndefined();
+    expect(lastPayload().creditMode).toBe('members');
+  });
+
+  it('still lets an un-assigned habit be set to Household deliberately', async () => {
+    // 🔒 Control: the fix must not make the setting unreachable with Kid Mode on.
+    render(<HabitFormModal isOpen onClose={mockOnClose} editingHabit={baseHabit()} />);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Household' }));
+    save();
+
+    await waitFor(() => expect(mockUpdateHabit).toHaveBeenCalledTimes(1));
+    expect(lastPayload().creditMode).toBe('household');
+    expect(lastPayload().assignedTo).toBeUndefined();
   });
 });
