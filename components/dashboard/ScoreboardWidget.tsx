@@ -426,7 +426,7 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
                 legacy history today, and (once shipped) Household-credit
                 habits. Shown only when nonzero so an ordinary household with
                 neither sees exactly what it saw before this row existed. */}
-            {!!householdShare && (
+            {householdShare !== undefined && householdShare !== 0 && (
               <div className="flex items-center gap-[11px] py-[5px]" data-testid="scoreboard-household-row">
                 <HouseholdAvatar size={30} data-testid="scoreboard-household-badge" />
                 <div className="flex-1 min-w-0">

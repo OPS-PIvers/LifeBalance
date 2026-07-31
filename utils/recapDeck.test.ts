@@ -359,6 +359,23 @@ describe('buildRecapDeck', () => {
     expect(deck.householdSharePoints).toBe(20); // 15 + 5, summed across the week
   });
 
+  it('treats a LEGACY day with no `unattributed` field as 0, never NaN (household-points-visibility)', () => {
+    // `weeklyRecapConverter` spreads raw Firestore data with `as WeeklyRecap`,
+    // so a recap written before `unattributed` joined `RecapDayPoints` carries
+    // days without it. Un-guarded, `sum + undefined` is NaN — and NaN !== 0
+    // passes the render guard, printing "NaN pts" on the household card.
+    const legacy = recap({
+      dailyPoints: DAYS.map((date, i) => {
+        const day = { date, byMember: { jen: 50, paul: 45 }, unattributed: i === 0 ? 15 : 0, total: 95 };
+        if (i !== 0) delete (day as Partial<typeof day>).unattributed;
+        return day as (typeof day) & { unattributed: number };
+      }),
+    });
+    const deck = buildRecapDeck({ ...base, recap: legacy, viewerId: 'jen' });
+    expect(Number.isNaN(deck.householdSharePoints)).toBe(false);
+    expect(deck.householdSharePoints).toBe(15);
+  });
+
   it('nets a MIXED-SIGN week — a positive unattributed day and a negative one — to the correct signed total (household-points-visibility, finding 2)', () => {
     // Monday +15 (legacy history), Wednesday -20 (e.g. a legacy penalty habit
     // whose completion reverted but whose submission still stands — see

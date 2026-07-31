@@ -387,7 +387,12 @@ export function buildRecapDeck(input: RecapDeckInput): RecapDeck {
     viewer,
     viewerStanding,
     totalPoints: recapTotalPoints(recap),
-    householdSharePoints: (recap.dailyPoints ?? []).reduce((sum, d) => sum + d.unattributed, 0),
+    // `?? 0` is load-bearing, not defensive noise: `weeklyRecapConverter`
+    // spreads raw Firestore data with `as WeeklyRecap`, so a recap written
+    // before `unattributed` joined `RecapDayPoints` has `dailyPoints` but no
+    // `unattributed` on its days. `sum + undefined` is NaN, and NaN !== 0
+    // passes the render guard — the card would print "NaN pts".
+    householdSharePoints: (recap.dailyPoints ?? []).reduce((sum, d) => sum + (d.unattributed ?? 0), 0),
     trendPct: recapTrendPct(recap),
     isBestWeekThisMonth: isBestWeekOfMonth(recap, recaps),
     weekNumber: weekNumberOf(recap.isoWeek),
