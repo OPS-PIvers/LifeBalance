@@ -534,6 +534,10 @@ describe('useHabitActions.resetHabitDay', () => {
     getDocsMock.mockReset();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   const yesterday = () => format(subDays(new Date(), 1), 'yyyy-MM-dd');
 
   // QuerySnapshot stand-in for the day's submissions, with refs for batch.delete.
@@ -641,6 +645,66 @@ describe('useHabitActions.resetHabitDay', () => {
     expect(memberUpd).toBeDefined();
     expect(memberUpd!.data['points.total']).toEqual({ __increment: -5 });
     expect(capturedUpdates.find(u => u.ref.__path === householdPath)).toBeUndefined();
+  });
+
+  it('reverses a single-date weekly threshold clear at the AWARD date, not the cleared date', async () => {
+    // 🔒 Regression (PR #1167 / TODO.md §3 fix). `resetHabitDay` always hands a
+    // SINGLE date to `attributionReversalForDates` — but a weekly threshold
+    // habit's award can still sit on an EARLIER day of the same period than
+    // the day being cleared, and the pre-fix implementation gated the whole
+    // reversal by the CLEARED date regardless. Order-independence (the other
+    // regression, covered in habitAttribution.test.ts) never applied here —
+    // this is the single-date shape of the same wrong rule, and it is real:
+    // clearing TODAY's completion of a habit whose award actually landed on
+    // Monday used to debit today's `points.daily`, which today never earned.
+    //
+    // Fixed system clock so this is deterministic on any CI weekday: Wed
+    // 2026-07-15, in the ISO week Mon 2026-07-13 – Sun 2026-07-19.
+    vi.useFakeTimers({ now: new Date('2026-07-15T09:00:00') });
+    getDocsMock.mockResolvedValue(daySubmissionsSnap([]));
+
+    const habit = baseHabit({
+      period: 'weekly',
+      scoringType: 'threshold',
+      targetCount: 2,
+      count: 2,
+      totalCount: 2,
+      completedDates: ['2026-07-15'], // only the day the target was crossed
+      completedBy: {
+        '2026-07-13': { user1: 1 }, // Monday — the member's FIRST attributed day = the award
+        '2026-07-15': { user1: 1 }, // Wednesday (today) — the day being cleared
+      },
+      lastUpdated: '2026-07-15T08:30:00',
+    });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.resetHabitDay('h1', '2026-07-15');
+    });
+
+    // The whole period's attribution is cleared, progress day included.
+    const hu = habitUpdate();
+    expect(hu!.data['completedBy.2026-07-13']).toEqual({ __deleteField: true });
+    expect(hu!.data['completedBy.2026-07-15']).toEqual({ __deleteField: true });
+
+    const memberUpd = capturedUpdates.find(
+      u => u.ref.__path === `${householdPath}/members/user1`,
+    );
+    expect(memberUpd).toBeDefined();
+    // Gated by the AWARD date (Monday: inside the current week, but NOT
+    // today) — daily must stay untouched. The pre-fix implementation gated by
+    // the CLEARED date (Wednesday = today) and would have debited daily too.
+    expect(memberUpd!.data['points.daily']).toBeUndefined();
+    expect(memberUpd!.data['points.weekly']).toEqual({ __increment: -10 });
+    expect(memberUpd!.data['points.total']).toEqual({ __increment: -10 });
+
+    const hh = householdUpdate();
+    expect(hh).toBeDefined();
+    expect(hh!.data['points.daily']).toBeUndefined();
+    expect(hh!.data['points.weekly']).toEqual({ __increment: -10 });
+    expect(hh!.data['points.total']).toEqual({ __increment: -10 });
   });
 });
 

@@ -557,15 +557,19 @@ Per-member habit points follow-ups (from the 2026-07-30 six-stage ship, PRs #115
   code one. Needs: does the owner want a one-off reconciliation script, and against which source
   of truth (recompute every member's lifetime total from `completedBy`, which is only complete
   back to when attribution shipped)? **S / product decision first.**
-- **Threshold reversal's daily/weekly bucket gating is order-sensitive** (its `total` telescopes,
-  so this is bucket PLACEMENT, not drift). With `completedDates` `[Mon, Thu]` and today = Thu,
-  whichever date is processed first absorbs the whole gated delta, while the award actually sits
-  on Mon. `periodPointsMove` would fix it, but doing so flips a deliberately pinned, documented
-  behaviour: `habitAttribution.test.ts` asserts "gated by the COMPLETION day, which is where the
-  credit landed", which directly contradicts `applyGatedDelta`'s and `periodPointsMove`'s own
-  "gate by the AWARD date" rule. That is a genuine conflict between two documented rules — pick
-  the winning rule first, then implement. Self-heals for daily/weekly on the next sync.
-  **S / decide the rule before coding.**
+- **Reversal never rescores surviving periods whose streak multiplier the clear changed** —
+  clearing period A shifts the multiplier of LATER periods that SURVIVE it, and neither
+  `attributionReversalForDates` branch scores those dates: `periodPointsMove` is period-scoped by
+  construction, so only the cleared period's own dates move. Probed: a daily threshold habit on a
+  7-day streak, clearing day 1 alone, moves `{daily: 0, weekly: -10, total: -10}` where the truth
+  is `{daily: -5, weekly: -20, total: -20}` (days 3 and 7 lose their 1.5x/2.0x step); a weekly
+  threshold habit on a 4-week streak, clearing week 1 alone, moves `{daily: 0, weekly: 0,
+  total: -10}` against a truth of `{daily: -5, weekly: -5, total: -20}`. Daily/weekly self-heal on
+  the next corrective sync; the under-debited `total` is permanent (`computeHouseholdPointsSync`
+  only ever RAISES it). PRE-EXISTING and branch-agnostic — verified identical on the untouched
+  incremental branch and byte-identical pre-PR #1167, so that PR neither caused nor worsened it.
+  Only reachable via BACK-DATED clears (`resetHabitDay`, `PointsBreakdownModal`), never a same-day
+  reset. **S / decide the rescoring scope before coding.**
 - **`HouseholdBadge` duplicates `MemberAvatar`'s glyph variant** — PR #1164 shipped a standalone
   `components/ui/HouseholdBadge.tsx` because the parallel Household-credit-mode PR owned
   `MemberAvatar.tsx`. Two components now draw the same circle/size/ring. Unify onto the shared
