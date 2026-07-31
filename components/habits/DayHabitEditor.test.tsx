@@ -16,6 +16,7 @@ const { ctx } = vi.hoisted(() => ({
     deleteHabitSubmission: vi.fn(() => Promise.resolve()),
     getHabitSubmissions: vi.fn((): Promise<HabitSubmission[]> => Promise.resolve([])),
     uncreditHabitCompletion: vi.fn(() => Promise.resolve()),
+    uncreditHouseholdCompletion: vi.fn(() => Promise.resolve()),
   },
 }));
 
@@ -413,5 +414,70 @@ describe('DayHabitEditor — past-day attribution', () => {
     longPress(screen.getByRole('button', { name: /^Log Walk for/ }));
     expect(screen.getAllByRole('menu')).toHaveLength(1);
     expect(screen.getByRole('menu', { name: 'Who completed Walk?' })).toBeInTheDocument();
+  });
+
+  // --- Household credit mode ------------------------------------------------
+  it('offers the Household row here too, logging ONE unattributed submission', async () => {
+    renderEditor();
+    fireEvent.click(whoButton());
+
+    const household = screen.getByRole('menuitemcheckbox', { name: /^Household/ });
+    expect(household).toHaveAttribute('aria-checked', 'false');
+    await act(async () => { fireEvent.click(household); });
+
+    // An EXPLICIT empty actor set — the "credit the household" signal.
+    expect(ctx.addHabitSubmission).toHaveBeenCalledWith(
+      'h1', 1, `${D}T12:00:00`, undefined, undefined, [],
+    );
+  });
+
+  it('checks Household for a day whose units nobody holds, and undoes it', async () => {
+    renderEditor({
+      habits: [baseHabit({ completedDates: [D], creditMode: 'household' })],
+      countForHabitOnDate: () => 1,
+    });
+    fireEvent.click(whoButton());
+
+    const household = screen.getByRole('menuitemcheckbox', { name: /^Household/ });
+    expect(household).toHaveAttribute('aria-checked', 'true');
+    await act(async () => { fireEvent.click(household); });
+
+    // No submission doc behind it → the attribution-only primitive.
+    expect(ctx.uncreditHouseholdCompletion).toHaveBeenCalledWith('h1', D);
+    expect(ctx.deleteHabitSubmission).not.toHaveBeenCalled();
+  });
+
+  it('undoes a household credit by deleting its own submission doc when one exists', async () => {
+    ctx.getHabitSubmissions.mockResolvedValue([
+      // A pre-attribution doc on the same day: no `attributedTo` either, but it
+      // must NOT be swept up by the household undo.
+      { id: 'legacy', habitId: 'h1', date: D, count: 1, createdBy: PAUL,
+        createdAt: '2026-07-15T08:00:00' } as HabitSubmission,
+      { id: 'hh', habitId: 'h1', date: D, count: 1, createdBy: PAUL,
+        creditsHousehold: true, createdAt: '2026-07-15T09:00:00' } as HabitSubmission,
+    ]);
+    renderEditor({
+      habits: [baseHabit({ completedDates: [D], creditMode: 'household' })],
+      countForHabitOnDate: () => 2,
+    });
+    fireEvent.click(whoButton());
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /^Household/ }));
+    });
+
+    expect(ctx.deleteHabitSubmission).toHaveBeenCalledWith('h1', 'hh');
+    expect(ctx.uncreditHouseholdCompletion).not.toHaveBeenCalled();
+  });
+
+  it('a plain tap on a household-credit habit leaves attribution to the hook', async () => {
+    renderEditor({ habits: [baseHabit({ creditMode: 'household' })] });
+    await act(async () => { fireEvent.click(row()); });
+
+    // `undefined`, not `[PAUL]`: naming the tapper would credit a member on a
+    // habit whose completions credit the household and nobody individually.
+    expect(ctx.addHabitSubmission).toHaveBeenCalledWith(
+      'h1', 1, `${D}T12:00:00`, undefined, undefined, undefined,
+    );
   });
 });

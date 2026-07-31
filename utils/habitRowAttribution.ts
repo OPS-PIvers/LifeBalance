@@ -11,6 +11,7 @@
  */
 import type { Habit, HouseholdMember } from '@/types/schema';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { habitPeriodStart } from '@/utils/habitLogic';
 import {
   memberCompletionCount,
   memberUnitsForPeriod,
@@ -231,3 +232,41 @@ export const dayPickerMembers = (
     credited: memberCompletionCount(habit, member.uid, date) > 0,
     isSelf: member.uid === context.currentUserId,
   }));
+
+/**
+ * Which date a HOUSEHOLD un-credit should target for the period containing
+ * `today` — the period's most recent completed day at or before `today`.
+ *
+ * The habit row's Household checkmark is PERIOD-scoped (it mirrors the row's own
+ * counter), but `uncreditHouseholdCompletion` takes a DATE: on a weekly habit
+ * the unattributed unit can sit on Monday while the row is being tapped on
+ * Wednesday, and pointing the undo at `today` would find no completion there and
+ * no-op. For a daily habit the period IS the day, so this returns `today`
+ * whenever the row is checked at all.
+ *
+ * Falls back to `today` when the period holds no completion date — the un-credit
+ * is then a deliberate no-op rather than a write against an unrelated day.
+ *
+ * DOCUMENTED LIMITATION: "latest completed day" is not always the day the
+ * household unit itself landed on. If the household tapped Monday and a member
+ * tapped Tuesday, this returns Tuesday — not because the household's unit moved,
+ * but because `householdPointsForHabitOnDate` parks the week's unattributed
+ * remainder on the period's latest completed day regardless of which date
+ * produced it, so the pool's -10 is still found there. The undo still nets the
+ * pool correctly; what it does NOT do is remove Monday from `completedDates` —
+ * Monday orphans as a dateless completion, the same acknowledged gap as the
+ * member-uncredit path.
+ */
+export const householdUndoDateInPeriod = (
+  habit: Pick<Habit, 'completedDates' | 'period'>,
+  today: string = getLocalDateString(),
+): string => {
+  const periodStart = habitPeriodStart(habit.period, today);
+  let latest: string | null = null;
+  for (const date of habit.completedDates) {
+    if (date > today) continue;
+    if (habitPeriodStart(habit.period, date) !== periodStart) continue;
+    if (latest === null || date > latest) latest = date;
+  }
+  return latest ?? today;
+};

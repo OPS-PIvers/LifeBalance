@@ -11,7 +11,7 @@ import {
   computeMemberPointsSync,
   type MemberPointsSyncUpdate,
 } from '@/utils/habitAttribution';
-import { fetchSubmissionTotals, type GetHabitSubmissions } from '@/utils/habitSubmissionTotals';
+import { fetchSubmissionTotals, submissionCacheKey, type GetHabitSubmissions } from '@/utils/habitSubmissionTotals';
 import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
 
 /** Payload handed to `writePoints` when the corrective sync needs to persist. */
@@ -56,21 +56,6 @@ interface UsePointsSyncParams {
 
 const defaultNow = (): Date => new Date();
 const noSubmissions: GetHabitSubmissions = async () => [];
-
-/**
- * Fingerprint of everything that can change the submissions in `scope`: the
- * household and scored window, plus each tracked habit's identity and last
- * write. Every submission mutation (add/update/delete, and the transaction-fire
- * batch) stamps the habit doc's `lastUpdated`, which arrives on the live
- * listener — so an unchanged fingerprint means the previously fetched totals are
- * still current.
- */
-const submissionCacheKey = (habits: Habit[], scope: string): string =>
-  habits
-    .filter(h => h.hasSubmissionTracking)
-    .map(h => `${h.id}@${h.lastUpdated}`)
-    .sort()
-    .join(',') + `|${scope}`;
 
 /**
  * Owns the corrective household-points sync: it reconciles the per-toggle deltas

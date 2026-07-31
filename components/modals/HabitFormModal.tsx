@@ -90,6 +90,23 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
   // EDIT mode is a single-select (0 or 1 kid). We keep both states and read only
   // the relevant one at save time, so neither leaks into the other mode.
   const [assignedKidUids, setAssignedKidUids] = useState<string[]>([]);
+  // Household credit mode. Absent on every existing habit ⇒ 'members' ⇒ today's
+  // behavior, so the control seeds to 'members' and only writes something new
+  // once someone picks 'household'.
+  //
+  // 🛡️ A CHORE'S STORED `creditMode` IS NEVER SEEDED. An assigned chore's points
+  // route to the assignee's own member doc and bypass the pool entirely
+  // (`isHouseholdCreditHabit` requires `!assignedTo`), so the field is inert
+  // there and the control is hidden. Seeding from it would mean un-assigning the
+  // kid re-opened the control ALREADY set to "Household" — handing the user a
+  // habit that credits nobody, from a setting they were never shown. Habits
+  // saved before `handleSave` stopped carrying the stale value can still hold
+  // one, and there is no migration, so this guard is what covers them.
+  const seedCreditMode = (habit: Habit | undefined): 'members' | 'household' =>
+    habit && !habit.assignedTo ? (habit.creditMode ?? 'members') : 'members';
+  const [creditMode, setCreditMode] = useState<'members' | 'household'>(
+    () => seedCreditMode(editingHabit),
+  );
   // Pre-seed the EDIT single-select ONLY when the habit's existing assignee is
   // STILL a managed kid. A stale uid (the kid was removed, or the field points at
   // a non-kid) must not pre-select a now-absent chip — it would let the save path
@@ -145,6 +162,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       setReminder(getHabitReminder(currentUser?.notificationPreferences, editingHabit.id));
       setEditAssignedUid(seedEditAssignedUid(editingHabit));
       setAssignedKidUids([]);
+      setCreditMode(seedCreditMode(editingHabit));
     } else {
       // Reset defaults
       setTitle('');
@@ -160,6 +178,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       setReminder(null);
       setEditAssignedUid(undefined);
       setAssignedKidUids([]);
+      setCreditMode('members');
     }
   }
 
@@ -281,6 +300,15 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
     }
   };
 
+  // Household credit is meaningless on an ASSIGNED chore: its points already
+  // route to the assignee's own member doc and bypass the household pool
+  // entirely (see `isHouseholdCreditHabit`). Hide the control — and never write
+  // the field — whenever this save will produce a chore.
+  const willBeAssignedChore = editingHabit
+    ? !!(showAssignControl ? editAssignedUid : editingHabit.assignedTo)
+    : showAssignControl && assignedKidUids.length >= 1;
+  const showCreditControl = !willBeAssignedChore;
+
   const handleSave = async () => {
     if (!title || !basePoints || !targetCount || isSaving) return;
 
@@ -337,6 +365,27 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       // key entirely (addHabit's addDoc rejects an explicit `undefined` value;
       // the automations UI isn't shown in create mode anyway).
       ...(editingHabit ? { triggers } : {}),
+      // Household credit mode. EDIT always writes an EXPLICIT value so the
+      // stored field can never disagree with what this form showed — flipping
+      // back to 'members' sticks (updateHabit's whitelist drops `undefined`, not
+      // an explicit value).
+      //
+      // 🛡️ WHEN THE SAVE PRODUCES A CHORE, THE WRITTEN VALUE IS 'members' — not
+      // the stored one the `...editingHabit` spread carried in. The control is
+      // hidden for a chore because `creditMode` is inert there (its points
+      // bypass the pool), so letting a stale 'household' ride along persisted a
+      // setting the user could neither see nor have chosen. Un-assigning the kid
+      // later then re-opened the control pre-set to "Household" and saved it
+      // again, turning a plain un-assign into a habit that credits nobody.
+      //
+      // CREATE omits the key unless it is actually 'household': addDoc rejects
+      // an explicit `undefined`, and a brand-new habit has no stale value to
+      // correct.
+      ...(editingHabit
+        ? { creditMode: showCreditControl ? creditMode : ('members' as const) }
+        : showCreditControl && creditMode === 'household'
+          ? { creditMode }
+          : {}),
     };
 
     setIsSaving(true);
@@ -554,6 +603,30 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {/* Household credit mode — who a completion credits. Hidden entirely for
+            an assigned chore, whose points already route to the assignee. */}
+        {showCreditControl && (
+          <div>
+            <span className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase">
+              Credit
+            </span>
+            <p className="text-xxs text-brand-400 dark:text-brand-400 mt-0.5 mb-2">
+              Household habits award the household total. Nobody earns individual points.
+            </p>
+            <SegmentedControl
+              tone="warm"
+              name="Credit"
+              disabled={isSaving}
+              value={creditMode}
+              onChange={setCreditMode}
+              options={[
+                { value: 'members', label: 'Individuals' },
+                { value: 'household', label: 'Household' },
+              ]}
+            />
           </div>
         )}
 

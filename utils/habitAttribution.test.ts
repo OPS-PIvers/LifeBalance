@@ -20,6 +20,7 @@ import {
   householdPeriodPoints,
   householdPeriodPointsDelta,
   householdPointsForHabitOnDate,
+  isHouseholdCreditHabit,
   legacyPeriodPoints,
   memberCompletionCount,
   memberCompletionDates,
@@ -1127,6 +1128,179 @@ describe('habitAttribution — whole-period clears sweep incremental orphans', (
   });
 });
 
+// 🔒 Regression (adversarial review, PR #1165). An INCREMENTAL reversal used to
+// debit the pool an ABSOLUTE per-date figure computed against a habit earlier
+// iterations had already stripped. `unattributedPointsForHabitOnDate` gates on
+// `periodHasAttribution`, which is PERIOD-wide — so an UNATTRIBUTED day (a
+// household-credit tap) processed AFTER an attributed one in the same period was
+// re-scored as fully grandfathered and paid the pool a remainder that had
+// already been taken off. The answer depended on the array order of
+// `completedDates`, which `arrayUnion` APPENDS to, and a wrongly-lowered
+// `points.total` is permanent.
+describe('habitAttribution — incremental reversals are order-independent', () => {
+  /** Thursday: the fixture week is live, but "today" is none of the cleared days. */
+  const TODAY = d(3);
+
+  /**
+   * The mixed period household credit makes routine: Wednesday is Jen's (a
+   * member override), Monday belongs to nobody (a household-credit tap).
+   * `completedDates` is passed in the caller's order so a test can flip it.
+   */
+  const mixedWeek = (completedDates: string[]): Habit => habit({
+    period: 'weekly',
+    scoringType: 'incremental',
+    targetCount: 1,
+    count: 2,
+    totalCount: 2,
+    completedDates,
+    completedBy: { [d(2)]: { [JEN]: 1 } },
+  });
+
+  /** The state a whole-period clear is about to WRITE. */
+  const clearedTo = (before: Habit, dates: string[], countAfter: number): Habit => {
+    const removed = new Set(dates);
+    return {
+      ...withDatesUnattributed(before, dates),
+      completedDates: before.completedDates.filter(c => !removed.has(c)),
+      count: countAfter,
+    };
+  };
+
+  it('the pool really does hold 20 for this week (Jen’s award + one loose unit)', () => {
+    expect(householdPeriodPoints(mixedWeek([d(2), d(0)]), d(2), TODAY)).toBe(20);
+    // …and the array order of `completedDates` cannot change that figure.
+    expect(householdPeriodPoints(mixedWeek([d(0), d(2)]), d(2), TODAY)).toBe(20);
+  });
+
+  it('reverses the whole mixed week to exactly zero, not to a phantom deficit', () => {
+    // The verified repro: Jen credited Wednesday (+10 pool, +10 Jen), the
+    // household credited Monday (+10 pool). The reset must give back 20 and 10,
+    // leaving both at 0 — it used to debit the pool 30.
+    const before = mixedWeek([d(2), d(0)]);
+    const dates = wholePeriodClearDates(before, [d(2), d(0)], TODAY);
+    const reversal = attributionReversalForDates(before, dates, TODAY, 0);
+
+    expect(reversal.household).toEqual({ daily: 0, weekly: -20, total: -20 });
+    expect(reversal.perMember.get(JEN)).toEqual({ daily: 0, weekly: -10, total: -10 });
+    // Only Wednesday carries an attribution node to clear.
+    expect(reversal.clearPaths).toEqual([completedByDatePath(d(2))]);
+    // 🔒 The pool debit IS the before/after diff the corrective recompute will
+    // derive — no login-time correction jump, in either direction.
+    expect(reversal.household.total).toBe(
+      householdPeriodPointsDelta(before, clearedTo(before, dates, 0), d(2), TODAY),
+    );
+  });
+
+  it('produces identical deltas for both `completedDates` orders and both clear orders', () => {
+    const variants = [
+      attributionReversalForDates(mixedWeek([d(2), d(0)]), [d(2), d(0)], TODAY, 0),
+      attributionReversalForDates(mixedWeek([d(2), d(0)]), [d(0), d(2)], TODAY, 0),
+      attributionReversalForDates(mixedWeek([d(0), d(2)]), [d(2), d(0)], TODAY, 0),
+      attributionReversalForDates(mixedWeek([d(0), d(2)]), [d(0), d(2)], TODAY, 0),
+    ];
+    for (const variant of variants) {
+      expect(variant.household).toEqual({ daily: 0, weekly: -20, total: -20 });
+      expect(variant.perMember.get(JEN)).toEqual({ daily: 0, weekly: -10, total: -10 });
+      expect(variant.clearPaths).toEqual([completedByDatePath(d(2))]);
+    }
+  });
+
+  it('clears ONE day of a mixed week without over-debiting the day that survives', () => {
+    // `resetHabitDay`'s shape (a single date, so iteration order was never the
+    // issue): clearing Wednesday leaves Monday holding the week's remaining
+    // live unit, so the pool loses 10, not the 20 Wednesday appeared to hold.
+    const before = mixedWeek([d(2), d(0)]);
+    const countAfter = 1; // habit.count - the one unit Wednesday recorded
+    const reversal = attributionReversalForDates(before, [d(2)], TODAY, countAfter);
+
+    expect(reversal.household).toEqual({ daily: 0, weekly: -10, total: -10 });
+    expect(reversal.perMember.get(JEN)).toEqual({ daily: 0, weekly: -10, total: -10 });
+    expect(reversal.household.total).toBe(
+      householdPeriodPointsDelta(before, clearedTo(before, [d(2)], countAfter), d(2), TODAY),
+    );
+  });
+
+  it('reverses a PRIOR week’s mixed period identically in either order (stale deselect)', () => {
+    // `processStaleDownToggle` hands over the whole prior week's completion
+    // dates — several dates, one period, straight into this branch.
+    const staleWeek = (completedDates: string[]): Habit => habit({
+      period: 'weekly',
+      scoringType: 'incremental',
+      targetCount: 1,
+      count: 2,
+      totalCount: 2,
+      completedDates,
+      completedBy: { [d(0)]: { [JEN]: 1 } },
+    });
+    const nextWeek = d(7);
+    expect(householdPeriodPoints(staleWeek([d(2), d(0)]), d(0), nextWeek)).toBe(10);
+
+    for (const order of [[d(2), d(0)], [d(0), d(2)]]) {
+      const reversal = attributionReversalForDates(staleWeek([d(2), d(0)]), order, nextWeek, 0);
+      // A closed week moves `total` alone — never this week's daily or weekly.
+      expect(reversal.household).toEqual({ daily: 0, weekly: 0, total: -10 });
+      expect(reversal.perMember.get(JEN)).toEqual({ daily: 0, weekly: 0, total: -10 });
+    }
+  });
+
+  it('leaves a single-member incremental week exactly as it was (control)', () => {
+    // 🔒 No household credit, no grandfathered day — the shape every existing
+    // test covers. Both orders agreed before the fix and must still agree now.
+    const control = habit({
+      period: 'weekly',
+      scoringType: 'incremental',
+      targetCount: 1,
+      count: 2,
+      totalCount: 2,
+      completedDates: [d(2), d(0)],
+      completedBy: { [d(0)]: { [PAUL]: 1 }, [d(2)]: { [JEN]: 1 } },
+    });
+    for (const order of [[d(2), d(0)], [d(0), d(2)]]) {
+      const reversal = attributionReversalForDates(control, order, TODAY, 0);
+      expect(reversal.household).toEqual({ daily: 0, weekly: -20, total: -20 });
+      expect(reversal.perMember.get(PAUL)).toEqual({ daily: 0, weekly: -10, total: -10 });
+      expect(reversal.perMember.get(JEN)).toEqual({ daily: 0, weekly: -10, total: -10 });
+    }
+  });
+
+  it('gates `daily` by EACH cleared date’s own day, not by the anchor, when today itself is a cleared date that is NOT the anchor', () => {
+    // Every test above fixes "today" at Thursday and clears PAST dates, so none
+    // of them exercise `daily` for a same-day reset. Here Monday is the anchor
+    // (the first date in the clear order), but "today" is Friday — a cleared
+    // date, but never the anchor. Wednesday is Jen's own tap; Friday is Paul's
+    // own tap PLUS the week's unattributed remainder (it parks on the period's
+    // LATEST completed day regardless of which day is passed as the anchor —
+    // see `householdUndoDateInPeriod`'s docstring in habitRowAttribution.ts).
+    const today = d(4);
+    const threeDayWeek = (completedDates: string[]): Habit => habit({
+      period: 'weekly',
+      scoringType: 'incremental',
+      targetCount: 1,
+      count: 3,
+      totalCount: 3,
+      completedDates,
+      completedBy: { [d(2)]: { [JEN]: 1 }, [d(4)]: { [PAUL]: 1 } },
+    });
+
+    for (const order of [[d(0), d(2), d(4)], [d(4), d(2), d(0)]]) {
+      const reversal = attributionReversalForDates(threeDayWeek([d(0), d(2), d(4)]), order, today, 0);
+
+      // Friday (today) alone carries Paul's own -10 plus the -10 remainder: its
+      // own delta (-20) is neither 0 nor the whole week's -30, which is exactly
+      // what distinguishes "gated by today's own date" from "gated by the
+      // anchor's date" (Monday, which never equals `today` here).
+      expect(reversal.household).toEqual({ daily: -20, weekly: -30, total: -30 });
+      expect(reversal.perMember.get(JEN)).toEqual({ daily: 0, weekly: -10, total: -10 });
+      expect(reversal.perMember.get(PAUL)).toEqual({ daily: -10, weekly: -10, total: -10 });
+      // Both attributed dates get cleared regardless of which order the caller
+      // passed them in — only the array's own order (not the amounts) differs.
+      expect(new Set(reversal.clearPaths)).toEqual(
+        new Set([completedByDatePath(d(2)), completedByDatePath(d(4))]),
+      );
+    }
+  });
+});
+
 describe('habitAttribution — household period points (pool delta)', () => {
   it('matches the legacy scorer for the period when nothing is attributed', () => {
     const h = habit({ count: 1, completedDates: [d(0)] });
@@ -1623,5 +1797,69 @@ describe('habitAttribution — periodPointsMove (per-date gating, one decomposit
     expect(move.household).toEqual({ total: 20, weekly: 0, daily: 0 });
     expect(move.perMember.get(PAUL)).toEqual({ total: 10, weekly: 0, daily: 0 });
     expect(move.perMember.get(JEN)).toEqual({ total: 10, weekly: 0, daily: 0 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Household credit mode
+// ---------------------------------------------------------------------------
+describe('isHouseholdCreditHabit', () => {
+  it('is false for an absent creditMode — every existing habit', () => {
+    expect(isHouseholdCreditHabit(habit())).toBe(false);
+  });
+
+  it('is false for an explicit "members"', () => {
+    expect(isHouseholdCreditHabit(habit({ creditMode: 'members' }))).toBe(false);
+  });
+
+  it('is true for "household" on an unassigned habit', () => {
+    expect(isHouseholdCreditHabit(habit({ creditMode: 'household' }))).toBe(true);
+  });
+
+  it('is false on an ASSIGNED chore — its points bypass the pool entirely', () => {
+    expect(
+      isHouseholdCreditHabit(habit({ creditMode: 'household', assignedTo: 'kid_leo' })),
+    ).toBe(false);
+  });
+});
+
+describe('household credit scores through the UNATTRIBUTED path (no new scorer)', () => {
+  // 🏁 The mechanism: a household completion is simply a completion with no
+  // `completedBy` entry — which is precisely what the grandfathering term
+  // already scores. These assertions are about the SCORER, not the flag: the
+  // flag only decides whether a write path records attribution.
+  it('pays the pool one award at the HABIT’s own flame and credits nobody', () => {
+    const h = habit({
+      creditMode: 'household',
+      count: 1,
+      completedDates: [d(0)],
+    });
+    expect(unattributedPointsForHabitOnDate(h, d(0), d(0))).toBe(10);
+    expect(householdPointsForHabitOnDate(h, d(0), d(0))).toBe(10);
+    expect(calculateMemberPointsForDate([h], PAUL, d(0), d(0))).toBe(0);
+    expect(calculateMemberPointsForDate([h], JEN, d(0), d(0))).toBe(0);
+  });
+
+  it('holds household = Σ members + unattributed on a MIXED day', () => {
+    // One household unit alongside one member override on the same date.
+    const h = habit({
+      creditMode: 'household',
+      count: 2,
+      completedDates: [d(0)],
+      completedBy: { [d(0)]: { [JEN]: 1 } },
+    });
+    const decomposed = decomposeDayPoints([h], [PAUL, JEN], d(0), undefined, d(0));
+    expect(decomposed.byMember[JEN]).toBe(10);
+    expect(decomposed.byMember[PAUL]).toBe(0);
+    expect(decomposed.unattributed).toBe(10);
+    expect(decomposed.household).toBe(20);
+  });
+
+  it('uses the habit’s flame, not a member’s — a long streak still pays 2.0x', () => {
+    // Seven consecutive days: the HABIT is at 2.0x, and nobody has a personal
+    // chain at all. That is the locked answer for a household award.
+    const dates = [0, 1, 2, 3, 4, 5, 6].map(d);
+    const h = habit({ creditMode: 'household', count: 1, completedDates: dates });
+    expect(unattributedPointsForHabitOnDate(h, d(6), d(6))).toBe(20);
   });
 });

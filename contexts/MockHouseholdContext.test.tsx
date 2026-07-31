@@ -8,6 +8,7 @@ import { calculateSafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { calculateBucketSpent } from '@/utils/bucketSpentCalculator';
 import { DEFAULT_TODO_POINTS } from '@/utils/todoPoints';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { decomposeDayPoints } from '@/utils/habitAttribution';
 import type { Habit } from '@/types/schema';
 
 // Finding 4.4: MockHouseholdContext must expose a well-formed
@@ -1151,14 +1152,180 @@ describe('MockHouseholdContext addHabitSubmission (period-scoped threshold compl
     const paulDelta = pointsOf(result, PAUL).total - paulBefore.total;
     const jordanDelta = pointsOf(result, JORDAN).total - jordanBefore.total;
     expect(jordanDelta).toBe(10);
-    // 🛡️ Paul is MOCK_USER_UID, and `creditHouseholdPool` deliberately credits
-    // the test user's own member figure alongside the pool (a long-standing mock
-    // conflation, documented on that helper). So his member total moves by the
-    // POOL delta plus his own award — that +10 award is what this test is about.
-    expect(paulDelta).toBe(poolDelta + 10);
+    // Paul's own Monday unit only earns ITS award once the WEEK completes — a
+    // side effect of Jordan's later Wednesday submission, exactly like
+    // production's `periodPointsMove` "holders" set. His own total therefore
+    // moves by exactly his own +10 threshold award, independent of the pool's
+    // figure. Before the fix this used to be `poolDelta + 10`: Paul is
+    // MOCK_USER_UID, and `creditHouseholdPool` mirrored the WHOLE pool delta
+    // onto his own doc on top of the correct +10 `creditMemberPoints` call
+    // below — a double-count that a household-credit completion (crediting
+    // the pool, no member at all) turns into a visible scoreboard desync (see
+    // the "household credit mode" describe block).
+    expect(paulDelta).toBe(10);
 
     // A closed week: only the lifetime counter moves.
     expect(pointsOf(result, JORDAN).weekly).toBe(jordanBefore.weekly);
     expect(pointsOf(result, JORDAN).daily).toBe(jordanBefore.daily);
+  });
+});
+
+// 🏁 Household credit mode — Test Mode must model "credits the pool, credits
+// nobody" exactly as production does, or the picker's Household row would look
+// right in the mock and be wrong in the app.
+describe('MockHouseholdContext household credit mode', () => {
+  const captureHousehold = () => renderHook(() => useHousehold(), { wrapper });
+  const pointsOf = (result: ReturnType<typeof captureHousehold>['result'], uid: string) =>
+    result.current.members.find((m) => m.uid === uid)!.points;
+
+  /** Seeded fixture: h4 = 'Homemade Meal', `creditMode: 'household'`, 20 pts. */
+  const HOUSEHOLD_HABIT = 'h4';
+
+  it('a tap writes NO completedBy entry and still pays the pool, crediting NEITHER adult — including the signed-in test user', async () => {
+    const { result } = captureHousehold();
+    const today = getLocalDateString();
+    const poolBefore = result.current.totalPoints;
+    const userBefore = { ...pointsOf(result, 'test-user-id') };
+    const partnerBefore = { ...pointsOf(result, 'test-partner-id') };
+
+    await act(async () => {
+      await result.current.toggleHabit(HOUSEHOLD_HABIT, 'up');
+    });
+
+    const habit = result.current.habits.find((h) => h.id === HOUSEHOLD_HABIT)!;
+    expect(habit.completedBy?.[today]).toBeUndefined();
+    expect(habit.completedDates).toContain(today);
+    expect(result.current.totalPoints).toBe(poolBefore + 20);
+    // 🔒 Regression: `creditHouseholdPool` used to mirror this delta onto the
+    // signed-in test user's own member doc (they are `MOCK_USER_UID`), so a
+    // household-credit tap looked like it paid the pool AND the tapper — the
+    // one actor a household completion must credit is nobody. Jordan (never
+    // the mirror's target) already covered the "some OTHER member" case; this
+    // pins the actual test-user-id leak.
+    expect(pointsOf(result, 'test-user-id')).toEqual(userBefore);
+    expect(pointsOf(result, 'test-partner-id')).toEqual(partnerBefore);
+  });
+
+  it('is pool-neutral across up → down, debiting no member — including the signed-in test user', async () => {
+    const { result } = captureHousehold();
+    const poolBefore = result.current.totalPoints;
+    const userBefore = { ...pointsOf(result, 'test-user-id') };
+    const partnerBefore = { ...pointsOf(result, 'test-partner-id') };
+
+    await act(async () => {
+      await result.current.toggleHabit(HOUSEHOLD_HABIT, 'up');
+    });
+    await act(async () => {
+      await result.current.toggleHabit(HOUSEHOLD_HABIT, 'down');
+    });
+
+    expect(result.current.totalPoints).toBe(poolBefore);
+    expect(pointsOf(result, 'test-user-id')).toEqual(userBefore);
+    expect(pointsOf(result, 'test-partner-id')).toEqual(partnerBefore);
+  });
+
+  // 🔒 Reconciliation invariant (rewritten, adversarial review of PR #1165).
+  //
+  // This used to assert `weeklyPoints === Σ adult members` after a
+  // household-credit completion — i.e. that the headline does NOT move. That is
+  // what Test Mode actually did, and it was the defect: production's household
+  // `points.weekly` is `Σ members + unattributed`, and a `creditMode:
+  // 'household'` completion moves ONLY the unattributed term. Σ-adults alone
+  // matched production for every prior feature only because every completion was
+  // attributed to somebody; household credit is the first one that isn't.
+  //
+  // The consequence was visible, not theoretical: a per-member scoreboard shows
+  // its "Household · N" row from the same unattributed term, so in Test Mode the
+  // rows failed to sum to the headline above them while production reconciled
+  // correctly — defeating browser verification of the invariant.
+  //
+  // So the assertion is now production's identity, both halves of it: nobody's
+  // own score moves, AND the headline moves by exactly the unattributed award.
+  it('moves the household headline by the unattributed award, crediting no member', async () => {
+    const { result } = captureHousehold();
+    const weeklyBefore = result.current.weeklyPoints;
+    const dailyBefore = result.current.dailyPoints;
+    const poolBefore = result.current.totalPoints;
+    const adultsBefore = result.current.members
+      .filter((m) => !m.isManaged)
+      .map((m) => ({ uid: m.uid, weekly: m.points.weekly, daily: m.points.daily }));
+
+    await act(async () => {
+      await result.current.toggleHabit(HOUSEHOLD_HABIT, 'up');
+    });
+
+    // Nobody is credited — that IS household credit.
+    const adultsAfter = result.current.members.filter((m) => !m.isManaged);
+    for (const before of adultsBefore) {
+      const after = adultsAfter.find((m) => m.uid === before.uid)!;
+      expect(after.points.weekly).toBe(before.weekly);
+      expect(after.points.daily).toBe(before.daily);
+    }
+
+    // …and yet the household headline moved, by the award the pool received.
+    const award = result.current.totalPoints - poolBefore;
+    expect(award).toBeGreaterThan(0);
+    expect(result.current.weeklyPoints).toBe(weeklyBefore + award);
+    expect(result.current.dailyPoints).toBe(dailyBefore + award);
+
+    // 🏁 `household = Σ adults + unattributed`, read off the SAME habit state a
+    // scoreboard's "Household" row reads — so its rows sum to its headline.
+    const unattributed = decomposeDayPoints(
+      result.current.habits,
+      adultsAfter.map((m) => m.uid),
+      getLocalDateString(),
+    ).unattributed;
+    const adultDaily = adultsAfter.reduce((sum, m) => sum + m.points.daily, 0);
+    expect(unattributed).toBe(award);
+    expect(result.current.dailyPoints).toBe(adultDaily + unattributed);
+  });
+
+  it('takes the headline back on the down-tap (Σ adults + unattributed, both ways)', async () => {
+    const { result } = captureHousehold();
+    const weeklyBefore = result.current.weeklyPoints;
+    const dailyBefore = result.current.dailyPoints;
+
+    await act(async () => {
+      await result.current.toggleHabit(HOUSEHOLD_HABIT, 'up');
+    });
+    expect(result.current.dailyPoints).toBeGreaterThan(dailyBefore);
+
+    await act(async () => {
+      await result.current.toggleHabit(HOUSEHOLD_HABIT, 'down');
+    });
+    expect(result.current.dailyPoints).toBe(dailyBefore);
+    expect(result.current.weeklyPoints).toBe(weeklyBefore);
+  });
+
+  it('creditHouseholdCompletion works on a MEMBERS habit as a one-off', async () => {
+    const { result } = captureHousehold();
+    const today = getLocalDateString();
+    const poolBefore = result.current.totalPoints;
+
+    await act(async () => {
+      // h2 = 'Exercise 30min', a shared threshold habit with no creditMode.
+      await result.current.creditHouseholdCompletion('h2');
+    });
+
+    const habit = result.current.habits.find((h) => h.id === 'h2')!;
+    expect(habit.completedBy?.[today]).toBeUndefined();
+    expect(result.current.totalPoints).toBeGreaterThan(poolBefore);
+
+    await act(async () => {
+      await result.current.uncreditHouseholdCompletion('h2');
+    });
+    expect(result.current.totalPoints).toBe(poolBefore);
+  });
+
+  it('an explicit member pick still overrides the household default', async () => {
+    const { result } = captureHousehold();
+    const today = getLocalDateString();
+
+    await act(async () => {
+      await result.current.creditHabitCompletion(HOUSEHOLD_HABIT, ['test-partner-id']);
+    });
+
+    const habit = result.current.habits.find((h) => h.id === HOUSEHOLD_HABIT)!;
+    expect(habit.completedBy?.[today]).toEqual({ 'test-partner-id': 1 });
   });
 });

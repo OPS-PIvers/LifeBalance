@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import type { Habit, HouseholdMember, WeeklyRecap } from '@/types/schema';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import type { Habit, HabitSubmission, HouseholdMember, WeeklyRecap } from '@/types/schema';
 import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 import { calculateHouseholdPointsForDateRange, calculateMemberPointsForDateRange } from '@/utils/habitAttribution';
+import { calculateHouseholdShareForDateRange } from '@/utils/scoreboardWidget';
 import { ScoreboardWidget } from './ScoreboardWidget';
 
 // The widget reads members + recaps (useHouseholdCore) and weeklyPoints/
@@ -11,7 +12,8 @@ const mockMembers = vi.fn<() => HouseholdMember[]>(() => []);
 const mockRecaps = vi.fn<() => WeeklyRecap[]>(() => []);
 const mockWeeklyPoints = vi.fn<() => number>(() => 0);
 const mockHabits = vi.fn<() => Habit[]>(() => []);
-const mockGetHabitSubmissions = vi.fn(async () => []);
+const mockGetHabitSubmissions =
+  vi.fn<(habitId: string, startDate?: string, endDate?: string) => Promise<HabitSubmission[]>>(async () => []);
 // Thursday inside the "current" Jul 27 - Aug 2 week — fixed so the week
 // selector's options/boundaries are deterministic regardless of wall-clock date.
 const mockToday = vi.fn(() => '2026-07-30');
@@ -60,7 +62,8 @@ describe('ScoreboardWidget', () => {
     mockRecaps.mockReturnValue([]);
     mockWeeklyPoints.mockReturnValue(0);
     mockHabits.mockReturnValue([]);
-    mockGetHabitSubmissions.mockClear();
+    mockGetHabitSubmissions.mockReset();
+    mockGetHabitSubmissions.mockImplementation(async () => []);
     mockToday.mockReturnValue('2026-07-30');
   });
 
@@ -278,6 +281,195 @@ describe('ScoreboardWidget', () => {
       const expectedTotal = calculateHouseholdPointsForDateRange(habits, '2026-07-13', '2026-07-19', '2026-07-30');
       expect(expectedTotal).toBeGreaterThan(0);
       expect(screen.getByTestId('scoreboard-total')).toHaveTextContent(String(expectedTotal));
+    });
+  });
+
+  describe('Household row (household-points-visibility)', () => {
+    // Current week is Jul 27 - Aug 2 (mockToday = Thu Jul 30). The current-week
+    // Household row is now sourced from an async `submissionTotals` fetch (see
+    // ScoreboardWidget.tsx), so every test in this block awaits it settling —
+    // `findByTestId` polls until the row appears; `act(async () => {})` flushes
+    // the fetch before asserting an ABSENCE, so that assertion can't pass
+    // vacuously just because the fetch hasn't resolved yet.
+    it('shows a Household row whose value the visible rows sum exactly to the household total', async () => {
+      // A legacy (pre-attribution) completion inside the current week — no
+      // `completedBy` at all, so it belongs to nobody: the household-only
+      // share of `weeklyPoints`.
+      const habits = [
+        makeHabit({ id: 'h-legacy', completedDates: ['2026-07-28'], completedBy: undefined }),
+      ];
+      mockHabits.mockReturnValue(habits);
+      const expectedHouseholdShare = calculateHouseholdShareForDateRange(habits, '2026-07-27', '2026-07-30', '2026-07-30');
+      expect(expectedHouseholdShare).toBeGreaterThan(0);
+
+      // Weekly values deliberately distinct from `expectedHouseholdShare` and
+      // from each other, so the DOM assertions below can't pass by accident.
+      mockMembers.mockReturnValue([
+        makeMember({ uid: 'paul', displayName: 'Paul', points: { daily: 5, weekly: 44, total: 44 } }),
+        makeMember({ uid: 'jen', displayName: 'Jen', points: { daily: 0, weekly: 17, total: 17 } }),
+      ]);
+      const total = 44 + 17 + expectedHouseholdShare;
+      mockWeeklyPoints.mockReturnValue(total);
+
+      render(<ScoreboardWidget />);
+
+      expect(screen.getByTestId('scoreboard-total')).toHaveTextContent(String(total));
+      const householdRow = await screen.findByTestId('scoreboard-household-row');
+      expect(householdRow).toHaveTextContent('Household');
+      expect(householdRow).toHaveTextContent(String(expectedHouseholdShare));
+      // Paul (44) and Jen (17) each still render their own weekly value.
+      expect(screen.getByText('44')).toBeInTheDocument();
+      expect(screen.getByText('17')).toBeInTheDocument();
+
+      // The three visible rows — Paul, Jen, Household — sum EXACTLY to the
+      // displayed household total (constructed that way above; the point of
+      // this test is that the WIDGET, not the fixture, produces
+      // `expectedHouseholdShare` via the production scorer rather than any
+      // other value).
+      expect(44 + 17 + expectedHouseholdShare).toBe(total);
+    });
+
+    it('omits the Household row when there is no unattributed remainder', async () => {
+      // Fully attributed — nothing left for the household pool alone.
+      const habits = [
+        makeHabit({ id: 'h-attributed', completedDates: ['2026-07-28'], completedBy: { '2026-07-28': { paul: 1 } } }),
+      ];
+      mockHabits.mockReturnValue(habits);
+      mockMembers.mockReturnValue([
+        makeMember({ uid: 'paul', displayName: 'Paul', points: { daily: 10, weekly: 10, total: 10 } }),
+        makeMember({ uid: 'jen', displayName: 'Jen', points: { daily: 0, weekly: 0, total: 0 } }),
+      ]);
+      mockWeeklyPoints.mockReturnValue(10);
+
+      render(<ScoreboardWidget />);
+      // Let the current-week submission fetch settle before asserting an
+      // absence — otherwise this would pass trivially while the row is just
+      // still loading.
+      await act(async () => {});
+
+      expect(screen.queryByTestId('scoreboard-household-row')).not.toBeInTheDocument();
+      expect(screen.queryByText('Household')).not.toBeInTheDocument();
+    });
+
+    it('includes a stored submission that OUTLIVES its completion date in the CURRENT week — a reverted toggle must not silently zero out the Household row (finding 1)', async () => {
+      // A legacy incremental habit whose completion was reverted — the date
+      // is gone from `completedDates` — but its submission doc (worth -20)
+      // still stands: a down-toggle removes the completion date but never
+      // deletes the submission (see `pointsForHabitOnDate`'s doc comment in
+      // utils/habitLogic.ts). `usePointsSync`'s corrective recompute DOES
+      // fold this into the canonical `weeklyPoints` figure, so the Household
+      // row must too, or the visible rows stop summing to the total.
+      const habits = [
+        makeHabit({
+          id: 'h-reverted',
+          type: 'negative',
+          scoringType: 'incremental',
+          basePoints: 20,
+          hasSubmissionTracking: true,
+          completedDates: [],
+          completedBy: undefined,
+        }),
+      ];
+      mockHabits.mockReturnValue(habits);
+      mockGetHabitSubmissions.mockImplementation(async (habitId) => {
+        if (habitId !== 'h-reverted') return [];
+        const submission: HabitSubmission = {
+          id: 's-reverted',
+          habitId: 'h-reverted',
+          habitTitle: 'Workout',
+          timestamp: '2026-07-28T20:00:00.000Z',
+          date: '2026-07-28',
+          count: 1,
+          pointsEarned: -20,
+          streakDaysAtTime: 1,
+          multiplierApplied: 1,
+          createdBy: 'paul',
+          createdAt: '2026-07-28T20:00:00.000Z',
+        };
+        return [submission];
+      });
+
+      mockMembers.mockReturnValue([
+        makeMember({ uid: 'paul', displayName: 'Paul', points: { daily: 5, weekly: 44, total: 44 } }),
+        makeMember({ uid: 'jen', displayName: 'Jen', points: { daily: 0, weekly: 17, total: 17 } }),
+      ]);
+      // The canonical stored total — as `usePointsSync` would have written it
+      // — already includes the -20.
+      const total = 44 + 17 - 20;
+      mockWeeklyPoints.mockReturnValue(total);
+
+      render(<ScoreboardWidget />);
+
+      const householdRow = await screen.findByTestId('scoreboard-household-row');
+      expect(householdRow).toHaveTextContent('-20');
+      expect(screen.getByTestId('scoreboard-total')).toHaveTextContent(String(total));
+      // The visible rows — Paul (44), Jen (17), Household (-20) — sum EXACTLY
+      // to the displayed total, which is the invariant this feature exists
+      // to guarantee.
+      expect(44 + 17 + -20).toBe(total);
+    });
+
+    describe('submission fetch caching (perf: avoid re-fetch on every habit toggle)', () => {
+      // The Dashboard (and hence this always-mounted widget) re-renders on
+      // every Firestore habits snapshot, which arrives with a fresh array
+      // identity on every single habit toggle. Without a fingerprint cache,
+      // that snapshot alone was enough to re-issue a `getHabitSubmissions`
+      // query per `hasSubmissionTracking` habit — see
+      // `submissionCacheKey`'s doc comment in utils/habitSubmissionTotals.ts.
+      //
+      // `ScoreboardWidget` is wrapped in `React.memo` with no props, so a
+      // parent-driven `rerender()` is a no-op; these tests force a genuine
+      // re-render via a real user interaction (opening the week menu) that
+      // flips internal state, then swap the mocked `habits` return value in
+      // between clicks to simulate a fresh snapshot.
+      const trackedHabit = (lastUpdated: string) =>
+        makeHabit({
+          id: 'h-tracked',
+          type: 'positive',
+          scoringType: 'incremental',
+          basePoints: 10,
+          hasSubmissionTracking: true,
+          completedDates: ['2026-07-28'],
+          completedBy: { '2026-07-28': { paul: 1 } },
+          lastUpdated,
+        });
+
+      beforeEach(() => {
+        mockMembers.mockReturnValue([
+          makeMember({ uid: 'paul', displayName: 'Paul', points: { daily: 5, weekly: 44, total: 44 } }),
+        ]);
+      });
+
+      it('does not re-fetch when re-rendered with a new habits array identity but an unchanged fingerprint', async () => {
+        mockHabits.mockReturnValue([trackedHabit('2026-07-28T12:00:00.000Z')]);
+        render(<ScoreboardWidget />);
+        await act(async () => {});
+        expect(mockGetHabitSubmissions).toHaveBeenCalledTimes(1);
+
+        // A fresh array/object identity (as every Firestore snapshot has)
+        // but the SAME tracked habit's lastUpdated — nothing that could have
+        // touched a submission.
+        mockHabits.mockReturnValue([trackedHabit('2026-07-28T12:00:00.000Z')]);
+        fireEvent.click(screen.getByRole('button', { name: /Select week/ }));
+        await act(async () => {});
+
+        expect(mockGetHabitSubmissions).toHaveBeenCalledTimes(1);
+      });
+
+      it('re-fetches once a tracked habit\'s lastUpdated actually changes', async () => {
+        mockHabits.mockReturnValue([trackedHabit('2026-07-28T12:00:00.000Z')]);
+        render(<ScoreboardWidget />);
+        await act(async () => {});
+        expect(mockGetHabitSubmissions).toHaveBeenCalledTimes(1);
+
+        // A submission mutation stamps the habit doc's lastUpdated, which
+        // arrives on the live listener as a new snapshot.
+        mockHabits.mockReturnValue([trackedHabit('2026-07-28T18:00:00.000Z')]);
+        fireEvent.click(screen.getByRole('button', { name: /Select week/ }));
+        await act(async () => {});
+
+        expect(mockGetHabitSubmissions).toHaveBeenCalledTimes(2);
+      });
     });
   });
 });

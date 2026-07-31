@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import PointsBreakdownDrawer from './PointsBreakdownDrawer';
-import type { HouseholdMember, WeeklyRecap } from '@/types/schema';
+import type { Habit, HabitSubmission, HouseholdMember, WeeklyRecap } from '@/types/schema';
 import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 
 const mockUseGamification = vi.fn();
@@ -22,6 +22,15 @@ const mockNavigate = vi.fn();
 vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
+
+// Thursday inside the "current" Jul 27 - Aug 2 week — fixed so the
+// Household row's date range is deterministic regardless of wall-clock date
+// (see ScoreboardWidget.test.tsx for the same convention).
+const mockToday = '2026-07-30';
+vi.mock('@/utils/dateHelpers', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/utils/dateHelpers')>();
+  return { ...actual, getLocalDateString: () => mockToday };
+});
 
 // Simplify Drawer to a passthrough (header + children) so the test focuses on
 // this drawer's own content — Drawer's own portal/focus-trap/motion behavior
@@ -53,6 +62,24 @@ const LEO = member({
   points: { daily: 999, weekly: 999, total: 999 },
 });
 
+const makeHabit = (overrides: Partial<Habit> = {}): Habit =>
+  ({
+    id: 'h-1',
+    title: 'Workout',
+    category: 'Health',
+    type: 'positive',
+    period: 'daily',
+    basePoints: 10,
+    scoringType: 'threshold',
+    targetCount: 1,
+    count: 0,
+    totalCount: 0,
+    completedDates: [],
+    streakDays: 0,
+    lastUpdated: '2026-07-27T00:00:00.000Z',
+    ...overrides,
+  } as unknown as Habit);
+
 const recap = (pointsByMember: WeeklyRecap['pointsByMember']): WeeklyRecap => ({
   id: '2026-W29',
   isoWeek: '2026-W29',
@@ -77,11 +104,15 @@ const setup = (config: {
   weeklyPoints?: number;
   totalPoints?: number;
   kidModeEnabled?: boolean;
+  habits?: Habit[];
+  getHabitSubmissions?: (habitId: string, startDate?: string, endDate?: string) => Promise<HabitSubmission[]>;
 }) => {
   mockUseGamification.mockReturnValue({
     dailyPoints: config.dailyPoints ?? 60,
     weeklyPoints: config.weeklyPoints ?? 610,
     totalPoints: config.totalPoints ?? 12480,
+    habits: config.habits ?? [],
+    getHabitSubmissions: config.getHabitSubmissions ?? (async () => []),
   });
   mockUseHouseholdCore.mockReturnValue({
     members: config.members ?? [JEN, PAUL],
@@ -221,5 +252,144 @@ describe('PointsBreakdownDrawer', () => {
     setup({ kidModeEnabled: false, household: { pendingRedemptions: [{}, {}] } });
     renderDrawer();
     expect(screen.queryByText(/pending/)).not.toBeInTheDocument();
+  });
+
+  describe('Household row (household-points-visibility)', () => {
+    // The Household row's figure is now sourced from an async
+    // `submissionTotals` fetch (see PointsBreakdownDrawer.tsx), so every test
+    // here awaits it settling — `findByTestId` polls until the row appears;
+    // `act(async () => {})` flushes the fetch before asserting an ABSENCE, so
+    // that assertion can't pass vacuously just because the fetch hasn't
+    // resolved yet.
+    it('shows a Household row for a legacy (pre-attribution) completion this week', async () => {
+      const habits = [makeHabit({ completedDates: ['2026-07-28'], completedBy: undefined })];
+      setup({ habits });
+      renderDrawer();
+
+      const householdRow = await screen.findByTestId('points-drawer-household-row');
+      expect(householdRow).toHaveTextContent('Household');
+      // Threshold habit, basePoints 10, no streak — 10 points, attributed to nobody.
+      expect(householdRow).toHaveTextContent('10');
+    });
+
+    it('omits the Household row when there is no unattributed remainder', async () => {
+      setup({ habits: [] });
+      renderDrawer();
+      // Let the submission fetch settle before asserting an absence.
+      await act(async () => {});
+      expect(screen.queryByTestId('points-drawer-household-row')).not.toBeInTheDocument();
+      expect(screen.queryByText('Household')).not.toBeInTheDocument();
+    });
+
+    it('switches the Household value between Day and Week the same as the standings do', async () => {
+      // A legacy completion TODAY counts in both Day and Week windows. `count:
+      // 1` matters — a same-day 0 counter reads as "reset back off" rather
+      // than "still completed" (see `pointsForHabitOnDate`'s current-period
+      // gate in utils/habitLogic.ts).
+      const habits = [makeHabit({ completedDates: ['2026-07-30'], completedBy: undefined, count: 1 })];
+      setup({ habits });
+      renderDrawer();
+
+      expect(await screen.findByTestId('points-drawer-household-row')).toHaveTextContent('10');
+
+      fireEvent.click(screen.getByRole('radio', { name: 'Day' }));
+      expect(await screen.findByTestId('points-drawer-household-row')).toHaveTextContent('10');
+    });
+
+    it('threads submissionTotals through the CURRENT window so a submission that OUTLIVES its completion date still counts toward the Household row (finding 1)', async () => {
+      // A legacy incremental habit whose completion was reverted — the date
+      // is gone from `completedDates` — but its submission doc (worth -20)
+      // still stands (a down-toggle removes the completion date but never
+      // deletes the submission; see `pointsForHabitOnDate`'s doc comment in
+      // utils/habitLogic.ts).
+      const habits = [
+        makeHabit({
+          id: 'h-reverted',
+          type: 'negative',
+          scoringType: 'incremental',
+          basePoints: 20,
+          hasSubmissionTracking: true,
+          completedDates: [],
+          completedBy: undefined,
+        }),
+      ];
+      const getHabitSubmissions = async (habitId: string): Promise<HabitSubmission[]> => {
+        if (habitId !== 'h-reverted') return [];
+        return [
+          {
+            id: 's-reverted',
+            habitId: 'h-reverted',
+            habitTitle: 'Workout',
+            timestamp: '2026-07-28T20:00:00.000Z',
+            date: '2026-07-28',
+            count: 1,
+            pointsEarned: -20,
+            streakDaysAtTime: 1,
+            multiplierApplied: 1,
+            createdBy: 'paul',
+            createdAt: '2026-07-28T20:00:00.000Z',
+          },
+        ];
+      };
+      setup({ habits, getHabitSubmissions });
+      renderDrawer();
+
+      const householdRow = await screen.findByTestId('points-drawer-household-row');
+      expect(householdRow).toHaveTextContent('-20');
+    });
+
+    describe('submission fetch caching (perf: avoid re-fetch on every habit toggle)', () => {
+      // This drawer is reachable from the always-mounted TopToolbar, so a
+      // habits snapshot on ANY habit toggle (a fresh array identity, since
+      // Firestore listeners never hand back the same array) previously
+      // re-issued a `getHabitSubmissions` query per `hasSubmissionTracking`
+      // habit even when nothing the fetch depends on had actually changed.
+      // See `submissionCacheKey`'s doc comment in
+      // utils/habitSubmissionTotals.ts for the fingerprint this cache keys on.
+      const trackedHabit = (lastUpdated: string) =>
+        makeHabit({
+          id: 'h-tracked',
+          type: 'positive',
+          scoringType: 'incremental',
+          basePoints: 10,
+          hasSubmissionTracking: true,
+          completedDates: ['2026-07-28'],
+          completedBy: { '2026-07-28': { paul: 1 } },
+          lastUpdated,
+        });
+
+      it('does not re-fetch when re-rendered with a new habits array identity but an unchanged fingerprint', async () => {
+        const getHabitSubmissions = vi.fn(async () => []);
+        setup({ habits: [trackedHabit('2026-07-28T12:00:00.000Z')], getHabitSubmissions });
+        const { rerender } = renderDrawer();
+        await act(async () => {});
+        expect(getHabitSubmissions).toHaveBeenCalledTimes(1);
+
+        // A fresh array/object identity (as every Firestore snapshot has)
+        // but the SAME tracked habit's lastUpdated — nothing that could have
+        // touched a submission.
+        setup({ habits: [trackedHabit('2026-07-28T12:00:00.000Z')], getHabitSubmissions });
+        rerender(<PointsBreakdownDrawer open={true} onClose={vi.fn()} />);
+        await act(async () => {});
+
+        expect(getHabitSubmissions).toHaveBeenCalledTimes(1);
+      });
+
+      it('re-fetches once a tracked habit\'s lastUpdated actually changes', async () => {
+        const getHabitSubmissions = vi.fn(async () => []);
+        setup({ habits: [trackedHabit('2026-07-28T12:00:00.000Z')], getHabitSubmissions });
+        const { rerender } = renderDrawer();
+        await act(async () => {});
+        expect(getHabitSubmissions).toHaveBeenCalledTimes(1);
+
+        // A submission mutation stamps the habit doc's lastUpdated, which
+        // arrives on the live listener as a new snapshot.
+        setup({ habits: [trackedHabit('2026-07-28T18:00:00.000Z')], getHabitSubmissions });
+        rerender(<PointsBreakdownDrawer open={true} onClose={vi.fn()} />);
+        await act(async () => {});
+
+        expect(getHabitSubmissions).toHaveBeenCalledTimes(2);
+      });
+    });
   });
 });

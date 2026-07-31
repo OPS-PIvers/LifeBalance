@@ -43,6 +43,8 @@ import {
   attributionReversalForDates,
   completedByPath,
   habitFeedsMemberAttribution,
+  householdPeriodPointsDelta,
+  isHouseholdCreditHabit,
   legacyPeriodPoints,
   memberCompletionCount,
   memberPeriodPointsDelta,
@@ -137,7 +139,8 @@ const habitPointsTargets = (
 });
 
 /**
- * WHO a completion belongs to — i.e. who gets CREDITED, going FORWARD.
+ * WHO a completion belongs to — i.e. who gets CREDITED, going FORWARD — or
+ * `null` when the completion credits the HOUSEHOLD and nobody individually.
  *
  * `completedBy` records the person a completion is FOR, never the device
  * operator. A managed kid has no auth session of their own, so every Kid-Mode
@@ -146,13 +149,23 @@ const habitPointsTargets = (
  * habit therefore attributes to its assignee, mirroring how
  * `habitPointsTargets` already routes that habit's points.
  *
+ * 🏁 HOUSEHOLD CREDIT (`Habit.creditMode === 'household'`) yields NO actor. That
+ * is the whole mechanism: a completion with no `completedBy` entry scores
+ * through the existing unattributed path — one award at the habit's own flame,
+ * to the pool, to nobody — so "we cooked dinner together" pays the household
+ * ONCE instead of paying it the sum of two personal awards. A caller that names
+ * members explicitly (the picker's per-completion override) overrides this; it
+ * never reaches here.
+ *
  * 🛡️ This is NEVER the authority for what to REVERSE. It reads the habit's
- * CURRENT `assignedTo`, which can change after the fact; the stored
+ * CURRENT `assignedTo`/`creditMode`, which can change after the fact; the stored
  * `Habit.completedBy` map is the only record of who was actually credited. Every
  * reversal path runs its preferred uid through `resolveReversalSources` first.
  */
-const attributionActor = (habit: Pick<Habit, 'assignedTo'>, actorUid: string): string =>
-  habit.assignedTo ?? actorUid;
+const attributionActor = (
+  habit: Pick<Habit, 'assignedTo' | 'creditMode'>,
+  actorUid: string,
+): string | null => (isHouseholdCreditHabit(habit) ? null : habit.assignedTo ?? actorUid);
 
 /** One member's attribution move on a single date: `delta` units, signed. */
 interface AttributionMove {
@@ -282,6 +295,15 @@ const gateDelta = (delta: number, date: string, today: string): PointsBuckets =>
  * member doc, they are excluded from attribution scoring
  * (`habitFeedsMemberAttribution`), and they keep the legacy habit-level figure
  * with no second per-member write.
+ *
+ * **Household credit** (`Habit.creditMode === 'household'`) passes
+ * `attributionMoved: true` with an EMPTY set of attribution moves. The
+ * decomposition then hands back `perMember` empty and `household` equal to the
+ * unattributed remainder's own move — which IS the invariant, stated as code:
+ * `household = Σ perMember (nothing) + unattributed`. Passing `false` here
+ * instead would pay the pool the path's habit-level `legacyDelta` while
+ * `move.perMember` still wrote any SIDE-EFFECT member award a newly-completed
+ * threshold period flipped on, and `points.total` never self-heals.
  *
  * **Grandfathered work** (`attributionMoved === false` — a down-toggle or
  * submission delete on a completion that predates attribution, so
@@ -471,6 +493,11 @@ export const useHabitActions = (
           // .filter below drops it when undefined, so an unassigned habit (every
           // existing one) writes nothing new here — this stays dormant.
           assignedTo: habit.assignedTo,
+          // Household credit mode. The .filter below drops it when undefined, so
+          // a habit that has never carried the field (every existing one) writes
+          // nothing new here — but an explicit `'members'` from the editor DOES
+          // write, which is what makes flipping back off 'household' stick.
+          creditMode: habit.creditMode,
         }).filter(([, value]) => value !== undefined)
       );
 
@@ -747,12 +774,22 @@ export const useHabitActions = (
     // CURRENT `assignedTo` — reassign a chore between the up-tap and the
     // down-tap and the naive reversal computes a 0 delta against the new
     // assignee while the original credit survives forever.
+    //
+    // 🏁 HOUSEHOLD CREDIT yields NO actor, and therefore NO moves in EITHER
+    // direction. Forward: the completion is deliberately unattributed, so it
+    // pays the pool once at the habit's own flame and credits nobody. Backward:
+    // the unit being taken back is the unattributed one, so `reversalMoves`
+    // must NOT run — its holder fallback would debit a member who holds a
+    // (per-completion override) unit this tap never touched.
     const today = getLocalDateString();
     const attributedTo = attributionActor(habit, currentUser.uid);
+    const householdCredit = attributedTo === null;
     const attributionMoves: AttributionMove[] =
-      direction === 'up'
-        ? [{ memberId: attributedTo, delta: 1 }]
-        : reversalMoves(effectiveHabit, attributedTo, today, 1);
+      attributedTo === null
+        ? []
+        : direction === 'up'
+          ? [{ memberId: attributedTo, delta: 1 }]
+          : reversalMoves(effectiveHabit, attributedTo, today, 1);
     let habitAfter: Habit = { ...effectiveHabit, ...result.updatedHabit } as Habit;
     for (const move of attributionMoves) {
       habitAfter = withAttributionDelta(habitAfter, today, move.memberId, move.delta);
@@ -810,7 +847,11 @@ export const useHabitActions = (
       date: today,
       today,
       targets,
-      attributionMoved: attributionMoves.length > 0,
+      // Household credit moves no member, but the DECOMPOSITION is still the
+      // right pool figure (see queueHabitPointsMove): it is the unattributed
+      // remainder's own move, which is by construction what the corrective
+      // recompute derives.
+      attributionMoved: attributionMoves.length > 0 || householdCredit,
       legacyDelta: result.pointsChange,
     });
     // The multiplier the points toast reports. An 'up' on a shared habit earns
@@ -818,8 +859,10 @@ export const useHabitActions = (
     // so on flip day a long-standing 2.0x habit correctly reads 1.0x until that
     // member's personal chain rebuilds. Everything else keeps the habit-level
     // figure `processToggleHabit` computed.
+    // A HOUSEHOLD credit earns the HABIT's own flame (nobody's personal chain
+    // moves), which is exactly `result.multiplier`.
     const toastMultiplier =
-      direction === 'up' && habitFeedsMemberAttribution(habit)
+      direction === 'up' && attributedTo !== null && habitFeedsMemberAttribution(habit)
         ? prospectiveMultiplierForMember(effectiveHabit, attributedTo, today, today)
         : result.multiplier;
 
@@ -1143,8 +1186,12 @@ export const useHabitActions = (
      * scalar, and both reversal paths assume one doc = one member's unit
      * bundle), so a two-person log adds `count × uids.length` units.
      *
+     * An EMPTY array is meaningful: it means HOUSEHOLD credit — one unattributed
+     * bundle of `count` units, credited to the pool and to nobody.
+     *
      * Omit for the legacy behaviour: a single doc attributed via
-     * `attributionActor` (the assignee, else the signed-in member).
+     * `attributionActor` (the assignee, else the signed-in member — or nobody
+     * at all on a `creditMode: 'household'` habit).
      */
     attributeTo?: readonly string[],
   ) => {
@@ -1157,15 +1204,25 @@ export const useHabitActions = (
     }
 
     // WHO this log credits. An explicit set comes from the past-day picker
-    // ("Me" / "Jen" / "Both of us"); with none, `attributionActor` keeps every
-    // pre-existing caller bit-for-bit unchanged.
-    const explicitActors = !!attributeTo && attributeTo.length > 0;
+    // ("Me" / "Jen" / "Both of us" / "Household"); with none, `attributionActor`
+    // keeps every pre-existing caller bit-for-bit unchanged.
+    //
+    // 🏁 An EMPTY actor set — passed explicitly as `[]` (the picker's Household
+    // row), or produced by `attributionActor` on a `creditMode: 'household'`
+    // habit — is HOUSEHOLD CREDIT: one unattributed bundle, one submission doc
+    // carrying no `attributedTo`, and NO `completedBy` write at all.
+    const explicitActors = attributeTo !== undefined;
+    const defaultActor = attributionActor(habit, currentUser.uid);
     const actors = explicitActors
       ? [...new Set(attributeTo)]
-      : [attributionActor(habit, currentUser.uid)];
+      : defaultActor === null
+        ? []
+        : [defaultActor];
+    const householdCredit = actors.length === 0;
     // `count` means "units per member"; `addedUnits` is the habit's total move.
-    // They are equal on every legacy call (one actor), so nothing changes there.
-    const addedUnits = count * actors.length;
+    // They are equal on every legacy call (one actor) and on a household credit
+    // (one unattributed bundle), so nothing changes there.
+    const addedUnits = count * (householdCredit ? 1 : actors.length);
 
     // Use provided timestamp or current time
     const submissionTimestamp = timestamp || new Date().toISOString();
@@ -1290,14 +1347,27 @@ export const useHabitActions = (
       // With `attributeTo` omitted the existing habit-level `pointsEarned` is
       // stored on the single doc, unchanged, so every legacy caller (and the
       // grandfathered-reversal path that reads it back) is untouched.
-      const docPoints = (uid: string, index: number): number =>
-        explicitActors && habitFeedsMemberAttribution(habit)
-          ? memberAward(uid)
-          : (index === 0 ? pointsEarned : 0);
+      //
+      // 🏁 A HOUSEHOLD doc stores the POOL's own move (`householdAward` below),
+      // which is what it was actually credited — so `resetHabitDay`'s
+      // `Σ pointsEarned` reversal and any other stored-figure path undo exactly
+      // that, rather than a habit-level approximation of it.
+      const householdAward =
+        householdCredit && habitFeedsMemberAttribution(habit)
+          ? householdPeriodPointsDelta(habit, submissionAfter, submissionDate, today)
+          : pointsEarned;
+      const docPoints = (uid: string | null, index: number): number =>
+        uid === null
+          ? (index === 0 ? householdAward : 0)
+          : explicitActors && habitFeedsMemberAttribution(habit)
+            ? memberAward(uid)
+            : (index === 0 ? pointsEarned : 0);
 
-      // Create submission documents — ONE per credited member. note/mood are
-      // only included when provided; Firestore rejects an explicit `undefined`.
-      actors.forEach((actor, index) => {
+      // Create submission documents — ONE per credited member, or exactly one
+      // unattributed doc for a household credit. note/mood are only included
+      // when provided; Firestore rejects an explicit `undefined`.
+      const docActors: (string | null)[] = householdCredit ? [null] : actors;
+      docActors.forEach((actor, index) => {
         const submission: Omit<HabitSubmission, 'id'> = {
           habitId,
           habitTitle: habit.title,
@@ -1314,7 +1384,10 @@ export const useHabitActions = (
           // 🛡️ SNAPSHOT the credited uid so a later delete/edit reverses the member
           // who actually earned these points — `habit.assignedTo` may have been
           // reassigned by then, and re-deriving would debit the wrong person.
-          attributedTo: actor,
+          // A household credit records NO uid and marks itself instead, so the
+          // reversal paths can tell it apart from a pre-attribution doc (which
+          // also has no `attributedTo` but must reverse its stored figure).
+          ...(actor !== null ? { attributedTo: actor } : { creditsHousehold: true }),
           createdAt: new Date().toISOString(),
           ...(note && note.trim() ? { note: note.trim().slice(0, 280) } : {}),
           ...(mood ? { mood } : {}),
@@ -1376,6 +1449,10 @@ export const useHabitActions = (
         date: submissionDate,
         today,
         targets: submissionTargets,
+        // A household credit moves no member but still takes the decomposition
+        // (see queueHabitPointsMove) — and `householdAward`, stored on the doc,
+        // is that same figure (`periodPointsMove().household.total ===
+        // householdPeriodPointsDelta(...)`), so add and reversal agree.
         attributionMoved: addedUnits !== 0,
         legacyDelta: pointsEarned,
       });
@@ -1503,8 +1580,17 @@ export const useHabitActions = (
       //      (`reversalMoves`): we may only take back units `completedBy` really
       //      records. A pre-stage-1 submission records none, so it reverses the
       //      household pool only and debits no member at all.
+      //   3. A HOUSEHOLD submission (`creditsHousehold`) credited nobody, so it
+      //      takes NOTHING back from any member — `reversalMoves`' holder
+      //      fallback would otherwise debit whoever happens to hold a
+      //      per-completion override on that date. It still reverses through the
+      //      decomposition (below), which is how a threshold period's
+      //      side-effect member awards move with it.
+      const isHouseholdSubmission = submission.creditsHousehold === true;
       const creditedUid = submission.attributedTo ?? submission.createdBy;
-      const deleteMoves = reversalMoves(habit, creditedUid, submission.date, submission.count);
+      const deleteMoves = isHouseholdSubmission
+        ? []
+        : reversalMoves(habit, creditedUid, submission.date, submission.count);
       // 🛡️ THE REVERSAL MODE IS DECIDED BY THE DOC, NOT BY THE MOVES.
       //
       // An ATTRIBUTED submission reverses through the attribution-bounded path
@@ -1563,7 +1649,8 @@ export const useHabitActions = (
         date: submission.date,
         today,
         targets: deleteTargets,
-        attributionMoved: submissionIsAttributed || deleteMoves.length > 0,
+        attributionMoved:
+          isHouseholdSubmission || submissionIsAttributed || deleteMoves.length > 0,
         legacyDelta: -submission.pointsEarned,
       });
 
@@ -1775,13 +1862,21 @@ export const useHabitActions = (
       const submissionDate = updates.date || originalSubmission.date;
       const today = getLocalDateString();
       const countDelta = updates.count !== undefined ? updates.count - originalSubmission.count : 0;
+      //
+      // A HOUSEHOLD submission credited nobody, so neither direction touches a
+      // member: an upward edit must not credit `createdBy` (the OPERATOR, which
+      // is what `attributedTo ?? createdBy` would fall back to), and a downward
+      // one must not debit whoever holds an override on that date.
+      const isHouseholdSubmission = originalSubmission.creditsHousehold === true;
       const creditedUid = originalSubmission.attributedTo ?? originalSubmission.createdBy;
       const editMoves: AttributionMove[] =
-        countDelta > 0
-          ? [{ memberId: creditedUid, delta: countDelta }]
-          : countDelta < 0
-            ? reversalMoves(habit, creditedUid, submissionDate, -countDelta)
-            : [];
+        isHouseholdSubmission
+          ? []
+          : countDelta > 0
+            ? [{ memberId: creditedUid, delta: countDelta }]
+            : countDelta < 0
+              ? reversalMoves(habit, creditedUid, submissionDate, -countDelta)
+              : [];
       let editAfter: Habit = {
         ...habit,
         count: habit.count + countDelta,
@@ -1824,7 +1919,10 @@ export const useHabitActions = (
         // through the attribution-bounded path exclusively, so a downward edit
         // whose attribution someone else already took back reverses NOTHING
         // rather than debiting the pool a second time via `legacyDelta`.
-        attributionMoved: originalSubmission.attributedTo != null || editMoves.length > 0,
+        attributionMoved:
+          isHouseholdSubmission ||
+          originalSubmission.attributedTo != null ||
+          editMoves.length > 0,
         legacyDelta: pointsDelta,
       });
 
@@ -1839,24 +1937,29 @@ export const useHabitActions = (
 
   /**
    * Per-member points (stage 1) — credit ONE completion of `habitId` to each of
-   * `memberIds` on `date` (default: today).
+   * `memberIds` on `date` (default: today), or — with an EMPTY `memberIds` — one
+   * completion to the HOUSEHOLD and nobody individually.
    *
-   * This is the member-set-based primitive the stage-2 long-press picker will
-   * drive ("Me" / "Jen" / "Both of us" are just different member sets). Every
-   * selected member is credited a FULL completion at their OWN streak
-   * multiplier, and the habit's counters move by one unit per member — so a
-   * two-person credit reads as a count of 2 in the pie counter.
+   * This is the member-set-based primitive the long-press picker drives ("Me" /
+   * "Jen" / "Both of us" are just different member sets). Every selected member
+   * is credited a FULL completion at their OWN streak multiplier, and the
+   * habit's counters move by one unit per member — so a two-person credit reads
+   * as a count of 2 in the pie counter.
    *
-   * Nothing calls this yet; it ships now so the data layer is complete.
+   * 🏁 The HOUSEHOLD case adds ONE unit and writes NO `completedBy` entry, so it
+   * scores through the unattributed path: one award at the habit's own flame, to
+   * the pool, to nobody. Reached through `creditHouseholdCompletion` below —
+   * `creditHabitCompletion` keeps its "empty set is a no-op" guard so no
+   * existing caller can log a completion by handing it an empty array.
    */
-  const creditHabitCompletion = useCallback(async (
+  const creditCompletion = useCallback(async (
     habitId: string,
     memberIds: string[],
     date?: string,
   ) => {
     if (!householdId || !currentUser) return;
     const habit = habitsRef.current.find(h => h.id === habitId);
-    if (!habit || memberIds.length === 0) return;
+    if (!habit) return;
     // Archived-habit guard, matching toggleHabit: an archived habit never fires
     // forward (un-crediting one stays allowed).
     if (habit.archivedAt) return;
@@ -1873,7 +1976,9 @@ export const useHabitActions = (
       // counter is then written ABSOLUTELY (a reset-then-add), because routing
       // it through increment() would add to the value we mean to throw away.
       const liveCount = isStale ? 0 : habit.count;
-      const addedUnits = memberIds.length;
+      // One unit per credited member — or a single unattributed unit for a
+      // household credit, which names nobody.
+      const addedUnits = Math.max(memberIds.length, 1);
       const target = Math.max(habit.targetCount, 1);
 
       // Does this credit complete the date? Incremental habits complete on any
@@ -1958,6 +2063,29 @@ export const useHabitActions = (
     }
   }, [householdId, currentUser, isLiveMember]);
 
+  const creditHabitCompletion = useCallback(async (
+    habitId: string,
+    memberIds: string[],
+    date?: string,
+  ) => {
+    // An empty set here is a caller mistake, not a household credit — that is
+    // what `creditHouseholdCompletion` is for. Guarding keeps every existing
+    // call site's meaning intact.
+    if (memberIds.length === 0) return;
+    await creditCompletion(habitId, memberIds, date);
+  }, [creditCompletion]);
+
+  /**
+   * Household credit mode — credit ONE completion of `habitId` on `date`
+   * (default: today) to the HOUSEHOLD and to nobody individually.
+   *
+   * Writes no `completedBy` entry, so the completion scores through the existing
+   * unattributed path: one award at the habit's OWN flame, paid to the pool.
+   */
+  const creditHouseholdCompletion = useCallback(async (habitId: string, date?: string) => {
+    await creditCompletion(habitId, [], date);
+  }, [creditCompletion]);
+
   /**
    * Per-member points (stage 1) — un-credit ONE of `memberId`'s completions of
    * `habitId` on `date` (default: today).
@@ -1971,9 +2099,9 @@ export const useHabitActions = (
    * A date nobody is attributed for (a grandfathered completion) is a no-op:
    * there is nothing to un-credit and nobody to debit.
    */
-  const uncreditHabitCompletion = useCallback(async (
+  const uncreditCompletion = useCallback(async (
     habitId: string,
-    memberId: string,
+    memberId: string | null,
     date?: string,
   ) => {
     if (!householdId) return;
@@ -1983,7 +2111,13 @@ export const useHabitActions = (
     try {
       const today = getLocalDateString();
       const targetDate = date ?? today;
-      if (memberCompletionCount(habit, memberId, targetDate) <= 0) return;
+      if (memberId !== null && memberCompletionCount(habit, memberId, targetDate) <= 0) return;
+      // 🏁 HOUSEHOLD un-credit: there is no attribution to take back, so the
+      // date must at least carry a recorded completion for a unit to exist. The
+      // points side is safe either way — `unattributedUnitsOnDate` floors at
+      // zero, so a date whose units are all attributed yields a 0 pool delta —
+      // but the COUNTERS are not, and this stops them drifting.
+      if (memberId === null && !habit.completedDates.includes(targetDate)) return;
 
       // A stale counter belongs to a previous period, so it must not shrink here
       // (mirrors resetHabitDay's `inLivePeriod`).
@@ -1992,7 +2126,13 @@ export const useHabitActions = (
         !isHabitStale(habit);
       const target = Math.max(habit.targetCount, 1);
 
-      const stripped = withAttributionDelta(habit, targetDate, memberId, -1);
+      // Household: nothing to strip — the unit being removed belongs to nobody,
+      // so `completedBy` is untouched and any per-completion member override on
+      // this date keeps its credit (which is also what keeps the date in
+      // `completedDates` below).
+      const stripped = memberId === null
+        ? habit
+        : withAttributionDelta(habit, targetDate, memberId, -1);
       const nextCount = inLivePeriod ? Math.max(0, habit.count - 1) : habit.count;
       // Does the date stay completed? In the live period the counter decides
       // (exactly as a 'down' toggle does). For a past date the attribution is
@@ -2017,7 +2157,7 @@ export const useHabitActions = (
 
       const batch = writeBatch(db);
       batch.update(doc(db, `households/${householdId}/habits`, habitId), {
-        ...attributionUpdate(targetDate, memberId, -1),
+        ...(memberId === null ? {} : attributionUpdate(targetDate, memberId, -1)),
         ...(inLivePeriod && habit.count > 0 ? { count: increment(-1) } : {}),
         ...(habit.totalCount > 0 ? { totalCount: increment(-1) } : {}),
         ...(dateRemoved ? { completedDates: arrayRemove(targetDate) } : {}),
@@ -2065,6 +2205,24 @@ export const useHabitActions = (
     }
   }, [householdId, isLiveMember]);
 
+  const uncreditHabitCompletion = useCallback(async (
+    habitId: string,
+    memberId: string,
+    date?: string,
+  ) => {
+    await uncreditCompletion(habitId, memberId, date);
+  }, [uncreditCompletion]);
+
+  /**
+   * Household credit mode — take back ONE unattributed completion of `habitId`
+   * on `date` (default: today). The twin of `creditHouseholdCompletion`: no
+   * member is debited (none was credited), and the pool loses exactly what the
+   * unattributed remainder contributed.
+   */
+  const uncreditHouseholdCompletion = useCallback(async (habitId: string, date?: string) => {
+    await uncreditCompletion(habitId, null, date);
+  }, [uncreditCompletion]);
+
   // F-HABITS-01: set or clear a habit's planned-break end date. Passing a date
   // pauses the habit until that day (inclusive); passing null resumes it (the
   // field is removed via deleteField so isHabitPaused reads false immediately).
@@ -2099,7 +2257,9 @@ export const useHabitActions = (
     getHabitSubmissions,
     resetHabitDay,
     creditHabitCompletion,
-    uncreditHabitCompletion
+    uncreditHabitCompletion,
+    creditHouseholdCompletion,
+    uncreditHouseholdCompletion
   }), [
     addHabit,
     updateHabit,
@@ -2116,6 +2276,8 @@ export const useHabitActions = (
     getHabitSubmissions,
     resetHabitDay,
     creditHabitCompletion,
-    uncreditHabitCompletion
+    uncreditHabitCompletion,
+    creditHouseholdCompletion,
+    uncreditHouseholdCompletion
   ]);
 };
