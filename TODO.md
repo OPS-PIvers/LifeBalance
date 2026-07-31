@@ -541,6 +541,40 @@ Per-member habit points follow-ups (from the 2026-07-30 six-stage ship, PRs #115
   but this household leans on automations, so personal scores under-count. Needs a product
   decision on WHO gets credit (the Shortcut key's owner? the transaction's member? the habit's
   `linkedMemberId`?) before wiring. **M / MED.**
+- **`deleteHabitSubmission` treats the OPERATOR as the creditee** — LIVE on `main` today,
+  independent of any open PR. `hooks/useHabitActions.tsx:1590` computes
+  `const creditedUid = submission.attributedTo ?? submission.createdBy`, but the same file
+  documents `createdBy` at :1380 as "The OPERATOR, always". Three of the four submission writers
+  set NEITHER `attributedTo` NOR `creditsHousehold`:
+  `contexts/household/mutations/transactionMutations.ts:627` (transaction/keyword automation —
+  `createdBy` is whoever verified the triggering transaction, a REAL member uid),
+  `functions/src/quickAdd/noSpendFire.ts:356` (`createdBy: "system"`), and
+  `scripts/migrateHabitSubmissions.ts:130` (`createdBy: 'migration_script'`). For any of those
+  docs the `?? createdBy` fallback debits the wrong member, and
+  `components/modals/HabitSubmissionLogModal.tsx` lists ALL submissions unfiltered behind a delete
+  button, so deleting an automation-fired row reproduces it with no PR involved. Probed: a
+  neither-field doc with `createdBy` user1, on a date carrying `completedBy { user1: 1 }`, writes
+  `completedBy.<date>.user1: increment -1` plus `[{ uid: user1, points.total: -10 }]` — destroying
+  real attribution the doc never created; the SAME doc on a date carrying
+  `completedBy { jen-uid: 1 }` debits `jen-uid`, a member with no link to the doc at all. THE TRAP
+  that keeps this from being a one-liner: widening `isHouseholdSubmission` to `attributedTo == null`
+  also flips `attributionMoved` (:1652), which suppresses `legacyDelta = -submission.pointsEarned`
+  (:1654) — the ONLY record of a pre-attribution doc's award — so the obvious fix breaks
+  grandfathered reversal. `points.total` drift is permanent (`computeHouseholdPointsSync` only ever
+  RAISES it), so this is the severe class. Needs its own PR and test sweep.
+  **S–M / decide the creditee rule and the grandfathered-reversal split before coding.**
+- **Two trade-offs accepted deliberately in the #1166/#1169 household-undo review** (recorded so
+  they are not re-litigated as bugs): (a) the tie-break on a date carrying BOTH an automation doc
+  and a manual `creditsHousehold` doc was DECLINED — the newest-`createdAt` sort may delete the
+  automation doc, destroying its `sourceTransactionId` audit record, after which `firedHabitIds`
+  (`transactionMutations.ts:683`, `arrayUnion`, cleared only by un-verifying) prevents that habit
+  ever re-firing from the transaction. Preferring `creditsHousehold` docs was rejected because it
+  is NOT points-neutral: the two doc classes reverse the pool by different arithmetic
+  (`periodPointsMove` decomposition vs stored `pointsEarned` via `legacyDelta`), so it changes the
+  pool delta in an unprobed case. (b) A narrow accepted orphan: a grandfathered doc on a date that
+  has SINCE gained attribution is no longer swept and falls back to the attribution-only
+  primitive — deliberate, since sweeping it would destroy real attribution. Resolves once the
+  `deleteHabitSubmission` bug above is fixed.
 - **Stale-deselect of a below-target incremental prior period reverses nothing by design**
   (`processStaleDownToggle` contract) — pool and member stay mutually consistent, only orphan
   attribution residue remains. Revisit only if "undo the previous period" should mean more than
