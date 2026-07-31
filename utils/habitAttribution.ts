@@ -1323,8 +1323,10 @@ export interface AttributionReversal {
  * change the deltas. Do not re-introduce an order dependence here: `arrayUnion`
  * APPENDS, so a back-dated credit already puts `completedDates` out of order.
  *
- * Single-DATE clears (`resetHabitDay`, `PointsBreakdownModal`) deliberately do
- * NOT come through here: their intent is one day, not one period.
+ * Single-DATE clears (`resetHabitDay`) deliberately do NOT come through here:
+ * their intent is one day, not one period. `PointsBreakdownModal`'s weekly
+ * day-toggle was the second such caller until it was deleted as dead code —
+ * unreachable since PR #819 (`74069195`, 2026-07-05).
  */
 export const wholePeriodClearDates = (
   habit: Habit,
