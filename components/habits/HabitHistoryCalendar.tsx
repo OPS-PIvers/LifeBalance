@@ -93,9 +93,11 @@ const HabitHistoryCalendar: React.FC = () => {
     { abbr: 'S', full: 'Saturday' },
   ];
 
-  // Same parent-visible set as the Track tab and PastDayLogModal: kid chores
-  // (assignedTo) excluded, so the day cells sum to the HOUSEHOLD points the
-  // toolbar shows (assigned chores credit the kid's own balance instead).
+  // The SCORING set, shared with PastDayLogModal: kid chores (assignedTo)
+  // excluded, so the day cells sum to the HOUSEHOLD points the toolbar shows
+  // (assigned chores credit the kid's own balance instead). Archived habits
+  // stay IN — their past completions are part of this history — and the day
+  // editor below narrows to the Track tab's active list on its own.
   const sortedHabits = useMemo(
     () => habits.filter(h => !h.assignedTo).sort((a, b) => (a.order ?? 999) - (b.order ?? 999)),
     [habits]

@@ -27,7 +27,12 @@ import { track } from '@/services/analytics';
 import { cn } from '@/utils/cn';
 
 interface DayHabitEditorProps {
-  /** Parent-visible habits (kid chores excluded), already sorted. */
+  /**
+   * Parent-visible habits (kid chores excluded), already sorted. Pass the same
+   * set the calendar above is scored from — archived habits included; this
+   * component drops them from the ROWS itself (see `visibleHabits`), because
+   * the scoring set and the editable set are deliberately not the same list.
+   */
   habits: Habit[];
   /** The day being edited (YYYY-MM-DD). */
   selectedDate: string;
@@ -105,15 +110,37 @@ const DayHabitEditor: React.FC<DayHabitEditorProps> = ({
   // the release doesn't ALSO log a unit.
   const suppressClickRef = useRef(false);
 
+  /**
+   * The rows for this day — the Track tab's habit list, not the calendar's
+   * scoring list.
+   *
+   * Both hosts hand over EVERY parent-visible habit, archived ones included,
+   * because the calendar above has to keep scoring a retired habit's past
+   * completions (dropping it there would silently rewrite history's point
+   * figures). Showing that same set as the editable list is what made "Log a
+   * past day" read as a stale copy of the habit list: `pages/Habits.tsx` hides
+   * archived habits (`showArchived ? !!h.archivedAt : !h.archivedAt`), so a
+   * preset retired months ago still offered itself for logging here.
+   *
+   * An archived habit that actually HOLDS units on the selected day stays
+   * visible: its points are inside that day's total, so hiding the row would
+   * leave a figure with nothing behind it and no way to clear it. The Archived
+   * badge on the row says why it is there.
+   */
+  const visibleHabits = useMemo(
+    () => habits.filter(h => !h.archivedAt || countForHabitOnDate(h, selectedDate) > 0),
+    [habits, countForHabitOnDate, selectedDate]
+  );
+
   const groupedHabits = useMemo<[string, Habit[]][]>(() => {
     const groups = new Map<string, Habit[]>();
-    habits.forEach(h => {
+    visibleHabits.forEach(h => {
       const list = groups.get(h.category) ?? [];
       list.push(h);
       groups.set(h.category, list);
     });
     return Array.from(groups.entries());
-  }, [habits]);
+  }, [visibleHabits]);
 
   const runGuarded = useCallback(async (habitId: string, action: () => Promise<void>) => {
     const inFlightIds = inFlightIdsRef.current;
@@ -456,13 +483,21 @@ const DayHabitEditor: React.FC<DayHabitEditorProps> = ({
     }
   };
 
-  if (habits.length === 0) {
+  if (visibleHabits.length === 0) {
+    // Two different empty days: nothing created yet, or everything retired.
+    // Telling them apart matters here — "create a habit first" is wrong advice
+    // for a household whose habits all exist but are archived.
+    const allArchived = habits.length > 0;
     return (
       <EmptyState
         variant="dashed"
         icon={<CalendarDays size={28} />}
-        title="No habits yet"
-        description="Create a habit first, then come back to log past days."
+        title={allArchived ? 'No active habits' : 'No habits yet'}
+        description={
+          allArchived
+            ? 'Every habit is archived. Restore one from the Habits list to log it here.'
+            : 'Create a habit first, then come back to log past days.'
+        }
       />
     );
   }
@@ -608,6 +643,10 @@ const DayHabitEditor: React.FC<DayHabitEditorProps> = ({
                         {dayPoints > 0 ? `+${dayPoints}` : dayPoints} pts
                       </span>
                       {habit.period === 'weekly' && <Badge variant="neutral" size="sm">Weekly</Badge>}
+                      {/* Only ever reached by an archived habit that holds
+                          units on this day (see `visibleHabits`) — the label
+                          explains why a retired habit is in this list. */}
+                      {habit.archivedAt && <Badge variant="outline" size="sm">Archived</Badge>}
                     </span>
                   </span>
 
