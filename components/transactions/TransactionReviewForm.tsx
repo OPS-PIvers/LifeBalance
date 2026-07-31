@@ -750,7 +750,7 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
           <p className="text-xs text-brand-400 dark:text-brand-400">
             {isRecurring && !isSubscription
               ? 'Creates a monthly bill on your calendar.'
-              : 'Creates a monthly entry on your Subscriptions tab.'}
+              : 'Creates a monthly entry under Subscriptions.'}
           </p>
         </div>
       )}

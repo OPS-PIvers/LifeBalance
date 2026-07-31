@@ -910,7 +910,7 @@ const BudgetCalendar: React.FC = () => {
                  <div className="min-w-0 pr-3">
                    <label className="text-sm font-semibold text-brand-700 dark:text-brand-200">Subscription?</label>
                    <p className="text-xs text-brand-450 dark:text-brand-400">
-                     Groups this bill under Subscriptions on the Money tab.
+                     Groups this bill under Subscriptions.
                    </p>
                  </div>
                  <Switch

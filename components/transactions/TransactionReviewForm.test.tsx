@@ -716,7 +716,7 @@ describe('TransactionReviewForm', () => {
 
       const toggle = screen.getByRole('checkbox', { name: /recurring transaction/i });
       expect(toggle).not.toBeChecked();
-      expect(screen.getByText(/creates a monthly entry on your subscriptions tab/i)).toBeInTheDocument();
+      expect(screen.getByText(/creates a monthly entry under subscriptions/i)).toBeInTheDocument();
 
       await user.click(screen.getByRole('button', { name: /approve transaction/i }));
       const call = mockUpdateTransactionCategory.mock.calls[0]!;
