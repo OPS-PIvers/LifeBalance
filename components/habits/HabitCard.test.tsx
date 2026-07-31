@@ -922,6 +922,49 @@ describe('HabitCard - attribution picker', () => {
     expect(mockHouseholdContext.uncreditHabitCompletion).toHaveBeenCalledWith('h1', PAUL, TODAY);
   });
 
+  // 🛡️ THE `?? createdBy` FALLBACK IS THE BUG, not a safety net.
+  //
+  // `addHabitSubmission` writes `attributedTo` on EVERY member-credited doc
+  // (`actor !== null ? { attributedTo: actor } : { creditsHousehold: true }`),
+  // so the fallback can never reach a doc this member is genuinely credited
+  // for. The ONLY docs it can reach carry neither field — the automation
+  // writers (`transactionMutations`' keyword fire, `noSpendFire`, the backfill
+  // script) and pre-attribution history. On the keyword fire `createdBy` is
+  // whoever VERIFIED the triggering transaction: a REAL member uid, routinely
+  // the same admin who also logs habits by hand — this household's actual
+  // situation.
+  //
+  // Matching one is not a no-op. `deleteHabitSubmission` resolves
+  // `creditedUid = attributedTo ?? createdBy` and runs `reversalMoves`, so the
+  // wrong doc is deleted AND the member's genuine `completedBy` unit is
+  // debited (probed directly against the real mutation: it writes
+  // `completedBy.<date>.<uid>: -1` and `-10` to that member's points).
+  it('member un-credit does not sweep up an AUTOMATION doc whose createdBy is that same member', async () => {
+    const user = userEvent.setup();
+    mockHouseholdContext.getHabitSubmissions.mockResolvedValueOnce([
+      // Writer #2 (`transactionMutations`): NO attributedTo, NO creditsHousehold,
+      // `createdBy` = the member who verified the triggering transaction.
+      { id: 'automation', habitId: 'h1', date: TODAY, count: 1, pointsEarned: 10,
+        createdBy: PAUL, createdAt: '2026-07-15T10:00:00',
+        sourceTransactionId: 'txn-1' } as HabitSubmission,
+    ]);
+    // Paul ALSO holds one genuine attributed unit on this same date — the
+    // attribution the mis-delete would destroy.
+    render(
+      <HabitCard habit={attributedHabit({ [PAUL]: 1 }, { count: 2 })} attribution={ROSTER} />,
+    );
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /^Me/ }));
+
+    // The automation doc survives…
+    expect(mockHouseholdContext.deleteHabitSubmission).not.toHaveBeenCalled();
+    // …and Paul's real unit is reversed by the attribution-only primitive,
+    // which is bounded by `completedBy` and cannot over-take.
+    expect(mockHouseholdContext.uncreditHabitCompletion).toHaveBeenCalledWith('h1', PAUL, TODAY);
+  });
+
   // --- Household credit mode ------------------------------------------------
   // The Household row is a THIRD meaning, not a rename of "Both of us": one
   // award, to the pool, to nobody — versus N awards and a pool paid N times.
@@ -1073,6 +1116,47 @@ describe('HabitCard - attribution picker', () => {
     await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
     await user.click(screen.getByRole('menuitemcheckbox', { name: /^Household/ }));
 
+    expect(mockHouseholdContext.deleteHabitSubmission).not.toHaveBeenCalled();
+    expect(mockHouseholdContext.uncreditHouseholdCompletion).toHaveBeenCalledWith('h1', TODAY);
+  });
+
+  // 🛡️ The household analogue of the member-path automation test above, and
+  // the reason `attributedTo == null` ALONE is too wide.
+  //
+  // A grandfathered doc and an automation doc are FIELD-IDENTICAL — neither
+  // carries `attributedTo` or `creditsHousehold` — so no marker separates
+  // them. What separates the SAFE case from the corrupting one is the date:
+  // `deleteHabitSubmission` falls back to `creditedUid = createdBy` for any
+  // doc without `creditsHousehold`, and `resolveReversalSources` provably
+  // returns `[]` only when the date carries no attribution at all. Probed
+  // against the real mutation, a neither-field doc with `createdBy: user1`
+  // on a date where SOMEONE holds attribution writes
+  // `completedBy.<date>.<holder>: -1` and `-10` to that holder's points —
+  // and the holder is whoever `completedBy` records, not necessarily
+  // `createdBy`. So a mixed date must fall through to the attribution-only
+  // primitive; the clean date (the genuine grandfathered case, covered
+  // above) still sweeps.
+  it('household un-credit does not sweep up an AUTOMATION doc on a date that carries attribution', async () => {
+    const user = userEvent.setup();
+    mockHouseholdContext.getHabitSubmissions.mockResolvedValueOnce([
+      { id: 'automation', habitId: 'h1', date: TODAY, count: 1, pointsEarned: 10,
+        createdBy: PAUL, createdAt: '2026-07-15T10:00:00',
+        sourceTransactionId: 'txn-1' } as HabitSubmission,
+    ]);
+    // Two units: Paul's genuine attributed one, plus the automation's
+    // unattributed one → Household reads checked for the second.
+    render(
+      <HabitCard
+        habit={attributedHabit({ [PAUL]: 1 }, { count: 2, creditMode: 'household' })}
+        attribution={ROSTER}
+      />,
+    );
+
+    await user.click(screen.getByLabelText('Options for Morning walk'));
+    await user.click(screen.getByRole('menuitem', { name: 'Who did this?' }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /^Household/ }));
+
+    // Deleting it would have debited Paul's REAL `completedBy` unit.
     expect(mockHouseholdContext.deleteHabitSubmission).not.toHaveBeenCalled();
     expect(mockHouseholdContext.uncreditHouseholdCompletion).toHaveBeenCalledWith('h1', TODAY);
   });
