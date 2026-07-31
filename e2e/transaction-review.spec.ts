@@ -29,12 +29,13 @@ test.describe('Transaction review drawer (Test Mode, stub seed)', () => {
     await expect(drawer).toBeVisible();
     const amount = drawer.getByLabel('Amount');
     await expect(amount).toHaveValue('');
-    await expect(drawer.getByRole('button', { name: 'Add amount & approve' })).toBeDisabled();
+    await expect(drawer.getByRole('button', { name: 'Add amount', exact: true })).toBeDisabled();
 
     // Enter the settled amount and categorize into a bucket.
     await amount.fill(String(STUB_AMOUNT));
     await drawer.getByLabel('Budget Category').selectOption({ label: 'Entertainment' });
-    await drawer.getByRole('button', { name: /Approve Transaction|Add amount & approve/ }).click();
+    // Typing an amount swaps the label off the "Add amount" hint onto the CTA.
+    await drawer.getByRole('button', { name: 'Approve', exact: true }).click();
     await expect(drawer).not.toBeVisible();
 
     // It left the review queue: the Budget link's name is back to exactly "Budget".

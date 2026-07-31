@@ -299,7 +299,13 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
   // roundMoney(NaN) is NaN, so a blank/invalid field keeps canApprove false.
   const parsedAmount = roundMoney(parseFloat(amount));
   const canApprove = parsedAmount > 0 && merchant.trim() !== '' && (isSelectedAccountCredit || selectedCategory !== '');
-  const approveLabel = transaction.needsAmount && !amount.trim() ? 'Add amount & approve' : 'Approve Transaction';
+  // The drawer is already titled "Review (N of M)" with the transaction on
+  // screen, so "Transaction" in the CTA was redundant — dropping it is what buys
+  // the row enough width for a LABELLED Delete beside it. The needs-amount
+  // variant only ever shows while the button is disabled (`canApprove` is false
+  // until an amount is typed), so it is a "what's blocking you" hint pointing at
+  // the Amount field, not a call to action.
+  const approveLabel = transaction.needsAmount && !amount.trim() ? 'Add amount' : 'Approve';
 
   const handleApprove = async () => {
     const trimmedMerchant = merchant.trim();
@@ -431,8 +437,8 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
   const actions = (
     <div className="flex items-center gap-2">
       {/* Approve CTA — takes the row's remaining width. `px-4` trims size="lg"'s
-          px-6 so the longest label ("Add amount & approve") still sits on one
-          line beside Delete on a 375px (and narrower) phone. */}
+          px-6 so the longest label ("Add amount") still sits on one line beside
+          a labelled Delete on a 375px (and 320px) phone. */}
       <Button
         variant="success"
         size="lg"
@@ -444,16 +450,19 @@ const TransactionReviewForm: React.FC<TransactionReviewFormProps> = ({ transacti
         {approveLabel}
       </Button>
 
-      {/* Delete, inline beside Approve. Icon-only — the word does not fit next
-          to the longest approve label at 375px — so the accessible name comes
-          from aria-label rather than from the (absent) text. */}
+      {/* Delete, inline beside Approve. Carries its word: once the approve label
+          shed the redundant "Transaction", both labels fit on one line together
+          down to 320px. `shrink-0` keeps it whole and `px-4` trims size="lg"'s
+          px-6 so Approve keeps the slack; the visible text supplies the
+          accessible name, so no aria-label. */}
       <Button
         variant="ghost-danger"
-        size="icon"
-        aria-label="Delete"
+        size="lg"
+        className="shrink-0 px-4"
         onClick={handleDelete}
+        leftIcon={<Trash2 size={18} />}
       >
-        <Trash2 size={18} />
+        Delete
       </Button>
     </div>
   );

@@ -106,9 +106,10 @@ describe('ReviewPendingDrawer', () => {
     render(<ReviewPendingDrawer items={items} isOpen onClose={vi.fn()} />);
 
     const footer = screen.getByTestId('review-drawer-footer');
-    const approve = await within(footer).findByRole('button', { name: /Approve Transaction/ });
-    // The form's own Delete joins it there; Skip stays the last row.
-    expect(within(footer).getByRole('button', { name: /Delete/ })).toBeInTheDocument();
+    const approve = await within(footer).findByRole('button', { name: /^Approve$/ });
+    // The form's own Delete joins it there, carrying its visible word rather
+    // than reading as a bare icon; Skip stays the last row.
+    expect(within(footer).getByRole('button', { name: /Delete/ })).toHaveTextContent('Delete');
     expect(within(footer).getByText('Skip — add later')).toBeInTheDocument();
 
     // Approving from the footer is the SAME action as before — one write, then advance.
@@ -123,7 +124,7 @@ describe('ReviewPendingDrawer', () => {
 
     const footer = screen.getByTestId('review-drawer-footer');
     expect(within(footer).getByText('Skip — add later')).toBeInTheDocument();
-    expect(within(footer).queryByRole('button', { name: /Approve Transaction/ })).toBeNull();
+    expect(within(footer).queryByRole('button', { name: /^Approve$/ })).toBeNull();
   });
 
   it('approving verifies via a single call then advances to the next card', async () => {
@@ -131,7 +132,7 @@ describe('ReviewPendingDrawer', () => {
     const onClose = vi.fn();
     render(<ReviewPendingDrawer items={items} isOpen onClose={onClose} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Approve Transaction/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Approve$/ }));
 
     await waitFor(() => expect(mockUpdateCategory).toHaveBeenCalledTimes(1));
     // Unedited real transaction → category 'Groceries' preselected, no overrides.
@@ -147,12 +148,12 @@ describe('ReviewPendingDrawer', () => {
     const items = [txItem('t1', 'Shell Gas', { amount: 0, needsAmount: true })];
     render(<ReviewPendingDrawer items={items} isOpen onClose={vi.fn()} />);
 
-    // Stub opens blank; the CTA reads "Add amount & approve" and is disabled.
+    // Stub opens blank; the CTA reads "Add amount" and is disabled.
     expect((screen.getByLabelText('Amount') as HTMLInputElement).value).toBe('');
-    expect(screen.getByRole('button', { name: /Add amount & approve/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Add amount$/ })).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '45.50' } });
-    fireEvent.click(screen.getByRole('button', { name: /Approve Transaction/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Approve$/ }));
 
     await waitFor(() => expect(mockUpdateCategory).toHaveBeenCalledTimes(1));
     expect(mockUpdateCategory).toHaveBeenCalledWith(
@@ -170,7 +171,7 @@ describe('ReviewPendingDrawer', () => {
 
     // Flip Recurring ON for the first card and approve it.
     fireEvent.click(screen.getByRole('checkbox', { name: /recurring transaction/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Approve Transaction/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Approve$/ }));
 
     await waitFor(() => expect(mockUpdateCategory).toHaveBeenCalledTimes(1));
     expect(mockUpdateCategory).toHaveBeenCalledWith(
@@ -187,7 +188,7 @@ describe('ReviewPendingDrawer', () => {
     expect(screen.getByRole('checkbox', { name: /recurring transaction/i })).not.toBeChecked();
 
     // Approving the second card untouched sends no overrides / no calendar item.
-    fireEvent.click(screen.getByRole('button', { name: /Approve Transaction/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Approve$/ }));
     await waitFor(() => expect(mockUpdateCategory).toHaveBeenCalledTimes(2));
     expect(mockUpdateCategory).toHaveBeenLastCalledWith('t2', 'Groceries', [], undefined, undefined);
     expect(mockAddCalendarItem).toHaveBeenCalledTimes(1);
