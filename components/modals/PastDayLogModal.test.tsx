@@ -189,6 +189,33 @@ describe('PastDayLogModal', () => {
     expect(screen.queryByText('Feed the dog')).not.toBeInTheDocument();
   });
 
+  it('hides archived habits from the log list while still scoring their history', () => {
+    // The bug this closes: the drawer listed every habit ever created, so
+    // retired presets kept offering themselves months later and the list read
+    // as a stale copy of the Habits page (which hides archived habits).
+    mockContextValue.habits = [
+      baseHabit,
+      { ...baseHabit, id: 'old-1', title: 'Get 7+ hours of sleep', archivedAt: '2026-01-05T00:00:00Z' },
+    ];
+    render(<PastDayLogModal isOpen={true} onClose={() => {}} />);
+
+    expect(screen.getByText('Read 30 mins')).toBeInTheDocument();
+    expect(screen.queryByText('Get 7+ hours of sleep')).not.toBeInTheDocument();
+  });
+
+  it('still counts an archived habit in the calendar day cell', () => {
+    // Archived is a LIST rule, not a scoring rule — dropping retired habits
+    // from the calendar would silently rewrite past days' point figures.
+    mockContextValue.habits = [
+      { ...baseHabit, id: 'old-1', title: 'Retired', archivedAt: '2026-01-05T00:00:00Z', completedDates: [yesterday] },
+    ];
+    render(<PastDayLogModal isOpen={true} onClose={() => {}} />);
+
+    expect(
+      screen.getByRole('button', { name: new RegExp(`${format(subDays(new Date(), 1), 'MMMM d')}, \\+10 points`) })
+    ).toBeInTheDocument();
+  });
+
   it('threads the roster into the day editor so the "who did this?" control renders', async () => {
     // Proves this host wires `useHouseholdCore` independently of the History
     // tab: with two adults the row carries the picker affordance, and the tap

@@ -59,7 +59,11 @@ const PastDayLogModal: React.FC<PastDayLogModalProps> = ({ isOpen, onClose }) =>
 
   const { monthStart, days } = useCalendarGrid(currentMonth);
 
-  // Same parent-visible set as the Track tab: kid chores (assignedTo) excluded.
+  // The SCORING set: kid chores (assignedTo) excluded, archived habits kept —
+  // a retired habit's past completions still earned the points the day cells
+  // below show. DayHabitEditor narrows this to the Track tab's active list for
+  // the editable rows; don't pre-filter archived habits out here or the
+  // calendar's history quietly loses their points.
   const sortedHabits = useMemo(
     () => habits.filter(h => !h.assignedTo).sort((a, b) => (a.order ?? 999) - (b.order ?? 999)),
     [habits]

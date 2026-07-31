@@ -193,16 +193,21 @@ describe('DayHabitEditor — past-day attribution', () => {
     );
     expect(screen.queryByRole('button', { name: /Who did Read on/ })).not.toBeInTheDocument();
 
+    // An archived habit only reaches the list at all when it HOLDS units on the
+    // day (count > 0), so this case must be probed that way — with count 0 the
+    // row is filtered out entirely and the assertion would pass for the wrong
+    // reason, silently retiring the `canPick` archived gate from coverage.
     rerender(
       <DayHabitEditor
-        habits={[baseHabit({ archivedAt: '2026-07-01T00:00:00Z' })]}
+        habits={[baseHabit({ archivedAt: '2026-07-01T00:00:00Z', completedDates: [D] })]}
         selectedDate={D}
         selectedLabel={LABEL}
-        countForHabitOnDate={() => 0}
+        countForHabitOnDate={() => 1}
         onMutated={() => {}}
         attribution={TWO_ADULTS}
       />
     );
+    expect(screen.getByText('Read')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Who did Read on/ })).not.toBeInTheDocument();
   });
 
@@ -722,5 +727,41 @@ describe('DayHabitEditor — past-day attribution', () => {
     expect(ctx.addHabitSubmission).toHaveBeenCalledWith(
       'h1', 1, `${D}T12:00:00`, undefined, undefined, undefined,
     );
+  });
+
+  // The hosts pass their SCORING set (archived habits included, so the calendar
+  // above keeps scoring history); the editable rows are the Track tab's list.
+  describe('archived habits', () => {
+    const RETIRED = baseHabit({
+      id: 'h2',
+      title: 'Old preset',
+      archivedAt: '2026-07-01T00:00:00Z',
+    });
+
+    it('drops a retired habit that holds nothing on this day', () => {
+      renderEditor({ habits: [baseHabit(), RETIRED] });
+
+      expect(screen.getByText('Read')).toBeInTheDocument();
+      expect(screen.queryByText('Old preset')).not.toBeInTheDocument();
+    });
+
+    it('keeps — and badges — a retired habit that holds units on this day', () => {
+      // Its points are inside the day's total, so hiding the row would leave a
+      // figure with nothing behind it and no way to clear it.
+      renderEditor({
+        habits: [RETIRED],
+        countForHabitOnDate: (h) => (h.id === 'h2' ? 1 : 0),
+      });
+
+      expect(screen.getByText('Old preset')).toBeInTheDocument();
+      expect(screen.getByText('Archived')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Clear Old preset/ })).toBeInTheDocument();
+    });
+
+    it('reads as "no active habits", not "no habits yet", when every habit is retired', () => {
+      renderEditor({ habits: [RETIRED] });
+
+      expect(screen.getByText('No active habits')).toBeInTheDocument();
+    });
   });
 });
