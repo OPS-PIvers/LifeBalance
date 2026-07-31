@@ -330,7 +330,7 @@ const Settings: React.FC = () => {
   const [isLeavingHousehold, setIsLeavingHousehold] = useState(false);
 
   // Points Breakdown Modal
-  const [activePointsView, setActivePointsView] = useState<'daily' | 'weekly' | 'total' | null>(null);
+  const [isPointsBreakdownOpen, setIsPointsBreakdownOpen] = useState(false);
 
   const isGlobalAdmin = user?.uid === import.meta.env.VITE_ADMIN_UID;
 
@@ -971,7 +971,7 @@ const Settings: React.FC = () => {
                 icon={<Star className="w-5 h-5" />}
                 title="Points breakdown"
                 subtitle="Daily, weekly, and total household points"
-                onClick={() => setActivePointsView('total')}
+                onClick={() => setIsPointsBreakdownOpen(true)}
               />
               {sortedMembers.map((member) => (
                 <Row key={member.uid}>
@@ -1630,11 +1630,10 @@ const Settings: React.FC = () => {
         }
       />
 
-      {activePointsView && (
+      {isPointsBreakdownOpen && (
         <PointsBreakdownModal
           isOpen={true}
-          onClose={() => setActivePointsView(null)}
-          view={activePointsView}
+          onClose={() => setIsPointsBreakdownOpen(false)}
           habits={habits}
         />
       )}

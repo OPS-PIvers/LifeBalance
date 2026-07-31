@@ -595,10 +595,14 @@ Per-member habit points follow-ups (from the 2026-07-30 six-stage ship, PRs #115
   threshold-habit exclusion) is PARKED on branch `fix/points-drift-repair`; PR #1168 is closed
   with the full reasoning, including the correction that the tool writes **upward only** — the
   earlier "one-way downward write" framing was wrong. Its Scan path is read-only, so a number can
-  be obtained at zero risk if ever wanted. The live successor is `PointsBreakdownModal`'s
-  threshold past-date edit (`pointsChange = 0` at `:210` while `completedDates` is still
-  written; the `:185` comment already concedes the over-credit "drifts permanently"), which is
-  NOT frozen and inflates the redeemable household pool.
+  be obtained at zero risk if ever wanted. **CORRECTION 2026-07-31: there is no live successor.**
+  `PointsBreakdownModal`'s threshold past-date edit (`pointsChange = 0` while `completedDates`
+  was still written) carried the same one-award-per-removal inflation — probed at
+  `points.total: 0` against a ground truth of `-15` — but it was NOT live and never could fire:
+  the drawer's `daily`/`weekly` views went unreachable in PR #819 (`74069195`, 2026-07-05), which
+  collapsed Settings' three points rows into one link hard-coded to the `total` view, and no
+  other mount existed. That editor has now been DELETED as dead code (PR #1172), so the defect
+  is gone rather than frozen. Nothing about the `points.total` decision above changes.
 - **Reversal never rescores surviving periods whose streak multiplier the clear changed** —
   clearing period A shifts the multiplier of LATER periods that SURVIVE it, and neither
   `attributionReversalForDates` branch scores those dates: `periodPointsMove` is period-scoped by
@@ -610,8 +614,9 @@ Per-member habit points follow-ups (from the 2026-07-30 six-stage ship, PRs #115
   the next corrective sync; the under-debited `total` is permanent (`computeHouseholdPointsSync`
   only ever RAISES it). PRE-EXISTING and branch-agnostic — verified identical on the untouched
   incremental branch and byte-identical pre-PR #1167, so that PR neither caused nor worsened it.
-  Only reachable via BACK-DATED clears (`resetHabitDay`, `PointsBreakdownModal`), never a same-day
-  reset. **S / decide the rescoring scope before coding.**
+  Only reachable via BACK-DATED clears — `resetHabitDay` alone since PR #1172 deleted
+  `PointsBreakdownModal`'s dead day-toggle — never a same-day reset.
+  **S / decide the rescoring scope before coding.**
 - **`HouseholdBadge` duplicates `MemberAvatar`'s glyph variant** — PR #1164 shipped a standalone
   `components/ui/HouseholdBadge.tsx` because the parallel Household-credit-mode PR owned
   `MemberAvatar.tsx`. Two components now draw the same circle/size/ring. Unify onto the shared
