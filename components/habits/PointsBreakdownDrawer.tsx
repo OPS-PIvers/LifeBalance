@@ -10,7 +10,7 @@ import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import { cn } from '@/utils/cn';
 import MemberAvatar from '@/components/ui/MemberAvatar';
-import HouseholdBadge from '@/components/ui/HouseholdBadge';
+import HouseholdAvatar from '@/components/ui/HouseholdAvatar';
 import { buildMemberColorMap, memberColorFor } from '@/utils/memberColors';
 import { getAdultStandings, computePointsTrend, type PointsDrawerPeriod } from '@/utils/pointsDrawer';
 import { calculateHouseholdShareForDateRange } from '@/utils/scoreboardWidget';
@@ -270,7 +270,7 @@ const PointsBreakdownDrawer: React.FC<PointsBreakdownDrawerProps> = ({ open, onC
             ))}
             {householdShare !== undefined && householdShare !== 0 && (
               <Row className="gap-3" data-testid="points-drawer-household-row">
-                <HouseholdBadge size={30} className="flex-none" data-testid="points-drawer-household-badge" />
+                <HouseholdAvatar size={30} className="flex-none" data-testid="points-drawer-household-badge" />
                 <span className="min-w-0 flex-1 flex items-center gap-1.5">
                   <span className="truncate text-sm font-semibold tracking-tight text-brand-900 dark:text-brand-50">
                     Household

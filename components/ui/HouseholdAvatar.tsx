@@ -34,6 +34,8 @@ export interface HouseholdAvatarProps {
   alt?: string;
   title?: string;
   className?: string;
+  /** Forwarded to MemberAvatar so scoreboard/drawer rows stay queryable. */
+  'data-testid'?: string;
 }
 
 const HouseholdAvatar: React.FC<HouseholdAvatarProps> = ({
@@ -42,6 +44,7 @@ const HouseholdAvatar: React.FC<HouseholdAvatarProps> = ({
   alt,
   title,
   className,
+  'data-testid': dataTestId,
 }) => (
   <MemberAvatar
     name="Household"
@@ -51,6 +54,7 @@ const HouseholdAvatar: React.FC<HouseholdAvatarProps> = ({
     alt={alt}
     title={title}
     className={className}
+    data-testid={dataTestId}
     icon={<Home size={Math.round(size * 0.55)} strokeWidth={2.4} aria-hidden="true" />}
   />
 );

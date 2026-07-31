@@ -21,7 +21,7 @@ import { cn } from '@/utils/cn';
 import { Section, SurfaceList } from '@/components/ui/Section';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 import MemberAvatar from '@/components/ui/MemberAvatar';
-import HouseholdBadge from '@/components/ui/HouseholdBadge';
+import HouseholdAvatar from '@/components/ui/HouseholdAvatar';
 
 /** Result of the async past-week recompute, keyed to whichever week it was fetched for. */
 interface PastWeekData {
@@ -428,7 +428,7 @@ export const ScoreboardWidget: React.FC = React.memo(() => {
                 neither sees exactly what it saw before this row existed. */}
             {!!householdShare && (
               <div className="flex items-center gap-[11px] py-[5px]" data-testid="scoreboard-household-row">
-                <HouseholdBadge size={30} data-testid="scoreboard-household-badge" />
+                <HouseholdAvatar size={30} data-testid="scoreboard-household-badge" />
                 <div className="flex-1 min-w-0">
                   <span className="text-[13.5px] font-semibold text-brand-900 dark:text-brand-50 tracking-tight truncate">
                     Household
